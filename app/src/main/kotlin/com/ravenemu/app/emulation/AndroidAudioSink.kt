@@ -39,9 +39,11 @@ class AndroidAudioSink(
             AudioFormat.CHANNEL_OUT_STEREO,
             AudioFormat.ENCODING_PCM_16BIT,
         ).coerceAtLeast(0)
-        // Cinq trames de sortie : marge confortable contre les
-        // sous-alimentations (craquements) lors d'un pic de charge ponctuel.
-        val bufferBytes = maxOf(minBuffer, outputSamplesPerFrame * 2 * 2 * 5)
+        // Le rendu vidéo étant découplé, le thread d'émulation ne fait plus
+        // qu'un travail bref entre deux écritures : trois trames de sortie
+        // (~50 ms) suffisent contre les sous-alimentations, tout en réduisant
+        // la latence audio pour rapprocher le son de l'image (synchro A/V).
+        val bufferBytes = maxOf(minBuffer, outputSamplesPerFrame * 2 * 2 * 3)
         track = AudioTrack.Builder()
             .setAudioAttributes(
                 AudioAttributes.Builder()
@@ -49,6 +51,9 @@ class AndroidAudioSink(
                     .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
                     .build()
             )
+            // Chemin basse latence lorsqu'il est disponible (réduit le
+            // tampon matériel, donc le décalage son/image).
+            .setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
             .setAudioFormat(
                 AudioFormat.Builder()
                     .setEncoding(AudioFormat.ENCODING_PCM_16BIT)

@@ -36,9 +36,9 @@
             android:key="video_integer_scaling"
             android:title="@string/settings_integer_scaling" />
         <ListPreference
-            android:defaultValue="classic"
-            android:key="video_palette"
-            android:title="@string/settings_palette"
+            android:defaultValue="dmg"
+            android:key="video_screen_profile"
+            android:title="@string/settings_screen_profile"
             app:useSimpleSummaryProvider="true" />
         <SwitchPreferenceCompat
             android:defaultValue="false"

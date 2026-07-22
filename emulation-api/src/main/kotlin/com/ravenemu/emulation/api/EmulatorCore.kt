@@ -24,6 +24,14 @@ interface EmulatorCore {
     val audio: AudioSpec
 
     /**
+     * Format des valeurs écrites par [runFrame] dans le framebuffer. Par
+     * défaut [FramebufferFormat.ARGB_8888] ; un moteur monochrome (Game Boy)
+     * produit des niveaux [FramebufferFormat.INDEXED_4] que le renderer
+     * colorise via un profil d'écran.
+     */
+    val framebufferFormat: FramebufferFormat get() = FramebufferFormat.ARGB_8888
+
+    /**
      * Charge une ROM et réinitialise entièrement le moteur.
      *
      * @param rom contenu complet du fichier ROM.
@@ -39,7 +47,9 @@ interface EmulatorCore {
 
     /**
      * Exécute exactement une trame vidéo et écrit l'image produite dans
-     * [framebuffer] au format ARGB 8888, ligne par ligne.
+     * [framebuffer], ligne par ligne, au format indiqué par
+     * [framebufferFormat] : couleurs ARGB 8888, ou niveaux `0..3` pour un
+     * écran monochrome (le renderer applique alors le profil d'écran).
      *
      * @param framebuffer tableau d'au moins [VideoSpec.pixelCount] entiers.
      * @throws IllegalStateException si aucune ROM n'est chargée.

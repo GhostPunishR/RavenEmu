@@ -44,12 +44,18 @@ class GameBoyCoreTest {
     }
 
     @Test
-    fun `une trame produit une image de la palette`() {
+    fun `le framebuffer contient des niveaux monochromes`() {
         val core = loadedCore()
+        assertEquals(
+            com.ravenemu.emulation.api.FramebufferFormat.INDEXED_4,
+            core.framebufferFormat,
+        )
         val frame = IntArray(core.video.pixelCount)
         core.runFrame(frame)
-        // VRAM vierge + BGP 0xFC → teinte 0 partout.
-        assertTrue(frame.all { it == core.palette[0] })
+        // Aucune colorisation : uniquement des niveaux 0..3, jamais d'ARGB.
+        assertTrue(frame.all { it in 0..3 })
+        // VRAM vierge + BGP 0xFC → niveau 0 partout.
+        assertTrue(frame.all { it == 0 })
     }
 
     @Test

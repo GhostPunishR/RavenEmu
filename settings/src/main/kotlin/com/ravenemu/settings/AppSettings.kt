@@ -48,10 +48,13 @@ class AppSettings(context: Context) {
         get() = prefs.getBoolean("video_integer_scaling", false)
         set(value) = prefs.edit { putBoolean("video_integer_scaling", value) }
 
-    /** Clé de palette DMG (voir [GameBoyPalettes]). */
-    var paletteKey: String
-        get() = prefs.getString("video_palette", "classic") ?: "classic"
-        set(value) = prefs.edit { putString("video_palette", value) }
+    /**
+     * Identifiant du profil d'écran monochrome
+     * (voir `MonochromeDisplayProfiles`). Défaut : Game Boy DMG.
+     */
+    var screenProfileId: String
+        get() = prefs.getString("video_screen_profile", "dmg") ?: "dmg"
+        set(value) = prefs.edit { putString("video_screen_profile", value) }
 
     var showPerformanceOverlay: Boolean
         get() = prefs.getBoolean("video_show_fps", false)

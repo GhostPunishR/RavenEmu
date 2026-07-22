@@ -12,6 +12,7 @@ import com.ravenemu.emulation.api.AudioSpec
 import com.ravenemu.emulation.api.ConsoleType
 import com.ravenemu.emulation.api.EmulatorButton
 import com.ravenemu.emulation.api.EmulatorCore
+import com.ravenemu.emulation.api.FramebufferFormat
 import com.ravenemu.emulation.api.VideoSpec
 import java.security.MessageDigest
 
@@ -23,6 +24,11 @@ import java.security.MessageDigest
  * L'émulation démarre à l'état post-boot ROM (aucun BIOS n'est requis ni
  * accepté). L'APU synthétise les 4 canaux en continu ; [readAudio] draine les
  * échantillons stéréo PCM 16 bits produits depuis le dernier appel.
+ *
+ * Le moteur ne produit **aucune couleur** : [runFrame] écrit les quatre
+ * niveaux logiques `0..3` de l'écran monochrome (0 = plus clair, 3 = plus
+ * sombre). La colorisation est appliquée par le renderer via un profil
+ * d'écran, indépendant de l'état d'émulation.
  */
 class GameBoyCore(
     private val clock: () -> Long = { System.currentTimeMillis() / 1000 },
@@ -39,15 +45,8 @@ class GameBoyCore(
     override val audio: AudioSpec =
         AudioSpec(sampleRateHz = Apu.SAMPLE_RATE_HZ, channelCount = 2)
 
-    /**
-     * Palette ARGB appliquée aux 4 teintes DMG (0 = plus claire). Modifiable
-     * à chaud depuis les paramètres vidéo de l'application.
-     */
-    var palette: IntArray = DEFAULT_PALETTE.copyOf()
-        set(value) {
-            require(value.size == 4) { "La palette doit contenir 4 couleurs" }
-            field = value.copyOf()
-        }
+    /** La Game Boy émet des niveaux monochromes, colorisés par le renderer. */
+    override val framebufferFormat: FramebufferFormat = FramebufferFormat.INDEXED_4
 
     internal var machine: Machine? = null
         private set
@@ -86,11 +85,9 @@ class GameBoyCore(
             m.tick(consumed)
             cycles += consumed
         }
-        val frame = m.ppu.completedFrame
-        val colors = palette
-        for (i in 0 until video.pixelCount) {
-            framebuffer[i] = colors[frame[i]]
-        }
+        // Le PPU produit déjà les niveaux 0..3 (registres BGP/OBP appliqués) ;
+        // on les recopie tels quels, sans colorisation.
+        System.arraycopy(m.ppu.completedFrame, 0, framebuffer, 0, video.pixelCount)
     }
 
     override fun setButton(button: EmulatorButton, pressed: Boolean) {
@@ -153,13 +150,5 @@ class GameBoyCore(
 
         /** 4 194 304 / 70 224 ≈ 59,7275 Hz. */
         const val REFRESH_RATE_HZ = 4_194_304.0 / CYCLES_PER_FRAME
-
-        /** Teintes vertes classiques de l'écran DMG (ARGB). */
-        val DEFAULT_PALETTE = intArrayOf(
-            0xFF9BBC0F.toInt(),
-            0xFF8BAC0F.toInt(),
-            0xFF306230.toInt(),
-            0xFF0F380F.toInt(),
-        )
     }
 }
