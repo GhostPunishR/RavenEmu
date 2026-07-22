@@ -179,3 +179,24 @@ HBlank, sans coût cycle précis ni verrouillage bus), séquenceur de trames APU
 non doublé en double vitesse (léger effet sur enveloppes/longueurs), registre
 OPRI non émulé (priorité sprites par index OAM), pas de correction
 colorimétrique LCD (couleurs BGR555 mises à l'échelle linéairement).
+
+## AD-14 — Base d'empreintes de référence
+
+L'identification des ROM s'appuie sur une base locale de **métadonnées et
+d'empreintes uniquement** (jamais de ROM), fusion d'une semence embarquée
+(`assets/references.json`, vide par défaut) et de bases importées par
+l'utilisateur, stockées dans l'espace privé. RavenEmu ne distribue aucune
+empreinte de jeu officiel : l'enrichissement se fait par import.
+
+Formats acceptés : DAT Logiqx (No-Intro, Redump…), analysés par
+`NoIntroDatParser` (durci contre l'injection d'entités externes XXE), et
+datasets JSON natifs (`ReferenceDataset`). La correspondance retient la plus
+forte empreinte disponible (SHA-256, puis SHA-1, puis CRC32), ce qui rend les
+DAT No-Intro (CRC + SHA-1) directement exploitables. Aucun statut affirmatif
+n'est attribué sans correspondance d'empreinte ; à défaut, une ROM dont seul
+le titre d'en-tête correspond à un jeu officiel connu est au mieux
+« Modifiée ou non reconnue ».
+
+Un changement de base est appliqué à chaud : la bibliothèque est **reclassée**
+sans relire les fichiers (les empreintes sont déjà indexées). La palette de
+statuts et les surcharges utilisateur (Homebrew déclaré) sont préservées.

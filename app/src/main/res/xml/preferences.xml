@@ -77,6 +77,12 @@
         <Preference
             android:key="files_covers_dir_picker"
             android:title="@string/settings_covers_dir" />
+        <Preference
+            android:key="files_import_references"
+            android:title="@string/settings_import_references" />
+        <Preference
+            android:key="files_clear_references"
+            android:title="@string/settings_clear_references" />
     </PreferenceCategory>
 
     <PreferenceCategory android:title="@string/settings_category_library">

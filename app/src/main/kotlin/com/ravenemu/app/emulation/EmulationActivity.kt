@@ -30,8 +30,6 @@ import com.ravenemu.input.ControlLayout
 import com.ravenemu.input.GamepadMapper
 import com.ravenemu.input.TouchControlsView
 import com.ravenemu.renderer.EmulatorSurfaceView
-import com.ravenemu.romlibrary.GameBoyRomAnalyzer
-import com.ravenemu.romlibrary.ReferenceDatabase
 import com.ravenemu.romlibrary.RomEntry
 import com.ravenemu.settings.AppSettings
 import com.ravenemu.emulation.api.display.MonochromeDisplayProfiles
@@ -172,10 +170,9 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
     // ---- Chargement ----
 
     private fun loadRomAndStart() {
-        val repository = LibraryRepository(
-            this,
-            listOf(GameBoyRomAnalyzer(ReferenceDatabase.empty())),
-        )
+        // Seule la lecture de la ROM est nécessaire ici : base de références
+        // par défaut (l'identification est faite par la bibliothèque).
+        val repository = LibraryRepository(this)
         lifecycleScope.launch {
             val data = repository.readRom(romUri)
             if (data == null) {

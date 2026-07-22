@@ -30,7 +30,9 @@ code d'émulateur existant, sans cœur tiers, sans BIOS ni contenu protégé.
   vue grille ou liste, actualisation avec détection des fichiers
   ajoutés/déplacés/supprimés
 - **Identification** : empreintes CRC32/SHA-1/SHA-256, statuts prudents
-  (jamais « officielle » sans correspondance d'empreinte)
+  (jamais « officielle » sans correspondance d'empreinte) ; **base de
+  références** enrichissable par import de fichiers No-Intro `.dat` ou de
+  datasets JSON (métadonnées uniquement, jamais de ROM)
 - **Pochettes** : image choisie, image voisine de la ROM, dossier de
   pochettes (par nom ou par empreinte), jaquette générée sinon — rien n'est
   téléchargé ni distribué
@@ -103,7 +105,7 @@ d'une console future se fait par un nouveau module implémentant
 ## Feuille de route
 
 - [x] Compatibilité Game Boy Color
-- [ ] Base locale d'empreintes de référence enrichie
+- [x] Base locale d'empreintes de référence enrichissable (import No-Intro/JSON)
 - [ ] Réglages d'affichage avancés (contraste, luminosité, correction LCD)
 - [ ] Tests de compatibilité étendus sur matériel réel
 - [ ] Android App Bundle (`.aab`)

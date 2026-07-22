@@ -29,35 +29,72 @@ enum class ReferenceKind { OFFICIAL, HACK, HOMEBREW }
 /**
  * Entrée de la base locale d'identification : uniquement des métadonnées et
  * des empreintes — jamais de contenu de ROM.
+ *
+ * Au moins une empreinte doit être renseignée. Les formats de bases répandus
+ * (No-Intro) fournissent CRC32 + SHA-1 ; d'autres ajoutent le SHA-256. La
+ * correspondance retient la plus forte empreinte disponible.
  */
 @Serializable
 data class ReferenceEntry(
     val title: String,
     val kind: ReferenceKind,
-    /** SHA-256 minuscule ; identifiant principal. */
-    val sha256: String,
+    val sha256: String? = null,
     val sha1: String? = null,
     val crc32: String? = null,
-)
+    val sizeBytes: Long? = null,
+) {
+    init {
+        require(sha256 != null || sha1 != null || crc32 != null) {
+            "Une entrée de référence doit contenir au moins une empreinte"
+        }
+    }
+
+    /** Empreintes normalisées (SHA en minuscules, CRC32 en majuscules). */
+    fun normalized(): ReferenceEntry = copy(
+        sha256 = sha256?.lowercase(),
+        sha1 = sha1?.lowercase(),
+        crc32 = crc32?.uppercase(),
+    )
+}
 
 /**
  * Base de références locale. [classify] applique les règles de la
  * spécification : correspondance d'empreinte exigée pour tout statut
  * affirmatif, repli sur « Modifiée ou non reconnue » quand seul le titre
- * d'en-tête est reconnu, « Inconnue » sinon.
+ * d'en-tête est reconnu, « Inconnue » sinon. La recherche compare le
+ * SHA-256, puis le SHA-1, puis le CRC32.
  */
 class ReferenceDatabase(entries: List<ReferenceEntry>) {
 
-    private val bySha256 = entries.associateBy { it.sha256.lowercase() }
-    private val officialTitles = entries
-        .filter { it.kind == ReferenceKind.OFFICIAL }
-        .map { it.title.uppercase() }
-        .toSet()
+    private val bySha256 = HashMap<String, ReferenceEntry>()
+    private val bySha1 = HashMap<String, ReferenceEntry>()
+    private val byCrc32 = HashMap<String, ReferenceEntry>()
+    private val officialTitles = HashSet<String>()
 
-    val size: Int = bySha256.size
+    init {
+        for (raw in entries) {
+            val entry = raw.normalized()
+            entry.sha256?.let { bySha256.putIfAbsent(it, entry) }
+            entry.sha1?.let { bySha1.putIfAbsent(it, entry) }
+            entry.crc32?.let { byCrc32.putIfAbsent(it, entry) }
+            if (entry.kind == ReferenceKind.OFFICIAL) {
+                officialTitles.add(entry.title.trim().uppercase())
+            }
+        }
+    }
+
+    /** Nombre d'entrées distinctes (par empreinte la plus forte). */
+    val size: Int = entries.map { it.normalized() }
+        .map { it.sha256 ?: it.sha1 ?: it.crc32 }
+        .toSet().size
+
+    /** Vrai si la base ne contient aucune référence. */
+    val isEmpty: Boolean get() = bySha256.isEmpty() && bySha1.isEmpty() && byCrc32.isEmpty()
 
     fun find(fingerprints: Fingerprints): ReferenceEntry? =
         bySha256[fingerprints.sha256.lowercase()]
+            ?: bySha1[fingerprints.sha1.lowercase()]
+            ?: byCrc32[fingerprints.crc32.uppercase()]
 
     fun classify(fingerprints: Fingerprints, headerTitle: String): RomStatus {
         val match = find(fingerprints)

@@ -4,6 +4,8 @@ import android.content.Context
 import android.net.Uri
 import com.ravenemu.core.gb.cartridge.CartridgeHeader
 import com.ravenemu.romlibrary.AnalysisResult
+import com.ravenemu.romlibrary.GameBoyRomAnalyzer
+import com.ravenemu.romlibrary.ReferenceDatabase
 import com.ravenemu.romlibrary.RomAnalyzer
 import com.ravenemu.romlibrary.RomIndex
 import kotlinx.coroutines.Dispatchers
@@ -13,15 +15,42 @@ import kotlinx.coroutines.withContext
  * Orchestration de la bibliothèque : balayage des dossiers SAF, analyse des
  * fichiers nouveaux ou modifiés, retrait des fichiers disparus, persistance
  * de l'index. Toute l'E/S s'exécute hors du thread principal.
+ *
+ * La base de références sert à l'identification des ROM ; elle peut être
+ * remplacée à chaud ([setReferenceDatabase]) après un import, puis appliquée
+ * à l'index existant sans relire les fichiers ([reclassify]).
  */
 class LibraryRepository(
     context: Context,
-    private val analyzers: List<RomAnalyzer>,
+    referenceDatabase: ReferenceDatabase = ReferenceDatabase.empty(),
 ) {
     private val scanner = RomFileScanner(context)
     private val indexStore = RomIndexStore(context)
 
+    private var database = referenceDatabase
+    private var analyzers: List<RomAnalyzer> = listOf(GameBoyRomAnalyzer(referenceDatabase))
+
+    fun setReferenceDatabase(newDatabase: ReferenceDatabase) {
+        database = newDatabase
+        analyzers = listOf(GameBoyRomAnalyzer(newDatabase))
+    }
+
     fun loadIndex(): RomIndex = indexStore.load()
+
+    /**
+     * Recalcule le statut d'identification de chaque entrée selon la base
+     * courante, sans relire les fichiers (les empreintes sont déjà connues).
+     * Les choix utilisateur (statut forcé, pochette) sont préservés.
+     */
+    suspend fun reclassify(index: RomIndex): RomIndex = withContext(Dispatchers.IO) {
+        val updated = index.copy(
+            entries = index.entries.map { entry ->
+                entry.copy(status = database.classify(entry.fingerprints, entry.title))
+            }
+        )
+        indexStore.save(updated)
+        updated
+    }
 
     /**
      * Actualise l'index à partir des dossiers [romDirUris] et retourne le
