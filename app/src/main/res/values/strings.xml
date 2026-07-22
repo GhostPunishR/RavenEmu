@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">RavenEmu</string>
+
+    <!-- Bibliothèque -->
+    <string name="library_title">Bibliothèque</string>
+    <string name="library_empty">Aucun jeu détecté.\nAjoutez un dossier de ROM avec le bouton ci-dessous.</string>
+    <string name="library_add_folder">Ajouter un dossier</string>
+    <string name="library_refresh">Actualiser</string>
+    <string name="library_search_hint">Rechercher un jeu</string>
+    <string name="library_view_grid">Vue grille</string>
+    <string name="library_view_list">Vue liste</string>
+    <string name="library_sort">Trier</string>
+    <string name="library_sort_title">Par titre</string>
+    <string name="library_sort_size">Par taille</string>
+    <string name="library_sort_status">Par statut</string>
+    <string name="library_refreshing">Actualisation de la bibliothèque…</string>
+    <string name="library_refresh_done">Bibliothèque actualisée : %1$d jeux</string>
+    <string name="library_rom_details">Détails</string>
+    <string name="library_choose_cover">Choisir une pochette</string>
+    <string name="library_mark_homebrew">Marquer comme homebrew</string>
+    <string name="library_unmark_homebrew">Retirer le marquage homebrew</string>
+    <string name="library_size_kib">%1$d Kio</string>
+
+    <!-- Statuts -->
+    <string name="status_verified">Officielle vérifiée</string>
+    <string name="status_hack">ROM hack identifié</string>
+    <string name="status_modified">Modifiée ou non reconnue</string>
+    <string name="status_unknown">Inconnue</string>
+    <string name="status_homebrew">Homebrew</string>
+
+    <!-- Émulation -->
+    <string name="emulation_menu">Menu de l\'émulateur</string>
+    <string name="emulation_resume">Reprendre</string>
+    <string name="emulation_save_state">Sauvegarder l\'état</string>
+    <string name="emulation_load_state">Charger l\'état</string>
+    <string name="emulation_reset">Réinitialiser le jeu</string>
+    <string name="emulation_fast_forward">Avance rapide</string>
+    <string name="emulation_edit_controls">Modifier les commandes</string>
+    <string name="emulation_quit">Quitter</string>
+    <string name="emulation_state_saved">État sauvegardé</string>
+    <string name="emulation_per_game_profile_on">Utiliser un profil de commandes propre à ce jeu</string>
+    <string name="emulation_per_game_profile_off">Revenir au profil de commandes global</string>
+    <string name="emulation_profile_created">Profil propre à ce jeu créé</string>
+    <string name="emulation_profile_removed">Profil global rétabli</string>
+    <string name="emulation_state_load_failed">Impossible de charger l\'état</string>
+    <string name="emulation_no_state">Aucun état sauvegardé</string>
+    <string name="emulation_rom_error">Impossible de lire cette ROM</string>
+
+    <!-- Éditeur de commandes -->
+    <string name="editor_hint">Glissez un élément pour le déplacer</string>
+    <string name="editor_size">Taille</string>
+    <string name="editor_opacity">Opacité</string>
+    <string name="editor_visible">Visible</string>
+    <string name="editor_reset">Disposition par défaut</string>
+    <string name="editor_done">Terminé</string>
+
+    <!-- Paramètres -->
+    <string name="settings_title">Paramètres</string>
+    <string name="settings_category_emulation">Émulation</string>
+    <string name="settings_speed_limit">Limiter la vitesse</string>
+    <string name="settings_speed_limit_summary">Respecter la cadence native (59,7 Hz)</string>
+    <string name="settings_fast_forward">Multiplicateur d\'avance rapide</string>
+    <string name="settings_pause_background">Pause en arrière-plan</string>
+    <string name="settings_auto_resume">Reprise automatique</string>
+    <string name="settings_auto_resume_summary">Recharger le dernier état au lancement d\'un jeu</string>
+    <string name="settings_category_video">Vidéo</string>
+    <string name="settings_keep_aspect">Conserver le ratio</string>
+    <string name="settings_integer_scaling">Mise à l\'échelle entière</string>
+    <string name="settings_palette">Palette Game Boy</string>
+    <string name="settings_show_fps">Compteur de performance</string>
+    <string name="settings_category_audio">Audio</string>
+    <string name="settings_audio_enabled">Activer l\'audio</string>
+    <string name="settings_audio_enabled_summary">La synthèse audio sera livrée dans une phase dédiée</string>
+    <string name="settings_audio_volume">Volume</string>
+    <string name="settings_category_controls">Contrôles</string>
+    <string name="settings_haptic">Vibration des commandes</string>
+    <string name="settings_reset_layouts">Réinitialiser les dispositions tactiles</string>
+    <string name="settings_layouts_reset_done">Dispositions réinitialisées</string>
+    <string name="settings_category_files">Fichiers</string>
+    <string name="settings_sav_dir">Dossier des sauvegardes .sav</string>
+    <string name="settings_sav_dir_none">Espace privé de l\'application</string>
+    <string name="settings_covers_dir">Dossier des pochettes</string>
+    <string name="settings_covers_dir_none">Aucun dossier choisi</string>
+    <string name="settings_category_library">Bibliothèque</string>
+    <string name="settings_badges">Afficher les badges de statut</string>
+    <string name="settings_clear_index">Nettoyer l\'index</string>
+    <string name="settings_index_cleared">Index nettoyé</string>
+    <string name="settings_category_debug">Débogage</string>
+    <string name="settings_debug_info">Les informations de cartouche sont visibles dans les détails de chaque jeu</string>
+
+    <!-- Divers -->
+    <string name="cancel">Annuler</string>
+    <string name="ok">OK</string>
+</resources>

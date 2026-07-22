@@ -1,0 +1,95 @@
+package com.ravenemu.storage
+
+import android.content.Context
+import android.net.Uri
+import com.ravenemu.core.gb.cartridge.CartridgeHeader
+import com.ravenemu.romlibrary.AnalysisResult
+import com.ravenemu.romlibrary.RomAnalyzer
+import com.ravenemu.romlibrary.RomIndex
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
+/**
+ * Orchestration de la bibliothèque : balayage des dossiers SAF, analyse des
+ * fichiers nouveaux ou modifiés, retrait des fichiers disparus, persistance
+ * de l'index. Toute l'E/S s'exécute hors du thread principal.
+ */
+class LibraryRepository(
+    context: Context,
+    private val analyzers: List<RomAnalyzer>,
+) {
+    private val scanner = RomFileScanner(context)
+    private val indexStore = RomIndexStore(context)
+
+    fun loadIndex(): RomIndex = indexStore.load()
+
+    /**
+     * Actualise l'index à partir des dossiers [romDirUris] et retourne le
+     * nouvel index persisté. Les fichiers illisibles ou invalides sont
+     * ignorés proprement.
+     */
+    suspend fun refresh(romDirUris: List<Uri>): RomIndex = withContext(Dispatchers.IO) {
+        var index = indexStore.load()
+        val extensions = analyzers.flatMap { it.console.romExtensions }.toSet()
+        val scanned = scanner.scan(romDirUris, extensions)
+
+        index = index.retainAll(scanned.map { it.uri.toString() }.toSet())
+
+        for (file in scanned) {
+            val uriString = file.uri.toString()
+            if (!index.needsRefresh(uriString, file.sizeBytes, file.lastModified)) {
+                continue
+            }
+            if (file.sizeBytes > CartridgeHeader.MAX_ROM_SIZE) continue
+            val analyzer = analyzers.firstOrNull { it.canAnalyze(file.name) } ?: continue
+            val data = try {
+                scanner.readAll(file.uri, CartridgeHeader.MAX_ROM_SIZE)
+            } catch (_: Exception) {
+                null
+            } ?: continue
+            when (val result = analyzer.analyze(
+                uri = uriString,
+                fileName = file.name,
+                lastModified = file.lastModified,
+                data = data,
+            )) {
+                is AnalysisResult.Success -> {
+                    // Conserve les choix utilisateur d'une version précédente.
+                    val previous = index.byUri(uriString)
+                    index = index.upsert(
+                        result.entry.copy(
+                            userStatusOverride = previous?.userStatusOverride,
+                            coverUri = previous?.coverUri,
+                        )
+                    )
+                }
+                is AnalysisResult.Invalid -> Unit // fichier ignoré
+            }
+        }
+        indexStore.save(index)
+        index
+    }
+
+    /** Met à jour une entrée (pochette choisie, statut forcé…). */
+    suspend fun update(index: RomIndex, entry: com.ravenemu.romlibrary.RomEntry): RomIndex =
+        withContext(Dispatchers.IO) {
+            val updated = index.upsert(entry)
+            indexStore.save(updated)
+            updated
+        }
+
+    /** Vide l'index (paramètre « nettoyage de l'index »). */
+    suspend fun clear(): RomIndex = withContext(Dispatchers.IO) {
+        indexStore.clear()
+        RomIndex()
+    }
+
+    /** Lit le contenu d'une ROM indexée pour lancement en émulation. */
+    suspend fun readRom(uri: Uri): ByteArray? = withContext(Dispatchers.IO) {
+        try {
+            scanner.readAll(uri, CartridgeHeader.MAX_ROM_SIZE)
+        } catch (_: Exception) {
+            null
+        }
+    }
+}

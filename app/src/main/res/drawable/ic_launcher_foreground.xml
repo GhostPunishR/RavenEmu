@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Silhouette de corbeau stylisée, dessinée pour RavenEmu. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#9BBC0F"
+        android:pathData="M54,26 C46,26 40,32 38,39 L26,44 L38,47 C38,54 42,60 48,63 L44,80 L52,68 L56,68 L60,82 L62,64 C70,61 74,53 73,45 L66,38 C64,31 60,26 54,26 Z" />
+    <path
+        android:fillColor="#0F380F"
+        android:pathData="M52,38 m-3,0 a3,3 0 1,1 6,0 a3,3 0 1,1 -6,0" />
+</vector>

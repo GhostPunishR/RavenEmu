@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res/auto">
+
+    <item
+        android:id="@+id/action_search"
+        android:icon="@android:drawable/ic_menu_search"
+        android:title="@string/library_search_hint"
+        app:actionViewClass="androidx.appcompat.widget.SearchView"
+        app:showAsAction="ifRoom|collapseActionView" />
+
+    <item
+        android:id="@+id/action_refresh"
+        android:icon="@android:drawable/ic_popup_sync"
+        android:title="@string/library_refresh"
+        app:showAsAction="ifRoom" />
+
+    <item
+        android:id="@+id/action_add_folder"
+        android:icon="@android:drawable/ic_menu_add"
+        android:title="@string/library_add_folder"
+        app:showAsAction="ifRoom" />
+
+    <item
+        android:id="@+id/action_toggle_view"
+        android:title="@string/library_view_list"
+        app:showAsAction="never" />
+
+    <item android:title="@string/library_sort" app:showAsAction="never">
+        <menu>
+            <item
+                android:id="@+id/action_sort_title"
+                android:title="@string/library_sort_title" />
+            <item
+                android:id="@+id/action_sort_size"
+                android:title="@string/library_sort_size" />
+            <item
+                android:id="@+id/action_sort_status"
+                android:title="@string/library_sort_status" />
+        </menu>
+    </item>
+
+    <item
+        android:id="@+id/action_settings"
+        android:title="@string/settings_title"
+        app:showAsAction="never" />
+</menu>
