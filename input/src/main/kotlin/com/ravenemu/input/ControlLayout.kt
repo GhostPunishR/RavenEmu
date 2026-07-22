@@ -61,14 +61,18 @@ data class ControlLayout(
             null
         }
 
-        /** Disposition par défaut en portrait : commandes sous l'écran de jeu. */
+        /**
+         * Disposition par défaut en portrait. L'écran de jeu étant ancré en
+         * haut, les commandes occupent le tiers médian-bas, à portée de
+         * pouce, en laissant la bordure basse aux gestes système.
+         */
         fun defaultPortrait(): ControlLayout = ControlLayout(
             elements = listOf(
-                ControlElement(ControlId.DPAD, centerX = 0.20f, centerY = 0.80f),
-                ControlElement(ControlId.BUTTON_A, centerX = 0.88f, centerY = 0.76f),
-                ControlElement(ControlId.BUTTON_B, centerX = 0.72f, centerY = 0.83f),
-                ControlElement(ControlId.SELECT, centerX = 0.40f, centerY = 0.94f),
-                ControlElement(ControlId.START, centerX = 0.60f, centerY = 0.94f),
+                ControlElement(ControlId.DPAD, centerX = 0.20f, centerY = 0.70f),
+                ControlElement(ControlId.BUTTON_A, centerX = 0.87f, centerY = 0.63f),
+                ControlElement(ControlId.BUTTON_B, centerX = 0.71f, centerY = 0.72f),
+                ControlElement(ControlId.SELECT, centerX = 0.38f, centerY = 0.88f),
+                ControlElement(ControlId.START, centerX = 0.62f, centerY = 0.88f),
                 ControlElement(ControlId.MENU, centerX = 0.94f, centerY = 0.04f),
             )
         )
