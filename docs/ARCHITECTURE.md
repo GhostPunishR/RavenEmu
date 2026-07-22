@@ -121,4 +121,8 @@ Enfin, la sortie ouvre l'`AudioTrack` au **débit natif** du périphérique
 (`PROPERTY_OUTPUT_SAMPLE_RATE`, repli 48 kHz) et rééchantillonne le flux
 32768 Hz du moteur avec un `LinearResampler` interne (module `emulation-api`,
 testé sur JVM) plutôt que de s'en remettre au rééchantillonneur — de qualité
-variable — du système.
+variable — du système. Le tampon est court (~3 trames) et le chemin basse
+latence (`PERFORMANCE_MODE_LOW_LATENCY`) est demandé : la latence de sortie
+reste faible, ce qui garde le son proche de l'image (synchronisation A/V) et
+l'entrée réactive, sans risque de sous-alimentation puisque le thread
+d'émulation n'est plus bloqué par l'affichage.
