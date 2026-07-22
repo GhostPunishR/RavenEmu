@@ -2,7 +2,7 @@ package com.ravenemu.core.gb.memory
 
 import com.ravenemu.core.gb.InterruptController
 import com.ravenemu.core.gb.cartridge.Cartridge
-import com.ravenemu.core.gb.io.ApuStub
+import com.ravenemu.core.gb.io.Apu
 import com.ravenemu.core.gb.io.Joypad
 import com.ravenemu.core.gb.io.SerialPort
 import com.ravenemu.core.gb.io.Timer
@@ -23,7 +23,7 @@ class MemoryBus(
     private val timer: Timer,
     private val serial: SerialPort,
     private val joypad: Joypad,
-    private val apu: ApuStub,
+    private val apu: Apu,
 ) : Bus {
 
     val wram = ByteArray(0x2000)

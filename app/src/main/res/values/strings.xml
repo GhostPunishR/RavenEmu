@@ -71,7 +71,7 @@
     <string name="settings_show_fps">Compteur de performance</string>
     <string name="settings_category_audio">Audio</string>
     <string name="settings_audio_enabled">Activer l\'audio</string>
-    <string name="settings_audio_enabled_summary">La synthèse audio sera livrée dans une phase dédiée</string>
+    <string name="settings_audio_enabled_summary">Synthèse des 4 canaux Game Boy, synchronisée avec l\'image</string>
     <string name="settings_audio_volume">Volume</string>
     <string name="settings_category_controls">Contrôles</string>
     <string name="settings_haptic">Vibration des commandes</string>

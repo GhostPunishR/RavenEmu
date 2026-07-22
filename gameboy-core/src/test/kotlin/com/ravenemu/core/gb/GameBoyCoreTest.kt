@@ -160,6 +160,18 @@ class GameBoyCoreTest {
     }
 
     @Test
+    fun `une trame produit des echantillons audio`() {
+        val core = loadedCore()
+        val frame = IntArray(core.video.pixelCount)
+        core.runFrame(frame)
+        val audio = ShortArray(4096)
+        val count = core.readAudio(audio)
+        assertTrue(count in 1096..1098, "obtenu $count")
+        // ROM inerte : aucun canal déclenché, silence attendu.
+        assertTrue((0 until count).all { audio[it] == 0.toShort() })
+    }
+
+    @Test
     fun `vblank cadence par trame`() {
         val core = loadedCore()
         val m = assertNotNull(core.machine)
