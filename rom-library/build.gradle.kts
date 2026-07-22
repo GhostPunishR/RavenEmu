@@ -16,6 +16,7 @@ kotlin {
 
 dependencies {
     api(project(":emulation-api"))
+    api(project(":gameboy-core"))
     implementation(libs.kotlinx.serialization.json)
     testImplementation(libs.kotlin.test)
     testImplementation(libs.junit4)
