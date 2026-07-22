@@ -23,6 +23,62 @@ class GameBoyCoreTest {
     private fun loadedCore(rom: ByteArray = idleRom()): GameBoyCore =
         GameBoyCore(clock = { 0L }).apply { loadRom(rom) }
 
+    /** ROM Game Boy Color inoffensive (boucle infinie, drapeau CGB posé). */
+    private fun idleCgbRom(): ByteArray =
+        TestRoms.build(type = 0x1B, ramSizeCode = 0x02, cgbFlag = 0x80) { rom ->
+            rom[0x0100] = 0x18
+            rom[0x0101] = 0xFE.toByte()
+        }
+
+    @Test
+    fun `mode CGB detecte via l'en-tete`() {
+        val dmg = loadedCore()
+        assertEquals(
+            com.ravenemu.emulation.api.FramebufferFormat.INDEXED_4,
+            dmg.framebufferFormat,
+        )
+        assertEquals(0x01, assertNotNull(dmg.machine).cpu.a) // A=0x01 (DMG)
+
+        val cgb = loadedCore(idleCgbRom())
+        assertEquals(
+            com.ravenemu.emulation.api.FramebufferFormat.ARGB_8888,
+            cgb.framebufferFormat,
+        )
+        assertEquals(0x11, assertNotNull(cgb.machine).cpu.a) // A=0x11 (jeux détectent CGB)
+    }
+
+    @Test
+    fun `une trame CGB produit des couleurs ARGB opaques`() {
+        val core = loadedCore(idleCgbRom())
+        val frame = IntArray(core.video.pixelCount)
+        core.runFrame(frame)
+        // Écran encore éteint au boot → image effacée, mais format ARGB.
+        assertTrue(frame.all { (it ushr 24) == 0xFF || it == 0 })
+    }
+
+    @Test
+    fun `etat instantane CGB aller-retour`() {
+        val core = loadedCore(idleCgbRom())
+        val frame = IntArray(core.video.pixelCount)
+        core.runFrame(frame)
+        val state = core.saveState()
+        core.runFrame(frame)
+        core.runFrame(frame)
+        core.loadState(state)
+        assertContentEquals(state, core.saveState())
+    }
+
+    @Test
+    fun `bascule double vitesse via le bus`() {
+        val core = loadedCore(idleCgbRom())
+        val m = assertNotNull(core.machine)
+        m.bus.write(0xFF4D, 0x01) // arme KEY1
+        assertFalse(m.speed.doubleSpeed)
+        m.bus.onStop()
+        assertTrue(m.speed.doubleSpeed)
+        assertEquals(0x80, m.bus.read(0xFF4D) and 0x80) // KEY1 bit7 = double vitesse
+    }
+
     @Test
     fun `caracteristiques video conformes DMG`() {
         val core = GameBoyCore()

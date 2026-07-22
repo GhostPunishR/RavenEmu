@@ -45,8 +45,16 @@ class GameBoyCore(
     override val audio: AudioSpec =
         AudioSpec(sampleRateHz = Apu.SAMPLE_RATE_HZ, channelCount = 2)
 
-    /** La Game Boy émet des niveaux monochromes, colorisés par le renderer. */
-    override val framebufferFormat: FramebufferFormat = FramebufferFormat.INDEXED_4
+    /**
+     * DMG : niveaux monochromes `0..3` colorisés par le renderer. CGB : le
+     * PPU produit directement des couleurs ARGB.
+     */
+    override val framebufferFormat: FramebufferFormat
+        get() = if (machine?.cgbMode == true) {
+            FramebufferFormat.ARGB_8888
+        } else {
+            FramebufferFormat.INDEXED_4
+        }
 
     internal var machine: Machine? = null
         private set
@@ -79,14 +87,17 @@ class GameBoyCore(
         require(framebuffer.size >= video.pixelCount) {
             "Framebuffer trop petit : ${framebuffer.size} < ${video.pixelCount}"
         }
-        var cycles = 0
-        while (cycles < CYCLES_PER_FRAME) {
+        // On compte les cycles ramenés à l'horloge PPU : une trame vaut
+        // toujours 70 224 points d'affichage, que le CPU tourne en simple ou
+        // en double vitesse (auquel cas il exécute deux fois plus de cycles).
+        var ppuCycles = 0
+        while (ppuCycles < CYCLES_PER_FRAME) {
             val consumed = m.cpu.step()
             m.tick(consumed)
-            cycles += consumed
+            ppuCycles += consumed shr m.speed.peripheralShift
         }
-        // Le PPU produit déjà les niveaux 0..3 (registres BGP/OBP appliqués) ;
-        // on les recopie tels quels, sans colorisation.
+        // En DMG le framebuffer contient des niveaux 0..3 (colorisés par le
+        // renderer) ; en CGB il contient déjà des couleurs ARGB.
         System.arraycopy(m.ppu.completedFrame, 0, framebuffer, 0, video.pixelCount)
     }
 
@@ -125,22 +136,40 @@ class GameBoyCore(
     /** Machine complète reconstruite à chaque chargement de ROM. */
     internal class Machine(rom: ByteArray, clock: () -> Long) {
         val cartridge: Cartridge = Cartridge.create(rom, clock)
+
+        /** Fonctions couleur CGB actives si la cartouche les déclare. */
+        val cgbMode: Boolean = cartridge.header.supportsCgb
+
         val interrupts = InterruptController()
         val timer = Timer(interrupts)
         val serial = SerialPort(interrupts)
         val joypad = Joypad(interrupts)
-        val ppu = Ppu(interrupts)
+        val speed = SpeedController(cgbMode)
+        val ppu = Ppu(interrupts, cgbMode)
         val apu = Apu()
-        val bus = MemoryBus(cartridge, ppu, interrupts, timer, serial, joypad, apu)
+        val bus =
+            MemoryBus(cartridge, ppu, interrupts, timer, serial, joypad, apu, cgbMode, speed)
         val cpu = Cpu(bus, interrupts)
 
-        fun tick(cycles: Int) {
-            timer.tick(cycles)
-            serial.tick(cycles)
-            ppu.tick(cycles)
-            apu.tick(cycles)
-            bus.tick(cycles)
-            cartridge.tick(cycles)
+        init {
+            // Les jeux détectent la Game Boy Color via A = 0x11 au démarrage.
+            if (cgbMode) cpu.a = 0x11
+        }
+
+        fun tick(cpuCycles: Int) {
+            // Timer et port série suivent l'horloge CPU (doublée en double
+            // vitesse) ; PPU et APU restent à 4,19 MHz.
+            timer.tick(cpuCycles)
+            serial.tick(cpuCycles)
+            val ppuCycles = cpuCycles shr speed.peripheralShift
+            ppu.tick(ppuCycles)
+            if (ppu.enteredHBlank) {
+                bus.notifyHBlank()
+                ppu.enteredHBlank = false
+            }
+            apu.tick(ppuCycles)
+            bus.tick(cpuCycles)
+            cartridge.tick(cpuCycles)
         }
     }
 

@@ -114,10 +114,16 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
         // l'image remplit la hauteur, le centrage reste naturel.
         surface.topAligned =
             resources.configuration.orientation != Configuration.ORIENTATION_LANDSCAPE
-        // Profil d'écran monochrome appliqué par le renderer, à chaud : le
-        // changement est visible immédiatement, sans redémarrer le jeu.
-        surface.displayColors =
+        // DMG : le renderer colorise les niveaux 0..3 via le profil d'écran
+        // (à chaud). Game Boy Color : le moteur produit déjà des couleurs
+        // ARGB, on laisse donc le renderer les afficher telles quelles.
+        val monochrome =
+            core?.framebufferFormat != com.ravenemu.emulation.api.FramebufferFormat.ARGB_8888
+        surface.displayColors = if (monochrome) {
             MonochromeDisplayProfiles.byId(settings.screenProfileId).colors
+        } else {
+            null
+        }
         performanceOverlay.visibility =
             if (settings.showPerformanceOverlay) View.VISIBLE else View.GONE
     }
@@ -208,6 +214,10 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
         newSession.audioEnabled = settings.audioEnabled
         core = newCore
         session = newSession
+
+        // La ROM est chargée : le format (monochrome DMG ou couleur CGB) est
+        // connu, on (ré)applique les réglages vidéo en conséquence.
+        applyVideoSettings()
 
         if (settings.autoResume) {
             snapshotStore.read(romSha256, SnapshotStore.AUTO_SLOT)?.let { state ->

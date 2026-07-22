@@ -9,6 +9,13 @@ interface Bus {
     fun read(address: Int): Int
     fun write(address: Int, value: Int)
 
+    /**
+     * Notifie l'exécution de l'instruction STOP. Utilisé par le matériel Game
+     * Boy Color pour basculer la vitesse d'horloge lorsqu'elle est armée.
+     * Sans effet par défaut.
+     */
+    fun onStop() {}
+
     fun readWord(address: Int): Int =
         read(address) or (read((address + 1) and 0xFFFF) shl 8)
 

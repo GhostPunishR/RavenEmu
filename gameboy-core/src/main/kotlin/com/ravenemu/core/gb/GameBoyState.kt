@@ -19,8 +19,8 @@ internal object GameBoyState {
 
     private const val MAGIC = 0x52564E53 // "RVNS"
 
-    /** Version 3 : filtre passe-haut APU ajouté (v2 : état APU complet). */
-    private const val VERSION = 3
+    /** Version 4 : état Game Boy Color (CRAM, banques, vitesse, HDMA). */
+    private const val VERSION = 4
 
     fun serialize(core: GameBoyCore, m: GameBoyCore.Machine): ByteArray {
         val buffer = ByteArrayOutputStream(64 * 1024)
@@ -64,12 +64,18 @@ internal object GameBoyState {
         for (field in ppuFields) out.writeInt(field)
         out.write(m.ppu.vram)
         out.write(m.ppu.oam)
+        out.write(m.ppu.bgCram)
+        out.write(m.ppu.objCram)
+
+        val speedState = m.speed.state()
+        out.writeInt(speedState[0])
+        out.writeInt(speedState[1])
 
         out.write(m.bus.wram)
         out.write(m.bus.hram)
         val dma = m.bus.stateDma()
-        out.writeInt(dma[0])
-        out.writeInt(dma[1])
+        out.writeInt(dma.size)
+        for (field in dma) out.writeInt(field)
 
         m.apu.saveState(out)
 
@@ -135,10 +141,16 @@ internal object GameBoyState {
             m.ppu.restoreState(ppuFields)
             input.readFully(m.ppu.vram)
             input.readFully(m.ppu.oam)
+            input.readFully(m.ppu.bgCram)
+            input.readFully(m.ppu.objCram)
+            m.ppu.rebuildColorCache()
+
+            m.speed.restore(intArrayOf(input.readInt(), input.readInt()))
 
             input.readFully(m.bus.wram)
             input.readFully(m.bus.hram)
-            m.bus.restoreDma(intArrayOf(input.readInt(), input.readInt()))
+            val dmaCount = input.readInt()
+            m.bus.restoreDma(IntArray(dmaCount) { input.readInt() })
 
             m.apu.loadState(input)
 
