@@ -1,0 +1,99 @@
+name: Android CI
+
+on:
+  push:
+    branches: [main, master, develop, "claude/**"]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Tests, lint et APK Debug
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@v4
+
+      - name: Installer Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Configurer Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Tests unitaires
+        run: ./gradlew test
+
+      - name: Lint
+        run: ./gradlew lint
+
+      - name: Construire l'APK Debug
+        run: ./gradlew assembleDebug
+
+      - name: Publier les rapports de test
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rapports-tests
+          path: "**/build/reports/tests/"
+          if-no-files-found: ignore
+
+      - name: Publier les rapports lint
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rapports-lint
+          path: "**/build/reports/lint-results-*"
+          if-no-files-found: ignore
+
+      - name: Publier l'APK Debug
+        uses: actions/upload-artifact@v4
+        with:
+          name: ravenemu-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+
+  release:
+    name: APK Release
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push'
+    env:
+      # Secrets GitHub : le keystore et ses mots de passe ne sont jamais
+      # stockés dans le dépôt. En leur absence, l'APK Release est non signé.
+      KEYSTORE_BASE64: ${{ secrets.RAVENEMU_KEYSTORE_BASE64 }}
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@v4
+
+      - name: Installer Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Configurer Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Restaurer le keystore depuis les secrets
+        if: env.KEYSTORE_BASE64 != ''
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/ravenemu.jks"
+          echo "RAVENEMU_KEYSTORE_PATH=$RUNNER_TEMP/ravenemu.jks" >> "$GITHUB_ENV"
+
+      - name: Construire l'APK Release
+        env:
+          RAVENEMU_KEYSTORE_PASSWORD: ${{ secrets.RAVENEMU_KEYSTORE_PASSWORD }}
+          RAVENEMU_KEY_ALIAS: ${{ secrets.RAVENEMU_KEY_ALIAS }}
+          RAVENEMU_KEY_PASSWORD: ${{ secrets.RAVENEMU_KEY_PASSWORD }}
+        run: ./gradlew assembleRelease
+
+      - name: Publier l'APK Release
+        uses: actions/upload-artifact@v4
+        with:
+          name: ravenemu-release-apk
+          path: app/build/outputs/apk/release/*.apk

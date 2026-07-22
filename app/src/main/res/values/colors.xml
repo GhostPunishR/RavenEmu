@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="raven_primary">#2E3440</color>
+    <color name="raven_primary_dark">#232831</color>
+    <color name="raven_accent">#8BAC0F</color>
+    <color name="raven_icon_background">#0F380F</color>
+    <color name="badge_verified">#2E7D32</color>
+    <color name="badge_hack">#F57F17</color>
+    <color name="badge_modified">#C62828</color>
+    <color name="badge_unknown">#546E7A</color>
+    <color name="badge_homebrew">#6A1B9A</color>
+</resources>

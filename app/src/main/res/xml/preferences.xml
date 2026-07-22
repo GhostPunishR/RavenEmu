@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory android:title="@string/settings_category_emulation">
+        <SwitchPreferenceCompat
+            android:defaultValue="true"
+            android:key="emu_speed_limit"
+            android:summary="@string/settings_speed_limit_summary"
+            android:title="@string/settings_speed_limit" />
+        <SeekBarPreference
+            android:defaultValue="2"
+            android:key="emu_fast_forward"
+            android:max="4"
+            android:title="@string/settings_fast_forward"
+            app:min="2"
+            app:showSeekBarValue="true" />
+        <SwitchPreferenceCompat
+            android:defaultValue="true"
+            android:key="emu_pause_background"
+            android:title="@string/settings_pause_background" />
+        <SwitchPreferenceCompat
+            android:defaultValue="false"
+            android:key="emu_auto_resume"
+            android:summary="@string/settings_auto_resume_summary"
+            android:title="@string/settings_auto_resume" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/settings_category_video">
+        <SwitchPreferenceCompat
+            android:defaultValue="true"
+            android:key="video_keep_aspect"
+            android:title="@string/settings_keep_aspect" />
+        <SwitchPreferenceCompat
+            android:defaultValue="false"
+            android:key="video_integer_scaling"
+            android:title="@string/settings_integer_scaling" />
+        <ListPreference
+            android:defaultValue="classic"
+            android:key="video_palette"
+            android:title="@string/settings_palette"
+            app:useSimpleSummaryProvider="true" />
+        <SwitchPreferenceCompat
+            android:defaultValue="false"
+            android:key="video_show_fps"
+            android:title="@string/settings_show_fps" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/settings_category_audio">
+        <SwitchPreferenceCompat
+            android:defaultValue="true"
+            android:key="audio_enabled"
+            android:summary="@string/settings_audio_enabled_summary"
+            android:title="@string/settings_audio_enabled" />
+        <SeekBarPreference
+            android:defaultValue="100"
+            android:key="audio_volume"
+            android:max="100"
+            android:title="@string/settings_audio_volume"
+            app:showSeekBarValue="true" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/settings_category_controls">
+        <SwitchPreferenceCompat
+            android:defaultValue="true"
+            android:key="controls_haptic"
+            android:title="@string/settings_haptic" />
+        <Preference
+            android:key="controls_reset_layouts"
+            android:title="@string/settings_reset_layouts" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/settings_category_files">
+        <Preference
+            android:key="files_sav_dir_picker"
+            android:title="@string/settings_sav_dir" />
+        <Preference
+            android:key="files_covers_dir_picker"
+            android:title="@string/settings_covers_dir" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/settings_category_library">
+        <SwitchPreferenceCompat
+            android:defaultValue="true"
+            android:key="library_badges"
+            android:title="@string/settings_badges" />
+        <Preference
+            android:key="library_clear_index"
+            android:title="@string/settings_clear_index" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/settings_category_debug">
+        <Preference
+            android:enabled="false"
+            android:key="debug_info"
+            android:summary="@string/settings_debug_info"
+            android:title="@string/settings_category_debug" />
+    </PreferenceCategory>
+</PreferenceScreen>
