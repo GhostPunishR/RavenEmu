@@ -34,6 +34,18 @@ class EmulatorSurfaceView @JvmOverloads constructor(
     @Volatile
     var integerScaling: Boolean = false
 
+    /**
+     * Ancrer l'image en haut de la surface plutôt que de la centrer
+     * verticalement. Utilisé en portrait pour libérer le bas de l'écran au
+     * profit des commandes tactiles.
+     */
+    @Volatile
+    var topAligned: Boolean = false
+
+    /** Marge haute en pixels (encoche / zone caméra) quand [topAligned]. */
+    @Volatile
+    var topInsetPx: Int = 0
+
     private var frameWidth = 0
     private var frameHeight = 0
     private var bitmap: Bitmap? = null
@@ -93,7 +105,11 @@ class EmulatorSurfaceView @JvmOverloads constructor(
         val width = (frameWidth * scale).toInt()
         val height = (frameHeight * scale).toInt()
         val left = (canvasWidth - width) / 2
-        val top = (canvasHeight - height) / 2
+        val top = if (topAligned && height + topInsetPx <= canvasHeight) {
+            topInsetPx
+        } else {
+            (canvasHeight - height) / 2
+        }
         destRect.set(left, top, left + width, top + height)
     }
 

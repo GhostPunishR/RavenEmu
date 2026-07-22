@@ -16,6 +16,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -82,6 +83,13 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
         editorPanel = findViewById(R.id.editorPanel)
 
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        // L'image est ancrée en haut en portrait : on la décale sous
+        // l'encoche ou la caméra perforée.
+        ViewCompat.setOnApplyWindowInsetsListener(surface) { _, insets ->
+            surface.topInsetPx =
+                insets.getInsets(WindowInsetsCompat.Type.displayCutout()).top
+            insets
+        }
         applyImmersiveMode()
         applyVideoSettings()
         applyControlLayout()
@@ -102,6 +110,10 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
     private fun applyVideoSettings() {
         surface.keepAspectRatio = settings.keepAspectRatio
         surface.integerScaling = settings.integerScaling
+        // Portrait : écran de jeu en haut, commandes en dessous. Paysage :
+        // l'image remplit la hauteur, le centrage reste naturel.
+        surface.topAligned =
+            resources.configuration.orientation != Configuration.ORIENTATION_LANDSCAPE
         performanceOverlay.visibility =
             if (settings.showPerformanceOverlay) View.VISIBLE else View.GONE
     }
@@ -398,6 +410,7 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
+        applyVideoSettings()
         applyControlLayout()
     }
 
