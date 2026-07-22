@@ -34,7 +34,7 @@ import com.ravenemu.romlibrary.GameBoyRomAnalyzer
 import com.ravenemu.romlibrary.ReferenceDatabase
 import com.ravenemu.romlibrary.RomEntry
 import com.ravenemu.settings.AppSettings
-import com.ravenemu.settings.GameBoyPalettes
+import com.ravenemu.emulation.api.display.MonochromeDisplayProfiles
 import com.ravenemu.storage.LibraryRepository
 import com.ravenemu.storage.SaveFileStore
 import com.ravenemu.storage.SnapshotStore
@@ -114,6 +114,10 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
         // l'image remplit la hauteur, le centrage reste naturel.
         surface.topAligned =
             resources.configuration.orientation != Configuration.ORIENTATION_LANDSCAPE
+        // Profil d'écran monochrome appliqué par le renderer, à chaud : le
+        // changement est visible immédiatement, sans redémarrer le jeu.
+        surface.displayColors =
+            MonochromeDisplayProfiles.byId(settings.screenProfileId).colors
         performanceOverlay.visibility =
             if (settings.showPerformanceOverlay) View.VISIBLE else View.GONE
     }
@@ -183,7 +187,6 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
 
     private fun startEmulation(rom: ByteArray) {
         val newCore = GameBoyCore()
-        newCore.palette = GameBoyPalettes.byKey(settings.paletteKey).colors
         try {
             val battery = saveStore.read(romSha256, romFileName, settings.saveDirectory)
             newCore.loadRom(rom, battery)

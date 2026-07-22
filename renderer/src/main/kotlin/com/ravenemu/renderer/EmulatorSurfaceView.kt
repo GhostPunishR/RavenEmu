@@ -53,6 +53,19 @@ class EmulatorSurfaceView @JvmOverloads constructor(
     @Volatile
     var topInsetPx: Int = 0
 
+    /**
+     * Profil d'écran monochrome : quatre couleurs ARGB appliquées aux niveaux
+     * `0..3` produits par le moteur (colors[0] = niveau 0 le plus clair). Si
+     * `null`, le framebuffer est traité comme des couleurs ARGB directes.
+     * Modifiable à chaud : le changement est visible dès la trame suivante,
+     * sans toucher à l'émulation.
+     */
+    @Volatile
+    var displayColors: IntArray? = null
+        set(value) {
+            field = value?.copyOf()
+        }
+
     @Volatile
     private var frameWidth = 0
 
@@ -156,6 +169,23 @@ class EmulatorSurfaceView @JvmOverloads constructor(
         var running = true
 
         private var renderBitmap: Bitmap? = null
+        private var argbScratch = IntArray(0)
+
+        /**
+         * Applique le profil d'écran : convertit les niveaux `0..3` en couleurs
+         * ARGB. Sans profil ([displayColors] nul), le framebuffer est déjà en
+         * ARGB et retourné tel quel.
+         */
+        private fun colorize(source: IntArray, pixelCount: Int): IntArray {
+            val colors = displayColors ?: return source
+            if (argbScratch.size < pixelCount) argbScratch = IntArray(pixelCount)
+            val out = argbScratch
+            for (i in 0 until pixelCount) {
+                val level = source[i]
+                out[i] = if (level in 0..3) colors[level] else colors[0]
+            }
+            return out
+        }
 
         override fun run() {
             while (running) {
@@ -174,7 +204,8 @@ class EmulatorSurfaceView @JvmOverloads constructor(
                         val width = frameWidth
                         val height = frameHeight
                         val bmp = ensureBitmap(width, height)
-                        bmp.setPixels(source, 0, width, 0, 0, width, height)
+                        val pixels = colorize(source, width * height)
+                        bmp.setPixels(pixels, 0, width, 0, 0, width, height)
                         frameToDraw = bmp
                     }
                 }

@@ -126,3 +126,27 @@ latence (`PERFORMANCE_MODE_LOW_LATENCY`) est demandé : la latence de sortie
 reste faible, ce qui garde le son proche de l'image (synchronisation A/V) et
 l'entrée réactive, sans risque de sous-alimentation puisque le thread
 d'émulation n'est plus bloqué par l'affichage.
+
+## AD-12 — Affichage monochrome : niveaux au moteur, couleur au renderer
+
+Le moteur Game Boy ne produit **aucune couleur** : `runFrame` écrit les
+quatre niveaux logiques `0..3` (le PPU applique déjà les registres BGP/OBP),
+et `EmulatorCore.framebufferFormat` vaut `INDEXED_4`. La colorisation est
+faite par le renderer via un **profil d'écran** (`MonochromeDisplayProfile`,
+module `emulation-api`) : une palette visuelle de quatre couleurs ARGB,
+appliquée au moment de l'affichage.
+
+Conséquences : le profil est indépendant de l'état d'émulation (jamais
+sérialisé dans les `.sav` ni les états instantanés), un changement de profil
+est visible immédiatement sans redémarrer le jeu, et les captures d'écran
+utilisent le profil actif par construction. Les palettes fournies (DMG,
+Pocket, Light éteint/allumé, Noir et blanc) sont des **simulations LCD
+calibrables**, jamais présentées comme des valeurs officielles — aucune
+palette numérique n'ayant été publiée pour ces panneaux, dont la teinte
+réelle varie selon le panneau, son vieillissement et l'éclairage.
+
+Les réglages avancés facultatifs (contraste, luminosité, persistance,
+grille LCD, mélange d'images) ne sont pas encore implémentés ; l'architecture
+les accueillera comme post-traitement appliqué **après** la palette, sans
+modifier les niveaux produits par le PPU, et sans effet ajouté par défaut
+(ni scanlines, ni CRT, ni lissage bilinéaire).

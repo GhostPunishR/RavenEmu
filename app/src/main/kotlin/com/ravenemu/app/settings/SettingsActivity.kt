@@ -10,7 +10,7 @@ import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
 import com.ravenemu.app.R
 import com.ravenemu.settings.AppSettings
-import com.ravenemu.settings.GameBoyPalettes
+import com.ravenemu.emulation.api.display.MonochromeDisplayProfiles
 import com.ravenemu.storage.RomIndexStore
 
 /** Onglet Paramètres : émulation, vidéo, audio, contrôles, fichiers, bibliothèque, débogage. */
@@ -61,10 +61,11 @@ class SettingsActivity : AppCompatActivity() {
             setPreferencesFromResource(R.xml.preferences, rootKey)
             settings = AppSettings(requireContext())
 
-            findPreference<ListPreference>("video_palette")?.let { preference ->
+            findPreference<ListPreference>("video_screen_profile")?.let { preference ->
                 preference.entries =
-                    GameBoyPalettes.all.map { it.displayName }.toTypedArray()
-                preference.entryValues = GameBoyPalettes.all.map { it.key }.toTypedArray()
+                    MonochromeDisplayProfiles.all.map { it.displayName }.toTypedArray()
+                preference.entryValues =
+                    MonochromeDisplayProfiles.all.map { it.id }.toTypedArray()
             }
 
             findPreference<Preference>("controls_reset_layouts")

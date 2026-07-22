@@ -20,6 +20,30 @@ class PpuTest {
         return ppu to interrupts
     }
 
+    // ---- Niveaux monochromes ----
+
+    @Test
+    fun `le PPU ne produit que les niveaux 0 a 3`() {
+        val (ppu, _) = freshPrepared { p ->
+            // Fond, fenêtre et sprites variés pour couvrir tous les niveaux.
+            for (i in 0 until 16) p.writeVram(0x8000 + i, 0xFF) // tuile 0 pleine
+            for (row in 0 until 8) {
+                p.writeVram(0x8010 + row * 2, 0xF0) // tuile 1 : moitié/moitié
+                p.writeVram(0x8010 + row * 2 + 1, 0x0F)
+            }
+            for (i in 0 until 0x400) p.writeVram(0x9800 + i, (i and 1)) // damier
+            p.bgp = 0xE4
+            p.obp0 = 0x1B
+            p.writeOam(0xFE00, 16)
+            p.writeOam(0xFE01, 8)
+            p.writeOam(0xFE02, 1)
+            p.writeOam(0xFE03, 0)
+        }
+        ppu.writeLcdc(0x93) // BG + sprites
+        ppu.tick(456 * 154)
+        assertTrue(ppu.completedFrame.all { it in 0..3 })
+    }
+
     // ---- Machine de modes ----
 
     @Test

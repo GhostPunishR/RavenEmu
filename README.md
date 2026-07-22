@@ -35,8 +35,11 @@ code d'émulateur existant, sans cœur tiers, sans BIOS ni contenu protégé.
 - **Commandes tactiles** : disposition entièrement modifiable (position,
   taille, opacité, visibilité), profils portrait/paysage et par jeu,
   multi-touch avec diagonales, vibrations, manettes physiques
-- **Affichage** : ratio natif conservé, mise à l'échelle entière optionnelle,
-  nearest-neighbor, palettes DMG, adaptation aux encoches et à toutes tailles
+- **Affichage** : le moteur ne produit que les **quatre niveaux monochromes**
+  `0..3` ; le renderer applique un **profil d'écran** (simulation LCD
+  calibrable : Game Boy DMG, Pocket, Light éteint/allumé, Noir et blanc),
+  changeable à chaud. Ratio natif conservé, mise à l'échelle entière
+  optionnelle, nearest-neighbor, adaptation aux encoches et à toutes tailles
   d'écran
 - **Confidentialité** : aucun réseau, aucune télémétrie, permissions
   minimales
@@ -74,7 +77,7 @@ Détails, signature Release et CI : [docs/BUILD.md](docs/BUILD.md).
 | `storage` | Bibliothèque Android | SAF, `.sav`, états, pochettes |
 | `renderer` | Bibliothèque Android | Affichage du framebuffer |
 | `input` | Bibliothèque Android | Tactile, éditeur, manettes |
-| `settings` | Bibliothèque Android | Préférences, palettes |
+| `settings` | Bibliothèque Android | Préférences, profils d'écran |
 
 Le moteur ne dépend pas d'Android et se teste sur JVM (175 tests). L'ajout
 d'une console future se fait par un nouveau module implémentant
