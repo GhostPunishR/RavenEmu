@@ -11,6 +11,8 @@ import androidx.preference.PreferenceFragmentCompat
 import com.ravenemu.app.R
 import com.ravenemu.settings.AppSettings
 import com.ravenemu.emulation.api.display.MonochromeDisplayProfiles
+import com.ravenemu.storage.ImportResult
+import com.ravenemu.storage.ReferenceDatabaseStore
 import com.ravenemu.storage.RomIndexStore
 
 /** Onglet Paramètres : émulation, vidéo, audio, contrôles, fichiers, bibliothèque, débogage. */
@@ -55,6 +57,11 @@ class SettingsActivity : AppCompatActivity() {
                 }
             }
 
+        private val pickReferenceDatabase =
+            registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+                if (uri != null) importReferenceDatabase(uri)
+            }
+
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
             // Même fichier de préférences que AppSettings.
             preferenceManager.sharedPreferencesName = "ravenemu_settings"
@@ -93,6 +100,27 @@ class SettingsActivity : AppCompatActivity() {
                     true
                 }
 
+            findPreference<Preference>("files_import_references")
+                ?.setOnPreferenceClickListener {
+                    // Accepte les DAT No-Intro (XML) et les datasets JSON.
+                    pickReferenceDatabase.launch(
+                        arrayOf("text/xml", "application/xml", "application/json", "text/*", "*/*")
+                    )
+                    true
+                }
+
+            findPreference<Preference>("files_clear_references")
+                ?.setOnPreferenceClickListener {
+                    ReferenceDatabaseStore(requireContext()).clearImports()
+                    Toast.makeText(
+                        requireContext(),
+                        R.string.settings_references_cleared,
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                    updateReferenceSummary()
+                    true
+                }
+
             findPreference<Preference>("library_clear_index")
                 ?.setOnPreferenceClickListener {
                     RomIndexStore(requireContext()).clear()
@@ -105,6 +133,25 @@ class SettingsActivity : AppCompatActivity() {
                 }
 
             updateDirectorySummaries()
+            updateReferenceSummary()
+        }
+
+        private fun importReferenceDatabase(uri: android.net.Uri) {
+            val store = ReferenceDatabaseStore(requireContext())
+            val message = when (val result = store.import(uri)) {
+                is ImportResult.Success ->
+                    getString(R.string.settings_references_imported, result.entryCount)
+                is ImportResult.Failure ->
+                    getString(R.string.settings_references_import_failed, result.reason)
+            }
+            Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show()
+            updateReferenceSummary()
+        }
+
+        private fun updateReferenceSummary() {
+            val count = ReferenceDatabaseStore(requireContext()).load().size
+            findPreference<Preference>("files_import_references")?.summary =
+                getString(R.string.settings_references_count, count)
         }
 
         private fun updateDirectorySummaries() {

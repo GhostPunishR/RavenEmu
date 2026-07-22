@@ -82,6 +82,12 @@
     <string name="settings_sav_dir_none">Espace privé de l\'application</string>
     <string name="settings_covers_dir">Dossier des pochettes</string>
     <string name="settings_covers_dir_none">Aucun dossier choisi</string>
+    <string name="settings_import_references">Importer une base d\'empreintes</string>
+    <string name="settings_references_count">%1$d empreintes de référence</string>
+    <string name="settings_references_imported">%1$d empreintes importées</string>
+    <string name="settings_references_import_failed">Import impossible : %1$s</string>
+    <string name="settings_clear_references">Supprimer les bases importées</string>
+    <string name="settings_references_cleared">Bases d\'empreintes importées supprimées</string>
     <string name="settings_category_library">Bibliothèque</string>
     <string name="settings_badges">Afficher les badges de statut</string>
     <string name="settings_clear_index">Nettoyer l\'index</string>

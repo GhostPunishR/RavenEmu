@@ -21,14 +21,13 @@ import com.google.android.material.appbar.MaterialToolbar
 import com.ravenemu.app.emulation.EmulationActivity
 import com.ravenemu.app.library.RomAdapter
 import com.ravenemu.app.settings.SettingsActivity
-import com.ravenemu.romlibrary.GameBoyRomAnalyzer
-import com.ravenemu.romlibrary.ReferenceDatabase
 import com.ravenemu.romlibrary.RomEntry
 import com.ravenemu.romlibrary.RomIndex
 import com.ravenemu.romlibrary.RomStatus
 import com.ravenemu.settings.AppSettings
 import com.ravenemu.storage.CoverResolver
 import com.ravenemu.storage.LibraryRepository
+import com.ravenemu.storage.ReferenceDatabaseStore
 import kotlinx.coroutines.launch
 
 /**
@@ -40,6 +39,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var settings: AppSettings
     private lateinit var repository: LibraryRepository
+    private lateinit var referenceStore: ReferenceDatabaseStore
     private lateinit var coverResolver: CoverResolver
     private lateinit var adapter: RomAdapter
     private lateinit var recycler: RecyclerView
@@ -80,12 +80,10 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         settings = AppSettings(this)
-        repository = LibraryRepository(
-            context = this,
-            // La base de références embarquée ne contient que des empreintes ;
-            // vide par défaut, elle peut être enrichie sans toucher au code.
-            analyzers = listOf(GameBoyRomAnalyzer(ReferenceDatabase.empty())),
-        )
+        // Base de références locale : semence embarquée + bases importées par
+        // l'utilisateur (No-Intro / dataset JSON), uniquement des empreintes.
+        referenceStore = ReferenceDatabaseStore(this)
+        repository = LibraryRepository(this, referenceStore.load())
         coverResolver = CoverResolver(this)
 
         val toolbar = findViewById<MaterialToolbar>(R.id.toolbar)
@@ -109,6 +107,12 @@ class MainActivity : AppCompatActivity() {
 
         index = repository.loadIndex()
         render()
+        // Applique la base de références courante aux entrées déjà indexées
+        // (leur statut a pu changer depuis un import).
+        lifecycleScope.launch {
+            index = repository.reclassify(index)
+            render()
+        }
         if (index.entries.isEmpty() && settings.romDirectories.isNotEmpty()) {
             refreshLibrary()
         }
@@ -118,6 +122,13 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         adapter.showBadges = settings.showStatusBadges
         render()
+        // Une base d'empreintes a pu être importée depuis les paramètres :
+        // on la recharge et on reclasse la bibliothèque.
+        lifecycleScope.launch {
+            repository.setReferenceDatabase(referenceStore.load())
+            index = repository.reclassify(index)
+            render()
+        }
     }
 
     private fun applyLayoutManager() {
