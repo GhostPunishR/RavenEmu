@@ -46,8 +46,11 @@ variables d'environnement :
 | `RAVENEMU_KEY_PASSWORD` | Mot de passe de la clé |
 
 En CI, ces valeurs proviennent des secrets GitHub (`RAVENEMU_KEYSTORE_BASE64`
-décodé au vol, plus les trois mots de passe/alias). Sans secrets, l'APK
-Release est produit non signé.
+décodé au vol, plus les trois mots de passe/alias). Sans secrets, le job
+`release` ne construit ni ne publie d'APK : Android refuse d'installer un
+APK non signé, seul un APK signé est donc diffusé. Pour tester sans
+signature, utilisez l'artefact `ravenemu-debug-apk` (APK Debug signé avec la
+clé de debug, installable directement).
 
 ## Intégration continue
 
