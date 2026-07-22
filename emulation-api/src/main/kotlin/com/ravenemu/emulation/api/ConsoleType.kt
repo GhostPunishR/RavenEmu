@@ -11,6 +11,8 @@ enum class ConsoleType(
     /** Extensions de fichier ROM reconnues, en minuscules, sans point. */
     val romExtensions: Set<String>,
 ) {
-    GAME_BOY("Game Boy", setOf("gb")),
+    // Le moteur Game Boy prend en charge les cartouches DMG et Game Boy
+    // Color ; les deux extensions sont donc indexées par le même cœur.
+    GAME_BOY("Game Boy", setOf("gb", "gbc")),
     GAME_BOY_COLOR("Game Boy Color", setOf("gbc", "gb")),
 }

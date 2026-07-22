@@ -150,3 +150,32 @@ grille LCD, mélange d'images) ne sont pas encore implémentés ; l'architecture
 les accueillera comme post-traitement appliqué **après** la palette, sans
 modifier les niveaux produits par le PPU, et sans effet ajouté par défaut
 (ni scanlines, ni CRT, ni lissage bilinéaire).
+
+## AD-13 — Game Boy Color
+
+Le cœur `gameboy-core` gère DMG et Game Boy Color dans un même moteur : le
+mode CGB est activé si l'en-tête de la cartouche le déclare
+(`supportsCgb`), et les cartouches `.gbc` sont indexées par le même
+analyseur que les `.gb`.
+
+Ajouts CGB : deux banques de VRAM (VBK), WRAM 32 KiO en 8 banques (SVBK),
+palettes couleur BG/OBJ 15 bits (CRAM, registres 0xFF68–0xFF6B) pré-calculées
+en ARGB, attributs de tuiles en banque 1 (palette, banque de tuile,
+retournements, priorité), priorité maître LCDC bit 0, transfert VRAM
+HDMA/GDMA (0xFF51–0xFF55) et commutateur de vitesse KEY1 (STOP → bascule via
+`SpeedController`). En double vitesse, CPU, timers et série tournent à
+8,4 MHz tandis que PPU et APU restent à 4,19 MHz ; la boucle de trame compte
+les cycles ramenés à l'horloge PPU (70 224 points/trame) pour rester correcte
+dans les deux vitesses.
+
+Sortie : en CGB, le PPU produit directement des couleurs ARGB
+(`framebufferFormat = ARGB_8888`) et le renderer les affiche telles quelles
+(profil d'écran monochrome désactivé) ; en DMG, le comportement niveaux +
+profil (AD-12) est conservé. Le format d'état passe en version 4 (CRAM,
+banques, vitesse, HDMA).
+
+Limites documentées : timing HDMA HBlank simplifié (un bloc de 16 octets par
+HBlank, sans coût cycle précis ni verrouillage bus), séquenceur de trames APU
+non doublé en double vitesse (léger effet sur enveloppes/longueurs), registre
+OPRI non émulé (priorité sprites par index OAM), pas de correction
+colorimétrique LCD (couleurs BGR555 mises à l'échelle linéairement).

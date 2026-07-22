@@ -13,6 +13,8 @@ code d'émulateur existant, sans cœur tiers, sans BIOS ni contenu protégé.
 - CPU Sharp LR35902 complet (jeu principal + instructions CB), cycles exacts,
   délai EI, bug HALT
 - PPU scanline : fond, fenêtre, sprites 8×8/8×16, priorités DMG, STAT/LYC
+- **Game Boy Color** : banques VRAM/WRAM, palettes couleur 15 bits, attributs
+  de tuiles, priorités, HDMA/GDMA, mode double vitesse ; sortie couleur ARGB
 - **Audio 4 canaux** : ondes carrées (balayage, enveloppe), table d'onde,
   bruit LFSR, mixage stéréo, synchronisation audio/vidéo
 - Timers au cycle, interruptions, OAM DMA, plan mémoire complet
@@ -93,13 +95,16 @@ d'une console future se fait par un nouveau module implémentant
 - Comportements obscurs de l'APU non émulés (mode « zombie », corruption de
   Wave RAM)
 - Multicarts MBC1M et câble link non pris en charge
-- Game Boy Color : prévu par l'architecture, pas encore implémenté
+- Game Boy Color pris en charge ; limites : timing HDMA HBlank simplifié
+  (un bloc par HBlank, sans coût cycle précis), séquenceur APU non doublé en
+  double vitesse, registre OPRI non émulé, sans correction colorimétrique LCD
 - États instantanés propres à RavenEmu (format `RVNS` versionné)
 
 ## Feuille de route
 
-- [ ] Compatibilité Game Boy Color
+- [x] Compatibilité Game Boy Color
 - [ ] Base locale d'empreintes de référence enrichie
+- [ ] Réglages d'affichage avancés (contraste, luminosité, correction LCD)
 - [ ] Tests de compatibilité étendus sur matériel réel
 - [ ] Android App Bundle (`.aab`)
 

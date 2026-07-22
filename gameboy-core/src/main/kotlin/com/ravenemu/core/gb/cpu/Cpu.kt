@@ -383,7 +383,7 @@ class Cpu(private val bus: Bus, private val interrupts: InterruptController) {
             0x0E -> { c = fetchByte(); return 8 }
             0x0F -> { a = rrc(a); f = f and FLAG_Z.inv(); return 4 } // RRCA
 
-            0x10 -> { fetchByte(); return 4 } // STOP (traité comme NOP 2 octets)
+            0x10 -> { fetchByte(); bus.onStop(); return 4 } // STOP (+ bascule vitesse CGB)
             0x11 -> { de = fetchWord(); return 12 }
             0x12 -> { bus.write(de, a); return 8 }
             0x13 -> { de = (de + 1) and 0xFFFF; return 8 }
