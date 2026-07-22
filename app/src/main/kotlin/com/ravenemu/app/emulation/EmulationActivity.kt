@@ -196,7 +196,7 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
 
         val samplesPerFrame =
             (newCore.audio.sampleRateHz / newCore.video.refreshRateHz).toInt() + 1
-        val audioSink = AndroidAudioSink(newCore.audio.sampleRateHz, samplesPerFrame)
+        val audioSink = AndroidAudioSink(this, newCore.audio.sampleRateHz, samplesPerFrame)
         audioSink.setVolume(settings.audioVolume / 100f)
 
         val newSession = EmulationSession(newCore, this, audioSink)

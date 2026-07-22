@@ -1,31 +1,47 @@
 package com.ravenemu.app.emulation
 
+import android.content.Context
 import android.media.AudioAttributes
 import android.media.AudioFormat
+import android.media.AudioManager
 import android.media.AudioTrack
+import com.ravenemu.emulation.api.audio.LinearResampler
+import kotlin.math.ceil
 
 /**
- * Sortie audio AudioTrack en mode flux. [write] est bloquant : appelé depuis
- * le thread d'émulation, il cale naturellement la cadence de la session sur
- * l'horloge audio du système (synchronisation audio/vidéo).
+ * Sortie audio AudioTrack en mode flux.
+ *
+ * Le moteur produit ses échantillons à [sourceRateHz] (32768 Hz). Plutôt que
+ * de laisser le système rééchantillonner vers le débit de sortie — avec une
+ * qualité variable selon l'appareil — on ouvre l'AudioTrack au **débit natif**
+ * du périphérique et on rééchantillonne nous-mêmes ([LinearResampler]).
+ *
+ * [write] est bloquant : appelé depuis le thread d'émulation, il cale la
+ * cadence de la session sur l'horloge audio du système (synchronisation
+ * audio/vidéo), quel que soit le débit de sortie.
  */
 class AndroidAudioSink(
-    sampleRateHz: Int,
-    samplesPerFrame: Int,
+    context: Context,
+    sourceRateHz: Int,
+    sourceSamplesPerFrame: Int,
 ) : EmulationSession.AudioSink {
 
+    private val outputRate = resolveNativeRate(context)
+    private val resampler = LinearResampler(sourceRateHz, outputRate)
+    private var resampled = ShortArray(0)
     private val track: AudioTrack
 
     init {
+        val outputSamplesPerFrame =
+            ceil(sourceSamplesPerFrame.toDouble() * outputRate / sourceRateHz).toInt()
         val minBuffer = AudioTrack.getMinBufferSize(
-            sampleRateHz,
+            outputRate,
             AudioFormat.CHANNEL_OUT_STEREO,
             AudioFormat.ENCODING_PCM_16BIT,
         ).coerceAtLeast(0)
-        // Cinq trames (~84 ms) : le rendu vidéo partage le thread
-        // d'émulation, une marge courte provoque des sous-alimentations
-        // audibles (craquements) au moindre ralentissement d'affichage.
-        val bufferBytes = maxOf(minBuffer, samplesPerFrame * 2 * 2 * 5)
+        // Cinq trames de sortie : marge confortable contre les
+        // sous-alimentations (craquements) lors d'un pic de charge ponctuel.
+        val bufferBytes = maxOf(minBuffer, outputSamplesPerFrame * 2 * 2 * 5)
         track = AudioTrack.Builder()
             .setAudioAttributes(
                 AudioAttributes.Builder()
@@ -36,7 +52,7 @@ class AndroidAudioSink(
             .setAudioFormat(
                 AudioFormat.Builder()
                     .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                    .setSampleRate(sampleRateHz)
+                    .setSampleRate(outputRate)
                     .setChannelMask(AudioFormat.CHANNEL_OUT_STEREO)
                     .build()
             )
@@ -48,7 +64,10 @@ class AndroidAudioSink(
     override fun write(samples: ShortArray, count: Int) {
         try {
             if (track.playState != AudioTrack.PLAYSTATE_PLAYING) track.play()
-            track.write(samples, 0, count, AudioTrack.WRITE_BLOCKING)
+            val needed = resampler.maxOutput(count)
+            if (resampled.size < needed) resampled = ShortArray(needed)
+            val produced = resampler.resample(samples, count, resampled)
+            track.write(resampled, 0, produced, AudioTrack.WRITE_BLOCKING)
         } catch (_: Exception) {
             // Une sortie audio défaillante ne doit pas interrompre le jeu.
         }
@@ -65,6 +84,7 @@ class AndroidAudioSink(
         try {
             track.pause()
             track.flush()
+            resampler.reset()
         } catch (_: Exception) {
         }
     }
@@ -73,6 +93,22 @@ class AndroidAudioSink(
         try {
             track.release()
         } catch (_: Exception) {
+        }
+    }
+
+    private companion object {
+        /** Débit de sortie natif du périphérique, avec repli sûr sur 48 kHz. */
+        fun resolveNativeRate(context: Context): Int {
+            return try {
+                val manager =
+                    context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+                val reported = manager
+                    .getProperty(AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE)
+                    ?.toIntOrNull()
+                if (reported != null && reported in 8000..192000) reported else 48000
+            } catch (_: Exception) {
+                48000
+            }
         }
     }
 }

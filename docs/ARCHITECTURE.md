@@ -116,3 +116,9 @@ propre cadence. Le thread d'émulation n'est donc jamais bloqué par
 l'affichage : sa cadence est pilotée uniquement par l'écriture audio
 bloquante, ce qui supprime les sous-alimentations audio (craquements)
 lorsqu'une image tarde à être présentée.
+
+Enfin, la sortie ouvre l'`AudioTrack` au **débit natif** du périphérique
+(`PROPERTY_OUTPUT_SAMPLE_RATE`, repli 48 kHz) et rééchantillonne le flux
+32768 Hz du moteur avec un `LinearResampler` interne (module `emulation-api`,
+testé sur JVM) plutôt que de s'en remettre au rééchantillonneur — de qualité
+variable — du système.
