@@ -209,6 +209,30 @@ class ApuTest {
     }
 
     @Test
+    fun `le moyennage anti-repliement produit des paliers intermediaires`() {
+        val apu = Apu()
+        // Onde carrée très aiguë : plusieurs transitions par échantillon.
+        // Fréquence 0x7FF → période de pas = (2048-2047)*4 = 4 cycles, bien
+        // en deçà des 128 cycles d'un échantillon.
+        apu.write(0xFF12, 0xF0)
+        apu.write(0xFF11, 0xC0) // rapport cyclique 50 %
+        apu.write(0xFF13, 0xFF)
+        apu.write(0xFF14, 0x87)
+        apu.run(70224)
+        val samples = apu.drain()
+        // Amplitude maximale théorique d'un canal isolé.
+        val peak = samples.maxOf { kotlin.math.abs(it.toInt()) }
+        assertTrue(peak > 0)
+        // Un simple instantané ne donnerait que deux niveaux (±crête) ; le
+        // moyennage fait apparaître des valeurs strictement intermédiaires.
+        val intermediate = samples.count {
+            val a = kotlin.math.abs(it.toInt())
+            a in (peak / 8)..(peak * 7 / 8)
+        }
+        assertTrue(intermediate > 0, "aucune valeur intermédiaire : point sampling ?")
+    }
+
+    @Test
     fun `panoramique nr51 route les canaux`() {
         val apu = Apu()
         apu.write(0xFF25, 0x01) // canal 1 à droite uniquement
