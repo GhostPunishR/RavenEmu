@@ -48,12 +48,30 @@ class Apu {
         var sweepEnabled = false
         var shadowFrequency = 0
 
+        /** Intégrale de la sortie DAC sur le temps (anti-repliement). */
+        private var accumulator = 0
+
+        /** Avance en intégrant la sortie : la forme est constante entre deux
+         * transitions du timer, ce qui rend l'intégration exacte. */
         fun step(cycles: Int) {
-            timer -= cycles
-            while (timer <= 0) {
-                timer += (2048 - frequency) * 4
-                dutyPosition = (dutyPosition + 1) and 7
+            var remaining = cycles
+            while (remaining > 0) {
+                val slice = if (timer < remaining) timer else remaining
+                accumulator += dacOutput() * slice
+                timer -= slice
+                remaining -= slice
+                if (timer <= 0) {
+                    timer = (2048 - frequency) * 4
+                    dutyPosition = (dutyPosition + 1) and 7
+                }
             }
+        }
+
+        /** Moyenne de la sortie sur l'intervalle écoulé, puis remise à zéro. */
+        fun drainAverage(cyclesPerSample: Int): Double {
+            val average = accumulator.toDouble() / cyclesPerSample
+            accumulator = 0
+            return average
         }
 
         fun output(): Int =
@@ -194,14 +212,28 @@ class Apu {
         var position = 0
         var sampleBuffer = 0
 
+        private var accumulator = 0
+
         fun step(cycles: Int) {
-            timer -= cycles
-            while (timer <= 0) {
-                timer += (2048 - frequency) * 2
-                position = (position + 1) and 31
-                val byte = waveRam[position shr 1].toInt() and 0xFF
-                sampleBuffer = if (position and 1 == 0) byte shr 4 else byte and 0x0F
+            var remaining = cycles
+            while (remaining > 0) {
+                val slice = if (timer < remaining) timer else remaining
+                accumulator += dacOutput() * slice
+                timer -= slice
+                remaining -= slice
+                if (timer <= 0) {
+                    timer = (2048 - frequency) * 2
+                    position = (position + 1) and 31
+                    val byte = waveRam[position shr 1].toInt() and 0xFF
+                    sampleBuffer = if (position and 1 == 0) byte shr 4 else byte and 0x0F
+                }
             }
+        }
+
+        fun drainAverage(cyclesPerSample: Int): Double {
+            val average = accumulator.toDouble() / cyclesPerSample
+            accumulator = 0
+            return average
         }
 
         fun output(): Int {
@@ -288,18 +320,32 @@ class Apu {
         var lfsr = 0x7FFF
         var timer = 8
 
+        private var accumulator = 0
+
         private fun period(): Int = DIVISORS[divisorCode] shl clockShift
 
         fun step(cycles: Int) {
-            timer -= cycles
-            while (timer <= 0) {
-                timer += period()
-                val feedback = (lfsr xor (lfsr shr 1)) and 1
-                lfsr = (lfsr shr 1) or (feedback shl 14)
-                if (widthMode7) {
-                    lfsr = (lfsr and (1 shl 6).inv()) or (feedback shl 6)
+            var remaining = cycles
+            while (remaining > 0) {
+                val slice = if (timer < remaining) timer else remaining
+                accumulator += dacOutput() * slice
+                timer -= slice
+                remaining -= slice
+                if (timer <= 0) {
+                    timer += period()
+                    val feedback = (lfsr xor (lfsr shr 1)) and 1
+                    lfsr = (lfsr shr 1) or (feedback shl 14)
+                    if (widthMode7) {
+                        lfsr = (lfsr and (1 shl 6).inv()) or (feedback shl 6)
+                    }
                 }
             }
+        }
+
+        fun drainAverage(cyclesPerSample: Int): Double {
+            val average = accumulator.toDouble() / cyclesPerSample
+            accumulator = 0
+            return average
         }
 
         fun output(): Int =
@@ -421,23 +467,30 @@ class Apu {
     // ---- Horloge ----
 
     fun tick(cycles: Int) {
-        if (powerOn) {
-            square1.step(cycles)
-            square2.step(cycles)
-            wave.step(cycles)
-            noise.step(cycles)
-            frameTimer -= cycles
-            while (frameTimer <= 0) {
-                frameTimer += FRAME_SEQUENCER_PERIOD
-                clockFrameSequencer()
+        // Avance par segments qui ne franchissent jamais une frontière
+        // d'échantillon : chaque canal intègre ainsi sa sortie sur exactement
+        // les 128 cycles d'un échantillon, ce qui réalise un filtre
+        // anti-repliement (moyenne) au lieu d'un instantané.
+        var remaining = cycles
+        while (remaining > 0) {
+            val slice = if (sampleTimer < remaining) sampleTimer else remaining
+            if (powerOn) {
+                square1.step(slice)
+                square2.step(slice)
+                wave.step(slice)
+                noise.step(slice)
+                frameTimer -= slice
+                while (frameTimer <= 0) {
+                    frameTimer += FRAME_SEQUENCER_PERIOD
+                    clockFrameSequencer()
+                }
             }
-        }
-        // L'échantillonneur tourne même APU éteint : le silence produit
-        // maintient la cadence de la sortie audio.
-        sampleTimer -= cycles
-        while (sampleTimer <= 0) {
-            sampleTimer += CYCLES_PER_SAMPLE
-            emitSample()
+            sampleTimer -= slice
+            remaining -= slice
+            if (sampleTimer <= 0) {
+                sampleTimer += CYCLES_PER_SAMPLE
+                emitSample()
+            }
         }
     }
 
@@ -465,13 +518,16 @@ class Apu {
     }
 
     private fun emitSample() {
-        var left = 0
-        var right = 0
+        // Chaque canal restitue la moyenne de sa sortie sur l'échantillon
+        // (les accumulateurs sont toujours purgés pour rester synchrones).
+        val c1 = square1.drainAverage(CYCLES_PER_SAMPLE)
+        val c2 = square2.drainAverage(CYCLES_PER_SAMPLE)
+        val c3 = wave.drainAverage(CYCLES_PER_SAMPLE)
+        val c4 = noise.drainAverage(CYCLES_PER_SAMPLE)
+
+        var left = 0.0
+        var right = 0.0
         if (powerOn) {
-            val c1 = square1.dacOutput()
-            val c2 = square2.dacOutput()
-            val c3 = wave.dacOutput()
-            val c4 = noise.dacOutput()
             if (nr51 and 0x10 != 0) left += c1
             if (nr51 and 0x20 != 0) left += c2
             if (nr51 and 0x40 != 0) left += c3
