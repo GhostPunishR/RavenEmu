@@ -405,6 +405,13 @@ class Apu {
     private var ringWrite = 0
     private var ringCount = 0
 
+    // Condensateurs du filtre passe-haut de sortie (un par côté). Comme sur
+    // console, ils éliminent la composante continue des DAC : sans eux,
+    // chaque coupure ou réactivation de DAC (à chaque note) produit une
+    // marche de tension audible (« pop »).
+    private var capacitorLeft = 0.0
+    private var capacitorRight = 0.0
+
     init {
         // Valeurs post-boot DMG des registres de mixage.
         rawRegisters[0x14] = 0x77
@@ -476,8 +483,19 @@ class Apu {
             left *= (((nr50 shr 4) and 0x07) + 1) * MIX_GAIN
             right *= ((nr50 and 0x07) + 1) * MIX_GAIN
         }
-        pushSample(left.toShort(), right.toShort())
+
+        // Filtre passe-haut : out = in - condensateur, qui se recharge vers
+        // l'entrée avec le facteur du matériel DMG ramené à un échantillon.
+        val filteredLeft = left - capacitorLeft
+        capacitorLeft = left - filteredLeft * CHARGE_FACTOR
+        val filteredRight = right - capacitorRight
+        capacitorRight = right - filteredRight * CHARGE_FACTOR
+
+        pushSample(clampToShort(filteredLeft), clampToShort(filteredRight))
     }
+
+    private fun clampToShort(value: Double): Short =
+        value.toInt().coerceIn(-32768, 32767).toShort()
 
     private fun pushSample(left: Short, right: Short) {
         if (ringCount > ring.size - 2) {
@@ -642,6 +660,8 @@ class Apu {
         out.writeInt(frameTimer)
         out.writeInt(frameStep)
         out.writeInt(sampleTimer)
+        out.writeDouble(capacitorLeft)
+        out.writeDouble(capacitorRight)
         square1.saveState(out)
         square2.saveState(out)
         wave.saveState(out)
@@ -656,6 +676,8 @@ class Apu {
         frameTimer = input.readInt()
         frameStep = input.readInt()
         sampleTimer = input.readInt()
+        capacitorLeft = input.readDouble()
+        capacitorRight = input.readDouble()
         square1.loadState(input)
         square2.loadState(input)
         wave.loadState(input)
@@ -676,6 +698,12 @@ class Apu {
 
         /** 4 canaux × 15 × 8 (volume maître) × gain = plafond < 32767. */
         private const val MIX_GAIN = 64
+
+        /**
+         * Facteur de charge du condensateur DMG (0,999958 par T-cycle)
+         * ramené à un échantillon : 0,999958^128.
+         */
+        private const val CHARGE_FACTOR = 0.994638
 
         private val DUTY_TABLE = arrayOf(
             intArrayOf(0, 0, 0, 0, 0, 0, 0, 1), // 12,5 %

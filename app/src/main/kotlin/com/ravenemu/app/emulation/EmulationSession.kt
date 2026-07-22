@@ -128,17 +128,19 @@ class EmulationSession(
             }
 
             core.runFrame(framebuffer)
-            callbacks.onFrame(framebuffer)
-            fpsFrames++
 
-            // Audio : l'écriture bloquante cadence la session ; hors
-            // conditions nominales (avance rapide, audio coupé, vitesse
-            // débridée), les échantillons sont drainés puis abandonnés et le
-            // cadencement par horloge reprend la main.
+            // Audio d'abord : l'écriture bloquante cadence la session et la
+            // file audio est réalimentée avant de payer le coût du rendu
+            // vidéo. Hors conditions nominales (avance rapide, audio coupé,
+            // vitesse débridée), les échantillons sont drainés puis
+            // abandonnés et le cadencement par horloge reprend la main.
             val audioCount = core.readAudio(audioBuffer)
             val audioPaced = audioSink != null && audioEnabled && audioCount > 0 &&
                 speedLimitEnabled && !fastForward
             if (audioPaced) audioSink!!.write(audioBuffer, audioCount)
+
+            callbacks.onFrame(framebuffer)
+            fpsFrames++
 
             val now = System.nanoTime()
 

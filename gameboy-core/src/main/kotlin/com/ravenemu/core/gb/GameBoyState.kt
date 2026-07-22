@@ -19,8 +19,8 @@ internal object GameBoyState {
 
     private const val MAGIC = 0x52564E53 // "RVNS"
 
-    /** Version 2 : état APU complet (la v1 stockait des registres bruts). */
-    private const val VERSION = 2
+    /** Version 3 : filtre passe-haut APU ajouté (v2 : état APU complet). */
+    private const val VERSION = 3
 
     fun serialize(core: GameBoyCore, m: GameBoyCore.Machine): ByteArray {
         val buffer = ByteArrayOutputStream(64 * 1024)
