@@ -105,7 +105,14 @@ par horloge monotone et abandonne les échantillons.
 
 Un **filtre passe-haut** (condensateur par côté, facteur de charge DMG) est
 appliqué à la sortie, comme sur console : il retire la composante continue
-des DAC et supprime les « pops » à chaque coupure/réactivation de canal. La
-file audio est réalimentée **avant** le rendu vidéo dans la boucle, et le
-tampon `AudioTrack` fait ~5 trames pour éviter les sous-alimentations
-(craquements) quand un pic de rendu ralentit ponctuellement le thread.
+des DAC et supprime les « pops » à chaque coupure/réactivation de canal.
+Chaque canal **intègre** sa sortie sur l'intervalle d'échantillon (filtre
+anti-repliement) au lieu d'un instantané, éliminant l'aliasing.
+
+Le **rendu vidéo est découplé** du thread d'émulation : `presentFrame` ne
+fait qu'une recopie brève du framebuffer dans un tampon partagé, et un thread
+de rendu dédié dessine sur la `SurfaceView` (et se cale sur le vsync) à sa
+propre cadence. Le thread d'émulation n'est donc jamais bloqué par
+l'affichage : sa cadence est pilotée uniquement par l'écriture audio
+bloquante, ce qui supprime les sous-alimentations audio (craquements)
+lorsqu'une image tarde à être présentée.

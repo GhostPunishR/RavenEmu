@@ -12,9 +12,13 @@ import android.view.SurfaceView
 /**
  * Affichage du framebuffer produit par un moteur d'émulation.
  *
- * [presentFrame] est appelée depuis le thread d'émulation avec un tableau
- * ARGB ; la vue copie les pixels dans un [Bitmap] réutilisé et le dessine sur
- * la surface avec l'échelle demandée. Aucune allocation par trame.
+ * Le rendu est **découplé** du thread d'émulation : [presentFrame] se contente
+ * de recopier les pixels dans un tampon partagé (opération brève, sans verrou
+ * de canvas), et un thread de rendu dédié dessine sur la surface à sa propre
+ * cadence, en se calant sur le vsync côté écran. Ainsi le thread d'émulation
+ * n'est jamais bloqué par l'affichage : sa cadence reste pilotée par l'audio,
+ * ce qui évite les sous-alimentations audio (craquements) lorsqu'une image
+ * tarde à être présentée.
  *
  * Modes d'échelle :
  * - ratio natif conservé (défaut), filtrage nearest-neighbor ;
@@ -46,17 +50,28 @@ class EmulatorSurfaceView @JvmOverloads constructor(
     @Volatile
     var topInsetPx: Int = 0
 
+    @Volatile
     private var frameWidth = 0
+
+    @Volatile
     private var frameHeight = 0
-    private var bitmap: Bitmap? = null
+
     private val destRect = Rect()
     private val paint = Paint().apply {
         isFilterBitmap = false // nearest-neighbor
         isAntiAlias = false
     }
 
+    // Tampon partagé entre le thread d'émulation (producteur) et le thread de
+    // rendu (consommateur). L'accès est protégé par [frameLock].
+    private val frameLock = Any()
+    private var latestFrame: IntArray? = null
+    private var frameDirty = false
+
     @Volatile
     private var surfaceAvailable = false
+
+    private var renderThread: RenderThread? = null
 
     init {
         holder.addCallback(this)
@@ -64,35 +79,30 @@ class EmulatorSurfaceView @JvmOverloads constructor(
 
     /** Prépare la vue pour un framebuffer de [width] × [height] pixels. */
     fun configure(width: Int, height: Int) {
-        frameWidth = width
-        frameHeight = height
-        bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        synchronized(frameLock) {
+            frameWidth = width
+            frameHeight = height
+            latestFrame = IntArray(width * height)
+            frameDirty = false
+        }
     }
 
     /**
-     * Copie et affiche une trame ARGB. Sans effet si la surface n'est pas
-     * prête, ce qui rend l'appel sûr pendant les transitions de cycle de vie.
+     * Recopie une trame ARGB dans le tampon partagé et réveille le thread de
+     * rendu. Retour immédiat : n'attend jamais le canvas ni le vsync.
      */
     fun presentFrame(frame: IntArray) {
-        val bmp = bitmap ?: return
-        if (!surfaceAvailable) return
-        bmp.setPixels(frame, 0, frameWidth, 0, 0, frameWidth, frameHeight)
-        val canvas = holder.lockCanvas() ?: return
-        try {
-            canvas.drawColor(Color.BLACK)
-            computeDestination(canvas.width, canvas.height)
-            canvas.drawBitmap(bmp, null, destRect, paint)
-        } finally {
-            holder.unlockCanvasAndPost(canvas)
+        synchronized(frameLock) {
+            val target = latestFrame ?: return
+            if (frame.size < target.size) return
+            System.arraycopy(frame, 0, target, 0, target.size)
+            frameDirty = true
+            frameLock.notifyAll()
         }
     }
 
     private fun computeDestination(canvasWidth: Int, canvasHeight: Int) {
-        if (frameWidth == 0 || frameHeight == 0) {
-            destRect.set(0, 0, canvasWidth, canvasHeight)
-            return
-        }
-        if (!keepAspectRatio) {
+        if (frameWidth == 0 || frameHeight == 0 || !keepAspectRatio) {
             destRect.set(0, 0, canvasWidth, canvasHeight)
             return
         }
@@ -115,6 +125,7 @@ class EmulatorSurfaceView @JvmOverloads constructor(
 
     override fun surfaceCreated(holder: SurfaceHolder) {
         surfaceAvailable = true
+        renderThread = RenderThread().also { it.start() }
     }
 
     override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
@@ -123,5 +134,74 @@ class EmulatorSurfaceView @JvmOverloads constructor(
 
     override fun surfaceDestroyed(holder: SurfaceHolder) {
         surfaceAvailable = false
+        renderThread?.let { thread ->
+            thread.running = false
+            synchronized(frameLock) { frameLock.notifyAll() }
+            thread.join(500)
+        }
+        renderThread = null
+    }
+
+    /**
+     * Thread de rendu : attend une trame fraîche, la dessine dans son propre
+     * bitmap, puis la présente. Le `unlockCanvasAndPost` se cale sur le vsync
+     * ici, sans impacter le thread d'émulation.
+     */
+    private inner class RenderThread : Thread("RavenEmu-Render") {
+        @Volatile
+        var running = true
+
+        private var renderBitmap: Bitmap? = null
+
+        override fun run() {
+            while (running) {
+                val width: Int
+                val height: Int
+                synchronized(frameLock) {
+                    while (running && !frameDirty) {
+                        try {
+                            frameLock.wait(250)
+                        } catch (_: InterruptedException) {
+                            return
+                        }
+                    }
+                    if (!running) return
+                    frameDirty = false
+                    width = frameWidth
+                    height = frameHeight
+                    val source = latestFrame ?: continue
+                    val bmp = renderBitmap.let {
+                        if (it == null || it.width != width || it.height != height) {
+                            Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                                .also { created -> renderBitmap = created }
+                        } else {
+                            it
+                        }
+                    }
+                    bmp.setPixels(source, 0, width, 0, 0, width, height)
+                }
+                drawToSurface()
+            }
+        }
+
+        private fun drawToSurface() {
+            if (!surfaceAvailable) return
+            val bmp = renderBitmap ?: return
+            val canvas = try {
+                holder.lockCanvas()
+            } catch (_: Exception) {
+                null
+            } ?: return
+            try {
+                canvas.drawColor(Color.BLACK)
+                computeDestination(canvas.width, canvas.height)
+                canvas.drawBitmap(bmp, null, destRect, paint)
+            } finally {
+                try {
+                    holder.unlockCanvasAndPost(canvas)
+                } catch (_: Exception) {
+                }
+            }
+        }
     }
 }
