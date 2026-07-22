@@ -102,3 +102,10 @@ application, l'écriture **bloquante** vers `AudioTrack` cadence la session
 d'émulation : la synchronisation audio/vidéo découle de l'horloge audio du
 système ; en avance rapide ou audio coupé, la session revient au cadencement
 par horloge monotone et abandonne les échantillons.
+
+Un **filtre passe-haut** (condensateur par côté, facteur de charge DMG) est
+appliqué à la sortie, comme sur console : il retire la composante continue
+des DAC et supprime les « pops » à chaque coupure/réactivation de canal. La
+file audio est réalimentée **avant** le rendu vidéo dans la boucle, et le
+tampon `AudioTrack` fait ~5 trames pour éviter les sous-alimentations
+(craquements) quand un pic de rendu ralentit ponctuellement le thread.

@@ -190,6 +190,25 @@ class ApuTest {
     }
 
     @Test
+    fun `le filtre passe-haut elimine la composante continue`() {
+        val apu = Apu()
+        // Onde constante : uniquement de la composante continue en entrée.
+        for (i in 0 until 16) apu.write(0xFF30 + i, 0xFF)
+        apu.write(0xFF1A, 0x80)
+        apu.write(0xFF1C, 0x20)
+        apu.write(0xFF1D, 0x00)
+        apu.write(0xFF1E, 0x87)
+        apu.run(70224)
+        val transient = maxAmplitude(apu.drain())
+        assertTrue(transient > 0) // marche initiale visible…
+        // Le filtre DMG est volontairement lent : on lui laisse largement le
+        // temps d'absorber la composante continue avant de mesurer.
+        apu.run(70224 * 40)
+        val settled = maxAmplitude(apu.drain())
+        assertTrue(settled < 50, "obtenu $settled") // …puis absorbée
+    }
+
+    @Test
     fun `panoramique nr51 route les canaux`() {
         val apu = Apu()
         apu.write(0xFF25, 0x01) // canal 1 à droite uniquement

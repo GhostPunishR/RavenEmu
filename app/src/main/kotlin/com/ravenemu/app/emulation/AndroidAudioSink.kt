@@ -22,8 +22,10 @@ class AndroidAudioSink(
             AudioFormat.CHANNEL_OUT_STEREO,
             AudioFormat.ENCODING_PCM_16BIT,
         ).coerceAtLeast(0)
-        // Trois trames de latence : réactif sans sous-alimentation.
-        val bufferBytes = maxOf(minBuffer, samplesPerFrame * 2 * 2 * 3)
+        // Cinq trames (~84 ms) : le rendu vidéo partage le thread
+        // d'émulation, une marge courte provoque des sous-alimentations
+        // audibles (craquements) au moindre ralentissement d'affichage.
+        val bufferBytes = maxOf(minBuffer, samplesPerFrame * 2 * 2 * 5)
         track = AudioTrack.Builder()
             .setAudioAttributes(
                 AudioAttributes.Builder()
