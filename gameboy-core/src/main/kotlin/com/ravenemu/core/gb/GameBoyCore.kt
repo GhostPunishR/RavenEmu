@@ -2,7 +2,7 @@ package com.ravenemu.core.gb
 
 import com.ravenemu.core.gb.cartridge.Cartridge
 import com.ravenemu.core.gb.cpu.Cpu
-import com.ravenemu.core.gb.io.ApuStub
+import com.ravenemu.core.gb.io.Apu
 import com.ravenemu.core.gb.io.Joypad
 import com.ravenemu.core.gb.io.SerialPort
 import com.ravenemu.core.gb.io.Timer
@@ -21,8 +21,8 @@ import java.security.MessageDigest
  * l'appelant pilote la cadence en appelant [runFrame].
  *
  * L'émulation démarre à l'état post-boot ROM (aucun BIOS n'est requis ni
- * accepté). L'audio est mémorisé mais non synthétisé dans cette phase
- * (AD-11) : [readAudio] retourne 0 échantillon.
+ * accepté). L'APU synthétise les 4 canaux en continu ; [readAudio] draine les
+ * échantillons stéréo PCM 16 bits produits depuis le dernier appel.
  */
 class GameBoyCore(
     private val clock: () -> Long = { System.currentTimeMillis() / 1000 },
@@ -36,7 +36,8 @@ class GameBoyCore(
         refreshRateHz = REFRESH_RATE_HZ,
     )
 
-    override val audio: AudioSpec = AudioSpec(sampleRateHz = 32768, channelCount = 2)
+    override val audio: AudioSpec =
+        AudioSpec(sampleRateHz = Apu.SAMPLE_RATE_HZ, channelCount = 2)
 
     /**
      * Palette ARGB appliquée aux 4 teintes DMG (0 = plus claire). Modifiable
@@ -96,7 +97,8 @@ class GameBoyCore(
         machine?.joypad?.setButton(button, pressed)
     }
 
-    override fun readAudio(buffer: ShortArray): Int = 0
+    override fun readAudio(buffer: ShortArray): Int =
+        machine?.apu?.readSamples(buffer) ?: 0
 
     override val hasBatteryRam: Boolean
         get() = machine?.cartridge?.let {
@@ -131,7 +133,7 @@ class GameBoyCore(
         val serial = SerialPort(interrupts)
         val joypad = Joypad(interrupts)
         val ppu = Ppu(interrupts)
-        val apu = ApuStub()
+        val apu = Apu()
         val bus = MemoryBus(cartridge, ppu, interrupts, timer, serial, joypad, apu)
         val cpu = Cpu(bus, interrupts)
 
@@ -139,6 +141,7 @@ class GameBoyCore(
             timer.tick(cycles)
             serial.tick(cycles)
             ppu.tick(cycles)
+            apu.tick(cycles)
             bus.tick(cycles)
             cartridge.tick(cycles)
         }

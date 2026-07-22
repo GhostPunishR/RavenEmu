@@ -1,7 +1,8 @@
 # RavenEmu — Règles de contribution
 
-RavenEmu est un projet propriétaire : toute contribution doit respecter les
-contraintes du cahier des charges (`docs/CAHIER_DES_CHARGES.md`), en
+RavenEmu est distribué sous licence MIT (© GhostPunishR). Toute contribution
+est réputée soumise sous cette même licence et doit respecter les contraintes
+d'originalité du cahier des charges (`docs/CAHIER_DES_CHARGES.md`), en
 particulier :
 
 1. **Aucun code d'émulateur existant** — ni copie, ni adaptation, ni

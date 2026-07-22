@@ -4,14 +4,15 @@ Version 1.0 — document de référence du projet.
 
 ## 1. Objet
 
-RavenEmu est une application Android propriétaire d'émulation de consoles,
-dont la première cible est la Game Boy classique (DMG). Le moteur
-d'émulation, les composants applicatifs et la logique métier sont développés
-spécifiquement pour RavenEmu, à partir de documentation technique publique
-(Pan Docs, documentation matérielle publiée), sans intégrer, copier, adapter
-ni traduire le code d'un émulateur existant.
+RavenEmu est une application Android d'émulation de consoles, dont la
+première cible est la Game Boy classique (DMG). Le moteur d'émulation, les
+composants applicatifs et la logique métier sont développés spécifiquement
+pour RavenEmu, à partir de documentation technique publique (Pan Docs,
+documentation matérielle publiée), sans intégrer, copier, adapter ni
+traduire le code d'un émulateur existant. Le code est distribué sous licence
+MIT, © GhostPunishR (voir `LICENSE`).
 
-## 2. Contraintes de propriété
+## 2. Contraintes d'originalité
 
 - Aucun cœur d'émulation tiers, aucun code issu d'un émulateur existant.
 - Aucun BIOS, ROM, pochette ou contenu protégé embarqué dans le dépôt ou l'APK.

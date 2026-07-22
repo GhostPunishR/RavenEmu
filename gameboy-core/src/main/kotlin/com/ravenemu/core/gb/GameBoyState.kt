@@ -18,7 +18,9 @@ import java.io.IOException
 internal object GameBoyState {
 
     private const val MAGIC = 0x52564E53 // "RVNS"
-    private const val VERSION = 1
+
+    /** Version 2 : état APU complet (la v1 stockait des registres bruts). */
+    private const val VERSION = 2
 
     fun serialize(core: GameBoyCore, m: GameBoyCore.Machine): ByteArray {
         val buffer = ByteArrayOutputStream(64 * 1024)
@@ -69,7 +71,7 @@ internal object GameBoyState {
         out.writeInt(dma[0])
         out.writeInt(dma[1])
 
-        out.write(m.apu.registers)
+        m.apu.saveState(out)
 
         m.cartridge.saveState(out)
 
@@ -138,7 +140,7 @@ internal object GameBoyState {
             input.readFully(m.bus.hram)
             m.bus.restoreDma(intArrayOf(input.readInt(), input.readInt()))
 
-            input.readFully(m.apu.registers)
+            m.apu.loadState(input)
 
             m.cartridge.loadState(input)
         } catch (e: SaveStateException) {

@@ -3,7 +3,7 @@ package com.ravenemu.core.gb.memory
 import com.ravenemu.core.gb.InterruptController
 import com.ravenemu.core.gb.TestRoms
 import com.ravenemu.core.gb.cartridge.Cartridge
-import com.ravenemu.core.gb.io.ApuStub
+import com.ravenemu.core.gb.io.Apu
 import com.ravenemu.core.gb.io.Joypad
 import com.ravenemu.core.gb.io.SerialPort
 import com.ravenemu.core.gb.io.Timer
@@ -22,7 +22,7 @@ class MemoryBusTest {
         val serial = SerialPort(interrupts)
         val joypad = Joypad(interrupts)
         val ppu = Ppu(interrupts)
-        val apu = ApuStub()
+        val apu = Apu()
         val bus = MemoryBus(cartridge, ppu, interrupts, timer, serial, joypad, apu)
 
         init {

@@ -92,8 +92,13 @@ Autorisées : AndroidX, Material Components, kotlinx-coroutines,
 kotlinx-serialization (JetBrains, officielle) pour l'index et les profils.
 Interdites : toute bibliothèque d'émulation, tout SDK tiers non officiel.
 
-## AD-11 — Audio en phase dédiée
+## AD-11 — Audio en phase dédiée (livrée)
 
-L'APU (4 canaux) est livré dans une phase dédiée après validation du moteur
-principal, conformément au besoin. L'interface `EmulatorCore.readAudio`
-existe dès la v1 pour ne pas casser le contrat ultérieurement.
+L'APU (4 canaux) a été livré dans une phase dédiée après validation du
+moteur principal, conformément au besoin. Le moteur produit des échantillons
+stéréo PCM 16 bits à 32 768 Hz (128 cycles par échantillon, division exacte)
+dans un tampon circulaire drainé par `EmulatorCore.readAudio`. Côté
+application, l'écriture **bloquante** vers `AudioTrack` cadence la session
+d'émulation : la synchronisation audio/vidéo découle de l'horloge audio du
+système ; en avance rapide ou audio coupé, la session revient au cadencement
+par horloge monotone et abandonne les échantillons.

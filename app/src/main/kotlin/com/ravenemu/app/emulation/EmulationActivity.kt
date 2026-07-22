@@ -194,9 +194,15 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
         }
         surface.configure(newCore.video.width, newCore.video.height)
 
-        val newSession = EmulationSession(newCore, this)
+        val samplesPerFrame =
+            (newCore.audio.sampleRateHz / newCore.video.refreshRateHz).toInt() + 1
+        val audioSink = AndroidAudioSink(newCore.audio.sampleRateHz, samplesPerFrame)
+        audioSink.setVolume(settings.audioVolume / 100f)
+
+        val newSession = EmulationSession(newCore, this, audioSink)
         newSession.speedLimitEnabled = settings.speedLimitEnabled
         newSession.fastForwardMultiplier = settings.fastForwardMultiplier
+        newSession.audioEnabled = settings.audioEnabled
         core = newCore
         session = newSession
 
@@ -418,6 +424,10 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
         super.onResume()
         applyImmersiveMode()
         applyVideoSettings()
+        session?.let { s ->
+            s.audioEnabled = settings.audioEnabled
+            s.setAudioVolume(settings.audioVolume / 100f)
+        }
         if (!controls.editMode) session?.resume()
     }
 

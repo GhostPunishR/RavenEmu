@@ -18,6 +18,7 @@ import java.util.concurrent.locks.LockSupport
 class EmulationSession(
     private val core: EmulatorCore,
     private val callbacks: Callbacks,
+    private val audioSink: AudioSink? = null,
 ) {
     interface Callbacks {
         /** Trame prête (appelée depuis le thread d'émulation). */
@@ -30,8 +31,24 @@ class EmulationSession(
         fun onBatterySave(data: ByteArray)
     }
 
+    /**
+     * Sortie audio de la plateforme. [write] doit être bloquante : c'est elle
+     * qui cadence la session quand l'audio est actif (synchronisation A/V).
+     */
+    interface AudioSink {
+        fun write(samples: ShortArray, count: Int)
+        fun setVolume(volume: Float)
+        fun pause()
+        fun release()
+    }
+
     private val framebuffer = IntArray(core.video.pixelCount)
+    private val audioBuffer = ShortArray(8192)
     private val commands = ConcurrentLinkedQueue<(EmulatorCore) -> Unit>()
+
+    /** Audio actif (paramètre utilisateur), modifiable à chaud. */
+    @Volatile
+    var audioEnabled = true
 
     @Volatile
     private var running = false
@@ -62,10 +79,16 @@ class EmulationSession(
 
     fun pause() {
         paused = true
+        audioSink?.pause()
     }
 
     fun resume() {
         paused = false
+    }
+
+    /** Volume audio 0..1, appliqué immédiatement. */
+    fun setAudioVolume(volume: Float) {
+        audioSink?.setVolume(volume)
     }
 
     /** Arrête le thread après une dernière sauvegarde de la RAM cartouche. */
@@ -74,6 +97,7 @@ class EmulationSession(
         running = false
         thread?.join(2000)
         thread = null
+        audioSink?.release()
     }
 
     /** Exécute [action] sur le thread d'émulation (file sans verrou). */
@@ -107,6 +131,15 @@ class EmulationSession(
             callbacks.onFrame(framebuffer)
             fpsFrames++
 
+            // Audio : l'écriture bloquante cadence la session ; hors
+            // conditions nominales (avance rapide, audio coupé, vitesse
+            // débridée), les échantillons sont drainés puis abandonnés et le
+            // cadencement par horloge reprend la main.
+            val audioCount = core.readAudio(audioBuffer)
+            val audioPaced = audioSink != null && audioEnabled && audioCount > 0 &&
+                speedLimitEnabled && !fastForward
+            if (audioPaced) audioSink!!.write(audioBuffer, audioCount)
+
             val now = System.nanoTime()
 
             if (now - fpsWindowStart >= 1_000_000_000L) {
@@ -122,6 +155,7 @@ class EmulationSession(
             }
 
             val period = when {
+                audioPaced -> 0L // l'écriture audio bloquante a déjà cadencé
                 !speedLimitEnabled -> 0L
                 fastForward -> basePeriodNanos / fastForwardMultiplier
                 else -> basePeriodNanos
