@@ -3,7 +3,8 @@
     <color name="raven_primary">#2E3440</color>
     <color name="raven_primary_dark">#232831</color>
     <color name="raven_accent">#8BAC0F</color>
-    <color name="raven_icon_background">#0F380F</color>
+    <!-- Teinte du bord de la tuile du logo : les masques de lanceur se fondent. -->
+    <color name="raven_icon_background">#262835</color>
     <color name="badge_verified">#2E7D32</color>
     <color name="badge_hack">#F57F17</color>
     <color name="badge_modified">#C62828</color>
