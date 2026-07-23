@@ -1,6 +1,7 @@
 package com.ravenemu.storage
 
 import android.content.Context
+import android.util.AtomicFile
 import java.io.File
 
 /** Métadonnées d'un état instantané présent sur disque. */
@@ -25,20 +26,16 @@ class SnapshotStore(private val context: Context) {
         File(dir(romSha256), "slot$slot.rvns")
 
     fun write(romSha256: String, slot: Int, state: ByteArray): Boolean {
-        val target = file(romSha256, slot)
-        val temp = File(target.parentFile, target.name + ".tmp")
+        val atomic = AtomicFile(file(romSha256, slot))
+        var stream: java.io.FileOutputStream? = null
         return try {
-            temp.outputStream().use { stream ->
-                stream.write(state)
-                stream.fd.sync()
-            }
-            if (!temp.renameTo(target)) {
-                target.writeBytes(state)
-                temp.delete()
-            }
+            stream = atomic.startWrite()
+            stream.write(state)
+            atomic.finishWrite(stream)
+            stream = null
             true
         } catch (_: Exception) {
-            temp.delete()
+            stream?.let(atomic::failWrite)
             false
         }
     }
