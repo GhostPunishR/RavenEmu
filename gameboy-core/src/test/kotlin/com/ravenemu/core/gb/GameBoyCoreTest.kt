@@ -204,13 +204,25 @@ class GameBoyCoreTest {
     }
 
     @Test
-    fun `etat corrompu refuse`() {
+    fun `etat corrompu refuse sans modifier la machine`() {
         val core = loadedCore()
         val state = core.saveState()
         assertFailsWith<SaveStateException> {
             core.loadState(state.copyOf(state.size / 2))
         }
+        assertContentEquals(state, core.saveState())
         assertFailsWith<SaveStateException> { core.loadState(ByteArray(10)) }
+        assertContentEquals(state, core.saveState())
+    }
+
+    @Test
+    fun `etat trop volumineux refuse sans modifier la machine`() {
+        val core = loadedCore()
+        val before = core.saveState()
+        assertFailsWith<SaveStateException> {
+            core.loadState(ByteArray((1 shl 20) + 1))
+        }
+        assertContentEquals(before, core.saveState())
     }
 
     @Test
