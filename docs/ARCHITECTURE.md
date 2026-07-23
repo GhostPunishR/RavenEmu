@@ -218,10 +218,22 @@ et indépendant, à côté de `gameboy-core` (qui reste inchangé et fonctionnel
 Il implémente le même contrat [EmulatorCore] et est sélectionné via
 `ConsoleType.GAME_BOY_ADVANCE` (extension `.gba`). Comme les autres cœurs, il
 est écrit **à partir de documentation matérielle publique**, sans code d'un
-autre émulateur, sans BIOS ni ROM Nintendo. Une interface `EmulatorCoreFactory`
-(module `emulation-api`) prépare la sélection du moteur par la racine de
-composition ; l'implémentation concrète (qui connaît tous les cœurs) et le
-câblage de l'application arriveront au lot d'intégration Android suivant.
+autre émulateur, sans BIOS ni ROM Nintendo.
+
+La sélection du moteur passe par l'interface `EmulatorCoreFactory`
+(module `emulation-api`), implémentée par `RavenEmulatorCoreFactory` dans la
+**racine de composition** (module `app`) : c'est le seul point qui connaît les
+cœurs concrets. L'écran d'émulation n'instancie plus aucun moteur directement,
+il demande à la fabrique celui de la console de la ROM. Côté bibliothèque, un
+`GbaRomAnalyzer` (module `rom-library`) reconnaît les fichiers `.gba`, analyse
+l'en-tête et indexe la ROM ; `RomEntry` a été généralisé (les champs propres à
+la cartouche Game Boy — MBC, région… — deviennent facultatifs) pour accueillir
+des consoles dont l'en-tête ne les définit pas, sans changer le format d'index
+persisté (nouveaux champs à valeur par défaut). L'affichage de la bibliothèque
+est adapté à la console (une ROM GBA montre « Game Boy Advance » plutôt que des
+champs MBC dénués de sens). La sortie du PPU étant en ARGB, le renderer
+l'affiche telle quelle (profil monochrome désactivé), exactement comme pour la
+Game Boy Color.
 
 Le CPU ARM7TDMI est modélisé par un état architectural séparé (`CpuState` :
 `R0..R15`, `CPSR`/`SPSR`, modes et **banques de registres**) et un moteur
@@ -240,11 +252,15 @@ d'instructions ARM/Thumb suffisant pour exécuter une **ROM synthétique interne
 (arrière-plan), et format d'état `RVNS` GBA versionné, transactionnel et lié au
 SHA-256 de la ROM, distinct de celui de la Game Boy.
 
+**Intégration Android (fait)** : fabrique de production, sélection du moteur par
+l'écran d'émulation, reconnaissance et affichage des ROM `.gba` dans la
+bibliothèque.
+
 **Différé aux lots suivants** (limites documentées) : jeu d'instructions complet
 (multiplication, `LDM`/`STM`, transferts demi-mot/signés, `SWP`, `SWI`,
 interruptions matérielles), BIOS (fourni par l'utilisateur, validé par taille et
 empreinte, ou HLE RavenEmu), modes graphiques 0–5 et sprites, DMA, timers,
-keypad (avec boutons `L`/`R`), audio, mémoires de sauvegarde réelles (SRAM,
-Flash, EEPROM), temps d'attente précis, et intégration à la bibliothèque et à
-l'interface Android. Aucune de ces briques n'est entamée tant que ce premier
-lot n'est pas stable.
+keypad (avec boutons `L`/`R` et disposition tactile GBA), audio, mémoires de
+sauvegarde réelles (SRAM, Flash, EEPROM), temps d'attente précis, et raffinements
+d'interface (filtre par console, détails GBA enrichis). L'entrée GBA reste donc
+non interactive à ce stade (le keypad viendra avec les boutons `L`/`R`).

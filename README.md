@@ -116,8 +116,9 @@ Game Boy Advance (`gba-core`, moteur ARM7TDMI) est construite, sans modifier
 - [ ] Tests de compatibilité étendus sur matériel réel
 - [x] Android App Bundle (`.aab`)
 - [ ] Game Boy Advance (`gba-core`, moteur ARM7TDMI) — **en cours** : squelette,
-  en-tête, bus mémoire, sous-ensemble ARM/Thumb, PPU couleur unie ; audio,
-  vidéo complète, entrées, sauvegardes et intégration à venir
+  en-tête, bus mémoire, sous-ensemble ARM/Thumb, PPU couleur unie, sélection du
+  moteur et ROM `.gba` dans la bibliothèque ; audio, vidéo complète, entrées
+  (boutons L/R), sauvegardes et BIOS à venir
 
 ## Licence
 
