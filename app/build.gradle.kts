@@ -47,6 +47,16 @@ android {
         }
     }
 
+    // App Bundle (.aab) pour la distribution Play Store : Google génère des
+    // APK optimisés par appareil à partir du bundle. Le moteur est en Kotlin
+    // pur (aucune bibliothèque native), donc le découpage par ABI est sans
+    // objet ; on conserve le découpage par densité et par langue (défauts AGP).
+    bundle {
+        density { enableSplit = true }
+        language { enableSplit = true }
+        abi { enableSplit = true }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

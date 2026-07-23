@@ -54,8 +54,9 @@ code d'émulateur existant, sans cœur tiers, sans BIOS ni contenu protégé.
 
 À chaque mise à jour de `main`, la CI publie un APK de test :
 **Actions → dernier run → artefact `ravenemu-debug-apk`** (`app-debug.apk`,
-installable directement). Un APK Release signé est produit lorsque les
-secrets de signature sont configurés (voir [docs/BUILD.md](docs/BUILD.md)).
+installable directement). Un APK Release signé et un **App Bundle `.aab`**
+(pour le Play Store) sont produits lorsque les secrets de signature sont
+configurés (voir [docs/BUILD.md](docs/BUILD.md)).
 
 RavenEmu ne fournit **aucune ROM**. Utilisez uniquement des copies de jeux
 que vous possédez ou des homebrews librement distribués.
@@ -110,7 +111,7 @@ d'une console future se fait par un nouveau module implémentant
 - [x] Base locale d'empreintes de référence enrichissable (import No-Intro/JSON)
 - [x] Réglages d'affichage avancés (contraste, luminosité, correction LCD)
 - [ ] Tests de compatibilité étendus sur matériel réel
-- [ ] Android App Bundle (`.aab`)
+- [x] Android App Bundle (`.aab`)
 
 ## Licence
 
