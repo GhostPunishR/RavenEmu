@@ -79,6 +79,7 @@ kotlin {
 dependencies {
     implementation(project(":emulation-api"))
     implementation(project(":gameboy-core"))
+    implementation(project(":gba-core"))
     implementation(project(":rom-library"))
     implementation(project(":storage"))
     implementation(project(":renderer"))

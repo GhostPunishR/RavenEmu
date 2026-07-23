@@ -22,7 +22,8 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
 import com.ravenemu.app.R
-import com.ravenemu.core.gb.GameBoyCore
+import com.ravenemu.emulation.api.ConsoleType
+import com.ravenemu.emulation.api.EmulatorCore
 import com.ravenemu.emulation.api.EmulatorButton
 import com.ravenemu.emulation.api.SaveStateException
 import com.ravenemu.input.ControlId
@@ -55,13 +56,15 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
     private lateinit var editorPanel: View
 
     private val gamepad = GamepadMapper()
-    private var core: GameBoyCore? = null
+    private val coreFactory = RavenEmulatorCoreFactory()
+    private var core: EmulatorCore? = null
     private var session: EmulationSession? = null
 
     private lateinit var romUri: Uri
     private lateinit var romFileName: String
     private lateinit var romSha256: String
     private var romTitle: String = ""
+    private var console: ConsoleType = ConsoleType.GAME_BOY
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -75,6 +78,9 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
         romFileName = requireNotNull(intent.getStringExtra(EXTRA_FILE_NAME))
         romSha256 = requireNotNull(intent.getStringExtra(EXTRA_SHA256))
         romTitle = intent.getStringExtra(EXTRA_TITLE).orEmpty()
+        console = intent.getStringExtra(EXTRA_CONSOLE)
+            ?.let { runCatching { ConsoleType.valueOf(it) }.getOrNull() }
+            ?: ConsoleType.GAME_BOY
 
         surface = findViewById(R.id.surface)
         controls = findViewById(R.id.controls)
@@ -196,7 +202,7 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
     }
 
     private fun startEmulation(rom: ByteArray) {
-        val newCore = GameBoyCore()
+        val newCore = coreFactory.create(console)
         try {
             val battery = saveStore.read(romSha256, romFileName, settings.saveDirectory)
             newCore.loadRom(rom, battery)
@@ -475,6 +481,7 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
         private const val EXTRA_FILE_NAME = "rom_file_name"
         private const val EXTRA_SHA256 = "rom_sha256"
         private const val EXTRA_TITLE = "rom_title"
+        private const val EXTRA_CONSOLE = "rom_console"
 
         /** Emplacement d'état utilisateur (le 0 est réservé à l'automatique). */
         private const val USER_SLOT = 1
@@ -485,5 +492,6 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
                 .putExtra(EXTRA_FILE_NAME, entry.fileName)
                 .putExtra(EXTRA_SHA256, entry.fingerprints.sha256)
                 .putExtra(EXTRA_TITLE, entry.displayName)
+                .putExtra(EXTRA_CONSOLE, entry.console.name)
     }
 }
