@@ -20,17 +20,21 @@ data class RomEntry(
     val console: ConsoleType,
     /** Titre lu dans l'en-tête de cartouche (peut être vide). */
     val title: String,
-    val cartridgeTypeCode: Int,
-    val mbcType: MbcType,
-    val hasBattery: Boolean,
-    val hasRtc: Boolean,
-    val romSizeBytes: Int,
-    val ramSizeBytes: Int,
-    val region: RomRegion,
-    val supportsCgb: Boolean,
-    val headerChecksumValid: Boolean,
     val fingerprints: Fingerprints,
     val status: RomStatus,
+    // Champs propres à la cartouche Game Boy : valeurs neutres par défaut pour
+    // les consoles dont l'en-tête ne les définit pas (ex. Game Boy Advance).
+    val cartridgeTypeCode: Int = 0,
+    val mbcType: MbcType = MbcType.NONE,
+    val hasBattery: Boolean = false,
+    val hasRtc: Boolean = false,
+    val romSizeBytes: Int = 0,
+    val ramSizeBytes: Int = 0,
+    val region: RomRegion = RomRegion.UNKNOWN,
+    val supportsCgb: Boolean = false,
+    val headerChecksumValid: Boolean = false,
+    /** Code jeu (Game Boy Advance : 4 caractères de l'en-tête), sinon vide. */
+    val gameCode: String = "",
     /** Statut forcé par l'utilisateur (ex. Homebrew déclaré), prioritaire. */
     val userStatusOverride: RomStatus? = null,
     /** URI d'une pochette associée manuellement ou détectée localement. */
