@@ -54,6 +54,9 @@ abstract class Cartridge(
 
     protected fun romBankCount(): Int = maxOf(2, rom.size / ROM_BANK_SIZE)
 
+    /** Replie une banque même lorsque le nombre de banques n'est pas une puissance de deux. */
+    protected fun normalizeRomBank(bank: Int): Int = bank.mod(romBankCount())
+
     companion object {
         const val ROM_BANK_SIZE = 0x4000
         const val RAM_BANK_SIZE = 0x2000
