@@ -254,13 +254,16 @@ SHA-256 de la ROM, distinct de celui de la Game Boy.
 
 **Intégration Android (fait)** : fabrique de production, sélection du moteur par
 l'écran d'émulation, reconnaissance et affichage des ROM `.gba` dans la
-bibliothèque.
+bibliothèque, et **entrées** : `GbaKeypad` alimente le registre `KEYINPUT`
+(actif-bas, dix touches). `EmulatorButton` est étendu de `L` et `R` (gâchettes
+d'épaule), ignorées par la Game Boy ; les manettes physiques mappent `L1`/`R1`,
+et la disposition tactile ajoute deux boutons `L`/`R` redimensionnables,
+affichés uniquement pour la Game Boy Advance.
 
 **Différé aux lots suivants** (limites documentées) : jeu d'instructions complet
 (multiplication, `LDM`/`STM`, transferts demi-mot/signés, `SWP`, `SWI`,
-interruptions matérielles), BIOS (fourni par l'utilisateur, validé par taille et
-empreinte, ou HLE RavenEmu), modes graphiques 0–5 et sprites, DMA, timers,
-keypad (avec boutons `L`/`R` et disposition tactile GBA), audio, mémoires de
-sauvegarde réelles (SRAM, Flash, EEPROM), temps d'attente précis, et raffinements
-d'interface (filtre par console, détails GBA enrichis). L'entrée GBA reste donc
-non interactive à ce stade (le keypad viendra avec les boutons `L`/`R`).
+interruptions matérielles), interruption clavier (`KEYCNT`, réveil par touches),
+BIOS (fourni par l'utilisateur, validé par taille et empreinte, ou HLE RavenEmu),
+modes graphiques 0–5 et sprites, DMA, timers, audio, mémoires de sauvegarde
+réelles (SRAM, Flash, EEPROM), temps d'attente précis, et raffinements
+d'interface (filtre par console, détails GBA enrichis).
