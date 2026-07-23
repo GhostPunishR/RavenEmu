@@ -17,6 +17,9 @@ sealed class AnalysisResult {
 interface RomAnalyzer {
     val console: ConsoleType
 
+    /** Taille maximale acceptée par le moteur de cette console. */
+    val maxRomSizeBytes: Int
+
     fun canAnalyze(fileName: String): Boolean
 
     /**
@@ -38,6 +41,7 @@ class GameBoyRomAnalyzer(
 ) : RomAnalyzer {
 
     override val console: ConsoleType = ConsoleType.GAME_BOY
+    override val maxRomSizeBytes: Int = CartridgeHeader.MAX_ROM_SIZE
 
     override fun canAnalyze(fileName: String): Boolean =
         fileName.substringAfterLast('.', "").lowercase() in console.romExtensions
