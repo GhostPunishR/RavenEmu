@@ -2,6 +2,7 @@ package com.ravenemu.core.gba.memory
 
 import com.ravenemu.core.gba.cartridge.GbaCartridge
 import com.ravenemu.core.gba.input.GbaKeypad
+import com.ravenemu.core.gba.ppu.GbaPpu
 
 /**
  * Bus mémoire minimal de la Game Boy Advance : achemine les accès 8, 16 et
@@ -31,6 +32,9 @@ class GbaBus(
     val oam = ByteArray(MemoryRegion.OAM.size)
     val sram = ByteArray(MemoryRegion.SRAM.size)
 
+    /** Unité graphique, rattachée après construction (registres DISPSTAT/VCOUNT). */
+    var ppu: GbaPpu? = null
+
     /** Replie une adresse VRAM (96 Kio) : blocs de 128 Kio dont les 32 derniers Kio recopient les précédents. */
     private fun vramOffset(address: Int): Int {
         var offset = address and 0x1_FFFF
@@ -40,10 +44,13 @@ class GbaBus(
 
     private fun romOffset(address: Int): Int = address and 0x01FF_FFFF
 
-    /** Lecture d'un octet d'E/S ; `KEYINPUT` reflète l'état du clavier. */
+    /** Lecture d'un octet d'E/S ; certains registres reflètent l'état matériel. */
     private fun readIo(offset: Int): Int = when (offset) {
         KEYINPUT_LOW -> keypad.keyInput() and 0xFF
         KEYINPUT_HIGH -> (keypad.keyInput() ushr 8) and 0xFF
+        DISPSTAT_LOW -> ppu?.dispStatLowByte() ?: (io[offset].toInt() and 0xFF)
+        VCOUNT_LOW -> ppu?.vcount ?: (io[offset].toInt() and 0xFF)
+        VCOUNT_HIGH -> 0 // VCOUNT < 228 : octet haut nul
         else -> io[offset].toInt() and 0xFF
     }
 
@@ -129,7 +136,10 @@ class GbaBus(
     }
 
     private companion object {
-        // Offsets de KEYINPUT (0x0400_0130) dans la région d'E/S.
+        // Offsets de registres dans la région d'E/S (base 0x0400_0000).
+        const val DISPSTAT_LOW = 0x004
+        const val VCOUNT_LOW = 0x006
+        const val VCOUNT_HIGH = 0x007
         const val KEYINPUT_LOW = 0x130
         const val KEYINPUT_HIGH = 0x131
     }

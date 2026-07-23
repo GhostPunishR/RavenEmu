@@ -21,19 +21,22 @@ class GbaMachine(rom: ByteArray) {
     val cpu: Arm7Tdmi = Arm7Tdmi(bus)
 
     init {
+        bus.ppu = ppu
         cpu.reset(ROM_ENTRY_POINT)
     }
 
     /**
-     * Exécute au moins [cycles] cycles CPU (comptage approximatif dans ce
-     * premier lot) puis produit la trame vidéo.
+     * Exécute [cycles] cycles CPU (comptage approximatif dans ce lot) en
+     * faisant avancer l'affichage à la même cadence : le PPU rend chaque ligne
+     * visible pendant son HBlank, si bien qu'une trame complète est produite.
      */
     fun runFrame(cycles: Int) {
         var elapsed = 0
         while (elapsed < cycles) {
-            elapsed += cpu.step()
+            val consumed = cpu.step()
+            ppu.tick(consumed)
+            elapsed += consumed
         }
-        ppu.renderFrame()
     }
 
     companion object {
