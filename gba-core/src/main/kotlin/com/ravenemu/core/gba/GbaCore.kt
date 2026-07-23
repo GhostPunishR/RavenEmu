@@ -16,10 +16,11 @@ import java.security.MessageDigest
  * l'appelant pilote la cadence via [runFrame].
  *
  * **Premier lot** : le CPU exécute un sous-ensemble d'instructions ARM/Thumb et
- * le PPU produit une image 240 × 160 d'une couleur unie (arrière-plan). Audio,
- * entrées, DMA, timers, interruptions matérielles, sauvegardes de cartouche et
- * compatibilité commerciale sont différés aux lots suivants (limites
- * documentées) ; [readAudio] retourne donc 0 et [setButton] est sans effet.
+ * le PPU produit une image 240 × 160 d'une couleur unie (arrière-plan). Les
+ * entrées sont gérées ([setButton] alimente le registre `KEYINPUT`, boutons
+ * `L`/`R` compris). Audio, DMA, timers, interruptions matérielles, sauvegardes
+ * de cartouche et compatibilité commerciale sont différés aux lots suivants
+ * (limites documentées) ; [readAudio] retourne donc 0.
  */
 class GbaCore : EmulatorCore {
 
@@ -65,7 +66,7 @@ class GbaCore : EmulatorCore {
     }
 
     override fun setButton(button: EmulatorButton, pressed: Boolean) {
-        // Keypad différé (lot ultérieur) : sans effet pour l'instant.
+        machine?.bus?.keypad?.setButton(button, pressed)
     }
 
     override fun readAudio(buffer: ShortArray): Int = 0

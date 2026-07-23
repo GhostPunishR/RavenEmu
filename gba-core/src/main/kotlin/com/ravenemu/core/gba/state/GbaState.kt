@@ -52,6 +52,7 @@ object GbaState {
         out.write(bus.vram)
         out.write(bus.oam)
         out.write(bus.sram)
+        out.writeInt(bus.keypad.pressedBits)
 
         out.flush()
         return buffer.toByteArray()
@@ -98,6 +99,7 @@ object GbaState {
             val vram = ByteArray(bus.vram.size).also(input::readFully)
             val oam = ByteArray(bus.oam.size).also(input::readFully)
             val sram = ByteArray(bus.sram.size).also(input::readFully)
+            val keypadBits = input.readInt()
 
             // Tout est lu et validé : application atomique.
             val state = machine.cpu.state
@@ -112,6 +114,7 @@ object GbaState {
             vram.copyInto(bus.vram)
             oam.copyInto(bus.oam)
             sram.copyInto(bus.sram)
+            bus.keypad.pressedBits = keypadBits
         } catch (e: SaveStateException) {
             throw e
         } catch (e: IOException) {

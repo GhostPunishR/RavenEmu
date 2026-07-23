@@ -1,6 +1,7 @@
 package com.ravenemu.core.gba.memory
 
 import com.ravenemu.core.gba.cartridge.GbaCartridge
+import com.ravenemu.core.gba.input.GbaKeypad
 
 /**
  * Bus mémoire minimal de la Game Boy Advance : achemine les accès 8, 16 et
@@ -9,12 +10,16 @@ import com.ravenemu.core.gba.cartridge.GbaCartridge
  *
  * Périmètre du premier lot : BIOS (interne, nul par défaut, voir HLE ultérieur),
  * EWRAM, IWRAM, registres d'E/S (stockage brut), palette, VRAM, OAM, ROM
- * cartouche et SRAM. Les registres d'E/S ne déclenchent encore aucun effet de
+ * cartouche et SRAM. Le registre clavier `KEYINPUT` reflète l'état du
+ * [keypad] ; les autres registres d'E/S ne déclenchent encore aucun effet de
  * bord (DMA, timers, PPU…) : ils sont conservés tels quels et lus tels quels.
  * La rotation des lectures 32/16 bits non alignées est appliquée par le CPU,
  * qui aligne les adresses avant d'appeler ce bus.
  */
-class GbaBus(private val cartridge: GbaCartridge) {
+class GbaBus(
+    private val cartridge: GbaCartridge,
+    val keypad: GbaKeypad = GbaKeypad(),
+) {
 
     /** BIOS interne : nul dans le premier lot (HLE des appels logiciels à venir). */
     val bios = ByteArray(MemoryRegion.BIOS.size)
@@ -35,6 +40,13 @@ class GbaBus(private val cartridge: GbaCartridge) {
 
     private fun romOffset(address: Int): Int = address and 0x01FF_FFFF
 
+    /** Lecture d'un octet d'E/S ; `KEYINPUT` reflète l'état du clavier. */
+    private fun readIo(offset: Int): Int = when (offset) {
+        KEYINPUT_LOW -> keypad.keyInput() and 0xFF
+        KEYINPUT_HIGH -> (keypad.keyInput() ushr 8) and 0xFF
+        else -> io[offset].toInt() and 0xFF
+    }
+
     // ---- Lectures ----
 
     fun read8(address: Int): Int {
@@ -43,7 +55,7 @@ class GbaBus(private val cartridge: GbaCartridge) {
             MemoryRegion.BIOS -> bios[address and region.mirrorMask].toInt() and 0xFF
             MemoryRegion.EWRAM -> ewram[address and region.mirrorMask].toInt() and 0xFF
             MemoryRegion.IWRAM -> iwram[address and region.mirrorMask].toInt() and 0xFF
-            MemoryRegion.IO -> io[address and region.mirrorMask].toInt() and 0xFF
+            MemoryRegion.IO -> readIo(address and region.mirrorMask)
             MemoryRegion.PALETTE -> paletteRam[address and region.mirrorMask].toInt() and 0xFF
             MemoryRegion.VRAM -> vram[vramOffset(address)].toInt() and 0xFF
             MemoryRegion.OAM -> oam[address and region.mirrorMask].toInt() and 0xFF
@@ -114,5 +126,11 @@ class GbaBus(private val cartridge: GbaCartridge) {
         val a = address and 0x3.inv()
         write16(a, value and 0xFFFF)
         write16(a + 2, (value ushr 16) and 0xFFFF)
+    }
+
+    private companion object {
+        // Offsets de KEYINPUT (0x0400_0130) dans la région d'E/S.
+        const val KEYINPUT_LOW = 0x130
+        const val KEYINPUT_HIGH = 0x131
     }
 }

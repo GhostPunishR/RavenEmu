@@ -14,4 +14,9 @@ enum class EmulatorButton {
     B,
     START,
     SELECT,
+
+    // Gâchettes d'épaule : présentes sur Game Boy Advance, ignorées par les
+    // consoles qui n'en ont pas (Game Boy).
+    L,
+    R,
 }
