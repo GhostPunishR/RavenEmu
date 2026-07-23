@@ -210,3 +210,41 @@ le titre d'en-tête correspond à un jeu officiel connu est au mieux
 Un changement de base est appliqué à chaud : la bibliothèque est **reclassée**
 sans relire les fichiers (les empreintes sont déjà indexées). La palette de
 statuts et les surcharges utilisateur (Homebrew déclaré) sont préservées.
+
+## AD-15 — Game Boy Advance : moteur ARM7TDMI dédié (premier lot)
+
+La Game Boy Advance est servie par un **nouveau module `gba-core`**, JVM pur
+et indépendant, à côté de `gameboy-core` (qui reste inchangé et fonctionnel).
+Il implémente le même contrat [EmulatorCore] et est sélectionné via
+`ConsoleType.GAME_BOY_ADVANCE` (extension `.gba`). Comme les autres cœurs, il
+est écrit **à partir de documentation matérielle publique**, sans code d'un
+autre émulateur, sans BIOS ni ROM Nintendo. Une interface `EmulatorCoreFactory`
+(module `emulation-api`) prépare la sélection du moteur par la racine de
+composition ; l'implémentation concrète (qui connaît tous les cœurs) et le
+câblage de l'application arriveront au lot d'intégration Android suivant.
+
+Le CPU ARM7TDMI est modélisé par un état architectural séparé (`CpuState` :
+`R0..R15`, `CPSR`/`SPSR`, modes et **banques de registres**) et un moteur
+(`Arm7Tdmi`) qui délègue à `ArmDecoder` (ARM 32 bits) et `ThumbDecoder`
+(Thumb 16 bits). Le pipeline est simplifié mais exact du point de vue logiciel
+(`R15` lu à `+8`/`+4`). Le plan mémoire (BIOS, EWRAM, IWRAM, E/S, palette,
+VRAM, OAM, ROM, SRAM) est géré par `GbaBus` avec accès 8/16/32 bits,
+alignement, rotation des lectures non alignées et zones miroir. Le PPU produit
+un framebuffer **240 × 160 ARGB 8888** que le renderer Android affiche sans
+rien connaître de ses détails.
+
+**Périmètre du premier lot** (volontairement borné) : sous-ensemble
+d'instructions ARM/Thumb suffisant pour exécuter une **ROM synthétique interne**
+(traitement de données complet avec barrel shifter et drapeaux, `B`/`BL`/`BX`,
+`LDR`/`STR`, `MRS`/`MSR`), bus mémoire minimal, PPU d'**une couleur unie**
+(arrière-plan), et format d'état `RVNS` GBA versionné, transactionnel et lié au
+SHA-256 de la ROM, distinct de celui de la Game Boy.
+
+**Différé aux lots suivants** (limites documentées) : jeu d'instructions complet
+(multiplication, `LDM`/`STM`, transferts demi-mot/signés, `SWP`, `SWI`,
+interruptions matérielles), BIOS (fourni par l'utilisateur, validé par taille et
+empreinte, ou HLE RavenEmu), modes graphiques 0–5 et sprites, DMA, timers,
+keypad (avec boutons `L`/`R`), audio, mémoires de sauvegarde réelles (SRAM,
+Flash, EEPROM), temps d'attente précis, et intégration à la bibliothèque et à
+l'interface Android. Aucune de ces briques n'est entamée tant que ce premier
+lot n'est pas stable.
