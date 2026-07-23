@@ -2,6 +2,7 @@ package com.ravenemu.storage
 
 import android.content.Context
 import android.net.Uri
+import android.util.AtomicFile
 import androidx.documentfile.provider.DocumentFile
 import java.io.File
 
@@ -39,22 +40,18 @@ class SaveFileStore(private val context: Context) {
         data: ByteArray,
         externalDir: Uri? = null,
     ): Boolean {
-        val target = privateSaveFile(romSha256, romFileName)
-        val temp = File(target.parentFile, target.name + ".tmp")
+        val atomic = AtomicFile(privateSaveFile(romSha256, romFileName))
+        var stream: java.io.FileOutputStream? = null
         return try {
-            temp.outputStream().use { stream ->
-                stream.write(data)
-                stream.fd.sync()
-            }
-            if (!temp.renameTo(target)) {
-                // Repli si le renommage échoue (systèmes de fichiers exotiques).
-                target.writeBytes(data)
-                temp.delete()
-            }
+            val output = atomic.startWrite()
+            stream = output
+            output.write(data)
+            atomic.finishWrite(output)
+            stream = null
             if (externalDir != null) copyToExternal(externalDir, savName(romFileName), data)
             true
         } catch (_: Exception) {
-            temp.delete()
+            stream?.let(atomic::failWrite)
             false
         }
     }

@@ -94,6 +94,29 @@ class GbaPpu(private val bus: GbaBus) {
         vcountMatch = false
     }
 
+    /** État temporel minimal requis pour une reprise déterministe. */
+    fun stateFields(): IntArray = intArrayOf(
+        vcount,
+        lineCycles,
+        if (inVBlank) 1 else 0,
+        if (inHBlank) 1 else 0,
+        if (vcountMatch) 1 else 0,
+    )
+
+    fun restoreState(fields: IntArray) {
+        require(fields.size == STATE_FIELD_COUNT) { "État PPU GBA invalide" }
+        require(fields[0] in 0 until TOTAL_LINES) { "VCOUNT GBA invalide" }
+        require(fields[1] in 0 until LINE_CYCLES) { "Position de ligne GBA invalide" }
+        require(fields[2] in 0..1 && fields[3] in 0..1 && fields[4] in 0..1) {
+            "Drapeaux PPU GBA invalides"
+        }
+        vcount = fields[0]
+        lineCycles = fields[1]
+        inVBlank = fields[2] != 0
+        inHBlank = fields[3] != 0
+        vcountMatch = fields[4] != 0
+    }
+
     // ---- Rendu ----
 
     private fun renderScanline(y: Int) {
@@ -321,6 +344,7 @@ class GbaPpu(private val bus: GbaBus) {
     companion object {
         const val SCREEN_WIDTH = 240
         const val SCREEN_HEIGHT = 160
+        const val STATE_FIELD_COUNT = 5
 
         private const val MODE5_WIDTH = 160
         private const val MODE5_HEIGHT = 128

@@ -22,7 +22,8 @@ import java.io.IOException
 object GbaState {
 
     private const val MAGIC = 0x52564E53 // "RVNS"
-    private const val VERSION = 1
+    /** Version 2 : état temporel et framebuffer PPU inclus. */
+    private const val VERSION = 2
     private const val BANK_WORDS = 28 // CpuState.exportBanks(): 6*3 + 10
 
     /** Taille maximale acceptée pour un état (garde-fou anti-« fichier trop volumineux »). */
@@ -53,6 +54,11 @@ object GbaState {
         out.write(bus.oam)
         out.write(bus.sram)
         out.writeInt(bus.keypad.pressedBits)
+
+        val ppuFields = machine.ppu.stateFields()
+        out.writeInt(ppuFields.size)
+        for (field in ppuFields) out.writeInt(field)
+        for (pixel in machine.ppu.frame) out.writeInt(pixel)
 
         out.flush()
         return buffer.toByteArray()
@@ -101,6 +107,19 @@ object GbaState {
             val sram = ByteArray(bus.sram.size).also(input::readFully)
             val keypadBits = input.readInt()
 
+            val ppuFieldCount = input.readInt()
+            if (ppuFieldCount != com.ravenemu.core.gba.ppu.GbaPpu.STATE_FIELD_COUNT) {
+                throw SaveStateException("État instantané corrompu (PPU)")
+            }
+            val ppuFields = IntArray(ppuFieldCount) { input.readInt() }
+            val ppuFrame = IntArray(machine.ppu.frame.size) { input.readInt() }
+            if (input.read() != -1) {
+                throw SaveStateException("État instantané corrompu (données excédentaires)")
+            }
+
+            // Valide d'abord les derniers champs susceptibles d'échouer.
+            machine.ppu.restoreState(ppuFields)
+
             // Tout est lu et validé : application atomique.
             val state = machine.cpu.state
             state.importBanks(banks)
@@ -115,10 +134,13 @@ object GbaState {
             oam.copyInto(bus.oam)
             sram.copyInto(bus.sram)
             bus.keypad.pressedBits = keypadBits
+            ppuFrame.copyInto(machine.ppu.frame)
         } catch (e: SaveStateException) {
             throw e
         } catch (e: IOException) {
             throw SaveStateException("État instantané corrompu ou tronqué", e)
+        } catch (e: IllegalArgumentException) {
+            throw SaveStateException("État instantané corrompu", e)
         }
     }
 }

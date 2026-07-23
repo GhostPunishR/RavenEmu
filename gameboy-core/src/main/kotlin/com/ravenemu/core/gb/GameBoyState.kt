@@ -22,6 +22,9 @@ internal object GameBoyState {
     /** Version 4 : état Game Boy Color (CRAM, banques, vitesse, HDMA). */
     private const val VERSION = 4
 
+    /** Garde-fou contre les fichiers corrompus provoquant de fortes allocations. */
+    private const val MAX_STATE_SIZE = 1 shl 20
+
     fun serialize(core: GameBoyCore, m: GameBoyCore.Machine): ByteArray {
         val buffer = ByteArrayOutputStream(64 * 1024)
         val out = DataOutputStream(buffer)
@@ -85,7 +88,10 @@ internal object GameBoyState {
         return buffer.toByteArray()
     }
 
-    fun restore(core: GameBoyCore, m: GameBoyCore.Machine, state: ByteArray) {
+    fun restore(core: GameBoyCore, state: ByteArray): GameBoyCore.Machine {
+        if (state.size > MAX_STATE_SIZE) {
+            throw SaveStateException("État instantané trop volumineux : ${state.size} octets")
+        }
         try {
             val input = DataInputStream(ByteArrayInputStream(state))
 
@@ -106,6 +112,9 @@ internal object GameBoyState {
                 throw SaveStateException("État issu d'une autre ROM")
             }
 
+            // Toute la restauration se fait dans une machine temporaire.
+            // La machine active n'est remplacée qu'après lecture complète.
+            val m = core.newMachineForState()
             val cpu = m.cpu
             cpu.af = input.readInt()
             cpu.bc = input.readInt()
@@ -137,6 +146,10 @@ internal object GameBoyState {
             m.joypad.restoreState(input.readInt())
 
             val ppuFieldCount = input.readInt()
+            val expectedPpuFieldCount = m.ppu.stateFields().size
+            if (ppuFieldCount != expectedPpuFieldCount) {
+                throw SaveStateException("État instantané corrompu (PPU)")
+            }
             val ppuFields = IntArray(ppuFieldCount) { input.readInt() }
             m.ppu.restoreState(ppuFields)
             input.readFully(m.ppu.vram)
@@ -150,17 +163,26 @@ internal object GameBoyState {
             input.readFully(m.bus.wram)
             input.readFully(m.bus.hram)
             val dmaCount = input.readInt()
+            val expectedDmaCount = m.bus.stateDma().size
+            if (dmaCount != expectedDmaCount) {
+                throw SaveStateException("État instantané corrompu (DMA)")
+            }
             m.bus.restoreDma(IntArray(dmaCount) { input.readInt() })
 
             m.apu.loadState(input)
-
             m.cartridge.loadState(input)
+            if (input.read() != -1) {
+                throw SaveStateException("État instantané corrompu (données excédentaires)")
+            }
+            return m
         } catch (e: SaveStateException) {
             throw e
         } catch (e: IOException) {
             throw SaveStateException("État instantané corrompu ou tronqué", e)
         } catch (e: IndexOutOfBoundsException) {
             throw SaveStateException("État instantané corrompu ou tronqué", e)
+        } catch (e: IllegalArgumentException) {
+            throw SaveStateException("État instantané corrompu", e)
         }
     }
 }

@@ -2,7 +2,6 @@ package com.ravenemu.storage
 
 import android.content.Context
 import android.net.Uri
-import com.ravenemu.core.gb.cartridge.CartridgeHeader
 import com.ravenemu.romlibrary.AnalysisResult
 import com.ravenemu.romlibrary.GameBoyRomAnalyzer
 import com.ravenemu.romlibrary.GbaRomAnalyzer
@@ -73,10 +72,10 @@ class LibraryRepository(
             if (!index.needsRefresh(uriString, file.sizeBytes, file.lastModified)) {
                 continue
             }
-            if (file.sizeBytes > CartridgeHeader.MAX_ROM_SIZE) continue
             val analyzer = analyzers.firstOrNull { it.canAnalyze(file.name) } ?: continue
+            if (file.sizeBytes > analyzer.maxRomSizeBytes) continue
             val data = try {
-                scanner.readAll(file.uri, CartridgeHeader.MAX_ROM_SIZE)
+                scanner.readAll(file.uri, analyzer.maxRomSizeBytes)
             } catch (_: Exception) {
                 null
             } ?: continue
@@ -120,7 +119,9 @@ class LibraryRepository(
     /** Lit le contenu d'une ROM indexée pour lancement en émulation. */
     suspend fun readRom(uri: Uri): ByteArray? = withContext(Dispatchers.IO) {
         try {
-            scanner.readAll(uri, CartridgeHeader.MAX_ROM_SIZE)
+            // Le fichier indexé a déjà été validé par son analyseur. Le
+            // plafond global couvre néanmoins la taille maximale GBA.
+            scanner.readAll(uri, analyzers.maxOf { it.maxRomSizeBytes })
         } catch (_: Exception) {
             null
         }

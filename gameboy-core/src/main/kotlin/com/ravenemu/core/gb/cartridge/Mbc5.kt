@@ -15,11 +15,10 @@ class Mbc5(rom: ByteArray, header: CartridgeHeader) : Cartridge(rom, header) {
     private var romBankHigh = 0
     private var ramBank = 0
 
-    private val romBankMask = romBankCount() - 1
     private val hasRumble = header.cartridgeTypeCode in 0x1C..0x1E
 
     private fun currentRomBank(): Int =
-        ((romBankHigh shl 8) or romBankLow) and romBankMask
+        normalizeRomBank((romBankHigh shl 8) or romBankLow)
 
     override fun readRom(address: Int): Int {
         val bank = if (address < ROM_BANK_SIZE) 0 else currentRomBank()

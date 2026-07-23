@@ -110,6 +110,21 @@ class MbcTest {
         }
     }
 
+    @Test
+    fun `taille speciale 72 banques conserve toutes les banques`() {
+        val rom = TestRoms.buildBankMarked(0x19, romSizeCode = 0x52)
+        val header = CartridgeHeader.parse(rom)
+        assertEquals(72 * Cartridge.ROM_BANK_SIZE, header.romSizeBytes)
+
+        val cart = Cartridge.create(rom)
+        cart.writeControl(0x2000, 8)
+        assertEquals(8, cart.bankMarkerAt(0x4000))
+        cart.writeControl(0x2000, 71)
+        assertEquals(71, cart.bankMarkerAt(0x4000))
+        cart.writeControl(0x2000, 72)
+        assertEquals(0, cart.bankMarkerAt(0x4000))
+    }
+
     // ---- Mbc2 ----
 
     @Test

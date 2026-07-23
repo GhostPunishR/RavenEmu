@@ -14,10 +14,8 @@ class Mbc2(rom: ByteArray, header: CartridgeHeader) : Cartridge(rom, header) {
     private var ramEnabled = false
     private var romBank = 1
 
-    private val romBankMask = romBankCount() - 1
-
     override fun readRom(address: Int): Int {
-        val bank = if (address < ROM_BANK_SIZE) 0 else romBank and romBankMask
+        val bank = if (address < ROM_BANK_SIZE) 0 else normalizeRomBank(romBank)
         val offset = bank * ROM_BANK_SIZE + (address and (ROM_BANK_SIZE - 1))
         return if (offset < rom.size) rom[offset].toInt() and 0xFF else 0xFF
     }

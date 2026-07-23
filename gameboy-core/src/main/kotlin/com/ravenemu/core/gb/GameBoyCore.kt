@@ -129,8 +129,17 @@ class GameBoyCore(
     }
 
     override fun loadState(state: ByteArray) {
-        val m = machine ?: error("Aucune ROM chargée")
-        GameBoyState.restore(this, m, state)
+        machine ?: error("Aucune ROM chargée")
+        machine = GameBoyState.restore(this, state)
+    }
+
+    /**
+     * Construit une machine vierge pour une restauration transactionnelle.
+     * Elle ne devient active qu'après validation complète de l'état.
+     */
+    internal fun newMachineForState(): Machine {
+        val rom = loadedRom ?: error("Aucune ROM chargée")
+        return Machine(rom, clock)
     }
 
     /** Machine complète reconstruite à chaque chargement de ROM. */

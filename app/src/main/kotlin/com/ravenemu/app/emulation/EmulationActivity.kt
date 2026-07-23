@@ -314,10 +314,14 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
         val currentSession = session ?: return
         currentSession.post { c ->
             val state = c.saveState()
-            snapshotStore.write(romSha256, USER_SLOT, state)
+            val saved = snapshotStore.write(romSha256, USER_SLOT, state)
             runOnUiThread {
-                Toast.makeText(this, R.string.emulation_state_saved, Toast.LENGTH_SHORT)
-                    .show()
+                val message = if (saved) {
+                    R.string.emulation_state_saved
+                } else {
+                    R.string.emulation_state_save_failed
+                }
+                Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
             }
         }
         currentSession.resume()

@@ -24,7 +24,14 @@ object TestRoms {
         cgbFlag: Int = 0x00,
         fill: (ByteArray) -> Unit = {},
     ): ByteArray {
-        val rom = ByteArray(0x8000 shl romSizeCode)
+        val romSize = when {
+            romSizeCode <= 0x08 -> 0x8000 shl romSizeCode
+            romSizeCode == 0x52 -> 72 * 0x4000
+            romSizeCode == 0x53 -> 80 * 0x4000
+            romSizeCode == 0x54 -> 96 * 0x4000
+            else -> error("Code de taille ROM non pris en charge en test : $romSizeCode")
+        }
+        val rom = ByteArray(romSize)
         for ((i, c) in title.take(15).withIndex()) rom[0x0134 + i] = c.code.toByte()
         rom[0x0143] = cgbFlag.toByte()
         rom[0x0147] = type.toByte()

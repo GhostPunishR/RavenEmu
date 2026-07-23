@@ -63,9 +63,8 @@ android {
     }
 
     lint {
-        // Le rapport lint est publié en artefact CI ; les erreurs bloquantes
-        // sont traitées via la revue plutôt qu'en cassant le build.
-        abortOnError = false
+        // Toute erreur lint bloque la CI ; les rapports restent publiés.
+        abortOnError = true
         checkDependencies = true
     }
 }

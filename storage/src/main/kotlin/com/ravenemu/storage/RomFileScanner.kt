@@ -3,6 +3,7 @@ package com.ravenemu.storage
 import android.content.Context
 import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
+import java.io.ByteArrayOutputStream
 
 /** Fichier ROM candidat découvert dans un dossier choisi par l'utilisateur. */
 data class ScannedFile(
@@ -21,6 +22,10 @@ data class ScannedFile(
  * lus.
  */
 class RomFileScanner(private val context: Context) {
+
+    private companion object {
+        const val DEFAULT_BUFFER_SIZE = 8 * 1024
+    }
 
     /**
      * Liste les fichiers dont l'extension figure dans [extensions]
@@ -64,9 +69,20 @@ class RomFileScanner(private val context: Context) {
      * écarter les fichiers aberrants avant analyse.
      */
     fun readAll(uri: Uri, maxBytes: Int): ByteArray? {
+        require(maxBytes >= 0) { "Plafond de lecture négatif" }
         return context.contentResolver.openInputStream(uri)?.use { stream ->
-            val data = stream.readBytes()
-            if (data.size > maxBytes) null else data
+            val output = ByteArrayOutputStream(minOf(maxBytes, DEFAULT_BUFFER_SIZE))
+            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+            var total = 0
+            while (true) {
+                val count = stream.read(buffer)
+                if (count < 0) break
+                if (count == 0) continue
+                if (total > maxBytes - count) return@use null
+                output.write(buffer, 0, count)
+                total += count
+            }
+            output.toByteArray()
         }
     }
 }
