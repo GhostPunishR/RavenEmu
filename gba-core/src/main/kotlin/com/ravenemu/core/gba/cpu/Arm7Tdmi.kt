@@ -76,6 +76,22 @@ class Arm7Tdmi(val bus: GbaBus) {
     }
 
     /**
+     * Entrée en exception : bascule vers [mode], sauvegarde le CPSR dans le SPSR
+     * du mode, place l'adresse de retour dans `LR`, masque les IRQ, repasse en
+     * ARM et saute au vecteur [vector]. Utilisé par `SWI` et l'interruption IRQ.
+     */
+    fun raiseException(mode: Int, vector: Int, returnAddress: Int) {
+        val savedCpsr = state.cpsr()
+        state.switchMode(mode)
+        state.setSpsr(savedCpsr)
+        state.regs[14] = returnAddress
+        state.irqDisabled = true
+        state.thumb = false
+        state.regs[15] = vector
+        branched = true
+    }
+
+    /**
      * Exécute une instruction et retourne un coût en cycles (approximatif dans
      * ce premier lot : le comptage exact des temps d'attente est différé).
      */
@@ -253,5 +269,23 @@ class Arm7Tdmi(val bus: GbaBus) {
     fun setNZ(result: Int) {
         state.negative = result < 0
         state.zero = result == 0
+    }
+
+    /**
+     * Lecture d'un mot avec la rotation ARM des adresses non alignées : le mot
+     * aligné est lu puis tourné selon les deux bits de poids faible.
+     */
+    fun loadWordRotated(address: Int): Int {
+        val word = bus.read32(address and 3.inv())
+        val rotate = (address and 3) * 8
+        return if (rotate == 0) word else (word ushr rotate) or (word shl (32 - rotate))
+    }
+
+    companion object {
+        /** Vecteur d'exception `SWI` (mode superviseur). */
+        const val VECTOR_SWI = 0x08
+
+        /** Vecteur d'exception IRQ. */
+        const val VECTOR_IRQ = 0x18
     }
 }
