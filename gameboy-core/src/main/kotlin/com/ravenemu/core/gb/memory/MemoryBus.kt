@@ -196,7 +196,9 @@ class MemoryBus(
         in 0xA000..0xBFFF -> cartridge.readRam(source)
         in 0xC000..0xCFFF -> wram[source - 0xC000].toInt() and 0xFF
         in 0xD000..0xDFFF -> wram[wramBank() * 0x1000 + (source - 0xD000)].toInt() and 0xFF
-        in 0xE000..0xFDFF -> wram[source - 0xE000].toInt() and 0xFF
+        in 0xE000..0xEFFF -> wram[source - 0xE000].toInt() and 0xFF
+        in 0xF000..0xFDFF ->
+            wram[wramBank() * 0x1000 + (source - 0xF000)].toInt() and 0xFF
         else -> 0xFF
     }
 
