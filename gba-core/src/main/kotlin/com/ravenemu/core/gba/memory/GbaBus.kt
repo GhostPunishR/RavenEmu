@@ -1,8 +1,11 @@
 package com.ravenemu.core.gba.memory
 
 import com.ravenemu.core.gba.cartridge.GbaCartridge
+import com.ravenemu.core.gba.dma.DmaController
 import com.ravenemu.core.gba.input.GbaKeypad
+import com.ravenemu.core.gba.interrupt.GbaInterruptController
 import com.ravenemu.core.gba.ppu.GbaPpu
+import com.ravenemu.core.gba.timer.GbaTimers
 
 /**
  * Bus mémoire minimal de la Game Boy Advance : achemine les accès 8, 16 et
@@ -35,6 +38,15 @@ class GbaBus(
     /** Unité graphique, rattachée après construction (registres DISPSTAT/VCOUNT). */
     var ppu: GbaPpu? = null
 
+    /** Contrôleur d'interruptions (registres IE/IF/IME), rattaché après construction. */
+    var interrupts: GbaInterruptController? = null
+
+    /** Timers (registres TMxCNT), rattachés après construction. */
+    var timers: GbaTimers? = null
+
+    /** Canaux DMA (registres DMAxCNT), rattachés après construction. */
+    var dma: DmaController? = null
+
     /** Replie une adresse VRAM (96 Kio) : blocs de 128 Kio dont les 32 derniers Kio recopient les précédents. */
     private fun vramOffset(address: Int): Int {
         var offset = address and 0x1_FFFF
@@ -45,13 +57,53 @@ class GbaBus(
     private fun romOffset(address: Int): Int = address and 0x01FF_FFFF
 
     /** Lecture d'un octet d'E/S ; certains registres reflètent l'état matériel. */
-    private fun readIo(offset: Int): Int = when (offset) {
-        KEYINPUT_LOW -> keypad.keyInput() and 0xFF
-        KEYINPUT_HIGH -> (keypad.keyInput() ushr 8) and 0xFF
-        DISPSTAT_LOW -> ppu?.dispStatLowByte() ?: (io[offset].toInt() and 0xFF)
-        VCOUNT_LOW -> ppu?.vcount ?: (io[offset].toInt() and 0xFF)
-        VCOUNT_HIGH -> 0 // VCOUNT < 228 : octet haut nul
-        else -> io[offset].toInt() and 0xFF
+    private fun readIo(offset: Int): Int {
+        val ic = interrupts
+        val tm = timers
+        return when {
+            offset == KEYINPUT_LOW -> keypad.keyInput() and 0xFF
+            offset == KEYINPUT_HIGH -> (keypad.keyInput() ushr 8) and 0xFF
+            offset == DISPSTAT_LOW -> ppu?.dispStatLowByte() ?: (io[offset].toInt() and 0xFF)
+            offset == VCOUNT_LOW -> ppu?.vcount ?: (io[offset].toInt() and 0xFF)
+            offset == VCOUNT_HIGH -> 0 // VCOUNT < 228 : octet haut nul
+            tm != null && offset in 0x100..0x10F -> readTimerByte(tm, offset)
+            ic != null && offset == IE_LOW -> ic.enable and 0xFF
+            ic != null && offset == IE_HIGH -> (ic.enable ushr 8) and 0xFF
+            ic != null && offset == IF_LOW -> ic.flags and 0xFF
+            ic != null && offset == IF_HIGH -> (ic.flags ushr 8) and 0xFF
+            ic != null && offset == IME -> if (ic.masterEnable) 1 else 0
+            ic != null && offset == IME + 1 -> 0
+            else -> io[offset].toInt() and 0xFF
+        }
+    }
+
+    /** Lecture d'un octet d'un registre de timer (compteur en 0/1, contrôle en 2/3). */
+    private fun readTimerByte(tm: GbaTimers, offset: Int): Int {
+        val timer = (offset - 0x100) / 4
+        return when ((offset - 0x100) % 4) {
+            0 -> tm.counter(timer) and 0xFF
+            1 -> (tm.counter(timer) ushr 8) and 0xFF
+            2 -> tm.control(timer) and 0xFF
+            else -> (tm.control(timer) ushr 8) and 0xFF
+        }
+    }
+
+    /**
+     * Effets de bord des écritures 16 bits vers les registres de contrôle
+     * (interruptions, timers, DMA). Les octets ont déjà été stockés dans [io].
+     */
+    private fun handleIoWrite(offset: Int, value: Int) {
+        when (offset) {
+            IE_LOW -> interrupts?.enable = value
+            IF_LOW -> interrupts?.acknowledge(value)
+            IME -> interrupts?.masterEnable = value and 1 != 0
+            0x100, 0x104, 0x108, 0x10C -> timers?.onReloadWrite((offset - 0x100) / 4, value)
+            0x102, 0x106, 0x10A, 0x10E -> timers?.onControlWrite((offset - 0x100) / 4, value)
+            0x0BA -> dma?.onControlWrite(0, value)
+            0x0C6 -> dma?.onControlWrite(1, value)
+            0x0D2 -> dma?.onControlWrite(2, value)
+            0x0DE -> dma?.onControlWrite(3, value)
+        }
     }
 
     // ---- Lectures ----
@@ -127,6 +179,7 @@ class GbaBus(
         val region = MemoryRegion.of(a) ?: return
         writeByteRaw(region, a, (value and 0xFF).toByte())
         writeByteRaw(region, a + 1, ((value ushr 8) and 0xFF).toByte())
+        if (region == MemoryRegion.IO) handleIoWrite(a and region.mirrorMask, value and 0xFFFF)
     }
 
     fun write32(address: Int, value: Int) {
@@ -142,5 +195,10 @@ class GbaBus(
         const val VCOUNT_HIGH = 0x007
         const val KEYINPUT_LOW = 0x130
         const val KEYINPUT_HIGH = 0x131
+        const val IE_LOW = 0x200
+        const val IE_HIGH = 0x201
+        const val IF_LOW = 0x202
+        const val IF_HIGH = 0x203
+        const val IME = 0x208
     }
 }
