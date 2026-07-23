@@ -39,6 +39,7 @@
     <string name="emulation_edit_controls">Modifier les commandes</string>
     <string name="emulation_quit">Quitter</string>
     <string name="emulation_state_saved">État sauvegardé</string>
+    <string name="emulation_state_save_failed">Impossible de sauvegarder l’état</string>
     <string name="emulation_per_game_profile_on">Utiliser un profil de commandes propre à ce jeu</string>
     <string name="emulation_per_game_profile_off">Revenir au profil de commandes global</string>
     <string name="emulation_profile_created">Profil propre à ce jeu créé</string>
