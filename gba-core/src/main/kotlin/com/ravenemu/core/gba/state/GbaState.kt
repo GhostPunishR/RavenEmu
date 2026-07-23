@@ -117,6 +117,9 @@ object GbaState {
                 throw SaveStateException("État instantané corrompu (données excédentaires)")
             }
 
+            // Valide d'abord les derniers champs susceptibles d'échouer.
+            machine.ppu.restoreState(ppuFields)
+
             // Tout est lu et validé : application atomique.
             val state = machine.cpu.state
             state.importBanks(banks)
@@ -131,12 +134,13 @@ object GbaState {
             oam.copyInto(bus.oam)
             sram.copyInto(bus.sram)
             bus.keypad.pressedBits = keypadBits
-            machine.ppu.restoreState(ppuFields)
             ppuFrame.copyInto(machine.ppu.frame)
         } catch (e: SaveStateException) {
             throw e
         } catch (e: IOException) {
             throw SaveStateException("État instantané corrompu ou tronqué", e)
+        } catch (e: IllegalArgumentException) {
+            throw SaveStateException("État instantané corrompu", e)
         }
     }
 }
