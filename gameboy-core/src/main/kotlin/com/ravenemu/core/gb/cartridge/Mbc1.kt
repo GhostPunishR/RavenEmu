@@ -15,15 +15,13 @@ class Mbc1(rom: ByteArray, header: CartridgeHeader) : Cartridge(rom, header) {
     private var bankHigh = 0
     private var advancedMode = false
 
-    private val romBankMask = romBankCount() - 1
-
     private fun currentRomBank(): Int {
         val bank = (bankHigh shl 5) or romBankLow
-        return bank and romBankMask
+        return normalizeRomBank(bank)
     }
 
     private fun fixedBank(): Int =
-        if (advancedMode) (bankHigh shl 5) and romBankMask else 0
+        if (advancedMode) normalizeRomBank(bankHigh shl 5) else 0
 
     private fun ramBank(): Int =
         if (advancedMode && ram.size > RAM_BANK_SIZE) bankHigh else 0
