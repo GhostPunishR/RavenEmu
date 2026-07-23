@@ -43,9 +43,10 @@ class SaveFileStore(private val context: Context) {
         val atomic = AtomicFile(privateSaveFile(romSha256, romFileName))
         var stream: java.io.FileOutputStream? = null
         return try {
-            stream = atomic.startWrite()
-            stream.write(data)
-            atomic.finishWrite(stream)
+            val output = atomic.startWrite()
+            stream = output
+            output.write(data)
+            atomic.finishWrite(output)
             stream = null
             if (externalDir != null) copyToExternal(externalDir, savName(romFileName), data)
             true
