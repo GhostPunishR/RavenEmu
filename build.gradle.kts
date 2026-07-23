@@ -7,6 +7,7 @@ tasks.register("jvmTest") {
     dependsOn(
         ":emulation-api:test",
         ":gameboy-core:test",
+        ":gba-core:test",
         ":rom-library:test",
     )
 }

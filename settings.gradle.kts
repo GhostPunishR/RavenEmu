@@ -31,6 +31,7 @@ rootProject.name = "RavenEmu"
 // Modules JVM purs : constructibles et testables sans SDK Android.
 include(":emulation-api")
 include(":gameboy-core")
+include(":gba-core")
 include(":rom-library")
 
 // Modules Android : inclus uniquement si un SDK Android est disponible
@@ -57,6 +58,6 @@ if (sdkDir != null) {
 } else {
     logger.lifecycle(
         "RavenEmu : SDK Android introuvable, seuls les modules JVM sont inclus " +
-            "(emulation-api, gameboy-core, rom-library)."
+            "(emulation-api, gameboy-core, gba-core, rom-library)."
     )
 }

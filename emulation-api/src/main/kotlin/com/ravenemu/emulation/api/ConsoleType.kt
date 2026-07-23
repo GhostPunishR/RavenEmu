@@ -15,4 +15,7 @@ enum class ConsoleType(
     // Color ; les deux extensions sont donc indexées par le même cœur.
     GAME_BOY("Game Boy", setOf("gb", "gbc")),
     GAME_BOY_COLOR("Game Boy Color", setOf("gbc", "gb")),
+
+    // Game Boy Advance : moteur ARM7TDMI dédié (module gba-core).
+    GAME_BOY_ADVANCE("Game Boy Advance", setOf("gba")),
 }
