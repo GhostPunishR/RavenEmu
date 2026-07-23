@@ -30,7 +30,27 @@ se teste sur n'importe quelle machine.
 
 # APK Release (signé si les variables de signature sont présentes)
 ./gradlew assembleRelease
+# → app/build/outputs/apk/release/app-release.apk
+
+# App Bundle Release (.aab) pour le Play Store (même signature)
+./gradlew bundleRelease
+# → app/build/outputs/bundle/release/app-release.aab
 ```
+
+## App Bundle (.aab)
+
+`bundleRelease` produit un **Android App Bundle** signé avec la même
+configuration que l'APK Release. À partir de ce bundle, le Play Store génère
+des APK optimisés par appareil (densité, langue). Le moteur étant en Kotlin
+pur (aucune bibliothèque native), le découpage par ABI est sans objet ; le
+bloc `bundle { … }` de `app/build.gradle.kts` conserve les découpages par
+densité et par langue.
+
+Un `.aab` **ne s'installe pas directement** sur un appareil : il se téléverse
+sur la Play Console, ou se convertit localement en APK installables avec
+[`bundletool`](https://developer.android.com/tools/bundletool)
+(`bundletool build-apks --bundle=app-release.aab --output=app.apks …`). Pour
+une installation directe, utilisez l'APK (Debug ou Release).
 
 ## Signature Release
 
@@ -56,6 +76,8 @@ clé de debug, installable directement).
 
 `.github/workflows/android.yml` : déclenchement sur branches principales et
 pull requests ; Java 21 (Temurin) ; `test`, `lint`, `assembleDebug` avec
-publication des rapports et de l'APK Debug ; job `release` produisant l'APK
-Release (signé si secrets présents). La génération d'un `.aab`
-(`bundleRelease`) pourra être ajoutée au même workflow.
+publication des rapports et de l'APK Debug ; job `release` produisant, **si les
+secrets de signature sont présents**, l'APK Release **et** l'App Bundle `.aab`
+signés (`assembleRelease bundleRelease`), publiés en artefacts
+`ravenemu-release-apk` et `ravenemu-release-aab`. Sans secrets, aucun livrable
+Release n'est construit.
