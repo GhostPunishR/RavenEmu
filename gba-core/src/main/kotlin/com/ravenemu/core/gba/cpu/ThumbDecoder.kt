@@ -9,10 +9,11 @@ package com.ravenemu.core.gba.cpu
  * - opérations ALU registre à registre ;
  * - opérations sur registres hauts et `BX` (échange Thumb/ARM) ;
  * - chargement relatif au `PC` ;
- * - branchements conditionnels, inconditionnels et `BL` (branchement long).
- *
- * Les formats de chargement/stockage indexés, `PUSH`/`POP`, `SWI` et l'accès
- * relatif au `SP` sont différés (indéfinis, un cycle) et documentés.
+ * - branchements conditionnels, inconditionnels et `BL` (branchement long) ;
+ * - chargements/stockages : offset registre, signés/demi-mot, offset immédiat,
+ *   demi-mot, relatif au `SP`, calcul d'adresse (`ADD Rd, PC/SP`), ajustement du
+ *   `SP`, `PUSH`/`POP` (avec `LR`/`PC`) et transfert de blocs (`LDMIA`/`STMIA`) ;
+ * - `MUL` et `SWI` (entrée en exception superviseur).
  */
 class ThumbDecoder(private val cpu: Arm7Tdmi) {
 
@@ -23,6 +24,16 @@ class ThumbDecoder(private val cpu: Arm7Tdmi) {
         instr and 0xFC00 == 0x4000 -> aluOps(instr)                // format 4
         instr and 0xFC00 == 0x4400 -> hiRegisterOps(instr)         // format 5
         instr and 0xF800 == 0x4800 -> pcRelativeLoad(instr)        // format 6
+        instr and 0xF200 == 0x5000 -> loadStoreRegisterOffset(instr) // format 7
+        instr and 0xF200 == 0x5200 -> loadStoreSignExtended(instr) // format 8
+        instr and 0xE000 == 0x6000 -> loadStoreImmediate(instr)    // format 9
+        instr and 0xF000 == 0x8000 -> loadStoreHalfword(instr)     // format 10
+        instr and 0xF000 == 0x9000 -> loadStoreSpRelative(instr)   // format 11
+        instr and 0xF000 == 0xA000 -> loadAddress(instr)           // format 12
+        instr and 0xFF00 == 0xB000 -> addOffsetToSp(instr)         // format 13
+        instr and 0xF600 == 0xB400 -> pushPop(instr)               // format 14
+        instr and 0xF000 == 0xC000 -> blockTransfer(instr)         // format 15
+        instr and 0xFF00 == 0xDF00 -> softwareInterrupt(instr)     // format 17
         instr and 0xF000 == 0xD000 -> conditionalBranch(instr)     // format 16
         instr and 0xF800 == 0xE000 -> unconditionalBranch(instr)   // format 18
         instr and 0xF800 == 0xF000 -> longBranchHigh(instr)        // format 19 (1/2)
@@ -104,7 +115,7 @@ class ThumbDecoder(private val cpu: Arm7Tdmi) {
             0xA -> arith(rd, cpu.addWithCarry(a, b.inv(), 1), write = false)  // CMP
             0xB -> arith(rd, cpu.addWithCarry(a, b, 0), write = false)        // CMN
             0xC -> logic(rd, a or b)                                  // ORR
-            0xD -> Unit                                              // MUL différé
+            0xD -> logic(rd, a * b)                                  // MUL (Rd = Rd * Rs)
             0xE -> logic(rd, a and b.inv())                          // BIC
             else -> logic(rd, b.inv())                               // MVN (0xF)
         }
@@ -162,6 +173,145 @@ class ThumbDecoder(private val cpu: Arm7Tdmi) {
         // Adresse de retour : instruction suivant ce demi-mot, marquée Thumb.
         cpu.writeReg(14, (cpu.state.regs[15] + 2) or 1)
         cpu.branchTo(target)
+        return 3
+    }
+
+    private fun loadStoreRegisterOffset(instr: Int): Int {
+        val load = (instr ushr 11) and 1 != 0
+        val byteAccess = (instr ushr 10) and 1 != 0
+        val ro = (instr ushr 6) and 7
+        val rb = (instr ushr 3) and 7
+        val rd = instr and 7
+        val address = cpu.readReg(rb) + cpu.readReg(ro)
+        when {
+            load && byteAccess -> cpu.writeReg(rd, cpu.bus.read8(address))
+            load -> cpu.writeReg(rd, cpu.loadWordRotated(address))
+            byteAccess -> cpu.bus.write8(address, cpu.readReg(rd) and 0xFF)
+            else -> cpu.bus.write32(address and 3.inv(), cpu.readReg(rd))
+        }
+        return 2
+    }
+
+    private fun loadStoreSignExtended(instr: Int): Int {
+        val h = (instr ushr 11) and 1 != 0
+        val s = (instr ushr 10) and 1 != 0
+        val ro = (instr ushr 6) and 7
+        val rb = (instr ushr 3) and 7
+        val rd = instr and 7
+        val address = cpu.readReg(rb) + cpu.readReg(ro)
+        when {
+            !s && !h -> cpu.bus.write16(address, cpu.readReg(rd) and 0xFFFF)     // STRH
+            !s -> cpu.writeReg(rd, cpu.bus.read16(address) and 0xFFFF)           // LDRH
+            !h -> cpu.writeReg(rd, (cpu.bus.read8(address) shl 24) shr 24)       // LDRSB
+            else -> cpu.writeReg(rd, (cpu.bus.read16(address) shl 16) shr 16)    // LDRSH
+        }
+        return 2
+    }
+
+    private fun loadStoreImmediate(instr: Int): Int {
+        val byteAccess = (instr ushr 12) and 1 != 0
+        val load = (instr ushr 11) and 1 != 0
+        val offset5 = (instr ushr 6) and 0x1F
+        val rb = (instr ushr 3) and 7
+        val rd = instr and 7
+        val address = cpu.readReg(rb) + if (byteAccess) offset5 else offset5 shl 2
+        when {
+            load && byteAccess -> cpu.writeReg(rd, cpu.bus.read8(address))
+            load -> cpu.writeReg(rd, cpu.loadWordRotated(address))
+            byteAccess -> cpu.bus.write8(address, cpu.readReg(rd) and 0xFF)
+            else -> cpu.bus.write32(address and 3.inv(), cpu.readReg(rd))
+        }
+        return 2
+    }
+
+    private fun loadStoreHalfword(instr: Int): Int {
+        val load = (instr ushr 11) and 1 != 0
+        val offset = ((instr ushr 6) and 0x1F) shl 1
+        val rb = (instr ushr 3) and 7
+        val rd = instr and 7
+        val address = cpu.readReg(rb) + offset
+        if (load) cpu.writeReg(rd, cpu.bus.read16(address) and 0xFFFF)
+        else cpu.bus.write16(address, cpu.readReg(rd) and 0xFFFF)
+        return 2
+    }
+
+    private fun loadStoreSpRelative(instr: Int): Int {
+        val load = (instr ushr 11) and 1 != 0
+        val rd = (instr ushr 8) and 7
+        val address = cpu.readReg(13) + ((instr and 0xFF) shl 2)
+        if (load) cpu.writeReg(rd, cpu.loadWordRotated(address))
+        else cpu.bus.write32(address and 3.inv(), cpu.readReg(rd))
+        return 2
+    }
+
+    private fun loadAddress(instr: Int): Int {
+        val useSp = (instr ushr 11) and 1 != 0
+        val rd = (instr ushr 8) and 7
+        val offset = (instr and 0xFF) shl 2
+        val base = if (useSp) cpu.readReg(13) else cpu.readReg(15) and 2.inv()
+        cpu.writeReg(rd, base + offset)
+        return 1
+    }
+
+    private fun addOffsetToSp(instr: Int): Int {
+        val offset = (instr and 0x7F) shl 2
+        val negative = (instr ushr 7) and 1 != 0
+        cpu.writeReg(13, cpu.readReg(13) + if (negative) -offset else offset)
+        return 1
+    }
+
+    private fun pushPop(instr: Int): Int {
+        val load = (instr ushr 11) and 1 != 0
+        val pcOrLr = (instr ushr 8) and 1 != 0
+        val list = instr and 0xFF
+        val count = Integer.bitCount(list) + if (pcOrLr) 1 else 0
+        if (load) {
+            var address = cpu.readReg(13)
+            for (r in 0 until 8) {
+                if (list and (1 shl r) == 0) continue
+                cpu.writeReg(r, cpu.bus.read32(address))
+                address += 4
+            }
+            if (pcOrLr) { // POP {PC}
+                cpu.writeReg(15, cpu.bus.read32(address))
+                address += 4
+            }
+            cpu.writeReg(13, address)
+        } else {
+            var address = cpu.readReg(13) - count * 4
+            cpu.writeReg(13, address)
+            for (r in 0 until 8) {
+                if (list and (1 shl r) == 0) continue
+                cpu.bus.write32(address, cpu.readReg(r))
+                address += 4
+            }
+            if (pcOrLr) cpu.bus.write32(address, cpu.readReg(14)) // PUSH {LR}
+        }
+        return count + 1
+    }
+
+    private fun blockTransfer(instr: Int): Int {
+        val load = (instr ushr 11) and 1 != 0
+        val rb = (instr ushr 8) and 7
+        val list = instr and 0xFF
+        if (list == 0) return 1 // cas limite non émulé
+        var address = cpu.readReg(rb)
+        for (r in 0 until 8) {
+            if (list and (1 shl r) == 0) continue
+            if (load) cpu.writeReg(r, cpu.bus.read32(address))
+            else cpu.bus.write32(address, cpu.readReg(r))
+            address += 4
+        }
+        if (!(load && list and (1 shl rb) != 0)) cpu.writeReg(rb, address)
+        return Integer.bitCount(list) + 1
+    }
+
+    private fun softwareInterrupt(instr: Int): Int {
+        cpu.raiseException(
+            CpuState.MODE_SUPERVISOR,
+            Arm7Tdmi.VECTOR_SWI,
+            cpu.state.regs[15] + 2,
+        )
         return 3
     }
 
