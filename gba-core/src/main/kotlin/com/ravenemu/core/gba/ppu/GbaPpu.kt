@@ -27,6 +27,13 @@ class GbaPpu(private val bus: GbaBus) {
     /** Dernière trame produite, en ARGB 8888. */
     val frame = IntArray(SCREEN_WIDTH * SCREEN_HEIGHT)
 
+    // Tampons de composition d'une ligne (réutilisés, sans allocation par ligne).
+    private val lineColor = IntArray(SCREEN_WIDTH)
+    private val linePriority = IntArray(SCREEN_WIDTH)
+    private val objColor = IntArray(SCREEN_WIDTH)
+    private val objPriority = IntArray(SCREEN_WIDTH)
+    private val objOpaque = BooleanArray(SCREEN_WIDTH)
+
     /** Ligne courante (`VCOUNT`), 0..227. */
     var vcount = 0
         private set
@@ -98,7 +105,11 @@ class GbaPpu(private val bus: GbaBus) {
             return
         }
         val backdrop = paletteColor(0)
-        for (x in 0 until SCREEN_WIDTH) frame[rowBase + x] = backdrop
+        for (x in 0 until SCREEN_WIDTH) {
+            lineColor[x] = backdrop
+            linePriority[x] = LAYER_BACKDROP
+            objOpaque[x] = false
+        }
 
         when (dispcnt and 0x7) {
             0 -> renderTextBackgrounds(y, dispcnt, 0..3)
@@ -107,6 +118,15 @@ class GbaPpu(private val bus: GbaBus) {
             3 -> renderBitmapMode3(y, dispcnt)
             4 -> renderBitmapMode4(y, dispcnt)
             5 -> renderBitmapMode5(y, dispcnt)
+        }
+        renderSprites(y, dispcnt)
+
+        // Composition : un sprite passe devant un arrière-plan si sa priorité
+        // est inférieure ou égale à celle du pixel de fond (les sprites gagnent
+        // les égalités).
+        for (x in 0 until SCREEN_WIDTH) {
+            frame[rowBase + x] =
+                if (objOpaque[x] && objPriority[x] <= linePriority[x]) objColor[x] else lineColor[x]
         }
     }
 
@@ -119,6 +139,7 @@ class GbaPpu(private val bus: GbaBus) {
 
     private fun drawTextBackgroundLine(bg: Int, y: Int) {
         val control = reg16(0x08 + bg * 2)
+        val priority = control and 0x3
         val charBase = ((control ushr 2) and 0x3) * 0x4000
         val screenBase = ((control ushr 8) and 0x1F) * 0x800
         val is8bpp = control and 0x0080 != 0
@@ -129,7 +150,6 @@ class GbaPpu(private val bus: GbaBus) {
         val hofs = reg16(0x10 + bg * 4) and 0x1FF
         val vofs = reg16(0x12 + bg * 4) and 0x1FF
 
-        val rowBase = y * SCREEN_WIDTH
         val effY = (y + vofs) and (heightPixels - 1)
         val tileY = effY / 8
         val py0 = effY and 7
@@ -158,7 +178,77 @@ class GbaPpu(private val bus: GbaBus) {
                 val nibble = if (px and 1 == 0) byte and 0xF else (byte ushr 4) and 0xF
                 if (nibble == 0) 0 else palBank * 16 + nibble
             }
-            if (colorIndex != 0) frame[rowBase + x] = paletteColor(colorIndex)
+            if (colorIndex != 0) {
+                lineColor[x] = paletteColor(colorIndex)
+                linePriority[x] = priority
+            }
+        }
+    }
+
+    /**
+     * Dessine les sprites de la ligne [y] dans les tampons objet. Périmètre :
+     * sprites **normaux** (tailles carrées/rectangulaires, 4/8 bpp, mappage
+     * 1D/2D, retournements, priorité). Les sprites **affines** (rotation/mise à
+     * l'échelle) et les fenêtres objet sont différés.
+     */
+    private fun renderSprites(y: Int, dispcnt: Int) {
+        if (dispcnt and 0x1000 == 0) return // OBJ désactivés
+        val oneDimensional = dispcnt and 0x0040 != 0
+        for (i in 0 until 128) {
+            val base = i * 8
+            val attr0 = oam16(base)
+            val objMode = (attr0 ushr 8) and 0x3
+            if (objMode == 2) continue          // sprite caché
+            if (objMode == 1 || objMode == 3) continue // affine : différé
+            val shape = (attr0 ushr 14) and 0x3
+            if (shape == 3) continue            // forme interdite
+
+            val attr1 = oam16(base + 2)
+            val attr2 = oam16(base + 4)
+            val sizeIdx = (attr1 ushr 14) and 0x3
+            val w = OBJ_WIDTH[shape][sizeIdx]
+            val h = OBJ_HEIGHT[shape][sizeIdx]
+
+            val yPos = attr0 and 0xFF
+            val sy = (y - yPos) and 0xFF
+            if (sy >= h) continue
+
+            var xPos = attr1 and 0x1FF
+            if (xPos >= 0x100) xPos -= 0x200    // X signé 9 bits
+
+            val is8bpp = attr0 and 0x2000 != 0
+            val palBank = (attr2 ushr 12) and 0xF
+            val priority = (attr2 ushr 10) and 0x3
+            val hflip = attr1 and 0x1000 != 0
+            val vflip = attr1 and 0x2000 != 0
+            val tileBase = attr2 and 0x3FF
+            val slots = if (is8bpp) 2 else 1
+            val rowStride = if (oneDimensional) (w / 8) * slots else 32
+
+            val row = if (vflip) h - 1 - sy else sy
+            val tileRow = row / 8
+            val inY = row and 7
+
+            for (col in 0 until w) {
+                val screenX = xPos + col
+                if (screenX < 0 || screenX >= SCREEN_WIDTH) continue
+                if (objOpaque[screenX]) continue // un sprite d'index inférieur a priorité
+                val sc = if (hflip) w - 1 - col else col
+                val tileIndex = tileBase + tileRow * rowStride + (sc / 8) * slots
+                val inX = sc and 7
+                val colorIndex = if (is8bpp) {
+                    vramByte(OBJ_TILE_BASE + tileIndex * 32 + inY * 8 + inX)
+                } else {
+                    val byte = vramByte(OBJ_TILE_BASE + tileIndex * 32 + inY * 4 + inX / 2)
+                    val nibble = if (inX and 1 == 0) byte and 0xF else (byte ushr 4) and 0xF
+                    if (nibble == 0) 0 else palBank * 16 + nibble
+                }
+                if (colorIndex != 0) {
+                    objColor[screenX] = paletteColor(OBJ_PALETTE_BASE + colorIndex)
+                    objPriority[screenX] = priority
+                    objOpaque[screenX] = true
+                }
+            }
         }
     }
 
@@ -175,29 +265,35 @@ class GbaPpu(private val bus: GbaBus) {
         return index * 0x800
     }
 
+    /** Priorité de BG2 (les modes bitmap dessinent sur BG2). */
+    private fun bg2Priority(): Int = reg16(0x0C) and 0x3
+
     private fun renderBitmapMode3(y: Int, dispcnt: Int) {
         if (dispcnt and 0x0400 == 0) return // BG2 désactivé
-        val rowBase = y * SCREEN_WIDTH
+        val priority = bg2Priority()
         for (x in 0 until SCREEN_WIDTH) {
-            frame[rowBase + x] = bgr555ToArgb(vram16((y * SCREEN_WIDTH + x) * 2))
+            lineColor[x] = bgr555ToArgb(vram16((y * SCREEN_WIDTH + x) * 2))
+            linePriority[x] = priority
         }
     }
 
     private fun renderBitmapMode4(y: Int, dispcnt: Int) {
         if (dispcnt and 0x0400 == 0) return
         val page = if (dispcnt and 0x0010 != 0) 0xA000 else 0
-        val rowBase = y * SCREEN_WIDTH
+        val priority = bg2Priority()
         for (x in 0 until SCREEN_WIDTH) {
-            frame[rowBase + x] = paletteColor(vramByte(page + y * SCREEN_WIDTH + x))
+            lineColor[x] = paletteColor(vramByte(page + y * SCREEN_WIDTH + x))
+            linePriority[x] = priority
         }
     }
 
     private fun renderBitmapMode5(y: Int, dispcnt: Int) {
         if (dispcnt and 0x0400 == 0 || y >= MODE5_HEIGHT) return
         val page = if (dispcnt and 0x0010 != 0) 0xA000 else 0
-        val rowBase = y * SCREEN_WIDTH
+        val priority = bg2Priority()
         for (x in 0 until MODE5_WIDTH) {
-            frame[rowBase + x] = bgr555ToArgb(vram16(page + (y * MODE5_WIDTH + x) * 2))
+            lineColor[x] = bgr555ToArgb(vram16(page + (y * MODE5_WIDTH + x) * 2))
+            linePriority[x] = priority
         }
     }
 
@@ -210,6 +306,9 @@ class GbaPpu(private val bus: GbaBus) {
         if (offset in bus.vram.indices) bus.vram[offset].toInt() and 0xFF else 0
 
     private fun vram16(offset: Int): Int = vramByte(offset) or (vramByte(offset + 1) shl 8)
+
+    private fun oam16(offset: Int): Int =
+        (bus.oam[offset].toInt() and 0xFF) or ((bus.oam[offset + 1].toInt() and 0xFF) shl 8)
 
     /** Couleur de la palette BG à l'index [index] (0..255), en ARGB. */
     private fun paletteColor(index: Int): Int {
@@ -225,6 +324,27 @@ class GbaPpu(private val bus: GbaBus) {
 
         private const val MODE5_WIDTH = 160
         private const val MODE5_HEIGHT = 128
+
+        /** Fond : priorité la plus basse (4 = derrière tout arrière-plan 0..3). */
+        private const val LAYER_BACKDROP = 4
+
+        /** Base des tuiles de sprites en VRAM (0x0601_0000). */
+        private const val OBJ_TILE_BASE = 0x1_0000
+
+        /** Décalage d'index de la palette OBJ (256 couleurs après la palette BG). */
+        private const val OBJ_PALETTE_BASE = 256
+
+        // Largeur/hauteur des sprites selon (forme, taille).
+        private val OBJ_WIDTH = arrayOf(
+            intArrayOf(8, 16, 32, 64),  // carré
+            intArrayOf(16, 32, 32, 64), // horizontal
+            intArrayOf(8, 8, 16, 32),   // vertical
+        )
+        private val OBJ_HEIGHT = arrayOf(
+            intArrayOf(8, 16, 32, 64),  // carré
+            intArrayOf(8, 8, 16, 32),   // horizontal
+            intArrayOf(16, 32, 32, 64), // vertical
+        )
 
         private const val HDRAW_CYCLES = 240 * 4   // 960 : début du HBlank
         private const val LINE_CYCLES = 308 * 4    // 1232 cycles par ligne
