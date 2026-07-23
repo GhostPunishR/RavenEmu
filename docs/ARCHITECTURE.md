@@ -260,10 +260,21 @@ d'épaule), ignorées par la Game Boy ; les manettes physiques mappent `L1`/`R1`
 et la disposition tactile ajoute deux boutons `L`/`R` redimensionnables,
 affichés uniquement pour la Game Boy Advance.
 
-**Différé aux lots suivants** (limites documentées) : jeu d'instructions complet
-(multiplication, `LDM`/`STM`, transferts demi-mot/signés, `SWP`, `SWI`,
-interruptions matérielles), interruption clavier (`KEYCNT`, réveil par touches),
-BIOS (fourni par l'utilisateur, validé par taille et empreinte, ou HLE RavenEmu),
-modes graphiques 0–5 et sprites, DMA, timers, audio, mémoires de sauvegarde
-réelles (SRAM, Flash, EEPROM), temps d'attente précis, et raffinements
-d'interface (filtre par console, détails GBA enrichis).
+**Vidéo (premier incrément)** : le PPU est rendu **ligne par ligne** au fil des
+cycles (4 cycles = 1 point, 308 points/ligne, 228 lignes). Il expose `VCOUNT`
+et les drapeaux `DISPSTAT` (VBlank, HBlank, coïncidence VCount) — lisibles via
+le bus — et gère `DISPCNT`. Sont rendus : les **modes bitmap** 3 (16 bpp),
+4 (8 bpp paletté, double page) et 5 (16 bpp, 160×128, double page), et les
+**modes texte** 0 et 1 avec arrière-plans BG0–BG3 (tuiles 4/8 bpp, défilement,
+retournements, priorités). Le blanc forcé et la couleur d'arrière-plan sont
+gérés. Le framebuffer 240×160 ARGB reste affiché tel quel par le renderer.
+
+**Différé aux lots suivants** (limites documentées) : arrière-plans **affines**
+(modes 1/2, rotation/mise à l'échelle), **sprites** (OBJ), fenêtres, mosaïque,
+alpha blending, luminosité ; jeu d'instructions complet (multiplication,
+`LDM`/`STM`, transferts demi-mot/signés, `SWP`, `SWI`, interruptions
+matérielles), **interruptions** VBlank/HBlank/VCount et clavier (les drapeaux
+d'état existent, mais le contrôleur d'IRQ manque), BIOS (fourni par
+l'utilisateur, validé par taille et empreinte, ou HLE RavenEmu), DMA, timers,
+audio, mémoires de sauvegarde réelles (SRAM, Flash, EEPROM), temps d'attente
+précis, et raffinements d'interface (filtre par console, détails GBA enrichis).
