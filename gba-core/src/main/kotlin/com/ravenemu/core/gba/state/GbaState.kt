@@ -54,6 +54,12 @@ object GbaState {
         out.write(bus.sram)
         out.writeInt(bus.keypad.pressedBits)
 
+        out.writeInt(machine.interrupts.enable)
+        out.writeInt(machine.interrupts.flags)
+        out.writeBoolean(machine.interrupts.masterEnable)
+        for (v in machine.timers.exportState()) out.writeInt(v)
+        for (v in machine.dma.exportState()) out.writeInt(v)
+
         out.flush()
         return buffer.toByteArray()
     }
@@ -101,6 +107,12 @@ object GbaState {
             val sram = ByteArray(bus.sram.size).also(input::readFully)
             val keypadBits = input.readInt()
 
+            val ie = input.readInt()
+            val iflag = input.readInt()
+            val ime = input.readBoolean()
+            val timerState = IntArray(16) { input.readInt() }
+            val dmaState = IntArray(8) { input.readInt() }
+
             // Tout est lu et validé : application atomique.
             val state = machine.cpu.state
             state.importBanks(banks)
@@ -115,6 +127,11 @@ object GbaState {
             oam.copyInto(bus.oam)
             sram.copyInto(bus.sram)
             bus.keypad.pressedBits = keypadBits
+            machine.interrupts.enable = ie
+            machine.interrupts.flags = iflag
+            machine.interrupts.masterEnable = ime
+            machine.timers.importState(timerState)
+            machine.dma.importState(dmaState)
         } catch (e: SaveStateException) {
             throw e
         } catch (e: IOException) {
