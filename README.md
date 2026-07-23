@@ -118,9 +118,9 @@ Game Boy Advance (`gba-core`, moteur ARM7TDMI) est construite, sans modifier
 - [ ] Game Boy Advance (`gba-core`, moteur ARM7TDMI) — **en cours** : en-tête,
   bus mémoire, jeu d'instructions ARM/Thumb quasi complet (LDM/STM, demi-mots,
   MUL, SWP, SWI), entrées (keypad + boutons L/R), vidéo (modes bitmap 3/4/5,
-  arrière-plans texte et **sprites**, VCOUNT/VBlank), sélection du moteur et ROM
-  `.gba` dans la bibliothèque ; contrôleur d'interruptions, DMA/timers, vidéo
-  affine, audio, sauvegardes et BIOS à venir
+  arrière-plans texte et **sprites**, VCOUNT/VBlank), **interruptions + timers +
+  DMA**, sélection du moteur et ROM `.gba` dans la bibliothèque ; BIOS HLE, vidéo
+  affine, audio et sauvegardes à venir
 
 ## Licence
 

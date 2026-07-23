@@ -283,13 +283,23 @@ OAM inférieur passe devant). Le rendu se fait via une **composition par pixel**
 (couleur + priorité de couche). Le framebuffer 240×160 ARGB reste affiché tel
 quel par le renderer.
 
+**Événements matériels** : un **contrôleur d'interruptions** (`GbaInterruptController` :
+`IE`/`IF`/`IME`, `IF` en écriture-pour-effacer) centralise les sources ; le PPU
+lève VBlank/HBlank/coïncidence VCount (si activées dans `DISPSTAT`), les **timers**
+et les **DMA** lèvent les leurs. Les **quatre timers** (`GbaTimers`) gèrent
+prédiviseur (1/64/256/1024), mode cascade et IRQ de débordement. Les **quatre
+canaux DMA** (`DmaController`) copient en mots de 16/32 bits avec contrôle
+d'adresse (incrément/décrément/fixe), répétition et IRQ, déclenchés en immédiat,
+VBlank ou HBlank. La **boucle machine** livre l'exception IRQ (vecteur `0x18`)
+avant chaque instruction quand une interruption autorisée est en attente et que
+le drapeau `I` du CPU est dégagé.
+
 **Différé aux lots suivants** (limites documentées) : arrière-plans **affines**
 (modes 1/2, rotation/mise à l'échelle), **sprites affines** (rotation/mise à
-l'échelle des OBJ), fenêtres, mosaïque,
-alpha blending, luminosité ; **contrôleur d'interruptions** et livraison des IRQ
-(VBlank/HBlank/VCount, clavier, timers, DMA — les drapeaux d'état existent et
-l'entrée en exception CPU est prête, mais le contrôleur `IE`/`IF`/`IME` manque),
-BIOS (fourni par l'utilisateur, validé par taille et empreinte, ou HLE RavenEmu),
-DMA, timers,
-audio, mémoires de sauvegarde réelles (SRAM, Flash, EEPROM), temps d'attente
-précis, et raffinements d'interface (filtre par console, détails GBA enrichis).
+l'échelle des OBJ), fenêtres, mosaïque, alpha blending, luminosité ; **BIOS** —
+fourni par l'utilisateur (validé par taille et empreinte) ou HLE RavenEmu : le
+vecteur IRQ `0x18` et `SWI` (`0x08`) sautent dans le BIOS, encore vide, si bien
+que la livraison d'IRQ n'atteint le jeu qu'une fois le handler BIOS présent ;
+modes DMA spéciaux (FIFO son, capture vidéo), IRQ clavier/série ; audio, mémoires
+de sauvegarde réelles (SRAM, Flash, EEPROM), temps d'attente précis, et
+raffinements d'interface (filtre par console, détails GBA enrichis).
