@@ -12,9 +12,13 @@ package com.ravenemu.core.gba.cpu
  * - transfert simple `LDR` / `STR` (octet/mot, offset immédiat ou registre,
  *   pré/post-indexation, réécriture de base, rotation des lectures non alignées).
  *
- * Les instructions hors périmètre (multiplication, transferts demi-mot/signés,
- * `LDM`/`STM`, `SWP`, `SWI`, coprocesseur) sont traitées comme indéfinies : sans
- * effet, un cycle. Elles seront ajoutées aux lots suivants.
+ * Sont également gérés : multiplications (`MUL`/`MLA`, `UMULL`/`SMULL`/…),
+ * transferts demi-mot et signés (`LDRH`/`STRH`/`LDRSB`/`LDRSH`), transferts de
+ * blocs (`LDM`/`STM`, avec les quatre modes IA/IB/DA/DB et réécriture), échange
+ * (`SWP`/`SWPB`) et `SWI` (entrée en exception superviseur). Le coprocesseur
+ * n'est pas pris en charge (indéfini). Détails non émulés (documentés) : temps
+ * d'attente précis, transfert de banque utilisateur par `LDM/STM^`, valeur
+ * `pc+12` stockée par `STR`/`STM` de R15.
  */
 class ArmDecoder(private val cpu: Arm7Tdmi) {
 
@@ -25,10 +29,20 @@ class ArmDecoder(private val cpu: Arm7Tdmi) {
             return 3
         }
         return when ((instr ushr 25) and 0x7) {
-            0b101 -> branch(instr)
+            0b000 -> when {
+                instr and 0x0FB0_0FF0 == 0x0100_0090 -> swap(instr)
+                instr and 0x0FC0_00F0 == 0x0000_0090 -> multiply(instr)
+                instr and 0x0F80_00F0 == 0x0080_0090 -> multiplyLong(instr)
+                instr and 0x0E00_0090 == 0x0000_0090 && instr and 0x60 != 0 ->
+                    halfwordTransfer(instr)
+                else -> dataProcessingOrPsr(instr)
+            }
+            0b001 -> dataProcessingOrPsr(instr)
             0b010, 0b011 -> singleDataTransfer(instr)
-            0b000, 0b001 -> dataProcessingOrPsr(instr)
-            else -> 1 // indéfini dans ce lot
+            0b100 -> blockDataTransfer(instr)
+            0b101 -> branch(instr)
+            0b111 -> if ((instr ushr 24) and 1 != 0) softwareInterrupt(instr) else 1
+            else -> 1 // 0b110 : coprocesseur (non pris en charge)
         }
     }
 
@@ -49,11 +63,6 @@ class ArmDecoder(private val cpu: Arm7Tdmi) {
         // Les codes de comparaison (8..B) avec S=0 codent un transfert PSR.
         if (!setFlags && opcode in 0x8..0xB) {
             return psrTransfer(instr)
-        }
-        // Décalage par registre avec bit 7 = 1 : encode multiplication / demi-mot,
-        // hors périmètre → indéfini.
-        if (!immediate && (instr ushr 4) and 1 != 0 && (instr ushr 7) and 1 != 0) {
-            return 1
         }
         return dataProcessing(instr, immediate, opcode, setFlags)
     }
@@ -204,6 +213,145 @@ class ArmDecoder(private val cpu: Arm7Tdmi) {
             if (!preIndex || writeBack) cpu.writeReg(rn, newBase)
         }
         return 2
+    }
+
+    private fun multiply(instr: Int): Int {
+        val rd = (instr ushr 16) and 0xF
+        val rn = (instr ushr 12) and 0xF
+        val rs = (instr ushr 8) and 0xF
+        val rm = instr and 0xF
+        val accumulate = (instr ushr 21) and 1 != 0
+        val setFlags = (instr ushr 20) and 1 != 0
+        var result = cpu.readReg(rm) * cpu.readReg(rs)
+        if (accumulate) result += cpu.readReg(rn)
+        cpu.writeReg(rd, result)
+        if (setFlags) cpu.setNZ(result)
+        return 2
+    }
+
+    private fun multiplyLong(instr: Int): Int {
+        val rdHi = (instr ushr 16) and 0xF
+        val rdLo = (instr ushr 12) and 0xF
+        val rs = (instr ushr 8) and 0xF
+        val rm = instr and 0xF
+        val signed = (instr ushr 22) and 1 != 0
+        val accumulate = (instr ushr 21) and 1 != 0
+        val setFlags = (instr ushr 20) and 1 != 0
+        val m = cpu.readReg(rm).toLong()
+        val s = cpu.readReg(rs).toLong()
+        var product =
+            if (signed) m * s else (m and 0xFFFF_FFFFL) * (s and 0xFFFF_FFFFL)
+        if (accumulate) {
+            val acc = ((cpu.readReg(rdHi).toLong() and 0xFFFF_FFFFL) shl 32) or
+                (cpu.readReg(rdLo).toLong() and 0xFFFF_FFFFL)
+            product += acc
+        }
+        cpu.writeReg(rdLo, product.toInt())
+        cpu.writeReg(rdHi, (product ushr 32).toInt())
+        if (setFlags) {
+            cpu.state.negative = product < 0
+            cpu.state.zero = product == 0L
+        }
+        return 3
+    }
+
+    private fun swap(instr: Int): Int {
+        val byteAccess = (instr ushr 22) and 1 != 0
+        val address = cpu.readReg((instr ushr 16) and 0xF)
+        val rd = (instr ushr 12) and 0xF
+        val source = cpu.readReg(instr and 0xF)
+        if (byteAccess) {
+            val temp = cpu.bus.read8(address)
+            cpu.bus.write8(address, source and 0xFF)
+            cpu.writeReg(rd, temp)
+        } else {
+            val temp = cpu.loadWordRotated(address)
+            cpu.bus.write32(address and 3.inv(), source)
+            cpu.writeReg(rd, temp)
+        }
+        return 4
+    }
+
+    private fun halfwordTransfer(instr: Int): Int {
+        val preIndex = (instr ushr 24) and 1 != 0
+        val add = (instr ushr 23) and 1 != 0
+        val immediate = (instr ushr 22) and 1 != 0
+        val writeBack = (instr ushr 21) and 1 != 0
+        val load = (instr ushr 20) and 1 != 0
+        val rn = (instr ushr 16) and 0xF
+        val rd = (instr ushr 12) and 0xF
+        val sh = (instr ushr 5) and 0x3
+        val offset = if (immediate) {
+            (((instr ushr 8) and 0xF) shl 4) or (instr and 0xF)
+        } else {
+            cpu.readReg(instr and 0xF)
+        }
+        val base = cpu.readReg(rn)
+        val signedOffset = if (add) offset else -offset
+        val address = if (preIndex) base + signedOffset else base
+        val newBase = base + signedOffset
+        if (load) {
+            val value = when (sh) {
+                1 -> cpu.bus.read16(address) and 0xFFFF                 // LDRH
+                2 -> (cpu.bus.read8(address) shl 24) shr 24             // LDRSB
+                else -> (cpu.bus.read16(address) shl 16) shr 16         // LDRSH
+            }
+            if ((!preIndex || writeBack) && rn != rd) cpu.writeReg(rn, newBase)
+            cpu.writeReg(rd, value)
+        } else {
+            cpu.bus.write16(address, cpu.readReg(rd) and 0xFFFF)        // STRH
+            if (!preIndex || writeBack) cpu.writeReg(rn, newBase)
+        }
+        return 2
+    }
+
+    private fun blockDataTransfer(instr: Int): Int {
+        val preIndex = (instr ushr 24) and 1 != 0
+        val add = (instr ushr 23) and 1 != 0
+        val psrForceUser = (instr ushr 22) and 1 != 0
+        val writeBack = (instr ushr 21) and 1 != 0
+        val load = (instr ushr 20) and 1 != 0
+        val rn = (instr ushr 16) and 0xF
+        val list = instr and 0xFFFF
+        val count = Integer.bitCount(list)
+        if (count == 0) return 2 // liste vide : cas limite non émulé (documenté)
+
+        val base = cpu.readReg(rn)
+        // Les registres bas vont toujours aux adresses basses, quel que soit le
+        // sens ; P/U ne fixent que l'adresse de départ et la réécriture.
+        var address = when {
+            add && preIndex -> base + 4
+            add -> base
+            preIndex -> base - count * 4
+            else -> base - count * 4 + 4
+        }
+        val writebackValue = if (add) base + count * 4 else base - count * 4
+        val loadsPc = load && (list and 0x8000) != 0
+
+        for (r in 0 until 16) {
+            if (list and (1 shl r) == 0) continue
+            if (load) cpu.writeReg(r, cpu.bus.read32(address))
+            else cpu.bus.write32(address, cpu.readReg(r))
+            address += 4
+        }
+        // Réécriture (sauf LDM incluant la base : la valeur chargée prime).
+        if (writeBack && !(load && list and (1 shl rn) != 0)) {
+            cpu.writeReg(rn, writebackValue)
+        }
+        // LDM avec R15 et bit S : retour d'exception (SPSR → CPSR).
+        if (loadsPc && psrForceUser && cpu.state.hasSpsr()) {
+            cpu.state.setCpsr(cpu.state.spsr(), true)
+        }
+        return count + 2
+    }
+
+    private fun softwareInterrupt(instr: Int): Int {
+        cpu.raiseException(
+            CpuState.MODE_SUPERVISOR,
+            Arm7Tdmi.VECTOR_SWI,
+            cpu.state.regs[15] + 4,
+        )
+        return 3
     }
 
     private fun readWithExtra(index: Int, pcExtra: Int): Int =
