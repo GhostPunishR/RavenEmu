@@ -29,9 +29,10 @@ class SnapshotStore(private val context: Context) {
         val atomic = AtomicFile(file(romSha256, slot))
         var stream: java.io.FileOutputStream? = null
         return try {
-            stream = atomic.startWrite()
-            stream.write(state)
-            atomic.finishWrite(stream)
+            val output = atomic.startWrite()
+            stream = output
+            output.write(state)
+            atomic.finishWrite(output)
             stream = null
             true
         } catch (_: Exception) {
