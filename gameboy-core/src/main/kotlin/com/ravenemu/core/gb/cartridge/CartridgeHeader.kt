@@ -113,7 +113,13 @@ data class CartridgeHeader(
             )
             val hasRtc = typeCode == 0x0F || typeCode == 0x10
 
-            val romSize = if (romSizeCode <= 0x08) MIN_ROM_SIZE shl romSizeCode else 0
+            val romSize = when {
+                romSizeCode <= 0x08 -> MIN_ROM_SIZE shl romSizeCode
+                romSizeCode == 0x52 -> 72 * Cartridge.ROM_BANK_SIZE
+                romSizeCode == 0x53 -> 80 * Cartridge.ROM_BANK_SIZE
+                romSizeCode == 0x54 -> 96 * Cartridge.ROM_BANK_SIZE
+                else -> 0
+            }
             val ramSize = when {
                 mbc == MbcType.MBC2 -> 512
                 else -> when (ramSizeCode) {
