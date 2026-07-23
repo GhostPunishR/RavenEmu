@@ -22,7 +22,8 @@ import java.io.IOException
 object GbaState {
 
     private const val MAGIC = 0x52564E53 // "RVNS"
-    private const val VERSION = 1
+    /** Version 2 : état temporel et framebuffer PPU inclus. */
+    private const val VERSION = 2
     private const val BANK_WORDS = 28 // CpuState.exportBanks(): 6*3 + 10
 
     /** Taille maximale acceptée pour un état (garde-fou anti-« fichier trop volumineux »). */
