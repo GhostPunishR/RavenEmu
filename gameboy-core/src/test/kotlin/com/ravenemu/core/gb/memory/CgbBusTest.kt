@@ -127,6 +127,15 @@ class CgbBusTest {
     }
 
     @Test
+    fun `OAM DMA depuis echo WRAM respecte SVBK`() {
+        val m = Machine()
+        m.bus.write(0xFF70, 3)
+        m.bus.write(0xD000, 0xA7)
+        m.bus.write(0xFF46, 0xF0)
+        assertEquals(0xA7, m.ppu.oam[0].toInt() and 0xFF)
+    }
+
+    @Test
     fun `registres CGB inertes en mode DMG`() {
         val interrupts = InterruptController()
         val cartridge = Cartridge.create(TestRoms.build(type = 0x00))
