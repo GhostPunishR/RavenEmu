@@ -105,6 +105,11 @@ class GbaPpu(private val bus: GbaBus) {
 
     fun restoreState(fields: IntArray) {
         require(fields.size == STATE_FIELD_COUNT) { "État PPU GBA invalide" }
+        require(fields[0] in 0 until TOTAL_LINES) { "VCOUNT GBA invalide" }
+        require(fields[1] in 0 until LINE_CYCLES) { "Position de ligne GBA invalide" }
+        require(fields[2] in 0..1 && fields[3] in 0..1 && fields[4] in 0..1) {
+            "Drapeaux PPU GBA invalides"
+        }
         vcount = fields[0]
         lineCycles = fields[1]
         inVBlank = fields[2] != 0
