@@ -42,8 +42,6 @@ class Mbc3(
 
     private var lastSyncEpoch = clock()
 
-    private val romBankMask = romBankCount() - 1
-
     private val hasRtc = header.hasRtc
 
     /** Rattrape le temps écoulé depuis la dernière synchronisation. */
@@ -75,7 +73,7 @@ class Mbc3(
     }
 
     override fun readRom(address: Int): Int {
-        val bank = if (address < ROM_BANK_SIZE) 0 else romBank and romBankMask
+        val bank = if (address < ROM_BANK_SIZE) 0 else normalizeRomBank(romBank)
         val offset = bank * ROM_BANK_SIZE + (address and (ROM_BANK_SIZE - 1))
         return if (offset < rom.size) rom[offset].toInt() and 0xFF else 0xFF
     }
