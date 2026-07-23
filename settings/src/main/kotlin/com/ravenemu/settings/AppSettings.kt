@@ -60,6 +60,28 @@ class AppSettings(context: Context) {
         get() = prefs.getBoolean("video_show_fps", false)
         set(value) = prefs.edit { putBoolean("video_show_fps", value) }
 
+    /**
+     * Luminosité de l'affichage, `-100..100` (`0` = neutre). Stockée en interne
+     * sur `0..200` (curseur centré sur 100) pour le `SeekBarPreference`.
+     */
+    var displayBrightness: Int
+        get() = prefs.getInt("video_brightness", 100).coerceIn(0, 200) - 100
+        set(value) = prefs.edit { putInt("video_brightness", (value + 100).coerceIn(0, 200)) }
+
+    /** Contraste de l'affichage, `-100..100` (`0` = neutre). Même stockage. */
+    var displayContrast: Int
+        get() = prefs.getInt("video_contrast", 100).coerceIn(0, 200) - 100
+        set(value) = prefs.edit { putInt("video_contrast", (value + 100).coerceIn(0, 200)) }
+
+    /**
+     * Correction colorimétrique LCD (simulation calibrable de la désaturation et
+     * du gamma d'un panneau réfléchissant). Désactivée par défaut. Surtout utile
+     * pour les couleurs vives d'une Game Boy Color.
+     */
+    var lcdColorCorrection: Boolean
+        get() = prefs.getBoolean("video_lcd_correction", false)
+        set(value) = prefs.edit { putBoolean("video_lcd_correction", value) }
+
     // ---- Audio (préparé pour la phase audio dédiée) ----
 
     var audioEnabled: Boolean

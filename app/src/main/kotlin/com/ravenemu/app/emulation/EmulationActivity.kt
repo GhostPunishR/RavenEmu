@@ -32,6 +32,7 @@ import com.ravenemu.input.TouchControlsView
 import com.ravenemu.renderer.EmulatorSurfaceView
 import com.ravenemu.romlibrary.RomEntry
 import com.ravenemu.settings.AppSettings
+import com.ravenemu.emulation.api.display.DisplayAdjustments
 import com.ravenemu.emulation.api.display.MonochromeDisplayProfiles
 import com.ravenemu.storage.LibraryRepository
 import com.ravenemu.storage.SaveFileStore
@@ -122,6 +123,12 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
         } else {
             null
         }
+        // Réglages avancés en post-traitement (aucun effet si tout est neutre).
+        surface.displayAdjustments = DisplayAdjustments(
+            brightness = settings.displayBrightness,
+            contrast = settings.displayContrast,
+            lcdColorCorrection = settings.lcdColorCorrection,
+        )
         performanceOverlay.visibility =
             if (settings.showPerformanceOverlay) View.VISIBLE else View.GONE
     }

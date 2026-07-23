@@ -145,11 +145,21 @@ calibrables**, jamais présentées comme des valeurs officielles — aucune
 palette numérique n'ayant été publiée pour ces panneaux, dont la teinte
 réelle varie selon le panneau, son vieillissement et l'éclairage.
 
-Les réglages avancés facultatifs (contraste, luminosité, persistance,
-grille LCD, mélange d'images) ne sont pas encore implémentés ; l'architecture
-les accueillera comme post-traitement appliqué **après** la palette, sans
-modifier les niveaux produits par le PPU, et sans effet ajouté par défaut
-(ni scanlines, ni CRT, ni lissage bilinéaire).
+Les réglages avancés de **luminosité**, **contraste** et **correction
+colorimétrique LCD** sont implémentés (`DisplayAdjustments`, module
+`emulation-api`, testé sur JVM) comme post-traitement appliqué **après** la
+palette, sans modifier les niveaux produits par le PPU et **sans effet par
+défaut** (l'objet identité laisse le framebuffer intact). Luminosité et
+contraste sont des tables 8 bits par canal (décalage additif, étirement
+photographique autour du gris moyen) ; la correction LCD est une **simulation
+calibrable** — jamais des valeurs officielles — de la désaturation vers la
+luminance et du gamma d'un panneau réfléchissant, surtout utile pour les
+couleurs vives de la Game Boy Color. Sur un écran monochrome, seules
+luminosité et contraste s'appliquent (la palette est déjà calibrée) ; en
+sortie couleur, les trois réglages s'appliquent par pixel. Les autres effets
+possibles (persistance, grille LCD, mélange d'images) restent non implémentés
+et s'inséreraient dans le même post-traitement, sans scanlines, CRT ni
+lissage bilinéaire par défaut.
 
 ## AD-13 — Game Boy Color
 

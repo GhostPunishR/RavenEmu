@@ -42,9 +42,11 @@ code d'émulateur existant, sans cœur tiers, sans BIOS ni contenu protégé.
 - **Affichage** : le moteur ne produit que les **quatre niveaux monochromes**
   `0..3` ; le renderer applique un **profil d'écran** (simulation LCD
   calibrable : Game Boy DMG, Pocket, Light éteint/allumé, Noir et blanc),
-  changeable à chaud. Ratio natif conservé, mise à l'échelle entière
-  optionnelle, nearest-neighbor, adaptation aux encoches et à toutes tailles
-  d'écran
+  changeable à chaud. **Réglages avancés** : luminosité, contraste et
+  correction colorimétrique LCD (simulation, surtout utile en Game Boy Color),
+  appliqués en post-traitement sans effet par défaut. Ratio natif conservé,
+  mise à l'échelle entière optionnelle, nearest-neighbor, adaptation aux
+  encoches et à toutes tailles d'écran
 - **Confidentialité** : aucun réseau, aucune télémétrie, permissions
   minimales
 
@@ -106,7 +108,7 @@ d'une console future se fait par un nouveau module implémentant
 
 - [x] Compatibilité Game Boy Color
 - [x] Base locale d'empreintes de référence enrichissable (import No-Intro/JSON)
-- [ ] Réglages d'affichage avancés (contraste, luminosité, correction LCD)
+- [x] Réglages d'affichage avancés (contraste, luminosité, correction LCD)
 - [ ] Tests de compatibilité étendus sur matériel réel
 - [ ] Android App Bundle (`.aab`)
 
