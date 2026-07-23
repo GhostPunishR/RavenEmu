@@ -4,6 +4,7 @@ import com.ravenemu.core.gba.GbaCore
 import com.ravenemu.core.gba.SyntheticRom
 import com.ravenemu.emulation.api.SaveStateException
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
@@ -31,6 +32,20 @@ class GbaStateTest {
         core.loadState(state)
         assertEquals(0x1234_5678, machine.bus.read32(0x0200_0000))
         assertEquals(0xABCD_EF01.toInt(), machine.cpu.state.regs[5])
+    }
+
+    @Test
+    fun `sauvegarde puis restauration retablit le PPU complet`() {
+        val core = loadedCore()
+        val machine = core.machine!!
+        machine.ppu.tick(1_000)
+        val state = core.saveState()
+
+        machine.ppu.tick(50_000)
+        machine.ppu.frame.fill(0x1234_5678)
+        core.loadState(state)
+
+        assertContentEquals(state, core.saveState())
     }
 
     @Test
