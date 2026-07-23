@@ -156,12 +156,16 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
     private fun activeProfileKey(): String =
         if (hasPerGameProfile()) perGameProfileKey() else orientationKey()
 
-    private fun defaultLayout(): ControlLayout =
-        if (orientationKey() == "landscape") {
-            ControlLayout.defaultLandscape()
+    private fun defaultLayout(): ControlLayout {
+        // Les gâchettes L/R ne sont affichées que pour les consoles qui en ont
+        // (Game Boy Advance).
+        val withShoulders = console == ConsoleType.GAME_BOY_ADVANCE
+        return if (orientationKey() == "landscape") {
+            ControlLayout.defaultLandscape(withShoulders)
         } else {
-            ControlLayout.defaultPortrait()
+            ControlLayout.defaultPortrait(withShoulders)
         }
+    }
 
     private fun applyControlLayout() {
         val layout = settings.controlLayout(activeProfileKey()) ?: defaultLayout()

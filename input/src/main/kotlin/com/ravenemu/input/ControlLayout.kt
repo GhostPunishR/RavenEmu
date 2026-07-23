@@ -4,7 +4,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
 /** Éléments de l'interface tactile. */
-enum class ControlId { DPAD, BUTTON_A, BUTTON_B, START, SELECT, MENU }
+enum class ControlId { DPAD, BUTTON_A, BUTTON_B, START, SELECT, MENU, BUTTON_L, BUTTON_R }
 
 /**
  * Position et apparence d'un élément. Les coordonnées sont **relatives**
@@ -66,7 +66,7 @@ data class ControlLayout(
          * haut, les commandes occupent le tiers médian-bas, à portée de
          * pouce, en laissant la bordure basse aux gestes système.
          */
-        fun defaultPortrait(): ControlLayout = ControlLayout(
+        fun defaultPortrait(withShoulders: Boolean = false): ControlLayout = ControlLayout(
             elements = listOf(
                 ControlElement(ControlId.DPAD, centerX = 0.20f, centerY = 0.70f),
                 ControlElement(ControlId.BUTTON_A, centerX = 0.87f, centerY = 0.63f),
@@ -74,11 +74,13 @@ data class ControlLayout(
                 ControlElement(ControlId.SELECT, centerX = 0.38f, centerY = 0.88f),
                 ControlElement(ControlId.START, centerX = 0.62f, centerY = 0.88f),
                 ControlElement(ControlId.MENU, centerX = 0.94f, centerY = 0.04f),
+                ControlElement(ControlId.BUTTON_L, centerX = 0.12f, centerY = 0.50f, visible = withShoulders),
+                ControlElement(ControlId.BUTTON_R, centerX = 0.88f, centerY = 0.50f, visible = withShoulders),
             )
         )
 
         /** Disposition par défaut en paysage : commandes de part et d'autre. */
-        fun defaultLandscape(): ControlLayout = ControlLayout(
+        fun defaultLandscape(withShoulders: Boolean = false): ControlLayout = ControlLayout(
             elements = listOf(
                 ControlElement(ControlId.DPAD, centerX = 0.12f, centerY = 0.70f),
                 ControlElement(ControlId.BUTTON_A, centerX = 0.93f, centerY = 0.60f),
@@ -86,6 +88,8 @@ data class ControlLayout(
                 ControlElement(ControlId.SELECT, centerX = 0.80f, centerY = 0.93f),
                 ControlElement(ControlId.START, centerX = 0.90f, centerY = 0.93f),
                 ControlElement(ControlId.MENU, centerX = 0.96f, centerY = 0.06f),
+                ControlElement(ControlId.BUTTON_L, centerX = 0.08f, centerY = 0.12f, visible = withShoulders),
+                ControlElement(ControlId.BUTTON_R, centerX = 0.92f, centerY = 0.12f, visible = withShoulders),
             )
         )
     }
