@@ -80,15 +80,18 @@ Détails, signature Release et CI : [docs/BUILD.md](docs/BUILD.md).
 | `app` | Application Android | Écrans, navigation, session d'émulation |
 | `emulation-api` | Kotlin JVM | Interfaces communes app ↔ moteurs |
 | `gameboy-core` | Kotlin JVM | Moteur Game Boy (CPU, PPU, APU, MBC…) |
+| `gba-core` | Kotlin JVM | Moteur Game Boy Advance (ARM7TDMI) — en construction |
 | `rom-library` | Kotlin JVM | En-têtes, empreintes, identification, index |
 | `storage` | Bibliothèque Android | SAF, `.sav`, états, pochettes |
 | `renderer` | Bibliothèque Android | Affichage du framebuffer |
 | `input` | Bibliothèque Android | Tactile, éditeur, manettes |
 | `settings` | Bibliothèque Android | Préférences, profils d'écran |
 
-Le moteur ne dépend pas d'Android et se teste sur JVM (175 tests). L'ajout
-d'une console future se fait par un nouveau module implémentant
-`emulation-api`, sans toucher au moteur Game Boy. Décisions détaillées :
+Les moteurs ne dépendent pas d'Android et se testent sur JVM. L'ajout d'une
+console se fait par un nouveau module implémentant `emulation-api`, sans
+toucher aux moteurs existants — c'est ainsi que la prise en charge de la
+Game Boy Advance (`gba-core`, moteur ARM7TDMI) est construite, sans modifier
+`gameboy-core`. Décisions détaillées :
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · spécification :
 [docs/CAHIER_DES_CHARGES.md](docs/CAHIER_DES_CHARGES.md) · contribution :
 [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md).
@@ -112,6 +115,11 @@ d'une console future se fait par un nouveau module implémentant
 - [x] Réglages d'affichage avancés (contraste, luminosité, correction LCD)
 - [ ] Tests de compatibilité étendus sur matériel réel
 - [x] Android App Bundle (`.aab`)
+- [ ] Game Boy Advance (`gba-core`, moteur ARM7TDMI) — **en cours** : squelette,
+  en-tête, bus mémoire, sous-ensemble ARM/Thumb, entrées (keypad + boutons L/R),
+  vidéo (modes bitmap 3/4/5, arrière-plans texte et **sprites**, VCOUNT/VBlank),
+  sélection du moteur et ROM `.gba` dans la bibliothèque ; arrière-plans affines,
+  interruptions, DMA/timers, audio, sauvegardes et BIOS à venir
 
 ## Licence
 

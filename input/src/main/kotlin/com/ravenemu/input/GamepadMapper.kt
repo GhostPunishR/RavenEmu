@@ -85,6 +85,9 @@ class GamepadMapper {
             KeyEvent.KEYCODE_BUTTON_B to EmulatorButton.B,
             KeyEvent.KEYCODE_BUTTON_START to EmulatorButton.START,
             KeyEvent.KEYCODE_BUTTON_SELECT to EmulatorButton.SELECT,
+            // Gâchettes d'épaule (Game Boy Advance) ; ignorées par la Game Boy.
+            KeyEvent.KEYCODE_BUTTON_L1 to EmulatorButton.L,
+            KeyEvent.KEYCODE_BUTTON_R1 to EmulatorButton.R,
         )
     }
 }

@@ -1,6 +1,5 @@
 plugins {
     alias(libs.plugins.kotlin.jvm)
-    alias(libs.plugins.kotlin.serialization)
 }
 
 java {
@@ -16,9 +15,6 @@ kotlin {
 
 dependencies {
     api(project(":emulation-api"))
-    api(project(":gameboy-core"))
-    api(project(":gba-core"))
-    implementation(libs.kotlinx.serialization.json)
     testImplementation(libs.kotlin.test)
     testImplementation(libs.junit4)
 }

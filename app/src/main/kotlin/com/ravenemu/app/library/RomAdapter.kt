@@ -10,6 +10,7 @@ import android.widget.TextView
 import androidx.core.graphics.drawable.toDrawable
 import androidx.recyclerview.widget.RecyclerView
 import com.ravenemu.app.R
+import com.ravenemu.emulation.api.ConsoleType
 import com.ravenemu.romlibrary.RomEntry
 import com.ravenemu.romlibrary.RomStatus
 
@@ -58,10 +59,17 @@ class RomAdapter(
         fun bind(entry: RomEntry) {
             title.text = entry.displayName
             val sizeKib = entry.sizeBytes / 1024
+            val details = if (entry.console == ConsoleType.GAME_BOY_ADVANCE) {
+                // Les champs MBC/région sont propres à la Game Boy : on affiche
+                // la console pour une ROM GBA.
+                entry.console.displayName
+            } else {
+                entry.mbcType.displayName + " · " + entry.region.displayName
+            }
             subtitle.text = itemView.context.getString(
                 R.string.library_size_kib,
                 sizeKib,
-            ) + " · " + entry.mbcType.displayName + " · " + entry.region.displayName
+            ) + " · " + details
 
             val coverUri = coverUriProvider(entry)
             var loaded = false

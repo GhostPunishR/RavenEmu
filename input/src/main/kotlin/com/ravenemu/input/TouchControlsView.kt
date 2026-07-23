@@ -78,6 +78,7 @@ class TouchControlsView @JvmOverloads constructor(
             ControlId.DPAD -> 76f * density
             ControlId.BUTTON_A, ControlId.BUTTON_B -> 34f * density
             ControlId.START, ControlId.SELECT -> 26f * density
+            ControlId.BUTTON_L, ControlId.BUTTON_R -> 28f * density
             ControlId.MENU -> 22f * density
         }
     }
@@ -108,6 +109,8 @@ class TouchControlsView @JvmOverloads constructor(
                 ControlId.BUTTON_B -> drawRound(canvas, cx, cy, radius, "B")
                 ControlId.START -> drawPill(canvas, cx, cy, radius, "START")
                 ControlId.SELECT -> drawPill(canvas, cx, cy, radius, "SELECT")
+                ControlId.BUTTON_L -> drawPill(canvas, cx, cy, radius, "L")
+                ControlId.BUTTON_R -> drawPill(canvas, cx, cy, radius, "R")
                 ControlId.MENU -> drawRound(canvas, cx, cy, radius, "≡")
             }
             if (editMode && selectedElement == element.id) {
@@ -234,6 +237,10 @@ class TouchControlsView @JvmOverloads constructor(
                     if (abs(dx) <= reach * 1.6f && abs(dy) <= reach) {
                         result += EmulatorButton.SELECT
                     }
+                ControlId.BUTTON_L ->
+                    if (abs(dx) <= reach * 1.6f && abs(dy) <= reach) result += EmulatorButton.L
+                ControlId.BUTTON_R ->
+                    if (abs(dx) <= reach * 1.6f && abs(dy) <= reach) result += EmulatorButton.R
                 ControlId.MENU -> Unit // géré séparément
             }
         }

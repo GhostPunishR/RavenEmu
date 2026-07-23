@@ -234,11 +234,17 @@ class MainActivity : AppCompatActivity() {
     private fun showDetails(entry: RomEntry) {
         val details = buildString {
             appendLine(entry.fileName)
-            appendLine("${entry.sizeBytes / 1024} Kio · ${entry.region.displayName}")
-            appendLine("MBC : ${entry.mbcType.displayName}")
-            appendLine("Type cartouche : 0x%02X".format(entry.cartridgeTypeCode))
-            appendLine("RAM : ${entry.ramSizeBytes} octets")
-            appendLine("Pile : ${if (entry.hasBattery) "oui" else "non"}")
+            appendLine("Console : ${entry.console.displayName}")
+            appendLine("${entry.sizeBytes / 1024} Kio")
+            if (entry.console == com.ravenemu.emulation.api.ConsoleType.GAME_BOY_ADVANCE) {
+                if (entry.gameCode.isNotBlank()) appendLine("Code jeu : ${entry.gameCode}")
+            } else {
+                appendLine("Région : ${entry.region.displayName}")
+                appendLine("MBC : ${entry.mbcType.displayName}")
+                appendLine("Type cartouche : 0x%02X".format(entry.cartridgeTypeCode))
+                appendLine("RAM : ${entry.ramSizeBytes} octets")
+                appendLine("Pile : ${if (entry.hasBattery) "oui" else "non"}")
+            }
             appendLine("Statut : ${entry.effectiveStatus.displayName}")
             appendLine("CRC32 : ${entry.fingerprints.crc32}")
             appendLine("SHA-1 : ${entry.fingerprints.sha1}")

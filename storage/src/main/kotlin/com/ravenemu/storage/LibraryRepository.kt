@@ -5,6 +5,7 @@ import android.net.Uri
 import com.ravenemu.core.gb.cartridge.CartridgeHeader
 import com.ravenemu.romlibrary.AnalysisResult
 import com.ravenemu.romlibrary.GameBoyRomAnalyzer
+import com.ravenemu.romlibrary.GbaRomAnalyzer
 import com.ravenemu.romlibrary.ReferenceDatabase
 import com.ravenemu.romlibrary.RomAnalyzer
 import com.ravenemu.romlibrary.RomIndex
@@ -28,12 +29,15 @@ class LibraryRepository(
     private val indexStore = RomIndexStore(context)
 
     private var database = referenceDatabase
-    private var analyzers: List<RomAnalyzer> = listOf(GameBoyRomAnalyzer(referenceDatabase))
+    private var analyzers: List<RomAnalyzer> = buildAnalyzers(referenceDatabase)
 
     fun setReferenceDatabase(newDatabase: ReferenceDatabase) {
         database = newDatabase
-        analyzers = listOf(GameBoyRomAnalyzer(newDatabase))
+        analyzers = buildAnalyzers(newDatabase)
     }
+
+    private fun buildAnalyzers(db: ReferenceDatabase): List<RomAnalyzer> =
+        listOf(GameBoyRomAnalyzer(db), GbaRomAnalyzer(db))
 
     fun loadIndex(): RomIndex = indexStore.load()
 

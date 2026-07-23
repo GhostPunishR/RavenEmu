@@ -210,3 +210,77 @@ le titre d'en-tête correspond à un jeu officiel connu est au mieux
 Un changement de base est appliqué à chaud : la bibliothèque est **reclassée**
 sans relire les fichiers (les empreintes sont déjà indexées). La palette de
 statuts et les surcharges utilisateur (Homebrew déclaré) sont préservées.
+
+## AD-15 — Game Boy Advance : moteur ARM7TDMI dédié (premier lot)
+
+La Game Boy Advance est servie par un **nouveau module `gba-core`**, JVM pur
+et indépendant, à côté de `gameboy-core` (qui reste inchangé et fonctionnel).
+Il implémente le même contrat [EmulatorCore] et est sélectionné via
+`ConsoleType.GAME_BOY_ADVANCE` (extension `.gba`). Comme les autres cœurs, il
+est écrit **à partir de documentation matérielle publique**, sans code d'un
+autre émulateur, sans BIOS ni ROM Nintendo.
+
+La sélection du moteur passe par l'interface `EmulatorCoreFactory`
+(module `emulation-api`), implémentée par `RavenEmulatorCoreFactory` dans la
+**racine de composition** (module `app`) : c'est le seul point qui connaît les
+cœurs concrets. L'écran d'émulation n'instancie plus aucun moteur directement,
+il demande à la fabrique celui de la console de la ROM. Côté bibliothèque, un
+`GbaRomAnalyzer` (module `rom-library`) reconnaît les fichiers `.gba`, analyse
+l'en-tête et indexe la ROM ; `RomEntry` a été généralisé (les champs propres à
+la cartouche Game Boy — MBC, région… — deviennent facultatifs) pour accueillir
+des consoles dont l'en-tête ne les définit pas, sans changer le format d'index
+persisté (nouveaux champs à valeur par défaut). L'affichage de la bibliothèque
+est adapté à la console (une ROM GBA montre « Game Boy Advance » plutôt que des
+champs MBC dénués de sens). La sortie du PPU étant en ARGB, le renderer
+l'affiche telle quelle (profil monochrome désactivé), exactement comme pour la
+Game Boy Color.
+
+Le CPU ARM7TDMI est modélisé par un état architectural séparé (`CpuState` :
+`R0..R15`, `CPSR`/`SPSR`, modes et **banques de registres**) et un moteur
+(`Arm7Tdmi`) qui délègue à `ArmDecoder` (ARM 32 bits) et `ThumbDecoder`
+(Thumb 16 bits). Le pipeline est simplifié mais exact du point de vue logiciel
+(`R15` lu à `+8`/`+4`). Le plan mémoire (BIOS, EWRAM, IWRAM, E/S, palette,
+VRAM, OAM, ROM, SRAM) est géré par `GbaBus` avec accès 8/16/32 bits,
+alignement, rotation des lectures non alignées et zones miroir. Le PPU produit
+un framebuffer **240 × 160 ARGB 8888** que le renderer Android affiche sans
+rien connaître de ses détails.
+
+**Périmètre du premier lot** (volontairement borné) : sous-ensemble
+d'instructions ARM/Thumb suffisant pour exécuter une **ROM synthétique interne**
+(traitement de données complet avec barrel shifter et drapeaux, `B`/`BL`/`BX`,
+`LDR`/`STR`, `MRS`/`MSR`), bus mémoire minimal, PPU d'**une couleur unie**
+(arrière-plan), et format d'état `RVNS` GBA versionné, transactionnel et lié au
+SHA-256 de la ROM, distinct de celui de la Game Boy.
+
+**Intégration Android (fait)** : fabrique de production, sélection du moteur par
+l'écran d'émulation, reconnaissance et affichage des ROM `.gba` dans la
+bibliothèque, et **entrées** : `GbaKeypad` alimente le registre `KEYINPUT`
+(actif-bas, dix touches). `EmulatorButton` est étendu de `L` et `R` (gâchettes
+d'épaule), ignorées par la Game Boy ; les manettes physiques mappent `L1`/`R1`,
+et la disposition tactile ajoute deux boutons `L`/`R` redimensionnables,
+affichés uniquement pour la Game Boy Advance.
+
+**Vidéo (premier incrément)** : le PPU est rendu **ligne par ligne** au fil des
+cycles (4 cycles = 1 point, 308 points/ligne, 228 lignes). Il expose `VCOUNT`
+et les drapeaux `DISPSTAT` (VBlank, HBlank, coïncidence VCount) — lisibles via
+le bus — et gère `DISPCNT`. Sont rendus : les **modes bitmap** 3 (16 bpp),
+4 (8 bpp paletté, double page) et 5 (16 bpp, 160×128, double page), et les
+**modes texte** 0 et 1 avec arrière-plans BG0–BG3 (tuiles 4/8 bpp, défilement,
+retournements, priorités). Le blanc forcé et la couleur d'arrière-plan sont
+gérés. Les **sprites** (OBJ) normaux sont rendus : tailles carrées et
+rectangulaires, 4/8 bpp, mappage 1D/2D, retournements, priorité par pixel entre
+sprites et arrière-plans (les sprites gagnent les égalités ; un sprite d'index
+OAM inférieur passe devant). Le rendu se fait via une **composition par pixel**
+(couleur + priorité de couche). Le framebuffer 240×160 ARGB reste affiché tel
+quel par le renderer.
+
+**Différé aux lots suivants** (limites documentées) : arrière-plans **affines**
+(modes 1/2, rotation/mise à l'échelle), **sprites affines** (rotation/mise à
+l'échelle des OBJ), fenêtres, mosaïque,
+alpha blending, luminosité ; jeu d'instructions complet (multiplication,
+`LDM`/`STM`, transferts demi-mot/signés, `SWP`, `SWI`, interruptions
+matérielles), **interruptions** VBlank/HBlank/VCount et clavier (les drapeaux
+d'état existent, mais le contrôleur d'IRQ manque), BIOS (fourni par
+l'utilisateur, validé par taille et empreinte, ou HLE RavenEmu), DMA, timers,
+audio, mémoires de sauvegarde réelles (SRAM, Flash, EEPROM), temps d'attente
+précis, et raffinements d'interface (filtre par console, détails GBA enrichis).
