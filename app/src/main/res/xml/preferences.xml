@@ -44,6 +44,27 @@
             android:defaultValue="false"
             android:key="video_show_fps"
             android:title="@string/settings_show_fps" />
+        <SeekBarPreference
+            android:defaultValue="100"
+            android:key="video_brightness"
+            android:max="200"
+            android:summary="@string/settings_brightness_summary"
+            android:title="@string/settings_brightness"
+            app:min="0"
+            app:showSeekBarValue="true" />
+        <SeekBarPreference
+            android:defaultValue="100"
+            android:key="video_contrast"
+            android:max="200"
+            android:summary="@string/settings_contrast_summary"
+            android:title="@string/settings_contrast"
+            app:min="0"
+            app:showSeekBarValue="true" />
+        <SwitchPreferenceCompat
+            android:defaultValue="false"
+            android:key="video_lcd_correction"
+            android:summary="@string/settings_lcd_correction_summary"
+            android:title="@string/settings_lcd_correction" />
     </PreferenceCategory>
 
     <PreferenceCategory android:title="@string/settings_category_audio">

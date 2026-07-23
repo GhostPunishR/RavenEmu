@@ -8,6 +8,7 @@ import android.graphics.Rect
 import android.util.AttributeSet
 import android.view.SurfaceHolder
 import android.view.SurfaceView
+import com.ravenemu.emulation.api.display.DisplayAdjustments
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
@@ -65,6 +66,14 @@ class EmulatorSurfaceView @JvmOverloads constructor(
         set(value) {
             field = value?.copyOf()
         }
+
+    /**
+     * Réglages d'affichage avancés (luminosité, contraste, correction LCD)
+     * appliqués en post-traitement de la sortie ARGB, sans toucher à
+     * l'émulation. Identité par défaut (aucun effet). Modifiable à chaud.
+     */
+    @Volatile
+    var displayAdjustments: DisplayAdjustments = DisplayAdjustments()
 
     @Volatile
     private var frameWidth = 0
@@ -170,20 +179,37 @@ class EmulatorSurfaceView @JvmOverloads constructor(
 
         private var renderBitmap: Bitmap? = null
         private var argbScratch = IntArray(0)
+        private val palette = IntArray(4)
 
         /**
-         * Applique le profil d'écran : convertit les niveaux `0..3` en couleurs
-         * ARGB. Sans profil ([displayColors] nul), le framebuffer est déjà en
-         * ARGB et retourné tel quel.
+         * Convertit le framebuffer en couleurs ARGB prêtes à l'affichage puis y
+         * applique les réglages d'affichage avancés.
+         *
+         * - Écran monochrome ([displayColors] non nul) : les niveaux `0..3` sont
+         *   colorisés par le profil, dont les quatre couleurs reçoivent la
+         *   luminosité/contraste (pas la correction LCD, qui viserait à corriger
+         *   des couleurs brutes et non un profil déjà calibré).
+         * - Sortie couleur ([displayColors] nul, Game Boy Color) : le
+         *   framebuffer est déjà en ARGB ; chaque pixel reçoit tous les réglages
+         *   actifs. Sans réglage, le tampon source est retourné tel quel.
          */
         private fun colorize(source: IntArray, pixelCount: Int): IntArray {
-            val colors = displayColors ?: return source
+            val adjustments = displayAdjustments
+            val colors = displayColors
+            if (colors != null) {
+                for (level in 0..3) palette[level] = adjustments.applyTone(colors[level])
+                if (argbScratch.size < pixelCount) argbScratch = IntArray(pixelCount)
+                val out = argbScratch
+                for (i in 0 until pixelCount) {
+                    val level = source[i]
+                    out[i] = if (level in 0..3) palette[level] else palette[0]
+                }
+                return out
+            }
+            if (adjustments.isIdentity) return source
             if (argbScratch.size < pixelCount) argbScratch = IntArray(pixelCount)
             val out = argbScratch
-            for (i in 0 until pixelCount) {
-                val level = source[i]
-                out[i] = if (level in 0..3) colors[level] else colors[0]
-            }
+            for (i in 0 until pixelCount) out[i] = adjustments.apply(source[i])
             return out
         }
 
