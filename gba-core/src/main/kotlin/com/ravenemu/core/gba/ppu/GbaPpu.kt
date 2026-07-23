@@ -1,5 +1,8 @@
 package com.ravenemu.core.gba.ppu
 
+import com.ravenemu.core.gba.dma.DmaController
+import com.ravenemu.core.gba.interrupt.GbaInterruptController
+import com.ravenemu.core.gba.interrupt.Interrupt
 import com.ravenemu.core.gba.memory.GbaBus
 
 /**
@@ -15,9 +18,8 @@ import com.ravenemu.core.gba.memory.GbaBus
  *   défilement, retournements horizontal/vertical, priorités.
  *
  * Différé (limites documentées) : arrière-plans **affines** (modes 1/2),
- * **sprites**, fenêtres, mosaïque, alpha blending, luminosité, et les
- * **interruptions** VBlank/HBlank/VCount (le contrôleur d'interruptions GBA
- * n'est pas encore implémenté ; seuls les drapeaux d'état sont fournis).
+ * **sprites**, fenêtres, mosaïque, alpha blending et luminosité. Les événements
+ * VBlank/HBlank/VCount alimentent désormais le contrôleur d'interruptions et le DMA.
  *
  * Le renderer Android reçoit un framebuffer ARGB 8888 sans rien connaître de
  * ces détails.
@@ -52,6 +54,10 @@ class GbaPpu(private val bus: GbaBus) {
 
     private var lineCycles = 0
 
+    /** Contrôleur d'interruptions et DMA, rattachés après construction. */
+    var interrupts: GbaInterruptController? = null
+    var dma: DmaController? = null
+
     /**
      * Avance l'horloge d'affichage de [cpuCycles] cycles CPU (4 cycles = 1 point).
      * Chaque ligne visible est rendue au début de son HBlank.
@@ -64,17 +70,30 @@ class GbaPpu(private val bus: GbaBus) {
             remaining -= step
             if (!inHBlank && lineCycles >= HDRAW_CYCLES) {
                 inHBlank = true
-                if (vcount < SCREEN_HEIGHT) renderScanline(vcount)
+                if (vcount < SCREEN_HEIGHT) {
+                    renderScanline(vcount)
+                    if (dispStatIrqEnabled(HBLANK_IRQ)) interrupts?.request(Interrupt.HBLANK)
+                    dma?.triggerHBlank()
+                }
             }
             if (lineCycles >= LINE_CYCLES) {
                 lineCycles = 0
                 inHBlank = false
                 vcount = (vcount + 1) % TOTAL_LINES
                 inVBlank = vcount >= SCREEN_HEIGHT
+                if (vcount == SCREEN_HEIGHT) {
+                    if (dispStatIrqEnabled(VBLANK_IRQ)) interrupts?.request(Interrupt.VBLANK)
+                    dma?.triggerVBlank()
+                }
                 vcountMatch = vcount == (bus.io[0x05].toInt() and 0xFF)
+                if (vcountMatch && dispStatIrqEnabled(VCOUNT_IRQ)) {
+                    interrupts?.request(Interrupt.VCOUNT)
+                }
             }
         }
     }
+
+    private fun dispStatIrqEnabled(mask: Int): Boolean = bus.io[0x04].toInt() and mask != 0
 
     /** Octet de poids faible de DISPSTAT : bits d'état (RO) fusionnés aux bits RW. */
     fun dispStatLowByte(): Int {
@@ -369,6 +388,11 @@ class GbaPpu(private val bus: GbaBus) {
             intArrayOf(8, 8, 16, 32),   // horizontal
             intArrayOf(16, 32, 32, 64), // vertical
         )
+
+        // Bits d'activation d'IRQ dans l'octet bas de DISPSTAT.
+        private const val VBLANK_IRQ = 0x08
+        private const val HBLANK_IRQ = 0x10
+        private const val VCOUNT_IRQ = 0x20
 
         private const val HDRAW_CYCLES = 240 * 4   // 960 : début du HBlank
         private const val LINE_CYCLES = 308 * 4    // 1232 cycles par ligne
