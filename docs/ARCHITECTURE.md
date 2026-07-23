@@ -239,7 +239,16 @@ Le CPU ARM7TDMI est modélisé par un état architectural séparé (`CpuState` :
 `R0..R15`, `CPSR`/`SPSR`, modes et **banques de registres**) et un moteur
 (`Arm7Tdmi`) qui délègue à `ArmDecoder` (ARM 32 bits) et `ThumbDecoder`
 (Thumb 16 bits). Le pipeline est simplifié mais exact du point de vue logiciel
-(`R15` lu à `+8`/`+4`). Le plan mémoire (BIOS, EWRAM, IWRAM, E/S, palette,
+(`R15` lu à `+8`/`+4`). Le **jeu d'instructions est désormais quasi complet** :
+traitement de données + barrel shifter + drapeaux, branchements (`B`/`BL`/`BX`),
+`MRS`/`MSR`, transferts simples et demi-mot/signés (`LDR`/`STR`/`LDRH`/`LDRSB`…),
+transferts de blocs (`LDM`/`STM`, quatre modes + réécriture), multiplications
+(`MUL`/`MLA`, longues), échange (`SWP`), et `SWI` via un mécanisme d'**entrée en
+exception** (`raiseException`, réutilisé par l'IRQ à venir) ; côté Thumb, tous
+les formats de chargement/stockage, `PUSH`/`POP`, `LDMIA`/`STMIA`, `MUL` et
+`SWI`. Restent hors périmètre : coprocesseur (inutile sur GBA), livraison
+matérielle des IRQ (dépend du contrôleur d'interruptions), et quelques cas
+limites (temps d'attente précis, banque utilisateur de `LDM/STM^`). Le plan mémoire (BIOS, EWRAM, IWRAM, E/S, palette,
 VRAM, OAM, ROM, SRAM) est géré par `GbaBus` avec accès 8/16/32 bits,
 alignement, rotation des lectures non alignées et zones miroir. Le PPU produit
 un framebuffer **240 × 160 ARGB 8888** que le renderer Android affiche sans
@@ -274,13 +283,23 @@ OAM inférieur passe devant). Le rendu se fait via une **composition par pixel**
 (couleur + priorité de couche). Le framebuffer 240×160 ARGB reste affiché tel
 quel par le renderer.
 
+**Événements matériels** : un **contrôleur d'interruptions** (`GbaInterruptController` :
+`IE`/`IF`/`IME`, `IF` en écriture-pour-effacer) centralise les sources ; le PPU
+lève VBlank/HBlank/coïncidence VCount (si activées dans `DISPSTAT`), les **timers**
+et les **DMA** lèvent les leurs. Les **quatre timers** (`GbaTimers`) gèrent
+prédiviseur (1/64/256/1024), mode cascade et IRQ de débordement. Les **quatre
+canaux DMA** (`DmaController`) copient en mots de 16/32 bits avec contrôle
+d'adresse (incrément/décrément/fixe), répétition et IRQ, déclenchés en immédiat,
+VBlank ou HBlank. La **boucle machine** livre l'exception IRQ (vecteur `0x18`)
+avant chaque instruction quand une interruption autorisée est en attente et que
+le drapeau `I` du CPU est dégagé.
+
 **Différé aux lots suivants** (limites documentées) : arrière-plans **affines**
 (modes 1/2, rotation/mise à l'échelle), **sprites affines** (rotation/mise à
-l'échelle des OBJ), fenêtres, mosaïque,
-alpha blending, luminosité ; jeu d'instructions complet (multiplication,
-`LDM`/`STM`, transferts demi-mot/signés, `SWP`, `SWI`, interruptions
-matérielles), **interruptions** VBlank/HBlank/VCount et clavier (les drapeaux
-d'état existent, mais le contrôleur d'IRQ manque), BIOS (fourni par
-l'utilisateur, validé par taille et empreinte, ou HLE RavenEmu), DMA, timers,
-audio, mémoires de sauvegarde réelles (SRAM, Flash, EEPROM), temps d'attente
-précis, et raffinements d'interface (filtre par console, détails GBA enrichis).
+l'échelle des OBJ), fenêtres, mosaïque, alpha blending, luminosité ; **BIOS** —
+fourni par l'utilisateur (validé par taille et empreinte) ou HLE RavenEmu : le
+vecteur IRQ `0x18` et `SWI` (`0x08`) sautent dans le BIOS, encore vide, si bien
+que la livraison d'IRQ n'atteint le jeu qu'une fois le handler BIOS présent ;
+modes DMA spéciaux (FIFO son, capture vidéo), IRQ clavier/série ; audio, mémoires
+de sauvegarde réelles (SRAM, Flash, EEPROM), temps d'attente précis, et
+raffinements d'interface (filtre par console, détails GBA enrichis).
