@@ -267,10 +267,16 @@ le bus — et gère `DISPCNT`. Sont rendus : les **modes bitmap** 3 (16 bpp),
 4 (8 bpp paletté, double page) et 5 (16 bpp, 160×128, double page), et les
 **modes texte** 0 et 1 avec arrière-plans BG0–BG3 (tuiles 4/8 bpp, défilement,
 retournements, priorités). Le blanc forcé et la couleur d'arrière-plan sont
-gérés. Le framebuffer 240×160 ARGB reste affiché tel quel par le renderer.
+gérés. Les **sprites** (OBJ) normaux sont rendus : tailles carrées et
+rectangulaires, 4/8 bpp, mappage 1D/2D, retournements, priorité par pixel entre
+sprites et arrière-plans (les sprites gagnent les égalités ; un sprite d'index
+OAM inférieur passe devant). Le rendu se fait via une **composition par pixel**
+(couleur + priorité de couche). Le framebuffer 240×160 ARGB reste affiché tel
+quel par le renderer.
 
 **Différé aux lots suivants** (limites documentées) : arrière-plans **affines**
-(modes 1/2, rotation/mise à l'échelle), **sprites** (OBJ), fenêtres, mosaïque,
+(modes 1/2, rotation/mise à l'échelle), **sprites affines** (rotation/mise à
+l'échelle des OBJ), fenêtres, mosaïque,
 alpha blending, luminosité ; jeu d'instructions complet (multiplication,
 `LDM`/`STM`, transferts demi-mot/signés, `SWP`, `SWI`, interruptions
 matérielles), **interruptions** VBlank/HBlank/VCount et clavier (les drapeaux
