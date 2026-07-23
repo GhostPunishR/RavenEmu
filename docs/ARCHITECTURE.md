@@ -239,7 +239,16 @@ Le CPU ARM7TDMI est modélisé par un état architectural séparé (`CpuState` :
 `R0..R15`, `CPSR`/`SPSR`, modes et **banques de registres**) et un moteur
 (`Arm7Tdmi`) qui délègue à `ArmDecoder` (ARM 32 bits) et `ThumbDecoder`
 (Thumb 16 bits). Le pipeline est simplifié mais exact du point de vue logiciel
-(`R15` lu à `+8`/`+4`). Le plan mémoire (BIOS, EWRAM, IWRAM, E/S, palette,
+(`R15` lu à `+8`/`+4`). Le **jeu d'instructions est désormais quasi complet** :
+traitement de données + barrel shifter + drapeaux, branchements (`B`/`BL`/`BX`),
+`MRS`/`MSR`, transferts simples et demi-mot/signés (`LDR`/`STR`/`LDRH`/`LDRSB`…),
+transferts de blocs (`LDM`/`STM`, quatre modes + réécriture), multiplications
+(`MUL`/`MLA`, longues), échange (`SWP`), et `SWI` via un mécanisme d'**entrée en
+exception** (`raiseException`, réutilisé par l'IRQ à venir) ; côté Thumb, tous
+les formats de chargement/stockage, `PUSH`/`POP`, `LDMIA`/`STMIA`, `MUL` et
+`SWI`. Restent hors périmètre : coprocesseur (inutile sur GBA), livraison
+matérielle des IRQ (dépend du contrôleur d'interruptions), et quelques cas
+limites (temps d'attente précis, banque utilisateur de `LDM/STM^`). Le plan mémoire (BIOS, EWRAM, IWRAM, E/S, palette,
 VRAM, OAM, ROM, SRAM) est géré par `GbaBus` avec accès 8/16/32 bits,
 alignement, rotation des lectures non alignées et zones miroir. Le PPU produit
 un framebuffer **240 × 160 ARGB 8888** que le renderer Android affiche sans
@@ -277,10 +286,10 @@ quel par le renderer.
 **Différé aux lots suivants** (limites documentées) : arrière-plans **affines**
 (modes 1/2, rotation/mise à l'échelle), **sprites affines** (rotation/mise à
 l'échelle des OBJ), fenêtres, mosaïque,
-alpha blending, luminosité ; jeu d'instructions complet (multiplication,
-`LDM`/`STM`, transferts demi-mot/signés, `SWP`, `SWI`, interruptions
-matérielles), **interruptions** VBlank/HBlank/VCount et clavier (les drapeaux
-d'état existent, mais le contrôleur d'IRQ manque), BIOS (fourni par
-l'utilisateur, validé par taille et empreinte, ou HLE RavenEmu), DMA, timers,
+alpha blending, luminosité ; **contrôleur d'interruptions** et livraison des IRQ
+(VBlank/HBlank/VCount, clavier, timers, DMA — les drapeaux d'état existent et
+l'entrée en exception CPU est prête, mais le contrôleur `IE`/`IF`/`IME` manque),
+BIOS (fourni par l'utilisateur, validé par taille et empreinte, ou HLE RavenEmu),
+DMA, timers,
 audio, mémoires de sauvegarde réelles (SRAM, Flash, EEPROM), temps d'attente
 précis, et raffinements d'interface (filtre par console, détails GBA enrichis).
