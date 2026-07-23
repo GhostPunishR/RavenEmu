@@ -1,5 +1,6 @@
 package com.ravenemu.romlibrary
 
+import com.ravenemu.core.gba.cartridge.GbaCartridge
 import com.ravenemu.core.gba.cartridge.GbaHeader
 import com.ravenemu.emulation.api.ConsoleType
 import kotlin.test.Test
@@ -32,6 +33,7 @@ class GbaRomAnalyzerTest {
         assertTrue(analyzer.canAnalyze("JEU.GBA"))
         assertFalse(analyzer.canAnalyze("jeu.gb"))
         assertFalse(analyzer.canAnalyze("jeu.gbc"))
+        assertEquals(GbaCartridge.MAX_ROM_SIZE, analyzer.maxRomSizeBytes)
     }
 
     @Test
