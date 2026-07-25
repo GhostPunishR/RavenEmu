@@ -8,6 +8,7 @@ import com.ravenemu.core.gba.dma.DmaController
 import com.ravenemu.core.gba.interrupt.GbaInterruptController
 import com.ravenemu.core.gba.memory.GbaBus
 import com.ravenemu.core.gba.ppu.GbaPpu
+import com.ravenemu.core.gba.save.GbaSaveType
 import com.ravenemu.core.gba.timer.GbaTimers
 
 /**
@@ -19,9 +20,9 @@ import com.ravenemu.core.gba.timer.GbaTimers
  * l'état laissé par le BIOS (mode système, exécution ARM), sans nécessiter de
  * BIOS Nintendo.
  */
-class GbaMachine(rom: ByteArray) {
+class GbaMachine(rom: ByteArray, forcedSaveType: GbaSaveType? = null) {
 
-    val cartridge: GbaCartridge = GbaCartridge.create(rom)
+    val cartridge: GbaCartridge = GbaCartridge.create(rom, forcedSaveType)
     val bus: GbaBus = GbaBus(cartridge)
     val ppu: GbaPpu = GbaPpu(bus)
     val interrupts: GbaInterruptController = GbaInterruptController()

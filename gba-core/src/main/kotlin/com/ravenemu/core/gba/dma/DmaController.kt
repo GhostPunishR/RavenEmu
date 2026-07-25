@@ -76,6 +76,13 @@ class DmaController(
 
         var src = sourceAddress[channel]
         var dst = destAddress[channel]
+
+        // Les accès EEPROM sont sériels : la longueur du transfert révèle la
+        // largeur d'adresse attendue par le jeu.
+        val eeprom = bus.eeprom()
+        if (eeprom != null && ((src ushr 24) == 0x0D || (dst ushr 24) == 0x0D)) {
+            eeprom.hintTransferLength(count)
+        }
         repeat(count) {
             if (word32) bus.write32(dst, bus.read32(src)) else bus.write16(dst, bus.read16(src))
             src += delta(sourceControl, size)
