@@ -346,11 +346,7 @@ class ArmDecoder(private val cpu: Arm7Tdmi) {
     }
 
     private fun softwareInterrupt(instr: Int): Int {
-        cpu.raiseException(
-            CpuState.MODE_SUPERVISOR,
-            Arm7Tdmi.VECTOR_SWI,
-            cpu.state.regs[15] + 4,
-        )
+        cpu.executeSwi((instr ushr 16) and 0xFF, cpu.state.regs[15] + 4)
         return 3
     }
 

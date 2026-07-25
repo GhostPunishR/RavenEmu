@@ -23,6 +23,13 @@ class Arm7Tdmi(val bus: GbaBus) {
 
     val state = CpuState()
 
+    /**
+     * Gestionnaire d'appels logiciels en haut niveau (BIOS HLE). S'il est
+     * présent, une instruction `SWI` est traitée directement au lieu de
+     * déclencher l'exception superviseur (le BIOS Nintendo n'étant pas fourni).
+     */
+    var swiHandler: SwiHandler? = null
+
     private val armDecoder = ArmDecoder(this)
     private val thumbDecoder = ThumbDecoder(this)
 
@@ -80,6 +87,16 @@ class Arm7Tdmi(val bus: GbaBus) {
      * du mode, place l'adresse de retour dans `LR`, masque les IRQ, repasse en
      * ARM et saute au vecteur [vector]. Utilisé par `SWI` et l'interruption IRQ.
      */
+    /**
+     * Exécute un `SWI` : délégué au [swiHandler] HLE s'il existe (l'exécution
+     * reprend à l'instruction suivante), sinon entrée en exception superviseur.
+     */
+    fun executeSwi(number: Int, returnAddress: Int) {
+        val handler = swiHandler
+        if (handler != null) handler.handleSwi(number)
+        else raiseException(CpuState.MODE_SUPERVISOR, VECTOR_SWI, returnAddress)
+    }
+
     fun raiseException(mode: Int, vector: Int, returnAddress: Int) {
         val savedCpsr = state.cpsr()
         state.switchMode(mode)

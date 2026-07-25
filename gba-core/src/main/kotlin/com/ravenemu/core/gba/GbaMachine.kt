@@ -1,5 +1,6 @@
 package com.ravenemu.core.gba
 
+import com.ravenemu.core.gba.bios.GbaBios
 import com.ravenemu.core.gba.cartridge.GbaCartridge
 import com.ravenemu.core.gba.cpu.Arm7Tdmi
 import com.ravenemu.core.gba.dma.DmaController
@@ -26,6 +27,7 @@ class GbaMachine(rom: ByteArray) {
     val timers: GbaTimers = GbaTimers(interrupts)
     val dma: DmaController = DmaController(bus, interrupts)
     val cpu: Arm7Tdmi = Arm7Tdmi(bus)
+    val bios: GbaBios = GbaBios(cpu, bus)
 
     init {
         bus.ppu = ppu
@@ -34,6 +36,7 @@ class GbaMachine(rom: ByteArray) {
         bus.dma = dma
         ppu.interrupts = interrupts
         ppu.dma = dma
+        cpu.swiHandler = bios
         cpu.reset(ROM_ENTRY_POINT)
     }
 
@@ -46,6 +49,17 @@ class GbaMachine(rom: ByteArray) {
     fun runFrame(cycles: Int) {
         var elapsed = 0
         while (elapsed < cycles) {
+            // CPU en pause (SWI Halt/IntrWait) : on avance les périphériques
+            // jusqu'à ce qu'une interruption soit levée, puis on réveille.
+            if (cpu.state.halted) {
+                ppu.tick(HALT_STEP)
+                timers.tick(HALT_STEP)
+                elapsed += HALT_STEP
+                if (interrupts.enable and interrupts.flags and 0x3FFF != 0) {
+                    cpu.state.halted = false
+                }
+                continue
+            }
             if (interrupts.pending() && !cpu.state.irqDisabled) {
                 cpu.raiseException(
                     com.ravenemu.core.gba.cpu.CpuState.MODE_IRQ,
@@ -63,5 +77,8 @@ class GbaMachine(rom: ByteArray) {
     companion object {
         /** Adresse du premier octet de la ROM cartouche, où le CPU démarre. */
         const val ROM_ENTRY_POINT = 0x0800_0000
+
+        /** Pas d'avancement des périphériques pendant une pause CPU. */
+        private const val HALT_STEP = 64
     }
 }

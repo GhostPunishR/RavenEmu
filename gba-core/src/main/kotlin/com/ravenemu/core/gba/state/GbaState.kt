@@ -22,8 +22,11 @@ import java.io.IOException
 object GbaState {
 
     private const val MAGIC = 0x52564E53 // "RVNS"
-    /** Version 3 : état PPU complet, interruptions, timers et DMA inclus. */
-    private const val VERSION = 3
+    /**
+     * Version 4 : état PPU complet, interruptions, timers, DMA, et pause CPU
+     * (`halted`, posée par les appels BIOS `Halt`/`IntrWait`).
+     */
+    private const val VERSION = 4
     private const val BANK_WORDS = 28 // CpuState.exportBanks(): 6*3 + 10
     private const val TIMER_STATE_WORDS = 16
     private const val DMA_STATE_WORDS = 8
@@ -44,6 +47,7 @@ object GbaState {
         val banks = state.exportBanks()
         for (i in 0 until 16) out.writeInt(state.regs[i])
         out.writeInt(state.cpsr())
+        out.writeBoolean(state.halted)
         out.writeInt(banks.size)
         for (v in banks) out.writeInt(v)
 
@@ -99,6 +103,7 @@ object GbaState {
             // Lecture dans des tampons locaux (rien n'est encore appliqué).
             val regs = IntArray(16) { input.readInt() }
             val cpsr = input.readInt()
+            val halted = input.readBoolean()
             val bankCount = input.readInt()
             if (bankCount != BANK_WORDS) {
                 throw SaveStateException("État instantané corrompu (banques)")
@@ -138,6 +143,7 @@ object GbaState {
             val state = machine.cpu.state
             state.importBanks(banks)
             state.setControlRaw(cpsr)
+            state.halted = halted
             for (i in 0 until 16) state.regs[i] = regs[i]
 
             ewram.copyInto(bus.ewram)

@@ -307,11 +307,7 @@ class ThumbDecoder(private val cpu: Arm7Tdmi) {
     }
 
     private fun softwareInterrupt(instr: Int): Int {
-        cpu.raiseException(
-            CpuState.MODE_SUPERVISOR,
-            Arm7Tdmi.VECTOR_SWI,
-            cpu.state.regs[15] + 2,
-        )
+        cpu.executeSwi(instr and 0xFF, cpu.state.regs[15] + 2)
         return 3
     }
 
