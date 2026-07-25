@@ -30,11 +30,34 @@ class GbaPpu(private val bus: GbaBus) {
     val frame = IntArray(SCREEN_WIDTH * SCREEN_HEIGHT)
 
     // Tampons de composition d'une ligne (réutilisés, sans allocation par ligne).
+    // Couche la plus proche de l'observateur, et celle juste derrière : le
+    // mélange alpha combine ces deux niveaux.
     private val lineColor = IntArray(SCREEN_WIDTH)
     private val linePriority = IntArray(SCREEN_WIDTH)
+    private val lineLayer = IntArray(SCREEN_WIDTH)
+    private val lineColor2 = IntArray(SCREEN_WIDTH)
+    private val linePriority2 = IntArray(SCREEN_WIDTH)
+    private val lineLayer2 = IntArray(SCREEN_WIDTH)
+
     private val objColor = IntArray(SCREEN_WIDTH)
     private val objPriority = IntArray(SCREEN_WIDTH)
     private val objOpaque = BooleanArray(SCREEN_WIDTH)
+
+    /** Sprite en mode semi-transparent : force le mélange alpha. */
+    private val objSemiTransparent = BooleanArray(SCREEN_WIDTH)
+
+    /** Pixel couvert par un sprite de type « fenêtre objet ». */
+    private val objWindow = BooleanArray(SCREEN_WIDTH)
+
+    /** Masque de fenêtre par pixel : bits 0–3 = BG0–3, bit 4 = OBJ, bit 5 = effets. */
+    private val windowMask = IntArray(SCREEN_WIDTH)
+
+    // Points de référence internes des arrière-plans affines (16.8 signé).
+    // Rechargés depuis BGxX/BGxY au VBlank, incrémentés à chaque ligne.
+    private var bg2RefX = 0
+    private var bg2RefY = 0
+    private var bg3RefX = 0
+    private var bg3RefY = 0
 
     /** Ligne courante (`VCOUNT`), 0..227. */
     var vcount = 0
@@ -72,6 +95,12 @@ class GbaPpu(private val bus: GbaBus) {
                 inHBlank = true
                 if (vcount < SCREEN_HEIGHT) {
                     renderScanline(vcount)
+                    // Les points de référence affines avancent d'une ligne
+                    // (dmx/dmy) après le rendu de la ligne courante.
+                    bg2RefX += signed16(reg16(0x22)) // BG2PB
+                    bg2RefY += signed16(reg16(0x26)) // BG2PD
+                    bg3RefX += signed16(reg16(0x32)) // BG3PB
+                    bg3RefY += signed16(reg16(0x36)) // BG3PD
                     if (dispStatIrqEnabled(HBLANK_IRQ)) interrupts?.request(Interrupt.HBLANK)
                     dma?.triggerHBlank()
                 }
@@ -82,6 +111,9 @@ class GbaPpu(private val bus: GbaBus) {
                 vcount = (vcount + 1) % TOTAL_LINES
                 inVBlank = vcount >= SCREEN_HEIGHT
                 if (vcount == SCREEN_HEIGHT) {
+                    // Le VBlank reverrouille les points de référence affines
+                    // sur les valeurs écrites par le jeu.
+                    reloadAffineReferencePoints()
                     if (dispStatIrqEnabled(VBLANK_IRQ)) interrupts?.request(Interrupt.VBLANK)
                     dma?.triggerVBlank()
                 }
@@ -111,6 +143,10 @@ class GbaPpu(private val bus: GbaBus) {
         inVBlank = false
         inHBlank = false
         vcountMatch = false
+        bg2RefX = 0
+        bg2RefY = 0
+        bg3RefX = 0
+        bg3RefY = 0
     }
 
     /** État temporel minimal requis pour une reprise déterministe. */
@@ -120,6 +156,10 @@ class GbaPpu(private val bus: GbaBus) {
         if (inVBlank) 1 else 0,
         if (inHBlank) 1 else 0,
         if (vcountMatch) 1 else 0,
+        bg2RefX,
+        bg2RefY,
+        bg3RefX,
+        bg3RefY,
     )
 
     fun restoreState(fields: IntArray) {
@@ -134,6 +174,10 @@ class GbaPpu(private val bus: GbaBus) {
         inVBlank = fields[2] != 0
         inHBlank = fields[3] != 0
         vcountMatch = fields[4] != 0
+        bg2RefX = fields[5]
+        bg2RefY = fields[6]
+        bg3RefX = fields[7]
+        bg3RefY = fields[8]
     }
 
     // ---- Rendu ----
@@ -150,34 +194,246 @@ class GbaPpu(private val bus: GbaBus) {
         for (x in 0 until SCREEN_WIDTH) {
             lineColor[x] = backdrop
             linePriority[x] = LAYER_BACKDROP
+            lineLayer[x] = LAYER_ID_BACKDROP
+            lineColor2[x] = backdrop
+            linePriority2[x] = LAYER_BACKDROP
+            lineLayer2[x] = LAYER_ID_BACKDROP
             objOpaque[x] = false
+            objSemiTransparent[x] = false
+            objWindow[x] = false
         }
 
+        // Les sprites sont dessinés en premier car la « fenêtre objet » dépend
+        // des pixels qu'ils couvrent ; leur composition vient ensuite.
+        renderSprites(y, dispcnt)
+        computeWindowMask(y, dispcnt)
+
         when (dispcnt and 0x7) {
-            0 -> renderTextBackgrounds(y, dispcnt, 0..3)
-            1 -> renderTextBackgrounds(y, dispcnt, 0..1) // BG2 affine différé
-            2 -> Unit // BG2/BG3 affines différés : fond seul
+            0, 1, 2 -> renderBackgrounds(y, dispcnt)
             3 -> renderBitmapMode3(y, dispcnt)
             4 -> renderBitmapMode4(y, dispcnt)
             5 -> renderBitmapMode5(y, dispcnt)
         }
-        renderSprites(y, dispcnt)
 
-        // Composition : un sprite passe devant un arrière-plan si sa priorité
-        // est inférieure ou égale à celle du pixel de fond (les sprites gagnent
-        // les égalités).
-        for (x in 0 until SCREEN_WIDTH) {
-            frame[rowBase + x] =
-                if (objOpaque[x] && objPriority[x] <= linePriority[x]) objColor[x] else lineColor[x]
+        composeLine(rowBase)
+    }
+
+    /**
+     * Dessine les arrière-plans actifs du mode courant, du plus lointain au plus
+     * proche. En mode 1, `BG2` est affine ; en mode 2, `BG2` et `BG3` le sont.
+     */
+    private fun renderBackgrounds(y: Int, dispcnt: Int) {
+        val mode = dispcnt and 0x7
+        val candidates = when (mode) {
+            0 -> intArrayOf(0, 1, 2, 3)
+            1 -> intArrayOf(0, 1, 2)
+            else -> intArrayOf(2, 3)
+        }
+        val ordered = candidates
+            .filter { dispcnt and (1 shl (8 + it)) != 0 }
+            // Clé de tri : priorité puis index ; on dessine du fond vers l'avant.
+            .sortedByDescending { (reg16(0x08 + it * 2) and 0x3) * 4 + it }
+        for (bg in ordered) {
+            val isAffine = (mode == 1 && bg == 2) || (mode == 2 && bg >= 2)
+            if (isAffine) drawAffineBackgroundLine(bg) else drawTextBackgroundLine(bg, y)
         }
     }
 
-    private fun renderTextBackgrounds(y: Int, dispcnt: Int, range: IntRange) {
-        // Ordre de dessin arrière → avant : clé = priorité*4 + index (petit = devant).
-        val enabled = range.filter { dispcnt and (1 shl (8 + it)) != 0 }
-            .sortedByDescending { (reg16(0x08 + it * 2) and 0x3) * 4 + it }
-        for (bg in enabled) drawTextBackgroundLine(bg, y)
+    /**
+     * Arrière-plan **affine** (rotation / mise à l'échelle) : la carte ne contient
+     * qu'un index de tuile par octet et les tuiles sont toujours en 8 bpp. Les
+     * coordonnées sont calculées en virgule fixe 20.8 à partir du point de
+     * référence interne et des paramètres `PA`–`PD`.
+     */
+    private fun drawAffineBackgroundLine(bg: Int) {
+        val control = reg16(0x08 + bg * 2)
+        val priority = control and 0x3
+        val charBase = ((control ushr 2) and 0x3) * 0x4000
+        val screenBase = ((control ushr 8) and 0x1F) * 0x800
+        val wraps = control and 0x2000 != 0
+        // Taille : 128, 256, 512 ou 1024 pixels de côté.
+        val sizeTiles = 16 shl ((control ushr 14) and 0x3)
+        val sizePixels = sizeTiles * 8
+
+        val paramBase = if (bg == 2) 0x20 else 0x30
+        val pa = signed16(reg16(paramBase))
+        val pc = signed16(reg16(paramBase + 4))
+        var currentX = if (bg == 2) bg2RefX else bg3RefX
+        var currentY = if (bg == 2) bg2RefY else bg3RefY
+
+        val layerBit = 1 shl bg
+        for (x in 0 until SCREEN_WIDTH) {
+            // Partie entière des coordonnées texture (8 bits fractionnaires).
+            var texX = currentX shr 8
+            var texY = currentY shr 8
+            currentX += pa
+            currentY += pc
+
+            if (windowMask[x] and layerBit == 0) continue
+            if (wraps) {
+                texX = texX mod sizePixels
+                texY = texY mod sizePixels
+            } else if (texX < 0 || texX >= sizePixels || texY < 0 || texY >= sizePixels) {
+                continue // hors carte et sans répétition : transparent
+            }
+
+            val tileIndex = vramByte(screenBase + (texY / 8) * sizeTiles + (texX / 8))
+            val colorIndex =
+                vramByte(charBase + tileIndex * 64 + (texY and 7) * 8 + (texX and 7))
+            if (colorIndex != 0) pushPixel(x, paletteColor(colorIndex), priority, bg)
+        }
     }
+
+    /** Reste positif : `mod` mathématique, contrairement à `%` sur les négatifs. */
+    private infix fun Int.mod(modulus: Int): Int {
+        val r = this % modulus
+        return if (r < 0) r + modulus else r
+    }
+
+    /**
+     * Dépose un pixel d'arrière-plan : il devient la couche visible et l'ancienne
+     * passe au second rang (nécessaire au mélange alpha). Les arrière-plans étant
+     * dessinés du fond vers l'avant, un nouveau pixel est toujours plus proche.
+     */
+    private fun pushPixel(x: Int, color: Int, priority: Int, layerId: Int) {
+        lineColor2[x] = lineColor[x]
+        linePriority2[x] = linePriority[x]
+        lineLayer2[x] = lineLayer[x]
+        lineColor[x] = color
+        linePriority[x] = priority
+        lineLayer[x] = layerId
+    }
+
+    /**
+     * Calcule, pour chaque pixel de la ligne, quelles couches sont visibles et
+     * si les effets de couleur s'y appliquent (registres `WIN0H`–`WINOUT`).
+     * Sans aucune fenêtre active, tout est autorisé.
+     */
+    private fun computeWindowMask(y: Int, dispcnt: Int) {
+        val win0On = dispcnt and 0x2000 != 0
+        val win1On = dispcnt and 0x4000 != 0
+        val objWinOn = dispcnt and 0x8000 != 0
+        if (!win0On && !win1On && !objWinOn) {
+            windowMask.fill(WINDOW_ALL)
+            return
+        }
+        val winin = reg16(0x48)
+        val winout = reg16(0x4A)
+        val win0Mask = winin and 0x3F
+        val win1Mask = (winin ushr 8) and 0x3F
+        val outsideMask = winout and 0x3F
+        val objWinMask = (winout ushr 8) and 0x3F
+        for (x in 0 until SCREEN_WIDTH) {
+            windowMask[x] = when {
+                win0On && insideWindow(0, x, y) -> win0Mask
+                win1On && insideWindow(1, x, y) -> win1Mask
+                objWinOn && objWindow[x] -> objWinMask
+                else -> outsideMask
+            }
+        }
+    }
+
+    /**
+     * `true` si le point ([x], [y]) est dans la fenêtre [index]. Les bornes
+     * droite et basse sont exclues ; lorsque la borne de fin précède celle de
+     * début, la fenêtre s'enroule (comportement matériel).
+     */
+    private fun insideWindow(index: Int, x: Int, y: Int): Boolean {
+        val horizontal = reg16(0x40 + index * 2)
+        val vertical = reg16(0x44 + index * 2)
+        val left = (horizontal ushr 8) and 0xFF
+        val right = horizontal and 0xFF
+        val top = (vertical ushr 8) and 0xFF
+        val bottom = vertical and 0xFF
+        val inX = if (left <= right) x >= left && x < right else x >= left || x < right
+        val inY = if (top <= bottom) y >= top && y < bottom else y >= top || y < bottom
+        return inX && inY
+    }
+
+    /**
+     * Composition finale : insère le sprite selon sa priorité, puis applique les
+     * effets de couleur (mélange alpha, éclaircissement, assombrissement) selon
+     * `BLDCNT` et la fenêtre.
+     */
+    private fun composeLine(rowBase: Int) {
+        val bldcnt = reg16(0x50)
+        val effectMode = (bldcnt ushr 6) and 0x3
+        for (x in 0 until SCREEN_WIDTH) {
+            var topColor = lineColor[x]
+            var topLayer = lineLayer[x]
+            var secondColor = lineColor2[x]
+            var secondLayer = lineLayer2[x]
+            var semiTransparent = false
+
+            if (objOpaque[x] && windowMask[x] and OBJ_BIT != 0) {
+                if (objPriority[x] <= linePriority[x]) {
+                    // Le sprite passe devant : l'ancien sommet recule d'un rang.
+                    secondColor = topColor
+                    secondLayer = topLayer
+                    topColor = objColor[x]
+                    topLayer = LAYER_ID_OBJ
+                    semiTransparent = objSemiTransparent[x]
+                } else if (objPriority[x] <= linePriority2[x]) {
+                    secondColor = objColor[x]
+                    secondLayer = LAYER_ID_OBJ
+                }
+            }
+
+            frame[rowBase + x] = applyColorEffects(
+                x, effectMode, bldcnt, topColor, topLayer, secondColor, secondLayer, semiTransparent
+            )
+        }
+    }
+
+    private fun applyColorEffects(
+        x: Int,
+        effectMode: Int,
+        bldcnt: Int,
+        topColor: Int,
+        topLayer: Int,
+        secondColor: Int,
+        secondLayer: Int,
+        semiTransparent: Boolean,
+    ): Int {
+        if (windowMask[x] and WINDOW_EFFECTS == 0) return topColor
+        val isTarget1 = bldcnt and (1 shl topLayer) != 0
+        val isTarget2 = bldcnt and (1 shl (8 + secondLayer)) != 0
+        // Un sprite semi-transparent impose le mélange alpha, quel que soit le
+        // mode d'effet programmé.
+        if (semiTransparent && isTarget2) return alphaBlend(topColor, secondColor)
+        if (!isTarget1) return topColor
+        return when (effectMode) {
+            1 -> if (isTarget2) alphaBlend(topColor, secondColor) else topColor
+            2 -> adjustBrightness(topColor, toWhite = true)
+            3 -> adjustBrightness(topColor, toWhite = false)
+            else -> topColor
+        }
+    }
+
+    /** Mélange alpha pondéré par `BLDALPHA` (coefficients EVA et EVB, /16). */
+    private fun alphaBlend(top: Int, bottom: Int): Int {
+        val bldalpha = reg16(0x52)
+        val eva = minOf(bldalpha and 0x1F, 16)
+        val evb = minOf((bldalpha ushr 8) and 0x1F, 16)
+        val r = minOf(255, (channel(top, 16) * eva + channel(bottom, 16) * evb) shr 4)
+        val g = minOf(255, (channel(top, 8) * eva + channel(bottom, 8) * evb) shr 4)
+        val b = minOf(255, (channel(top, 0) * eva + channel(bottom, 0) * evb) shr 4)
+        return (0xFF shl 24) or (r shl 16) or (g shl 8) or b
+    }
+
+    /** Éclaircissement vers le blanc ou assombrissement vers le noir (`BLDY`). */
+    private fun adjustBrightness(color: Int, toWhite: Boolean): Int {
+        val evy = minOf(reg16(0x54) and 0x1F, 16)
+        val r = brightnessChannel(channel(color, 16), evy, toWhite)
+        val g = brightnessChannel(channel(color, 8), evy, toWhite)
+        val b = brightnessChannel(channel(color, 0), evy, toWhite)
+        return (0xFF shl 24) or (r shl 16) or (g shl 8) or b
+    }
+
+    private fun brightnessChannel(value: Int, evy: Int, toWhite: Boolean): Int =
+        if (toWhite) value + (((255 - value) * evy) shr 4) else value - ((value * evy) shr 4)
+
+    private fun channel(color: Int, shift: Int): Int = (color ushr shift) and 0xFF
 
     private fun drawTextBackgroundLine(bg: Int, y: Int) {
         val control = reg16(0x08 + bg * 2)
@@ -220,18 +476,17 @@ class GbaPpu(private val bus: GbaBus) {
                 val nibble = if (px and 1 == 0) byte and 0xF else (byte ushr 4) and 0xF
                 if (nibble == 0) 0 else palBank * 16 + nibble
             }
-            if (colorIndex != 0) {
-                lineColor[x] = paletteColor(colorIndex)
-                linePriority[x] = priority
+            if (colorIndex != 0 && windowMask[x] and (1 shl bg) != 0) {
+                pushPixel(x, paletteColor(colorIndex), priority, bg)
             }
         }
     }
 
     /**
-     * Dessine les sprites de la ligne [y] dans les tampons objet. Périmètre :
-     * sprites **normaux** (tailles carrées/rectangulaires, 4/8 bpp, mappage
-     * 1D/2D, retournements, priorité). Les sprites **affines** (rotation/mise à
-     * l'échelle) et les fenêtres objet sont différés.
+     * Dessine les sprites de la ligne [y] dans les tampons objet : tailles
+     * carrées et rectangulaires, 4/8 bpp, mappage 1D/2D, retournements,
+     * priorité, **rotation/mise à l'échelle** (avec ou sans surface doublée),
+     * sprites **semi-transparents** et sprites de **fenêtre objet**.
      */
     private fun renderSprites(y: Int, dispcnt: Int) {
         if (dispcnt and 0x1000 == 0) return // OBJ désactivés
@@ -239,21 +494,31 @@ class GbaPpu(private val bus: GbaBus) {
         for (i in 0 until 128) {
             val base = i * 8
             val attr0 = oam16(base)
-            val objMode = (attr0 ushr 8) and 0x3
-            if (objMode == 2) continue          // sprite caché
-            if (objMode == 1 || objMode == 3) continue // affine : différé
+            // Bits 8-9 : 0 normal, 1 affine, 2 masqué, 3 affine à surface doublée.
+            val transform = (attr0 ushr 8) and 0x3
+            if (transform == 2) continue
             val shape = (attr0 ushr 14) and 0x3
             if (shape == 3) continue            // forme interdite
+            val graphicsMode = (attr0 ushr 10) and 0x3
+            if (graphicsMode == 3) continue     // mode interdit
+
+            val affine = transform == 1 || transform == 3
+            val doubleSize = transform == 3
+            val isWindowSprite = graphicsMode == 2
+            val semiTransparent = graphicsMode == 1
 
             val attr1 = oam16(base + 2)
             val attr2 = oam16(base + 4)
             val sizeIdx = (attr1 ushr 14) and 0x3
             val w = OBJ_WIDTH[shape][sizeIdx]
             val h = OBJ_HEIGHT[shape][sizeIdx]
+            // Emprise à l'écran : doublée pour un sprite affine « double size ».
+            val boxW = if (doubleSize) w * 2 else w
+            val boxH = if (doubleSize) h * 2 else h
 
             val yPos = attr0 and 0xFF
             val sy = (y - yPos) and 0xFF
-            if (sy >= h) continue
+            if (sy >= boxH) continue
 
             var xPos = attr1 and 0x1FF
             if (xPos >= 0x100) xPos -= 0x200    // X signé 9 bits
@@ -261,23 +526,48 @@ class GbaPpu(private val bus: GbaBus) {
             val is8bpp = attr0 and 0x2000 != 0
             val palBank = (attr2 ushr 12) and 0xF
             val priority = (attr2 ushr 10) and 0x3
-            val hflip = attr1 and 0x1000 != 0
-            val vflip = attr1 and 0x2000 != 0
             val tileBase = attr2 and 0x3FF
             val slots = if (is8bpp) 2 else 1
             val rowStride = if (oneDimensional) (w / 8) * slots else 32
 
-            val row = if (vflip) h - 1 - sy else sy
-            val tileRow = row / 8
-            val inY = row and 7
+            // Matrice affine : quatre mots répartis dans le champ `attr3` d'un
+            // groupe de 32 entrées OAM. Identité si le sprite ne tourne pas.
+            var pa = 0x100
+            var pb = 0
+            var pc = 0
+            var pd = 0x100
+            if (affine) {
+                val group = ((attr1 ushr 9) and 0x1F) * 32
+                pa = signed16(oam16(group + 0x06))
+                pb = signed16(oam16(group + 0x0E))
+                pc = signed16(oam16(group + 0x16))
+                pd = signed16(oam16(group + 0x1E))
+            }
+            val hflip = !affine && attr1 and 0x1000 != 0
+            val vflip = !affine && attr1 and 0x2000 != 0
 
-            for (col in 0 until w) {
+            for (col in 0 until boxW) {
                 val screenX = xPos + col
                 if (screenX < 0 || screenX >= SCREEN_WIDTH) continue
-                if (objOpaque[screenX]) continue // un sprite d'index inférieur a priorité
-                val sc = if (hflip) w - 1 - col else col
-                val tileIndex = tileBase + tileRow * rowStride + (sc / 8) * slots
-                val inX = sc and 7
+
+                val texX: Int
+                val texY: Int
+                if (affine) {
+                    // Transformation autour du centre de l'emprise, résultat
+                    // ramené dans les dimensions réelles du sprite.
+                    val dx = col - boxW / 2
+                    val dy = sy - boxH / 2
+                    texX = ((pa * dx + pb * dy) shr 8) + w / 2
+                    texY = ((pc * dx + pd * dy) shr 8) + h / 2
+                    if (texX < 0 || texX >= w || texY < 0 || texY >= h) continue
+                } else {
+                    texX = if (hflip) w - 1 - col else col
+                    texY = if (vflip) h - 1 - sy else sy
+                }
+
+                val tileIndex = tileBase + (texY / 8) * rowStride + (texX / 8) * slots
+                val inX = texX and 7
+                val inY = texY and 7
                 val colorIndex = if (is8bpp) {
                     vramByte(OBJ_TILE_BASE + tileIndex * 32 + inY * 8 + inX)
                 } else {
@@ -285,11 +575,18 @@ class GbaPpu(private val bus: GbaBus) {
                     val nibble = if (inX and 1 == 0) byte and 0xF else (byte ushr 4) and 0xF
                     if (nibble == 0) 0 else palBank * 16 + nibble
                 }
-                if (colorIndex != 0) {
-                    objColor[screenX] = paletteColor(OBJ_PALETTE_BASE + colorIndex)
-                    objPriority[screenX] = priority
-                    objOpaque[screenX] = true
+                if (colorIndex == 0) continue
+
+                if (isWindowSprite) {
+                    // Ne s'affiche pas : délimite la « fenêtre objet ».
+                    objWindow[screenX] = true
+                    continue
                 }
+                if (objOpaque[screenX]) continue // un sprite d'index inférieur prime
+                objColor[screenX] = paletteColor(OBJ_PALETTE_BASE + colorIndex)
+                objPriority[screenX] = priority
+                objOpaque[screenX] = true
+                objSemiTransparent[screenX] = semiTransparent
             }
         }
     }
@@ -314,8 +611,8 @@ class GbaPpu(private val bus: GbaBus) {
         if (dispcnt and 0x0400 == 0) return // BG2 désactivé
         val priority = bg2Priority()
         for (x in 0 until SCREEN_WIDTH) {
-            lineColor[x] = bgr555ToArgb(vram16((y * SCREEN_WIDTH + x) * 2))
-            linePriority[x] = priority
+            if (windowMask[x] and BG2_BIT == 0) continue
+            pushPixel(x, bgr555ToArgb(vram16((y * SCREEN_WIDTH + x) * 2)), priority, 2)
         }
     }
 
@@ -324,8 +621,8 @@ class GbaPpu(private val bus: GbaBus) {
         val page = if (dispcnt and 0x0010 != 0) 0xA000 else 0
         val priority = bg2Priority()
         for (x in 0 until SCREEN_WIDTH) {
-            lineColor[x] = paletteColor(vramByte(page + y * SCREEN_WIDTH + x))
-            linePriority[x] = priority
+            if (windowMask[x] and BG2_BIT == 0) continue
+            pushPixel(x, paletteColor(vramByte(page + y * SCREEN_WIDTH + x)), priority, 2)
         }
     }
 
@@ -334,12 +631,28 @@ class GbaPpu(private val bus: GbaBus) {
         val page = if (dispcnt and 0x0010 != 0) 0xA000 else 0
         val priority = bg2Priority()
         for (x in 0 until MODE5_WIDTH) {
-            lineColor[x] = bgr555ToArgb(vram16(page + (y * MODE5_WIDTH + x) * 2))
-            linePriority[x] = priority
+            if (windowMask[x] and BG2_BIT == 0) continue
+            pushPixel(x, bgr555ToArgb(vram16(page + (y * MODE5_WIDTH + x) * 2)), priority, 2)
         }
     }
 
     // ---- Accès mémoire ----
+
+    /** Recharge les points de référence affines depuis `BGxX`/`BGxY`. */
+    private fun reloadAffineReferencePoints() {
+        bg2RefX = signed28(reg32(0x28))
+        bg2RefY = signed28(reg32(0x2C))
+        bg3RefX = signed28(reg32(0x38))
+        bg3RefY = signed28(reg32(0x3C))
+    }
+
+    /** Étend le signe d'une valeur 16 bits (paramètres affines, format 8.8). */
+    private fun signed16(value: Int): Int = (value shl 16) shr 16
+
+    /** Étend le signe d'une valeur 28 bits (points de référence, format 20.8). */
+    private fun signed28(value: Int): Int = (value shl 4) shr 4
+
+    private fun reg32(offset: Int): Int = reg16(offset) or (reg16(offset + 2) shl 16)
 
     private fun reg16(offset: Int): Int =
         (bus.io[offset].toInt() and 0xFF) or ((bus.io[offset + 1].toInt() and 0xFF) shl 8)
@@ -363,13 +676,25 @@ class GbaPpu(private val bus: GbaBus) {
     companion object {
         const val SCREEN_WIDTH = 240
         const val SCREEN_HEIGHT = 160
-        const val STATE_FIELD_COUNT = 5
+        const val STATE_FIELD_COUNT = 9
 
         private const val MODE5_WIDTH = 160
         private const val MODE5_HEIGHT = 128
 
         /** Fond : priorité la plus basse (4 = derrière tout arrière-plan 0..3). */
         private const val LAYER_BACKDROP = 4
+
+        // Identifiants de couche pour BLDCNT : BG0..BG3 = 0..3, OBJ = 4, fond = 5.
+        private const val LAYER_ID_OBJ = 4
+        private const val LAYER_ID_BACKDROP = 5
+
+        // Bits du masque de fenêtre.
+        private const val BG2_BIT = 1 shl 2
+        private const val OBJ_BIT = 1 shl 4
+        private const val WINDOW_EFFECTS = 1 shl 5
+
+        /** Toutes les couches et les effets autorisés (aucune fenêtre active). */
+        private const val WINDOW_ALL = 0x3F
 
         /** Base des tuiles de sprites en VRAM (0x0601_0000). */
         private const val OBJ_TILE_BASE = 0x1_0000
