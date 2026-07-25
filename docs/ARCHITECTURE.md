@@ -357,8 +357,30 @@ Limites documentées : RAM d'onde traitée comme une **banque unique** (le doubl
 banc du GBA n'est pas émulé), `SOUNDBIAS` et le rééchantillonnage matériel non
 émulés, modes obscurs des canaux PSG absents.
 
+**Sauvegardes de cartouche** : le type de mémoire est **détecté** dans la ROM à
+partir des chaînes laissées par les bibliothèques officielles (`SRAM_V`,
+`FLASH_V`, `FLASH512_V`, `FLASH1M_V`, `EEPROM_V`) et reste **remplaçable
+manuellement** (`GbaCore.forcedSaveType`), la détection ne pouvant pas trancher
+tous les cas. Trois familles sont émulées :
+
+- **SRAM** 32 Kio : accès direct par octet ;
+- **Flash** 64/128 Kio : machine à états de commandes (`0xAA`/`0x55` puis code
+  d'opération) couvrant l'écriture d'octet, l'effacement total et par secteur de
+  4 Kio, le mode identification (constructeur/modèle) et, en 128 Kio, la
+  commutation de bancs ; une Flash vierge vaut `0xFF` ;
+- **EEPROM** 512 o / 8 Kio : protocole **série**, un bit par accès 16 bits,
+  commandes de lecture (`11`) et d'écriture (`10`) suivies de l'adresse (6 ou
+  14 bits) et, en écriture, de 64 bits de données. La largeur d'adresse est
+  déduite de la **longueur du transfert DMA**, comme le font les jeux.
+
+Le contenu est exposé au format `.sav` **brut** via le contrat commun
+(`hasBatteryRam`, `batteryRamDirty`, `exportBatteryRam`, et restauration à
+`loadRom`), donc l'écriture atomique de `SaveFileStore` s'applique sans
+changement ; il est aussi inclus dans les états instantanés. La mémoire survit à
+un `reset` (power-cycle).
+
 **Différé aux lots suivants** (limites documentées) : mosaïque, effets
 mid-scanline ; appels BIOS restants et BIOS externe ; DMA de capture vidéo, IRQ
-clavier/série ; mémoires de sauvegarde réelles (SRAM, Flash, EEPROM), temps
-d'attente précis, et raffinements d'interface (filtre par console, détails GBA
-enrichis).
+clavier/série ; temps d'attente précis ; réglage **par jeu** du type de
+sauvegarde dans l'interface Android (l'API du cœur existe, l'écran reste à
+faire) et raffinements d'interface (filtre par console, détails GBA enrichis).
