@@ -335,8 +335,30 @@ de la couche visible et de celle juste derrière. Simplification documentée :
 lorsqu'un sprite s'intercale, il remplace la seconde couche plutôt que de
 réordonner une pile complète.
 
+**Audio** : `GbaApu` réunit les **quatre canaux PSG** hérités de la Game Boy
+(deux ondes carrées avec enveloppe et balayage, table d'onde, bruit à registre à
+décalage), réécrits pour `gba-core` afin que **`gameboy-core` reste autonome** —
+aucune dépendance entre les deux moteurs — et les **deux canaux Direct Sound**.
+Ceux-ci rejouent du PCM 8 bits signé dépilé d'une **FIFO de 32 octets** : chaque
+canal est cadencé par le timer 0 ou 1, consomme un échantillon à chaque
+débordement, et réclame son réapprovisionnement au **DMA en mode son** (canaux 1
+et 2, temporisation spéciale, quatre mots par transfert vers l'adresse de FIFO)
+dès que sa file passe sous la moitié. Le mixage suit `SOUNDCNT_L/H/X` (volumes
+et panoramique PSG, proportion PSG/Direct Sound, volumes et panoramique Direct
+Sound) et produit du PCM stéréo 16 bits à 32 768 Hz, drainé par `readAudio` — le
+même contrat que la Game Boy, donc la même sortie Android.
+
+L'horloge audio vaut le quart de l'horloge CPU, ce qui redonne les formules de
+période de la Game Boy et un séquenceur de trames à 512 Hz. Les oscillateurs
+n'avancent jamais au-delà du prochain point d'échantillonnage : sans cet
+entrelacement, une salve d'échantillons observerait un état figé des canaux.
+
+Limites documentées : RAM d'onde traitée comme une **banque unique** (le double
+banc du GBA n'est pas émulé), `SOUNDBIAS` et le rééchantillonnage matériel non
+émulés, modes obscurs des canaux PSG absents.
+
 **Différé aux lots suivants** (limites documentées) : mosaïque, effets
-mid-scanline ; appels BIOS restants et BIOS externe ; modes DMA spéciaux (FIFO
-son, capture vidéo), IRQ clavier/série ; audio, mémoires de sauvegarde réelles
-(SRAM, Flash, EEPROM), temps d'attente précis, et raffinements d'interface
-(filtre par console, détails GBA enrichis).
+mid-scanline ; appels BIOS restants et BIOS externe ; DMA de capture vidéo, IRQ
+clavier/série ; mémoires de sauvegarde réelles (SRAM, Flash, EEPROM), temps
+d'attente précis, et raffinements d'interface (filtre par console, détails GBA
+enrichis).
