@@ -37,6 +37,28 @@ class DmaController(
 
     fun triggerHBlank() = triggerTiming(TIMING_HBLANK)
 
+    /**
+     * Réapprovisionnement d'une FIFO Direct Sound (`0` = A, `1` = B) : le canal
+     * DMA 1 ou 2 armé en mode spécial et pointant sur la bonne FIFO transfère
+     * quatre mots de 32 bits, sans faire progresser l'adresse de destination.
+     */
+    fun triggerSoundFifo(fifoChannel: Int) {
+        val fifoAddress = if (fifoChannel == 0) FIFO_A_ADDRESS else FIFO_B_ADDRESS
+        for (channel in 1..2) {
+            val control = readIoHalf(CNT_H[channel])
+            if (control and 0x8000 == 0 || timing(control) != TIMING_SPECIAL) continue
+            if (readIoWord(DAD[channel]) and 0x0FFF_FFFF != fifoAddress) continue
+            val sourceControl = (control ushr 7) and 0x3
+            var src = sourceAddress[channel]
+            repeat(FIFO_WORDS) {
+                bus.write32(fifoAddress, bus.read32(src))
+                src += delta(sourceControl, 4)
+            }
+            sourceAddress[channel] = src
+            if (control and 0x4000 != 0) interrupts.request(Interrupt.DMA0 + channel)
+        }
+    }
+
     private fun triggerTiming(timing: Int) {
         for (channel in 0 until 4) {
             val control = readIoHalf(CNT_H[channel])
@@ -111,6 +133,13 @@ class DmaController(
         const val TIMING_IMMEDIATE = 0
         const val TIMING_VBLANK = 1
         const val TIMING_HBLANK = 2
+        const val TIMING_SPECIAL = 3
         const val DEST_INCREMENT_RELOAD = 3
+
+        const val FIFO_A_ADDRESS = 0x0400_00A0
+        const val FIFO_B_ADDRESS = 0x0400_00A4
+
+        /** Un réapprovisionnement transfère quatre mots (16 octets). */
+        const val FIFO_WORDS = 4
     }
 }

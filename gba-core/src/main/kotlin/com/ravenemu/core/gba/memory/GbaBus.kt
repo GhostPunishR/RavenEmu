@@ -1,5 +1,6 @@
 package com.ravenemu.core.gba.memory
 
+import com.ravenemu.core.gba.audio.GbaApu
 import com.ravenemu.core.gba.cartridge.GbaCartridge
 import com.ravenemu.core.gba.dma.DmaController
 import com.ravenemu.core.gba.input.GbaKeypad
@@ -46,6 +47,9 @@ class GbaBus(
 
     /** Canaux DMA (registres DMAxCNT), rattachés après construction. */
     var dma: DmaController? = null
+
+    /** Unité audio (registres 0x60–0xA7), rattachée après construction. */
+    var apu: GbaApu? = null
 
     /** Replie une adresse VRAM (96 Kio) : blocs de 128 Kio dont les 32 derniers Kio recopient les précédents. */
     private fun vramOffset(address: Int): Int {
@@ -103,6 +107,10 @@ class GbaBus(
             0x0C6 -> dma?.onControlWrite(1, value)
             0x0D2 -> dma?.onControlWrite(2, value)
             0x0DE -> dma?.onControlWrite(3, value)
+            // Files d'échantillons Direct Sound : les octets sont empilés.
+            0x0A0, 0x0A2 -> apu?.pushFifo(0, value, 2)
+            0x0A4, 0x0A6 -> apu?.pushFifo(1, value, 2)
+            in 0x060..0x09F -> apu?.writeRegister(offset, value)
         }
     }
 

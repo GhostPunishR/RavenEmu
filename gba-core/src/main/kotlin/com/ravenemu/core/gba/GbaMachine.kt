@@ -1,5 +1,6 @@
 package com.ravenemu.core.gba
 
+import com.ravenemu.core.gba.audio.GbaApu
 import com.ravenemu.core.gba.bios.GbaBios
 import com.ravenemu.core.gba.cartridge.GbaCartridge
 import com.ravenemu.core.gba.cpu.Arm7Tdmi
@@ -26,6 +27,7 @@ class GbaMachine(rom: ByteArray) {
     val interrupts: GbaInterruptController = GbaInterruptController()
     val timers: GbaTimers = GbaTimers(interrupts)
     val dma: DmaController = DmaController(bus, interrupts)
+    val apu: GbaApu = GbaApu()
     val cpu: Arm7Tdmi = Arm7Tdmi(bus)
     val bios: GbaBios = GbaBios(cpu, bus)
 
@@ -34,8 +36,13 @@ class GbaMachine(rom: ByteArray) {
         bus.interrupts = interrupts
         bus.timers = timers
         bus.dma = dma
+        bus.apu = apu
         ppu.interrupts = interrupts
         ppu.dma = dma
+        // Les timers cadencent les canaux Direct Sound, qui réclament à leur
+        // tour leur réapprovisionnement au DMA.
+        timers.onOverflow = apu::onTimerOverflow
+        apu.onFifoRequest = dma::triggerSoundFifo
         cpu.swiHandler = bios
         cpu.reset(ROM_ENTRY_POINT)
     }
@@ -54,6 +61,7 @@ class GbaMachine(rom: ByteArray) {
             if (cpu.state.halted) {
                 ppu.tick(HALT_STEP)
                 timers.tick(HALT_STEP)
+                apu.tick(HALT_STEP)
                 elapsed += HALT_STEP
                 if (interrupts.enable and interrupts.flags and 0x3FFF != 0) {
                     cpu.state.halted = false
@@ -70,6 +78,7 @@ class GbaMachine(rom: ByteArray) {
             val consumed = cpu.step()
             ppu.tick(consumed)
             timers.tick(consumed)
+            apu.tick(consumed)
             elapsed += consumed
         }
     }

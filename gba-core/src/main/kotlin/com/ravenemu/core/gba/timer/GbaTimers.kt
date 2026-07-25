@@ -15,6 +15,9 @@ import com.ravenemu.core.gba.interrupt.Interrupt
  */
 class GbaTimers(private val interrupts: GbaInterruptController) {
 
+    /** Notification de débordement, utilisée par les canaux Direct Sound. */
+    var onOverflow: ((Int) -> Unit)? = null
+
     private val counter = IntArray(4)
     private val reload = IntArray(4)
     private val control = IntArray(4)
@@ -57,6 +60,8 @@ class GbaTimers(private val interrupts: GbaInterruptController) {
         if (counter[timer] <= 0xFFFF) return
         counter[timer] = reload[timer]
         if (control[timer] and 0x40 != 0) interrupts.request(Interrupt.TIMER0 + timer)
+        // Les canaux Direct Sound consomment un échantillon à chaque débordement.
+        onOverflow?.invoke(timer)
         // Cascade : incrémente le timer suivant s'il est en mode count-up.
         val next = timer + 1
         if (next < 4 && control[next] and 0x80 != 0 && control[next] and 0x04 != 0) {

@@ -1,5 +1,6 @@
 package com.ravenemu.core.gba
 
+import com.ravenemu.core.gba.audio.GbaApu
 import com.ravenemu.core.gba.ppu.GbaPpu
 import com.ravenemu.core.gba.state.GbaState
 import com.ravenemu.emulation.api.AudioSpec
@@ -18,9 +19,10 @@ import java.security.MessageDigest
  * **Premier lot** : le CPU exécute un sous-ensemble d'instructions ARM/Thumb et
  * le PPU produit une image 240 × 160 d'une couleur unie (arrière-plan). Les
  * entrées sont gérées ([setButton] alimente le registre `KEYINPUT`, boutons
- * `L`/`R` compris). Audio, DMA, timers, interruptions matérielles, sauvegardes
- * de cartouche et compatibilité commerciale sont différés aux lots suivants
- * (limites documentées) ; [readAudio] retourne donc 0.
+ * `L`/`R` compris), ainsi que les interruptions, timers, DMA, le BIOS HLE et
+ * l'audio ([readAudio] draine les canaux PSG et Direct Sound). Les sauvegardes
+ * de cartouche et la compatibilité commerciale restent à venir (limites
+ * documentées en AD-15).
  */
 class GbaCore : EmulatorCore {
 
@@ -32,7 +34,8 @@ class GbaCore : EmulatorCore {
         refreshRateHz = REFRESH_RATE_HZ,
     )
 
-    override val audio: AudioSpec = AudioSpec(sampleRateHz = 32_768, channelCount = 2)
+    override val audio: AudioSpec =
+        AudioSpec(sampleRateHz = GbaApu.SAMPLE_RATE_HZ, channelCount = 2)
 
     override val framebufferFormat: FramebufferFormat = FramebufferFormat.ARGB_8888
 
@@ -69,7 +72,8 @@ class GbaCore : EmulatorCore {
         machine?.bus?.keypad?.setButton(button, pressed)
     }
 
-    override fun readAudio(buffer: ShortArray): Int = 0
+    override fun readAudio(buffer: ShortArray): Int =
+        machine?.apu?.readSamples(buffer) ?: 0
 
     override val hasBatteryRam: Boolean = false
 
