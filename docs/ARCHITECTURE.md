@@ -294,12 +294,32 @@ VBlank ou HBlank. La **boucle machine** livre l'exception IRQ (vecteur `0x18`)
 avant chaque instruction quand une interruption autorisée est en attente et que
 le drapeau `I` du CPU est dégagé.
 
+**BIOS HLE** : RavenEmu ne distribue **aucun BIOS Nintendo**. Un BIOS de
+substitution (`GbaBios`) est écrit intégralement à partir de la documentation
+publique et remplit deux rôles.
+
+D'abord un **gestionnaire d'interruption** : un court programme ARM, assemblé
+par RavenEmu, est installé au vecteur IRQ `0x18`. Il sauvegarde le contexte, lit
+l'adresse du gestionnaire du jeu en `0x0300_7FFC` (miroir de `0x03FF_FFFC`),
+l'appelle, restaure puis retourne par `subs pc, lr, #4` — le comportement
+documenté du BIOS. C'est cette pièce qui referme la chaîne : une source lève son
+IRQ, la boucle machine prend l'exception, le handler BIOS appelle **le code du
+jeu**.
+
+Ensuite les **appels logiciels `SWI`**, interceptés en haut niveau
+(`Arm7Tdmi.swiHandler`) plutôt que routés vers le vecteur `0x08` : `Div`,
+`DivArm`, `Sqrt`, `CpuSet`, `CpuFastSet`, et `Halt`/`Stop`/`IntrWait`/
+`VBlankIntrWait` qui posent le drapeau **`halted`** du CPU. En pause, la boucle
+machine n'exécute plus d'instruction mais continue d'avancer PPU et timers,
+jusqu'à ce qu'une interruption activée réveille le processeur. Les appels non
+implémentés (`SoftReset`, `RegisterRamReset`, décompression…) sont sans effet.
+Un BIOS **fourni par l'utilisateur** (sélection SAF, validation par taille et
+empreinte) reste une option prévue mais non implémentée.
+
 **Différé aux lots suivants** (limites documentées) : arrière-plans **affines**
 (modes 1/2, rotation/mise à l'échelle), **sprites affines** (rotation/mise à
-l'échelle des OBJ), fenêtres, mosaïque, alpha blending, luminosité ; **BIOS** —
-fourni par l'utilisateur (validé par taille et empreinte) ou HLE RavenEmu : le
-vecteur IRQ `0x18` et `SWI` (`0x08`) sautent dans le BIOS, encore vide, si bien
-que la livraison d'IRQ n'atteint le jeu qu'une fois le handler BIOS présent ;
-modes DMA spéciaux (FIFO son, capture vidéo), IRQ clavier/série ; audio, mémoires
-de sauvegarde réelles (SRAM, Flash, EEPROM), temps d'attente précis, et
-raffinements d'interface (filtre par console, détails GBA enrichis).
+l'échelle des OBJ), fenêtres, mosaïque, alpha blending, luminosité ; appels BIOS
+restants et BIOS externe ; modes DMA spéciaux (FIFO son, capture vidéo), IRQ
+clavier/série ; audio, mémoires de sauvegarde réelles (SRAM, Flash, EEPROM),
+temps d'attente précis, et raffinements d'interface (filtre par console, détails
+GBA enrichis).
