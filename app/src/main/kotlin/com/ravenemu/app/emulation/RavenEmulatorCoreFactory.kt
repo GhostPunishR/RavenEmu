@@ -2,6 +2,7 @@ package com.ravenemu.app.emulation
 
 import com.ravenemu.core.gb.GameBoyCore
 import com.ravenemu.core.gba.GbaCore
+import com.ravenemu.core.gba.save.GbaSaveType
 import com.ravenemu.emulation.api.ConsoleType
 import com.ravenemu.emulation.api.EmulatorCore
 import com.ravenemu.emulation.api.EmulatorCoreFactory
@@ -13,7 +14,14 @@ import com.ravenemu.emulation.api.EmulatorCoreFactory
  * moteur directement, ce qui permet d'ajouter une console sans modifier les
  * écrans d'émulation.
  */
-class RavenEmulatorCoreFactory : EmulatorCoreFactory {
+class RavenEmulatorCoreFactory(
+    /**
+     * Type de mémoire de sauvegarde imposé aux moteurs Game Boy Advance
+     * (nom d'énumération `GbaSaveType`), ou `null` pour la détection
+     * automatique. Réglage par jeu de la bibliothèque.
+     */
+    private val forcedGbaSaveType: String? = null,
+) : EmulatorCoreFactory {
 
     override val supportedConsoles: Set<ConsoleType> = setOf(
         ConsoleType.GAME_BOY,
@@ -23,6 +31,9 @@ class RavenEmulatorCoreFactory : EmulatorCoreFactory {
 
     override fun create(console: ConsoleType): EmulatorCore = when (console) {
         ConsoleType.GAME_BOY, ConsoleType.GAME_BOY_COLOR -> GameBoyCore()
-        ConsoleType.GAME_BOY_ADVANCE -> GbaCore()
+        ConsoleType.GAME_BOY_ADVANCE -> GbaCore(
+            forcedSaveType = forcedGbaSaveType
+                ?.let { name -> runCatching { GbaSaveType.valueOf(name) }.getOrNull() },
+        )
     }
 }

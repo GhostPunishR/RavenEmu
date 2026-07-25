@@ -379,8 +379,15 @@ Le contenu est exposé au format `.sav` **brut** via le contrat commun
 changement ; il est aussi inclus dans les états instantanés. La mémoire survit à
 un `reset` (power-cycle).
 
-**Différé aux lots suivants** (limites documentées) : mosaïque, effets
-mid-scanline ; appels BIOS restants et BIOS externe ; DMA de capture vidéo, IRQ
-clavier/série ; temps d'attente précis ; réglage **par jeu** du type de
-sauvegarde dans l'interface Android (l'API du cœur existe, l'écran reste à
-faire) et raffinements d'interface (filtre par console, détails GBA enrichis).
+**Interface Android** : la bibliothèque se **filtre par console**, chaque entrée
+indique la sienne, et les détails d'une ROM GBA affichent code jeu, validité
+d'en-tête et type de sauvegarde. Ce dernier est **réglable par jeu** (détection
+automatique ou type imposé) : le choix est mémorisé par empreinte SHA-256 et
+transmis au moteur à la création, via la fabrique. Les dispositions tactiles
+sont enregistrées **par orientation et par console**, si bien que les gâchettes
+`L`/`R` de la Game Boy Advance n'altèrent pas la disposition Game Boy.
+
+**Différé** (limites documentées) : mosaïque, effets mid-scanline ; appels BIOS
+restants et BIOS externe ; DMA de capture vidéo, IRQ clavier/série ; temps
+d'attente précis. La **compatibilité commerciale reste à valider sur matériel
+réel** : le moteur n'a été éprouvé que sur des ROM synthétiques.

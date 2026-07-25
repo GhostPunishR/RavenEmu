@@ -29,6 +29,12 @@ class RomAdapter(
 
     private val items = mutableListOf<RomEntry>()
 
+    private companion object {
+        // Étiquettes courtes : le sous-titre d'une vignette reste lisible.
+        const val CONSOLE_LABEL_GB = "GB"
+        const val CONSOLE_LABEL_GBA = "GBA"
+    }
+
     @Suppress("NotifyDataSetChanged")
     fun submit(entries: List<RomEntry>) {
         items.clear()
@@ -59,12 +65,13 @@ class RomAdapter(
         fun bind(entry: RomEntry) {
             title.text = entry.displayName
             val sizeKib = entry.sizeBytes / 1024
+            // La console est toujours indiquée ; les champs MBC et région sont
+            // propres à la cartouche Game Boy et n'ont pas d'équivalent GBA.
             val details = if (entry.console == ConsoleType.GAME_BOY_ADVANCE) {
-                // Les champs MBC/région sont propres à la Game Boy : on affiche
-                // la console pour une ROM GBA.
-                entry.console.displayName
+                CONSOLE_LABEL_GBA
             } else {
-                entry.mbcType.displayName + " · " + entry.region.displayName
+                CONSOLE_LABEL_GB + " · " + entry.mbcType.displayName +
+                    " · " + entry.region.displayName
             }
             subtitle.text = itemView.context.getString(
                 R.string.library_size_kib,

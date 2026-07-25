@@ -151,4 +151,29 @@ class AppSettings(context: Context) {
     var showStatusBadges: Boolean
         get() = prefs.getBoolean("library_badges", true)
         set(value) = prefs.edit { putBoolean("library_badges", value) }
+
+    /**
+     * Console affichée dans la bibliothèque : nom d'énumération `ConsoleType`,
+     * ou `all` pour ne rien filtrer.
+     */
+    var libraryConsoleFilter: String
+        get() = prefs.getString("library_console_filter", "all") ?: "all"
+        set(value) = prefs.edit { putString("library_console_filter", value) }
+
+    // ---- Réglages par jeu ----
+
+    /**
+     * Type de mémoire de sauvegarde imposé pour un jeu Game Boy Advance
+     * (nom d'énumération `GbaSaveType`), ou `null` pour laisser la détection
+     * automatique décider.
+     */
+    fun forcedSaveType(romSha256: String): String? =
+        prefs.getString("game_save_type_$romSha256", null)
+
+    fun setForcedSaveType(romSha256: String, type: String?) {
+        prefs.edit {
+            if (type == null) remove("game_save_type_$romSha256")
+            else putString("game_save_type_$romSha256", type)
+        }
+    }
 }

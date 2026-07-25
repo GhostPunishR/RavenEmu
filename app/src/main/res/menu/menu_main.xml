@@ -40,6 +40,20 @@
         </menu>
     </item>
 
+    <item android:title="@string/library_filter_console" app:showAsAction="never">
+        <menu>
+            <item
+                android:id="@+id/action_filter_all"
+                android:title="@string/library_filter_all" />
+            <item
+                android:id="@+id/action_filter_gb"
+                android:title="@string/library_filter_gb" />
+            <item
+                android:id="@+id/action_filter_gba"
+                android:title="@string/library_filter_gba" />
+        </menu>
+    </item>
+
     <item
         android:id="@+id/action_settings"
         android:title="@string/settings_title"

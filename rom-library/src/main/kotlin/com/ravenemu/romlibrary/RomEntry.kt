@@ -35,6 +35,11 @@ data class RomEntry(
     val headerChecksumValid: Boolean = false,
     /** Code jeu (Game Boy Advance : 4 caractères de l'en-tête), sinon vide. */
     val gameCode: String = "",
+    /**
+     * Type de mémoire de sauvegarde détecté dans la ROM (Game Boy Advance),
+     * sous forme du nom d'énumération `GbaSaveType` ; vide si non applicable.
+     */
+    val saveType: String = "",
     /** Statut forcé par l'utilisateur (ex. Homebrew déclaré), prioritaire. */
     val userStatusOverride: RomStatus? = null,
     /** URI d'une pochette associée manuellement ou détectée localement. */

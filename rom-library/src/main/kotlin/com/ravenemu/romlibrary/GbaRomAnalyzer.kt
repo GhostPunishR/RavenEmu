@@ -2,6 +2,7 @@ package com.ravenemu.romlibrary
 
 import com.ravenemu.core.gba.cartridge.GbaCartridge
 import com.ravenemu.core.gba.cartridge.GbaHeader
+import com.ravenemu.core.gba.save.GbaSaveType
 import com.ravenemu.emulation.api.ConsoleType
 import com.ravenemu.emulation.api.RomLoadException
 
@@ -48,6 +49,7 @@ class GbaRomAnalyzer(
                 fingerprints = fingerprints,
                 status = references.classify(fingerprints, header.title),
                 gameCode = header.gameCode,
+                saveType = GbaSaveType.detect(data).name,
                 romSizeBytes = data.size,
                 headerChecksumValid = header.headerChecksumValid,
             )
