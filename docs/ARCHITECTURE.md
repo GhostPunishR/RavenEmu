@@ -316,10 +316,27 @@ implémentés (`SoftReset`, `RegisterRamReset`, décompression…) sont sans eff
 Un BIOS **fourni par l'utilisateur** (sélection SAF, validation par taille et
 empreinte) reste une option prévue mais non implémentée.
 
-**Différé aux lots suivants** (limites documentées) : arrière-plans **affines**
-(modes 1/2, rotation/mise à l'échelle), **sprites affines** (rotation/mise à
-l'échelle des OBJ), fenêtres, mosaïque, alpha blending, luminosité ; appels BIOS
-restants et BIOS externe ; modes DMA spéciaux (FIFO son, capture vidéo), IRQ
-clavier/série ; audio, mémoires de sauvegarde réelles (SRAM, Flash, EEPROM),
-temps d'attente précis, et raffinements d'interface (filtre par console, détails
-GBA enrichis).
+**Vidéo affine, fenêtres et effets de couleur** : les arrière-plans **affines**
+(`BG2` en mode 1, `BG2`/`BG3` en mode 2) sont rendus à partir d'un point de
+référence interne — rechargé depuis `BGxX`/`BGxY` au VBlank puis incrémenté de
+`PB`/`PD` à chaque ligne, comme sur le matériel — et des paramètres `PA`–`PD` en
+virgule fixe 8.8 ; la carte affine tient sur un octet par tuile, en 8 bpp, avec
+répétition optionnelle. Les **sprites affines** appliquent la matrice du groupe
+`attr3` désigné, avec ou sans emprise doublée. Les **fenêtres** (`WIN0`, `WIN1`,
+fenêtre objet, `WININ`/`WINOUT`) produisent un masque par pixel indiquant les
+couches visibles et l'autorisation des effets ; les bornes qui s'inversent
+enroulent la fenêtre. Les **effets de couleur** (`BLDCNT`/`BLDALPHA`/`BLDY`)
+couvrent le mélange alpha, l'éclaircissement et l'assombrissement, les sprites
+**semi-transparents** imposant le mélange quel que soit le mode programmé.
+
+Ces effets exigent de connaître les **deux couches supérieures** de chaque
+pixel : la composition maintient donc, par pixel, la couleur/priorité/identité
+de la couche visible et de celle juste derrière. Simplification documentée :
+lorsqu'un sprite s'intercale, il remplace la seconde couche plutôt que de
+réordonner une pile complète.
+
+**Différé aux lots suivants** (limites documentées) : mosaïque, effets
+mid-scanline ; appels BIOS restants et BIOS externe ; modes DMA spéciaux (FIFO
+son, capture vidéo), IRQ clavier/série ; audio, mémoires de sauvegarde réelles
+(SRAM, Flash, EEPROM), temps d'attente précis, et raffinements d'interface
+(filtre par console, détails GBA enrichis).
