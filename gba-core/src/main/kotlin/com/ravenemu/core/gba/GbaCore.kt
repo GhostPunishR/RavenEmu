@@ -1,6 +1,8 @@
 package com.ravenemu.core.gba
 
+import com.ravenemu.core.gba.audio.GbaApu
 import com.ravenemu.core.gba.ppu.GbaPpu
+import com.ravenemu.core.gba.save.GbaSaveType
 import com.ravenemu.core.gba.state.GbaState
 import com.ravenemu.emulation.api.AudioSpec
 import com.ravenemu.emulation.api.ConsoleType
@@ -15,14 +17,23 @@ import java.security.MessageDigest
  * bus, PPU) et expose le contrat [EmulatorCore]. Mono-thread et passif :
  * l'appelant pilote la cadence via [runFrame].
  *
- * **Premier lot** : le CPU exécute un sous-ensemble d'instructions ARM/Thumb et
- * le PPU produit une image 240 × 160 d'une couleur unie (arrière-plan). Les
- * entrées sont gérées ([setButton] alimente le registre `KEYINPUT`, boutons
- * `L`/`R` compris). Audio, DMA, timers, interruptions matérielles, sauvegardes
- * de cartouche et compatibilité commerciale sont différés aux lots suivants
- * (limites documentées) ; [readAudio] retourne donc 0.
+ * Le CPU couvre l'essentiel du jeu d'instructions ARM/Thumb, le PPU rend les
+ * modes bitmap, texte et affines avec sprites, fenêtres et effets de couleur.
+ * Sont également gérés : entrées ([setButton] alimente `KEYINPUT`, boutons
+ * `L`/`R` compris), interruptions, timers, DMA, BIOS HLE, audio ([readAudio]
+ * draine les canaux PSG et Direct Sound) et **sauvegardes de cartouche**
+ * (SRAM, Flash 64/128 Kio, EEPROM) exportées au format `.sav` brut.
+ *
+ * La compatibilité commerciale reste à valider ; les limites connues sont
+ * documentées en AD-15.
  */
-class GbaCore : EmulatorCore {
+class GbaCore(
+    /**
+     * Impose un type de mémoire de sauvegarde au lieu de la détection
+     * automatique (réglage par jeu). `null` = détection.
+     */
+    var forcedSaveType: GbaSaveType? = null,
+) : EmulatorCore {
 
     override val console: ConsoleType = ConsoleType.GAME_BOY_ADVANCE
 
@@ -32,7 +43,8 @@ class GbaCore : EmulatorCore {
         refreshRateHz = REFRESH_RATE_HZ,
     )
 
-    override val audio: AudioSpec = AudioSpec(sampleRateHz = 32_768, channelCount = 2)
+    override val audio: AudioSpec =
+        AudioSpec(sampleRateHz = GbaApu.SAMPLE_RATE_HZ, channelCount = 2)
 
     override val framebufferFormat: FramebufferFormat = FramebufferFormat.ARGB_8888
 
@@ -46,14 +58,20 @@ class GbaCore : EmulatorCore {
         private set
 
     override fun loadRom(rom: ByteArray, batteryRam: ByteArray?) {
-        machine = GbaMachine(rom)
+        val newMachine = GbaMachine(rom, forcedSaveType)
+        if (batteryRam != null) newMachine.cartridge.save?.import(batteryRam)
+        machine = newMachine
         loadedRom = rom
         romHash = MessageDigest.getInstance("SHA-256").digest(rom)
     }
 
     override fun reset() {
         val rom = loadedRom ?: error("Aucune ROM chargée")
-        machine = GbaMachine(rom)
+        // Power-cycle : la mémoire de sauvegarde survit, le reste repart à zéro.
+        val battery = machine?.cartridge?.save?.export()
+        val newMachine = GbaMachine(rom, forcedSaveType)
+        if (battery != null) newMachine.cartridge.save?.import(battery)
+        machine = newMachine
     }
 
     override fun runFrame(framebuffer: IntArray) {
@@ -69,13 +87,25 @@ class GbaCore : EmulatorCore {
         machine?.bus?.keypad?.setButton(button, pressed)
     }
 
-    override fun readAudio(buffer: ShortArray): Int = 0
+    override fun readAudio(buffer: ShortArray): Int =
+        machine?.apu?.readSamples(buffer) ?: 0
 
-    override val hasBatteryRam: Boolean = false
+    /** Type de sauvegarde retenu pour la ROM chargée (détecté ou imposé). */
+    val saveType: GbaSaveType
+        get() = machine?.cartridge?.saveType ?: GbaSaveType.NONE
 
-    override val batteryRamDirty: Boolean = false
+    override val hasBatteryRam: Boolean
+        get() = machine?.cartridge?.save != null
 
-    override fun exportBatteryRam(): ByteArray? = null
+    override val batteryRamDirty: Boolean
+        get() = machine?.cartridge?.save?.dirty ?: false
+
+    override fun exportBatteryRam(): ByteArray? {
+        val save = machine?.cartridge?.save ?: return null
+        val data = save.export()
+        save.acknowledgeSaved()
+        return data
+    }
 
     override fun saveState(): ByteArray {
         val m = machine ?: error("Aucune ROM chargée")

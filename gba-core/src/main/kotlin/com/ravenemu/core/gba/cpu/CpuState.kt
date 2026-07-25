@@ -28,6 +28,9 @@ class CpuState {
     var fiqDisabled = true
     var thumb = false
 
+    /** CPU en pause (SWI Halt/IntrWait) jusqu'à une interruption. */
+    var halted = false
+
     /** Mode processeur courant (voir constantes `MODE_*`). */
     var mode = MODE_SUPERVISOR
         private set
@@ -58,6 +61,7 @@ class CpuState {
         irqDisabled = true
         fiqDisabled = true
         thumb = false
+        halted = false
         mode = MODE_SUPERVISOR
     }
 

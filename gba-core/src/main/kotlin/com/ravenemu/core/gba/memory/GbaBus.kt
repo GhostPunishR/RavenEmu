@@ -1,21 +1,30 @@
 package com.ravenemu.core.gba.memory
 
+import com.ravenemu.core.gba.audio.GbaApu
 import com.ravenemu.core.gba.cartridge.GbaCartridge
+import com.ravenemu.core.gba.dma.DmaController
 import com.ravenemu.core.gba.input.GbaKeypad
+import com.ravenemu.core.gba.interrupt.GbaInterruptController
 import com.ravenemu.core.gba.ppu.GbaPpu
+import com.ravenemu.core.gba.save.GbaSaveMemory
+import com.ravenemu.core.gba.timer.GbaTimers
 
 /**
- * Bus mémoire minimal de la Game Boy Advance : achemine les accès 8, 16 et
- * 32 bits vers la bonne région du plan mémoire, en gérant l'alignement et les
- * zones miroir.
+ * Bus mémoire de la Game Boy Advance : achemine les accès 8, 16 et 32 bits vers
+ * la bonne région du plan mémoire (BIOS, EWRAM, IWRAM, E/S, palette, VRAM, OAM,
+ * ROM cartouche et zone de sauvegarde), en gérant l'alignement et les zones
+ * miroir. La rotation des lectures non alignées est appliquée par le CPU, qui
+ * aligne les adresses avant d'appeler ce bus.
  *
- * Périmètre du premier lot : BIOS (interne, nul par défaut, voir HLE ultérieur),
- * EWRAM, IWRAM, registres d'E/S (stockage brut), palette, VRAM, OAM, ROM
- * cartouche et SRAM. Le registre clavier `KEYINPUT` reflète l'état du
- * [keypad] ; les autres registres d'E/S ne déclenchent encore aucun effet de
- * bord (DMA, timers, PPU…) : ils sont conservés tels quels et lus tels quels.
- * La rotation des lectures 32/16 bits non alignées est appliquée par le CPU,
- * qui aligne les adresses avant d'appeler ce bus.
+ * Les registres d'E/S ne sont pas de simples octets : les lectures reflètent
+ * l'état du matériel (`KEYINPUT`, `DISPSTAT`, `VCOUNT`, compteurs de timers,
+ * `IE`/`IF`/`IME`) et les écritures 16 bits déclenchent les effets de bord
+ * correspondants (interruptions, timers, DMA, audio).
+ *
+ * La zone de sauvegarde est routée vers la mémoire de la cartouche : SRAM et
+ * Flash par accès octet, EEPROM par son protocole série — ce dernier est traité
+ * au niveau des accès **16 bits**, car un accès y transporte un seul bit et ne
+ * doit donc jamais être décomposé en deux octets.
  */
 class GbaBus(
     private val cartridge: GbaCartridge,
@@ -35,6 +44,18 @@ class GbaBus(
     /** Unité graphique, rattachée après construction (registres DISPSTAT/VCOUNT). */
     var ppu: GbaPpu? = null
 
+    /** Contrôleur d'interruptions (registres IE/IF/IME), rattaché après construction. */
+    var interrupts: GbaInterruptController? = null
+
+    /** Timers (registres TMxCNT), rattachés après construction. */
+    var timers: GbaTimers? = null
+
+    /** Canaux DMA (registres DMAxCNT), rattachés après construction. */
+    var dma: DmaController? = null
+
+    /** Unité audio (registres 0x60–0xA7), rattachée après construction. */
+    var apu: GbaApu? = null
+
     /** Replie une adresse VRAM (96 Kio) : blocs de 128 Kio dont les 32 derniers Kio recopient les précédents. */
     private fun vramOffset(address: Int): Int {
         var offset = address and 0x1_FFFF
@@ -44,14 +65,94 @@ class GbaBus(
 
     private fun romOffset(address: Int): Int = address and 0x01FF_FFFF
 
+    /** Mémoire EEPROM de la cartouche, ou `null` si elle est d'un autre type. */
+    fun eeprom(): GbaSaveMemory.Eeprom? = cartridge.save as? GbaSaveMemory.Eeprom
+
+    /** Mémoire de sauvegarde de la cartouche, tous types confondus. */
+    fun saveMemory(): GbaSaveMemory? = cartridge.save
+
+    /** `true` si l'adresse tombe dans la fenêtre EEPROM (0x0D00_0000-0x0DFF_FFFF). */
+    private fun isEepromWindow(address: Int): Boolean =
+        cartridge.save is GbaSaveMemory.Eeprom && (address ushr 24) == 0x0D
+
+    /** Lecture dans l'espace cartouche (ROM). */
+    private fun readRomRegion(address: Int): Int = cartridge.read8(romOffset(address))
+
+    /**
+     * L'espace ROM est en lecture seule ; la fenêtre EEPROM est traitée au
+     * niveau des accès 16 bits, seuls utilisés par son protocole série.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    private fun writeRomRegion(address: Int, value: Int) = Unit
+
+    /** Lecture de la zone de sauvegarde (SRAM ou Flash selon la cartouche). */
+    private fun readSaveRegion(address: Int): Int = when (val save = cartridge.save) {
+        is GbaSaveMemory.Sram -> save.read(address)
+        is GbaSaveMemory.Flash -> save.read(address)
+        // Sans mémoire déclarée, la zone se comporte comme une RAM ordinaire.
+        else -> sram[address and MemoryRegion.SRAM.mirrorMask].toInt() and 0xFF
+    }
+
+    private fun writeSaveRegion(address: Int, value: Int) {
+        when (val save = cartridge.save) {
+            is GbaSaveMemory.Sram -> save.write(address, value)
+            is GbaSaveMemory.Flash -> save.write(address, value)
+            else -> sram[address and MemoryRegion.SRAM.mirrorMask] = value.toByte()
+        }
+    }
+
     /** Lecture d'un octet d'E/S ; certains registres reflètent l'état matériel. */
-    private fun readIo(offset: Int): Int = when (offset) {
-        KEYINPUT_LOW -> keypad.keyInput() and 0xFF
-        KEYINPUT_HIGH -> (keypad.keyInput() ushr 8) and 0xFF
-        DISPSTAT_LOW -> ppu?.dispStatLowByte() ?: (io[offset].toInt() and 0xFF)
-        VCOUNT_LOW -> ppu?.vcount ?: (io[offset].toInt() and 0xFF)
-        VCOUNT_HIGH -> 0 // VCOUNT < 228 : octet haut nul
-        else -> io[offset].toInt() and 0xFF
+    private fun readIo(offset: Int): Int {
+        val ic = interrupts
+        val tm = timers
+        return when {
+            offset == KEYINPUT_LOW -> keypad.keyInput() and 0xFF
+            offset == KEYINPUT_HIGH -> (keypad.keyInput() ushr 8) and 0xFF
+            offset == DISPSTAT_LOW -> ppu?.dispStatLowByte() ?: (io[offset].toInt() and 0xFF)
+            offset == VCOUNT_LOW -> ppu?.vcount ?: (io[offset].toInt() and 0xFF)
+            offset == VCOUNT_HIGH -> 0 // VCOUNT < 228 : octet haut nul
+            tm != null && offset in 0x100..0x10F -> readTimerByte(tm, offset)
+            ic != null && offset == IE_LOW -> ic.enable and 0xFF
+            ic != null && offset == IE_HIGH -> (ic.enable ushr 8) and 0xFF
+            ic != null && offset == IF_LOW -> ic.flags and 0xFF
+            ic != null && offset == IF_HIGH -> (ic.flags ushr 8) and 0xFF
+            ic != null && offset == IME -> if (ic.masterEnable) 1 else 0
+            ic != null && offset == IME + 1 -> 0
+            else -> io[offset].toInt() and 0xFF
+        }
+    }
+
+    /** Lecture d'un octet d'un registre de timer (compteur en 0/1, contrôle en 2/3). */
+    private fun readTimerByte(tm: GbaTimers, offset: Int): Int {
+        val timer = (offset - 0x100) / 4
+        return when ((offset - 0x100) % 4) {
+            0 -> tm.counter(timer) and 0xFF
+            1 -> (tm.counter(timer) ushr 8) and 0xFF
+            2 -> tm.control(timer) and 0xFF
+            else -> (tm.control(timer) ushr 8) and 0xFF
+        }
+    }
+
+    /**
+     * Effets de bord des écritures 16 bits vers les registres de contrôle
+     * (interruptions, timers, DMA). Les octets ont déjà été stockés dans [io].
+     */
+    private fun handleIoWrite(offset: Int, value: Int) {
+        when (offset) {
+            IE_LOW -> interrupts?.enable = value
+            IF_LOW -> interrupts?.acknowledge(value)
+            IME -> interrupts?.masterEnable = value and 1 != 0
+            0x100, 0x104, 0x108, 0x10C -> timers?.onReloadWrite((offset - 0x100) / 4, value)
+            0x102, 0x106, 0x10A, 0x10E -> timers?.onControlWrite((offset - 0x100) / 4, value)
+            0x0BA -> dma?.onControlWrite(0, value)
+            0x0C6 -> dma?.onControlWrite(1, value)
+            0x0D2 -> dma?.onControlWrite(2, value)
+            0x0DE -> dma?.onControlWrite(3, value)
+            // Files d'échantillons Direct Sound : les octets sont empilés.
+            0x0A0, 0x0A2 -> apu?.pushFifo(0, value, 2)
+            0x0A4, 0x0A6 -> apu?.pushFifo(1, value, 2)
+            in 0x060..0x09F -> apu?.writeRegister(offset, value)
+        }
     }
 
     // ---- Lectures ----
@@ -66,13 +167,17 @@ class GbaBus(
             MemoryRegion.PALETTE -> paletteRam[address and region.mirrorMask].toInt() and 0xFF
             MemoryRegion.VRAM -> vram[vramOffset(address)].toInt() and 0xFF
             MemoryRegion.OAM -> oam[address and region.mirrorMask].toInt() and 0xFF
-            MemoryRegion.ROM -> cartridge.read8(romOffset(address))
-            MemoryRegion.SRAM -> sram[address and region.mirrorMask].toInt() and 0xFF
+            MemoryRegion.ROM -> readRomRegion(address)
+            MemoryRegion.SRAM -> readSaveRegion(address)
         }
     }
 
     fun read16(address: Int): Int {
         val a = address and 0x1.inv() // alignement demi-mot
+        // Le port EEPROM est sériel : un accès 16 bits transporte un seul bit,
+        // il ne doit donc pas être décomposé en deux lectures d'octet.
+        val eeprom = eeprom()
+        if (eeprom != null && isEepromWindow(a)) return eeprom.read()
         return read8(a) or (read8(a + 1) shl 8)
     }
 
@@ -89,11 +194,12 @@ class GbaBus(
     /** Écrit un octet dans une région, sans le comportement de duplication 8 bits. */
     private fun writeByteRaw(region: MemoryRegion, address: Int, value: Byte) {
         when (region) {
-            MemoryRegion.BIOS, MemoryRegion.ROM -> Unit // lecture seule
+            MemoryRegion.BIOS -> Unit // lecture seule
+            MemoryRegion.ROM -> writeRomRegion(address, value.toInt() and 0xFF)
             MemoryRegion.EWRAM -> ewram[address and region.mirrorMask] = value
             MemoryRegion.IWRAM -> iwram[address and region.mirrorMask] = value
             MemoryRegion.IO -> io[address and region.mirrorMask] = value
-            MemoryRegion.SRAM -> sram[address and region.mirrorMask] = value
+            MemoryRegion.SRAM -> writeSaveRegion(address, value.toInt() and 0xFF)
             MemoryRegion.PALETTE -> paletteRam[address and region.mirrorMask] = value
             MemoryRegion.VRAM -> vram[vramOffset(address)] = value
             MemoryRegion.OAM -> oam[address and region.mirrorMask] = value
@@ -124,9 +230,15 @@ class GbaBus(
 
     fun write16(address: Int, value: Int) {
         val a = address and 0x1.inv()
+        val eeprom = eeprom()
+        if (eeprom != null && isEepromWindow(a)) {
+            eeprom.write(value)
+            return
+        }
         val region = MemoryRegion.of(a) ?: return
         writeByteRaw(region, a, (value and 0xFF).toByte())
         writeByteRaw(region, a + 1, ((value ushr 8) and 0xFF).toByte())
+        if (region == MemoryRegion.IO) handleIoWrite(a and region.mirrorMask, value and 0xFFFF)
     }
 
     fun write32(address: Int, value: Int) {
@@ -142,5 +254,10 @@ class GbaBus(
         const val VCOUNT_HIGH = 0x007
         const val KEYINPUT_LOW = 0x130
         const val KEYINPUT_HIGH = 0x131
+        const val IE_LOW = 0x200
+        const val IE_HIGH = 0x201
+        const val IF_LOW = 0x202
+        const val IF_HIGH = 0x203
+        const val IME = 0x208
     }
 }

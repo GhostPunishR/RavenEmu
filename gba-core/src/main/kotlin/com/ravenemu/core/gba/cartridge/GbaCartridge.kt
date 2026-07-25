@@ -1,5 +1,7 @@
 package com.ravenemu.core.gba.cartridge
 
+import com.ravenemu.core.gba.save.GbaSaveMemory
+import com.ravenemu.core.gba.save.GbaSaveType
 import com.ravenemu.emulation.api.RomLoadException
 
 /**
@@ -17,7 +19,12 @@ import com.ravenemu.emulation.api.RomLoadException
 class GbaCartridge private constructor(
     val rom: ByteArray,
     val header: GbaHeader,
+    /** Type de mémoire de sauvegarde retenu (détecté ou imposé). */
+    val saveType: GbaSaveType,
 ) {
+    /** Mémoire de sauvegarde, ou `null` si la cartouche n'en déclare aucune. */
+    val save: GbaSaveMemory? = GbaSaveMemory.create(saveType)
+
     /** Lit un octet à l'offset ROM (déjà replié par le bus). */
     fun read8(offset: Int): Int =
         if (offset in rom.indices) rom[offset].toInt() and 0xFF else 0
@@ -29,10 +36,12 @@ class GbaCartridge private constructor(
         /**
          * Crée une cartouche à partir des octets d'une ROM.
          *
+         * @param forcedSaveType impose un type de sauvegarde au lieu de la
+         *   détection automatique (réglage par jeu).
          * @throws RomLoadException si la ROM est trop courte, trop volumineuse
          *   ou dépourvue du marqueur GBA `0x96`.
          */
-        fun create(rom: ByteArray): GbaCartridge {
+        fun create(rom: ByteArray, forcedSaveType: GbaSaveType? = null): GbaCartridge {
             if (rom.size > MAX_ROM_SIZE) {
                 throw RomLoadException(
                     "ROM GBA trop volumineuse : ${rom.size} octets (> $MAX_ROM_SIZE)"
@@ -44,7 +53,7 @@ class GbaCartridge private constructor(
                     "Marqueur GBA 0x96 absent : ce fichier n'est pas une ROM Game Boy Advance"
                 )
             }
-            return GbaCartridge(rom, header)
+            return GbaCartridge(rom, header, forcedSaveType ?: GbaSaveType.detect(rom))
         }
     }
 }

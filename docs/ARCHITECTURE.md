@@ -239,7 +239,16 @@ Le CPU ARM7TDMI est modélisé par un état architectural séparé (`CpuState` :
 `R0..R15`, `CPSR`/`SPSR`, modes et **banques de registres**) et un moteur
 (`Arm7Tdmi`) qui délègue à `ArmDecoder` (ARM 32 bits) et `ThumbDecoder`
 (Thumb 16 bits). Le pipeline est simplifié mais exact du point de vue logiciel
-(`R15` lu à `+8`/`+4`). Le plan mémoire (BIOS, EWRAM, IWRAM, E/S, palette,
+(`R15` lu à `+8`/`+4`). Le **jeu d'instructions est désormais quasi complet** :
+traitement de données + barrel shifter + drapeaux, branchements (`B`/`BL`/`BX`),
+`MRS`/`MSR`, transferts simples et demi-mot/signés (`LDR`/`STR`/`LDRH`/`LDRSB`…),
+transferts de blocs (`LDM`/`STM`, quatre modes + réécriture), multiplications
+(`MUL`/`MLA`, longues), échange (`SWP`), et `SWI` via un mécanisme d'**entrée en
+exception** (`raiseException`, réutilisé par l'IRQ à venir) ; côté Thumb, tous
+les formats de chargement/stockage, `PUSH`/`POP`, `LDMIA`/`STMIA`, `MUL` et
+`SWI`. Restent hors périmètre : coprocesseur (inutile sur GBA), livraison
+matérielle des IRQ (dépend du contrôleur d'interruptions), et quelques cas
+limites (temps d'attente précis, banque utilisateur de `LDM/STM^`). Le plan mémoire (BIOS, EWRAM, IWRAM, E/S, palette,
 VRAM, OAM, ROM, SRAM) est géré par `GbaBus` avec accès 8/16/32 bits,
 alignement, rotation des lectures non alignées et zones miroir. Le PPU produit
 un framebuffer **240 × 160 ARGB 8888** que le renderer Android affiche sans
@@ -274,13 +283,111 @@ OAM inférieur passe devant). Le rendu se fait via une **composition par pixel**
 (couleur + priorité de couche). Le framebuffer 240×160 ARGB reste affiché tel
 quel par le renderer.
 
-**Différé aux lots suivants** (limites documentées) : arrière-plans **affines**
-(modes 1/2, rotation/mise à l'échelle), **sprites affines** (rotation/mise à
-l'échelle des OBJ), fenêtres, mosaïque,
-alpha blending, luminosité ; jeu d'instructions complet (multiplication,
-`LDM`/`STM`, transferts demi-mot/signés, `SWP`, `SWI`, interruptions
-matérielles), **interruptions** VBlank/HBlank/VCount et clavier (les drapeaux
-d'état existent, mais le contrôleur d'IRQ manque), BIOS (fourni par
-l'utilisateur, validé par taille et empreinte, ou HLE RavenEmu), DMA, timers,
-audio, mémoires de sauvegarde réelles (SRAM, Flash, EEPROM), temps d'attente
-précis, et raffinements d'interface (filtre par console, détails GBA enrichis).
+**Événements matériels** : un **contrôleur d'interruptions** (`GbaInterruptController` :
+`IE`/`IF`/`IME`, `IF` en écriture-pour-effacer) centralise les sources ; le PPU
+lève VBlank/HBlank/coïncidence VCount (si activées dans `DISPSTAT`), les **timers**
+et les **DMA** lèvent les leurs. Les **quatre timers** (`GbaTimers`) gèrent
+prédiviseur (1/64/256/1024), mode cascade et IRQ de débordement. Les **quatre
+canaux DMA** (`DmaController`) copient en mots de 16/32 bits avec contrôle
+d'adresse (incrément/décrément/fixe), répétition et IRQ, déclenchés en immédiat,
+VBlank ou HBlank. La **boucle machine** livre l'exception IRQ (vecteur `0x18`)
+avant chaque instruction quand une interruption autorisée est en attente et que
+le drapeau `I` du CPU est dégagé.
+
+**BIOS HLE** : RavenEmu ne distribue **aucun BIOS Nintendo**. Un BIOS de
+substitution (`GbaBios`) est écrit intégralement à partir de la documentation
+publique et remplit deux rôles.
+
+D'abord un **gestionnaire d'interruption** : un court programme ARM, assemblé
+par RavenEmu, est installé au vecteur IRQ `0x18`. Il sauvegarde le contexte, lit
+l'adresse du gestionnaire du jeu en `0x0300_7FFC` (miroir de `0x03FF_FFFC`),
+l'appelle, restaure puis retourne par `subs pc, lr, #4` — le comportement
+documenté du BIOS. C'est cette pièce qui referme la chaîne : une source lève son
+IRQ, la boucle machine prend l'exception, le handler BIOS appelle **le code du
+jeu**.
+
+Ensuite les **appels logiciels `SWI`**, interceptés en haut niveau
+(`Arm7Tdmi.swiHandler`) plutôt que routés vers le vecteur `0x08` : `Div`,
+`DivArm`, `Sqrt`, `CpuSet`, `CpuFastSet`, et `Halt`/`Stop`/`IntrWait`/
+`VBlankIntrWait` qui posent le drapeau **`halted`** du CPU. En pause, la boucle
+machine n'exécute plus d'instruction mais continue d'avancer PPU et timers,
+jusqu'à ce qu'une interruption activée réveille le processeur. Les appels non
+implémentés (`SoftReset`, `RegisterRamReset`, décompression…) sont sans effet.
+Un BIOS **fourni par l'utilisateur** (sélection SAF, validation par taille et
+empreinte) reste une option prévue mais non implémentée.
+
+**Vidéo affine, fenêtres et effets de couleur** : les arrière-plans **affines**
+(`BG2` en mode 1, `BG2`/`BG3` en mode 2) sont rendus à partir d'un point de
+référence interne — rechargé depuis `BGxX`/`BGxY` au VBlank puis incrémenté de
+`PB`/`PD` à chaque ligne, comme sur le matériel — et des paramètres `PA`–`PD` en
+virgule fixe 8.8 ; la carte affine tient sur un octet par tuile, en 8 bpp, avec
+répétition optionnelle. Les **sprites affines** appliquent la matrice du groupe
+`attr3` désigné, avec ou sans emprise doublée. Les **fenêtres** (`WIN0`, `WIN1`,
+fenêtre objet, `WININ`/`WINOUT`) produisent un masque par pixel indiquant les
+couches visibles et l'autorisation des effets ; les bornes qui s'inversent
+enroulent la fenêtre. Les **effets de couleur** (`BLDCNT`/`BLDALPHA`/`BLDY`)
+couvrent le mélange alpha, l'éclaircissement et l'assombrissement, les sprites
+**semi-transparents** imposant le mélange quel que soit le mode programmé.
+
+Ces effets exigent de connaître les **deux couches supérieures** de chaque
+pixel : la composition maintient donc, par pixel, la couleur/priorité/identité
+de la couche visible et de celle juste derrière. Simplification documentée :
+lorsqu'un sprite s'intercale, il remplace la seconde couche plutôt que de
+réordonner une pile complète.
+
+**Audio** : `GbaApu` réunit les **quatre canaux PSG** hérités de la Game Boy
+(deux ondes carrées avec enveloppe et balayage, table d'onde, bruit à registre à
+décalage), réécrits pour `gba-core` afin que **`gameboy-core` reste autonome** —
+aucune dépendance entre les deux moteurs — et les **deux canaux Direct Sound**.
+Ceux-ci rejouent du PCM 8 bits signé dépilé d'une **FIFO de 32 octets** : chaque
+canal est cadencé par le timer 0 ou 1, consomme un échantillon à chaque
+débordement, et réclame son réapprovisionnement au **DMA en mode son** (canaux 1
+et 2, temporisation spéciale, quatre mots par transfert vers l'adresse de FIFO)
+dès que sa file passe sous la moitié. Le mixage suit `SOUNDCNT_L/H/X` (volumes
+et panoramique PSG, proportion PSG/Direct Sound, volumes et panoramique Direct
+Sound) et produit du PCM stéréo 16 bits à 32 768 Hz, drainé par `readAudio` — le
+même contrat que la Game Boy, donc la même sortie Android.
+
+L'horloge audio vaut le quart de l'horloge CPU, ce qui redonne les formules de
+période de la Game Boy et un séquenceur de trames à 512 Hz. Les oscillateurs
+n'avancent jamais au-delà du prochain point d'échantillonnage : sans cet
+entrelacement, une salve d'échantillons observerait un état figé des canaux.
+
+Limites documentées : RAM d'onde traitée comme une **banque unique** (le double
+banc du GBA n'est pas émulé), `SOUNDBIAS` et le rééchantillonnage matériel non
+émulés, modes obscurs des canaux PSG absents.
+
+**Sauvegardes de cartouche** : le type de mémoire est **détecté** dans la ROM à
+partir des chaînes laissées par les bibliothèques officielles (`SRAM_V`,
+`FLASH_V`, `FLASH512_V`, `FLASH1M_V`, `EEPROM_V`) et reste **remplaçable
+manuellement** (`GbaCore.forcedSaveType`), la détection ne pouvant pas trancher
+tous les cas. Trois familles sont émulées :
+
+- **SRAM** 32 Kio : accès direct par octet ;
+- **Flash** 64/128 Kio : machine à états de commandes (`0xAA`/`0x55` puis code
+  d'opération) couvrant l'écriture d'octet, l'effacement total et par secteur de
+  4 Kio, le mode identification (constructeur/modèle) et, en 128 Kio, la
+  commutation de bancs ; une Flash vierge vaut `0xFF` ;
+- **EEPROM** 512 o / 8 Kio : protocole **série**, un bit par accès 16 bits,
+  commandes de lecture (`11`) et d'écriture (`10`) suivies de l'adresse (6 ou
+  14 bits) et, en écriture, de 64 bits de données. La largeur d'adresse est
+  déduite de la **longueur du transfert DMA**, comme le font les jeux.
+
+Le contenu est exposé au format `.sav` **brut** via le contrat commun
+(`hasBatteryRam`, `batteryRamDirty`, `exportBatteryRam`, et restauration à
+`loadRom`), donc l'écriture atomique de `SaveFileStore` s'applique sans
+changement ; il est aussi inclus dans les états instantanés. La mémoire survit à
+un `reset` (power-cycle).
+
+**Interface Android** : la bibliothèque se **filtre par console**, chaque entrée
+indique la sienne, et les détails d'une ROM GBA affichent code jeu, validité
+d'en-tête et type de sauvegarde. Ce dernier est **réglable par jeu** (détection
+automatique ou type imposé) : le choix est mémorisé par empreinte SHA-256 et
+transmis au moteur à la création, via la fabrique. Les dispositions tactiles
+sont enregistrées **par orientation et par console**, si bien que les gâchettes
+`L`/`R` de la Game Boy Advance n'altèrent pas la disposition Game Boy.
+
+**Différé** (limites documentées) : mosaïque, effets mid-scanline ; appels BIOS
+restants et BIOS externe ; DMA de capture vidéo, IRQ clavier/série ; temps
+d'attente précis. La **compatibilité commerciale reste à valider sur matériel
+réel** : le moteur n'a été éprouvé que sur des ROM synthétiques.

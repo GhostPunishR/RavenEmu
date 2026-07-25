@@ -21,6 +21,8 @@ import com.google.android.material.appbar.MaterialToolbar
 import com.ravenemu.app.emulation.EmulationActivity
 import com.ravenemu.app.library.RomAdapter
 import com.ravenemu.app.settings.SettingsActivity
+import com.ravenemu.core.gba.save.GbaSaveType
+import com.ravenemu.emulation.api.ConsoleType
 import com.ravenemu.romlibrary.RomEntry
 import com.ravenemu.romlibrary.RomIndex
 import com.ravenemu.romlibrary.RomStatus
@@ -172,6 +174,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun visibleEntries(): List<RomEntry> {
         var entries = index.entries
+        val consoleFilter = settings.libraryConsoleFilter
+        if (consoleFilter != "all") {
+            entries = entries.filter { it.console.name == consoleFilter }
+        }
         if (searchQuery.isNotBlank()) {
             val query = searchQuery.trim()
             entries = entries.filter {
@@ -199,14 +205,19 @@ class MainActivity : AppCompatActivity() {
 
     private fun showEntryOptions(entry: RomEntry) {
         val isHomebrew = entry.userStatusOverride == RomStatus.HOMEBREW
-        val options = arrayOf(
-            getString(R.string.library_rom_details),
-            getString(R.string.library_choose_cover),
-            getString(
-                if (isHomebrew) R.string.library_unmark_homebrew
-                else R.string.library_mark_homebrew
-            ),
-        )
+        val isGba = entry.console == ConsoleType.GAME_BOY_ADVANCE
+        val options = buildList {
+            add(getString(R.string.library_rom_details))
+            add(getString(R.string.library_choose_cover))
+            add(
+                getString(
+                    if (isHomebrew) R.string.library_unmark_homebrew
+                    else R.string.library_mark_homebrew
+                )
+            )
+            // Le type de sauvegarde n'a de sens que pour la Game Boy Advance.
+            if (isGba) add(getString(R.string.library_save_type))
+        }.toTypedArray()
         AlertDialog.Builder(this)
             .setTitle(entry.displayName)
             .setItems(options) { _, which ->
@@ -225,7 +236,45 @@ class MainActivity : AppCompatActivity() {
                         )
                         render()
                     }
+                    3 -> showSaveTypeDialog(entry)
                 }
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    /** Libellé du type de sauvegarde : choix utilisateur ou détection. */
+    private fun saveTypeLabel(entry: RomEntry): String {
+        val forced = settings.forcedSaveType(entry.fingerprints.sha256)
+        val effective = forced ?: entry.saveType.ifBlank { GbaSaveType.NONE.name }
+        val label = runCatching { GbaSaveType.valueOf(effective) }
+            .getOrDefault(GbaSaveType.NONE)
+            .displayName
+        return if (forced != null) getString(R.string.library_save_type_forced, label) else label
+    }
+
+    /**
+     * Choix du type de mémoire de sauvegarde d'un jeu Game Boy Advance : la
+     * détection automatique ne peut pas trancher tous les cas.
+     */
+    private fun showSaveTypeDialog(entry: RomEntry) {
+        val types = GbaSaveType.entries
+        val labels = buildList {
+            add(getString(R.string.library_save_type_auto))
+            types.forEach { add(it.displayName) }
+        }.toTypedArray()
+        val current = settings.forcedSaveType(entry.fingerprints.sha256)
+        val checked = if (current == null) 0 else types.indexOfFirst { it.name == current } + 1
+
+        AlertDialog.Builder(this)
+            .setTitle(R.string.library_save_type)
+            .setSingleChoiceItems(labels, checked) { dialog, which ->
+                settings.setForcedSaveType(
+                    entry.fingerprints.sha256,
+                    if (which == 0) null else types[which - 1].name,
+                )
+                dialog.dismiss()
+                render()
             }
             .setNegativeButton(R.string.cancel, null)
             .show()
@@ -236,8 +285,12 @@ class MainActivity : AppCompatActivity() {
             appendLine(entry.fileName)
             appendLine("Console : ${entry.console.displayName}")
             appendLine("${entry.sizeBytes / 1024} Kio")
-            if (entry.console == com.ravenemu.emulation.api.ConsoleType.GAME_BOY_ADVANCE) {
+            if (entry.console == ConsoleType.GAME_BOY_ADVANCE) {
                 if (entry.gameCode.isNotBlank()) appendLine("Code jeu : ${entry.gameCode}")
+                appendLine("Sauvegarde : ${saveTypeLabel(entry)}")
+                appendLine(
+                    "En-tête : ${if (entry.headerChecksumValid) "valide" else "somme incorrecte"}"
+                )
             } else {
                 appendLine("Région : ${entry.region.displayName}")
                 appendLine("MBC : ${entry.mbcType.displayName}")
@@ -276,6 +329,11 @@ class MainActivity : AppCompatActivity() {
         return true
     }
 
+    private fun applyConsoleFilter(console: String) {
+        settings.libraryConsoleFilter = console
+        render()
+    }
+
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
             R.id.action_refresh -> refreshLibrary()
@@ -298,6 +356,9 @@ class MainActivity : AppCompatActivity() {
                 settings.librarySortOrder = "status"
                 render()
             }
+            R.id.action_filter_all -> applyConsoleFilter("all")
+            R.id.action_filter_gb -> applyConsoleFilter(ConsoleType.GAME_BOY.name)
+            R.id.action_filter_gba -> applyConsoleFilter(ConsoleType.GAME_BOY_ADVANCE.name)
             R.id.action_settings ->
                 startActivity(Intent(this, SettingsActivity::class.java))
             else -> return super.onOptionsItemSelected(item)

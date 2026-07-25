@@ -56,7 +56,7 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
     private lateinit var editorPanel: View
 
     private val gamepad = GamepadMapper()
-    private val coreFactory = RavenEmulatorCoreFactory()
+
     private var core: EmulatorCore? = null
     private var session: EmulationSession? = null
 
@@ -141,6 +141,10 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
 
     // ---- Profils de commandes ----
 
+    /** Suffixe de profil propre à la console : la GBA a ses propres commandes. */
+    private fun consoleKey(): String =
+        if (console == ConsoleType.GAME_BOY_ADVANCE) "gba" else "gb"
+
     private fun orientationKey(): String =
         if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) {
             "landscape"
@@ -148,13 +152,14 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
             "portrait"
         }
 
-    private fun perGameProfileKey(): String = "${romSha256}_${orientationKey()}"
+    private fun perGameProfileKey(): String =
+        "${romSha256}_${orientationKey()}_${consoleKey()}"
 
     private fun hasPerGameProfile(): Boolean =
         settings.controlLayout(perGameProfileKey()) != null
 
     private fun activeProfileKey(): String =
-        if (hasPerGameProfile()) perGameProfileKey() else orientationKey()
+        if (hasPerGameProfile()) perGameProfileKey() else "${orientationKey()}_${consoleKey()}"
 
     private fun defaultLayout(): ControlLayout {
         // Les gâchettes L/R ne sont affichées que pour les consoles qui en ont
@@ -206,7 +211,9 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
     }
 
     private fun startEmulation(rom: ByteArray) {
-        val newCore = coreFactory.create(console)
+        // La fabrique reçoit le réglage de sauvegarde propre à ce jeu.
+        val newCore = RavenEmulatorCoreFactory(settings.forcedSaveType(romSha256))
+            .create(console)
         try {
             val battery = saveStore.read(romSha256, romFileName, settings.saveDirectory)
             newCore.loadRom(rom, battery)

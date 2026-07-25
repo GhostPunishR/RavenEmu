@@ -23,6 +23,13 @@ class Arm7Tdmi(val bus: GbaBus) {
 
     val state = CpuState()
 
+    /**
+     * Gestionnaire d'appels logiciels en haut niveau (BIOS HLE). S'il est
+     * présent, une instruction `SWI` est traitée directement au lieu de
+     * déclencher l'exception superviseur (le BIOS Nintendo n'étant pas fourni).
+     */
+    var swiHandler: SwiHandler? = null
+
     private val armDecoder = ArmDecoder(this)
     private val thumbDecoder = ThumbDecoder(this)
 
@@ -72,6 +79,32 @@ class Arm7Tdmi(val bus: GbaBus) {
     fun branchExchange(address: Int) {
         state.thumb = (address and 1) != 0
         state.regs[15] = if (state.thumb) address and 1.inv() else address and 3.inv()
+        branched = true
+    }
+
+    /**
+     * Entrée en exception : bascule vers [mode], sauvegarde le CPSR dans le SPSR
+     * du mode, place l'adresse de retour dans `LR`, masque les IRQ, repasse en
+     * ARM et saute au vecteur [vector]. Utilisé par `SWI` et l'interruption IRQ.
+     */
+    /**
+     * Exécute un `SWI` : délégué au [swiHandler] HLE s'il existe (l'exécution
+     * reprend à l'instruction suivante), sinon entrée en exception superviseur.
+     */
+    fun executeSwi(number: Int, returnAddress: Int) {
+        val handler = swiHandler
+        if (handler != null) handler.handleSwi(number)
+        else raiseException(CpuState.MODE_SUPERVISOR, VECTOR_SWI, returnAddress)
+    }
+
+    fun raiseException(mode: Int, vector: Int, returnAddress: Int) {
+        val savedCpsr = state.cpsr()
+        state.switchMode(mode)
+        state.setSpsr(savedCpsr)
+        state.regs[14] = returnAddress
+        state.irqDisabled = true
+        state.thumb = false
+        state.regs[15] = vector
         branched = true
     }
 
@@ -253,5 +286,23 @@ class Arm7Tdmi(val bus: GbaBus) {
     fun setNZ(result: Int) {
         state.negative = result < 0
         state.zero = result == 0
+    }
+
+    /**
+     * Lecture d'un mot avec la rotation ARM des adresses non alignées : le mot
+     * aligné est lu puis tourné selon les deux bits de poids faible.
+     */
+    fun loadWordRotated(address: Int): Int {
+        val word = bus.read32(address and 3.inv())
+        val rotate = (address and 3) * 8
+        return if (rotate == 0) word else (word ushr rotate) or (word shl (32 - rotate))
+    }
+
+    companion object {
+        /** Vecteur d'exception `SWI` (mode superviseur). */
+        const val VECTOR_SWI = 0x08
+
+        /** Vecteur d'exception IRQ. */
+        const val VECTOR_IRQ = 0x18
     }
 }

@@ -22,9 +22,15 @@ import java.io.IOException
 object GbaState {
 
     private const val MAGIC = 0x52564E53 // "RVNS"
-    /** Version 2 : état temporel et framebuffer PPU inclus. */
-    private const val VERSION = 2
+    /**
+     * Version 6 : état PPU complet (dont les points de référence affines),
+     * interruptions, timers, DMA, pause CPU (`halted`, posée par les appels BIOS
+     * `Halt`/`IntrWait`) et mémoire de sauvegarde de la cartouche.
+     */
+    private const val VERSION = 6
     private const val BANK_WORDS = 28 // CpuState.exportBanks(): 6*3 + 10
+    private const val TIMER_STATE_WORDS = 16
+    private const val DMA_STATE_WORDS = 8
 
     /** Taille maximale acceptée pour un état (garde-fou anti-« fichier trop volumineux »). */
     private const val MAX_STATE_SIZE = 1 shl 20 // 1 Mio
@@ -42,6 +48,7 @@ object GbaState {
         val banks = state.exportBanks()
         for (i in 0 until 16) out.writeInt(state.regs[i])
         out.writeInt(state.cpsr())
+        out.writeBoolean(state.halted)
         out.writeInt(banks.size)
         for (v in banks) out.writeInt(v)
 
@@ -59,6 +66,18 @@ object GbaState {
         out.writeInt(ppuFields.size)
         for (field in ppuFields) out.writeInt(field)
         for (pixel in machine.ppu.frame) out.writeInt(pixel)
+
+        out.writeInt(machine.interrupts.enable)
+        out.writeInt(machine.interrupts.flags)
+        out.writeBoolean(machine.interrupts.masterEnable)
+        for (value in machine.timers.exportState()) out.writeInt(value)
+        for (value in machine.dma.exportState()) out.writeInt(value)
+
+        // Mémoire de sauvegarde : longueur puis contenu (vide si absente).
+        val save = machine.cartridge.save
+        val saveData = save?.export() ?: ByteArray(0)
+        out.writeInt(saveData.size)
+        out.write(saveData)
 
         out.flush()
         return buffer.toByteArray()
@@ -91,6 +110,7 @@ object GbaState {
             // Lecture dans des tampons locaux (rien n'est encore appliqué).
             val regs = IntArray(16) { input.readInt() }
             val cpsr = input.readInt()
+            val halted = input.readBoolean()
             val bankCount = input.readInt()
             if (bankCount != BANK_WORDS) {
                 throw SaveStateException("État instantané corrompu (banques)")
@@ -113,6 +133,18 @@ object GbaState {
             }
             val ppuFields = IntArray(ppuFieldCount) { input.readInt() }
             val ppuFrame = IntArray(machine.ppu.frame.size) { input.readInt() }
+
+            val interruptEnable = input.readInt()
+            val interruptFlags = input.readInt()
+            val interruptMasterEnable = input.readBoolean()
+            val timerState = IntArray(TIMER_STATE_WORDS) { input.readInt() }
+            val dmaState = IntArray(DMA_STATE_WORDS) { input.readInt() }
+            val saveSize = input.readInt()
+            val expectedSaveSize = machine.cartridge.save?.data?.size ?: 0
+            if (saveSize != expectedSaveSize) {
+                throw SaveStateException("État instantané corrompu (sauvegarde)")
+            }
+            val saveData = ByteArray(saveSize).also(input::readFully)
             if (input.read() != -1) {
                 throw SaveStateException("État instantané corrompu (données excédentaires)")
             }
@@ -124,6 +156,7 @@ object GbaState {
             val state = machine.cpu.state
             state.importBanks(banks)
             state.setControlRaw(cpsr)
+            state.halted = halted
             for (i in 0 until 16) state.regs[i] = regs[i]
 
             ewram.copyInto(bus.ewram)
@@ -135,6 +168,12 @@ object GbaState {
             sram.copyInto(bus.sram)
             bus.keypad.pressedBits = keypadBits
             ppuFrame.copyInto(machine.ppu.frame)
+            machine.interrupts.enable = interruptEnable
+            machine.interrupts.flags = interruptFlags
+            machine.interrupts.masterEnable = interruptMasterEnable
+            machine.timers.importState(timerState)
+            machine.dma.importState(dmaState)
+            if (saveData.isNotEmpty()) machine.cartridge.save?.import(saveData)
         } catch (e: SaveStateException) {
             throw e
         } catch (e: IOException) {

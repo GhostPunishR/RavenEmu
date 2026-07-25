@@ -77,8 +77,12 @@ class SettingsActivity : AppCompatActivity() {
 
             findPreference<Preference>("controls_reset_layouts")
                 ?.setOnPreferenceClickListener {
-                    for (profile in listOf("portrait", "landscape")) {
-                        settings.resetControlLayout(profile)
+                    // Une disposition par orientation et par console : la Game
+                    // Boy Advance a ses propres gâchettes L/R.
+                    for (orientation in listOf("portrait", "landscape")) {
+                        for (consoleKey in listOf("gb", "gba")) {
+                            settings.resetControlLayout("${orientation}_$consoleKey")
+                        }
                     }
                     Toast.makeText(
                         requireContext(),

@@ -35,14 +35,24 @@ class GbaStateTest {
     }
 
     @Test
-    fun `sauvegarde puis restauration retablit le PPU complet`() {
+    fun `sauvegarde puis restauration retablit le PPU et les peripheriques`() {
         val core = loadedCore()
         val machine = core.machine!!
         machine.ppu.tick(1_000)
+        machine.interrupts.enable = 0x1234
+        machine.interrupts.flags = 0x0055
+        machine.interrupts.masterEnable = true
+        machine.timers.onReloadWrite(0, 0xFFFC)
+        machine.timers.onControlWrite(0, 0x0080)
+        machine.timers.tick(2)
         val state = core.saveState()
 
         machine.ppu.tick(50_000)
         machine.ppu.frame.fill(0x1234_5678)
+        machine.interrupts.enable = 0
+        machine.interrupts.flags = 0
+        machine.interrupts.masterEnable = false
+        machine.timers.reset()
         core.loadState(state)
 
         assertContentEquals(state, core.saveState())
