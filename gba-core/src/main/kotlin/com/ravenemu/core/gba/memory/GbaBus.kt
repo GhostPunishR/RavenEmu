@@ -56,6 +56,62 @@ class GbaBus(
     /** Unité audio (registres 0x60–0xA7), rattachée après construction. */
     var apu: GbaApu? = null
 
+    /** Modèle de temps d'attente des régions mémoire, piloté par `WAITCNT`. */
+    val timing = MemoryTiming()
+
+    /**
+     * Cycles d'attente accumulés par les accès depuis le dernier [takeWaitCycles].
+     * Le CPU et le DMA les récupèrent pour facturer leurs accès.
+     */
+    var waitCycles = 0
+        private set
+
+    /**
+     * Adresse qu'un accès doit viser pour être qualifié de **séquentiel**, c'est-à-dire
+     * la fin de l'accès précédent. `-1` force un accès non séquentiel.
+     */
+    private var nextSequentialAddress = -1
+
+    /** Prochain accès facturé comme lecture d'instruction (préchargement Game Pak). */
+    private var fetchAccess = false
+
+    /** Récupère et remet à zéro les cycles d'attente accumulés. */
+    fun takeWaitCycles(): Int {
+        val value = waitCycles
+        waitCycles = 0
+        return value
+    }
+
+    /**
+     * Marque le prochain accès comme lecture d'instruction : seul ce type d'accès
+     * bénéficie de la file de préchargement de la cartouche.
+     */
+    fun markInstructionFetch() {
+        fetchAccess = true
+    }
+
+    /** Casse la chaîne séquentielle : saut, changement de maître du bus, réveil. */
+    fun breakAccessSequence() {
+        nextSequentialAddress = -1
+    }
+
+    /** Facture un accès de [width] octets à [address] dans [waitCycles]. */
+    private fun account(address: Int, width: Int) {
+        val sequential = address == nextSequentialAddress
+        waitCycles += if (fetchAccess) {
+            timing.instructionWaitStates(address, width, sequential)
+        } else {
+            timing.waitStates(address, width, sequential)
+        }
+        fetchAccess = false
+        nextSequentialAddress = address + width
+    }
+
+    /** Réaligne le modèle de temps d'attente sur le contenu courant de [io]. */
+    fun syncTimingFromIo() {
+        timing.waitControl = ioRegister(MemoryTiming.WAITCNT_OFFSET)
+    }
+
     /** Replie une adresse VRAM (96 Kio) : blocs de 128 Kio dont les 32 derniers Kio recopient les précédents. */
     private fun vramOffset(address: Int): Int {
         var offset = address and 0x1_FFFF
@@ -147,6 +203,7 @@ class GbaBus(
             IE_LOW -> interrupts?.enable = value
             IF_LOW -> interrupts?.acknowledge(value)
             IME -> interrupts?.masterEnable = value and 1 != 0
+            MemoryTiming.WAITCNT_OFFSET -> timing.waitControl = value
             0x100, 0x104, 0x108, 0x10C -> timers?.onReloadWrite((offset - 0x100) / 4, value)
             0x102, 0x106, 0x10A, 0x10E -> timers?.onControlWrite((offset - 0x100) / 4, value)
             0x0BA -> dma?.onControlWrite(0, value)
@@ -188,6 +245,12 @@ class GbaBus(
     // ---- Lectures ----
 
     fun read8(address: Int): Int {
+        account(address, 1)
+        return read8Raw(address)
+    }
+
+    /** Lecture d'un octet **sans facturation** : brique des accès plus larges. */
+    private fun read8Raw(address: Int): Int {
         val region = MemoryRegion.of(address) ?: return 0
         return when (region) {
             MemoryRegion.BIOS -> bios[address and region.mirrorMask].toInt() and 0xFF
@@ -204,6 +267,7 @@ class GbaBus(
 
     fun read16(address: Int): Int {
         val a = address and 0x1.inv() // alignement demi-mot
+        account(a, 2)
         // Le port EEPROM est sériel : un accès 16 bits transporte un seul bit,
         // il ne doit donc pas être décomposé en deux lectures d'octet.
         val eeprom = eeprom()
@@ -215,11 +279,12 @@ class GbaBus(
             val i = directOffset(a)
             return (block[i].toInt() and 0xFF) or ((block[i + 1].toInt() and 0xFF) shl 8)
         }
-        return read8(a) or (read8(a + 1) shl 8)
+        return read8Raw(a) or (read8Raw(a + 1) shl 8)
     }
 
     fun read32(address: Int): Int {
         val a = address and 0x3.inv() // alignement mot
+        account(a, 4)
         // Chemin rapide : décisif pour la vitesse, le CPU lisant ici chaque
         // instruction et chaque mot de données.
         val block = directBlock(a)
@@ -230,10 +295,10 @@ class GbaBus(
                 ((block[i + 2].toInt() and 0xFF) shl 16) or
                 ((block[i + 3].toInt() and 0xFF) shl 24)
         }
-        return read8(a) or
-            (read8(a + 1) shl 8) or
-            (read8(a + 2) shl 16) or
-            (read8(a + 3) shl 24)
+        return read8Raw(a) or
+            (read8Raw(a + 1) shl 8) or
+            (read8Raw(a + 2) shl 16) or
+            (read8Raw(a + 3) shl 24)
     }
 
     /**
@@ -284,6 +349,12 @@ class GbaBus(
     }
 
     fun write8(address: Int, value: Int) {
+        account(address, 1)
+        write8Raw(address, value)
+    }
+
+    /** Écriture d'un octet **sans facturation**. */
+    private fun write8Raw(address: Int, value: Int) {
         val region = MemoryRegion.of(address) ?: return
         val v = (value and 0xFF).toByte()
         when (region) {
@@ -314,6 +385,12 @@ class GbaBus(
 
     fun write16(address: Int, value: Int) {
         val a = address and 0x1.inv()
+        account(a, 2)
+        write16Raw(a, value)
+    }
+
+    /** Écriture d'un demi-mot aligné **sans facturation**. */
+    private fun write16Raw(a: Int, value: Int) {
         val eeprom = eeprom()
         if (eeprom != null && isEepromWindow(a)) {
             eeprom.write(value)
@@ -329,6 +406,7 @@ class GbaBus(
 
     fun write32(address: Int, value: Int) {
         val a = address and 0x3.inv()
+        account(a, 4)
         if ((a ushr 24) and 0xFF == 0x04) {
             // E/S : les quatre octets sont stockés, puis les deux registres
             // 16 bits couverts sont notifiés dans l'ordre croissant.
@@ -348,8 +426,8 @@ class GbaBus(
             block[i + 3] = ((value ushr 24) and 0xFF).toByte()
             return
         }
-        write16(a, value and 0xFFFF)
-        write16(a + 2, (value ushr 16) and 0xFFFF)
+        write16Raw(a, value and 0xFFFF)
+        write16Raw(a + 2, (value ushr 16) and 0xFFFF)
     }
 
     private companion object {

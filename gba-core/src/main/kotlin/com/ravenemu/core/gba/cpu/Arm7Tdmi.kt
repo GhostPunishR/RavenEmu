@@ -109,12 +109,18 @@ class Arm7Tdmi(val bus: GbaBus) {
     }
 
     /**
-     * Exécute une instruction et retourne un coût en cycles (approximatif dans
-     * ce premier lot : le comptage exact des temps d'attente est différé).
+     * Exécute une instruction et retourne son coût en cycles : le coût nominal
+     * de l'instruction (cycles internes et accès sans attente) auquel s'ajoutent
+     * les **temps d'attente** réellement facturés par le bus pour la lecture de
+     * l'instruction et ses accès aux données. Une boucle en IWRAM garde donc son
+     * coût nominal, tandis que la même boucle en EWRAM ou en ROM cartouche coûte
+     * ce que `WAITCNT` impose.
      */
     fun step(): Int {
         branched = false
+        bus.takeWaitCycles() // ne facture pas les cycles d'un autre maître du bus
         val cost: Int
+        bus.markInstructionFetch()
         if (state.thumb) {
             val instr = bus.read16(state.regs[15]) and 0xFFFF
             cost = thumbDecoder.execute(instr)
@@ -128,7 +134,9 @@ class Arm7Tdmi(val bus: GbaBus) {
             }
             if (!branched) state.regs[15] += 4
         }
-        return cost
+        // Un saut vide le pipeline : la lecture suivante est non séquentielle.
+        if (branched) bus.breakAccessSequence()
+        return cost + bus.takeWaitCycles()
     }
 
     /** Évalue le champ de condition ARM (bits 31–28). */

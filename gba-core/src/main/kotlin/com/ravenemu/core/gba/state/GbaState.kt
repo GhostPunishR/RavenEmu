@@ -172,6 +172,9 @@ object GbaState {
             ewram.copyInto(bus.ewram)
             iwram.copyInto(bus.iwram)
             io.copyInto(bus.io)
+            // `WAITCNT` est dupliqué dans le modèle de temps d'attente : il faut
+            // le réaligner sur les registres restaurés.
+            bus.syncTimingFromIo()
             palette.copyInto(bus.paletteRam)
             vram.copyInto(bus.vram)
             oam.copyInto(bus.oam)
