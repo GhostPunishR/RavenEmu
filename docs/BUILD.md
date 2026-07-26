@@ -1,24 +1,24 @@
-# RavenEmu — Compilation
+# RavenEmu : compilation
 
 ## Prérequis
 
-- JDK 17 ou plus récent (le projet cible le bytecode Java 17).
+- JDK 17 ou plus récent, le projet cible le bytecode Java 17.
 - Gradle Wrapper fourni (`./gradlew`), Gradle 8.14.3.
-- SDK Android (compileSdk 35) **uniquement** pour les modules Android :
-  variable `ANDROID_HOME`/`ANDROID_SDK_ROOT` ou `local.properties` avec
+- SDK Android avec compileSdk 35 uniquement pour les modules Android :
+  variable `ANDROID_HOME` ou `ANDROID_SDK_ROOT`, ou `local.properties` avec
   `sdk.dir=…`.
 
 Sans SDK Android, `settings.gradle.kts` n'inclut que les modules JVM
-(`emulation-api`, `gameboy-core`, `rom-library`) : le moteur se construit et
-se teste sur n'importe quelle machine.
+(`emulation-api`, `gameboy-core`, `gba-core`, `rom-library`) : les moteurs se
+construisent et se testent sur une machine sans environnement Android complet.
 
 ## Commandes
 
 ```bash
-# Tests unitaires (tous modules inclus dans le build courant)
+# Tests unitaires des modules inclus dans le build courant
 ./gradlew test
 
-# Tests des seuls modules JVM
+# Tests des modules JVM
 ./gradlew jvmTest
 
 # Analyse lint des modules Android
@@ -26,37 +26,47 @@ se teste sur n'importe quelle machine.
 
 # APK Debug
 ./gradlew assembleDebug
-# → app/build/outputs/apk/debug/app-debug.apk
+# Fichier : app/build/outputs/apk/debug/app-debug.apk
 
-# APK Release (signé si les variables de signature sont présentes)
+# APK Release, signé si les variables de signature sont présentes
 ./gradlew assembleRelease
-# → app/build/outputs/apk/release/app-release.apk
+# Fichier : app/build/outputs/apk/release/app-release.apk
 
-# App Bundle Release (.aab) pour le Play Store (même signature)
+# App Bundle Release pour le Play Store
 ./gradlew bundleRelease
-# → app/build/outputs/bundle/release/app-release.aab
+# Fichier : app/build/outputs/bundle/release/app-release.aab
 ```
 
-## App Bundle (.aab)
+## App Bundle
 
-`bundleRelease` produit un **Android App Bundle** signé avec la même
-configuration que l'APK Release. À partir de ce bundle, le Play Store génère
-des APK optimisés par appareil (densité, langue). Le moteur étant en Kotlin
-pur (aucune bibliothèque native), le découpage par ABI est sans objet ; le
-bloc `bundle { … }` de `app/build.gradle.kts` conserve les découpages par
-densité et par langue.
+`bundleRelease` produit un Android App Bundle signé avec la même configuration
+que l'APK Release. À partir de ce bundle, le Play Store génère des APK optimisés
+par appareil, notamment pour la densité et la langue.
 
-Un `.aab` **ne s'installe pas directement** sur un appareil : il se téléverse
-sur la Play Console, ou se convertit localement en APK installables avec
-[`bundletool`](https://developer.android.com/tools/bundletool)
-(`bundletool build-apks --bundle=app-release.aab --output=app.apks …`). Pour
-une installation directe, utilisez l'APK (Debug ou Release).
+Le moteur étant en Kotlin pur, sans bibliothèque native, le découpage par ABI
+n'est pas nécessaire. Le bloc `bundle { … }` de `app/build.gradle.kts` conserve
+les découpages par densité et par langue.
+
+Un fichier `.aab` ne s'installe pas directement sur un appareil. Il doit être
+téléversé dans la Play Console ou converti localement avec
+[`bundletool`](https://developer.android.com/tools/bundletool).
+
+Exemple :
+
+```bash
+bundletool build-apks \
+  --bundle=app-release.aab \
+  --output=app.apks
+```
+
+Pour une installation directe, utilisez un APK Debug ou Release signé.
 
 ## Signature Release
 
-Le keystore n'est **jamais** stocké dans le dépôt (`.gitignore` exclut
-`*.jks`, `*.keystore`, `keystore.properties`). La signature est pilotée par
-variables d'environnement :
+Le keystore n'est jamais stocké dans le dépôt. Les fichiers `*.jks`,
+`*.keystore` et `keystore.properties` sont exclus par `.gitignore`.
+
+La signature est pilotée par les variables d'environnement suivantes :
 
 | Variable | Rôle |
 |---|---|
@@ -65,19 +75,34 @@ variables d'environnement :
 | `RAVENEMU_KEY_ALIAS` | Alias de la clé |
 | `RAVENEMU_KEY_PASSWORD` | Mot de passe de la clé |
 
-En CI, ces valeurs proviennent des secrets GitHub (`RAVENEMU_KEYSTORE_BASE64`
-décodé au vol, plus les trois mots de passe/alias). Sans secrets, le job
-`release` ne construit ni ne publie d'APK : Android refuse d'installer un
-APK non signé, seul un APK signé est donc diffusé. Pour tester sans
-signature, utilisez l'artefact `ravenemu-debug-apk` (APK Debug signé avec la
-clé de debug, installable directement).
+En CI, le keystore provient du secret `RAVENEMU_KEYSTORE_BASE64`, décodé pendant
+le job. Les mots de passe et l'alias proviennent également de secrets GitHub.
+
+Sans secrets de signature, le job Release ne construit et ne publie aucun
+livrable Release. Pour tester l'application, utilisez l'artefact
+`ravenemu-debug-apk`, signé avec la clé de debug Android.
 
 ## Intégration continue
 
-`.github/workflows/android.yml` : déclenchement sur branches principales et
-pull requests ; Java 21 (Temurin) ; `test`, `lint`, `assembleDebug` avec
-publication des rapports et de l'APK Debug ; job `release` produisant, **si les
-secrets de signature sont présents**, l'APK Release **et** l'App Bundle `.aab`
-signés (`assembleRelease bundleRelease`), publiés en artefacts
-`ravenemu-release-apk` et `ravenemu-release-aab`. Sans secrets, aucun livrable
-Release n'est construit.
+Le workflow `.github/workflows/android.yml` s'exécute sur les branches
+principales et les pull requests.
+
+Il effectue notamment :
+
+- l'installation de Java ;
+- les tests unitaires ;
+- le lint Android ;
+- la construction de l'APK Debug ;
+- la publication des rapports ;
+- la publication de l'APK Debug ;
+- la construction conditionnelle de l'APK et de l'App Bundle Release lorsque
+  les secrets de signature sont disponibles.
+
+Les artefacts Release sont publiés sous les noms :
+
+```text
+ravenemu-release-apk
+ravenemu-release-aab
+```
+
+Aucun livrable Release non signé ne doit être publié.
