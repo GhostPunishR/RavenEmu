@@ -2,6 +2,7 @@
 
 [![Android CI](https://github.com/GhostPunishR/RavenEmu/actions/workflows/android.yml/badge.svg)](https://github.com/GhostPunishR/RavenEmu/actions/workflows/android.yml)
 [![Licence: MIT](https://img.shields.io/badge/Licence-MIT-green.svg)](LICENSE)
+[![Site RavenEmu](https://img.shields.io/badge/Site-RavenEmu-a855f7.svg)](https://ghostpunishr.github.io/RavenEmu/)
 
 **RavenEmu** est un émulateur **Game Boy, Game Boy Color et Game Boy Advance**
 pour Android, aux moteurs écrits intégralement en Kotlin à partir de
@@ -78,7 +79,8 @@ tiers, sans BIOS ni contenu protégé.
 **Actions → dernier run → artefact `ravenemu-debug-apk`** (`app-debug.apk`,
 installable directement). Un APK Release signé et un **App Bundle `.aab`**
 (pour le Play Store) sont produits lorsque les secrets de signature sont
-configurés (voir [docs/BUILD.md](docs/BUILD.md)).
+configurés. Les commandes sont regroupées sur le
+[site RavenEmu](https://ghostpunishr.github.io/RavenEmu/#demarrer).
 
 RavenEmu ne fournit **aucune ROM ni aucun BIOS**. Utilisez uniquement des copies
 de jeux que vous possédez ou des homebrews librement distribués.
@@ -93,7 +95,8 @@ de jeux que vous possédez ou des homebrews librement distribués.
 ./gradlew assembleDebug
 ```
 
-Détails, signature Release et CI : [docs/BUILD.md](docs/BUILD.md).
+Détails, contribution, architecture et sécurité :
+[site RavenEmu](https://ghostpunishr.github.io/RavenEmu/).
 
 ## Architecture
 
@@ -113,10 +116,9 @@ Les moteurs ne dépendent pas d'Android et se testent sur JVM. Ils sont
 **indépendants les uns des autres** : `gba-core` ne référence pas
 `gameboy-core`. L'ajout d'une console se fait par un nouveau module implémentant
 `emulation-api`, sans toucher aux moteurs existants ; l'application sélectionne
-le moteur par une fabrique et n'en instancie aucun directement. Décisions
-détaillées : [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · spécification :
-[docs/CAHIER_DES_CHARGES.md](docs/CAHIER_DES_CHARGES.md) · contribution :
-[docs/CONTRIBUTING.md](docs/CONTRIBUTING.md).
+le moteur par une fabrique et n'en instancie aucun directement. Les catégories
+techniques sont présentées sur le
+[site RavenEmu](https://ghostpunishr.github.io/RavenEmu/#architecture).
 
 ## Limites connues
 
