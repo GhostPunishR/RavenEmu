@@ -58,25 +58,26 @@ body::after {
 }
 
 body::before {
-  inset: -18vh -14vw;
+  inset: -24vh -18vw;
   background:
-    radial-gradient(circle at 18% 22%, rgba(124, 58, 237, 0.22), transparent 27rem),
-    radial-gradient(circle at 78% 30%, rgba(168, 85, 247, 0.13), transparent 25rem),
-    radial-gradient(circle at 54% 82%, rgba(74, 35, 126, 0.16), transparent 30rem);
-  opacity: 0.76;
-  animation: ambient-aurora 28s ease-in-out infinite alternate;
+    radial-gradient(circle at 14% 18%, rgba(124, 58, 237, 0.38), transparent 25rem),
+    radial-gradient(circle at 84% 26%, rgba(168, 85, 247, 0.28), transparent 25rem),
+    radial-gradient(circle at 52% 84%, rgba(91, 33, 182, 0.25), transparent 29rem),
+    conic-gradient(from 215deg at 50% 50%, transparent 0 31%, rgba(168, 85, 247, 0.08) 39%, transparent 48% 100%);
+  opacity: 0.92;
+  animation: ambient-aurora 18s ease-in-out infinite alternate;
 }
 
 body::after {
   inset: -8rem;
   background-image:
-    radial-gradient(circle, rgba(216, 180, 254, 0.48) 0 1px, transparent 1.6px),
-    radial-gradient(circle, rgba(168, 85, 247, 0.34) 0 1px, transparent 1.5px);
-  background-position: 12px 18px, 58px 76px;
-  background-size: 92px 92px, 137px 137px;
-  opacity: 0.24;
-  mask-image: linear-gradient(to bottom, #000, rgba(0, 0, 0, 0.78) 72%, transparent);
-  animation: ambient-particles 52s linear infinite;
+    radial-gradient(circle, rgba(216, 180, 254, 0.72) 0 1.2px, transparent 2px),
+    radial-gradient(circle, rgba(168, 85, 247, 0.52) 0 1.1px, transparent 1.9px);
+  background-position: 12px 18px, 52px 68px;
+  background-size: 76px 76px, 121px 121px;
+  opacity: 0.42;
+  mask-image: linear-gradient(to bottom, #000, rgba(0, 0, 0, 0.9) 76%, transparent);
+  animation: ambient-particles 22s linear infinite;
 }
 
 body.nav-open {
@@ -349,18 +350,37 @@ p {
 
 .hero::before {
   position: absolute;
+  z-index: 0;
   inset: 0;
   background-image:
-    linear-gradient(rgba(216, 180, 254, 0.045) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(216, 180, 254, 0.045) 1px, transparent 1px);
-  background-size: 80px 80px;
+    linear-gradient(rgba(216, 180, 254, 0.075) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(216, 180, 254, 0.075) 1px, transparent 1px);
+  background-size: 64px 64px;
   mask-image: linear-gradient(#000, transparent 88%);
-  animation: hero-grid-drift 32s linear infinite;
+  animation: hero-grid-drift 18s linear infinite;
+  content: "";
+}
+
+.hero::after {
+  position: absolute;
+  z-index: 0;
+  inset: -35% -45%;
+  background: linear-gradient(
+    115deg,
+    transparent 42%,
+    rgba(124, 58, 237, 0.04) 46%,
+    rgba(168, 85, 247, 0.13) 50%,
+    rgba(216, 180, 254, 0.045) 53%,
+    transparent 58%
+  );
+  pointer-events: none;
+  animation: hero-energy-sweep 8s ease-in-out infinite alternate;
   content: "";
 }
 
 .hero-grid {
   position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(300px, 0.65fr);
   align-items: center;
@@ -447,6 +467,7 @@ p {
 
 .hero-glow {
   position: absolute;
+  z-index: 0;
   border-radius: 50%;
   filter: blur(28px);
   pointer-events: none;
@@ -458,6 +479,7 @@ p {
   width: 29rem;
   height: 29rem;
   background: rgba(124, 58, 237, 0.13);
+  animation: hero-glow-one 9s ease-in-out infinite alternate;
 }
 
 .hero-glow-two {
@@ -466,6 +488,7 @@ p {
   width: 15rem;
   height: 15rem;
   background: rgba(168, 85, 247, 0.065);
+  animation: hero-glow-two 11s ease-in-out infinite alternate;
 }
 
 .hero-visual {
@@ -1037,30 +1060,62 @@ p {
 
 @keyframes ambient-aurora {
   0% {
-    opacity: 0.68;
-    transform: translate3d(-2%, -2%, 0) scale(1);
+    opacity: 0.78;
+    transform: translate3d(-5%, -4%, 0) scale(1);
   }
 
   50% {
-    opacity: 0.9;
-    transform: translate3d(3%, 1%, 0) scale(1.04);
+    opacity: 1;
+    transform: translate3d(5%, 0, 0) scale(1.07);
   }
 
   100% {
-    opacity: 0.76;
-    transform: translate3d(-1%, 4%, 0) scale(1.02);
+    opacity: 0.88;
+    transform: translate3d(-2%, 6%, 0) scale(1.03);
   }
 }
 
 @keyframes ambient-particles {
   to {
-    transform: translate3d(92px, 92px, 0);
+    transform: translate3d(76px, 76px, 0);
   }
 }
 
 @keyframes hero-grid-drift {
   to {
-    background-position: 80px 80px;
+    background-position: 64px 64px;
+  }
+}
+
+@keyframes hero-energy-sweep {
+  from {
+    opacity: 0.35;
+    transform: translate3d(-20%, -2%, 0);
+  }
+
+  to {
+    opacity: 0.9;
+    transform: translate3d(20%, 2%, 0);
+  }
+}
+
+@keyframes hero-glow-one {
+  from {
+    transform: translate3d(2%, -2%, 0) scale(0.94);
+  }
+
+  to {
+    transform: translate3d(-10%, 8%, 0) scale(1.12);
+  }
+}
+
+@keyframes hero-glow-two {
+  from {
+    transform: translate3d(-5%, 4%, 0) scale(0.9);
+  }
+
+  to {
+    transform: translate3d(12%, -8%, 0) scale(1.16);
   }
 }
 
@@ -1366,7 +1421,9 @@ p {
 
   body::before,
   body::after,
-  .hero::before {
+  .hero::before,
+  .hero::after,
+  .hero-glow {
     animation: none !important;
     transform: none;
   }
