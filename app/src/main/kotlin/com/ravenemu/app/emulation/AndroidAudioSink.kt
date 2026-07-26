@@ -43,10 +43,10 @@ class AndroidAudioSink(
             AudioFormat.CHANNEL_OUT_STEREO,
             AudioFormat.ENCODING_PCM_16BIT,
         ).coerceAtLeast(0)
-        // Quatre trames donnent une réserve suffisante contre les variations
-        // d'ordonnancement Android. Trois trames sont écrites avant le premier
-        // appel à play(), sinon AudioTrack démarre vide et ne reconstitue jamais
-        // cette avance lorsque chaque bloc couvre exactement son temps de calcul.
+        // Huit trames absorbent un pic ponctuel d'ordonnancement Android.
+        // Six trames sont écrites avant le premier appel à play(), soit environ
+        // 100 ms de réserve à la cadence GBA. La marge restante évite de vider
+        // la piste sans modifier la fréquence ni les timings du moteur.
         val bufferBytes = maxOf(
             minBuffer,
             outputFramesPerVideoFrame *
@@ -161,8 +161,8 @@ class AndroidAudioSink(
     private companion object {
         const val CHANNEL_COUNT = 2
         const val BYTES_PER_SAMPLE = 2
-        const val BUFFER_VIDEO_FRAMES = 4
-        const val PRIME_VIDEO_FRAMES = 3
+        const val BUFFER_VIDEO_FRAMES = 8
+        const val PRIME_VIDEO_FRAMES = 6
 
         /** Débit de sortie natif du périphérique, avec repli sûr sur 48 kHz. */
         fun resolveNativeRate(context: Context): Int {
