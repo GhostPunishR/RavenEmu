@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   build:
-    name: Tests, lint et APK Debug
+    name: Tests, lint et APK Test
     runs-on: ubuntu-latest
     steps:
       - name: Récupérer le dépôt
@@ -40,7 +40,7 @@ jobs:
       - name: Construire l'APK Debug
         run: ./gradlew assembleDebug
 
-      - name: Construire l'APK de mesure (profil)
+      - name: Construire l'APK Test optimisé
         run: ./gradlew assembleProfil
 
       - name: Publier les rapports de test
@@ -59,22 +59,16 @@ jobs:
           path: "**/build/reports/lint-results-*"
           if-no-files-found: ignore
 
-      - name: Publier l'APK Debug
+      # Seul cet APK optimisé est publié. L'APK Debug reste une construction
+      # locale destinée au débogage avec Android Studio.
+      - name: Publier l'APK Test
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: ravenemu-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
-
-      # Même contenu que l'APK Debug, mais sans `android:debuggable` : c'est
-      # celui-ci qu'il faut installer pour mesurer la vitesse réelle du moteur.
-      - name: Publier l'APK de mesure
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: ravenemu-profil-apk
+          name: ravenemu-test-apk
           path: app/build/outputs/apk/profil/*.apk
 
-  publish-debug:
-    name: APK Debug téléchargeable
+  publish-test:
+    name: APK Test téléchargeable
     runs-on: ubuntu-latest
     needs: build
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -88,62 +82,73 @@ jobs:
         run: |
           gh run download "$GITHUB_RUN_ID" \
             --repo "$GITHUB_REPOSITORY" \
-            --name ravenemu-debug-apk \
-            --dir "$RUNNER_TEMP/ravenemu-debug"
+            --name ravenemu-test-apk \
+            --dir "$RUNNER_TEMP/ravenemu-test"
 
       - name: Préparer l'APK et son empreinte
         run: |
-          apk_path="$(find "$RUNNER_TEMP/ravenemu-debug" -type f -name '*.apk' -print -quit)"
+          apk_path="$(find "$RUNNER_TEMP/ravenemu-test" -type f -name '*.apk' -print -quit)"
           if [[ -z "$apk_path" ]]; then
-            echo "Aucun APK debug trouvé dans l'artefact." >&2
+            echo "Aucun APK Test trouvé dans l'artefact." >&2
             exit 1
           fi
 
-          cp "$apk_path" "$RUNNER_TEMP/RavenEmu-debug.apk"
+          cp "$apk_path" "$RUNNER_TEMP/RavenEmu-test.apk"
           (
             cd "$RUNNER_TEMP"
-            sha256sum RavenEmu-debug.apk > RavenEmu-debug.apk.sha256
+            sha256sum RavenEmu-test.apk > RavenEmu-test.apk.sha256
           )
 
-          cat > "$RUNNER_TEMP/debug-release-notes.md" <<EOF
-          Dernier APK debug construit automatiquement depuis la branche \`main\`.
+          cat > "$RUNNER_TEMP/test-release-notes.md" <<EOF
+          Dernier APK Test optimisé construit automatiquement depuis la branche \`main\`.
 
           - Commit : \`$GITHUB_SHA\`
-          - Package : \`com.ravenemu.app.debug\`
-          - Usage : tests uniquement
+          - Package : \`com.ravenemu.app.profil\`
+          - Usage : essais et mesures de compatibilité
 
-          Cet APK utilise la signature debug Android. Il ne remplace pas une version Release signée.
+          Cet APK utilise la signature de développement, conserve les diagnostics et permet à Android d'optimiser le moteur.
           EOF
 
-      - name: Mettre à jour la préversion Debug
+      - name: Mettre à jour la préversion Test
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view test-latest --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh api \
+              --method PATCH \
+              "repos/$GITHUB_REPOSITORY/git/refs/tags/test-latest" \
+              -f sha="$GITHUB_SHA" \
+              -F force=true
+            gh release edit test-latest \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "RavenEmu Test" \
+              --notes-file "$RUNNER_TEMP/test-release-notes.md" \
+              --prerelease
+            gh release upload test-latest \
+              "$RUNNER_TEMP/RavenEmu-test.apk" \
+              "$RUNNER_TEMP/RavenEmu-test.apk.sha256" \
+              --repo "$GITHUB_REPOSITORY" \
+              --clobber
+          else
+            gh release create test-latest \
+              "$RUNNER_TEMP/RavenEmu-test.apk" \
+              "$RUNNER_TEMP/RavenEmu-test.apk.sha256" \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "RavenEmu Test" \
+              --notes-file "$RUNNER_TEMP/test-release-notes.md" \
+              --prerelease
+          fi
+
+      - name: Retirer l'ancienne préversion Debug
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           if gh release view debug-latest --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
-            gh api \
-              --method PATCH \
-              "repos/$GITHUB_REPOSITORY/git/refs/tags/debug-latest" \
-              -f sha="$GITHUB_SHA" \
-              -F force=true
-            gh release edit debug-latest \
+            gh release delete debug-latest \
               --repo "$GITHUB_REPOSITORY" \
-              --title "RavenEmu Debug" \
-              --notes-file "$RUNNER_TEMP/debug-release-notes.md" \
-              --prerelease
-            gh release upload debug-latest \
-              "$RUNNER_TEMP/RavenEmu-debug.apk" \
-              "$RUNNER_TEMP/RavenEmu-debug.apk.sha256" \
-              --repo "$GITHUB_REPOSITORY" \
-              --clobber
-          else
-            gh release create debug-latest \
-              "$RUNNER_TEMP/RavenEmu-debug.apk" \
-              "$RUNNER_TEMP/RavenEmu-debug.apk.sha256" \
-              --repo "$GITHUB_REPOSITORY" \
-              --target "$GITHUB_SHA" \
-              --title "RavenEmu Debug" \
-              --notes-file "$RUNNER_TEMP/debug-release-notes.md" \
-              --prerelease
+              --cleanup-tag \
+              --yes
           fi
 
   release:
@@ -167,7 +172,7 @@ jobs:
             echo "RAVENEMU_KEYSTORE_PASSWORD, RAVENEMU_KEY_ALIAS,"
             echo "RAVENEMU_KEY_PASSWORD) ne sont pas configurés : seuls un APK"
             echo "et un App Bundle (.aab) signés sont publiés. Pour tester,"
-            echo "utilisez l'artefact ravenemu-debug-apk du job de build"
+            echo "utilisez l'artefact ravenemu-test-apk du job de build"
             echo "(voir README.md#installation)."
           } >> "$GITHUB_STEP_SUMMARY"
 
