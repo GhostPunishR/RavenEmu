@@ -146,6 +146,25 @@ class PerfBenchmark {
         }
         println("dma   %8.3f ms pour une trame recopiée (240x160 en 16 bits)".format(dmaMs))
 
+        // --- Chemin rapide du bus contre chemin générique ---
+        // Publié plutôt qu'affirmé : l'écart est net mais se joue en nanosecondes,
+        // et une recompilation du compilateur juste-à-temps suffit à l'inverser
+        // sur une mesure isolée. On garde donc la meilleure de plusieurs séries.
+        val busCore = core()
+        val bus = busCore.machine!!.bus
+        fun bestNanos(rounds: Int, body: () -> Unit): Double = (0 until 5).minOf {
+            repeat(rounds) { body() }
+            val start = System.nanoTime()
+            repeat(rounds) { body() }
+            (System.nanoTime() - start).toDouble() / rounds
+        }
+        val fastPath = bestNanos(200_000) { bus.read32(0x0300_0100) }
+        val genericPath = bestNanos(200_000) { bus.read32(0x0400_0100) }
+        println(
+            "bus   raccourci direct %.2f ns, aiguillage complet %.2f ns (rapport %.1f)"
+                .format(fastPath, genericPath, genericPath / fastPath),
+        )
+
         // --- Allocations ---
         val allocCore = core { c -> heavyScene(c); loudScene(c) }
         val allocFb = IntArray(allocCore.video.pixelCount)

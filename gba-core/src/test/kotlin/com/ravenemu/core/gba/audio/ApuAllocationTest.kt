@@ -93,9 +93,10 @@ class ApuAllocationTest {
 
     @Test
     fun `debit du mixage audio`() {
-        // Mesure informative : elle ne fait échouer le test que si le mixage
-        // devient absurdement lent (plus de 5 ms pour une trame de son, soit
-        // près d'un tiers du budget d'une trame à 60 images par seconde).
+        // Mesure informative. Le seuil ne détecte qu'un effondrement : le mixage
+        // d'une trame coûte moins de 0,05 ms sur un poste de développement, la
+        // borne est donc à plus de deux ordres de grandeur au-dessus pour rester
+        // insensible à la charge d'une machine d'intégration continue partagée.
         val m = machine()
         enableEverything(m)
         val drain = ShortArray(4096)
@@ -112,6 +113,6 @@ class ApuAllocationTest {
         }
         val msPerFrame = (System.nanoTime() - start) / 1_000_000.0 / frames
         println("PERF[apu]: %.3f ms de son par trame".format(msPerFrame))
-        assertTrue(msPerFrame < 5.0, "mixage audio anormalement lent : $msPerFrame ms/trame")
+        assertTrue(msPerFrame < 20.0, "mixage audio anormalement lent : $msPerFrame ms/trame")
     }
 }

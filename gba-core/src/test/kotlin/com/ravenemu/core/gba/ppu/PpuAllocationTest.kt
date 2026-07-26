@@ -87,6 +87,8 @@ class PpuAllocationTest {
         repeat(frames) { ppu.tick(GbaCore.CYCLES_PER_FRAME) }
         val msPerFrame = (System.nanoTime() - start) / 1_000_000.0 / frames
         println("PERF[ppu]: %.3f ms de rendu par trame (4 BG + 128 sprites)".format(msPerFrame))
-        assertTrue(msPerFrame < 20.0, "rendu anormalement lent : $msPerFrame ms/trame")
+        // Borne large : le rendu coûte ~2 ms sur un poste de développement, ce
+        // seuil ne détecte donc qu'un effondrement, pas la charge du runner.
+        assertTrue(msPerFrame < 100.0, "rendu anormalement lent : $msPerFrame ms/trame")
     }
 }
