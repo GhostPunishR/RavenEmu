@@ -3,20 +3,23 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="@color/raven_background"
     android:orientation="vertical">
 
     <com.google.android.material.appbar.MaterialToolbar
         android:id="@+id/toolbar"
         android:layout_width="match_parent"
         android:layout_height="?attr/actionBarSize"
-        android:background="?attr/colorPrimary"
+        android:background="@color/raven_toolbar"
+        android:elevation="4dp"
         app:title="@string/library_title"
-        app:titleTextColor="@android:color/white" />
+        app:titleTextColor="@color/raven_text_primary" />
 
     <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1">
+        android:layout_weight="1"
+        android:background="@color/raven_background">
 
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/romList"
@@ -34,6 +37,7 @@
             android:padding="32dp"
             android:text="@string/library_empty"
             android:textAppearance="?attr/textAppearanceBody1"
+            android:textColor="@color/raven_text_secondary"
             android:visibility="gone" />
 
         <ProgressBar
@@ -41,6 +45,27 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center"
+            android:indeterminateTint="@color/raven_accent"
             android:visibility="gone" />
     </FrameLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/raven_outline" />
+
+    <TextView
+        android:id="@+id/footerSignature"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/raven_surface"
+        android:fontFamily="sans-serif-medium"
+        android:gravity="center"
+        android:letterSpacing="0.08"
+        android:minHeight="36dp"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:text="@string/footer_signature"
+        android:textColor="@color/raven_text_muted"
+        android:textSize="11sp" />
 </LinearLayout>
