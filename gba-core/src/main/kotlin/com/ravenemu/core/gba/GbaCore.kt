@@ -143,6 +143,8 @@ class GbaCore(
             dmaActive = m.dma.isActive,
             fifoASize = m.apu.fifoSize(0),
             fifoBSize = m.apu.fifoSize(1),
+            fifoAEmptyReads = m.apu.fifoEmptyReads(0),
+            fifoBEmptyReads = m.apu.fifoEmptyReads(1),
             audioUnderruns = m.apu.underruns,
             unsupportedSwiCount = diag.count(GbaDiagnostics.Event.UNSUPPORTED_SWI),
             undefinedInstructionCount =

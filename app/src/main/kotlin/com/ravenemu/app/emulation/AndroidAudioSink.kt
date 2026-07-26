@@ -98,6 +98,12 @@ class AndroidAudioSink(
         }
     }
 
+    override fun underrunCount(): Int = try {
+        track.underrunCount
+    } catch (_: Exception) {
+        0
+    }
+
     override fun setVolume(volume: Float) {
         try {
             track.setVolume(volume.coerceIn(0f, 1f))

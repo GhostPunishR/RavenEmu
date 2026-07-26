@@ -22,6 +22,8 @@ class GbaDebugTextTest {
         dmaActive: Boolean = false,
         fifoA: Int = 0,
         fifoB: Int = 0,
+        fifoAEmptyReads: Int = 0,
+        fifoBEmptyReads: Int = 0,
         underruns: Int = 0,
         unsupportedSwi: Int = 0,
         undefinedInstruction: Int = 0,
@@ -44,6 +46,8 @@ class GbaDebugTextTest {
         dmaActive = dmaActive,
         fifoASize = fifoA,
         fifoBSize = fifoB,
+        fifoAEmptyReads = fifoAEmptyReads,
+        fifoBEmptyReads = fifoBEmptyReads,
         audioUnderruns = underruns,
         unsupportedSwiCount = unsupportedSwi,
         undefinedInstructionCount = undefinedInstruction,
@@ -66,13 +70,15 @@ class GbaDebugTextTest {
             dmaActive = true,
             fifoA = 16,
             fifoB = 8,
+            fifoAEmptyReads = 3,
+            fifoBEmptyReads = 4,
             underruns = 2,
-        ).toDebugText(fps = 59.7, frameTimeMs = 8.25)
+        ).toDebugText(fps = 59.7, frameTimeMs = 8.25, audioTrackUnderruns = 5)
 
         for (expected in listOf(
             "59.7 FPS", "8.25 ms", "12345 instr", "PC 08001234", "THUMB",
             "SWI 05", "IRQ 0001", "VCOUNT  42", "canal 3", "FIFO A 16", "B  8",
-            "sous-alim. 2",
+            "vides A 3 B 4", "sortie moteur 2", "Android 5",
         )) {
             assertTrue(expected in text, "« $expected » absent de :\n$text")
         }
@@ -141,7 +147,7 @@ class GbaDebugTextTest {
     }
 
     @Test
-    fun `le texte d'un moteur reel est complet et tient en six lignes`() {
+    fun `le texte d'un moteur reel est complet et tient en sept lignes`() {
         // Hors mesure : pas de ligne de répartition du temps.
         val core = GbaCore()
         core.loadRom(RealisticRom.bootSequence())
@@ -150,7 +156,7 @@ class GbaDebugTextTest {
 
         val text = assertNotNull(core.debugSnapshot()).toDebugText(59.7, 4.2)
         val lines = text.lines()
-        assertTrue(lines.size == 6, "six lignes attendues sans anomalie, obtenu :\n$text")
+        assertTrue(lines.size == 7, "sept lignes attendues sans anomalie, obtenu :\n$text")
         assertTrue(lines.none { it.isBlank() }, text)
     }
 }

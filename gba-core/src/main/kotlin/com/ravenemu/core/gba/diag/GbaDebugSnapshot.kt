@@ -31,7 +31,11 @@ data class GbaDebugSnapshot(
     val fifoASize: Int,
     /** Octets en attente dans la FIFO Direct Sound B. */
     val fifoBSize: Int,
-    /** Sous-alimentations audio depuis le chargement de la ROM. */
+    /** Lectures à vide de la FIFO Direct Sound A. */
+    val fifoAEmptyReads: Int,
+    /** Lectures à vide de la FIFO Direct Sound B. */
+    val fifoBEmptyReads: Int,
+    /** Sous-alimentations du tampon de sortie du moteur. */
     val audioUnderruns: Int,
     /** Nombre d'appels logiciels non pris en charge rencontrés. */
     val unsupportedSwiCount: Int,

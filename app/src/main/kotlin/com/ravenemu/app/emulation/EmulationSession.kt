@@ -44,6 +44,7 @@ class EmulationSession(
      */
     interface AudioSink {
         fun write(samples: ShortArray, count: Int, targetDurationNanos: Long)
+        fun underrunCount(): Int = 0
         fun setVolume(volume: Float)
         fun pause()
         fun release()
@@ -99,6 +100,9 @@ class EmulationSession(
     fun setAudioVolume(volume: Float) {
         audioSink?.setVolume(volume)
     }
+
+    /** Sous-alimentations relevées par la sortie audio de la plateforme. */
+    fun audioOutputUnderruns(): Int = audioSink?.underrunCount() ?: 0
 
     /** Arrête le thread après une dernière sauvegarde de la RAM cartouche. */
     fun stop() {

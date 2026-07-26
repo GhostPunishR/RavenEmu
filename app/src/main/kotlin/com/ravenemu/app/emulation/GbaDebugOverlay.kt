@@ -32,11 +32,16 @@ object GbaDebugOverlay {
      * mesure qui dit s'il reste de la marge, là où la cadence plafonne à celle
      * de la console dès que le moteur suit. Ce n'est pas un détail interne.
      */
-    fun render(core: EmulatorCore?, fps: Double, frameTimeMs: Double): String {
+    fun render(
+        core: EmulatorCore?,
+        fps: Double,
+        frameTimeMs: Double,
+        audioTrackUnderruns: Int = 0,
+    ): String {
         val basic = "%.1f FPS  %.2f ms/trame".format(fps, frameTimeMs)
         if (!BuildConfig.DIAGNOSTICS) return basic
         val snapshot = (core as? GbaCore)?.debugSnapshot() ?: return basic
-        return snapshot.toDebugText(fps, frameTimeMs)
+        return snapshot.toDebugText(fps, frameTimeMs, audioTrackUnderruns)
     }
 
     /**

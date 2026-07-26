@@ -7,10 +7,14 @@ package com.ravenemu.core.gba.diag
  * du texte pur, sans dépendance de plateforme, et il est ainsi couvert par les
  * tests JVM. La couche applicative n'a plus qu'à afficher la chaîne obtenue.
  *
- * [fps] et [frameTimeMs] ne viennent pas du moteur : seul l'appelant sait à
- * quelle cadence il le fait tourner.
+ * [fps], [frameTimeMs] et [audioTrackUnderruns] ne viennent pas du moteur :
+ * seul l'appelant connaît la cadence et l'état de la sortie Android.
  */
-fun GbaDebugSnapshot.toDebugText(fps: Double, frameTimeMs: Double): String {
+fun GbaDebugSnapshot.toDebugText(
+    fps: Double,
+    frameTimeMs: Double,
+    audioTrackUnderruns: Int = 0,
+): String {
     val builder = StringBuilder(256)
     builder.append("%.1f FPS  %.2f ms/trame\n".format(fps, frameTimeMs))
     builder.append("%d instr/trame\n".format(instructionsPerFrame))
@@ -29,7 +33,15 @@ fun GbaDebugSnapshot.toDebugText(fps: Double, frameTimeMs: Double): String {
     )
     builder.append("VCOUNT %3d  DMA %s\n".format(vcount, dmaLabel()))
     builder.append(
-        "FIFO A %2d  B %2d  sous-alim. %d".format(fifoASize, fifoBSize, audioUnderruns),
+        "FIFO A %2d  B %2d  vides A %d B %d".format(
+            fifoASize,
+            fifoBSize,
+            fifoAEmptyReads,
+            fifoBEmptyReads,
+        ),
+    )
+    builder.append('\n').append(
+        "sortie moteur %d  Android %d".format(audioUnderruns, audioTrackUnderruns),
     )
     // Répartition du temps de trame. Le processeur est obtenu par différence :
     // c'est tout ce qui n'est ni composition, ni DMA, ni mixage.

@@ -41,6 +41,7 @@ class GbaApu {
 
     private val fifoA = FifoBuffer()
     private val fifoB = FifoBuffer()
+    private val fifoEmptyReads = IntArray(2)
     private var directSampleA = 0
     private var directSampleB = 0
 
@@ -138,6 +139,7 @@ class GbaApu {
 
     private fun popFifo(channel: Int) {
         val fifo = if (channel == 0) fifoA else fifoB
+        if (fifo.size == 0) fifoEmptyReads[channel]++
         val sample = fifo.pop()
         if (channel == 0) directSampleA = sample else directSampleB = sample
         // Sous le quart de sa capacité, la FIFO réclame un nouveau bloc.
@@ -329,10 +331,14 @@ class GbaApu {
         readIndex = 0
         available = 0
         underruns = 0
+        fifoEmptyReads.fill(0)
     }
 
     /** Nombre d'octets en attente dans une FIFO (diagnostic et tests). */
     fun fifoSize(channel: Int): Int = if (channel == 0) fifoA.size else fifoB.size
+
+    /** Lectures effectuées alors que la FIFO demandée était vide. */
+    fun fifoEmptyReads(channel: Int): Int = fifoEmptyReads[channel]
 
     /** File d'attente circulaire de 32 octets d'échantillons signés. */
     private class FifoBuffer {

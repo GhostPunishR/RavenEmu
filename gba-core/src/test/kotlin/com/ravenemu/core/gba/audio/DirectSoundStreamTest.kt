@@ -82,6 +82,25 @@ class DirectSoundStreamTest {
         // La FIFO reste dans sa plage de service : ni vide, ni saturée.
         val size = m.apu.fifoSize(0)
         assertTrue(size in 1..32, "taille de FIFO hors plage : $size")
+        assertEquals(0, m.apu.fifoEmptyReads(0), "la FIFO ne doit jamais être lue vide")
+    }
+
+    @Test
+    fun `une lecture de fifo vide est comptee par canal`() {
+        val m = GbaMachine(SyntheticRom.build())
+        // Canal A sur timer 0 et canal B sur timer 1, pour isoler les compteurs.
+        m.bus.write16(0x0400_0082, 0x4300)
+
+        m.apu.onTimerOverflow(0)
+        assertEquals(1, m.apu.fifoEmptyReads(0))
+        assertEquals(0, m.apu.fifoEmptyReads(1))
+
+        m.apu.pushFifo(0, 0x7F, 1)
+        m.apu.onTimerOverflow(0)
+        assertEquals(1, m.apu.fifoEmptyReads(0), "une FIFO alimentée ne doit pas compter à vide")
+
+        m.apu.onTimerOverflow(1)
+        assertEquals(1, m.apu.fifoEmptyReads(1))
     }
 
     @Test
