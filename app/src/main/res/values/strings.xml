@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">RavenEmu</string>
+    <string name="footer_signature">RavenEmu By GhostPunishR</string>
 
     <!-- Bibliothèque -->
     <string name="library_title">Bibliothèque</string>

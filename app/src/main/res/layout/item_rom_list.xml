@@ -4,12 +4,17 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:layout_margin="4dp"
-    app:cardCornerRadius="10dp"
-    app:cardElevation="1dp">
+    app:cardBackgroundColor="@color/raven_surface"
+    app:cardCornerRadius="12dp"
+    app:cardElevation="1dp"
+    app:rippleColor="@color/raven_ripple"
+    app:strokeColor="@color/raven_outline"
+    app:strokeWidth="1dp">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:background="@color/raven_surface"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:padding="8dp">
@@ -18,6 +23,7 @@
             android:id="@+id/cover"
             android:layout_width="56dp"
             android:layout_height="56dp"
+            android:background="@color/raven_surface_variant"
             android:contentDescription="@null"
             android:scaleType="centerCrop" />
 
@@ -34,7 +40,8 @@
                 android:layout_height="wrap_content"
                 android:ellipsize="end"
                 android:maxLines="1"
-                android:textAppearance="?attr/textAppearanceSubtitle1" />
+                android:textAppearance="?attr/textAppearanceSubtitle1"
+                android:textColor="@color/raven_text_primary" />
 
             <TextView
                 android:id="@+id/subtitle"
@@ -42,7 +49,8 @@
                 android:layout_height="wrap_content"
                 android:ellipsize="end"
                 android:maxLines="1"
-                android:textAppearance="?attr/textAppearanceCaption" />
+                android:textAppearance="?attr/textAppearanceCaption"
+                android:textColor="@color/raven_text_secondary" />
         </LinearLayout>
 
         <TextView
@@ -50,10 +58,10 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:paddingStart="8dp"
-            android:paddingEnd="8dp"
             android:paddingTop="2dp"
+            android:paddingEnd="8dp"
             android:paddingBottom="2dp"
-            android:textColor="@android:color/white"
+            android:textColor="@color/raven_badge_text"
             android:textSize="11sp" />
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>
