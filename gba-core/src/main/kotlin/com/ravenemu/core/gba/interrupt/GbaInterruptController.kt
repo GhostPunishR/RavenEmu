@@ -21,9 +21,17 @@ class GbaInterruptController {
     /** Registre `IME` : activation globale des interruptions. */
     var masterEnable = false
 
+    /**
+     * Observateur des sources levées, utilisé par le BIOS pour tenir ses propres
+     * drapeaux d'attente (`IntrWait`).
+     */
+    var onRequest: ((Int) -> Unit)? = null
+
     /** Lève l'interruption [bit] (une des constantes [Interrupt]). */
     fun request(bit: Int) {
-        flags = flags or (1 shl bit)
+        val mask = 1 shl bit
+        flags = flags or mask
+        onRequest?.invoke(mask)
     }
 
     /** Acquittement : écrire `1` sur un bit d'`IF` l'efface. */

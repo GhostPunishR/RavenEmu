@@ -1,6 +1,7 @@
 package com.ravenemu.core.gba.bios
 
 import com.ravenemu.core.gba.cpu.Arm7Tdmi
+import com.ravenemu.core.gba.interrupt.Interrupt
 import com.ravenemu.core.gba.cpu.SwiHandler
 import com.ravenemu.core.gba.memory.GbaBus
 import kotlin.math.sqrt
@@ -22,6 +23,9 @@ class GbaBios(
     private val cpu: Arm7Tdmi,
     private val bus: GbaBus,
 ) : SwiHandler {
+
+    /** Attente d'interruption en cours, ou `null` hors `IntrWait`. */
+    var waitState: BiosWaitState? = null
 
     init {
         installIrqHandler()
@@ -52,8 +56,12 @@ class GbaBios(
         when (number) {
             0x00 -> softReset()                                   // SoftReset
             0x01 -> registerRamReset(r[0])                        // RegisterRamReset
-            0x02, 0x03 -> cpu.state.halted = true                 // Halt / Stop
-            0x04, 0x05 -> cpu.state.halted = true                 // IntrWait / VBlankIntrWait
+            0x02, 0x03 -> {                                       // Halt / Stop
+                waitState = null
+                cpu.state.halted = true
+            }
+            0x04 -> intrWait(discardOldFlags = r[0] != 0, mask = r[1] and 0x3FFF)
+            0x05 -> intrWait(discardOldFlags = true, mask = 1 shl Interrupt.VBLANK)
             0x06 -> divide(numerator = r[0], denominator = r[1])  // Div
             0x07 -> divide(numerator = r[1], denominator = r[0])  // DivArm (arguments inversés)
             0x08 -> r[0] = isqrt(r[0].toLong() and 0xFFFF_FFFFL)  // Sqrt
@@ -75,6 +83,62 @@ class GbaBios(
             // Appels du pilote sonore (0x19–0x1F) et diagnostics : sans effet.
         }
     }
+
+    /**
+     * `IntrWait` / `VBlankIntrWait` : met le processeur en pause jusqu'à ce
+     * qu'une interruption du [mask] demandé survienne.
+     *
+     * Le BIOS active `IME` (sans quoi l'attente ne pourrait jamais se terminer),
+     * puis consulte ses propres drapeaux, alimentés par [onInterruptRaised].
+     * Avec [discardOldFlags], les sources déjà survenues sont oubliées et seules
+     * les suivantes réveillent l'appel ; sans lui, une source déjà présente rend
+     * la main immédiatement.
+     */
+    private fun intrWait(discardOldFlags: Boolean, mask: Int) {
+        bus.interrupts?.masterEnable = true
+        if (mask == 0) return // aucune source attendue : rien à faire
+
+        if (discardOldFlags) {
+            clearBiosFlags(mask)
+        } else if (biosFlags() and mask != 0) {
+            clearBiosFlags(mask)
+            return // l'interruption attendue avait déjà eu lieu
+        }
+        waitState = BiosWaitState(mask, discardOldFlags)
+        cpu.state.halted = true
+    }
+
+    /**
+     * Enregistre une source d'interruption dans les drapeaux du BIOS, comme le
+     * fait son gestionnaire d'interruption. Câblé sur le contrôleur.
+     */
+    fun onInterruptRaised(mask: Int) {
+        writeBiosFlags(biosFlags() or mask)
+    }
+
+    /**
+     * Indique si le processeur en pause peut reprendre. Une attente `IntrWait`
+     * ne se termine que sur une source de son masque ; une pause `Halt` simple
+     * se termine sur n'importe quelle interruption activée.
+     */
+    fun shouldResume(): Boolean {
+        val wait = waitState
+        val interrupts = bus.interrupts ?: return true
+        if (wait == null) {
+            return interrupts.enable and interrupts.flags and 0x3FFF != 0
+        }
+        if (biosFlags() and wait.interruptMask == 0) return false
+        clearBiosFlags(wait.interruptMask)
+        waitState = null
+        return true
+    }
+
+    /** Mot de drapeaux d'attente du BIOS (`0x0300_7FF8`). */
+    fun biosFlags(): Int = bus.read32(BIOS_INTERRUPT_FLAGS)
+
+    private fun writeBiosFlags(value: Int) = bus.write32(BIOS_INTERRUPT_FLAGS, value)
+
+    private fun clearBiosFlags(mask: Int) = writeBiosFlags(biosFlags() and mask.inv())
 
     /**
      * `SoftReset` : redémarre la cartouche depuis son point d'entrée.
@@ -247,6 +311,9 @@ class GbaBios(
 
         /** Adresse du pointeur de gestionnaire d'IRQ du jeu (miroir de 0x03FF_FFFC). */
         const val USER_IRQ_HANDLER = 0x0300_7FFC
+
+        /** Mot où le BIOS accumule les interruptions survenues, pour `IntrWait`. */
+        const val BIOS_INTERRUPT_FLAGS = 0x0300_7FF8
 
         /** Point d'entrée de la cartouche, utilisé par `SoftReset`. */
         private const val ROM_ENTRY = 0x0800_0000

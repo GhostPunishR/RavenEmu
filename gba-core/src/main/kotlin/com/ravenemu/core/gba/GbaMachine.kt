@@ -45,6 +45,9 @@ class GbaMachine(rom: ByteArray, forcedSaveType: GbaSaveType? = null) {
         timers.onOverflow = apu::onTimerOverflow
         apu.onFifoRequest = dma::triggerSoundFifo
         cpu.swiHandler = bios
+        // Le gestionnaire du BIOS mémorise les sources survenues : c'est ce que
+        // consultent IntrWait et VBlankIntrWait.
+        interrupts.onRequest = bios::onInterruptRaised
         cpu.reset(ROM_ENTRY_POINT)
     }
 
@@ -64,9 +67,7 @@ class GbaMachine(rom: ByteArray, forcedSaveType: GbaSaveType? = null) {
                 timers.tick(HALT_STEP)
                 apu.tick(HALT_STEP)
                 elapsed += HALT_STEP
-                if (interrupts.enable and interrupts.flags and 0x3FFF != 0) {
-                    cpu.state.halted = false
-                }
+                if (bios.shouldResume()) cpu.state.halted = false
                 continue
             }
             if (interrupts.pending() && !cpu.state.irqDisabled) {
