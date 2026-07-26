@@ -28,6 +28,9 @@ class GbaDebugTextTest {
         unsupportedAccess: Int = 0,
         missingInterrupt: Int = 0,
         decompressionError: Int = 0,
+        ppuMillis: Double = 0.0,
+        dmaMillis: Double = 0.0,
+        apuMillis: Double = 0.0,
     ) = GbaDebugSnapshot(
         instructionsPerFrame = instructions,
         programCounter = pc,
@@ -46,6 +49,9 @@ class GbaDebugTextTest {
         unsupportedAccessCount = unsupportedAccess,
         missingInterruptCount = missingInterrupt,
         decompressionErrorCount = decompressionError,
+        ppuMillis = ppuMillis,
+        dmaMillis = dmaMillis,
+        apuMillis = apuMillis,
     )
 
     @Test
@@ -101,7 +107,33 @@ class GbaDebugTextTest {
     }
 
     @Test
+    fun `la repartition du temps apparait quand elle est mesuree`() {
+        val text = snapshot(ppuMillis = 7.4, dmaMillis = 0.3, apuMillis = 1.1)
+            .toDebugText(fps = 35.0, frameTimeMs = 28.5)
+        // Le processeur est obtenu par différence : 28,5 - 7,4 - 0,3 - 1,1.
+        assertTrue("cpu 19.7" in text, text)
+        assertTrue("ppu 7.4" in text, text)
+        assertTrue("dma 0.3" in text, text)
+        assertTrue("apu 1.1" in text, text)
+    }
+
+    @Test
+    fun `sans mesure aucune ligne de repartition n'est ajoutee`() {
+        val text = snapshot().toDebugText(fps = 60.0, frameTimeMs = 5.0)
+        assertFalse("cpu " in text, text)
+    }
+
+    @Test
+    fun `le temps processeur ne devient jamais negatif`() {
+        // Les relevés s'additionnent sur la trame écoulée, le temps de trame est
+        // celui d'une moyenne : rien ne garantit leur cohérence exacte.
+        val text = snapshot(ppuMillis = 40.0).toDebugText(fps = 30.0, frameTimeMs = 10.0)
+        assertTrue("cpu 0.0" in text, text)
+    }
+
+    @Test
     fun `le texte d'un moteur reel est complet et tient en six lignes`() {
+        // Hors mesure : pas de ligne de répartition du temps.
         val core = GbaCore()
         core.loadRom(RealisticRom.bootSequence())
         val framebuffer = IntArray(core.video.pixelCount)

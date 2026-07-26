@@ -33,6 +33,12 @@ class GbaApu {
      */
     var onFifoRequest: ((Int) -> Unit)? = null
 
+    /**
+     * Rappel de chronométrage du mixage, branché par la machine quand la mesure
+     * est active. Nul, il ne coûte qu'une comparaison de référence par lot.
+     */
+    var onBatchNanos: ((Long) -> Unit)? = null
+
     private val fifoA = FifoBuffer()
     private val fifoB = FifoBuffer()
     private var directSampleA = 0
@@ -68,6 +74,7 @@ class GbaApu {
         var audioCycles = cpuRemainder shr 2
         if (audioCycles <= 0) return
         cpuRemainder -= audioCycles shl 2
+        val start = if (onBatchNanos != null) System.nanoTime() else 0L
 
         // On n'avance jamais au-delà du prochain échantillon : les canaux et le
         // point d'échantillonnage restent ainsi entrelacés, sinon toute une
@@ -92,6 +99,7 @@ class GbaApu {
             }
             audioCycles -= step
         }
+        onBatchNanos?.invoke(System.nanoTime() - start)
     }
 
     /** Séquenceur de trames : longueurs (256 Hz), enveloppes (64 Hz), balayage (128 Hz). */

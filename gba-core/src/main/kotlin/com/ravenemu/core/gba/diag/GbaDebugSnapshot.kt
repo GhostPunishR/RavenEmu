@@ -43,6 +43,12 @@ data class GbaDebugSnapshot(
     val missingInterruptCount: Int,
     /** Nombre d'erreurs de décompression rencontrées. */
     val decompressionErrorCount: Int,
+    /** Millisecondes passées à composer l'affichage, trame écoulée. */
+    val ppuMillis: Double,
+    /** Millisecondes passées en transferts DMA, trame écoulée. */
+    val dmaMillis: Double,
+    /** Millisecondes passées à mixer l'audio, trame écoulée. */
+    val apuMillis: Double,
 ) {
     /** `true` si une anomalie au moins a été relevée depuis le chargement. */
     val hasAnomalies: Boolean

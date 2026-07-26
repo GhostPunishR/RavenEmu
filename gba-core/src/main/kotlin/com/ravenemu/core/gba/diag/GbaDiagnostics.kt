@@ -73,6 +73,41 @@ class GbaDiagnostics {
     var waitCycles = 0
         private set
 
+    /**
+     * Chronométrage des sous-systèmes. Désactivé par défaut : chaque relevé
+     * coûte deux lectures d'horloge, négligeables aux quelques milliers d'appels
+     * par trame concernés, mais inutiles hors mesure.
+     */
+    var measuringTime = false
+
+    /** Nanosecondes passées à composer les lignes de l'affichage, trame écoulée. */
+    var ppuNanosLastFrame = 0L
+        private set
+
+    /** Nanosecondes passées en transferts DMA, trame écoulée. */
+    var dmaNanosLastFrame = 0L
+        private set
+
+    /** Nanosecondes passées à mixer l'audio, trame écoulée. */
+    var apuNanosLastFrame = 0L
+        private set
+
+    private var ppuNanos = 0L
+    private var dmaNanos = 0L
+    private var apuNanos = 0L
+
+    fun addPpuNanos(nanos: Long) {
+        ppuNanos += nanos
+    }
+
+    fun addDmaNanos(nanos: Long) {
+        dmaNanos += nanos
+    }
+
+    fun addApuNanos(nanos: Long) {
+        apuNanos += nanos
+    }
+
     fun onInstruction() {
         instructionsThisFrame++
     }
@@ -81,6 +116,12 @@ class GbaDiagnostics {
     fun beginFrame() {
         instructionsLastFrame = instructionsThisFrame
         instructionsThisFrame = 0
+        ppuNanosLastFrame = ppuNanos
+        dmaNanosLastFrame = dmaNanos
+        apuNanosLastFrame = apuNanos
+        ppuNanos = 0
+        dmaNanos = 0
+        apuNanos = 0
     }
 
     fun onSwi(number: Int) {
@@ -146,6 +187,13 @@ class GbaDiagnostics {
         lastInterruptMask = 0
         audioUnderruns = 0
         waitCycles = 0
+        measuringTime = false
+        ppuNanos = 0
+        dmaNanos = 0
+        apuNanos = 0
+        ppuNanosLastFrame = 0
+        dmaNanosLastFrame = 0
+        apuNanosLastFrame = 0
     }
 
     companion object {

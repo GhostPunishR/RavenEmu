@@ -31,6 +31,19 @@ fun GbaDebugSnapshot.toDebugText(fps: Double, frameTimeMs: Double): String {
     builder.append(
         "FIFO A %2d  B %2d  sous-alim. %d".format(fifoASize, fifoBSize, audioUnderruns),
     )
+    // Répartition du temps de trame. Le processeur est obtenu par différence :
+    // c'est tout ce qui n'est ni composition, ni DMA, ni mixage.
+    val measured = ppuMillis + dmaMillis + apuMillis
+    if (measured > 0.0) {
+        builder.append('\n').append(
+            "cpu %.1f  ppu %.1f  dma %.1f  apu %.1f ms".format(
+                (frameTimeMs - measured).coerceAtLeast(0.0),
+                ppuMillis,
+                dmaMillis,
+                apuMillis,
+            ),
+        )
+    }
     if (hasAnomalies) builder.append('\n').append(anomalyLine())
     return builder.toString()
 }

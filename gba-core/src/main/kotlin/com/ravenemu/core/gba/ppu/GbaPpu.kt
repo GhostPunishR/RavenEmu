@@ -114,7 +114,14 @@ class GbaPpu(private val bus: GbaBus) {
             if (!inHBlank && lineCycles >= HDRAW_CYCLES) {
                 inHBlank = true
                 if (vcount < SCREEN_HEIGHT) {
-                    renderScanline(vcount)
+                    val diagnostics = bus.diagnostics
+                    if (diagnostics.measuringTime) {
+                        val start = System.nanoTime()
+                        renderScanline(vcount)
+                        diagnostics.addPpuNanos(System.nanoTime() - start)
+                    } else {
+                        renderScanline(vcount)
+                    }
                     // Les points de référence affines avancent d'une ligne
                     // (dmx/dmy) après le rendu de la ligne courante.
                     bg2RefX += signed16(reg16(0x22)) // BG2PB

@@ -108,6 +108,23 @@ class GbaCore(
         }
 
     /**
+     * Chronométrage des sous-systèmes. À n'activer que pour mesurer : chaque
+     * relevé coûte deux lectures d'horloge, et le but est justement de ne pas
+     * fausser ce qu'on mesure.
+     */
+    var measuringTime: Boolean
+        get() = machine?.diagnostics?.measuringTime ?: false
+        set(value) {
+            val m = machine ?: return
+            m.diagnostics.measuringTime = value
+            // Le rappel de l'unité audio n'est branché que pendant la mesure :
+            // laissé en place, il coûterait deux lectures d'horloge par lot,
+            // même en Release.
+            m.apu.onBatchNanos =
+                if (value) { nanos -> m.diagnostics.addApuNanos(nanos) } else null
+        }
+
+    /**
      * Photographie de l'état du moteur, pour une surcouche de débogage. Retourne
      * `null` si aucune ROM n'est chargée.
      */
@@ -134,6 +151,9 @@ class GbaCore(
             missingInterruptCount = diag.count(GbaDiagnostics.Event.MISSING_INTERRUPT),
             decompressionErrorCount =
                 diag.count(GbaDiagnostics.Event.DECOMPRESSION_ERROR),
+            ppuMillis = diag.ppuNanosLastFrame / 1_000_000.0,
+            dmaMillis = diag.dmaNanosLastFrame / 1_000_000.0,
+            apuMillis = diag.apuNanosLastFrame / 1_000_000.0,
         )
     }
 

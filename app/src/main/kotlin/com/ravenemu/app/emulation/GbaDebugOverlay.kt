@@ -51,8 +51,13 @@ object GbaDebugOverlay {
         val gba = core as? GbaCore ?: return
         if (!BuildConfig.DIAGNOSTICS) {
             gba.onDiagnosticEvent = null
+            gba.measuringTime = false
             return
         }
+        // Le chronométrage par sous-système accompagne les diagnostics : c'est
+        // lui qui dit où passe le temps d'une trame sur l'appareil réel, seul
+        // endroit où la question se pose vraiment.
+        gba.measuringTime = true
         gba.onDiagnosticEvent = { event, detail ->
             val label = when (event) {
                 GbaDiagnostics.Event.UNSUPPORTED_SWI -> "appel BIOS non géré"
