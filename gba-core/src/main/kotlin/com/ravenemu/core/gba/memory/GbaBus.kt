@@ -367,6 +367,7 @@ class GbaBus(
      * matériel dans ce cas : rien.
      */
     private fun unsupportedAccess(address: Int, write: Boolean): Int {
+        diagnostics.recordUnsupportedAccess(address)
         diagnostics.report(com.ravenemu.core.gba.diag.GbaDiagnostics.Event.UNSUPPORTED_ACCESS) {
             val kind = if (write) "écriture" else "lecture"
             "$kind hors du plan mémoire à 0x${address.toUInt().toString(16)}"

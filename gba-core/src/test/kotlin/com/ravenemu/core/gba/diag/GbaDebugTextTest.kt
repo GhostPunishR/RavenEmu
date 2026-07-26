@@ -22,12 +22,18 @@ class GbaDebugTextTest {
         dmaActive: Boolean = false,
         fifoA: Int = 0,
         fifoB: Int = 0,
+        fifoAEmptyReads: Int = 0,
+        fifoBEmptyReads: Int = 0,
         underruns: Int = 0,
         unsupportedSwi: Int = 0,
         undefinedInstruction: Int = 0,
         unsupportedAccess: Int = 0,
         missingInterrupt: Int = 0,
         decompressionError: Int = 0,
+        firstUnsupportedAddress: Int = 0,
+        ppuMillis: Double = 0.0,
+        dmaMillis: Double = 0.0,
+        apuMillis: Double = 0.0,
     ) = GbaDebugSnapshot(
         instructionsPerFrame = instructions,
         programCounter = pc,
@@ -40,12 +46,18 @@ class GbaDebugTextTest {
         dmaActive = dmaActive,
         fifoASize = fifoA,
         fifoBSize = fifoB,
+        fifoAEmptyReads = fifoAEmptyReads,
+        fifoBEmptyReads = fifoBEmptyReads,
         audioUnderruns = underruns,
         unsupportedSwiCount = unsupportedSwi,
         undefinedInstructionCount = undefinedInstruction,
         unsupportedAccessCount = unsupportedAccess,
         missingInterruptCount = missingInterrupt,
         decompressionErrorCount = decompressionError,
+        firstUnsupportedAddress = firstUnsupportedAddress,
+        ppuMillis = ppuMillis,
+        dmaMillis = dmaMillis,
+        apuMillis = apuMillis,
     )
 
     @Test
@@ -58,13 +70,15 @@ class GbaDebugTextTest {
             dmaActive = true,
             fifoA = 16,
             fifoB = 8,
+            fifoAEmptyReads = 3,
+            fifoBEmptyReads = 4,
             underruns = 2,
-        ).toDebugText(fps = 59.7, frameTimeMs = 8.25)
+        ).toDebugText(fps = 59.7, frameTimeMs = 8.25, audioTrackUnderruns = 5)
 
         for (expected in listOf(
             "59.7 FPS", "8.25 ms", "12345 instr", "PC 08001234", "THUMB",
             "SWI 05", "IRQ 0001", "VCOUNT  42", "canal 3", "FIFO A 16", "B  8",
-            "sous-alim. 2",
+            "vides A 3 B 4", "sortie moteur 2", "Android 5",
         )) {
             assertTrue(expected in text, "« $expected » absent de :\n$text")
         }
@@ -90,6 +104,13 @@ class GbaDebugTextTest {
     }
 
     @Test
+    fun `l'adresse du premier acces fautif accompagne le decompte`() {
+        val text = snapshot(unsupportedAccess = 64, firstUnsupportedAddress = 0xFFFF_FE00.toInt())
+            .toDebugText(fps = 60.0, frameTimeMs = 16.0)
+        assertTrue("accès 64 @FFFFFE00" in text, text)
+    }
+
+    @Test
     fun `seules les anomalies non nulles sont listees`() {
         val text = snapshot(unsupportedSwi = 3, decompressionError = 1)
             .toDebugText(fps = 60.0, frameTimeMs = 5.0)
@@ -101,7 +122,33 @@ class GbaDebugTextTest {
     }
 
     @Test
-    fun `le texte d'un moteur reel est complet et tient en six lignes`() {
+    fun `la repartition du temps apparait quand elle est mesuree`() {
+        val text = snapshot(ppuMillis = 7.4, dmaMillis = 0.3, apuMillis = 1.1)
+            .toDebugText(fps = 35.0, frameTimeMs = 28.5)
+        // Le processeur est obtenu par différence : 28,5 - 7,4 - 0,3 - 1,1.
+        assertTrue("cpu 19.7" in text, text)
+        assertTrue("ppu 7.4" in text, text)
+        assertTrue("dma 0.3" in text, text)
+        assertTrue("apu 1.1" in text, text)
+    }
+
+    @Test
+    fun `sans mesure aucune ligne de repartition n'est ajoutee`() {
+        val text = snapshot().toDebugText(fps = 60.0, frameTimeMs = 5.0)
+        assertFalse("cpu " in text, text)
+    }
+
+    @Test
+    fun `le temps processeur ne devient jamais negatif`() {
+        // Les relevés s'additionnent sur la trame écoulée, le temps de trame est
+        // celui d'une moyenne : rien ne garantit leur cohérence exacte.
+        val text = snapshot(ppuMillis = 40.0).toDebugText(fps = 30.0, frameTimeMs = 10.0)
+        assertTrue("cpu 0.0" in text, text)
+    }
+
+    @Test
+    fun `le texte d'un moteur reel est complet et tient en sept lignes`() {
+        // Hors mesure : pas de ligne de répartition du temps.
         val core = GbaCore()
         core.loadRom(RealisticRom.bootSequence())
         val framebuffer = IntArray(core.video.pixelCount)
@@ -109,7 +156,7 @@ class GbaDebugTextTest {
 
         val text = assertNotNull(core.debugSnapshot()).toDebugText(59.7, 4.2)
         val lines = text.lines()
-        assertTrue(lines.size == 6, "six lignes attendues sans anomalie, obtenu :\n$text")
+        assertTrue(lines.size == 7, "sept lignes attendues sans anomalie, obtenu :\n$text")
         assertTrue(lines.none { it.isBlank() }, text)
     }
 }

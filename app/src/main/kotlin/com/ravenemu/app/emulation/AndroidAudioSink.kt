@@ -5,6 +5,8 @@ import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
+import com.ravenemu.emulation.api.audio.AudioBufferPrimer
+import com.ravenemu.emulation.api.audio.AudioRateController
 import com.ravenemu.emulation.api.audio.LinearResampler
 import kotlin.math.ceil
 
@@ -28,22 +30,33 @@ class AndroidAudioSink(
 
     private val outputRate = resolveNativeRate(context)
     private val resampler = LinearResampler(sourceRateHz, outputRate)
+    private val rateController = AudioRateController(sourceRateHz)
     private var resampled = ShortArray(0)
+    private val primer: AudioBufferPrimer
     private val track: AudioTrack
 
     init {
-        val outputSamplesPerFrame =
+        val outputFramesPerVideoFrame =
             ceil(sourceSamplesPerFrame.toDouble() * outputRate / sourceRateHz).toInt()
         val minBuffer = AudioTrack.getMinBufferSize(
             outputRate,
             AudioFormat.CHANNEL_OUT_STEREO,
             AudioFormat.ENCODING_PCM_16BIT,
         ).coerceAtLeast(0)
-        // Le rendu vidéo étant découplé, le thread d'émulation ne fait plus
-        // qu'un travail bref entre deux écritures : trois trames de sortie
-        // (~50 ms) suffisent contre les sous-alimentations, tout en réduisant
-        // la latence audio pour rapprocher le son de l'image (synchro A/V).
-        val bufferBytes = maxOf(minBuffer, outputSamplesPerFrame * 2 * 2 * 3)
+        // Huit trames absorbent un pic ponctuel d'ordonnancement Android.
+        // Six trames sont écrites avant le premier appel à play(), soit environ
+        // 100 ms de réserve à la cadence GBA. La marge restante évite de vider
+        // la piste sans modifier la fréquence ni les timings du moteur.
+        val bufferBytes = maxOf(
+            minBuffer,
+            outputFramesPerVideoFrame *
+                CHANNEL_COUNT *
+                BYTES_PER_SAMPLE *
+                BUFFER_VIDEO_FRAMES,
+        )
+        primer = AudioBufferPrimer(
+            outputFramesPerVideoFrame * CHANNEL_COUNT * PRIME_VIDEO_FRAMES,
+        )
         track = AudioTrack.Builder()
             .setAudioAttributes(
                 AudioAttributes.Builder()
@@ -66,16 +79,58 @@ class AndroidAudioSink(
             .build()
     }
 
-    override fun write(samples: ShortArray, count: Int) {
+    override fun write(samples: ShortArray, count: Int, targetDurationNanos: Long) {
         try {
-            if (track.playState != AudioTrack.PLAYSTATE_PLAYING) track.play()
-            val needed = resampler.maxOutput(count)
+            recoverFromUnderrun()
+
+            // À vitesse réduite, produire davantage de trames de sortie évite
+            // les trous périodiques dans AudioTrack. Le contrôleur lisse et
+            // borne le ratio pour empêcher toute variation brutale.
+            val rateScale = rateController.update(count / 2, targetDurationNanos)
+            val needed = resampler.maxOutput(count, rateScale)
             if (resampled.size < needed) resampled = ShortArray(needed)
-            val produced = resampler.resample(samples, count, resampled)
-            track.write(resampled, 0, produced, AudioTrack.WRITE_BLOCKING)
+            val produced = resampler.resample(samples, count, resampled, rateScale)
+
+            // WRITE_BLOCKING peut encore retourner une écriture partielle si la
+            // piste change d'état. Ne jamais abandonner silencieusement la fin.
+            var offset = 0
+            while (offset < produced) {
+                val written = track.write(
+                    resampled,
+                    offset,
+                    produced - offset,
+                    AudioTrack.WRITE_BLOCKING,
+                )
+                if (written <= 0) break
+                offset += written
+            }
+
+            // AudioTrack ne commence à consommer qu'après le préremplissage.
+            // Les appels suivants maintiennent cette avance au lieu de courir
+            // en permanence au bord d'une nouvelle rupture.
+            if (primer.onSamplesQueued(offset)) track.play()
         } catch (_: Exception) {
             // Une sortie audio défaillante ne doit pas interrompre le jeu.
         }
+    }
+
+    override fun underrunCount(): Int = currentUnderrunCount()
+
+    /**
+     * Une rupture vide l'avance accumulée. On arrête alors la piste, on jette
+     * son tampon devenu discontinu et on repasse par le même préremplissage.
+     */
+    private fun recoverFromUnderrun() {
+        if (!primer.onUnderrunCount(currentUnderrunCount())) return
+        track.pause()
+        track.flush()
+        primer.reset(currentUnderrunCount())
+    }
+
+    private fun currentUnderrunCount(): Int = try {
+        track.underrunCount.coerceAtLeast(0)
+    } catch (_: Exception) {
+        0
     }
 
     override fun setVolume(volume: Float) {
@@ -89,7 +144,9 @@ class AndroidAudioSink(
         try {
             track.pause()
             track.flush()
+            primer.reset(currentUnderrunCount())
             resampler.reset()
+            rateController.reset()
         } catch (_: Exception) {
         }
     }
@@ -102,6 +159,11 @@ class AndroidAudioSink(
     }
 
     private companion object {
+        const val CHANNEL_COUNT = 2
+        const val BYTES_PER_SAMPLE = 2
+        const val BUFFER_VIDEO_FRAMES = 8
+        const val PRIME_VIDEO_FRAMES = 6
+
         /** Débit de sortie natif du périphérique, avec repli sûr sur 48 kHz. */
         fun resolveNativeRate(context: Context): Int {
             return try {

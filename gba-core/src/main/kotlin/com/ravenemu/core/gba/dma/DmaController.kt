@@ -84,6 +84,7 @@ class DmaController(
             val control = readIoHalf(CNT_H[channel])
             if (control and 0x8000 == 0 || timing(control) != TIMING_SPECIAL) continue
             if (readIoWord(DAD[channel]) and 0x0FFF_FFFF != fifoAddress) continue
+            if (bus.diagnostics.measuringTime) transferStartNanos = System.nanoTime()
             val sourceControl = (control ushr 7) and 0x3
             var src = sourceAddress[channel]
             var cycles = STARTUP_CYCLES
@@ -106,7 +107,13 @@ class DmaController(
         }
     }
 
+    /** Instant du début du transfert en cours, pour le chronométrage. */
+    private var transferStartNanos = 0L
+
+    private fun transferNanos(): Long = System.nanoTime() - transferStartNanos
+
     private fun performTransfer(channel: Int) {
+        if (bus.diagnostics.measuringTime) transferStartNanos = System.nanoTime()
         val control = readIoHalf(CNT_H[channel])
         val word32 = control and 0x0400 != 0
         val size = if (word32) 4 else 2
@@ -164,6 +171,7 @@ class DmaController(
      */
     private fun finishTransfer(channel: Int, cycles: Int) {
         bus.takeWaitCycles()
+        if (bus.diagnostics.measuringTime) bus.diagnostics.addDmaNanos(transferNanos())
         bus.breakAccessSequence()
         pendingCycles += cycles
         lastChannel = channel

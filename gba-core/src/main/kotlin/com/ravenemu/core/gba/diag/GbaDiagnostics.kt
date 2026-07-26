@@ -69,9 +69,59 @@ class GbaDiagnostics {
     var audioUnderruns = 0
         private set
 
+    /**
+     * Adresse du **premier** accès hors du plan mémoire, ou 0.
+     *
+     * Un compteur seul dit qu'il se passe quelque chose ; l'adresse dit quoi.
+     * La première suffit : ces incidents arrivent presque toujours en rafale,
+     * au même endroit, et c'est celui-là qu'il faut retrouver dans le programme.
+     */
+    var firstUnsupportedAddress = 0
+        private set
+
+    /** À appeler **avant** [report], le décompte servant à repérer la première. */
+    fun recordUnsupportedAccess(address: Int) {
+        if (counts[Event.UNSUPPORTED_ACCESS.ordinal] == 0) firstUnsupportedAddress = address
+    }
+
     /** Cycles écoulés dans l'attente d'interruption en cours. */
     var waitCycles = 0
         private set
+
+    /**
+     * Chronométrage des sous-systèmes. Désactivé par défaut : chaque relevé
+     * coûte deux lectures d'horloge, négligeables aux quelques milliers d'appels
+     * par trame concernés, mais inutiles hors mesure.
+     */
+    var measuringTime = false
+
+    /** Nanosecondes passées à composer les lignes de l'affichage, trame écoulée. */
+    var ppuNanosLastFrame = 0L
+        private set
+
+    /** Nanosecondes passées en transferts DMA, trame écoulée. */
+    var dmaNanosLastFrame = 0L
+        private set
+
+    /** Nanosecondes passées à mixer l'audio, trame écoulée. */
+    var apuNanosLastFrame = 0L
+        private set
+
+    private var ppuNanos = 0L
+    private var dmaNanos = 0L
+    private var apuNanos = 0L
+
+    fun addPpuNanos(nanos: Long) {
+        ppuNanos += nanos
+    }
+
+    fun addDmaNanos(nanos: Long) {
+        dmaNanos += nanos
+    }
+
+    fun addApuNanos(nanos: Long) {
+        apuNanos += nanos
+    }
 
     fun onInstruction() {
         instructionsThisFrame++
@@ -81,6 +131,12 @@ class GbaDiagnostics {
     fun beginFrame() {
         instructionsLastFrame = instructionsThisFrame
         instructionsThisFrame = 0
+        ppuNanosLastFrame = ppuNanos
+        dmaNanosLastFrame = dmaNanos
+        apuNanosLastFrame = apuNanos
+        ppuNanos = 0
+        dmaNanos = 0
+        apuNanos = 0
     }
 
     fun onSwi(number: Int) {
@@ -145,7 +201,15 @@ class GbaDiagnostics {
         lastSwi = -1
         lastInterruptMask = 0
         audioUnderruns = 0
+        firstUnsupportedAddress = 0
         waitCycles = 0
+        measuringTime = false
+        ppuNanos = 0
+        dmaNanos = 0
+        apuNanos = 0
+        ppuNanosLastFrame = 0
+        dmaNanosLastFrame = 0
+        apuNanosLastFrame = 0
     }
 
     companion object {

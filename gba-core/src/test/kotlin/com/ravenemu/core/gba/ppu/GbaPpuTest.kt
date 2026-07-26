@@ -50,6 +50,29 @@ class GbaPpuTest {
     }
 
     @Test
+    fun `une composition sautee conserve l'image et avance la trame`() {
+        val (bus, ppu) = newPpu()
+        palette(bus, 0, red)
+        renderFrame(ppu)
+        assertEquals(GbaPpu.bgr555ToArgb(red), pixel(ppu, 0, 0))
+
+        palette(bus, 0, green)
+        ppu.renderEnabled = false
+        renderFrame(ppu)
+
+        assertEquals(0, ppu.vcount, "la trame matérielle doit avoir avancé")
+        assertEquals(
+            GbaPpu.bgr555ToArgb(red),
+            pixel(ppu, 0, 0),
+            "le framebuffer doit conserver la dernière image composée",
+        )
+
+        ppu.renderEnabled = true
+        renderFrame(ppu)
+        assertEquals(GbaPpu.bgr555ToArgb(green), pixel(ppu, 0, 0))
+    }
+
+    @Test
     fun `l'ecran blanc force remplit de blanc`() {
         val (bus, ppu) = newPpu()
         palette(bus, 0, red)
@@ -85,6 +108,20 @@ class GbaPpuTest {
         bus.vram[0xA000] = 9
         renderFrame(ppu)
         assertEquals(GbaPpu.bgr555ToArgb(blue), pixel(ppu, 0, 0))
+    }
+
+    @Test
+    fun `le cache de palette suit les changements entre deux trames`() {
+        val (bus, ppu) = newPpu()
+        reg(bus, 0x00, 0x0404) // mode 4 + BG2
+        bus.vram[0] = 7
+        palette(bus, 7, red)
+        renderFrame(ppu)
+        assertEquals(GbaPpu.bgr555ToArgb(red), pixel(ppu, 0, 0))
+
+        palette(bus, 7, green)
+        renderFrame(ppu)
+        assertEquals(GbaPpu.bgr555ToArgb(green), pixel(ppu, 0, 0))
     }
 
     @Test
@@ -139,6 +176,27 @@ class GbaPpuTest {
         palette(bus, 2, blue)
         renderFrame(ppu)
         assertEquals(GbaPpu.bgr555ToArgb(green), pixel(ppu, 0, 0))
+    }
+
+    @Test
+    fun `le melange alpha conserve le second plan`() {
+        val (bus, ppu) = newPpu()
+        reg(bus, 0x00, 0x0300) // mode 0 + BG0 + BG1
+        reg(bus, 0x08, 0x0004) // BG0 devant, char base 1
+        reg(bus, 0x0A, 0x0105) // BG1 derrière, screen base 1
+        vram16(bus, 0x0000, 0x0001)
+        vram16(bus, 0x0800, 0x0002)
+        for (i in 0 until 32) bus.vram[0x4020 + i] = 0x11
+        for (i in 0 until 32) bus.vram[0x4040 + i] = 0x22
+        palette(bus, 1, red)
+        palette(bus, 2, blue)
+
+        // BG0 cible 1, BG1 cible 2, mélange 50 pour cent de chaque plan.
+        reg(bus, 0x50, 0x0241)
+        reg(bus, 0x52, 0x0808)
+        renderFrame(ppu)
+
+        assertEquals(0xFF7F007F.toInt(), pixel(ppu, 0, 0))
     }
 
     @Test

@@ -44,7 +44,24 @@ class GbaTimersTest {
         timers.onReloadWrite(0, 0xFFFF)
         timers.onControlWrite(0, 0x0080) // T0 activé, prédiviseur 1
         timers.onControlWrite(1, 0x0084) // T1 activé, cascade (count-up)
-        timers.tick(1) // T0 déborde → T1 s'incrémente
+        timers.tick(1) // T0 déborde et T1 s'incrémente
         assertEquals(1, timers.counter(1))
+    }
+
+    @Test
+    fun `les cycles sans timer actif ne débordent pas l'accumulateur`() {
+        val timers = GbaTimers(GbaInterruptController())
+
+        // Reproduit rapidement plus de 128 secondes de cycles sans timer.
+        timers.tick(Int.MAX_VALUE - 1)
+        timers.tick(16)
+
+        timers.onReloadWrite(0, 0xFF00)
+        timers.onControlWrite(0, 0x0080)
+        timers.tick(0x100)
+
+        // Le timer nouvellement activé doit avancer normalement et déborder
+        // exactement après 256 cycles.
+        assertEquals(0xFF00, timers.counter(0))
     }
 }

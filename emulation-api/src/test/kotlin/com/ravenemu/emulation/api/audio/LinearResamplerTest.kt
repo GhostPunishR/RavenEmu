@@ -96,6 +96,31 @@ class LinearResamplerTest {
     }
 
     @Test
+    fun `une cadence ralentie etire le bloc sans rupture`() {
+        val input = stereo(549) { 2000 to -2000 }
+
+        val normal = LinearResampler(32768, 48000)
+        val normalOut = ShortArray(normal.maxOutput(input.size))
+        val normalFrames = normal.resample(input, input.size, normalOut) / 2
+
+        val slowed = LinearResampler(32768, 48000)
+        val scale = 0.86
+        val slowedOut = ShortArray(slowed.maxOutput(input.size, scale))
+        val slowedCount = slowed.resample(input, input.size, slowedOut, scale)
+        val slowedFrames = slowedCount / 2
+
+        assertTrue(slowedFrames > normalFrames)
+        assertTrue(
+            abs(slowedFrames.toDouble() / normalFrames - 1.0 / scale) < 0.02,
+            "ratio ralenti : ${slowedFrames.toDouble() / normalFrames}",
+        )
+        for (f in 5 until slowedFrames) {
+            assertEquals(2000, slowedOut[f * 2].toInt())
+            assertEquals(-2000, slowedOut[f * 2 + 1].toInt())
+        }
+    }
+
+    @Test
     fun `pas de depassement si la sortie est trop petite`() {
         val r = LinearResampler(32768, 48000)
         val input = stereo(300) { 1000 to 1000 }

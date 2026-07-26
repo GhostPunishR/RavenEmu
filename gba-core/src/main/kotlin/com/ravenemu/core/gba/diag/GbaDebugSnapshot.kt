@@ -31,7 +31,11 @@ data class GbaDebugSnapshot(
     val fifoASize: Int,
     /** Octets en attente dans la FIFO Direct Sound B. */
     val fifoBSize: Int,
-    /** Sous-alimentations audio depuis le chargement de la ROM. */
+    /** Lectures à vide de la FIFO Direct Sound A. */
+    val fifoAEmptyReads: Int,
+    /** Lectures à vide de la FIFO Direct Sound B. */
+    val fifoBEmptyReads: Int,
+    /** Sous-alimentations du tampon de sortie du moteur. */
     val audioUnderruns: Int,
     /** Nombre d'appels logiciels non pris en charge rencontrés. */
     val unsupportedSwiCount: Int,
@@ -43,6 +47,14 @@ data class GbaDebugSnapshot(
     val missingInterruptCount: Int,
     /** Nombre d'erreurs de décompression rencontrées. */
     val decompressionErrorCount: Int,
+    /** Adresse du premier accès hors du plan mémoire, ou 0. */
+    val firstUnsupportedAddress: Int,
+    /** Millisecondes passées à composer l'affichage, trame écoulée. */
+    val ppuMillis: Double,
+    /** Millisecondes passées en transferts DMA, trame écoulée. */
+    val dmaMillis: Double,
+    /** Millisecondes passées à mixer l'audio, trame écoulée. */
+    val apuMillis: Double,
 ) {
     /** `true` si une anomalie au moins a été relevée depuis le chargement. */
     val hasAnomalies: Boolean

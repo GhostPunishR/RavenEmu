@@ -50,6 +50,8 @@ class GbaCore(
 
     override val framebufferFormat: FramebufferFormat = FramebufferFormat.ARGB_8888
 
+    override val supportsVideoFrameSkipping: Boolean = true
+
     internal var machine: GbaMachine? = null
         private set
 
@@ -79,12 +81,24 @@ class GbaCore(
     }
 
     override fun runFrame(framebuffer: IntArray) {
+        runFrame(framebuffer, renderVideo = true)
+    }
+
+    override fun runFrame(framebuffer: IntArray, renderVideo: Boolean) {
         val m = machine ?: error("Aucune ROM chargée")
         require(framebuffer.size >= video.pixelCount) {
             "Framebuffer trop petit : ${framebuffer.size} < ${video.pixelCount}"
         }
-        m.runFrame(CYCLES_PER_FRAME)
-        System.arraycopy(m.ppu.frame, 0, framebuffer, 0, video.pixelCount)
+        m.ppu.renderEnabled = renderVideo
+        try {
+            m.runFrame(CYCLES_PER_FRAME)
+        } finally {
+            // Une demande de saut ne doit jamais survivre à la trame courante.
+            m.ppu.renderEnabled = true
+        }
+        if (renderVideo) {
+            System.arraycopy(m.ppu.frame, 0, framebuffer, 0, video.pixelCount)
+        }
     }
 
     override fun setButton(button: EmulatorButton, pressed: Boolean) {
@@ -108,6 +122,23 @@ class GbaCore(
         }
 
     /**
+     * Chronométrage des sous-systèmes. À n'activer que pour mesurer : chaque
+     * relevé coûte deux lectures d'horloge, et le but est justement de ne pas
+     * fausser ce qu'on mesure.
+     */
+    var measuringTime: Boolean
+        get() = machine?.diagnostics?.measuringTime ?: false
+        set(value) {
+            val m = machine ?: return
+            m.diagnostics.measuringTime = value
+            // Le rappel de l'unité audio n'est branché que pendant la mesure :
+            // laissé en place, il coûterait deux lectures d'horloge par lot,
+            // même en Release.
+            m.apu.onBatchNanos =
+                if (value) { nanos -> m.diagnostics.addApuNanos(nanos) } else null
+        }
+
+    /**
      * Photographie de l'état du moteur, pour une surcouche de débogage. Retourne
      * `null` si aucune ROM n'est chargée.
      */
@@ -126,6 +157,8 @@ class GbaCore(
             dmaActive = m.dma.isActive,
             fifoASize = m.apu.fifoSize(0),
             fifoBSize = m.apu.fifoSize(1),
+            fifoAEmptyReads = m.apu.fifoEmptyReads(0),
+            fifoBEmptyReads = m.apu.fifoEmptyReads(1),
             audioUnderruns = m.apu.underruns,
             unsupportedSwiCount = diag.count(GbaDiagnostics.Event.UNSUPPORTED_SWI),
             undefinedInstructionCount =
@@ -134,6 +167,10 @@ class GbaCore(
             missingInterruptCount = diag.count(GbaDiagnostics.Event.MISSING_INTERRUPT),
             decompressionErrorCount =
                 diag.count(GbaDiagnostics.Event.DECOMPRESSION_ERROR),
+            firstUnsupportedAddress = diag.firstUnsupportedAddress,
+            ppuMillis = diag.ppuNanosLastFrame / 1_000_000.0,
+            dmaMillis = diag.dmaNanosLastFrame / 1_000_000.0,
+            apuMillis = diag.apuNanosLastFrame / 1_000_000.0,
         )
     }
 

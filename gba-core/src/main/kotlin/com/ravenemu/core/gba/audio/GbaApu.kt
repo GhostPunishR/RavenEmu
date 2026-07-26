@@ -33,8 +33,15 @@ class GbaApu {
      */
     var onFifoRequest: ((Int) -> Unit)? = null
 
+    /**
+     * Rappel de chronométrage du mixage, branché par la machine quand la mesure
+     * est active. Nul, il ne coûte qu'une comparaison de référence par lot.
+     */
+    var onBatchNanos: ((Long) -> Unit)? = null
+
     private val fifoA = FifoBuffer()
     private val fifoB = FifoBuffer()
+    private val fifoEmptyReads = IntArray(2)
     private var directSampleA = 0
     private var directSampleB = 0
 
@@ -68,6 +75,7 @@ class GbaApu {
         var audioCycles = cpuRemainder shr 2
         if (audioCycles <= 0) return
         cpuRemainder -= audioCycles shl 2
+        val start = if (onBatchNanos != null) System.nanoTime() else 0L
 
         // On n'avance jamais au-delà du prochain échantillon : les canaux et le
         // point d'échantillonnage restent ainsi entrelacés, sinon toute une
@@ -92,6 +100,7 @@ class GbaApu {
             }
             audioCycles -= step
         }
+        onBatchNanos?.invoke(System.nanoTime() - start)
     }
 
     /** Séquenceur de trames : longueurs (256 Hz), enveloppes (64 Hz), balayage (128 Hz). */
@@ -130,6 +139,7 @@ class GbaApu {
 
     private fun popFifo(channel: Int) {
         val fifo = if (channel == 0) fifoA else fifoB
+        if (fifo.size == 0) fifoEmptyReads[channel]++
         val sample = fifo.pop()
         if (channel == 0) directSampleA = sample else directSampleB = sample
         // Sous le quart de sa capacité, la FIFO réclame un nouveau bloc.
@@ -321,10 +331,14 @@ class GbaApu {
         readIndex = 0
         available = 0
         underruns = 0
+        fifoEmptyReads.fill(0)
     }
 
     /** Nombre d'octets en attente dans une FIFO (diagnostic et tests). */
     fun fifoSize(channel: Int): Int = if (channel == 0) fifoA.size else fifoB.size
+
+    /** Lectures effectuées alors que la FIFO demandée était vide. */
+    fun fifoEmptyReads(channel: Int): Int = fifoEmptyReads[channel]
 
     /** File d'attente circulaire de 32 octets d'échantillons signés. */
     private class FifoBuffer {

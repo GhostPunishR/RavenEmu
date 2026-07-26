@@ -56,6 +56,20 @@ interface EmulatorCore {
      */
     fun runFrame(framebuffer: IntArray)
 
+    /**
+     * Vrai si le moteur peut avancer une trame complète sans recomposer
+     * l'image. Les timings vidéo, interruptions et DMA doivent rester actifs.
+     */
+    val supportsVideoFrameSkipping: Boolean get() = false
+
+    /**
+     * Exécute une trame en demandant ou non sa composition. Le comportement par
+     * défaut conserve la compatibilité des moteurs qui rendent toujours.
+     */
+    fun runFrame(framebuffer: IntArray, renderVideo: Boolean) {
+        runFrame(framebuffer)
+    }
+
     /** Applique l'état d'un bouton. Prend effet dès le prochain cycle émulé. */
     fun setButton(button: EmulatorButton, pressed: Boolean)
 
