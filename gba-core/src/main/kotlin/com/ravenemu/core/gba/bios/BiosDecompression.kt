@@ -117,19 +117,30 @@ internal object BiosDecompression {
         if (size <= 0 || size > MAX_OUTPUT) return
         if (symbolBits != 4 && symbolBits != 8) return
 
-        val treeSize = (read8(bus, source + 4) + 1) * 2
-        val treeBase = source + 5
-        var streamAddress = source + 4 + treeSize
+        // La table Huffman commence à l'octet de taille lui-même : c'est sur
+        // cette base, et en adresses absolues, que se calculent les offsets des
+        // enfants. Aligner un offset relatif à la racine donnerait un décalage
+        // d'un octet et ferait dérailler tout le parcours de l'arbre.
+        val treeStart = source + 4
+        val treeBytes = (read8(bus, treeStart) + 1) * 2
+        val rootAddress = treeStart + 1
+        val treeEnd = treeStart + treeBytes
+        var streamAddress = treeEnd
+
         val out = ByteArray(size)
         var written = 0
         var nibbleHigh = false
         var pending = 0
 
-        var node = 0
+        var nodeAddress = rootAddress
         var word = 0
         var bitsLeft = 0
+        // Un arbre incohérent pourrait ne jamais atteindre de feuille : on borne
+        // le nombre de bits consommés pour toujours terminer.
+        var budget = size.toLong() * 8 * MAX_BITS_PER_SYMBOL + 64
 
         while (written < size) {
+            if (budget-- <= 0) return // flux invalide : rien n'est écrit
             if (bitsLeft == 0) {
                 word = bus.read32(streamAddress)
                 streamAddress += 4
@@ -139,17 +150,20 @@ internal object BiosDecompression {
             word = word shl 1
             bitsLeft--
 
-            val nodeValue = read8(bus, treeBase + node)
+            val nodeValue = read8(bus, nodeAddress)
             val offset = nodeValue and 0x3F
-            val next = ((node and 1.inv()) + (offset + 1) * 2) + bit
+            val nextAddress = (nodeAddress and 1.inv()) + (offset + 1) * 2 + bit
             val isLeaf = if (bit == 0) nodeValue and 0x80 != 0 else nodeValue and 0x40 != 0
 
+            // Un enfant hors de la table signale un flux corrompu.
+            if (nextAddress < rootAddress || nextAddress >= treeEnd) return
+
             if (!isLeaf) {
-                node = next
+                nodeAddress = nextAddress
                 continue
             }
-            val symbol = read8(bus, treeBase + next)
-            node = 0
+            val symbol = read8(bus, nextAddress)
+            nodeAddress = rootAddress
             if (symbolBits == 8) {
                 out[written++] = symbol.toByte()
             } else {
@@ -238,4 +252,7 @@ internal object BiosDecompression {
 
     /** Garde-fou : refuse un flux annonçant une taille aberrante. */
     private const val MAX_OUTPUT = 1 shl 20
+
+    /** Profondeur d'arbre Huffman tolérée avant de conclure à un flux corrompu. */
+    private const val MAX_BITS_PER_SYMBOL = 32
 }

@@ -76,15 +76,27 @@ class GbaBios(
         }
     }
 
-    /** `SoftReset` : redémarre la cartouche depuis son point d'entrée. */
+    /**
+     * `SoftReset` : redémarre la cartouche depuis son point d'entrée.
+     *
+     * Le saut passe par [Arm7Tdmi.branchTo] : sans cela le moteur considérerait
+     * l'instruction courante comme terminée et avancerait `PC`, ce qui sauterait
+     * la première instruction de la ROM.
+     */
     private fun softReset() {
         cpu.state.reset()
         cpu.reset(ROM_ENTRY)
+        cpu.branchTo(ROM_ENTRY)
     }
 
     /**
-     * `RegisterRamReset` : efface les zones désignées par le masque [flags]
-     * (bit 0 EWRAM, 1 IWRAM, 2 palette, 3 VRAM, 4 OAM, 5–7 registres).
+     * `RegisterRamReset` : efface uniquement les groupes désignés par [flags].
+     *
+     * Bits 0–4 : EWRAM, IWRAM, palette, VRAM, OAM. Bits 5–7 : registres, par
+     * familles distinctes — série, audio, puis « les autres » (affichage, DMA,
+     * timers, interruptions). Un groupe non demandé n'est jamais touché : un
+     * effacement global écraserait `DISPCNT` ou la configuration DMA d'un jeu
+     * qui ne demandait que la remise à zéro du son.
      */
     private fun registerRamReset(flags: Int) {
         if (flags and 0x01 != 0) bus.ewram.fill(0)
@@ -93,7 +105,24 @@ class GbaBios(
         if (flags and 0x04 != 0) bus.paletteRam.fill(0)
         if (flags and 0x08 != 0) bus.vram.fill(0)
         if (flags and 0x10 != 0) bus.oam.fill(0)
-        if (flags and 0xE0 != 0) bus.io.fill(0)
+
+        if (flags and 0x20 != 0) {
+            // Communication série.
+            bus.io.fill(0, IO_SERIAL_START, IO_SERIAL_END)
+        }
+        if (flags and 0x40 != 0) {
+            // Registres audio et files Direct Sound.
+            bus.io.fill(0, IO_SOUND_START, IO_SOUND_END)
+            bus.apu?.reset()
+        }
+        if (flags and 0x80 != 0) {
+            // Affichage, DMA, timers, interruptions : tout le reste des E/S.
+            bus.io.fill(0, 0, IO_SOUND_START)
+            bus.io.fill(0, IO_SOUND_END, IO_SERIAL_START)
+            bus.io.fill(0, IO_SERIAL_END, bus.io.size)
+            bus.timers?.reset()
+            bus.interrupts?.reset()
+        }
     }
 
     /** `ArcTan` : arc tangente d'une valeur en virgule fixe 1.14, en angle 16 bits. */
@@ -224,5 +253,11 @@ class GbaBios(
 
         /** Garde-fou sur le nombre d'entrées traitées par les appels affines. */
         private const val MAX_AFFINE_ENTRIES = 512
+
+        // Bornes des familles de registres, pour un effacement par groupe.
+        private const val IO_SOUND_START = 0x060
+        private const val IO_SOUND_END = 0x0A8
+        private const val IO_SERIAL_START = 0x120
+        private const val IO_SERIAL_END = 0x160
     }
 }
