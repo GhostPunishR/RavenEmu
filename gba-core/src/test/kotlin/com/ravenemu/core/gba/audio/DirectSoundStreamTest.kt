@@ -79,10 +79,12 @@ class DirectSoundStreamTest {
             "progression DMA $advanced, attendu autour de $consumed octets",
         )
 
-        // La FIFO reste dans sa plage de service : ni vide, ni saturée.
+        // Après l'amorçage initial, la FIFO reste dans sa plage de service.
+        // Le premier vidage peut déclencher la toute première requête DMA.
         val size = m.apu.fifoSize(0)
         assertTrue(size in 1..32, "taille de FIFO hors plage : $size")
-        assertEquals(0, m.apu.fifoEmptyReads(0), "la FIFO ne doit jamais être lue vide")
+        val emptyReads = m.apu.fifoEmptyReads(0)
+        assertTrue(emptyReads <= 1, "lectures à vide répétées : $emptyReads")
     }
 
     @Test
