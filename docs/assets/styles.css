@@ -58,26 +58,23 @@ body::after {
 }
 
 body::before {
-  inset: -24vh -18vw;
+  inset: 0;
   background:
-    radial-gradient(circle at 14% 18%, rgba(124, 58, 237, 0.38), transparent 25rem),
-    radial-gradient(circle at 84% 26%, rgba(168, 85, 247, 0.28), transparent 25rem),
-    radial-gradient(circle at 52% 84%, rgba(91, 33, 182, 0.25), transparent 29rem),
-    conic-gradient(from 215deg at 50% 50%, transparent 0 31%, rgba(168, 85, 247, 0.08) 39%, transparent 48% 100%);
-  opacity: 0.92;
-  animation: ambient-aurora 18s ease-in-out infinite alternate;
+    radial-gradient(circle at 10% 12%, rgba(124, 58, 237, 0.2), transparent 27rem),
+    radial-gradient(circle at 88% 28%, rgba(168, 85, 247, 0.12), transparent 25rem),
+    radial-gradient(circle at 52% 84%, rgba(91, 33, 182, 0.12), transparent 30rem);
+  opacity: 0.88;
 }
 
 body::after {
-  inset: -8rem;
+  inset: 0;
   background-image:
-    radial-gradient(circle, rgba(216, 180, 254, 0.72) 0 1.2px, transparent 2px),
-    radial-gradient(circle, rgba(168, 85, 247, 0.52) 0 1.1px, transparent 1.9px);
-  background-position: 12px 18px, 52px 68px;
-  background-size: 76px 76px, 121px 121px;
-  opacity: 0.42;
-  mask-image: linear-gradient(to bottom, #000, rgba(0, 0, 0, 0.9) 76%, transparent);
-  animation: ambient-particles 22s linear infinite;
+    url("raven-retro-pattern.svg"),
+    radial-gradient(circle, rgba(216, 180, 254, 0.42) 0 1px, transparent 1.6px);
+  background-position: 0 0, 18px 22px;
+  background-size: 320px 220px, 104px 104px;
+  opacity: 0.24;
+  mask-image: linear-gradient(to bottom, #000, rgba(0, 0, 0, 0.82) 74%, transparent);
 }
 
 body.nav-open {
@@ -353,28 +350,25 @@ p {
   z-index: 0;
   inset: 0;
   background-image:
-    linear-gradient(rgba(216, 180, 254, 0.075) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(216, 180, 254, 0.075) 1px, transparent 1px);
+    linear-gradient(rgba(216, 180, 254, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(216, 180, 254, 0.055) 1px, transparent 1px);
   background-size: 64px 64px;
   mask-image: linear-gradient(#000, transparent 88%);
-  animation: hero-grid-drift 18s linear infinite;
   content: "";
 }
 
 .hero::after {
   position: absolute;
   z-index: 0;
-  inset: -35% -45%;
-  background: linear-gradient(
-    115deg,
-    transparent 42%,
-    rgba(124, 58, 237, 0.04) 46%,
-    rgba(168, 85, 247, 0.13) 50%,
-    rgba(216, 180, 254, 0.045) 53%,
-    transparent 58%
-  );
+  top: clamp(5.5rem, 14vh, 9rem);
+  left: -30rem;
+  width: clamp(260px, 32vw, 460px);
+  aspect-ratio: 520 / 220;
+  background: url("raven-flight.svg") center / contain no-repeat;
+  opacity: 0;
+  filter: drop-shadow(0 0 22px rgba(124, 58, 237, 0.2));
   pointer-events: none;
-  animation: hero-energy-sweep 8s ease-in-out infinite alternate;
+  animation: raven-flight 22s ease-in-out infinite;
   content: "";
 }
 
@@ -479,7 +473,6 @@ p {
   width: 29rem;
   height: 29rem;
   background: rgba(124, 58, 237, 0.13);
-  animation: hero-glow-one 9s ease-in-out infinite alternate;
 }
 
 .hero-glow-two {
@@ -488,7 +481,6 @@ p {
   width: 15rem;
   height: 15rem;
   background: rgba(168, 85, 247, 0.065);
-  animation: hero-glow-two 11s ease-in-out infinite alternate;
 }
 
 .hero-visual {
@@ -1058,64 +1050,31 @@ p {
   border-top: 1px solid var(--border);
 }
 
-@keyframes ambient-aurora {
-  0% {
-    opacity: 0.78;
-    transform: translate3d(-5%, -4%, 0) scale(1);
+@keyframes raven-flight {
+  0%,
+  12% {
+    opacity: 0;
+    transform: translate3d(0, 18px, 0) rotate(-2deg);
   }
 
-  50% {
-    opacity: 1;
-    transform: translate3d(5%, 0, 0) scale(1.07);
+  17% {
+    opacity: 0.22;
   }
 
+  42% {
+    opacity: 0.28;
+    transform: translate3d(calc(48vw + 15rem), -26px, 0) rotate(1deg);
+  }
+
+  68% {
+    opacity: 0.2;
+    transform: translate3d(calc(100vw + 32rem), 12px, 0) rotate(-1deg);
+  }
+
+  72%,
   100% {
-    opacity: 0.88;
-    transform: translate3d(-2%, 6%, 0) scale(1.03);
-  }
-}
-
-@keyframes ambient-particles {
-  to {
-    transform: translate3d(76px, 76px, 0);
-  }
-}
-
-@keyframes hero-grid-drift {
-  to {
-    background-position: 64px 64px;
-  }
-}
-
-@keyframes hero-energy-sweep {
-  from {
-    opacity: 0.35;
-    transform: translate3d(-20%, -2%, 0);
-  }
-
-  to {
-    opacity: 0.9;
-    transform: translate3d(20%, 2%, 0);
-  }
-}
-
-@keyframes hero-glow-one {
-  from {
-    transform: translate3d(2%, -2%, 0) scale(0.94);
-  }
-
-  to {
-    transform: translate3d(-10%, 8%, 0) scale(1.12);
-  }
-}
-
-@keyframes hero-glow-two {
-  from {
-    transform: translate3d(-5%, 4%, 0) scale(0.9);
-  }
-
-  to {
-    transform: translate3d(12%, -8%, 0) scale(1.16);
+    opacity: 0;
+    transform: translate3d(calc(100vw + 32rem), 12px, 0) rotate(-1deg);
   }
 }
 
@@ -1419,13 +1378,9 @@ p {
     scroll-behavior: auto;
   }
 
-  body::before,
-  body::after,
-  .hero::before,
-  .hero::after,
-  .hero-glow {
+  .hero::after {
     animation: none !important;
-    transform: none;
+    display: none;
   }
 
   *,
