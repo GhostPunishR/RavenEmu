@@ -1,3 +1,0 @@
-.menu-toggle[aria-expanded="true"] span[aria-hidden="true"]:nth-of-type(2){opacity:1;transform:translateY(6px) rotate(45deg)}
-.menu-toggle[aria-expanded="true"] span[aria-hidden="true"]:nth-of-type(3){opacity:0;transform:none}
-.menu-toggle[aria-expanded="true"] span[aria-hidden="true"]:nth-of-type(4){opacity:1;transform:translateY(-6px) rotate(-45deg)}
