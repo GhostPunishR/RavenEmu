@@ -57,6 +57,10 @@ class Arm7Tdmi(val bus: GbaBus) {
         state.switchMode(CpuState.MODE_SYSTEM)
         state.regs[13] = 0x0300_7F00
         state.thumb = false
+        // Le BIOS rend la main avec les IRQ **démasquées** (bit I du CPSR à 0) :
+        // un jeu se contente de programmer IE et IME, il ne dégage jamais ce bit
+        // lui-même. Le laisser armé empêcherait tout gestionnaire de tourner.
+        state.irqDisabled = false
         state.regs[15] = entryPoint
     }
 

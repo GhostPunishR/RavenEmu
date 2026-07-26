@@ -149,6 +149,10 @@ class BiosIntrWaitTest {
         m.interrupts.enable = 0xFFFF
         // DISPSTAT : interruption VBlank activée, pour que la trame la lève.
         m.bus.write16(0x0400_0004, 0x0008)
+        // Les IRQ étant démasquées au sortir du BIOS, l'interruption est
+        // réellement délivrée : il faut donc un gestionnaire, comme dans un vrai
+        // jeu, et qui acquitte `IF`.
+        SyntheticRom.installMinimalIrqHandler(m.bus)
 
         m.runFrame(com.ravenemu.core.gba.GbaCore.CYCLES_PER_FRAME)
 

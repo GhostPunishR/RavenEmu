@@ -29,12 +29,35 @@ object SyntheticRom {
             putWord(rom, offset, word)
             offset += 4
         }
+        writeHeader(rom, title)
+        return rom
+    }
+
+    /**
+     * Construit une ROM à partir de [code] déjà assemblé (mélange ARM et Thumb
+     * possible). Le code doit réserver la zone d'en-tête 0x04–0xBF, comme le fait
+     * une vraie cartouche : un branchement en 0x00, puis le programme à partir de
+     * 0xC0 (voir [GbaAssembler.padTo]).
+     */
+    fun buildFromCode(
+        code: ByteArray,
+        title: String = "RAVENTEST",
+        sizeBytes: Int = 8192,
+    ): ByteArray {
+        require(sizeBytes >= GbaHeader.HEADER_SIZE) { "ROM trop petite" }
+        require(code.size <= sizeBytes) { "Programme plus grand que la ROM" }
+        val rom = ByteArray(sizeBytes)
+        code.copyInto(rom)
+        writeHeader(rom, title)
+        return rom
+    }
+
+    private fun writeHeader(rom: ByteArray, title: String) {
         writeAscii(rom, 0xA0, title.take(12))
         writeAscii(rom, 0xAC, "TEST")
         writeAscii(rom, 0xB0, "RV")
         rom[0xB2] = 0x96.toByte() // marqueur fixe GBA
         rom[0xBD] = GbaHeader.computeHeaderChecksum(rom).toByte()
-        return rom
     }
 
     /**
@@ -49,6 +72,30 @@ object SyntheticRom {
             0xE5810000.toInt(),                // STR R0, [R1]
             ARM_INFINITE_LOOP,                 // b .
         )
+    }
+
+    /**
+     * Installe en IWRAM le plus court gestionnaire d'interruption **viable** pour
+     * un jeu, et le déclare au BIOS en `0x0300_7FFC`.
+     *
+     * Il acquitte `IF` avant de rendre la main : sans cet acquittement, la source
+     * reste levée et l'exception se redéclenche à l'infini dès le retour — ce que
+     * fait aussi le vrai matériel.
+     */
+    fun installMinimalIrqHandler(
+        bus: com.ravenemu.core.gba.memory.GbaBus,
+        at: Int = 0x0300_0000,
+    ) {
+        val asm = GbaAssembler(base = at)
+        asm.ldrPc(0, "ifRegister")
+        asm.ldrh(1, 0)          // lit les sources levées
+        asm.strh(1, 0)          // écrire un 1 efface le drapeau
+        asm.bx(14)
+        asm.label("ifRegister")
+        asm.word(0x0400_0202)
+        val code = asm.assemble()
+        for ((i, byte) in code.withIndex()) bus.write8(at + i, byte.toInt() and 0xFF)
+        bus.write32(0x0300_7FFC, at)
     }
 
     private fun putWord(rom: ByteArray, offset: Int, word: Int) {
