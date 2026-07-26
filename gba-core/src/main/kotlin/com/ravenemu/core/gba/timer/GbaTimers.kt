@@ -23,11 +23,28 @@ class GbaTimers(private val interrupts: GbaInterruptController) {
     private val control = IntArray(4)
     private val prescalerCounter = IntArray(4)
 
+    /**
+     * Cycles reçus mais pas encore appliqués, et nombre de cycles avant le
+     * prochain débordement.
+     *
+     * Entre deux débordements, la seule chose qu'un timer donne à voir est la
+     * valeur de son compteur, lisible par les registres d'E/S. Tout le reste —
+     * interruption, échantillon Direct Sound, cascade — n'arrive qu'au
+     * débordement. Les cycles sont donc **accumulés** et n'appliqués qu'au
+     * moment utile : à l'échéance, ou dès qu'on lit un compteur. Appelé après
+     * chaque instruction, ce point d'entrée se réduit ainsi à une addition et
+     * une comparaison.
+     */
+    private var pendingCycles = 0
+    private var cyclesUntilOverflow = NO_OVERFLOW
+
     fun onReloadWrite(timer: Int, value: Int) {
+        flush() // les cycles en attente valent encore pour l'ancien rechargement
         reload[timer] = value and 0xFFFF
     }
 
     fun onControlWrite(timer: Int, value: Int) {
+        flush() // idem : appliqué avant que les réglages ne changent
         val wasEnabled = control[timer] and 0x80 != 0
         control[timer] = value and 0xFFFF
         val nowEnabled = value and 0x80 != 0
@@ -35,9 +52,14 @@ class GbaTimers(private val interrupts: GbaInterruptController) {
             counter[timer] = reload[timer]
             prescalerCounter[timer] = 0
         }
+        cyclesUntilOverflow = computeBudget()
     }
 
-    fun counter(timer: Int): Int = counter[timer]
+    /** Compteur courant. Les cycles en attente sont appliqués d'abord. */
+    fun counter(timer: Int): Int {
+        flush()
+        return counter[timer]
+    }
 
     fun control(timer: Int): Int = control[timer]
 
@@ -51,6 +73,40 @@ class GbaTimers(private val interrupts: GbaInterruptController) {
      * strictement identique.
      */
     fun tick(cycles: Int) {
+        pendingCycles += cycles
+        // Rien d'observable avant la prochaine échéance : on diffère.
+        if (pendingCycles < cyclesUntilOverflow) return
+        flush()
+    }
+
+    /** Applique les cycles accumulés, puis recalcule la prochaine échéance. */
+    private fun flush() {
+        val cycles = pendingCycles
+        if (cycles > 0) {
+            pendingCycles = 0
+            applyCycles(cycles)
+        }
+        cyclesUntilOverflow = computeBudget()
+    }
+
+    /**
+     * Nombre de cycles avant le prochain débordement, tous timers confondus.
+     * [NO_OVERFLOW] si aucun timer piloté par l'horloge n'est actif.
+     */
+    private fun computeBudget(): Int {
+        var budget = NO_OVERFLOW
+        for (i in 0 until 4) {
+            val settings = control[i]
+            if (settings and 0x80 == 0 || settings and 0x04 != 0) continue
+            val prescale = PRESCALE[settings and 0x3]
+            val ticks = 0x1_0000 - counter[i]
+            val cycles = ticks * prescale - prescalerCounter[i]
+            if (cycles < budget) budget = cycles
+        }
+        return budget
+    }
+
+    private fun applyCycles(cycles: Int) {
         for (i in 0 until 4) {
             val settings = control[i]
             if (settings and 0x80 == 0) continue // désactivé
@@ -103,10 +159,15 @@ class GbaTimers(private val interrupts: GbaInterruptController) {
         reload.fill(0)
         control.fill(0)
         prescalerCounter.fill(0)
+        pendingCycles = 0
+        cyclesUntilOverflow = NO_OVERFLOW
     }
 
     /** État sérialisable (compteurs, rechargements, contrôles, prédiviseurs). */
-    fun exportState(): IntArray = counter + reload + control + prescalerCounter
+    fun exportState(): IntArray {
+        flush() // l'état exporté ne doit rien devoir à une file d'attente
+        return counter + reload + control + prescalerCounter
+    }
 
     fun importState(data: IntArray) {
         for (i in 0 until 4) {
@@ -115,9 +176,14 @@ class GbaTimers(private val interrupts: GbaInterruptController) {
             control[i] = data[8 + i]
             prescalerCounter[i] = data[12 + i]
         }
+        pendingCycles = 0
+        cyclesUntilOverflow = computeBudget()
     }
 
     private companion object {
         val PRESCALE = intArrayOf(1, 64, 256, 1024)
+
+        /** Aucun timer actif : aucune échéance à surveiller. */
+        const val NO_OVERFLOW = Int.MAX_VALUE
     }
 }
