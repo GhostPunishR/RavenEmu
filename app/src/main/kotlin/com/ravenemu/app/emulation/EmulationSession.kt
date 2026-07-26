@@ -2,6 +2,7 @@ package com.ravenemu.app.emulation
 
 import com.ravenemu.emulation.api.EmulatorButton
 import com.ravenemu.emulation.api.EmulatorCore
+import com.ravenemu.emulation.api.audio.AudioBlockClock
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.locks.LockSupport
 
@@ -132,6 +133,7 @@ class EmulationSession(
             android.os.Process.THREAD_PRIORITY_URGENT_DISPLAY,
         )
         val basePeriodNanos = (1_000_000_000.0 / core.video.refreshRateHz).toLong()
+        val audioBlockClock = AudioBlockClock(basePeriodNanos)
         var nextFrameAt = System.nanoTime()
         var fpsWindowStart = System.nanoTime()
         var fpsFrames = 0
@@ -147,6 +149,7 @@ class EmulationSession(
                 fpsWindowStart = System.nanoTime()
                 fpsFrames = 0
                 workNanos = 0
+                audioBlockClock.reset()
                 continue
             }
 
@@ -166,11 +169,13 @@ class EmulationSession(
             val audioPaced = audioSink != null && audioEnabled && audioCount > 0 &&
                 speedLimitEnabled && !fastForward
             if (audioPaced) {
-                // Si le moteur est plus lent que la console, un bloc natif ne
-                // couvre pas le temps écoulé et AudioTrack finit par manquer de
-                // données. La sortie étire alors le bloc jusqu'au temps de calcul.
-                val targetAudioNanos = maxOf(basePeriodNanos, frameWorkNanos)
+                // Le bloc doit couvrir l'intervalle réel depuis la livraison
+                // précédente, pas seulement le calcul du moteur. Le rendu, les
+                // rappels et l'ordonnancement Android consomment aussi du temps.
+                val targetAudioNanos = audioBlockClock.mark(System.nanoTime())
                 audioSink!!.write(audioBuffer, audioCount, targetAudioNanos)
+            } else {
+                audioBlockClock.reset()
             }
 
             callbacks.onFrame(framebuffer)
