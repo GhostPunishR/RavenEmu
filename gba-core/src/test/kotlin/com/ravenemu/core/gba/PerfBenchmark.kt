@@ -117,6 +117,52 @@ class PerfBenchmark {
         )
     }
 
+    /**
+     * Approche la charge d'un jeu commercial : code Thumb en cartouche, quatre
+     * arrière-plans, 128 sprites, audio complet et **timers Direct Sound à
+     * prédiviseur 1**. Ce dernier point est décisif : c'est le régime où un
+     * cadencement des timers cycle par cycle coûterait des centaines de milliers
+     * de tours de boucle par trame.
+     */
+    @Test
+    fun `banc d'essai d'une charge proche d'un jeu`() {
+        val core = GbaCore()
+        core.loadRom(thumbFromRomImage())
+        val bus = core.machine!!.bus
+        bus.write16(0x0400_0000, 0x1F00) // mode 0, BG0-3 et OBJ
+        for (bg in 0 until 4) bus.write16(0x0400_0008 + bg * 2, 0x0084 or (bg shl 8))
+        for (i in 0 until 0x8000) bus.vram[i] = ((i and 0xFF) or 1).toByte()
+        for (s in 0 until 128) {
+            bus.oam[s * 8] = (s and 0x7F).toByte()
+            bus.oam[s * 8 + 1] = 0x20
+            bus.oam[s * 8 + 2] = ((s * 2) and 0xFF).toByte()
+        }
+        bus.write16(0x0400_0084, 0x0080)
+        bus.write16(0x0400_0082, 0x3F02)
+        bus.write16(0x0400_0080, 0x77FF)
+        // Timers 0 et 1 : prédiviseur 1, rechargement proche du débordement.
+        bus.write16(0x0400_0100, 0xFF00)
+        bus.write16(0x0400_0102, 0x0080)
+        bus.write16(0x0400_0104, 0xFF00)
+        bus.write16(0x0400_0106, 0x0080)
+        repeat(8) {
+            bus.write32(0x0400_00A0, 0x4030_2010)
+            bus.write32(0x0400_00A4, 0x1020_3040)
+        }
+
+        val fb = IntArray(core.video.pixelCount)
+        val audio = ShortArray(4096)
+        val ms = milliseconds(warmup = 40, frames = 120) {
+            core.runFrame(fb)
+            core.readAudio(audio)
+        }
+        val instr = core.debugSnapshot()!!.instructionsPerFrame
+        println(
+            "jeu-simule      %6.3f ms/trame  %7d instructions  %5.1f Mi/s"
+                .format(ms, instr, instr / ms / 1000.0),
+        )
+    }
+
     @Test
     fun `banc d'essai du moteur complet`() {
         println("=== Banc d'essai RavenEmu GBA (JVM de bureau, valeurs indicatives) ===")

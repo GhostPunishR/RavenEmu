@@ -41,31 +41,60 @@ class GbaTimers(private val interrupts: GbaInterruptController) {
 
     fun control(timer: Int): Int = control[timer]
 
-    /** Avance les timers pilotés par l'horloge de [cycles] cycles CPU. */
+    /**
+     * Avance les timers pilotés par l'horloge de [cycles] cycles CPU.
+     *
+     * Le calcul est fait **en une division**, non pas cycle par cycle. Un canal
+     * Direct Sound est cadencé par un timer de prédiviseur 1 : à raison d'un
+     * appel après chaque instruction, une boucle d'incrémentation coûtait ici
+     * plusieurs centaines de milliers de tours par trame, pour un résultat
+     * strictement identique.
+     */
     fun tick(cycles: Int) {
         for (i in 0 until 4) {
-            if (control[i] and 0x80 == 0) continue // désactivé
-            if (control[i] and 0x04 != 0) continue // cascade : piloté par le précédent
-            val prescale = PRESCALE[control[i] and 0x3]
-            prescalerCounter[i] += cycles
-            while (prescalerCounter[i] >= prescale) {
-                prescalerCounter[i] -= prescale
-                increment(i)
+            val settings = control[i]
+            if (settings and 0x80 == 0) continue // désactivé
+            if (settings and 0x04 != 0) continue // cascade : piloté par le précédent
+            val prescale = PRESCALE[settings and 0x3]
+            val total = prescalerCounter[i] + cycles
+            if (total < prescale) {
+                prescalerCounter[i] = total
+                continue
             }
+            prescalerCounter[i] = total % prescale
+            advance(i, total / prescale)
         }
     }
 
-    private fun increment(timer: Int) {
-        counter[timer]++
-        if (counter[timer] <= 0xFFFF) return
-        counter[timer] = reload[timer]
+    /**
+     * Ajoute [ticks] incréments au compteur du timer [timer], en traitant d'un
+     * bloc les débordements éventuels. Chaque débordement conserve ses effets :
+     * interruption, échantillon Direct Sound consommé, cascade.
+     */
+    private fun advance(timer: Int, ticks: Int) {
+        val value = counter[timer] + ticks
+        if (value <= 0xFFFF) {
+            counter[timer] = value
+            return
+        }
+        // Après le premier débordement, le compteur repart du rechargement :
+        // la période vaut donc 0x10000 - rechargement.
+        val period = 0x1_0000 - reload[timer]
+        val excess = value - 0x1_0000
+        val overflows = 1 + excess / period
+        counter[timer] = reload[timer] + excess % period
+        repeat(overflows) { onTimerOverflow(timer) }
+    }
+
+    /** Effets d'un débordement : interruption, Direct Sound, cascade. */
+    private fun onTimerOverflow(timer: Int) {
         if (control[timer] and 0x40 != 0) interrupts.request(Interrupt.TIMER0 + timer)
         // Les canaux Direct Sound consomment un échantillon à chaque débordement.
         onOverflow?.invoke(timer)
         // Cascade : incrémente le timer suivant s'il est en mode count-up.
         val next = timer + 1
         if (next < 4 && control[next] and 0x80 != 0 && control[next] and 0x04 != 0) {
-            increment(next)
+            advance(next, 1)
         }
     }
 
