@@ -24,8 +24,14 @@ class EmulationSession(
         /** Trame prête (appelée depuis le thread d'émulation). */
         fun onFrame(framebuffer: IntArray)
 
-        /** Statistiques périodiques (appelée depuis le thread d'émulation). */
-        fun onStats(fps: Double)
+        /**
+         * Statistiques périodiques (appelée depuis le thread d'émulation).
+         *
+         * [frameTimeMs] est le temps moyen **de calcul** d'une trame, cadencement
+         * exclu : c'est lui qui dit s'il reste de la marge, là où [fps] plafonne à
+         * la fréquence de la console dès que le moteur suit.
+         */
+        fun onStats(fps: Double, frameTimeMs: Double)
 
         /** RAM de cartouche à persister (thread d'émulation). */
         fun onBatterySave(data: ByteArray)
@@ -114,6 +120,7 @@ class EmulationSession(
         var nextFrameAt = System.nanoTime()
         var fpsWindowStart = System.nanoTime()
         var fpsFrames = 0
+        var workNanos = 0L
         var lastBatteryCheck = System.nanoTime()
 
         while (running) {
@@ -124,10 +131,15 @@ class EmulationSession(
                 nextFrameAt = System.nanoTime()
                 fpsWindowStart = System.nanoTime()
                 fpsFrames = 0
+                workNanos = 0
                 continue
             }
 
+            // Temps de calcul brut d'une trame : mesuré autour de l'émulation
+            // seule, sans le cadencement ni l'attente audio.
+            val workStart = System.nanoTime()
             core.runFrame(framebuffer)
+            workNanos += System.nanoTime() - workStart
 
             // Audio d'abord : l'écriture bloquante cadence la session et la
             // file audio est réalimentée avant de payer le coût du rendu
@@ -146,9 +158,11 @@ class EmulationSession(
 
             if (now - fpsWindowStart >= 1_000_000_000L) {
                 val fps = fpsFrames * 1_000_000_000.0 / (now - fpsWindowStart)
-                callbacks.onStats(fps)
+                val frameTimeMs = workNanos / 1_000_000.0 / fpsFrames
+                callbacks.onStats(fps, frameTimeMs)
                 fpsWindowStart = now
                 fpsFrames = 0
+                workNanos = 0
             }
 
             if (now - lastBatteryCheck >= BATTERY_SAVE_INTERVAL_NANOS) {

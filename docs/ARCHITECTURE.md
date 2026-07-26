@@ -388,6 +388,63 @@ sont enregistrées **par orientation et par console**, si bien que les gâchette
 `L`/`R` de la Game Boy Advance n'altèrent pas la disposition Game Boy.
 
 **Différé** (limites documentées) : mosaïque, effets mid-scanline ; appels BIOS
-restants et BIOS externe ; DMA de capture vidéo, IRQ clavier/série ; temps
-d'attente précis. La **compatibilité commerciale reste à valider sur matériel
-réel** : le moteur n'a été éprouvé que sur des ROM synthétiques.
+restants et BIOS externe ; DMA de capture vidéo, IRQ clavier/série. Les temps
+d'attente mémoire sont désormais modélisés (voir AD-16). La **compatibilité
+commerciale reste à valider sur matériel réel** : le moteur n'a été éprouvé que
+sur des ROM synthétiques.
+
+## AD-16 — Game Boy Advance : cadencement mémoire, DMA progressif et diagnostics
+
+Le premier lot GBA supposait que **tous les accès mémoire coûtaient la même
+chose** et qu'un transfert DMA était gratuit. Les deux hypothèses faussent le
+cadencement d'un jeu commercial, dont le code s'exécute majoritairement depuis
+la cartouche et qui déplace ses graphismes par DMA.
+
+**Temps d'attente mémoire.** `MemoryTiming` décode `WAITCNT` (attente SRAM,
+zones d'attente 0/1/2 avec premier accès et accès suivants distincts, file de
+préchargement Game Pak) et modélise la largeur du bus par région : 32 bits pour
+BIOS, IWRAM, E/S et OAM ; 16 bits pour EWRAM, palette, VRAM et cartouche ;
+8 bits pour la SRAM. Un accès plus large que son bus est découpé en accès
+matériels dont seul le premier est non séquentiel. `MemoryAccessTiming`
+(`sequential`, `nonSequential`) expose ces coûts sous forme descriptive, mais le
+**chemin chaud ne manipule que des entiers** : `waitStates` est appelé pour
+chaque accès mémoire, il ne construit aucun objet. `GbaBus` qualifie chaque accès
+de séquentiel ou non selon l'adresse du précédent, accumule les temps d'attente,
+et `Arm7Tdmi.step` les ajoute au coût nominal de l'instruction. Le préchargement
+Game Pak ne s'applique qu'aux lectures d'instruction ; son remplissage réel
+n'est pas suivi (limite documentée : coût légèrement sous-estimé).
+
+**DMA progressif.** Chaque mot transféré est facturé en une lecture et une
+écriture au coût de sa région, le premier mot en accès non séquentiel. Les
+cycles dus s'accumulent dans `DmaController.pendingCycles`, que la boucle de la
+machine écoule **avant** de rendre la main au processeur : le CPU est réellement
+arrêté pendant le transfert, tandis qu'affichage, timers et audio avancent. Les
+mots sont copiés d'un bloc puis le temps est écoulé ; aucun autre maître du bus
+n'observant l'état intermédiaire, le résultat est identique à celui d'un
+transfert entrelacé (limite documentée : la position exacte de chaque mot dans la
+ligne d'affichage diffère).
+
+**Aucune allocation dans les chemins chauds.** Le mixage audio tourne 32 768 fois
+par seconde et la composition graphique 160 fois par trame : ni l'un ni l'autre
+ne crée d'objet. Les niveaux PSG, l'ordre de tracé des plans et les tampons de
+ligne sont des tableaux réutilisés ; le tri des priorités se fait sur place par
+insertion, à sortie graphique identique. Un test mesure les allocations par
+trame via `ThreadMXBean` et échoue si elles réapparaissent.
+
+**Diagnostics.** `GbaDiagnostics` compte les instructions par trame, le dernier
+appel logiciel, la dernière interruption et les sous-alimentations audio, et
+**signale de façon bridée** cinq anomalies : appel BIOS non géré, instruction
+indéfinie, accès hors du plan mémoire, attente d'interruption qui ne vient pas,
+flux compressé invalide. Chaque catégorie n'est journalisée qu'un nombre limité
+de fois — le détail textuel n'est même pas construit au-delà — alors que les
+compteurs continuent de progresser. `GbaCore.debugSnapshot()` expose l'ensemble,
+et la surcouche de l'écran d'émulation l'affiche **en Debug uniquement**
+(`BuildConfig.DEBUG`) ; en Release elle se limite au nombre d'images par seconde.
+
+**Mesure de performance.** `PerfBenchmark` publie des chiffres indicatifs (temps
+par trame, coût du CPU, du PPU, de l'APU et du DMA, instructions par trame et par
+seconde, allocations) sans jamais faire échouer la construction :
+`PerfRegressionTest` porte les garde-fous, et ils sont **relatifs** (le chemin
+rapide du bus doit battre le chemin générique, la cartouche doit coûter plus que
+l'IWRAM, rien ne doit s'allouer) ou grossiers à dessein. Un résultat obtenu sur
+une JVM de bureau ne dit rien de la cadence atteinte sur un téléphone.

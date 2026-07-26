@@ -53,6 +53,7 @@ class GbaBios(
 
     override fun handleSwi(number: Int) {
         val r = cpu.state.regs
+        bus.diagnostics.onSwi(number)
         when (number) {
             0x00 -> softReset()                                   // SoftReset
             0x01 -> registerRamReset(r[0])                        // RegisterRamReset
@@ -81,6 +82,9 @@ class GbaBios(
             0x17 -> BiosDecompression.differentialUnfilter(bus, r[0], r[1], wide = false, toVram = true)
             0x18 -> BiosDecompression.differentialUnfilter(bus, r[0], r[1], wide = true, toVram = true)
             // Appels du pilote sonore (0x19–0x1F) et diagnostics : sans effet.
+            else -> bus.diagnostics.report(
+                com.ravenemu.core.gba.diag.GbaDiagnostics.Event.UNSUPPORTED_SWI,
+            ) { "appel logiciel 0x${number.toString(16)} non pris en charge" }
         }
     }
 

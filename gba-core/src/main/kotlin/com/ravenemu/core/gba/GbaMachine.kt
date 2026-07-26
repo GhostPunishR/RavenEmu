@@ -32,6 +32,9 @@ class GbaMachine(rom: ByteArray, forcedSaveType: GbaSaveType? = null) {
     val cpu: Arm7Tdmi = Arm7Tdmi(bus)
     val bios: GbaBios = GbaBios(cpu, bus)
 
+    /** Compteurs et signalements du moteur (surcouche de débogage, bancs d'essai). */
+    val diagnostics: com.ravenemu.core.gba.diag.GbaDiagnostics get() = bus.diagnostics
+
     init {
         bus.ppu = ppu
         bus.interrupts = interrupts
@@ -47,7 +50,10 @@ class GbaMachine(rom: ByteArray, forcedSaveType: GbaSaveType? = null) {
         cpu.swiHandler = bios
         // Le gestionnaire du BIOS mémorise les sources survenues : c'est ce que
         // consultent IntrWait et VBlankIntrWait.
-        interrupts.onRequest = bios::onInterruptRaised
+        interrupts.onRequest = { mask ->
+            bios.onInterruptRaised(mask)
+            diagnostics.onInterrupt(mask)
+        }
         cpu.reset(ROM_ENTRY_POINT)
     }
 
@@ -59,6 +65,7 @@ class GbaMachine(rom: ByteArray, forcedSaveType: GbaSaveType? = null) {
      */
     fun runFrame(cycles: Int) {
         var elapsed = 0
+        diagnostics.beginFrame()
         while (elapsed < cycles) {
             // Le DMA est prioritaire sur le processeur : tant qu'il occupe le
             // bus, seuls les périphériques avancent.
@@ -73,8 +80,12 @@ class GbaMachine(rom: ByteArray, forcedSaveType: GbaSaveType? = null) {
             if (cpu.state.halted) {
                 advancePeripherals(HALT_STEP)
                 elapsed += HALT_STEP
+                // Une attente qui s'éternise signale une interruption qui ne
+                // vient pas : c'est le symptôme d'un jeu figé.
+                diagnostics.onWaitStep(HALT_STEP, bios.waitState?.interruptMask ?: 0)
                 if (bios.shouldResume()) {
                     cpu.state.halted = false
+                    diagnostics.onWaitResolved()
                     // Le processeur reprend le bus après une pause.
                     bus.breakAccessSequence()
                 }
@@ -88,6 +99,7 @@ class GbaMachine(rom: ByteArray, forcedSaveType: GbaSaveType? = null) {
                 )
             }
             val consumed = cpu.step()
+            diagnostics.onInstruction()
             advancePeripherals(consumed)
             elapsed += consumed
         }

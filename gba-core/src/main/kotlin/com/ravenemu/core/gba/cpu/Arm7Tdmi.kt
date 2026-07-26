@@ -14,10 +14,14 @@ import com.ravenemu.core.gba.memory.GbaBus
  * ARM (`+4` en Thumb), comme sur le matériel. Toute écriture de `R15` provoque
  * un « saut » (vidage de pipeline) traité par [branchTo]/[branchExchange].
  *
- * Premier lot : sous-ensemble d'instructions suffisant pour exécuter une ROM
- * synthétique (traitement de données complet avec barrel shifter et drapeaux,
- * `B`/`BL`/`BX`, `LDR`/`STR`, `MRS`/`MSR`). Le jeu complet, les interruptions
- * matérielles et les temps d'attente réels sont différés (limites documentées).
+ * Le coût d'une instruction combine son coût nominal et les **temps d'attente**
+ * facturés par le bus pour la lecture de l'instruction et ses accès aux données
+ * (voir [com.ravenemu.core.gba.memory.MemoryTiming]) : exécuter depuis la
+ * cartouche coûte donc réellement plus cher que depuis l'IWRAM.
+ *
+ * Limite documentée : quelques motifs restent non décodés (coprocesseur
+ * notamment) ; ils sont ignorés et signalés par
+ * [com.ravenemu.core.gba.diag.GbaDiagnostics].
  */
 class Arm7Tdmi(val bus: GbaBus) {
 

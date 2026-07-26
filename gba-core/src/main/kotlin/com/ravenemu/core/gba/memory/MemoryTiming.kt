@@ -56,25 +56,85 @@ class MemoryTiming {
         else -> 4                   // BIOS, IWRAM, E/S, OAM : bus interne
     }
 
-    /** Temps d'attente d'un accès unitaire (au plus la largeur du bus). */
-    fun unitTiming(address: Int): MemoryAccessTiming = when ((address ushr 24) and 0xFF) {
-        0x02 -> EWRAM_TIMING
-        in 0x08..0x0D -> romTiming(address)
-        0x0E, 0x0F -> sramTiming()
-        // BIOS, IWRAM, E/S, palette, VRAM, OAM : un cycle, sans attente.
-        else -> MemoryAccessTiming.NONE
+    // ---- Chemin chaud : uniquement des entiers ----
+    //
+    // `waitStates` est appelé pour **chaque** accès mémoire, soit des dizaines de
+    // milliers de fois par trame. Il ne construit donc aucun objet : les valeurs
+    // descriptives ([timing], [unitTiming]) sont réservées aux tests et au
+    // diagnostic, qui n'ont pas cette contrainte.
+
+    /**
+     * Temps d'attente d'un accès de [width] octets à [address], selon qu'il est
+     * [sequential] ou non. Un bus plus étroit que l'accès impose plusieurs accès
+     * matériels : le premier de la nature demandée, les suivants séquentiels, et
+     * chacun des suivants ajoute son propre cycle de base.
+     */
+    fun waitStates(address: Int, width: Int, sequential: Boolean): Int {
+        val first = unitWaitStates(address, sequential)
+        val extra = width / busWidth(address) - 1
+        if (extra <= 0) return first
+        return first + extra * (unitWaitStates(address, sequential = true) + 1)
     }
 
     /**
-     * Temps d'attente d'un accès de [width] octets. Un bus plus étroit que
-     * l'accès impose plusieurs accès matériels : le premier de la nature
-     * demandée, les suivants séquentiels.
+     * Temps d'attente d'une **lecture d'instruction** de [width] octets. Le
+     * préchargement Game Pak sert les lectures séquentielles en ROM sans attente.
      */
-    fun timing(address: Int, width: Int): MemoryAccessTiming {
-        val unit = unitTiming(address)
-        val parts = width / busWidth(address)
-        return if (parts <= 1) unit else split(unit, parts)
+    fun instructionWaitStates(address: Int, width: Int, sequential: Boolean): Int {
+        if (sequential && prefetchEnabled && (address ushr 24) and 0xFF in 0x08..0x0D) {
+            return 0
+        }
+        return waitStates(address, width, sequential)
     }
+
+    /** Temps d'attente d'un accès unitaire, dans la nature demandée. */
+    private fun unitWaitStates(address: Int, sequential: Boolean): Int =
+        when ((address ushr 24) and 0xFF) {
+            0x02 -> EWRAM_WAIT
+            in 0x08..0x0D -> romWaitStates(address, sequential)
+            // La SRAM est sur un bus 8 bits : même attente dans les deux sens.
+            0x0E, 0x0F -> N_WAIT[waitControl and 0x3]
+            // BIOS, IWRAM, E/S, palette, VRAM, OAM : un cycle, sans attente.
+            else -> 0
+        }
+
+    /**
+     * Temps d'attente de la fenêtre cartouche contenant [address]. Deux fenêtres
+     * de 32 Mio par zone d'attente : 0x08/0x09, 0x0A/0x0B, 0x0C/0x0D — cette
+     * dernière, celle de l'EEPROM, est cadencée comme la zone 2.
+     */
+    private fun romWaitStates(address: Int, sequential: Boolean): Int =
+        when ((address ushr 25) and 0x3) {
+            0x0 -> if (sequential) {
+                if (waitControl and 0x0010 != 0) WS0_S_FAST else WS0_S_SLOW
+            } else {
+                N_WAIT[(waitControl ushr 2) and 0x3]
+            }
+            0x1 -> if (sequential) {
+                if (waitControl and 0x0080 != 0) WS1_S_FAST else WS1_S_SLOW
+            } else {
+                N_WAIT[(waitControl ushr 5) and 0x3]
+            }
+            else -> if (sequential) {
+                if (waitControl and 0x0400 != 0) WS2_S_FAST else WS2_S_SLOW
+            } else {
+                N_WAIT[(waitControl ushr 8) and 0x3]
+            }
+        }
+
+    // ---- Vue descriptive : tests, diagnostic, documentation ----
+
+    /** Temps d'attente d'un accès unitaire (au plus la largeur du bus). */
+    fun unitTiming(address: Int): MemoryAccessTiming = MemoryAccessTiming(
+        sequential = unitWaitStates(address, sequential = true),
+        nonSequential = unitWaitStates(address, sequential = false),
+    )
+
+    /** Temps d'attente d'un accès de [width] octets, sous les deux natures. */
+    fun timing(address: Int, width: Int): MemoryAccessTiming = MemoryAccessTiming(
+        sequential = waitStates(address, width, sequential = true),
+        nonSequential = waitStates(address, width, sequential = false),
+    )
 
     /** Temps d'attente d'un accès 8 ou 16 bits dans la région de [address]. */
     fun timing16(address: Int): MemoryAccessTiming = timing(address, 2)
@@ -82,76 +142,13 @@ class MemoryTiming {
     /** Temps d'attente d'un accès 32 bits dans la région de [address]. */
     fun timing32(address: Int): MemoryAccessTiming = timing(address, 4)
 
-    /**
-     * Coût d'un accès découpé en [parts] accès matériels : le premier garde la
-     * nature demandée, les suivants sont séquentiels, et chaque accès
-     * supplémentaire ajoute son propre cycle de base.
-     */
-    private fun split(unit: MemoryAccessTiming, parts: Int): MemoryAccessTiming {
-        val extra = parts - 1
-        return MemoryAccessTiming(
-            sequential = unit.sequential * parts + extra,
-            nonSequential = unit.nonSequential + unit.sequential * extra + extra,
-        )
-    }
-
-    /**
-     * Temps d'attente d'un accès de [width] octets à [address], selon qu'il est
-     * [sequential] ou non.
-     */
-    fun waitStates(address: Int, width: Int, sequential: Boolean): Int =
-        timing(address, width).waitStates(sequential)
-
-    /**
-     * Temps d'attente d'une **lecture d'instruction** de [width] octets. Le
-     * préchargement Game Pak sert les lectures séquentielles en ROM sans attente.
-     */
-    fun instructionWaitStates(address: Int, width: Int, sequential: Boolean): Int {
-        val isRom = (address ushr 24) and 0xFF in 0x08..0x0D
-        if (isRom && sequential && prefetchEnabled) return 0
-        return waitStates(address, width, sequential)
-    }
-
-    /** Temps d'attente de la fenêtre cartouche contenant [address]. */
-    private fun romTiming(address: Int): MemoryAccessTiming {
-        // Deux fenêtres de 32 Mio par zone d'attente : 0x08/0x09, 0x0A/0x0B,
-        // 0x0C/0x0D. La fenêtre 0x0D est celle de l'EEPROM, cadencée comme la
-        // zone 2.
-        return when ((address ushr 25) and 0x3) {
-            0x0 -> waitZone0()
-            0x1 -> waitZone1()
-            else -> waitZone2()
-        }
-    }
-
-    private fun waitZone0() = MemoryAccessTiming(
-        sequential = if (waitControl and 0x0010 != 0) WS0_S_FAST else WS0_S_SLOW,
-        nonSequential = N_WAIT[(waitControl ushr 2) and 0x3],
-    )
-
-    private fun waitZone1() = MemoryAccessTiming(
-        sequential = if (waitControl and 0x0080 != 0) WS1_S_FAST else WS1_S_SLOW,
-        nonSequential = N_WAIT[(waitControl ushr 5) and 0x3],
-    )
-
-    private fun waitZone2() = MemoryAccessTiming(
-        sequential = if (waitControl and 0x0400 != 0) WS2_S_FAST else WS2_S_SLOW,
-        nonSequential = N_WAIT[(waitControl ushr 8) and 0x3],
-    )
-
-    /** La SRAM est sur un bus 8 bits : même temps d'attente dans les deux sens. */
-    private fun sramTiming(): MemoryAccessTiming {
-        val wait = N_WAIT[waitControl and 0x3]
-        return MemoryAccessTiming(wait, wait)
-    }
-
     fun reset() {
         waitControl = 0
     }
 
     companion object {
         /** L'EWRAM est un bus 16 bits avec deux cycles d'attente câblés. */
-        private val EWRAM_TIMING = MemoryAccessTiming(2, 2)
+        private const val EWRAM_WAIT = 2
 
         /** Temps d'attente d'un premier accès cartouche : 4, 3, 2 ou 8 cycles. */
         private val N_WAIT = intArrayOf(4, 3, 2, 8)

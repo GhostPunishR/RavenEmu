@@ -41,9 +41,18 @@ class ArmDecoder(private val cpu: Arm7Tdmi) {
             0b010, 0b011 -> singleDataTransfer(instr)
             0b100 -> blockDataTransfer(instr)
             0b101 -> branch(instr)
-            0b111 -> if ((instr ushr 24) and 1 != 0) softwareInterrupt(instr) else 1
-            else -> 1 // 0b110 : coprocesseur (non pris en charge)
+            0b111 -> if ((instr ushr 24) and 1 != 0) softwareInterrupt(instr) else undefined(instr)
+            else -> undefined(instr) // 0b110 : coprocesseur (non pris en charge)
         }
+    }
+
+    /** Motif non reconnu : signalé une poignée de fois, puis simplement ignoré. */
+    private fun undefined(instr: Int): Int {
+        cpu.bus.diagnostics.report(com.ravenemu.core.gba.diag.GbaDiagnostics.Event.UNDEFINED_INSTRUCTION) {
+            "instruction ARM indéfinie 0x${instr.toUInt().toString(16)} en " +
+                "0x${cpu.state.regs[15].toUInt().toString(16)}"
+        }
+        return 1
     }
 
     private fun branch(instr: Int): Int {

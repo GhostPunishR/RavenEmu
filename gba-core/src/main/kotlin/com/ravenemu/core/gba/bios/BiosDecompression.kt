@@ -22,6 +22,18 @@ internal object BiosDecompression {
     /** Taille décompressée annoncée par l'en-tête (24 bits de poids fort). */
     private fun decompressedSize(header: Int): Int = (header ushr 8) and 0xFF_FFFF
 
+    /**
+     * Signale un flux compressé inutilisable. Les appels de décompression du BIOS
+     * n'ont pas de valeur de retour : sans ce signalement, un en-tête corrompu
+     * produisait un écran vide sans la moindre trace.
+     */
+    private fun invalid(bus: GbaBus, reason: () -> String) {
+        bus.diagnostics.report(
+            com.ravenemu.core.gba.diag.GbaDiagnostics.Event.DECOMPRESSION_ERROR,
+            reason,
+        )
+    }
+
     private fun read8(bus: GbaBus, address: Int): Int = bus.read8(address)
 
     /**
@@ -51,7 +63,7 @@ internal object BiosDecompression {
     fun lz77(bus: GbaBus, source: Int, dest: Int, toVram: Boolean) {
         val header = bus.read32(source)
         val size = decompressedSize(header)
-        if (size <= 0 || size > MAX_OUTPUT) return
+        if (size <= 0 || size > MAX_OUTPUT) return invalid(bus) { "taille décompressée invalide : $size" }
         val out = ByteArray(size)
         var src = source + 4
         var written = 0
@@ -69,7 +81,7 @@ internal object BiosDecompression {
                 val length = (b0 ushr 4) + 3
                 val distance = (((b0 and 0xF) shl 8) or b1) + 1
                 var from = written - distance
-                if (from < 0) return // flux incohérent : on abandonne sans écrire
+                if (from < 0) return invalid(bus) { "référence arrière LZ77 hors du tampon" }
                 repeat(length) {
                     if (written < size) out[written++] = out[from++]
                 }
@@ -85,7 +97,7 @@ internal object BiosDecompression {
     fun runLength(bus: GbaBus, source: Int, dest: Int, toVram: Boolean) {
         val header = bus.read32(source)
         val size = decompressedSize(header)
-        if (size <= 0 || size > MAX_OUTPUT) return
+        if (size <= 0 || size > MAX_OUTPUT) return invalid(bus) { "taille décompressée invalide : $size" }
         val out = ByteArray(size)
         var src = source + 4
         var written = 0
@@ -114,8 +126,10 @@ internal object BiosDecompression {
         val header = bus.read32(source)
         val size = decompressedSize(header)
         val symbolBits = header and 0xF
-        if (size <= 0 || size > MAX_OUTPUT) return
-        if (symbolBits != 4 && symbolBits != 8) return
+        if (size <= 0 || size > MAX_OUTPUT) return invalid(bus) { "taille décompressée invalide : $size" }
+        if (symbolBits != 4 && symbolBits != 8) {
+            return invalid(bus) { "largeur de symbole Huffman non gérée : $symbolBits" }
+        }
 
         // La table Huffman commence à l'octet de taille lui-même : c'est sur
         // cette base, et en adresses absolues, que se calculent les offsets des
@@ -140,7 +154,7 @@ internal object BiosDecompression {
         var budget = size.toLong() * 8 * MAX_BITS_PER_SYMBOL + 64
 
         while (written < size) {
-            if (budget-- <= 0) return // flux invalide : rien n'est écrit
+            if (budget-- <= 0) return invalid(bus) { "flux Huffman sans fin" }
             if (bitsLeft == 0) {
                 word = bus.read32(streamAddress)
                 streamAddress += 4
@@ -156,7 +170,9 @@ internal object BiosDecompression {
             val isLeaf = if (bit == 0) nodeValue and 0x80 != 0 else nodeValue and 0x40 != 0
 
             // Un enfant hors de la table signale un flux corrompu.
-            if (nextAddress < rootAddress || nextAddress >= treeEnd) return
+            if (nextAddress < rootAddress || nextAddress >= treeEnd) {
+                return invalid(bus) { "arbre Huffman incohérent" }
+            }
 
             if (!isLeaf) {
                 nodeAddress = nextAddress
@@ -187,7 +203,7 @@ internal object BiosDecompression {
     fun differentialUnfilter(bus: GbaBus, source: Int, dest: Int, wide: Boolean, toVram: Boolean) {
         val header = bus.read32(source)
         val size = decompressedSize(header)
-        if (size <= 0 || size > MAX_OUTPUT) return
+        if (size <= 0 || size > MAX_OUTPUT) return invalid(bus) { "taille décompressée invalide : $size" }
         val out = ByteArray(size)
         var src = source + 4
 
@@ -223,7 +239,9 @@ internal object BiosDecompression {
         val offsetWord = bus.read32(paramAddress + 4)
         val dataOffset = offsetWord and 0x7FFF_FFFF
         val offsetZero = offsetWord and 0x8000_0000.toInt() != 0
-        if (sourceWidth == 0 || destWidth == 0 || sourceLength <= 0) return
+        if (sourceWidth == 0 || destWidth == 0 || sourceLength <= 0) {
+            return invalid(bus) { "paramètres BitUnPack invalides" }
+        }
 
         var buffer = 0L
         var bitsInBuffer = 0

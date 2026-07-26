@@ -15,11 +15,17 @@ import com.ravenemu.core.gba.memory.GbaBus
  * - modes **bitmap** 3 (16 bpp), 4 (8 bpp paletté, double page) et 5
  *   (16 bpp, 160×128, double page) ;
  * - modes **texte** 0 et 1 : arrière-plans BG0–BG3, tuiles 4/8 bpp,
- *   défilement, retournements horizontal/vertical, priorités.
+ *   défilement, retournements horizontal/vertical, priorités ;
+ * - modes **affines** 1 et 2 : rotation et mise à l'échelle avec points de
+ *   référence internes ;
+ * - **sprites** (dont affines et à surface doublée), fenêtres 0/1 et fenêtre
+ *   objet, mélange alpha, éclaircissement et assombrissement.
  *
- * Différé (limites documentées) : arrière-plans **affines** (modes 1/2),
- * **sprites**, fenêtres, mosaïque, alpha blending et luminosité. Les événements
- * VBlank/HBlank/VCount alimentent désormais le contrôleur d'interruptions et le DMA.
+ * Les événements VBlank/HBlank/VCount alimentent le contrôleur d'interruptions
+ * et le DMA. Limite documentée : la mosaïque n'est pas émulée.
+ *
+ * Le rendu d'une ligne n'alloue rien : tampons de composition et ordre de tracé
+ * des plans sont des tableaux réutilisés.
  *
  * Le renderer Android reçoit un framebuffer ARGB 8888 sans rien connaître de
  * ces détails.

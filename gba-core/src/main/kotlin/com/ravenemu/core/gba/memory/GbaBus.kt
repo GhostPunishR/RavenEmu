@@ -60,6 +60,12 @@ class GbaBus(
     val timing = MemoryTiming()
 
     /**
+     * Compteurs et signalements du moteur. Le bus étant accessible depuis le CPU,
+     * le BIOS et le DMA, c'est lui qui les porte.
+     */
+    val diagnostics = com.ravenemu.core.gba.diag.GbaDiagnostics()
+
+    /**
      * Cycles d'attente accumulés par les accès depuis le dernier [takeWaitCycles].
      * Le CPU et le DMA les récupèrent pour facturer leurs accès.
      */
@@ -242,6 +248,18 @@ class GbaBus(
         }
     }
 
+    /**
+     * Signale un accès hors du plan mémoire et retourne la valeur lue par le
+     * matériel dans ce cas : rien.
+     */
+    private fun unsupportedAccess(address: Int, write: Boolean): Int {
+        diagnostics.report(com.ravenemu.core.gba.diag.GbaDiagnostics.Event.UNSUPPORTED_ACCESS) {
+            val kind = if (write) "écriture" else "lecture"
+            "$kind hors du plan mémoire à 0x${address.toUInt().toString(16)}"
+        }
+        return 0
+    }
+
     // ---- Lectures ----
 
     fun read8(address: Int): Int {
@@ -251,7 +269,7 @@ class GbaBus(
 
     /** Lecture d'un octet **sans facturation** : brique des accès plus larges. */
     private fun read8Raw(address: Int): Int {
-        val region = MemoryRegion.of(address) ?: return 0
+        val region = MemoryRegion.of(address) ?: return unsupportedAccess(address, write = false)
         return when (region) {
             MemoryRegion.BIOS -> bios[address and region.mirrorMask].toInt() and 0xFF
             MemoryRegion.EWRAM -> ewram[address and region.mirrorMask].toInt() and 0xFF
@@ -355,7 +373,10 @@ class GbaBus(
 
     /** Écriture d'un octet **sans facturation**. */
     private fun write8Raw(address: Int, value: Int) {
-        val region = MemoryRegion.of(address) ?: return
+        val region = MemoryRegion.of(address) ?: run {
+            unsupportedAccess(address, write = true)
+            return
+        }
         val v = (value and 0xFF).toByte()
         when (region) {
             // Un octet écrit dans la palette ou la VRAM est dupliqué sur les

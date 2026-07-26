@@ -278,8 +278,17 @@ class GbaApu {
         available += 2
     }
 
+    /**
+     * Sous-alimentations constatées : nombre de fois où de l'audio a été réclamé
+     * alors qu'aucun échantillon n'était prêt. C'est ce qui s'entend comme un
+     * craquement ou un blanc.
+     */
+    var underruns = 0
+        private set
+
     /** Copie au plus `dest.size` échantillons disponibles et retourne leur nombre. */
     fun readSamples(dest: ShortArray): Int {
+        if (available == 0 && dest.isNotEmpty()) underruns++
         val count = minOf(dest.size, available)
         for (i in 0 until count) {
             dest[i] = ring[readIndex]
@@ -304,6 +313,7 @@ class GbaApu {
         writeIndex = 0
         readIndex = 0
         available = 0
+        underruns = 0
     }
 
     /** Nombre d'octets en attente dans une FIFO (diagnostic et tests). */
