@@ -134,8 +134,13 @@ class GbaBus(
     }
 
     /**
-     * Effets de bord des écritures 16 bits vers les registres de contrôle
-     * (interruptions, timers, DMA). Les octets ont déjà été stockés dans [io].
+     * Effets de bord d'une écriture vers un registre de contrôle 16 bits
+     * (interruptions, timers, DMA, audio). Les octets ont déjà été stockés dans
+     * [io] : [value] est la valeur complète du registre après écriture.
+     *
+     * L'affichage (`DISPCNT`, `DISPSTAT`, fenêtres, mélange…) n'apparaît pas
+     * ici : le PPU lit ces registres directement dans [io], donc une écriture
+     * de n'importe quelle largeur prend effet sans notification.
      */
     private fun handleIoWrite(offset: Int, value: Int) {
         when (offset) {
@@ -148,10 +153,35 @@ class GbaBus(
             0x0C6 -> dma?.onControlWrite(1, value)
             0x0D2 -> dma?.onControlWrite(2, value)
             0x0DE -> dma?.onControlWrite(3, value)
-            // Files d'échantillons Direct Sound : les octets sont empilés.
-            0x0A0, 0x0A2 -> apu?.pushFifo(0, value, 2)
-            0x0A4, 0x0A6 -> apu?.pushFifo(1, value, 2)
             in 0x060..0x09F -> apu?.writeRegister(offset, value)
+        }
+    }
+
+    /** Valeur courante d'un registre d'E/S 16 bits, lue dans [io]. */
+    private fun ioRegister(offset: Int): Int =
+        (io[offset].toInt() and 0xFF) or ((io[offset + 1].toInt() and 0xFF) shl 8)
+
+    /** `true` si l'offset désigne une file d'échantillons Direct Sound. */
+    private fun isFifo(offset: Int): Boolean = offset in FIFO_A_START..FIFO_B_END
+
+    /** Canal Direct Sound visé par un offset de FIFO (`0` = A, `1` = B). */
+    private fun fifoChannel(offset: Int): Int = if (offset < FIFO_B_START) 0 else 1
+
+    /**
+     * Propage une écriture d'E/S de [byteCount] octets à partir de [offset] :
+     * chaque registre 16 bits couvert est notifié, du plus bas au plus haut.
+     * Les FIFO reçoivent exactement les octets écrits, sans arrondi de largeur.
+     */
+    private fun propagateIoWrite(offset: Int, value: Int, byteCount: Int) {
+        if (isFifo(offset)) {
+            apu?.pushFifo(fifoChannel(offset), value, byteCount)
+            return
+        }
+        var register = offset and 0x1.inv()
+        val end = offset + byteCount
+        while (register < end) {
+            handleIoWrite(register, ioRegister(register))
+            register += 2
         }
     }
 
@@ -271,6 +301,13 @@ class GbaBus(
             }
             // Les écritures 8 bits vers l'OAM sont ignorées par le matériel.
             MemoryRegion.OAM -> Unit
+            MemoryRegion.IO -> {
+                val offset = address and region.mirrorMask
+                io[offset] = v
+                // Une écriture d'octet doit agir comme le matériel : un STRB sur
+                // SOUNDCNT_X allume ou éteint réellement l'APU.
+                propagateIoWrite(offset, value and 0xFF, byteCount = 1)
+            }
             else -> writeByteRaw(region, address, v)
         }
     }
@@ -285,22 +322,31 @@ class GbaBus(
         val region = MemoryRegion.of(a) ?: return
         writeByteRaw(region, a, (value and 0xFF).toByte())
         writeByteRaw(region, a + 1, ((value ushr 8) and 0xFF).toByte())
-        if (region == MemoryRegion.IO) handleIoWrite(a and region.mirrorMask, value and 0xFFFF)
+        if (region == MemoryRegion.IO) {
+            propagateIoWrite(a and region.mirrorMask, value and 0xFFFF, byteCount = 2)
+        }
     }
 
     fun write32(address: Int, value: Int) {
         val a = address and 0x3.inv()
-        // Chemin rapide symétrique de read32, hors régions à effet de bord.
-        if ((a ushr 24) and 0xFF != 0x04) {
-            val block = directBlock(a)
-            if (block != null && (a ushr 24) and 0xFF !in 0x08..0x0C) {
-                val i = directOffset(a)
-                block[i] = (value and 0xFF).toByte()
-                block[i + 1] = ((value ushr 8) and 0xFF).toByte()
-                block[i + 2] = ((value ushr 16) and 0xFF).toByte()
-                block[i + 3] = ((value ushr 24) and 0xFF).toByte()
-                return
-            }
+        if ((a ushr 24) and 0xFF == 0x04) {
+            // E/S : les quatre octets sont stockés, puis les deux registres
+            // 16 bits couverts sont notifiés dans l'ordre croissant.
+            val offset = a and MemoryRegion.IO.mirrorMask
+            for (i in 0 until 4) io[offset + i] = ((value ushr (i * 8)) and 0xFF).toByte()
+            propagateIoWrite(offset, value, byteCount = 4)
+            return
+        }
+        // Chemin rapide symétrique de read32, hors régions à effet de bord et
+        // hors ROM (en lecture seule).
+        val block = if ((a ushr 24) and 0xFF in 0x08..0x0C) null else directBlock(a)
+        if (block != null) {
+            val i = directOffset(a)
+            block[i] = (value and 0xFF).toByte()
+            block[i + 1] = ((value ushr 8) and 0xFF).toByte()
+            block[i + 2] = ((value ushr 16) and 0xFF).toByte()
+            block[i + 3] = ((value ushr 24) and 0xFF).toByte()
+            return
         }
         write16(a, value and 0xFFFF)
         write16(a + 2, (value ushr 16) and 0xFFFF)
@@ -318,5 +364,10 @@ class GbaBus(
         const val IF_LOW = 0x202
         const val IF_HIGH = 0x203
         const val IME = 0x208
+
+        // Files d'échantillons Direct Sound.
+        const val FIFO_A_START = 0x0A0
+        const val FIFO_B_START = 0x0A4
+        const val FIFO_B_END = 0x0A7
     }
 }
