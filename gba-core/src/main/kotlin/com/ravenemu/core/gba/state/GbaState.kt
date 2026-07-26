@@ -24,13 +24,14 @@ object GbaState {
     private const val MAGIC = 0x52564E53 // "RVNS"
     /**
      * Version 7 : état PPU complet (dont les points de référence affines),
-     * interruptions, timers, DMA, pause CPU (`halted`), attente d'interruption
-     * du BIOS (`IntrWait`) et mémoire de sauvegarde de la cartouche.
+     * interruptions, timers, DMA (adresses courantes et cycles dus), pause CPU
+     * (`halted`), attente d'interruption du BIOS (`IntrWait`) et mémoire de
+     * sauvegarde de la cartouche.
      */
     private const val VERSION = 7
     private const val BANK_WORDS = 28 // CpuState.exportBanks(): 6*3 + 10
     private const val TIMER_STATE_WORDS = 16
-    private const val DMA_STATE_WORDS = 8
+    private const val DMA_STATE_WORDS = 9 // 4 sources + 4 destinations + cycles dus
 
     /** Taille maximale acceptée pour un état (garde-fou anti-« fichier trop volumineux »). */
     private const val MAX_STATE_SIZE = 1 shl 20 // 1 Mio

@@ -16,6 +16,21 @@ import com.ravenemu.core.gba.memory.GbaBus
  * Les adresses et le nombre de mots sont lus dans les registres d'E/S (écrits
  * par le programme) ; l'écriture du registre de contrôle avec le bit
  * d'activation déclenche (ou arme) le transfert.
+ *
+ * ### Coût en temps
+ * Un transfert n'est pas gratuit : le contrôleur prend le bus, le CPU s'arrête,
+ * et chaque mot coûte une lecture puis une écriture dont le prix dépend de la
+ * région visée (voir [com.ravenemu.core.gba.memory.MemoryTiming]). Le premier
+ * mot est facturé en accès non séquentiel, les suivants en séquentiel. Ces
+ * cycles sont accumulés dans [pendingCycles], que la boucle de la machine
+ * consomme en arrêtant le processeur — un jeu qui recopie une trame par DMA voit
+ * donc réellement son code s'interrompre.
+ *
+ * ### Limite documentée
+ * Les mots sont copiés d'un bloc au moment du déclenchement, puis le temps
+ * correspondant est écoulé. Aucun autre maître du bus n'observant l'état
+ * intermédiaire, le résultat est identique à celui d'un transfert entrelacé ;
+ * seule la position exacte de chaque mot dans la ligne d'affichage diffère.
  */
 class DmaController(
     private val bus: GbaBus,
@@ -24,6 +39,27 @@ class DmaController(
     // Adresses courantes verrouillées à l'activation.
     private val sourceAddress = IntArray(4)
     private val destAddress = IntArray(4)
+
+    /**
+     * Cycles dus par les transferts déjà effectués et pas encore écoulés. Tant
+     * qu'ils ne sont pas consommés, le CPU n'a pas la main.
+     */
+    var pendingCycles = 0
+        private set
+
+    /** Canal ayant réalisé le dernier transfert, ou -1 (diagnostic). */
+    var lastChannel = -1
+        private set
+
+    /** `true` si le contrôleur retient encore le bus. */
+    val isActive: Boolean get() = pendingCycles > 0
+
+    /** Récupère et remet à zéro les cycles dus par le contrôleur. */
+    fun takePendingCycles(): Int {
+        val value = pendingCycles
+        pendingCycles = 0
+        return value
+    }
 
     /** Écriture du registre de contrôle `DMAxCNT_H` : arme ou déclenche le canal. */
     fun onControlWrite(channel: Int, control: Int) {
@@ -50,11 +86,15 @@ class DmaController(
             if (readIoWord(DAD[channel]) and 0x0FFF_FFFF != fifoAddress) continue
             val sourceControl = (control ushr 7) and 0x3
             var src = sourceAddress[channel]
-            repeat(FIFO_WORDS) {
+            var cycles = STARTUP_CYCLES
+            for (word in 0 until FIFO_WORDS) {
+                cycles += accessCycles(src, 4, sequential = word > 0)
+                cycles += accessCycles(fifoAddress, 4, sequential = word > 0)
                 bus.write32(fifoAddress, bus.read32(src))
                 src += delta(sourceControl, 4)
             }
             sourceAddress[channel] = src
+            finishTransfer(channel, cycles)
             if (control and 0x4000 != 0) interrupts.request(Interrupt.DMA0 + channel)
         }
     }
@@ -83,7 +123,13 @@ class DmaController(
         if (eeprom != null && ((src ushr 24) == 0x0D || (dst ushr 24) == 0x0D)) {
             eeprom.hintTransferLength(count)
         }
-        repeat(count) {
+        // Prise du bus, puis un couple lecture/écriture par mot : le premier est
+        // facturé en accès non séquentiel, les suivants en séquentiel.
+        var cycles = STARTUP_CYCLES
+        for (word in 0 until count) {
+            val sequential = word > 0
+            cycles += accessCycles(src, size, sequential)
+            cycles += accessCycles(dst, size, sequential)
             if (word32) bus.write32(dst, bus.read32(src)) else bus.write16(dst, bus.read16(src))
             src += delta(sourceControl, size)
             dst += delta(destControl, size)
@@ -92,6 +138,7 @@ class DmaController(
         // Contrôle destination 3 = incrément + rechargement à la répétition.
         if (destControl != DEST_INCREMENT_RELOAD) destAddress[channel] = dst
 
+        finishTransfer(channel, cycles)
         if (control and 0x4000 != 0) interrupts.request(Interrupt.DMA0 + channel)
 
         val repeat = control and 0x0200 != 0
@@ -100,6 +147,26 @@ class DmaController(
             val cleared = control and 0x8000.inv()
             bus.io[CNT_H[channel] + 1] = ((cleared ushr 8) and 0xFF).toByte()
         }
+    }
+
+    /**
+     * Coût d'un accès du DMA à [address], en cycles complets : un cycle de base
+     * plus les temps d'attente de la région.
+     */
+    private fun accessCycles(address: Int, size: Int, sequential: Boolean): Int =
+        1 + bus.timing.waitStates(address, size, sequential)
+
+    /**
+     * Clôt un transfert : les cycles sont mis à la charge du contrôleur, et le
+     * bus repart en accès non séquentiel puisque le CPU le récupère. La
+     * facturation faite par le bus pendant la copie est écartée pour ne pas être
+     * imputée deux fois — une fois ici, une fois à l'instruction en cours.
+     */
+    private fun finishTransfer(channel: Int, cycles: Int) {
+        bus.takeWaitCycles()
+        bus.breakAccessSequence()
+        pendingCycles += cycles
+        lastChannel = channel
     }
 
     private fun delta(control: Int, size: Int): Int = when (control) {
@@ -122,13 +189,21 @@ class DmaController(
     private fun readIoWord(offset: Int): Int =
         readIoHalf(offset) or (readIoHalf(offset + 2) shl 16)
 
-    fun exportState(): IntArray = sourceAddress + destAddress
+    fun exportState(): IntArray = sourceAddress + destAddress + intArrayOf(pendingCycles)
 
     fun importState(data: IntArray) {
         for (i in 0 until 4) {
             sourceAddress[i] = data[i]
             destAddress[i] = data[4 + i]
         }
+        pendingCycles = data[8]
+    }
+
+    fun reset() {
+        sourceAddress.fill(0)
+        destAddress.fill(0)
+        pendingCycles = 0
+        lastChannel = -1
     }
 
     private companion object {
@@ -148,5 +223,8 @@ class DmaController(
 
         /** Un réapprovisionnement transfère quatre mots (16 octets). */
         const val FIFO_WORDS = 4
+
+        /** Cycles de prise du bus, avant le premier mot transféré. */
+        const val STARTUP_CYCLES = 2
     }
 }

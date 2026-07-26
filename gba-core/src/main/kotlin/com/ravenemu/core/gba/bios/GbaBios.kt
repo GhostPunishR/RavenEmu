@@ -186,6 +186,7 @@ class GbaBios(
             bus.io.fill(0, IO_SERIAL_END, bus.io.size)
             bus.timers?.reset()
             bus.interrupts?.reset()
+            bus.dma?.reset()
         }
     }
 

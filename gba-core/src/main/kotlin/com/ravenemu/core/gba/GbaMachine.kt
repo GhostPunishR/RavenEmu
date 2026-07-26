@@ -60,14 +60,24 @@ class GbaMachine(rom: ByteArray, forcedSaveType: GbaSaveType? = null) {
     fun runFrame(cycles: Int) {
         var elapsed = 0
         while (elapsed < cycles) {
+            // Le DMA est prioritaire sur le processeur : tant qu'il occupe le
+            // bus, seuls les périphériques avancent.
+            val dmaCycles = dma.takePendingCycles()
+            if (dmaCycles > 0) {
+                advancePeripherals(dmaCycles)
+                elapsed += dmaCycles
+                continue
+            }
             // CPU en pause (SWI Halt/IntrWait) : on avance les périphériques
             // jusqu'à ce qu'une interruption soit levée, puis on réveille.
             if (cpu.state.halted) {
-                ppu.tick(HALT_STEP)
-                timers.tick(HALT_STEP)
-                apu.tick(HALT_STEP)
+                advancePeripherals(HALT_STEP)
                 elapsed += HALT_STEP
-                if (bios.shouldResume()) cpu.state.halted = false
+                if (bios.shouldResume()) {
+                    cpu.state.halted = false
+                    // Le processeur reprend le bus après une pause.
+                    bus.breakAccessSequence()
+                }
                 continue
             }
             if (interrupts.pending() && !cpu.state.irqDisabled) {
@@ -78,11 +88,16 @@ class GbaMachine(rom: ByteArray, forcedSaveType: GbaSaveType? = null) {
                 )
             }
             val consumed = cpu.step()
-            ppu.tick(consumed)
-            timers.tick(consumed)
-            apu.tick(consumed)
+            advancePeripherals(consumed)
             elapsed += consumed
         }
+    }
+
+    /** Avance affichage, timers et audio de [cycles] cycles CPU. */
+    private fun advancePeripherals(cycles: Int) {
+        ppu.tick(cycles)
+        timers.tick(cycles)
+        apu.tick(cycles)
     }
 
     companion object {
