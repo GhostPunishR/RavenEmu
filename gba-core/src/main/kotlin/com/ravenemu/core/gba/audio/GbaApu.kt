@@ -44,6 +44,10 @@ class GbaApu {
     private var sequencerTimer = 0
     private var sequencerStep = 0
 
+    // Niveaux PSG de l'échantillon courant, réutilisés d'un échantillon à
+    // l'autre : le mixage tourne 32 768 fois par seconde et ne doit rien allouer.
+    private val psgOutputs = IntArray(4)
+
     // Tampon circulaire de sortie (stéréo entrelacé).
     private val ring = ShortArray(BUFFER_SAMPLES)
     private var writeIndex = 0
@@ -227,21 +231,26 @@ class GbaApu {
             return
         }
         // --- PSG ---
-        val outputs = intArrayOf(
-            square1.output(), square2.output(), wave.output(), noise.output()
-        )
+        psgOutputs[0] = square1.output()
+        psgOutputs[1] = square2.output()
+        psgOutputs[2] = wave.output()
+        psgOutputs[3] = noise.output()
         var psgLeft = 0
         var psgRight = 0
         for (i in 0 until 4) {
-            if (controlL and (1 shl (8 + i)) != 0) psgLeft += outputs[i]
-            if (controlL and (1 shl (12 + i)) != 0) psgRight += outputs[i]
+            val level = psgOutputs[i]
+            if (level == 0) continue
+            if (controlL and (1 shl (8 + i)) != 0) psgLeft += level
+            if (controlL and (1 shl (12 + i)) != 0) psgRight += level
         }
         // Volumes maîtres gauche/droite (0..7) puis proportion PSG du mixage.
+        // Le ratio est tabulé en virgule fixe 8 bits : 25/50/100 % s'expriment
+        // exactement en 64/128/256, ce qui remplace une division par un décalage.
         psgLeft *= ((controlL ushr 4) and 0x7) + 1
         psgRight *= (controlL and 0x7) + 1
-        val psgRatio = PSG_RATIO[controlH and 0x3]
-        psgLeft = psgLeft * PSG_SCALE * psgRatio / 100
-        psgRight = psgRight * PSG_SCALE * psgRatio / 100
+        val psgRatio = PSG_RATIO_Q8[controlH and 0x3]
+        psgLeft = (psgLeft * PSG_SCALE * psgRatio) shr 8
+        psgRight = (psgRight * PSG_SCALE * psgRatio) shr 8
 
         // --- Direct Sound ---
         val volumeA = if (controlH and 0x04 != 0) 2 else 1
@@ -263,9 +272,9 @@ class GbaApu {
     private fun push(left: Int, right: Int) {
         if (available >= BUFFER_SAMPLES) return // l'appelant ne draine pas : on abandonne
         ring[writeIndex] = left.toShort()
-        writeIndex = (writeIndex + 1) % BUFFER_SAMPLES
+        writeIndex = (writeIndex + 1) and BUFFER_MASK
         ring[writeIndex] = right.toShort()
-        writeIndex = (writeIndex + 1) % BUFFER_SAMPLES
+        writeIndex = (writeIndex + 1) and BUFFER_MASK
         available += 2
     }
 
@@ -274,7 +283,7 @@ class GbaApu {
         val count = minOf(dest.size, available)
         for (i in 0 until count) {
             dest[i] = ring[readIndex]
-            readIndex = (readIndex + 1) % BUFFER_SAMPLES
+            readIndex = (readIndex + 1) and BUFFER_MASK
         }
         available -= count
         return count
@@ -311,7 +320,7 @@ class GbaApu {
         fun push(value: Byte) {
             if (size >= CAPACITY) return // pleine : l'octet est perdu
             data[tail] = value
-            tail = (tail + 1) % CAPACITY
+            tail = (tail + 1) and MASK
             size++
         }
 
@@ -319,7 +328,7 @@ class GbaApu {
         fun pop(): Int {
             if (size == 0) return 0
             val value = data[head].toInt()
-            head = (head + 1) % CAPACITY
+            head = (head + 1) and MASK
             size--
             return value
         }
@@ -332,6 +341,7 @@ class GbaApu {
 
         companion object {
             const val CAPACITY = 32
+            private const val MASK = CAPACITY - 1
         }
     }
 
@@ -348,11 +358,17 @@ class GbaApu {
         /** Tampon de sortie : environ un dixième de seconde en stéréo. */
         private const val BUFFER_SAMPLES = 8192
 
+        /** [BUFFER_SAMPLES] est une puissance de deux : le modulo est un masque. */
+        private const val BUFFER_MASK = BUFFER_SAMPLES - 1
+
         /** Seuil de réapprovisionnement d'une FIFO, en octets. */
         private const val REFILL_THRESHOLD = 16
 
-        /** Proportion du mixage réservée aux canaux PSG (`SOUNDCNT_H` bits 0-1). */
-        private val PSG_RATIO = intArrayOf(25, 50, 100, 100)
+        /**
+         * Proportion du mixage réservée aux canaux PSG (`SOUNDCNT_H` bits 0-1),
+         * en virgule fixe 8 bits : 25 %, 50 %, 100 %, 100 %.
+         */
+        private val PSG_RATIO_Q8 = intArrayOf(64, 128, 256, 256)
 
         // Facteurs d'échelle vers le PCM 16 bits, choisis pour éviter la
         // saturation lorsque toutes les sources jouent simultanément.

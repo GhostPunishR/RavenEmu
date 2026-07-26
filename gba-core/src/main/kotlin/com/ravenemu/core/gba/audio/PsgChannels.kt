@@ -91,10 +91,12 @@ internal class SquareChannel(private val hasSweep: Boolean) {
     fun tick(cycles: Int) {
         if (!enabled) return
         timer -= cycles
-        while (timer <= 0) {
-            timer += (2048 - frequency) * 4
-            dutyStep = (dutyStep + 1) and 7
-        }
+        if (timer > 0) return
+        // Avance en une seule division au lieu d'itérer période par période.
+        val period = (2048 - frequency) * 4
+        val steps = 1 + (-timer) / period
+        timer += steps * period
+        dutyStep = (dutyStep + steps) and 7
     }
 
     fun clockLength() {
@@ -126,7 +128,7 @@ internal class SquareChannel(private val hasSweep: Boolean) {
 
     /** Niveau courant `0..15`. */
     fun output(): Int =
-        if (enabled && DUTY_TABLE[duty][dutyStep] != 0) envelope.volume else 0
+        if (enabled && (DUTY_MASKS[duty] ushr dutyStep) and 1 != 0) envelope.volume else 0
 
     fun reset() {
         enabled = false
@@ -136,11 +138,16 @@ internal class SquareChannel(private val hasSweep: Boolean) {
     }
 
     private companion object {
-        val DUTY_TABLE = arrayOf(
-            intArrayOf(0, 0, 0, 0, 0, 0, 0, 1), // 12,5 %
-            intArrayOf(1, 0, 0, 0, 0, 0, 0, 1), // 25 %
-            intArrayOf(1, 0, 0, 0, 0, 1, 1, 1), // 50 %
-            intArrayOf(0, 1, 1, 1, 1, 1, 1, 0), // 75 %
+        /**
+         * Motifs de rapport cyclique, un bit par pas (bit 0 = premier pas). Un
+         * masque entier évite le double déréférencement d'un tableau de tableaux
+         * dans le mixage, appelé pour chaque échantillon.
+         */
+        val DUTY_MASKS = intArrayOf(
+            0b1000_0000, // 12,5 % : 0,0,0,0,0,0,0,1
+            0b1000_0001, // 25 %   : 1,0,0,0,0,0,0,1
+            0b1110_0001, // 50 %   : 1,0,0,0,0,1,1,1
+            0b0111_1110, // 75 %   : 0,1,1,1,1,1,1,0
         )
     }
 }
@@ -171,10 +178,11 @@ internal class WaveChannel {
     fun tick(cycles: Int) {
         if (!enabled) return
         timer -= cycles
-        while (timer <= 0) {
-            timer += (2048 - frequency) * 2
-            position = (position + 1) and 31
-        }
+        if (timer > 0) return
+        val period = (2048 - frequency) * 2
+        val steps = 1 + (-timer) / period
+        timer += steps * period
+        position = (position + steps) and 31
     }
 
     fun clockLength() {
@@ -238,8 +246,11 @@ internal class NoiseChannel {
     fun tick(cycles: Int) {
         if (!enabled) return
         timer -= cycles
+        // Le registre à décalage ne peut pas être avancé d'un bloc : chaque pas
+        // dépend du précédent. La période, elle, est constante sur tout le tick.
+        val period = period()
         while (timer <= 0) {
-            timer += period()
+            timer += period
             val feedback = (lfsr and 1) xor ((lfsr ushr 1) and 1)
             lfsr = (lfsr ushr 1) or (feedback shl 14)
             if (widthMode) {
