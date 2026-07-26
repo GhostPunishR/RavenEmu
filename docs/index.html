@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#17131f">
+  <meta name="description" content="RavenEmu, émulateur Game Boy, Game Boy Color et Game Boy Advance pour Android, développé en Kotlin avec des moteurs originaux et modulaires.">
+  <meta name="color-scheme" content="dark">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: https://raw.githubusercontent.com; style-src 'self'; script-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests">
+  <title>RavenEmu | Émulation portable, architecture ouverte</title>
+  <link rel="stylesheet" href="assets/styles.css">
+  <script src="assets/app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#contenu">Aller au contenu</a>
+
+  <header class="site-header" id="accueil">
+    <div class="header-inner container">
+      <a class="brand" href="#accueil" aria-label="RavenEmu, accueil">
+        <span class="brand-logo" aria-hidden="true">
+          <img
+            src="https://raw.githubusercontent.com/GhostPunishR/RavenEmu/main/app/src/main/res/drawable-nodpi/ic_launcher_raven.png"
+            alt=""
+            width="64"
+            height="64"
+          >
+        </span>
+        <span class="brand-copy">
+          <strong>RavenEmu</strong>
+          <small>Android Emulator</small>
+        </span>
+      </a>
+
+      <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="navigation-principale">
+        <span class="sr-only">Ouvrir le menu</span>
+        <span aria-hidden="true"></span>
+        <span aria-hidden="true"></span>
+        <span aria-hidden="true"></span>
+      </button>
+
+      <nav class="site-nav" id="navigation-principale" aria-label="Navigation principale">
+        <a href="#consoles">Consoles</a>
+        <a href="#fonctionnalites">Fonctionnalités</a>
+        <a href="#architecture">Architecture</a>
+        <a href="#contribuer">Contribuer</a>
+        <a href="#securite">Sécurité</a>
+        <a class="nav-github" href="https://github.com/GhostPunishR/RavenEmu" target="_blank" rel="noreferrer">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="contenu">
+    <section class="hero section-shell" aria-labelledby="hero-title">
+      <div class="hero-glow hero-glow-one" aria-hidden="true"></div>
+      <div class="hero-glow hero-glow-two" aria-hidden="true"></div>
+      <div class="container hero-grid">
+        <div class="hero-copy reveal">
+          <span class="eyebrow">Émulateur Android modulaire</span>
+          <h1 id="hero-title">Trois générations portables.<br><span>Un seul projet ouvert.</span></h1>
+          <p class="hero-lead">
+            RavenEmu réunit la Game Boy, la Game Boy Color et la Game Boy Advance dans une application Android conçue en Kotlin. Chaque moteur est développé pour le projet à partir de documentation technique publique.
+          </p>
+          <div class="hero-actions">
+            <a
+              class="button button-primary"
+              href="https://github.com/GhostPunishR/RavenEmu/releases/download/debug-latest/RavenEmu-debug.apk"
+              aria-label="Télécharger le dernier APK debug de RavenEmu"
+            >Télécharger l’APK debug</a>
+            <a class="button button-secondary" href="https://github.com/GhostPunishR/RavenEmu" target="_blank" rel="noreferrer">Voir le dépôt</a>
+            <a class="button button-secondary" href="#demarrer">Compiler RavenEmu</a>
+          </div>
+          <ul class="hero-points" aria-label="Principes RavenEmu">
+            <li>Moteurs JVM indépendants</li>
+            <li>Aucun BIOS ni ROM distribué</li>
+            <li>Licence MIT</li>
+          </ul>
+        </div>
+
+        <div class="hero-visual">
+          <img
+            class="hero-console"
+            src="assets/ravenemu-handheld.webp"
+            alt="Console portable rétro RavenEmu, graphite avec des accents violets"
+            width="779"
+            height="900"
+            decoding="async"
+            fetchpriority="high"
+          >
+        </div>
+      </div>
+    </section>
+
+    <section class="trust-strip" aria-label="Caractéristiques principales">
+      <div class="container trust-grid">
+        <div><strong>100 %</strong><span>Kotlin</span></div>
+        <div><strong>3</strong><span>familles de consoles</span></div>
+        <div><strong>0</strong><span>télémétrie réseau</span></div>
+        <div><strong>MIT</strong><span>licence du projet</span></div>
+      </div>
+    </section>
+
+    <section class="section section-consoles" id="consoles" aria-labelledby="consoles-title">
+      <div class="container">
+        <div class="section-heading reveal">
+          <span class="eyebrow">Consoles</span>
+          <h2 id="consoles-title">Un moteur adapté à chaque génération</h2>
+          <p>Les cœurs partagent une API commune, sans dépendre les uns des autres ni de la couche Android.</p>
+        </div>
+
+        <div class="console-grid">
+          <article class="console-card console-dmg reveal">
+            <div class="console-card-top">
+              <span class="console-icon" aria-hidden="true">GB</span>
+              <span class="status-badge status-advanced">Avancé</span>
+            </div>
+            <h3>Game Boy</h3>
+            <p>CPU LR35902, PPU, audio quatre canaux, interruptions, timers, DMA et contrôleurs de cartouche classiques.</p>
+            <ul>
+              <li>Profils d’écran monochrome</li>
+              <li>MBC1, MBC2, MBC3 et MBC5</li>
+              <li>Sauvegardes brutes et RTC</li>
+            </ul>
+          </article>
+
+          <article class="console-card console-cgb reveal">
+            <div class="console-card-top">
+              <span class="console-icon" aria-hidden="true">CGB</span>
+              <span class="status-badge status-integrated">Intégré</span>
+            </div>
+            <h3>Game Boy Color</h3>
+            <p>Le cœur Game Boy étend son matériel avec les banques couleur, les palettes, le HDMA et la double vitesse.</p>
+            <ul>
+              <li>Sortie couleur ARGB</li>
+              <li>VRAM et WRAM bancarisées</li>
+              <li>Attributs et palettes CGB</li>
+            </ul>
+          </article>
+
+          <article class="console-card console-gba reveal">
+            <div class="console-card-top">
+              <span class="console-icon" aria-hidden="true">GBA</span>
+              <span class="status-badge status-experimental">Expérimental</span>
+            </div>
+            <h3>Game Boy Advance</h3>
+            <p>Nouveau cœur ARM7TDMI dédié avec modes ARM et Thumb, vidéo 240 × 160, DMA, timers et audio Direct Sound.</p>
+            <ul>
+              <li>Modes graphiques et sprites</li>
+              <li>SRAM, Flash et EEPROM</li>
+              <li>Compatibilité en validation active</li>
+            </ul>
+          </article>
+        </div>
+
+        <div class="notice reveal" role="note">
+          <strong>État du cœur GBA</strong>
+          <p>Le moteur Game Boy Advance reste en développement. La compatibilité avec les jeux commerciaux et les performances sur appareils Android doivent être vérifiées jeu par jeu.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-features" id="fonctionnalites" aria-labelledby="features-title">
+      <div class="container">
+        <div class="section-heading reveal">
+          <span class="eyebrow">Fonctionnalités</span>
+          <h2 id="features-title">Explorer RavenEmu par catégorie</h2>
+          <p>Filtre les cartes pour découvrir les moteurs, l’application Android et les outils du projet.</p>
+        </div>
+
+        <div class="filter-bar reveal" role="group" aria-label="Filtrer les fonctionnalités">
+          <button class="filter-button is-active" type="button" data-filter="all" aria-pressed="true">Tout</button>
+          <button class="filter-button" type="button" data-filter="emulation" aria-pressed="false">Émulation</button>
+          <button class="filter-button" type="button" data-filter="application" aria-pressed="false">Application</button>
+          <button class="filter-button" type="button" data-filter="development" aria-pressed="false">Développement</button>
+          <button class="filter-button" type="button" data-filter="community" aria-pressed="false">Communauté</button>
+        </div>
+
+        <div class="feature-grid" id="feature-grid">
+          <article class="feature-card reveal" data-category="emulation">
+            <span class="feature-number">01</span>
+            <h3>Moteurs déterministes</h3>
+            <p>Les cœurs avancent selon un budget de cycles contrôlé et produisent leur framebuffer via le contrat commun.</p>
+          </article>
+          <article class="feature-card reveal" data-category="emulation">
+            <span class="feature-number">02</span>
+            <h3>Audio natif</h3>
+            <p>Sortie PCM, rééchantillonnage interne et synchronisation avec la couche audio Android.</p>
+          </article>
+          <article class="feature-card reveal" data-category="application">
+            <span class="feature-number">03</span>
+            <h3>Bibliothèque locale</h3>
+            <p>Recherche, filtres par console, empreintes, pochettes et accès aux fichiers via le sélecteur Android.</p>
+          </article>
+          <article class="feature-card reveal" data-category="application">
+            <span class="feature-number">04</span>
+            <h3>Contrôles adaptatifs</h3>
+            <p>Disposition tactile configurable, profils portrait et paysage, manettes physiques et gâchettes GBA.</p>
+          </article>
+          <article class="feature-card reveal" data-category="application">
+            <span class="feature-number">05</span>
+            <h3>Sauvegardes</h3>
+            <p>Fichiers .sav bruts lorsque possible, sauvegarde automatique et états instantanés versionnés.</p>
+          </article>
+          <article class="feature-card reveal" data-category="development">
+            <span class="feature-number">06</span>
+            <h3>Architecture modulaire</h3>
+            <p>Les moteurs Kotlin/JVM sont isolés de l’interface Android et testables sans émulateur Android.</p>
+          </article>
+          <article class="feature-card reveal" data-category="development">
+            <span class="feature-number">07</span>
+            <h3>Tests synthétiques</h3>
+            <p>Les tests produisent leurs propres programmes et données, sans intégrer de ROM commerciale au dépôt.</p>
+          </article>
+          <article class="feature-card reveal" data-category="community">
+            <span class="feature-number">08</span>
+            <h3>Contribution ouverte</h3>
+            <p>Issues, pull requests, revues techniques, règles de sécurité et code de conduite sont centralisés ici.</p>
+          </article>
+        </div>
+        <p class="filter-empty" id="filter-empty" hidden>Aucune fonctionnalité dans cette catégorie.</p>
+      </div>
+    </section>
+
+    <section class="section section-architecture" id="architecture" aria-labelledby="architecture-title">
+      <div class="container architecture-layout">
+        <div class="section-heading architecture-copy reveal">
+          <span class="eyebrow">Architecture</span>
+          <h2 id="architecture-title">Des modules aux responsabilités nettes</h2>
+          <p>L’application sélectionne le moteur adapté à la ROM. Les cœurs restent purs JVM, tandis que l’interface, le stockage et le rendu vivent dans des modules Android dédiés.</p>
+          <a class="text-link" href="https://github.com/GhostPunishR/RavenEmu" target="_blank" rel="noreferrer">Parcourir le code source <span aria-hidden="true">→</span></a>
+        </div>
+
+        <div class="module-map reveal" aria-label="Modules RavenEmu">
+          <div class="module module-app"><strong>app</strong><span>Composition et navigation</span></div>
+          <div class="module-flow" aria-hidden="true"></div>
+          <div class="module-row">
+            <div class="module module-core"><strong>gameboy-core</strong><span>DMG et CGB</span></div>
+            <div class="module module-core"><strong>gba-core</strong><span>Game Boy Advance</span></div>
+            <div class="module module-api"><strong>emulation-api</strong><span>Contrats partagés</span></div>
+          </div>
+          <div class="module-row module-row-bottom">
+            <div class="module"><strong>renderer</strong><span>Framebuffer</span></div>
+            <div class="module"><strong>input</strong><span>Tactile et manettes</span></div>
+            <div class="module"><strong>storage</strong><span>SAF et sauvegardes</span></div>
+            <div class="module"><strong>rom-library</strong><span>Index et empreintes</span></div>
+            <div class="module"><strong>settings</strong><span>Préférences</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-build" id="demarrer" aria-labelledby="build-title">
+      <div class="container build-grid">
+        <div class="section-heading reveal">
+          <span class="eyebrow">Démarrage</span>
+          <h2 id="build-title">Compiler et vérifier le projet</h2>
+          <p>Les moteurs JVM peuvent être testés sans SDK Android. La construction de l’application nécessite le SDK Android configuré localement.</p>
+          <div class="requirements">
+            <span>JDK 17+</span>
+            <span>Gradle Wrapper</span>
+            <span>SDK Android pour l’APK</span>
+          </div>
+        </div>
+
+        <div class="code-stack reveal">
+          <div class="code-card">
+            <div class="code-card-header">
+              <span>Tests JVM</span>
+              <button class="copy-button" type="button" data-copy="./gradlew jvmTest">Copier</button>
+            </div>
+            <pre><code>./gradlew jvmTest</code></pre>
+          </div>
+          <div class="code-card">
+            <div class="code-card-header">
+              <span>Validation complète</span>
+              <button class="copy-button" type="button" data-copy="./gradlew test lint assembleDebug">Copier</button>
+            </div>
+            <pre><code>./gradlew test lint assembleDebug</code></pre>
+          </div>
+          <div class="code-card">
+            <div class="code-card-header">
+              <span>App Bundle</span>
+              <button class="copy-button" type="button" data-copy="./gradlew bundleRelease">Copier</button>
+            </div>
+            <pre><code>./gradlew bundleRelease</code></pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-contribute" id="contribuer" aria-labelledby="contribute-title">
+      <div class="container">
+        <div class="section-heading reveal">
+          <span class="eyebrow">Contribuer</span>
+          <h2 id="contribute-title">Construire RavenEmu ensemble</h2>
+          <p>Les contributions techniques, documentaires et de validation sont bienvenues lorsqu’elles respectent l’originalité et la sécurité du projet.</p>
+        </div>
+
+        <div class="steps-grid">
+          <article class="step-card reveal">
+            <span>1</span>
+            <h3>Choisir un sujet</h3>
+            <p>Consulter les issues existantes ou ouvrir une proposition claire avant un chantier important.</p>
+          </article>
+          <article class="step-card reveal">
+            <span>2</span>
+            <h3>Développer proprement</h3>
+            <p>Conserver les frontières des modules, documenter le matériel et éviter les allocations dans les chemins chauds.</p>
+          </article>
+          <article class="step-card reveal">
+            <span>3</span>
+            <h3>Tester</h3>
+            <p>Ajouter des tests synthétiques reproductibles et exécuter les tâches Gradle adaptées.</p>
+          </article>
+          <article class="step-card reveal">
+            <span>4</span>
+            <h3>Ouvrir une PR</h3>
+            <p>Décrire le comportement visé, les références publiques, les résultats et les limites restantes.</p>
+          </article>
+        </div>
+
+        <div class="contribute-actions reveal">
+          <a class="button button-primary" href="https://github.com/GhostPunishR/RavenEmu/issues" target="_blank" rel="noreferrer">Voir les issues</a>
+          <a class="button button-secondary" href="https://github.com/GhostPunishR/RavenEmu/pulls" target="_blank" rel="noreferrer">Voir les pull requests</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-community" id="securite" aria-labelledby="security-title">
+      <div class="container community-grid">
+        <article class="community-card security-card reveal">
+          <span class="eyebrow">Sécurité</span>
+          <h2 id="security-title">Signaler sans exposer</h2>
+          <p>Une vulnérabilité ne doit pas être publiée dans une issue publique avant coordination d’un correctif.</p>
+          <ul>
+            <li>Ne jamais joindre de ROM, BIOS ou sauvegarde personnelle</li>
+            <li>Fournir une reproduction minimale et l’impact observé</li>
+            <li>Utiliser les avis de sécurité privés du dépôt</li>
+          </ul>
+          <a class="text-link" href="https://github.com/GhostPunishR/RavenEmu/security/advisories/new" target="_blank" rel="noreferrer">Ouvrir un signalement privé <span aria-hidden="true">→</span></a>
+        </article>
+
+        <article class="community-card conduct-card reveal">
+          <span class="eyebrow">Code de conduite</span>
+          <h2>Une communauté respectueuse</h2>
+          <p>Les échanges doivent rester techniques, inclusifs et constructifs. Les attaques personnelles, le harcèlement et la divulgation de données privées ne sont pas acceptés.</p>
+          <ul>
+            <li>Critiquer le code, jamais la personne</li>
+            <li>Expliquer les désaccords avec des éléments vérifiables</li>
+            <li>Respecter les décisions de modération</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section class="section section-faq" aria-labelledby="faq-title">
+      <div class="container faq-layout">
+        <div class="section-heading reveal">
+          <span class="eyebrow">Questions fréquentes</span>
+          <h2 id="faq-title">Avant de commencer</h2>
+        </div>
+        <div class="faq-list">
+          <details class="faq-item reveal">
+            <summary>RavenEmu fournit-il des jeux ou un BIOS ?</summary>
+            <p>Non. Le dépôt et l’application ne distribuent aucun BIOS, aucune ROM et aucun contenu protégé. Utilise uniquement des copies que tu es autorisé à employer ou des homebrews librement distribués.</p>
+          </details>
+          <details class="faq-item reveal">
+            <summary>Le cœur Game Boy Advance est-il prêt pour tous les jeux ?</summary>
+            <p>Non. Il est en développement actif. Les fonctions, les performances et la compatibilité commerciale doivent encore être validées sur différents appareils.</p>
+          </details>
+          <details class="faq-item reveal">
+            <summary>Puis-je intégrer le code d’un autre émulateur ?</summary>
+            <p>Non. Les moteurs RavenEmu sont écrits pour le projet à partir de documentation technique publique. Une contribution ne doit pas copier, traduire ou adapter le code d’un autre émulateur.</p>
+          </details>
+          <details class="faq-item reveal">
+            <summary>Quelles données quittent mon appareil ?</summary>
+            <p>RavenEmu est conçu sans télémétrie et sans téléversement de ROM ou de sauvegarde. Les fichiers restent sous le contrôle de l’utilisateur.</p>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <section class="cta-section">
+      <div class="container cta-card reveal">
+        <div>
+          <span class="eyebrow">Projet open source</span>
+          <h2>Faire progresser l’émulation portable sur Android</h2>
+          <p>Explore le code, teste les moteurs, documente un comportement matériel ou propose une correction ciblée.</p>
+        </div>
+        <a class="button button-primary" href="https://github.com/GhostPunishR/RavenEmu" target="_blank" rel="noreferrer">Rejoindre le projet</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-grid">
+      <div class="footer-brand">
+        <span class="brand-logo" aria-hidden="true">
+          <img
+            src="https://raw.githubusercontent.com/GhostPunishR/RavenEmu/main/app/src/main/res/drawable-nodpi/ic_launcher_raven.png"
+            alt=""
+            width="48"
+            height="48"
+          >
+        </span>
+        <div>
+          <strong>RavenEmu</strong>
+          <p>Émulateur Android sous licence MIT.</p>
+        </div>
+      </div>
+      <nav class="footer-links" aria-label="Liens du pied de page">
+        <a href="#consoles">Consoles</a>
+        <a href="#architecture">Architecture</a>
+        <a href="#contribuer">Contribution</a>
+        <a href="#securite">Sécurité</a>
+        <a href="https://github.com/GhostPunishR/RavenEmu/blob/main/LICENSE" target="_blank" rel="noreferrer">Licence</a>
+      </nav>
+      <p class="footer-copy">© <span id="current-year">2026</span> GhostPunishR. Game Boy, Game Boy Color et Game Boy Advance sont des marques de leurs propriétaires respectifs. RavenEmu n’est pas affilié à Nintendo.</p>
+    </div>
+  </footer>
+</body>
+</html>
