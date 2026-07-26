@@ -113,6 +113,117 @@ class GbaBus(
         nextSequentialAddress = address + width
     }
 
+    // ---- Cache de lecture d'instruction ----
+    //
+    // Le processeur relit une instruction à chaque pas, presque toujours dans la
+    // même région et à l'adresse suivante. Le chemin générique refaisait pour
+    // chacune quatre fois le même aiguillage sur l'octet de poids fort de
+    // l'adresse : une fois pour la facturation, une fois pour le temps d'attente,
+    // une fois pour trouver le tableau, une fois pour calculer l'index. Une
+    // fenêtre mémorisée ramène tout cela à une comparaison de bornes.
+
+    private var codeBlock: ByteArray? = null
+    private var codeStart = 0
+    private var codeLimit = 0
+    private var codeSequentialWait16 = 0
+    private var codeNonSequentialWait16 = 0
+    private var codeSequentialWait32 = 0
+    private var codeNonSequentialWait32 = 0
+
+    /** Invalide la fenêtre de code : `WAITCNT` a changé, ou l'exécution a migré. */
+    fun invalidateCodeWindow() {
+        codeBlock = null
+    }
+
+    /**
+     * Lecture d'un demi-mot d'**instruction**. Identique à [read16] du point de
+     * vue du programme émulé, mais servie par la fenêtre de code quand elle
+     * s'applique.
+     */
+    fun fetch16(address: Int): Int {
+        val block = codeBlock
+        if (block != null && address >= codeStart && address + 2 <= codeLimit) {
+            waitCycles += if (address == nextSequentialAddress) {
+                codeSequentialWait16
+            } else {
+                codeNonSequentialWait16
+            }
+            nextSequentialAddress = address + 2
+            val i = address - codeStart
+            return (block[i].toInt() and 0xFF) or ((block[i + 1].toInt() and 0xFF) shl 8)
+        }
+        openCodeWindow(address)
+        markInstructionFetch()
+        return read16(address)
+    }
+
+    /** Lecture d'un mot d'**instruction**, symétrique de [fetch16]. */
+    fun fetch32(address: Int): Int {
+        val block = codeBlock
+        if (block != null && address >= codeStart && address + 4 <= codeLimit) {
+            waitCycles += if (address == nextSequentialAddress) {
+                codeSequentialWait32
+            } else {
+                codeNonSequentialWait32
+            }
+            nextSequentialAddress = address + 4
+            val i = address - codeStart
+            return (block[i].toInt() and 0xFF) or
+                ((block[i + 1].toInt() and 0xFF) shl 8) or
+                ((block[i + 2].toInt() and 0xFF) shl 16) or
+                ((block[i + 3].toInt() and 0xFF) shl 24)
+        }
+        openCodeWindow(address)
+        markInstructionFetch()
+        return read32(address)
+    }
+
+    /**
+     * Ouvre la fenêtre de code contenant [address], si la région s'y prête.
+     *
+     * Seules l'EWRAM, l'IWRAM et la cartouche sont mises en fenêtre : un jeu n'y
+     * exécute pratiquement jamais rien d'autre, et ces trois régions ont des
+     * miroirs de taille fixe, donc une fenêtre contiguë bien définie. Les temps
+     * d'attente sont mémorisés avec elle, d'où l'invalidation sur `WAITCNT`.
+     */
+    private fun openCodeWindow(address: Int) {
+        codeBlock = null
+        when ((address ushr 24) and 0xFF) {
+            0x02 -> openWindow(ewram, address, MemoryRegion.EWRAM.mirrorMask)
+            0x03 -> openWindow(iwram, address, MemoryRegion.IWRAM.mirrorMask)
+            // 0x0D est exclu : c'est la fenêtre du port EEPROM, dont les
+            // lectures sont sérielles et ne doivent jamais être servies depuis
+            // la ROM. Aucun jeu n'y exécute de code.
+            in 0x08..0x0C -> {
+                val offset = romOffset(address)
+                val rom = cartridge.rom
+                if (offset < rom.size) {
+                    // La fenêtre couvre la ROM entière depuis sa base ; elle ne
+                    // franchit pas de frontière de zone d'attente, les bases
+                    // 0x08/0x0A/0x0C étant alignées sur 32 Mio.
+                    codeBlock = rom
+                    codeStart = address - offset
+                    codeLimit = codeStart + rom.size
+                    cacheCodeWaitStates(address)
+                }
+            }
+        }
+    }
+
+    private fun openWindow(block: ByteArray, address: Int, mirrorMask: Int) {
+        codeBlock = block
+        codeStart = address and mirrorMask.inv()
+        codeLimit = codeStart + block.size
+        cacheCodeWaitStates(address)
+    }
+
+    private fun cacheCodeWaitStates(address: Int) {
+        codeSequentialWait16 = timing.instructionWaitStates(address, 2, sequential = true)
+        codeNonSequentialWait16 = timing.instructionWaitStates(address, 2, sequential = false)
+        codeSequentialWait32 = timing.instructionWaitStates(address, 4, sequential = true)
+        codeNonSequentialWait32 = timing.instructionWaitStates(address, 4, sequential = false)
+    }
+
     /** Réaligne le modèle de temps d'attente sur le contenu courant de [io]. */
     fun syncTimingFromIo() {
         timing.waitControl = ioRegister(MemoryTiming.WAITCNT_OFFSET)
@@ -209,7 +320,10 @@ class GbaBus(
             IE_LOW -> interrupts?.enable = value
             IF_LOW -> interrupts?.acknowledge(value)
             IME -> interrupts?.masterEnable = value and 1 != 0
-            MemoryTiming.WAITCNT_OFFSET -> timing.waitControl = value
+            MemoryTiming.WAITCNT_OFFSET -> {
+                timing.waitControl = value
+                invalidateCodeWindow() // les coûts mémorisés ne valent plus
+            }
             0x100, 0x104, 0x108, 0x10C -> timers?.onReloadWrite((offset - 0x100) / 4, value)
             0x102, 0x106, 0x10A, 0x10E -> timers?.onControlWrite((offset - 0x100) / 4, value)
             0x0BA -> dma?.onControlWrite(0, value)

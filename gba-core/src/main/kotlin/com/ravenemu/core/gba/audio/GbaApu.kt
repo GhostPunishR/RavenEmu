@@ -58,6 +58,13 @@ class GbaApu {
     fun tick(cpuCycles: Int) {
         // L'horloge audio est le quart de l'horloge CPU.
         cpuRemainder += cpuCycles
+        // Traitement par lots : appelé après chaque instruction, ce point d'entrée
+        // recevait des incréments de quelques cycles et payait le coût d'appel de
+        // quatre oscillateurs pour presque rien. Le résultat est identique — la
+        // boucle ci-dessous découpe de toute façon aux frontières d'échantillon,
+        // et rien ne lit l'état de l'unité entre deux instructions — seul le
+        // moment du calcul change.
+        if (cpuRemainder < MIN_BATCH_CPU_CYCLES) return
         var audioCycles = cpuRemainder shr 2
         if (audioCycles <= 0) return
         cpuRemainder -= audioCycles shl 2
@@ -364,6 +371,13 @@ class GbaApu {
 
         /** Séquenceur de trames à 512 Hz. */
         private const val SEQUENCER_PERIOD = 8192
+
+        /**
+         * Cycles CPU accumulés avant de faire tourner les oscillateurs. Un quart
+         * d'échantillon : bien trop court pour s'entendre, assez long pour éviter
+         * un appel par instruction.
+         */
+        private const val MIN_BATCH_CPU_CYCLES = 4 * CYCLES_PER_SAMPLE / 4
 
         /** Tampon de sortie : environ un dixième de seconde en stéréo. */
         private const val BUFFER_SAMPLES = 8192

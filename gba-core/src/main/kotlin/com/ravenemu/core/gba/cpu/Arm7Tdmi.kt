@@ -128,13 +128,12 @@ class Arm7Tdmi(val bus: GbaBus) {
         branched = false
         bus.takeWaitCycles() // ne facture pas les cycles d'un autre maître du bus
         val cost: Int
-        bus.markInstructionFetch()
         if (state.thumb) {
-            val instr = bus.read16(state.regs[15]) and 0xFFFF
+            val instr = bus.fetch16(state.regs[15]) and 0xFFFF
             cost = thumbDecoder.execute(instr)
             if (!branched) state.regs[15] += 2
         } else {
-            val instr = bus.read32(state.regs[15])
+            val instr = bus.fetch32(state.regs[15])
             cost = if (checkCondition(instr ushr 28)) {
                 armDecoder.execute(instr)
             } else {

@@ -68,6 +68,55 @@ class PerfBenchmark {
         return (System.nanoTime() - start) / 1_000_000.0 / frames
     }
 
+    /**
+     * Boucle Thumb exécutée depuis la cartouche : c'est le régime d'un vrai jeu,
+     * là où la boucle ARM ci-dessus ne représente qu'un cas d'école.
+     */
+    private fun thumbFromRomImage(): ByteArray {
+        val a = GbaAssembler()
+        a.b("main")
+        a.padTo(0xC0)
+        a.label("main")
+        a.ldrPc(0, "cWork")
+        a.ldrPc(1, "cThumb")
+        a.bx(1)
+        a.align(2)
+        a.label("loop")
+        a.tMov(1, 0x20)
+        a.tStr(1, 0, 0)
+        a.tLdr(2, 0, 0)
+        a.tAdd(2, 1)
+        a.tStr(2, 0, 4)
+        a.tLsl(3, 2, 3)
+        a.tStr(3, 0, 8)
+        a.tLdr(4, 0, 4)
+        a.tAdd(4, 0x11)
+        a.tStr(4, 0, 12)
+        a.tMov(5, 0x7F)
+        a.tStr(5, 0, 16)
+        a.tLdr(6, 0, 8)
+        a.tLsl(6, 6, 1)
+        a.tStr(6, 0, 20)
+        a.tB("loop")
+        a.align(4)
+        a.label("cWork"); a.word(0x0300_0000)
+        a.label("cThumb"); a.thumbAddressWord("loop")
+        return SyntheticRom.buildFromCode(a.assemble())
+    }
+
+    @Test
+    fun `banc d'essai d'une charge Thumb en cartouche`() {
+        val core = GbaCore()
+        core.loadRom(thumbFromRomImage())
+        val fb = IntArray(core.video.pixelCount)
+        val ms = milliseconds(warmup = 40, frames = 120) { core.runFrame(fb) }
+        val instr = core.debugSnapshot()!!.instructionsPerFrame
+        println(
+            "thumb-cartouche %6.3f ms/trame  %7d instructions  %5.1f Mi/s"
+                .format(ms, instr, instr / ms / 1000.0),
+        )
+    }
+
     @Test
     fun `banc d'essai du moteur complet`() {
         println("=== Banc d'essai RavenEmu GBA (JVM de bureau, valeurs indicatives) ===")

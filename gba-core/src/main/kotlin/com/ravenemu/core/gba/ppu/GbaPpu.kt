@@ -97,6 +97,15 @@ class GbaPpu(private val bus: GbaBus) {
      * Chaque ligne visible est rendue au début de son HBlank.
      */
     fun tick(cpuCycles: Int) {
+        // Chemin rapide, exact : si l'incrément n'atteint ni le début du HBlank
+        // ni la fin de la ligne, il n'y a rien d'autre à faire qu'avancer
+        // l'horloge. C'est le cas de la quasi-totalité des appels, le processeur
+        // rendant la main après chaque instruction.
+        val nextEvent = if (inHBlank) LINE_CYCLES else HDRAW_CYCLES
+        if (lineCycles + cpuCycles < nextEvent) {
+            lineCycles += cpuCycles
+            return
+        }
         var remaining = cpuCycles
         while (remaining > 0) {
             val step = minOf(remaining, LINE_CYCLES - lineCycles)
