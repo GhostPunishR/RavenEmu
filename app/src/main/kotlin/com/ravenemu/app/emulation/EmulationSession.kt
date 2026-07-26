@@ -40,9 +40,10 @@ class EmulationSession(
     /**
      * Sortie audio de la plateforme. [write] doit être bloquante : c'est elle
      * qui cadence la session quand l'audio est actif (synchronisation A/V).
+     * [targetDurationNanos] indique la durée réelle que le bloc doit couvrir.
      */
     interface AudioSink {
-        fun write(samples: ShortArray, count: Int)
+        fun write(samples: ShortArray, count: Int, targetDurationNanos: Long)
         fun setVolume(volume: Float)
         fun pause()
         fun release()
@@ -149,7 +150,8 @@ class EmulationSession(
             // seule, sans le cadencement ni l'attente audio.
             val workStart = System.nanoTime()
             core.runFrame(framebuffer)
-            workNanos += System.nanoTime() - workStart
+            val frameWorkNanos = System.nanoTime() - workStart
+            workNanos += frameWorkNanos
 
             // Audio d'abord : l'écriture bloquante cadence la session et la
             // file audio est réalimentée avant de payer le coût du rendu
@@ -159,7 +161,13 @@ class EmulationSession(
             val audioCount = core.readAudio(audioBuffer)
             val audioPaced = audioSink != null && audioEnabled && audioCount > 0 &&
                 speedLimitEnabled && !fastForward
-            if (audioPaced) audioSink!!.write(audioBuffer, audioCount)
+            if (audioPaced) {
+                // Si le moteur est plus lent que la console, un bloc natif ne
+                // couvre pas le temps écoulé et AudioTrack finit par manquer de
+                // données. La sortie étire alors le bloc jusqu'au temps de calcul.
+                val targetAudioNanos = maxOf(basePeriodNanos, frameWorkNanos)
+                audioSink!!.write(audioBuffer, audioCount, targetAudioNanos)
+            }
 
             callbacks.onFrame(framebuffer)
             fpsFrames++

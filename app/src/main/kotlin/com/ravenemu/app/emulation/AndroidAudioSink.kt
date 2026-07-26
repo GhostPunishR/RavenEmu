@@ -5,6 +5,7 @@ import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
+import com.ravenemu.emulation.api.audio.AudioRateController
 import com.ravenemu.emulation.api.audio.LinearResampler
 import kotlin.math.ceil
 
@@ -28,6 +29,7 @@ class AndroidAudioSink(
 
     private val outputRate = resolveNativeRate(context)
     private val resampler = LinearResampler(sourceRateHz, outputRate)
+    private val rateController = AudioRateController(sourceRateHz)
     private var resampled = ShortArray(0)
     private val track: AudioTrack
 
@@ -66,13 +68,31 @@ class AndroidAudioSink(
             .build()
     }
 
-    override fun write(samples: ShortArray, count: Int) {
+    override fun write(samples: ShortArray, count: Int, targetDurationNanos: Long) {
         try {
             if (track.playState != AudioTrack.PLAYSTATE_PLAYING) track.play()
-            val needed = resampler.maxOutput(count)
+
+            // À vitesse réduite, produire davantage de trames de sortie évite
+            // les trous périodiques dans AudioTrack. Le contrôleur lisse et
+            // borne le ratio pour empêcher toute variation brutale.
+            val rateScale = rateController.update(count / 2, targetDurationNanos)
+            val needed = resampler.maxOutput(count, rateScale)
             if (resampled.size < needed) resampled = ShortArray(needed)
-            val produced = resampler.resample(samples, count, resampled)
-            track.write(resampled, 0, produced, AudioTrack.WRITE_BLOCKING)
+            val produced = resampler.resample(samples, count, resampled, rateScale)
+
+            // WRITE_BLOCKING peut encore retourner une écriture partielle si la
+            // piste change d'état. Ne jamais abandonner silencieusement la fin.
+            var offset = 0
+            while (offset < produced) {
+                val written = track.write(
+                    resampled,
+                    offset,
+                    produced - offset,
+                    AudioTrack.WRITE_BLOCKING,
+                )
+                if (written <= 0) break
+                offset += written
+            }
         } catch (_: Exception) {
             // Une sortie audio défaillante ne doit pas interrompre le jeu.
         }
@@ -90,6 +110,7 @@ class AndroidAudioSink(
             track.pause()
             track.flush()
             resampler.reset()
+            rateController.reset()
         } catch (_: Exception) {
         }
     }

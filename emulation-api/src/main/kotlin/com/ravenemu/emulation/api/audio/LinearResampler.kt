@@ -1,5 +1,7 @@
 package com.ravenemu.emulation.api.audio
 
+import kotlin.math.ceil
+
 /**
  * Rééchantillonneur linéaire **en flux**, PCM 16 bits stéréo entrelacé.
  *
@@ -20,8 +22,8 @@ class LinearResampler(
         require(inputRate > 0 && outputRate > 0) { "Débits invalides" }
     }
 
-    /** Trames d'entrée à avancer par trame de sortie. */
-    private val step = inputRate.toDouble() / outputRate
+    /** Trames d'entrée à avancer par trame de sortie à vitesse native. */
+    private val baseStep = inputRate.toDouble() / outputRate
 
     private var frac = 0.0
     private var lastL = 0.0
@@ -29,11 +31,15 @@ class LinearResampler(
 
     val isIdentity: Boolean get() = inputRate == outputRate
 
-    /** Majorant du nombre de shorts produits pour [inputCount] shorts d'entrée. */
-    fun maxOutput(inputCount: Int): Int {
-        if (isIdentity) return inputCount
-        val inFrames = (inputCount / 2).toLong()
-        return (((inFrames * outputRate) / inputRate) + 2).toInt() * 2
+    /**
+     * Majorant du nombre de shorts produits pour [inputCount] shorts d'entrée.
+     * [rateScale] vaut 1 à vitesse native et descend sous 1 pour étirer le son.
+     */
+    fun maxOutput(inputCount: Int, rateScale: Double = 1.0): Int {
+        validateRateScale(rateScale)
+        if (isIdentity && rateScale == 1.0) return inputCount
+        val inFrames = inputCount / 2
+        return (ceil(inFrames / (baseStep * rateScale)).toInt() + 2) * 2
     }
 
     /**
@@ -41,12 +47,19 @@ class LinearResampler(
      * vers [output] et retourne le nombre de shorts écrits (toujours pair).
      * L'écriture s'arrête si [output] est plein (jamais de dépassement).
      */
-    fun resample(input: ShortArray, inputCount: Int, output: ShortArray): Int {
-        if (isIdentity) {
+    fun resample(
+        input: ShortArray,
+        inputCount: Int,
+        output: ShortArray,
+        rateScale: Double = 1.0,
+    ): Int {
+        validateRateScale(rateScale)
+        if (isIdentity && rateScale == 1.0) {
             val n = minOf(inputCount, output.size)
             System.arraycopy(input, 0, output, 0, n)
             return n
         }
+        val step = baseStep * rateScale
         var o = 0
         var i = 0
         val frames = inputCount / 2
@@ -65,6 +78,10 @@ class LinearResampler(
             i++
         }
         return o
+    }
+
+    private fun validateRateScale(rateScale: Double) {
+        require(rateScale.isFinite() && rateScale > 0.0) { "Échelle de débit invalide" }
     }
 
     /** Réinitialise l'état (à la reprise après une coupure du flux). */
