@@ -178,15 +178,62 @@ class GbaBus(
         // il ne doit donc pas être décomposé en deux lectures d'octet.
         val eeprom = eeprom()
         if (eeprom != null && isEepromWindow(a)) return eeprom.read()
+        // Chemin rapide : un seul aiguillage de région puis deux accès tableau,
+        // au lieu de deux appels complets à read8.
+        val block = directBlock(a)
+        if (block != null) {
+            val i = directOffset(a)
+            return (block[i].toInt() and 0xFF) or ((block[i + 1].toInt() and 0xFF) shl 8)
+        }
         return read8(a) or (read8(a + 1) shl 8)
     }
 
     fun read32(address: Int): Int {
         val a = address and 0x3.inv() // alignement mot
+        // Chemin rapide : décisif pour la vitesse, le CPU lisant ici chaque
+        // instruction et chaque mot de données.
+        val block = directBlock(a)
+        if (block != null) {
+            val i = directOffset(a)
+            return (block[i].toInt() and 0xFF) or
+                ((block[i + 1].toInt() and 0xFF) shl 8) or
+                ((block[i + 2].toInt() and 0xFF) shl 16) or
+                ((block[i + 3].toInt() and 0xFF) shl 24)
+        }
         return read8(a) or
             (read8(a + 1) shl 8) or
             (read8(a + 2) shl 16) or
             (read8(a + 3) shl 24)
+    }
+
+    /**
+     * Tableau servant directement un accès multi-octets aligné, ou `null` quand
+     * la région exige un traitement particulier (E/S, sauvegarde, bord de zone).
+     * Les régions retournées ici se lisent et s'écrivent sans effet de bord.
+     */
+    private fun directBlock(address: Int): ByteArray? = when ((address ushr 24) and 0xFF) {
+        0x02 -> ewram
+        0x03 -> iwram
+        0x05 -> paletteRam
+        0x06 -> if ((address and 0x1_FFFF) < 0x1_8000 - 4) vram else null
+        0x07 -> oam
+        in 0x08..0x0C -> romBlockFor(address)
+        else -> null
+    }
+
+    private fun directOffset(address: Int): Int = when ((address ushr 24) and 0xFF) {
+        0x02 -> address and MemoryRegion.EWRAM.mirrorMask
+        0x03 -> address and MemoryRegion.IWRAM.mirrorMask
+        0x05 -> address and MemoryRegion.PALETTE.mirrorMask
+        0x06 -> vramOffset(address)
+        0x07 -> address and MemoryRegion.OAM.mirrorMask
+        else -> romOffset(address)
+    }
+
+    /** ROM cartouche : servie directement si l'accès tient dans ses bornes. */
+    private fun romBlockFor(address: Int): ByteArray? {
+        val offset = romOffset(address)
+        return if (offset >= 0 && offset + 4 <= cartridge.rom.size) cartridge.rom else null
     }
 
     // ---- Écritures ----
@@ -243,6 +290,18 @@ class GbaBus(
 
     fun write32(address: Int, value: Int) {
         val a = address and 0x3.inv()
+        // Chemin rapide symétrique de read32, hors régions à effet de bord.
+        if ((a ushr 24) and 0xFF != 0x04) {
+            val block = directBlock(a)
+            if (block != null && (a ushr 24) and 0xFF !in 0x08..0x0C) {
+                val i = directOffset(a)
+                block[i] = (value and 0xFF).toByte()
+                block[i + 1] = ((value ushr 8) and 0xFF).toByte()
+                block[i + 2] = ((value ushr 16) and 0xFF).toByte()
+                block[i + 3] = ((value ushr 24) and 0xFF).toByte()
+                return
+            }
+        }
         write16(a, value and 0xFFFF)
         write16(a + 2, (value ushr 16) and 0xFFFF)
     }
