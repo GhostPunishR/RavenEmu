@@ -43,6 +43,8 @@ data class GbaDebugSnapshot(
     val missingInterruptCount: Int,
     /** Nombre d'erreurs de décompression rencontrées. */
     val decompressionErrorCount: Int,
+    /** Adresse du premier accès hors du plan mémoire, ou 0. */
+    val firstUnsupportedAddress: Int,
     /** Millisecondes passées à composer l'affichage, trame écoulée. */
     val ppuMillis: Double,
     /** Millisecondes passées en transferts DMA, trame écoulée. */

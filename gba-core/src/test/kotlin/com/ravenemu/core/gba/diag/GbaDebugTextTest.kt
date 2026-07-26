@@ -28,6 +28,7 @@ class GbaDebugTextTest {
         unsupportedAccess: Int = 0,
         missingInterrupt: Int = 0,
         decompressionError: Int = 0,
+        firstUnsupportedAddress: Int = 0,
         ppuMillis: Double = 0.0,
         dmaMillis: Double = 0.0,
         apuMillis: Double = 0.0,
@@ -49,6 +50,7 @@ class GbaDebugTextTest {
         unsupportedAccessCount = unsupportedAccess,
         missingInterruptCount = missingInterrupt,
         decompressionErrorCount = decompressionError,
+        firstUnsupportedAddress = firstUnsupportedAddress,
         ppuMillis = ppuMillis,
         dmaMillis = dmaMillis,
         apuMillis = apuMillis,
@@ -93,6 +95,13 @@ class GbaDebugTextTest {
     fun `la pause du processeur est visible`() {
         val text = snapshot(halted = true).toDebugText(fps = 60.0, frameTimeMs = 5.0)
         assertTrue("en pause" in text, text)
+    }
+
+    @Test
+    fun `l'adresse du premier acces fautif accompagne le decompte`() {
+        val text = snapshot(unsupportedAccess = 64, firstUnsupportedAddress = 0xFFFF_FE00.toInt())
+            .toDebugText(fps = 60.0, frameTimeMs = 16.0)
+        assertTrue("accès 64 @FFFFFE00" in text, text)
     }
 
     @Test

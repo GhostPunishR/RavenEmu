@@ -59,7 +59,11 @@ private fun GbaDebugSnapshot.anomalyLine(): String {
     val parts = ArrayList<String>(5)
     if (unsupportedSwiCount > 0) parts += "SWI $unsupportedSwiCount"
     if (undefinedInstructionCount > 0) parts += "instr $undefinedInstructionCount"
-    if (unsupportedAccessCount > 0) parts += "accès $unsupportedAccessCount"
+    if (unsupportedAccessCount > 0) {
+        // L'adresse fautive vaut mieux qu'un décompte : elle se retrouve dans
+        // le programme, le décompte non.
+        parts += "accès $unsupportedAccessCount @%08X".format(firstUnsupportedAddress)
+    }
     if (missingInterruptCount > 0) parts += "IRQ absente $missingInterruptCount"
     if (decompressionErrorCount > 0) parts += "décompr. $decompressionErrorCount"
     return "anomalies : " + parts.joinToString("  ")

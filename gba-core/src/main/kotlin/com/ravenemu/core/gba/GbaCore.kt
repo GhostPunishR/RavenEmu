@@ -151,6 +151,7 @@ class GbaCore(
             missingInterruptCount = diag.count(GbaDiagnostics.Event.MISSING_INTERRUPT),
             decompressionErrorCount =
                 diag.count(GbaDiagnostics.Event.DECOMPRESSION_ERROR),
+            firstUnsupportedAddress = diag.firstUnsupportedAddress,
             ppuMillis = diag.ppuNanosLastFrame / 1_000_000.0,
             dmaMillis = diag.dmaNanosLastFrame / 1_000_000.0,
             apuMillis = diag.apuNanosLastFrame / 1_000_000.0,

@@ -69,6 +69,21 @@ class GbaDiagnostics {
     var audioUnderruns = 0
         private set
 
+    /**
+     * Adresse du **premier** accès hors du plan mémoire, ou 0.
+     *
+     * Un compteur seul dit qu'il se passe quelque chose ; l'adresse dit quoi.
+     * La première suffit : ces incidents arrivent presque toujours en rafale,
+     * au même endroit, et c'est celui-là qu'il faut retrouver dans le programme.
+     */
+    var firstUnsupportedAddress = 0
+        private set
+
+    /** À appeler **avant** [report], le décompte servant à repérer la première. */
+    fun recordUnsupportedAccess(address: Int) {
+        if (counts[Event.UNSUPPORTED_ACCESS.ordinal] == 0) firstUnsupportedAddress = address
+    }
+
     /** Cycles écoulés dans l'attente d'interruption en cours. */
     var waitCycles = 0
         private set
@@ -186,6 +201,7 @@ class GbaDiagnostics {
         lastSwi = -1
         lastInterruptMask = 0
         audioUnderruns = 0
+        firstUnsupportedAddress = 0
         waitCycles = 0
         measuringTime = false
         ppuNanos = 0
