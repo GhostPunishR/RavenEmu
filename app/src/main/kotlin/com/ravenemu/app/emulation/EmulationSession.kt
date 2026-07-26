@@ -3,7 +3,6 @@ package com.ravenemu.app.emulation
 import com.ravenemu.emulation.api.EmulatorButton
 import com.ravenemu.emulation.api.EmulatorCore
 import com.ravenemu.emulation.api.timing.AdaptiveFrameSkipper
-import com.ravenemu.emulation.api.audio.AudioBlockClock
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.locks.LockSupport
 
@@ -42,10 +41,9 @@ class EmulationSession(
     /**
      * Sortie audio de la plateforme. [write] doit être bloquante : c'est elle
      * qui cadence la session quand l'audio est actif (synchronisation A/V).
-     * [targetDurationNanos] indique la durée réelle que le bloc doit couvrir.
      */
     interface AudioSink {
-        fun write(samples: ShortArray, count: Int, targetDurationNanos: Long)
+        fun write(samples: ShortArray, count: Int)
         fun underrunCount(): Int = 0
         fun setVolume(volume: Float)
         fun pause()
@@ -134,7 +132,6 @@ class EmulationSession(
             android.os.Process.THREAD_PRIORITY_URGENT_DISPLAY,
         )
         val basePeriodNanos = (1_000_000_000.0 / core.video.refreshRateHz).toLong()
-        val audioBlockClock = AudioBlockClock(basePeriodNanos)
         val frameSkipper = AdaptiveFrameSkipper(basePeriodNanos)
         var nextFrameAt = System.nanoTime()
         var fpsWindowStart = System.nanoTime()
@@ -151,7 +148,6 @@ class EmulationSession(
                 fpsWindowStart = System.nanoTime()
                 fpsFrames = 0
                 workNanos = 0
-                audioBlockClock.reset()
                 frameSkipper.reset()
                 continue
             }
@@ -177,19 +173,9 @@ class EmulationSession(
             val audioPaced = audioSink != null && audioEnabled && audioCount > 0 &&
                 speedLimitEnabled && !fastForward
             if (audioPaced) {
-                // Le bloc doit couvrir l'intervalle réel depuis la livraison
-                // précédente, pas seulement le calcul du moteur. Le rendu, les
-                // rappels et l'ordonnancement Android consomment aussi du temps.
-                val targetAudioNanos = if (core.supportsVideoFrameSkipping) {
-                    // Le saut de composition rend au moteur sa cadence native.
-                    // Conserver la durée native évite toute modification de hauteur.
-                    basePeriodNanos
-                } else {
-                    audioBlockClock.mark(System.nanoTime())
-                }
-                audioSink!!.write(audioBuffer, audioCount, targetAudioNanos)
-            } else {
-                audioBlockClock.reset()
+                // Le débit audio reste celui du moteur. Les variations de temps
+                // de rendu ne doivent jamais modifier la hauteur du son.
+                audioSink!!.write(audioBuffer, audioCount)
             }
 
             if (renderVideo) callbacks.onFrame(framebuffer)
