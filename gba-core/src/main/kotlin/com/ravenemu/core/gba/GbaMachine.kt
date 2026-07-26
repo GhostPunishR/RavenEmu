@@ -32,6 +32,9 @@ class GbaMachine(rom: ByteArray, forcedSaveType: GbaSaveType? = null) {
     val cpu: Arm7Tdmi = Arm7Tdmi(bus)
     val bios: GbaBios = GbaBios(cpu, bus)
 
+    /** Compteurs et signalements du moteur (surcouche de débogage, bancs d'essai). */
+    val diagnostics: com.ravenemu.core.gba.diag.GbaDiagnostics get() = bus.diagnostics
+
     init {
         bus.ppu = ppu
         bus.interrupts = interrupts
@@ -45,6 +48,12 @@ class GbaMachine(rom: ByteArray, forcedSaveType: GbaSaveType? = null) {
         timers.onOverflow = apu::onTimerOverflow
         apu.onFifoRequest = dma::triggerSoundFifo
         cpu.swiHandler = bios
+        // Le gestionnaire du BIOS mémorise les sources survenues : c'est ce que
+        // consultent IntrWait et VBlankIntrWait.
+        interrupts.onRequest = { mask ->
+            bios.onInterruptRaised(mask)
+            diagnostics.onInterrupt(mask)
+        }
         cpu.reset(ROM_ENTRY_POINT)
     }
 
@@ -56,16 +65,29 @@ class GbaMachine(rom: ByteArray, forcedSaveType: GbaSaveType? = null) {
      */
     fun runFrame(cycles: Int) {
         var elapsed = 0
+        diagnostics.beginFrame()
         while (elapsed < cycles) {
+            // Le DMA est prioritaire sur le processeur : tant qu'il occupe le
+            // bus, seuls les périphériques avancent.
+            val dmaCycles = dma.takePendingCycles()
+            if (dmaCycles > 0) {
+                advancePeripherals(dmaCycles)
+                elapsed += dmaCycles
+                continue
+            }
             // CPU en pause (SWI Halt/IntrWait) : on avance les périphériques
             // jusqu'à ce qu'une interruption soit levée, puis on réveille.
             if (cpu.state.halted) {
-                ppu.tick(HALT_STEP)
-                timers.tick(HALT_STEP)
-                apu.tick(HALT_STEP)
+                advancePeripherals(HALT_STEP)
                 elapsed += HALT_STEP
-                if (interrupts.enable and interrupts.flags and 0x3FFF != 0) {
+                // Une attente qui s'éternise signale une interruption qui ne
+                // vient pas : c'est le symptôme d'un jeu figé.
+                diagnostics.onWaitStep(HALT_STEP, bios.waitState?.interruptMask ?: 0)
+                if (bios.shouldResume()) {
                     cpu.state.halted = false
+                    diagnostics.onWaitResolved()
+                    // Le processeur reprend le bus après une pause.
+                    bus.breakAccessSequence()
                 }
                 continue
             }
@@ -77,11 +99,17 @@ class GbaMachine(rom: ByteArray, forcedSaveType: GbaSaveType? = null) {
                 )
             }
             val consumed = cpu.step()
-            ppu.tick(consumed)
-            timers.tick(consumed)
-            apu.tick(consumed)
+            diagnostics.onInstruction()
+            advancePeripherals(consumed)
             elapsed += consumed
         }
+    }
+
+    /** Avance affichage, timers et audio de [cycles] cycles CPU. */
+    private fun advancePeripherals(cycles: Int) {
+        ppu.tick(cycles)
+        timers.tick(cycles)
+        apu.tick(cycles)
     }
 
     companion object {

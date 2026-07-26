@@ -14,10 +14,14 @@ import com.ravenemu.core.gba.memory.GbaBus
  * ARM (`+4` en Thumb), comme sur le matériel. Toute écriture de `R15` provoque
  * un « saut » (vidage de pipeline) traité par [branchTo]/[branchExchange].
  *
- * Premier lot : sous-ensemble d'instructions suffisant pour exécuter une ROM
- * synthétique (traitement de données complet avec barrel shifter et drapeaux,
- * `B`/`BL`/`BX`, `LDR`/`STR`, `MRS`/`MSR`). Le jeu complet, les interruptions
- * matérielles et les temps d'attente réels sont différés (limites documentées).
+ * Le coût d'une instruction combine son coût nominal et les **temps d'attente**
+ * facturés par le bus pour la lecture de l'instruction et ses accès aux données
+ * (voir [com.ravenemu.core.gba.memory.MemoryTiming]) : exécuter depuis la
+ * cartouche coûte donc réellement plus cher que depuis l'IWRAM.
+ *
+ * Limite documentée : quelques motifs restent non décodés (coprocesseur
+ * notamment) ; ils sont ignorés et signalés par
+ * [com.ravenemu.core.gba.diag.GbaDiagnostics].
  */
 class Arm7Tdmi(val bus: GbaBus) {
 
@@ -57,6 +61,10 @@ class Arm7Tdmi(val bus: GbaBus) {
         state.switchMode(CpuState.MODE_SYSTEM)
         state.regs[13] = 0x0300_7F00
         state.thumb = false
+        // Le BIOS rend la main avec les IRQ **démasquées** (bit I du CPSR à 0) :
+        // un jeu se contente de programmer IE et IME, il ne dégage jamais ce bit
+        // lui-même. Le laisser armé empêcherait tout gestionnaire de tourner.
+        state.irqDisabled = false
         state.regs[15] = entryPoint
     }
 
@@ -109,18 +117,23 @@ class Arm7Tdmi(val bus: GbaBus) {
     }
 
     /**
-     * Exécute une instruction et retourne un coût en cycles (approximatif dans
-     * ce premier lot : le comptage exact des temps d'attente est différé).
+     * Exécute une instruction et retourne son coût en cycles : le coût nominal
+     * de l'instruction (cycles internes et accès sans attente) auquel s'ajoutent
+     * les **temps d'attente** réellement facturés par le bus pour la lecture de
+     * l'instruction et ses accès aux données. Une boucle en IWRAM garde donc son
+     * coût nominal, tandis que la même boucle en EWRAM ou en ROM cartouche coûte
+     * ce que `WAITCNT` impose.
      */
     fun step(): Int {
         branched = false
+        bus.takeWaitCycles() // ne facture pas les cycles d'un autre maître du bus
         val cost: Int
         if (state.thumb) {
-            val instr = bus.read16(state.regs[15]) and 0xFFFF
+            val instr = bus.fetch16(state.regs[15]) and 0xFFFF
             cost = thumbDecoder.execute(instr)
             if (!branched) state.regs[15] += 2
         } else {
-            val instr = bus.read32(state.regs[15])
+            val instr = bus.fetch32(state.regs[15])
             cost = if (checkCondition(instr ushr 28)) {
                 armDecoder.execute(instr)
             } else {
@@ -128,7 +141,9 @@ class Arm7Tdmi(val bus: GbaBus) {
             }
             if (!branched) state.regs[15] += 4
         }
-        return cost
+        // Un saut vide le pipeline : la lecture suivante est non séquentielle.
+        if (branched) bus.breakAccessSequence()
+        return cost + bus.takeWaitCycles()
     }
 
     /** Évalue le champ de condition ARM (bits 31–28). */

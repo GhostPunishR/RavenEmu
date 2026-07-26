@@ -7,6 +7,13 @@ android {
     namespace = "com.ravenemu.app"
     compileSdk = 35
 
+    buildFeatures {
+        // `BuildConfig.DEBUG` conditionne la surcouche de débogage GBA : elle ne
+        // doit exister qu'en Debug. La génération est explicite, l'AGP ne
+        // l'activant plus par défaut.
+        buildConfig = true
+    }
+
     defaultConfig {
         applicationId = "com.ravenemu.app"
         minSdk = 26

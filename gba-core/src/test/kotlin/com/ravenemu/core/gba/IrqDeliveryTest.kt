@@ -4,6 +4,7 @@ import com.ravenemu.core.gba.cpu.CpuState
 import com.ravenemu.core.gba.interrupt.Interrupt
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /** Livraison d'une interruption au CPU (entrée en exception IRQ, vecteur 0x18). */
@@ -30,6 +31,27 @@ class IrqDeliveryTest {
         assertEquals(0x18, m.cpu.state.regs[15])          // saut au vecteur IRQ
         assertEquals(0x0800_0004, m.cpu.state.regs[14])   // LR_irq = adresse interrompue + 4
         assertTrue(m.cpu.state.irqDisabled)               // les IRQ sont masquées pendant le handler
+    }
+
+    @Test
+    fun `au sortir du BIOS les IRQ sont demasquees`() {
+        // Un jeu ne dégage jamais le drapeau I lui-même : il programme IE et IME
+        // et compte sur l'état laissé par le BIOS. Si le CPU démarrait avec les
+        // IRQ masquées, aucun gestionnaire ne tournerait jamais — écran figé.
+        val m = GbaMachine(SyntheticRom.build())
+        assertFalse(m.cpu.state.irqDisabled, "le BIOS rend la main avec les IRQ autorisées")
+        assertEquals(CpuState.MODE_SYSTEM, m.cpu.state.mode)
+
+        // Vérification de bout en bout : sans toucher au CPSR, l'exception passe.
+        m.bus.bios[0x18] = 0xFE.toByte()
+        m.bus.bios[0x19] = 0xFF.toByte()
+        m.bus.bios[0x1A] = 0xFF.toByte()
+        m.bus.bios[0x1B] = 0xEA.toByte()
+        m.bus.write16(0x0400_0200, 0xFFFF) // IE
+        m.bus.write16(0x0400_0208, 0x0001) // IME
+        m.interrupts.request(Interrupt.VBLANK)
+        m.runFrame(12)
+        assertEquals(CpuState.MODE_IRQ, m.cpu.state.mode)
     }
 
     @Test

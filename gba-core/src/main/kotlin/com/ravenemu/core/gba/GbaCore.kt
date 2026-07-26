@@ -1,6 +1,8 @@
 package com.ravenemu.core.gba
 
 import com.ravenemu.core.gba.audio.GbaApu
+import com.ravenemu.core.gba.diag.GbaDebugSnapshot
+import com.ravenemu.core.gba.diag.GbaDiagnostics
 import com.ravenemu.core.gba.ppu.GbaPpu
 import com.ravenemu.core.gba.save.GbaSaveType
 import com.ravenemu.core.gba.state.GbaState
@@ -60,6 +62,7 @@ class GbaCore(
     override fun loadRom(rom: ByteArray, batteryRam: ByteArray?) {
         val newMachine = GbaMachine(rom, forcedSaveType)
         if (batteryRam != null) newMachine.cartridge.save?.import(batteryRam)
+        newMachine.diagnostics.onEvent = onDiagnosticEvent
         machine = newMachine
         loadedRom = rom
         romHash = MessageDigest.getInstance("SHA-256").digest(rom)
@@ -71,6 +74,7 @@ class GbaCore(
         val battery = machine?.cartridge?.save?.export()
         val newMachine = GbaMachine(rom, forcedSaveType)
         if (battery != null) newMachine.cartridge.save?.import(battery)
+        newMachine.diagnostics.onEvent = onDiagnosticEvent
         machine = newMachine
     }
 
@@ -89,6 +93,49 @@ class GbaCore(
 
     override fun readAudio(buffer: ShortArray): Int =
         machine?.apu?.readSamples(buffer) ?: 0
+
+    /**
+     * Journal des anomalies du moteur. Branché par la couche applicative en
+     * **Debug uniquement** ; laissé à `null`, aucun message n'est produit et
+     * aucune chaîne n'est même construite.
+     */
+    var onDiagnosticEvent: ((GbaDiagnostics.Event, String) -> Unit)? = null
+        set(value) {
+            field = value
+            // Le rappel survit à un redémarrage : la machine est reconstruite,
+            // pas l'intention de journaliser.
+            machine?.diagnostics?.onEvent = value
+        }
+
+    /**
+     * Photographie de l'état du moteur, pour une surcouche de débogage. Retourne
+     * `null` si aucune ROM n'est chargée.
+     */
+    fun debugSnapshot(): GbaDebugSnapshot? {
+        val m = machine ?: return null
+        val diag = m.diagnostics
+        return GbaDebugSnapshot(
+            instructionsPerFrame = diag.instructionsLastFrame,
+            programCounter = m.cpu.state.regs[15],
+            thumb = m.cpu.state.thumb,
+            halted = m.cpu.state.halted,
+            lastSwi = diag.lastSwi,
+            lastInterruptMask = diag.lastInterruptMask,
+            vcount = m.ppu.vcount,
+            lastDmaChannel = m.dma.lastChannel,
+            dmaActive = m.dma.isActive,
+            fifoASize = m.apu.fifoSize(0),
+            fifoBSize = m.apu.fifoSize(1),
+            audioUnderruns = m.apu.underruns,
+            unsupportedSwiCount = diag.count(GbaDiagnostics.Event.UNSUPPORTED_SWI),
+            undefinedInstructionCount =
+                diag.count(GbaDiagnostics.Event.UNDEFINED_INSTRUCTION),
+            unsupportedAccessCount = diag.count(GbaDiagnostics.Event.UNSUPPORTED_ACCESS),
+            missingInterruptCount = diag.count(GbaDiagnostics.Event.MISSING_INTERRUPT),
+            decompressionErrorCount =
+                diag.count(GbaDiagnostics.Event.DECOMPRESSION_ERROR),
+        )
+    }
 
     /** Type de sauvegarde retenu pour la ROM chargée (détecté ou imposé). */
     val saveType: GbaSaveType

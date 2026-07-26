@@ -23,14 +23,15 @@ object GbaState {
 
     private const val MAGIC = 0x52564E53 // "RVNS"
     /**
-     * Version 6 : état PPU complet (dont les points de référence affines),
-     * interruptions, timers, DMA, pause CPU (`halted`, posée par les appels BIOS
-     * `Halt`/`IntrWait`) et mémoire de sauvegarde de la cartouche.
+     * Version 7 : état PPU complet (dont les points de référence affines),
+     * interruptions, timers, DMA (adresses courantes et cycles dus), pause CPU
+     * (`halted`), attente d'interruption du BIOS (`IntrWait`) et mémoire de
+     * sauvegarde de la cartouche.
      */
-    private const val VERSION = 6
+    private const val VERSION = 7
     private const val BANK_WORDS = 28 // CpuState.exportBanks(): 6*3 + 10
     private const val TIMER_STATE_WORDS = 16
-    private const val DMA_STATE_WORDS = 8
+    private const val DMA_STATE_WORDS = 9 // 4 sources + 4 destinations + cycles dus
 
     /** Taille maximale acceptée pour un état (garde-fou anti-« fichier trop volumineux »). */
     private const val MAX_STATE_SIZE = 1 shl 20 // 1 Mio
@@ -72,6 +73,12 @@ object GbaState {
         out.writeBoolean(machine.interrupts.masterEnable)
         for (value in machine.timers.exportState()) out.writeInt(value)
         for (value in machine.dma.exportState()) out.writeInt(value)
+
+        // Attente d'interruption du BIOS : présence, masque, politique.
+        val wait = machine.bios.waitState
+        out.writeBoolean(wait != null)
+        out.writeInt(wait?.interruptMask ?: 0)
+        out.writeBoolean(wait?.discardOldFlags ?: false)
 
         // Mémoire de sauvegarde : longueur puis contenu (vide si absente).
         val save = machine.cartridge.save
@@ -139,6 +146,10 @@ object GbaState {
             val interruptMasterEnable = input.readBoolean()
             val timerState = IntArray(TIMER_STATE_WORDS) { input.readInt() }
             val dmaState = IntArray(DMA_STATE_WORDS) { input.readInt() }
+            val waiting = input.readBoolean()
+            val waitMask = input.readInt()
+            val waitDiscard = input.readBoolean()
+
             val saveSize = input.readInt()
             val expectedSaveSize = machine.cartridge.save?.data?.size ?: 0
             if (saveSize != expectedSaveSize) {
@@ -162,6 +173,9 @@ object GbaState {
             ewram.copyInto(bus.ewram)
             iwram.copyInto(bus.iwram)
             io.copyInto(bus.io)
+            // `WAITCNT` est dupliqué dans le modèle de temps d'attente : il faut
+            // le réaligner sur les registres restaurés.
+            bus.syncTimingFromIo()
             palette.copyInto(bus.paletteRam)
             vram.copyInto(bus.vram)
             oam.copyInto(bus.oam)
@@ -174,6 +188,12 @@ object GbaState {
             machine.timers.importState(timerState)
             machine.dma.importState(dmaState)
             if (saveData.isNotEmpty()) machine.cartridge.save?.import(saveData)
+            machine.bios.waitState =
+                if (waiting) {
+                    com.ravenemu.core.gba.bios.BiosWaitState(waitMask, waitDiscard)
+                } else {
+                    null
+                }
         } catch (e: SaveStateException) {
             throw e
         } catch (e: IOException) {

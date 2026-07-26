@@ -235,6 +235,8 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
         newSession.audioEnabled = settings.audioEnabled
         core = newCore
         session = newSession
+        // Journalisation des anomalies du moteur : bridée, et Debug uniquement.
+        GbaDebugOverlay.attachLogging(newCore)
 
         // La ROM est chargée : le format (monochrome DMG ou couleur CGB) est
         // connu, on (ré)applique les réglages vidéo en conséquence.
@@ -260,12 +262,12 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
         surface.presentFrame(framebuffer)
     }
 
-    override fun onStats(fps: Double) {
-        if (settings.showPerformanceOverlay) {
-            runOnUiThread {
-                performanceOverlay.text = "%.1f FPS".format(fps)
-            }
-        }
+    override fun onStats(fps: Double, frameTimeMs: Double) {
+        if (!settings.showPerformanceOverlay) return
+        // La photographie est prise sur le thread d'émulation, qui est celui qui
+        // appelle cette méthode : le moteur n'est jamais lu depuis l'interface.
+        val text = GbaDebugOverlay.render(core, fps, frameTimeMs)
+        runOnUiThread { performanceOverlay.text = text }
     }
 
     override fun onBatterySave(data: ByteArray) {

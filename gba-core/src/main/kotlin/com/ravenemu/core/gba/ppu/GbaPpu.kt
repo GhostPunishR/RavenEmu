@@ -15,11 +15,17 @@ import com.ravenemu.core.gba.memory.GbaBus
  * - modes **bitmap** 3 (16 bpp), 4 (8 bpp paletté, double page) et 5
  *   (16 bpp, 160×128, double page) ;
  * - modes **texte** 0 et 1 : arrière-plans BG0–BG3, tuiles 4/8 bpp,
- *   défilement, retournements horizontal/vertical, priorités.
+ *   défilement, retournements horizontal/vertical, priorités ;
+ * - modes **affines** 1 et 2 : rotation et mise à l'échelle avec points de
+ *   référence internes ;
+ * - **sprites** (dont affines et à surface doublée), fenêtres 0/1 et fenêtre
+ *   objet, mélange alpha, éclaircissement et assombrissement.
  *
- * Différé (limites documentées) : arrière-plans **affines** (modes 1/2),
- * **sprites**, fenêtres, mosaïque, alpha blending et luminosité. Les événements
- * VBlank/HBlank/VCount alimentent désormais le contrôleur d'interruptions et le DMA.
+ * Les événements VBlank/HBlank/VCount alimentent le contrôleur d'interruptions
+ * et le DMA. Limite documentée : la mosaïque n'est pas émulée.
+ *
+ * Le rendu d'une ligne n'alloue rien : tampons de composition et ordre de tracé
+ * des plans sont des tableaux réutilisés.
  *
  * Le renderer Android reçoit un framebuffer ARGB 8888 sans rien connaître de
  * ces détails.
@@ -51,6 +57,11 @@ class GbaPpu(private val bus: GbaBus) {
 
     /** Masque de fenêtre par pixel : bits 0–3 = BG0–3, bit 4 = OBJ, bit 5 = effets. */
     private val windowMask = IntArray(SCREEN_WIDTH)
+
+    // Ordre de tracé des arrière-plans de la ligne courante et clés de tri
+    // associées, triés sur place à chaque ligne (voir renderBackgrounds).
+    private val bgOrder = IntArray(4)
+    private val bgOrderKeys = IntArray(4)
 
     // Points de référence internes des arrière-plans affines (16.8 signé).
     // Rechargés depuis BGxX/BGxY au VBlank, incrémentés à chaque ligne.
@@ -86,6 +97,15 @@ class GbaPpu(private val bus: GbaBus) {
      * Chaque ligne visible est rendue au début de son HBlank.
      */
     fun tick(cpuCycles: Int) {
+        // Chemin rapide, exact : si l'incrément n'atteint ni le début du HBlank
+        // ni la fin de la ligne, il n'y a rien d'autre à faire qu'avancer
+        // l'horloge. C'est le cas de la quasi-totalité des appels, le processeur
+        // rendant la main après chaque instruction.
+        val nextEvent = if (inHBlank) LINE_CYCLES else HDRAW_CYCLES
+        if (lineCycles + cpuCycles < nextEvent) {
+            lineCycles += cpuCycles
+            return
+        }
         var remaining = cpuCycles
         while (remaining > 0) {
             val step = minOf(remaining, LINE_CYCLES - lineCycles)
@@ -224,16 +244,31 @@ class GbaPpu(private val bus: GbaBus) {
      */
     private fun renderBackgrounds(y: Int, dispcnt: Int) {
         val mode = dispcnt and 0x7
-        val candidates = when (mode) {
-            0 -> intArrayOf(0, 1, 2, 3)
-            1 -> intArrayOf(0, 1, 2)
-            else -> intArrayOf(2, 3)
-        }
-        val ordered = candidates
-            .filter { dispcnt and (1 shl (8 + it)) != 0 }
+        // Plans disponibles selon le mode : 0-3 en mode 0, 0-2 en mode 1, 2-3 en
+        // mode 2 (les modes bitmap ne passent pas ici).
+        val firstBg = if (mode == 2) 2 else 0
+        val lastBg = if (mode == 1) 2 else 3
+
+        // Tri par insertion décroissant, dans des tableaux réutilisés : cette
+        // fonction est appelée 160 fois par trame et ne doit rien allouer.
+        var count = 0
+        for (bg in firstBg..lastBg) {
+            if (dispcnt and (1 shl (8 + bg)) == 0) continue
             // Clé de tri : priorité puis index ; on dessine du fond vers l'avant.
-            .sortedByDescending { (reg16(0x08 + it * 2) and 0x3) * 4 + it }
-        for (bg in ordered) {
+            val key = (reg16(0x08 + bg * 2) and 0x3) * 4 + bg
+            var i = count
+            while (i > 0 && bgOrderKeys[i - 1] < key) {
+                bgOrderKeys[i] = bgOrderKeys[i - 1]
+                bgOrder[i] = bgOrder[i - 1]
+                i--
+            }
+            bgOrderKeys[i] = key
+            bgOrder[i] = bg
+            count++
+        }
+
+        for (i in 0 until count) {
+            val bg = bgOrder[i]
             val isAffine = (mode == 1 && bg == 2) || (mode == 2 && bg >= 2)
             if (isAffine) drawAffineBackgroundLine(bg) else drawTextBackgroundLine(bg, y)
         }
@@ -510,8 +545,9 @@ class GbaPpu(private val bus: GbaBus) {
             val attr1 = oam16(base + 2)
             val attr2 = oam16(base + 4)
             val sizeIdx = (attr1 ushr 14) and 0x3
-            val w = OBJ_WIDTH[shape][sizeIdx]
-            val h = OBJ_HEIGHT[shape][sizeIdx]
+            val sizeKey = shape * 4 + sizeIdx
+            val w = OBJ_WIDTH[sizeKey]
+            val h = OBJ_HEIGHT[sizeKey]
             // Emprise à l'écran : doublée pour un sprite affine « double size ».
             val boxW = if (doubleSize) w * 2 else w
             val boxH = if (doubleSize) h * 2 else h
@@ -702,16 +738,17 @@ class GbaPpu(private val bus: GbaBus) {
         /** Décalage d'index de la palette OBJ (256 couleurs après la palette BG). */
         private const val OBJ_PALETTE_BASE = 256
 
-        // Largeur/hauteur des sprites selon (forme, taille).
-        private val OBJ_WIDTH = arrayOf(
-            intArrayOf(8, 16, 32, 64),  // carré
-            intArrayOf(16, 32, 32, 64), // horizontal
-            intArrayOf(8, 8, 16, 32),   // vertical
+        // Largeur/hauteur des sprites, tables plates indexées `forme * 4 + taille`
+        // (un seul déréférencement dans la boucle des 128 sprites).
+        private val OBJ_WIDTH = intArrayOf(
+            8, 16, 32, 64,  // carré
+            16, 32, 32, 64, // horizontal
+            8, 8, 16, 32,   // vertical
         )
-        private val OBJ_HEIGHT = arrayOf(
-            intArrayOf(8, 16, 32, 64),  // carré
-            intArrayOf(8, 8, 16, 32),   // horizontal
-            intArrayOf(16, 32, 32, 64), // vertical
+        private val OBJ_HEIGHT = intArrayOf(
+            8, 16, 32, 64,  // carré
+            8, 8, 16, 32,   // horizontal
+            16, 32, 32, 64, // vertical
         )
 
         // Bits d'activation d'IRQ dans l'octet bas de DISPSTAT.

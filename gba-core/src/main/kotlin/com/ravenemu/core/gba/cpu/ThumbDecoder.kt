@@ -38,7 +38,16 @@ class ThumbDecoder(private val cpu: Arm7Tdmi) {
         instr and 0xF800 == 0xE000 -> unconditionalBranch(instr)   // format 18
         instr and 0xF800 == 0xF000 -> longBranchHigh(instr)        // format 19 (1/2)
         instr and 0xF800 == 0xF800 -> longBranchLow(instr)         // format 19 (2/2)
-        else -> 1 // formats différés
+        else -> undefined(instr) // formats différés
+    }
+
+    /** Motif Thumb non reconnu : signalé de façon bridée, puis ignoré. */
+    private fun undefined(instr: Int): Int {
+        cpu.bus.diagnostics.report(com.ravenemu.core.gba.diag.GbaDiagnostics.Event.UNDEFINED_INSTRUCTION) {
+            "instruction Thumb indéfinie 0x${instr.toString(16)} en " +
+                "0x${cpu.state.regs[15].toUInt().toString(16)}"
+        }
+        return 1
     }
 
     private fun moveShifted(instr: Int): Int {
