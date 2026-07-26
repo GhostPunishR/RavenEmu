@@ -207,12 +207,22 @@ p {
 }
 
 .brand-logo {
+  display: block;
+  flex: none;
   width: 46px;
   height: 46px;
-  object-fit: cover;
+  overflow: hidden;
   border: 0;
   border-radius: 11px;
   box-shadow: none;
+}
+
+.brand-logo img {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  object-fit: cover;
+  transform: scale(1.46);
 }
 
 .brand-copy {
@@ -422,7 +432,7 @@ p {
 .hero-visual {
   position: relative;
   display: grid;
-  min-height: 430px;
+  min-height: 470px;
   place-items: center;
 }
 
@@ -435,26 +445,28 @@ p {
 }
 
 .hero-visual::before {
-  width: min(72vw, 390px);
-  height: min(72vw, 390px);
+  width: min(72vw, 430px);
+  height: min(72vw, 430px);
   background: radial-gradient(circle, rgba(168, 85, 247, 0.15), rgba(124, 58, 237, 0.035) 48%, transparent 72%);
   filter: blur(8px);
 }
 
 .hero-visual::after {
-  width: min(58vw, 315px);
-  height: min(58vw, 315px);
+  width: min(58vw, 340px);
+  height: min(58vw, 340px);
   border: 1px solid rgba(216, 180, 254, 0.08);
 }
 
 .hero-console {
   position: relative;
   z-index: 1;
-  width: min(96%, 380px);
+  width: min(108%, 420px);
   height: auto;
+  max-width: none;
   filter:
     drop-shadow(0 32px 38px rgba(0, 0, 0, 0.42))
     drop-shadow(0 0 28px rgba(124, 58, 237, 0.12));
+  transform: translate(-8px, 8px);
 }
 
 .trust-strip {
@@ -996,12 +1008,10 @@ p {
   gap: 0.8rem;
 }
 
-.footer-brand img {
+.footer-brand .brand-logo {
   width: 44px;
   height: 44px;
-  border: 0;
   border-radius: 10px;
-  box-shadow: none;
 }
 
 .footer-brand p {
@@ -1062,7 +1072,12 @@ p {
   }
 
   .hero-visual {
-    min-height: 360px;
+    min-height: 460px;
+  }
+
+  .hero-console {
+    width: min(72vw, 400px);
+    transform: none;
   }
 
   .feature-grid,
@@ -1177,7 +1192,7 @@ p {
   }
 
   .hero-visual {
-    min-height: 285px;
+    min-height: 380px;
   }
 
   .hero-visual::before {
@@ -1191,7 +1206,7 @@ p {
   }
 
   .hero-console {
-    width: min(78vw, 320px);
+    width: min(82vw, 330px);
   }
 
   .trust-grid {
@@ -1261,11 +1276,11 @@ p {
   }
 
   .hero-visual {
-    min-height: 250px;
+    min-height: 320px;
   }
 
   .hero-console {
-    width: min(82vw, 280px);
+    width: min(84vw, 290px);
   }
 
   .console-card,
