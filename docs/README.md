@@ -6,6 +6,7 @@ Ce dossier regroupe la documentation technique et communautaire du projet.
 
 - [Compilation](BUILD.md)
 - [Guide de contribution](CONTRIBUTING.md)
+- [Checklist de pull request](PULL_REQUEST_CHECKLIST.md)
 - [Cahier des charges](CAHIER_DES_CHARGES.md)
 - [Décisions d'architecture](ARCHITECTURE.md)
 
