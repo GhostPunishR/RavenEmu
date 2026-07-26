@@ -76,10 +76,16 @@ tiers, sans BIOS ni contenu protégé.
 ## Installation
 
 À chaque mise à jour de `main`, la CI publie un APK de test :
-**Actions → dernier run → artefact `ravenemu-debug-apk`** (`app-debug.apk`,
-installable directement). Un APK Release signé et un **App Bundle `.aab`**
-(pour le Play Store) sont produits lorsque les secrets de signature sont
-configurés. Les commandes sont regroupées sur le
+**[télécharger le dernier APK debug](https://github.com/GhostPunishR/RavenEmu/releases/download/debug-latest/RavenEmu-debug.apk)**.
+La préversion `debug-latest` et son empreinte SHA-256 sont remplacées après
+chaque build réussi de `main`. L'artefact `ravenemu-debug-apk` reste également
+disponible dans le run GitHub Actions correspondant.
+
+Cet APK porte l'identifiant `com.ravenemu.app.debug` et utilise la signature
+debug Android. Il est destiné aux tests et ne remplace pas une version Release
+signée. Un APK Release signé et un **App Bundle `.aab`** (pour le Play Store)
+sont produits lorsque les secrets de signature sont configurés. Les commandes
+sont regroupées sur le
 [site RavenEmu](https://ghostpunishr.github.io/RavenEmu/#demarrer).
 
 RavenEmu ne fournit **aucune ROM ni aucun BIOS**. Utilisez uniquement des copies
