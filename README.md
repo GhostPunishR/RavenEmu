@@ -121,9 +121,15 @@ L'APK est produit dans `app/build/outputs/apk/debug/`.
 - [Installation](https://github.com/GhostPunishR/RavenEmu/wiki/Installation)
 - [Premiers pas](https://github.com/GhostPunishR/RavenEmu/wiki/Premiers-pas)
 - [Consoles et compatibilité](https://github.com/GhostPunishR/RavenEmu/wiki/Consoles-et-compatibilite)
+- [Matrice de compatibilité des jeux](https://github.com/GhostPunishR/RavenEmu/wiki/Compatibilite-des-jeux)
 - [Compilation](https://github.com/GhostPunishR/RavenEmu/wiki/Compilation)
 - [Architecture](https://github.com/GhostPunishR/RavenEmu/wiki/Architecture)
 - [Dépannage](https://github.com/GhostPunishR/RavenEmu/wiki/Depannage)
+- [Guide de contribution](CONTRIBUTING.md)
+- [Code de conduite](CODE_OF_CONDUCT.md)
+- [Politique de sécurité](SECURITY.md)
+- [Politique de confidentialité](PRIVACY.md)
+- [Publication des versions](RELEASING.md)
 
 ## Limites actuelles
 
@@ -148,7 +154,7 @@ Les états instantanés utilisent le format versionné `RVNS`. Ils ne sont pas c
 
 ## Contribuer
 
-Les contributions de code, de documentation et de validation sont bienvenues.
+Les contributions de code, de documentation et de validation sont bienvenues. Consultez le [guide de contribution](CONTRIBUTING.md) et le [code de conduite](CODE_OF_CONDUCT.md) avant de proposer une modification.
 
 Avant une modification importante:
 

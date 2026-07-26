@@ -62,3 +62,10 @@ La description doit préciser:
 ## Sécurité
 
 Une vulnérabilité ne doit pas être publiée dans une issue. Utilisez un [avis de sécurité privé](https://github.com/GhostPunishR/RavenEmu/security/advisories/new).
+
+## Documents de référence
+
+- [Guide de contribution complet](https://github.com/GhostPunishR/RavenEmu/blob/main/CONTRIBUTING.md)
+- [Code de conduite](https://github.com/GhostPunishR/RavenEmu/blob/main/CODE_OF_CONDUCT.md)
+- [Politique de sécurité](https://github.com/GhostPunishR/RavenEmu/blob/main/SECURITY.md)
+- [Modèle de pull request](https://github.com/GhostPunishR/RavenEmu/blob/main/.github/PULL_REQUEST_TEMPLATE.md)

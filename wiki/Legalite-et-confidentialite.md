@@ -35,6 +35,8 @@ RavenEmu est conçu sans télémétrie et sans service réseau dans l'applicatio
 - pochettes;
 - réglages.
 
+Consultez la [politique de confidentialité complète](https://github.com/GhostPunishR/RavenEmu/blob/main/PRIVACY.md) pour le détail du traitement local et des services GitHub utilisés.
+
 ## Rapports publics
 
 Avant de publier une issue ou une capture:

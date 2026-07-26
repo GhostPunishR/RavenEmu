@@ -43,4 +43,4 @@ RavenEmu n'envoie pas les ROM, les empreintes ou les pochettes vers un service d
 
 ## Fichier absent de la bibliothèque
 
-Consultez [[Dépannage]] pour vérifier l'autorisation du dossier, le format et l'actualisation de l'index.
+Consultez [[Dépannage|Depannage]] pour vérifier l'autorisation du dossier, le format et l'actualisation de l'index.

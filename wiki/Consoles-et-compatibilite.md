@@ -1,5 +1,7 @@
 # Consoles et compatibilité
 
+Consultez la [[matrice de compatibilité détaillée des jeux|Compatibilite-des-jeux]] pour les résultats associés à une version, un appareil et une empreinte précise.
+
 ## Game Boy
 
 Le moteur Game Boy comprend notamment:

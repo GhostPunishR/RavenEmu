@@ -1,0 +1,69 @@
+name: "Demande de fonctionnalité"
+description: "Proposer une amélioration ciblée pour RavenEmu"
+title: "[Fonctionnalité] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Décrivez le besoin avant la solution. Une proposition concernant un moteur d’émulation doit reposer sur une documentation technique publique et ne doit intégrer aucun code provenant d’un autre émulateur.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: "Domaine"
+      options:
+        - "Game Boy"
+        - "Game Boy Color"
+        - "Game Boy Advance"
+        - "Bibliothèque de jeux"
+        - "Commandes"
+        - "Affichage ou audio"
+        - "Sauvegardes ou états instantanés"
+        - "Application Android"
+        - "Architecture ou outils"
+        - "Documentation ou site"
+        - "Autre"
+    validations:
+      required: true
+
+  - type: textarea
+    id: need
+    attributes:
+      label: "Besoin"
+      description: "Quel problème utilisateur ou technique souhaitez-vous résoudre ?"
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: "Solution proposée"
+      description: "Décrivez le comportement attendu et le périmètre envisagé."
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: "Solutions alternatives"
+      description: "Indiquez les autres approches étudiées, si elles existent."
+
+  - type: textarea
+    id: references
+    attributes:
+      label: "Références techniques"
+      description: "Pour une évolution matérielle, ajoutez les références publiques utilisées."
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: "Confirmations"
+      options:
+        - label: "J’ai recherché une proposition similaire dans les issues existantes."
+          required: true
+        - label: "La proposition ne nécessite aucun code copié, traduit ou adapté depuis un autre émulateur."
+          required: true
+        - label: "La proposition ne demande aucune ROM, aucun BIOS ni aucun contenu protégé."
+          required: true
+        - label: "J’accepte le code de conduite du projet."
+          required: true

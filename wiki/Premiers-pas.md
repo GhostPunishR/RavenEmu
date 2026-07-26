@@ -38,4 +38,4 @@ Revenez à la bibliothèque avec les commandes de l'application. RavenEmu sauveg
 - [[Commandes]] pour le tactile et les manettes physiques
 - [[Affichage et audio|Affichage-et-audio]] pour les profils LCD et le son
 - [[Sauvegardes et états|Sauvegardes-et-etats]] pour distinguer `.sav` et état instantané
-- [[Dépannage]] si un jeu manque dans la bibliothèque ou ne démarre pas
+- [[Dépannage|Depannage]] si un jeu manque dans la bibliothèque ou ne démarre pas

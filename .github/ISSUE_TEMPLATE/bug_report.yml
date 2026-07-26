@@ -1,0 +1,112 @@
+name: "Rapport de bug"
+description: "Signaler un défaut reproductible dans RavenEmu"
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Merci de prendre le temps de documenter le problème.
+
+        Ne joignez aucune ROM, aucun BIOS, aucune sauvegarde personnelle, aucune clé et aucune donnée privée. Pour une vulnérabilité, utilisez le signalement privé indiqué dans la politique de sécurité.
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: "Composant concerné"
+      description: "Choisissez la partie de RavenEmu qui présente le problème."
+      options:
+        - "Game Boy"
+        - "Game Boy Color"
+        - "Game Boy Advance"
+        - "Bibliothèque de jeux"
+        - "Commandes tactiles ou manette"
+        - "Affichage ou audio"
+        - "Sauvegardes ou états instantanés"
+        - "Application Android"
+        - "Compilation ou GitHub Actions"
+        - "Documentation ou site"
+        - "Autre"
+    validations:
+      required: true
+
+  - type: input
+    id: ravenemu_version
+    attributes:
+      label: "Version de RavenEmu"
+      description: "Indiquez le numéro de version ou le commit testé."
+      placeholder: "Exemple: debug-latest, 0.1.0 ou abc1234"
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: "Appareil"
+      description: "Indiquez le fabricant et le modèle de l’appareil."
+      placeholder: "Exemple: Google Pixel 8"
+    validations:
+      required: true
+
+  - type: input
+    id: android_version
+    attributes:
+      label: "Version Android"
+      placeholder: "Exemple: Android 15"
+    validations:
+      required: true
+
+  - type: input
+    id: game_fingerprint
+    attributes:
+      label: "Empreinte du jeu"
+      description: "Facultatif. Fournissez uniquement une empreinte SHA-256, jamais le fichier du jeu."
+      placeholder: "SHA-256 du fichier testé"
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: "Étapes de reproduction"
+      description: "Décrivez une procédure minimale et reproductible."
+      placeholder: |
+        1. Ouvrir...
+        2. Sélectionner...
+        3. Observer...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: "Comportement attendu"
+      description: "Expliquez ce qui devait se produire."
+    validations:
+      required: true
+
+  - type: textarea
+    id: observed
+    attributes:
+      label: "Comportement observé"
+      description: "Expliquez précisément le résultat obtenu."
+    validations:
+      required: true
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: "Diagnostics utiles"
+      description: "Ajoutez uniquement les journaux ou mesures nécessaires après avoir supprimé les données sensibles."
+      render: shell
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: "Confirmations"
+      options:
+        - label: "J’ai recherché une issue existante décrivant le même problème."
+          required: true
+        - label: "J’utilise une copie du jeu que je suis autorisé à employer ou un homebrew légalement distribué."
+          required: true
+        - label: "Je n’ai joint aucune ROM, aucun BIOS, aucune clé et aucune donnée personnelle."
+          required: true
+        - label: "J’accepte le code de conduite du projet."
+          required: true
