@@ -100,7 +100,7 @@ Toute modification matérielle importante doit préciser :
 
 Une décision structurante doit être ajoutée ou mise à jour dans `docs/ARCHITECTURE.md`.
 
-La documentation du dépôt utilise des titres et séparateurs simples. Le caractère typographique `—` ne doit pas être utilisé dans les fichiers du dossier `docs`.
+La documentation du dépôt utilise des titres et séparateurs simples. Le tiret cadratin ne doit pas être utilisé dans les fichiers du dossier `docs`.
 
 ## Tests
 
