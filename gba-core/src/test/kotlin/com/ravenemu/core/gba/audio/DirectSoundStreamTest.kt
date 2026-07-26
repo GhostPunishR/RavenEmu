@@ -20,9 +20,9 @@ import kotlin.test.assertTrue
  */
 class DirectSoundStreamTest {
 
-    /** Base et taille du tampon d'échantillons placé en EWRAM. */
-    private val sampleBase = 0x0200_0000
-    private val sampleBytes = 4096
+    /** Base et taille du tampon d'échantillons placé en fin d'EWRAM. */
+    private val sampleBase = 0x0203_E000
+    private val sampleBytes = 8192
 
     private fun machine(): GbaMachine {
         val m = GbaMachine(SyntheticRom.build())
@@ -45,28 +45,39 @@ class DirectSoundStreamTest {
     }
 
     @Test
-    fun `le flux ne sort jamais du plan memoire`() {
+    fun `le flux reste dans le tampon programme`() {
         val m = machine()
         repeat(4) { m.runFrame(GbaCore.CYCLES_PER_FRAME) }
+
+        val source = m.dma.exportState()[1]
+        assertTrue(
+            source in sampleBase until (sampleBase + sampleBytes),
+            "source DMA hors du tampon : 0x${source.toUInt().toString(16)}",
+        )
         assertEquals(
             0,
             m.diagnostics.count(GbaDiagnostics.Event.UNSUPPORTED_ACCESS),
-            "le pointeur de source a dépassé le tampon d'échantillons",
+            "le flux Direct Sound a quitté le plan mémoire",
         )
     }
 
     @Test
     fun `la FIFO est consommee au rythme du timer`() {
         val m = machine()
-        // Un débordement tous les 256 cycles : une trame en compte
-        // 280 896 / 256 = 1098. Chaque débordement consomme un octet.
+        // Un débordement tous les 256 cycles donne 1097 débordements complets
+        // par trame, avec 64 cycles conservés pour la trame suivante.
         m.runFrame(GbaCore.CYCLES_PER_FRAME)
         val consumed = 280_896 / 256
 
-        // Le DMA réapprovisionne par blocs de 16 octets : la source doit avoir
-        // avancé d'environ le nombre d'octets consommés, à un bloc près.
-        val advanced = m.bus.read32(0x0400_00BC).let { sampleBase } // registre inchangé
-        assertEquals(sampleBase, advanced, "le registre source n'est pas modifié")
+        // Le registre visible reste inchangé, mais l'adresse interne du DMA
+        // avance par blocs de 16 octets au rythme des échantillons consommés.
+        assertEquals(sampleBase, m.bus.read32(0x0400_00BC))
+        val advanced = m.dma.exportState()[1] - sampleBase
+        assertEquals(0, advanced % 16, "progression DMA non alignée : $advanced")
+        assertTrue(
+            advanced in consumed..(consumed + 32),
+            "progression DMA $advanced, attendu autour de $consumed octets",
+        )
 
         // La FIFO reste dans sa plage de service : ni vide, ni saturée.
         val size = m.apu.fifoSize(0)
@@ -77,15 +88,22 @@ class DirectSoundStreamTest {
     fun `le nombre d'echantillons consommes suit la cadence du timer`() {
         val m = machine()
         var pops = 0
-        m.apu.onFifoRequest = { }          // neutralise le réapprovisionnement
-        // Compte les débordements réellement propagés à l'audio.
-        m.timers.onOverflow = { timer -> if (timer == 0) pops++ }
-        m.runFrame(GbaCore.CYCLES_PER_FRAME)
+        // Compte les débordements tout en conservant la chaîne réelle
+        // timer, APU, FIFO et DMA.
+        m.timers.onOverflow = { timer ->
+            if (timer == 0) pops++
+            m.apu.onTimerOverflow(timer)
+        }
+        // L'appel direct donne un budget exact, sans le léger dépassement
+        // possible de la dernière instruction CPU d'une trame complète.
+        m.timers.tick(GbaCore.CYCLES_PER_FRAME)
 
-        val expected = 280_896 / 256
-        assertTrue(
-            pops in (expected - 2)..(expected + 2),
-            "débordements sur une trame : $pops, attendu ~$expected",
+        val expected = GbaCore.CYCLES_PER_FRAME / 256
+        assertEquals(expected, pops)
+        assertEquals(
+            0xFF00 + (GbaCore.CYCLES_PER_FRAME % 256),
+            m.timers.counter(0),
+            "phase du timer après une trame",
         )
     }
 }

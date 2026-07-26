@@ -45,6 +45,17 @@ class GbaPpu(private val bus: GbaBus) {
     private val linePriority2 = IntArray(SCREEN_WIDTH)
     private val lineLayer2 = IntArray(SCREEN_WIDTH)
 
+    // Cache paresseux des 512 couleurs. Une couleur est lue au plus une fois
+    // par ligne et n'est reconvertie que si sa valeur BGR555 a changé.
+    private val paletteCache = IntArray(PALETTE_COLORS)
+    private val paletteRaw = IntArray(PALETTE_COLORS) { -1 }
+    private val paletteStamp = IntArray(PALETTE_COLORS)
+    private var paletteEpoch = 0
+
+    // Vrai lorsque BLDCNT ne peut demander aucun effet. Le second plan de
+    // composition est alors inutile.
+    private var simpleComposition = false
+
     private val objColor = IntArray(SCREEN_WIDTH)
     private val objPriority = IntArray(SCREEN_WIDTH)
     private val objOpaque = BooleanArray(SCREEN_WIDTH)
@@ -174,6 +185,9 @@ class GbaPpu(private val bus: GbaBus) {
         bg2RefY = 0
         bg3RefX = 0
         bg3RefY = 0
+        paletteStamp.fill(0)
+        paletteEpoch = 0
+        simpleComposition = false
     }
 
     /** État temporel minimal requis pour une reprise déterministe. */
@@ -217,21 +231,26 @@ class GbaPpu(private val bus: GbaBus) {
             for (x in 0 until SCREEN_WIDTH) frame[rowBase + x] = WHITE
             return
         }
+        beginPaletteLine()
+        val bldcnt = reg16(0x50)
+        simpleComposition = bldcnt and SIMPLE_COMPOSITION_MASK == 0
         val backdrop = paletteColor(0)
         for (x in 0 until SCREEN_WIDTH) {
             lineColor[x] = backdrop
             linePriority[x] = LAYER_BACKDROP
             lineLayer[x] = LAYER_ID_BACKDROP
-            lineColor2[x] = backdrop
-            linePriority2[x] = LAYER_BACKDROP
-            lineLayer2[x] = LAYER_ID_BACKDROP
+            if (!simpleComposition) {
+                lineColor2[x] = backdrop
+                linePriority2[x] = LAYER_BACKDROP
+                lineLayer2[x] = LAYER_ID_BACKDROP
+            }
             objOpaque[x] = false
             objSemiTransparent[x] = false
             objWindow[x] = false
         }
 
-        // Les sprites sont dessinés en premier car la « fenêtre objet » dépend
-        // des pixels qu'ils couvrent ; leur composition vient ensuite.
+        // Les sprites sont dessinés en premier car la fenêtre objet dépend
+        // des pixels qu'ils couvrent. Leur composition vient ensuite.
         renderSprites(y, dispcnt)
         computeWindowMask(y, dispcnt)
 
@@ -242,7 +261,7 @@ class GbaPpu(private val bus: GbaBus) {
             5 -> renderBitmapMode5(y, dispcnt)
         }
 
-        composeLine(rowBase)
+        if (simpleComposition) composeSimpleLine(rowBase) else composeLine(rowBase, bldcnt)
     }
 
     /**
@@ -338,9 +357,11 @@ class GbaPpu(private val bus: GbaBus) {
      * dessinés du fond vers l'avant, un nouveau pixel est toujours plus proche.
      */
     private fun pushPixel(x: Int, color: Int, priority: Int, layerId: Int) {
-        lineColor2[x] = lineColor[x]
-        linePriority2[x] = linePriority[x]
-        lineLayer2[x] = lineLayer[x]
+        if (!simpleComposition) {
+            lineColor2[x] = lineColor[x]
+            linePriority2[x] = linePriority[x]
+            lineLayer2[x] = lineLayer[x]
+        }
         lineColor[x] = color
         linePriority[x] = priority
         lineLayer[x] = layerId
@@ -397,8 +418,16 @@ class GbaPpu(private val bus: GbaBus) {
      * effets de couleur (mélange alpha, éclaircissement, assombrissement) selon
      * `BLDCNT` et la fenêtre.
      */
-    private fun composeLine(rowBase: Int) {
-        val bldcnt = reg16(0x50)
+    private fun composeSimpleLine(rowBase: Int) {
+        for (x in 0 until SCREEN_WIDTH) {
+            val showObj = objOpaque[x] &&
+                windowMask[x] and OBJ_BIT != 0 &&
+                objPriority[x] <= linePriority[x]
+            frame[rowBase + x] = if (showObj) objColor[x] else lineColor[x]
+        }
+    }
+
+    private fun composeLine(rowBase: Int, bldcnt: Int) {
         val effectMode = (bldcnt ushr 6) and 0x3
         for (x in 0 until SCREEN_WIDTH) {
             var topColor = lineColor[x]
@@ -491,36 +520,46 @@ class GbaPpu(private val bus: GbaBus) {
         val vofs = reg16(0x12 + bg * 4) and 0x1FF
 
         val effY = (y + vofs) and (heightPixels - 1)
-        val tileY = effY / 8
+        val tileY = effY ushr 3
         val py0 = effY and 7
+        val layerBit = 1 shl bg
+
+        // L'entrée de carte ne change que tous les huit pixels. La conserver
+        // évite jusqu'à sept lectures VRAM et sept décodages identiques.
+        var cachedTileX = -1
+        var tileNum = 0
+        var hflip = false
+        var vflip = false
+        var palBank = 0
 
         for (x in 0 until SCREEN_WIDTH) {
+            if (windowMask[x] and layerBit == 0) continue
             val effX = (x + hofs) and (widthPixels - 1)
-            val tileX = effX / 8
+            val tileX = effX ushr 3
 
-            val mapAddr = screenBase + screenBlockOffset(tileX, tileY, size) +
-                ((tileY and 31) * 32 + (tileX and 31)) * 2
-            val entry = vram16(mapAddr)
-            val tileNum = entry and 0x3FF
-            val hflip = entry and 0x400 != 0
-            val vflip = entry and 0x800 != 0
-            val palBank = (entry ushr 12) and 0xF
+            if (tileX != cachedTileX) {
+                val mapAddr = screenBase + screenBlockOffset(tileX, tileY, size) +
+                    ((tileY and 31) * 32 + (tileX and 31)) * 2
+                val entry = vram16(mapAddr)
+                tileNum = entry and 0x3FF
+                hflip = entry and 0x400 != 0
+                vflip = entry and 0x800 != 0
+                palBank = (entry ushr 12) and 0xF
+                cachedTileX = tileX
+            }
 
-            val px = if (hflip) 7 - (effX and 7) else (effX and 7)
+            val inTileX = effX and 7
+            val px = if (hflip) 7 - inTileX else inTileX
             val py = if (vflip) 7 - py0 else py0
 
             val colorIndex = if (is8bpp) {
-                val addr = charBase + tileNum * 64 + py * 8 + px
-                vramByte(addr)
+                vramByte(charBase + tileNum * 64 + py * 8 + px)
             } else {
-                val addr = charBase + tileNum * 32 + py * 4 + px / 2
-                val byte = vramByte(addr)
+                val byte = vramByte(charBase + tileNum * 32 + py * 4 + (px ushr 1))
                 val nibble = if (px and 1 == 0) byte and 0xF else (byte ushr 4) and 0xF
                 if (nibble == 0) 0 else palBank * 16 + nibble
             }
-            if (colorIndex != 0 && windowMask[x] and (1 shl bg) != 0) {
-                pushPixel(x, paletteColor(colorIndex), priority, bg)
-            }
+            if (colorIndex != 0) pushPixel(x, paletteColor(colorIndex), priority, bg)
         }
     }
 
@@ -708,12 +747,28 @@ class GbaPpu(private val bus: GbaBus) {
     private fun oam16(offset: Int): Int =
         (bus.oam[offset].toInt() and 0xFF) or ((bus.oam[offset + 1].toInt() and 0xFF) shl 8)
 
-    /** Couleur de la palette BG à l'index [index] (0..255), en ARGB. */
+    private fun beginPaletteLine() {
+        if (paletteEpoch == Int.MAX_VALUE) {
+            paletteStamp.fill(0)
+            paletteEpoch = 1
+        } else {
+            paletteEpoch++
+        }
+    }
+
+    /** Couleur de la palette BG ou OBJ à l'index [index], en ARGB. */
     private fun paletteColor(index: Int): Int {
-        val a = index * 2
-        val lo = bus.paletteRam[a].toInt() and 0xFF
-        val hi = bus.paletteRam[a + 1].toInt() and 0xFF
-        return bgr555ToArgb(lo or (hi shl 8))
+        if (paletteStamp[index] != paletteEpoch) {
+            val a = index * 2
+            val raw = (bus.paletteRam[a].toInt() and 0xFF) or
+                ((bus.paletteRam[a + 1].toInt() and 0xFF) shl 8)
+            if (paletteRaw[index] != raw) {
+                paletteRaw[index] = raw
+                paletteCache[index] = bgr555ToArgb(raw)
+            }
+            paletteStamp[index] = paletteEpoch
+        }
+        return paletteCache[index]
     }
 
     companion object {
@@ -723,6 +778,11 @@ class GbaPpu(private val bus: GbaBus) {
 
         private const val MODE5_WIDTH = 160
         private const val MODE5_HEIGHT = 128
+        private const val PALETTE_COLORS = 512
+
+        // Bits d'effet et cibles secondaires de BLDCNT. Tous à zéro, aucune
+        // composition avec le second plan n'est possible.
+        private const val SIMPLE_COMPOSITION_MASK = 0x3FC0
 
         /** Fond : priorité la plus basse (4 = derrière tout arrière-plan 0..3). */
         private const val LAYER_BACKDROP = 4

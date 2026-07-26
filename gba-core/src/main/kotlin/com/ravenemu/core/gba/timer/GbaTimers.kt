@@ -92,6 +92,10 @@ class GbaTimers(private val interrupts: GbaInterruptController) {
      * strictement identique.
      */
     fun tick(cycles: Int) {
+        // Aucun timer piloté par l'horloge ne tourne. Ces cycles ne devront
+        // jamais être rejoués lors de la prochaine activation et les accumuler
+        // finirait par faire déborder un Int après environ 128 secondes.
+        if (cyclesUntilOverflow == NO_OVERFLOW) return
         pendingCycles += cycles
         // Rien d'observable avant la prochaine échéance : on diffère.
         if (pendingCycles < cyclesUntilOverflow) return
@@ -101,10 +105,10 @@ class GbaTimers(private val interrupts: GbaInterruptController) {
     /** Applique les cycles accumulés, puis recalcule la prochaine échéance. */
     private fun flush() {
         val cycles = pendingCycles
-        if (cycles > 0) {
-            pendingCycles = 0
-            applyCycles(cycles)
-        }
+        // Toujours vider l'accumulateur, y compris si un ancien état corrompu
+        // contient une valeur négative issue d'un débordement signé.
+        pendingCycles = 0
+        if (cycles > 0) applyCycles(cycles)
         cyclesUntilOverflow = computeBudget()
     }
 
