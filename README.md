@@ -1,177 +1,177 @@
 # RavenEmu
 
 [![Android CI](https://github.com/GhostPunishR/RavenEmu/actions/workflows/android.yml/badge.svg)](https://github.com/GhostPunishR/RavenEmu/actions/workflows/android.yml)
-[![Licence: MIT](https://img.shields.io/badge/Licence-MIT-green.svg)](LICENSE)
-[![Site RavenEmu](https://img.shields.io/badge/Site-RavenEmu-a855f7.svg)](https://ghostpunishr.github.io/RavenEmu/)
+[![Wiki](https://img.shields.io/badge/Documentation-Wiki-5b21b6.svg?logo=github&logoColor=white)](https://github.com/GhostPunishR/RavenEmu/wiki)
+[![Site officiel](https://img.shields.io/badge/Site-RavenEmu-7c3aed.svg?logo=githubpages&logoColor=white)](https://ghostpunishr.github.io/RavenEmu/)
+[![APK Debug](https://img.shields.io/badge/APK-Debug-a855f7.svg?logo=android&logoColor=white)](https://github.com/GhostPunishR/RavenEmu/releases/download/debug-latest/RavenEmu-debug.apk)
+[![Licence MIT](https://img.shields.io/badge/Licence-MIT-22c55e.svg?logo=opensourceinitiative&logoColor=white)](LICENSE)
 
-**RavenEmu** est un émulateur **Game Boy, Game Boy Color et Game Boy Advance**
-pour Android, aux moteurs écrits intégralement en Kotlin à partir de
-documentation technique publique — sans code d'émulateur existant, sans cœur
-tiers, sans BIOS ni contenu protégé.
+**RavenEmu** est un émulateur Game Boy, Game Boy Color et Game Boy Advance pour Android.
+
+Les moteurs sont écrits en Kotlin pour le projet à partir de documentation technique publique. RavenEmu n'intègre aucun cœur d'émulation tiers et ne fournit aucun BIOS, aucune ROM ni aucun contenu protégé.
+
+## Télécharger
+
+La CI publie automatiquement un APK de test après chaque construction réussie de `main`.
+
+### [Télécharger le dernier APK Debug](https://github.com/GhostPunishR/RavenEmu/releases/download/debug-latest/RavenEmu-debug.apk)
+
+L'empreinte SHA-256 est disponible dans le fichier [RavenEmu-debug.apk.sha256](https://github.com/GhostPunishR/RavenEmu/releases/download/debug-latest/RavenEmu-debug.apk.sha256).
+
+L'APK Debug porte l'identifiant `com.ravenemu.app.debug` et utilise une signature de développement. Il sert aux essais et ne remplace pas une version Release signée.
+
+RavenEmu ne fournit aucun jeu. Utilisez uniquement des copies que vous êtes autorisé à employer ou des homebrews librement distribués.
+
+## État du projet
+
+| Console | État | Capacités principales |
+|---|---|---|
+| Game Boy | Avancé | CPU LR35902, vidéo, audio, timers, DMA et principaux MBC |
+| Game Boy Color | Intégré | Couleur, banques mémoire, palettes, HDMA et double vitesse |
+| Game Boy Advance | Expérimental | ARM7TDMI, vidéo, audio, DMA, sauvegardes et BIOS HLE |
+
+Le moteur Game Boy Advance démarre désormais des jeux commerciaux testés, mais sa compatibilité et ses performances restent à valider jeu par jeu sur Android.
 
 ## Fonctionnalités
 
-### Game Boy / Game Boy Color
-- CPU Sharp LR35902 complet (jeu principal + instructions CB), cycles exacts,
-  délai EI, bug HALT
-- PPU scanline : fond, fenêtre, sprites 8×8/8×16, priorités DMG, STAT/LYC
-- **Game Boy Color** : banques VRAM/WRAM, palettes couleur 15 bits, attributs
-  de tuiles, priorités, HDMA/GDMA, mode double vitesse ; sortie couleur ARGB
-- **Audio 4 canaux** : ondes carrées (balayage, enveloppe), table d'onde,
-  bruit LFSR, mixage stéréo, synchronisation audio/vidéo
-- Timers au cycle, interruptions, OAM DMA, plan mémoire complet
-- Cartouches : ROM seule, MBC1, MBC2, MBC3 (+ horloge temps réel), MBC5
+### Game Boy et Game Boy Color
+
+- CPU Sharp LR35902 avec instructions principales et CB
+- Gestion du délai `EI` et du comportement `HALT`
+- Fond, fenêtre, sprites 8 x 8 et 8 x 16, priorités et interruptions vidéo
+- Audio à quatre canaux avec mixage stéréo
+- Timers, interruptions et DMA OAM
+- ROM seule, MBC1, MBC2, MBC3 avec horloge et MBC5
+- Banques VRAM et WRAM, palettes 15 bits, attributs de tuiles, HDMA et double vitesse pour la Game Boy Color
 
 ### Game Boy Advance
-- **CPU ARM7TDMI** : registres banqués, modes processeur, `CPSR`/`SPSR`,
-  exceptions ; jeu d'instructions ARM et Thumb quasi complet (traitement de
-  données et barrel shifter, `LDM`/`STM`, transferts demi-mot et signés,
-  multiplications longues, `SWP`, `SWI`, `PUSH`/`POP`)
-- **Vidéo** : modes bitmap 3/4/5, arrière-plans texte et **affines**, sprites
-  normaux et affines, **fenêtres**, **effets de couleur** (mélange alpha,
-  éclaircissement, assombrissement), rendu ligne par ligne
-- **Interruptions, timers et DMA** : `IE`/`IF`/`IME`, quatre timers (cascade,
-  prédiviseur), quatre canaux DMA (immédiat, VBlank, HBlank, son)
-- **BIOS HLE** écrit pour RavenEmu — gestionnaire d'interruption et appels
-  `SWI` (division, racine, copies mémoire, mise en veille) : **aucun BIOS
-  Nintendo n'est requis ni fourni**
-- **Audio** : quatre canaux PSG hérités et deux canaux **Direct Sound**
-  alimentés par FIFO et DMA
-- **Sauvegardes** : SRAM, Flash 64/128 Kio et EEPROM, détectées dans la ROM et
-  **remplaçables par jeu**, au format `.sav` brut
 
-### Commun aux consoles
-- Sauvegardes `.sav` au format brut compatible (écriture atomique, sauvegarde
-  automatique), états instantanés versionnés
-- Boucle déterministe sur thread dédié, cadence native, avance rapide
-- Sélection automatique du moteur selon la console de la ROM
+- CPU ARM7TDMI avec registres banqués, exceptions et modes ARM et Thumb
+- Modes vidéo bitmap 3, 4 et 5
+- Arrière-plans texte et affines
+- Sprites normaux et affines, fenêtres et effets de couleur
+- Interruptions, quatre timers et quatre canaux DMA
+- Temps d'attente mémoire, accès séquentiels et préchargement Game Pak
+- BIOS HLE avec copies mémoire, calculs, attentes d'interruption et décompression
+- Audio PSG et Direct Sound avec FIFO et DMA
+- SRAM, Flash 64 ou 128 Kio et EEPROM
+- Diagnostics de performance dans l'APK Debug
 
-### Application
-- **Bibliothèque** : dossiers choisis via le sélecteur Android (aucune
-  permission globale de stockage), en-têtes de cartouche, recherche, tri,
-  **filtre par console**, vue grille ou liste, actualisation avec détection des
-  fichiers ajoutés/déplacés/supprimés
-- **Identification** : empreintes CRC32/SHA-1/SHA-256, statuts prudents
-  (jamais « officielle » sans correspondance d'empreinte) ; **base de
-  références** enrichissable par import de fichiers No-Intro `.dat` ou de
-  datasets JSON (métadonnées uniquement, jamais de ROM)
-- **Pochettes** : image choisie, image voisine de la ROM, dossier de
-  pochettes (par nom ou par empreinte), jaquette générée sinon — rien n'est
-  téléchargé ni distribué
-- **Commandes tactiles** : disposition entièrement modifiable (position,
-  taille, opacité, visibilité), profils portrait/paysage **par console** et par
-  jeu, gâchettes `L`/`R` sur Game Boy Advance, multi-touch avec diagonales,
-  vibrations, manettes physiques
-- **Affichage** : en monochrome, le moteur ne produit que les **quatre niveaux**
-  `0..3` et le renderer applique un **profil d'écran** (simulation LCD
-  calibrable : Game Boy DMG, Pocket, Light éteint/allumé, Noir et blanc),
-  changeable à chaud ; les sorties couleur (Game Boy Color, Game Boy Advance)
-  sont affichées telles quelles. **Réglages avancés** : luminosité, contraste et
-  correction colorimétrique LCD, appliqués en post-traitement sans effet par
-  défaut. Ratio natif conservé, mise à l'échelle entière optionnelle,
-  nearest-neighbor, adaptation aux encoches et à toutes tailles d'écran
-- **Confidentialité** : aucun réseau, aucune télémétrie, permissions
-  minimales
+### Application Android
 
-## Installation
-
-À chaque mise à jour de `main`, la CI publie un APK de test :
-**[télécharger le dernier APK debug](https://github.com/GhostPunishR/RavenEmu/releases/download/debug-latest/RavenEmu-debug.apk)**.
-La préversion `debug-latest` et son empreinte SHA-256 sont remplacées après
-chaque build réussi de `main`. L'artefact `ravenemu-debug-apk` reste également
-disponible dans le run GitHub Actions correspondant.
-
-Cet APK porte l'identifiant `com.ravenemu.app.debug` et utilise la signature
-debug Android. Il est destiné aux tests et ne remplace pas une version Release
-signée. Un APK Release signé et un **App Bundle `.aab`** (pour le Play Store)
-sont produits lorsque les secrets de signature sont configurés. Les commandes
-sont regroupées sur le
-[site RavenEmu](https://ghostpunishr.github.io/RavenEmu/#demarrer).
-
-RavenEmu ne fournit **aucune ROM ni aucun BIOS**. Utilisez uniquement des copies
-de jeux que vous possédez ou des homebrews librement distribués.
-
-## Compilation
-
-```bash
-# Tests des moteurs — aucun SDK Android requis
-./gradlew test
-
-# APK Debug — SDK Android requis (compileSdk 35)
-./gradlew assembleDebug
-```
-
-Détails, contribution, architecture et sécurité :
-[site RavenEmu](https://ghostpunishr.github.io/RavenEmu/).
+- Bibliothèque locale avec recherche, tri, filtres et vues grille ou liste
+- Accès aux dossiers par le sélecteur Android, sans permission globale de stockage
+- Identification par CRC32, SHA-1 et SHA-256
+- Import de métadonnées No-Intro `.dat` ou JSON, sans téléchargement de ROM
+- Pochettes choisies par l'utilisateur ou générées localement
+- Commandes tactiles configurables par console, orientation et jeu
+- Manettes physiques, multitouch, diagonales et vibrations
+- Profils d'écran Game Boy et réglages de luminosité, contraste et couleur
+- Ratio natif, mise à l'échelle entière et rendu nearest-neighbor
+- Sauvegardes `.sav` automatiques et états instantanés versionnés
+- Avance rapide et surcouche de performance
+- Aucun réseau et aucune télémétrie dans l'application
 
 ## Architecture
 
-| Module | Type | Rôle |
+| Module | Type | Responsabilité |
 |---|---|---|
-| `app` | Application Android | Écrans, navigation, session d'émulation |
-| `emulation-api` | Kotlin JVM | Interfaces communes app ↔ moteurs |
-| `gameboy-core` | Kotlin JVM | Moteur Game Boy / Color (CPU, PPU, APU, MBC…) |
-| `gba-core` | Kotlin JVM | Moteur Game Boy Advance (ARM7TDMI, PPU, APU, DMA…) |
-| `rom-library` | Kotlin JVM | En-têtes, empreintes, identification, index |
-| `storage` | Bibliothèque Android | SAF, `.sav`, états, pochettes |
-| `renderer` | Bibliothèque Android | Affichage du framebuffer |
-| `input` | Bibliothèque Android | Tactile, éditeur, manettes |
-| `settings` | Bibliothèque Android | Préférences, profils d'écran |
+| `app` | Android | Écrans, navigation et session d'émulation |
+| `emulation-api` | Kotlin/JVM | Contrats communs entre l'application et les moteurs |
+| `gameboy-core` | Kotlin/JVM | Moteur Game Boy et Game Boy Color |
+| `gba-core` | Kotlin/JVM | Moteur Game Boy Advance |
+| `rom-library` | Kotlin/JVM | En-têtes, empreintes, identification et index |
+| `storage` | Android | Dossiers, sauvegardes, états et pochettes |
+| `renderer` | Android | Affichage du framebuffer |
+| `input` | Android | Commandes tactiles et manettes |
+| `settings` | Android | Préférences et profils |
 
-Les moteurs ne dépendent pas d'Android et se testent sur JVM. Ils sont
-**indépendants les uns des autres** : `gba-core` ne référence pas
-`gameboy-core`. L'ajout d'une console se fait par un nouveau module implémentant
-`emulation-api`, sans toucher aux moteurs existants ; l'application sélectionne
-le moteur par une fabrique et n'en instancie aucun directement. Les catégories
-techniques sont présentées sur le
-[site RavenEmu](https://ghostpunishr.github.io/RavenEmu/#architecture).
+Les moteurs ne dépendent pas d'Android et peuvent être testés sur une JVM de bureau. Ils restent indépendants les uns des autres. Une nouvelle console peut être ajoutée dans un module séparé qui implémente `emulation-api`.
 
-## Limites connues
+## Compiler
 
-### Game Boy / Game Boy Color
-- PPU sans effets mid-scanline (durée de mode 3 fixe) — sans incidence sur
-  la grande majorité des jeux DMG
-- Comportements obscurs de l'APU non émulés (mode « zombie », corruption de
-  Wave RAM)
-- Multicarts MBC1M et câble link non pris en charge
-- Game Boy Color : timing HDMA HBlank simplifié (un bloc par HBlank, sans coût
-  cycle précis), séquenceur APU non doublé en double vitesse, registre OPRI non
-  émulé, sans correction colorimétrique LCD
+### Prérequis
+
+- JDK 21 recommandé
+- Gradle Wrapper fourni
+- SDK Android avec `compileSdk 35` pour construire l'application
+
+Les modules Kotlin/JVM restent testables sans SDK Android.
+
+```bash
+git clone https://github.com/GhostPunishR/RavenEmu.git
+cd RavenEmu
+
+# Tests
+./gradlew test
+
+# Validation Android
+./gradlew lint
+
+# APK Debug
+./gradlew assembleDebug
+```
+
+L'APK est produit dans `app/build/outputs/apk/debug/`.
+
+## Documentation
+
+- [Wiki RavenEmu](https://github.com/GhostPunishR/RavenEmu/wiki)
+- [Site officiel](https://ghostpunishr.github.io/RavenEmu/)
+- [Installation](https://github.com/GhostPunishR/RavenEmu/wiki/Installation)
+- [Premiers pas](https://github.com/GhostPunishR/RavenEmu/wiki/Premiers-pas)
+- [Consoles et compatibilité](https://github.com/GhostPunishR/RavenEmu/wiki/Consoles-et-compatibilite)
+- [Matrice de compatibilité des jeux](https://github.com/GhostPunishR/RavenEmu/wiki/Compatibilite-des-jeux)
+- [Compilation](https://github.com/GhostPunishR/RavenEmu/wiki/Compilation)
+- [Architecture](https://github.com/GhostPunishR/RavenEmu/wiki/Architecture)
+- [Dépannage](https://github.com/GhostPunishR/RavenEmu/wiki/Depannage)
+- [Guide de contribution](CONTRIBUTING.md)
+- [Code de conduite](CODE_OF_CONDUCT.md)
+- [Politique de sécurité](SECURITY.md)
+- [Politique de confidentialité](PRIVACY.md)
+- [Publication des versions](RELEASING.md)
+
+## Limites actuelles
+
+### Game Boy et Game Boy Color
+
+- Pas de câble link
+- Pas de multicartouches MBC1M
+- Effets modifiant le rendu au milieu d'une ligne non reproduits
+- Certains comportements audio rares restent simplifiés
+- Timing HDMA HBlank et séquenceur audio en double vitesse encore simplifiés
 
 ### Game Boy Advance
-- **Le moteur n'a été éprouvé que sur des ROM synthétiques internes : la
-  compatibilité avec les jeux du commerce reste à valider sur matériel réel.**
-- Mosaïque et effets mid-scanline non émulés
-- Temps d'attente mémoire (wait states) non émulés, comptage de cycles
-  approximatif
-- BIOS : seuls les appels `SWI` courants sont implémentés ; le BIOS fourni par
-  l'utilisateur n'est pas encore pris en charge
-- DMA de capture vidéo, interruptions clavier et série absentes
-- Audio : RAM d'onde en banque unique, `SOUNDBIAS` non émulé
 
-### Commun
-- États instantanés propres à RavenEmu (format `RVNS` versionné), jamais
-  présentés comme compatibles avec d'autres émulateurs
+- Compatibilité et performances encore expérimentales
+- Mosaïque et effets vidéo au milieu d'une ligne absents
+- DMA de capture vidéo absent
+- Interruptions clavier et série absentes
+- Certains détails audio, dont `SOUNDBIAS`, restent simplifiés
+- Chargement d'un BIOS externe non pris en charge
 
-## Feuille de route
+Les états instantanés utilisent le format versionné `RVNS`. Ils ne sont pas compatibles avec les états d'autres émulateurs et une évolution du format peut rendre un ancien état illisible.
 
-- [x] Compatibilité Game Boy Color
-- [x] Base locale d'empreintes de référence enrichissable (import No-Intro/JSON)
-- [x] Réglages d'affichage avancés (contraste, luminosité, correction LCD)
-- [x] Android App Bundle (`.aab`)
-- [x] Moteur Game Boy Advance (`gba-core`) : CPU, vidéo, audio, sauvegardes,
-  BIOS HLE et intégration à l'interface
-- [ ] Tests de compatibilité étendus sur matériel réel (Game Boy et surtout
-  Game Boy Advance)
-- [ ] Précision Game Boy Advance : temps d'attente mémoire, mosaïque, effets
-  mid-scanline
-- [ ] BIOS Game Boy Advance fourni par l'utilisateur (validé par taille et
-  empreinte)
+## Contribuer
 
-## Licence
+Les contributions de code, de documentation et de validation sont bienvenues. Consultez le [guide de contribution](CONTRIBUTING.md) et le [code de conduite](CODE_OF_CONDUCT.md) avant de proposer une modification.
 
-Code sous [licence MIT](LICENSE) — © 2026 GhostPunishR.
+Avant une modification importante:
 
-« Game Boy » et « Game Boy Advance » sont des marques de Nintendo. RavenEmu
-n'est ni affilié à, ni approuvé par Nintendo, et ne contient ni ne distribue
-aucun BIOS, jeu ou contenu protégé.
+1. consultez les [issues](https://github.com/GhostPunishR/RavenEmu/issues);
+2. décrivez clairement le comportement visé;
+3. conservez les frontières entre modules;
+4. utilisez uniquement de la documentation technique publique;
+5. ajoutez des tests synthétiques reproductibles;
+6. exécutez les tâches Gradle adaptées;
+7. documentez les limites restantes.
+
+Le code d'un autre émulateur ne doit pas être copié, traduit ou adapté dans RavenEmu. Les tests ne doivent contenir aucune ROM commerciale ni aucun BIOS protégé.
+
+Pour une vulnérabilité, utilisez un [avis de sécurité privé](https://github.com/GhostPunishR/RavenEmu/security/advisories/new) et ne publiez pas les détails dans une issue.
+
+## Licence et marques
+
+RavenEmu est distribué sous [licence MIT](LICENSE). Copyright 2026 GhostPunishR.
+
+Game Boy, Game Boy Color et Game Boy Advance sont des marques de Nintendo. RavenEmu n'est ni affilié à Nintendo, ni approuvé par Nintendo.
