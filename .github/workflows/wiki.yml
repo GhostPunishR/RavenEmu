@@ -1,0 +1,60 @@
+name: Publier le Wiki
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "wiki/**"
+      - ".github/workflows/wiki.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ravenemu-wiki
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Synchroniser les pages
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Vérifier les pages
+        run: |
+          test -f wiki/Home.md
+          test -f wiki/_Sidebar.md
+          if grep -R -n $'\u2014' wiki; then
+            echo "Le tiret cadratin est interdit dans les textes du wiki." >&2
+            exit 1
+          fi
+
+      - name: Publier vers le dépôt Wiki
+        env:
+          WIKI_TOKEN: ${{ github.token }}
+        run: |
+          wiki_dir="$RUNNER_TEMP/ravenemu-wiki"
+          git clone \
+            "https://x-access-token:${WIKI_TOKEN}@github.com/${GITHUB_REPOSITORY}.wiki.git" \
+            "$wiki_dir"
+
+          cp wiki/*.md "$wiki_dir/"
+
+          git -C "$wiki_dir" config user.name "github-actions[bot]"
+          git -C "$wiki_dir" config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C "$wiki_dir" add --all
+
+          if git -C "$wiki_dir" diff --cached --quiet; then
+            echo "Le Wiki est déjà à jour."
+            exit 0
+          fi
+
+          git -C "$wiki_dir" commit \
+            -m "docs: synchronise le wiki depuis ${GITHUB_SHA}"
+          git -C "$wiki_dir" push origin HEAD
