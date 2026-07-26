@@ -50,6 +50,8 @@ class GbaCore(
 
     override val framebufferFormat: FramebufferFormat = FramebufferFormat.ARGB_8888
 
+    override val supportsVideoFrameSkipping: Boolean = true
+
     internal var machine: GbaMachine? = null
         private set
 
@@ -79,12 +81,24 @@ class GbaCore(
     }
 
     override fun runFrame(framebuffer: IntArray) {
+        runFrame(framebuffer, renderVideo = true)
+    }
+
+    override fun runFrame(framebuffer: IntArray, renderVideo: Boolean) {
         val m = machine ?: error("Aucune ROM chargée")
         require(framebuffer.size >= video.pixelCount) {
             "Framebuffer trop petit : ${framebuffer.size} < ${video.pixelCount}"
         }
-        m.runFrame(CYCLES_PER_FRAME)
-        System.arraycopy(m.ppu.frame, 0, framebuffer, 0, video.pixelCount)
+        m.ppu.renderEnabled = renderVideo
+        try {
+            m.runFrame(CYCLES_PER_FRAME)
+        } finally {
+            // Une demande de saut ne doit jamais survivre à la trame courante.
+            m.ppu.renderEnabled = true
+        }
+        if (renderVideo) {
+            System.arraycopy(m.ppu.frame, 0, framebuffer, 0, video.pixelCount)
+        }
     }
 
     override fun setButton(button: EmulatorButton, pressed: Boolean) {

@@ -35,6 +35,12 @@ class GbaPpu(private val bus: GbaBus) {
     /** Dernière trame produite, en ARGB 8888. */
     val frame = IntArray(SCREEN_WIDTH * SCREEN_HEIGHT)
 
+    /**
+     * Désactive uniquement la composition des pixels de la trame courante.
+     * Les compteurs, références affines, interruptions et DMA continuent.
+     */
+    internal var renderEnabled = true
+
     // Tampons de composition d'une ligne (réutilisés, sans allocation par ligne).
     // Couche la plus proche de l'observateur, et celle juste derrière : le
     // mélange alpha combine ces deux niveaux.
@@ -125,16 +131,18 @@ class GbaPpu(private val bus: GbaBus) {
             if (!inHBlank && lineCycles >= HDRAW_CYCLES) {
                 inHBlank = true
                 if (vcount < SCREEN_HEIGHT) {
-                    val diagnostics = bus.diagnostics
-                    if (diagnostics.measuringTime) {
-                        val start = System.nanoTime()
-                        renderScanline(vcount)
-                        diagnostics.addPpuNanos(System.nanoTime() - start)
-                    } else {
-                        renderScanline(vcount)
+                    if (renderEnabled) {
+                        val diagnostics = bus.diagnostics
+                        if (diagnostics.measuringTime) {
+                            val start = System.nanoTime()
+                            renderScanline(vcount)
+                            diagnostics.addPpuNanos(System.nanoTime() - start)
+                        } else {
+                            renderScanline(vcount)
+                        }
                     }
-                    // Les points de référence affines avancent d'une ligne
-                    // (dmx/dmy) après le rendu de la ligne courante.
+                    // Les points de référence affines avancent même lorsque la
+                    // composition est sautée : leur état appartient au matériel.
                     bg2RefX += signed16(reg16(0x22)) // BG2PB
                     bg2RefY += signed16(reg16(0x26)) // BG2PD
                     bg3RefX += signed16(reg16(0x32)) // BG3PB

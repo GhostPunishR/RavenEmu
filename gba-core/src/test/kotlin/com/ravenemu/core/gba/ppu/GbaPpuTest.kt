@@ -50,6 +50,29 @@ class GbaPpuTest {
     }
 
     @Test
+    fun `une composition sautee conserve l'image et avance la trame`() {
+        val (bus, ppu) = newPpu()
+        palette(bus, 0, red)
+        renderFrame(ppu)
+        assertEquals(GbaPpu.bgr555ToArgb(red), pixel(ppu, 0, 0))
+
+        palette(bus, 0, green)
+        ppu.renderEnabled = false
+        renderFrame(ppu)
+
+        assertEquals(0, ppu.vcount, "la trame matérielle doit avoir avancé")
+        assertEquals(
+            GbaPpu.bgr555ToArgb(red),
+            pixel(ppu, 0, 0),
+            "le framebuffer doit conserver la dernière image composée",
+        )
+
+        ppu.renderEnabled = true
+        renderFrame(ppu)
+        assertEquals(GbaPpu.bgr555ToArgb(green), pixel(ppu, 0, 0))
+    }
+
+    @Test
     fun `l'ecran blanc force remplit de blanc`() {
         val (bus, ppu) = newPpu()
         palette(bus, 0, red)

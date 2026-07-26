@@ -2,6 +2,7 @@ package com.ravenemu.app.emulation
 
 import com.ravenemu.emulation.api.EmulatorButton
 import com.ravenemu.emulation.api.EmulatorCore
+import com.ravenemu.emulation.api.timing.AdaptiveFrameSkipper
 import com.ravenemu.emulation.api.audio.AudioBlockClock
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.locks.LockSupport
@@ -134,6 +135,7 @@ class EmulationSession(
         )
         val basePeriodNanos = (1_000_000_000.0 / core.video.refreshRateHz).toLong()
         val audioBlockClock = AudioBlockClock(basePeriodNanos)
+        val frameSkipper = AdaptiveFrameSkipper(basePeriodNanos)
         var nextFrameAt = System.nanoTime()
         var fpsWindowStart = System.nanoTime()
         var fpsFrames = 0
@@ -150,15 +152,21 @@ class EmulationSession(
                 fpsFrames = 0
                 workNanos = 0
                 audioBlockClock.reset()
+                frameSkipper.reset()
                 continue
             }
 
             // Temps de calcul brut d'une trame : mesuré autour de l'émulation
             // seule, sans le cadencement ni l'attente audio.
+            val renderVideo =
+                !core.supportsVideoFrameSkipping || frameSkipper.shouldRender()
             val workStart = System.nanoTime()
-            core.runFrame(framebuffer)
+            core.runFrame(framebuffer, renderVideo)
             val frameWorkNanos = System.nanoTime() - workStart
             workNanos += frameWorkNanos
+            if (core.supportsVideoFrameSkipping) {
+                frameSkipper.onFrameCompleted(renderVideo, frameWorkNanos)
+            }
 
             // Audio d'abord : l'écriture bloquante cadence la session et la
             // file audio est réalimentée avant de payer le coût du rendu
@@ -172,13 +180,19 @@ class EmulationSession(
                 // Le bloc doit couvrir l'intervalle réel depuis la livraison
                 // précédente, pas seulement le calcul du moteur. Le rendu, les
                 // rappels et l'ordonnancement Android consomment aussi du temps.
-                val targetAudioNanos = audioBlockClock.mark(System.nanoTime())
+                val targetAudioNanos = if (core.supportsVideoFrameSkipping) {
+                    // Le saut de composition rend au moteur sa cadence native.
+                    // Conserver la durée native évite toute modification de hauteur.
+                    basePeriodNanos
+                } else {
+                    audioBlockClock.mark(System.nanoTime())
+                }
                 audioSink!!.write(audioBuffer, audioCount, targetAudioNanos)
             } else {
                 audioBlockClock.reset()
             }
 
-            callbacks.onFrame(framebuffer)
+            if (renderVideo) callbacks.onFrame(framebuffer)
             fpsFrames++
 
             val now = System.nanoTime()
