@@ -55,13 +55,10 @@ android {
             applicationIdSuffix = ".debug"
             buildConfigField("boolean", "DIAGNOSTICS", "true")
         }
-        // Variante de **mesure**. Un APK de debug porte `android:debuggable`,
-        // et ART compile alors le code de façon nettement plus conservatrice :
-        // il inline beaucoup moins, ce qui pénalise lourdement un émulateur,
-        // fait de milliers de minuscules appels par trame. Cette variante est
-        // identique au debug — même signature, donc installable sans clé de
-        // publication, mêmes diagnostics — au drapeau `debuggable` près. Elle
-        // sert à mesurer la vitesse réelle du moteur, pas à être distribuée.
+        // Variante de test optimisée. Elle conserve la signature et les
+        // diagnostics de développement, mais retire le drapeau debuggable afin
+        // qu'Android optimise correctement le moteur. C'est le seul APK de test
+        // publié par la CI. L'APK Debug reste disponible en compilation locale.
         create("profil") {
             initWith(getByName("debug"))
             applicationIdSuffix = ".profil"

@@ -23,7 +23,7 @@ Consultez [[Consoles et compatibilité|Consoles-et-compatibilite]] avant de sign
 
 ## Liens utiles
 
-- [Télécharger le dernier APK Debug](https://github.com/GhostPunishR/RavenEmu/releases/download/debug-latest/RavenEmu-debug.apk)
+- [Télécharger le dernier APK Test](https://github.com/GhostPunishR/RavenEmu/releases/download/test-latest/RavenEmu-test.apk)
 - [Site officiel](https://ghostpunishr.github.io/RavenEmu/)
 - [Dépôt GitHub](https://github.com/GhostPunishR/RavenEmu)
 - [Issues](https://github.com/GhostPunishR/RavenEmu/issues)

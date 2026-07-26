@@ -1,18 +1,20 @@
 # Publication des versions de RavenEmu
 
-Ce document décrit la préparation des APK Debug continus et des futures versions numérotées signées.
+Ce document décrit l'APK Test continu et les futures versions numérotées signées.
 
-## APK Debug continu
+## APK Test continu
 
-Après chaque construction réussie de `main`, GitHub Actions met à jour la préversion `debug-latest`.
+Après chaque construction réussie de `main`, GitHub Actions met à jour la préversion `test-latest`.
 
 Cette préversion contient :
 
-- `RavenEmu-debug.apk` ;
-- `RavenEmu-debug.apk.sha256` ;
+- `RavenEmu-test.apk` ;
+- `RavenEmu-test.apk.sha256` ;
 - le commit exact utilisé pour la construction.
 
-L’APK Debug utilise l’identifiant `com.ravenemu.app.debug` et une signature de développement. Le tag `debug-latest` est mobile et ne représente pas une version stable.
+L'APK Test utilise la signature de développement, conserve les diagnostics et permet à Android d'optimiser le moteur. Le tag `test-latest` est mobile et ne représente pas une version stable.
+
+La CI ne publie aucun APK Debug. Les développeurs peuvent toujours le construire localement avec `./gradlew assembleDebug`.
 
 ## Secrets de signature
 

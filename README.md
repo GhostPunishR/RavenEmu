@@ -3,7 +3,7 @@
 [![Android CI](https://github.com/GhostPunishR/RavenEmu/actions/workflows/android.yml/badge.svg)](https://github.com/GhostPunishR/RavenEmu/actions/workflows/android.yml)
 [![Wiki](https://img.shields.io/badge/Documentation-Wiki-5b21b6.svg?logo=github&logoColor=white)](https://github.com/GhostPunishR/RavenEmu/wiki)
 [![Site officiel](https://img.shields.io/badge/Site-RavenEmu-7c3aed.svg?logo=githubpages&logoColor=white)](https://ghostpunishr.github.io/RavenEmu/)
-[![APK Debug](https://img.shields.io/badge/APK-Debug-a855f7.svg?logo=android&logoColor=white)](https://github.com/GhostPunishR/RavenEmu/releases/download/debug-latest/RavenEmu-debug.apk)
+[![APK Test](https://img.shields.io/badge/APK-Test-a855f7.svg?logo=android&logoColor=white)](https://github.com/GhostPunishR/RavenEmu/releases/download/test-latest/RavenEmu-test.apk)
 [![Licence MIT](https://img.shields.io/badge/Licence-MIT-22c55e.svg?logo=opensourceinitiative&logoColor=white)](LICENSE)
 
 **RavenEmu** est un émulateur Game Boy, Game Boy Color et Game Boy Advance pour Android.
@@ -14,11 +14,11 @@ Les moteurs sont écrits en Kotlin pour le projet à partir de documentation tec
 
 La CI publie automatiquement un APK de test après chaque construction réussie de `main`.
 
-### [Télécharger le dernier APK Debug](https://github.com/GhostPunishR/RavenEmu/releases/download/debug-latest/RavenEmu-debug.apk)
+### [Télécharger le dernier APK Test](https://github.com/GhostPunishR/RavenEmu/releases/download/test-latest/RavenEmu-test.apk)
 
-L'empreinte SHA-256 est disponible dans le fichier [RavenEmu-debug.apk.sha256](https://github.com/GhostPunishR/RavenEmu/releases/download/debug-latest/RavenEmu-debug.apk.sha256).
+L'empreinte SHA-256 est disponible dans le fichier [RavenEmu-test.apk.sha256](https://github.com/GhostPunishR/RavenEmu/releases/download/test-latest/RavenEmu-test.apk.sha256).
 
-L'APK Debug porte l'identifiant `com.ravenemu.app.debug` et utilise une signature de développement. Il sert aux essais et ne remplace pas une version Release signée.
+L'APK Test utilise une signature de développement, conserve les diagnostics et permet à Android d'optimiser le moteur. Il sert aux essais et ne remplace pas une version Release signée. L'APK Debug reste réservé aux développeurs et n'est pas publié.
 
 RavenEmu ne fournit aucun jeu. Utilisez uniquement des copies que vous êtes autorisé à employer ou des homebrews librement distribués.
 
@@ -55,7 +55,7 @@ Le moteur Game Boy Advance démarre désormais des jeux commerciaux testés, mai
 - BIOS HLE avec copies mémoire, calculs, attentes d'interruption et décompression
 - Audio PSG et Direct Sound avec FIFO et DMA
 - SRAM, Flash 64 ou 128 Kio et EEPROM
-- Diagnostics de performance dans l'APK Debug
+- Diagnostics de performance dans l'APK Test
 
 ### Application Android
 
@@ -108,11 +108,14 @@ cd RavenEmu
 # Validation Android
 ./gradlew lint
 
-# APK Debug
+# APK Test optimisé
+./gradlew assembleProfil
+
+# APK Debug local pour le développement
 ./gradlew assembleDebug
 ```
 
-L'APK est produit dans `app/build/outputs/apk/debug/`.
+L'APK Test est produit dans `app/build/outputs/apk/profil/`. L'APK Debug local reste dans `app/build/outputs/apk/debug/`.
 
 ## Documentation
 
