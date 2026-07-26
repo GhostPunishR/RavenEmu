@@ -55,8 +55,27 @@ class GbaTimers(private val interrupts: GbaInterruptController) {
         cyclesUntilOverflow = computeBudget()
     }
 
-    /** Compteur courant. Les cycles en attente sont appliqués d'abord. */
+    /**
+     * Compteur courant, cycles en attente compris.
+     *
+     * Tant qu'aucun débordement n'est dû — le cas de plus de deux cent
+     * cinquante lectures sur deux cent cinquante-six — la valeur est **projetée**
+     * sans rien appliquer. C'est exact par construction : l'échéance étant le
+     * minimum sur tous les timers, aucun ne peut avoir débordé.
+     *
+     * Ce n'est pas qu'une optimisation. Cette fonction est appelée depuis une
+     * lecture du bus, donc au beau milieu d'un accès mémoire du processeur ;
+     * appliquer les cycles y ferait déborder un timer, qui alimenterait Direct
+     * Sound, qui déclencherait un transfert DMA — un second maître du bus au
+     * cœur d'un accès déjà en cours. La projection supprime cette réentrance.
+     */
     fun counter(timer: Int): Int {
+        if (pendingCycles < cyclesUntilOverflow) {
+            val settings = control[timer]
+            if (settings and 0x80 == 0 || settings and 0x04 != 0) return counter[timer]
+            val prescale = PRESCALE[settings and 0x3]
+            return counter[timer] + (prescalerCounter[timer] + pendingCycles) / prescale
+        }
         flush()
         return counter[timer]
     }
