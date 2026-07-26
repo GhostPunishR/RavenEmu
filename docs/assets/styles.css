@@ -447,44 +447,14 @@ p {
   border: 1px solid rgba(216, 180, 254, 0.08);
 }
 
-.device-card {
+.hero-console {
   position: relative;
   z-index: 1;
-  width: min(100%, 390px);
-  max-width: none;
-  margin: 0;
-  padding: 0;
-  background: transparent;
-  border: 0;
-  border-radius: 0;
-  box-shadow: none;
-  transform: none;
-}
-
-.device-topline,
-.device-console-row,
-.scanline {
-  display: none;
-}
-
-.device-screen {
-  position: relative;
-  display: grid;
-  min-height: 390px;
-  place-items: center;
-  overflow: visible;
-  background: transparent;
-  border: 0;
-  border-radius: 0;
-  box-shadow: none;
-}
-
-.device-screen img {
-  width: min(76%, 292px);
-  border: 0;
-  border-radius: 22%;
-  box-shadow: none;
-  filter: drop-shadow(0 26px 34px rgba(0, 0, 0, 0.34));
+  width: min(96%, 380px);
+  height: auto;
+  filter:
+    drop-shadow(0 32px 38px rgba(0, 0, 0, 0.42))
+    drop-shadow(0 0 28px rgba(124, 58, 237, 0.12));
 }
 
 .trust-strip {
@@ -1095,10 +1065,6 @@ p {
     min-height: 360px;
   }
 
-  .device-screen {
-    min-height: 340px;
-  }
-
   .feature-grid,
   .steps-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1224,12 +1190,8 @@ p {
     height: min(70vw, 270px);
   }
 
-  .device-screen {
-    min-height: 280px;
-  }
-
-  .device-screen img {
-    width: min(68%, 230px);
+  .hero-console {
+    width: min(78vw, 320px);
   }
 
   .trust-grid {
@@ -1302,8 +1264,8 @@ p {
     min-height: 250px;
   }
 
-  .device-screen {
-    min-height: 245px;
+  .hero-console {
+    width: min(82vw, 280px);
   }
 
   .console-card,
