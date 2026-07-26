@@ -40,6 +40,9 @@ jobs:
       - name: Construire l'APK Debug
         run: ./gradlew assembleDebug
 
+      - name: Construire l'APK de mesure (profil)
+        run: ./gradlew assembleProfil
+
       - name: Publier les rapports de test
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -61,6 +64,14 @@ jobs:
         with:
           name: ravenemu-debug-apk
           path: app/build/outputs/apk/debug/*.apk
+
+      # Même contenu que l'APK Debug, mais sans `android:debuggable` : c'est
+      # celui-ci qu'il faut installer pour mesurer la vitesse réelle du moteur.
+      - name: Publier l'APK de mesure
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ravenemu-profil-apk
+          path: app/build/outputs/apk/profil/*.apk
 
   publish-debug:
     name: APK Debug téléchargeable

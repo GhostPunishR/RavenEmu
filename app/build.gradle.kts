@@ -48,9 +48,29 @@ android {
             if (hasSigning) {
                 signingConfig = signingConfigs.getByName("release")
             }
+            // Aucun diagnostic en Release : la surcouche s'y limite à la cadence.
+            buildConfigField("boolean", "DIAGNOSTICS", "false")
         }
         debug {
             applicationIdSuffix = ".debug"
+            buildConfigField("boolean", "DIAGNOSTICS", "true")
+        }
+        // Variante de **mesure**. Un APK de debug porte `android:debuggable`,
+        // et ART compile alors le code de façon nettement plus conservatrice :
+        // il inline beaucoup moins, ce qui pénalise lourdement un émulateur,
+        // fait de milliers de minuscules appels par trame. Cette variante est
+        // identique au debug — même signature, donc installable sans clé de
+        // publication, mêmes diagnostics — au drapeau `debuggable` près. Elle
+        // sert à mesurer la vitesse réelle du moteur, pas à être distribuée.
+        create("profil") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".profil"
+            isDebuggable = false
+            isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("debug")
+            // Les modules bibliothèque n'ont que debug et release.
+            matchingFallbacks += listOf("debug")
+            buildConfigField("boolean", "DIAGNOSTICS", "true")
         }
     }
 

@@ -81,6 +81,8 @@ class EmulationSession(
             it.priority = Thread.MAX_PRIORITY - 1
             it.start()
         }
+        // La priorité qui compte réellement est demandée depuis le thread
+        // lui-même, au début de [loop].
     }
 
     fun pause() {
@@ -116,6 +118,14 @@ class EmulationSession(
     }
 
     private fun loop() {
+        // `Thread.priority` ne fait que positionner une valeur de politesse Unix.
+        // Android place les threads dans des groupes d'ordonnancement, et c'est ce
+        // groupe qui décide, sur un processeur hétérogène, si le thread tourne sur
+        // un cœur puissant ou sur un cœur économe. Un émulateur a besoin du
+        // premier : on le demande explicitement.
+        android.os.Process.setThreadPriority(
+            android.os.Process.THREAD_PRIORITY_URGENT_DISPLAY,
+        )
         val basePeriodNanos = (1_000_000_000.0 / core.video.refreshRateHz).toLong()
         var nextFrameAt = System.nanoTime()
         var fpsWindowStart = System.nanoTime()

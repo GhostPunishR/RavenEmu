@@ -16,18 +16,25 @@ import com.ravenemu.emulation.api.EmulatorCore
  * DMA en cours, remplissage des FIFO audio, sous-alimentations, et le décompte
  * des anomalies relevées.
  *
- * En **Release**, `BuildConfig.DEBUG` étant faux, elle se réduit au seul nombre
- * d'images par seconde — aucun détail interne n'est exposé, et la journalisation
- * n'est jamais branchée.
+ * Elle est pilotée par `BuildConfig.DIAGNOSTICS`, vrai en Debug et dans la
+ * variante de mesure « profil », faux en **Release** — où elle se réduit à la
+ * cadence et au temps de trame, sans exposer le moindre détail interne, et où
+ * la journalisation n'est jamais branchée.
  */
 object GbaDebugOverlay {
 
     private const val TAG = "RavenEmuGba"
 
-    /** Texte de la surcouche pour le [core] courant. */
+    /**
+     * Texte de la surcouche pour le [core] courant.
+     *
+     * Le temps de trame figure dans **toutes** les variantes : c'est la seule
+     * mesure qui dit s'il reste de la marge, là où la cadence plafonne à celle
+     * de la console dès que le moteur suit. Ce n'est pas un détail interne.
+     */
     fun render(core: EmulatorCore?, fps: Double, frameTimeMs: Double): String {
-        val basic = "%.1f FPS".format(fps)
-        if (!BuildConfig.DEBUG) return basic
+        val basic = "%.1f FPS  %.2f ms/trame".format(fps, frameTimeMs)
+        if (!BuildConfig.DIAGNOSTICS) return basic
         val snapshot = (core as? GbaCore)?.debugSnapshot() ?: return basic
         return snapshot.toDebugText(fps, frameTimeMs)
     }
@@ -42,7 +49,7 @@ object GbaDebugOverlay {
      */
     fun attachLogging(core: EmulatorCore?) {
         val gba = core as? GbaCore ?: return
-        if (!BuildConfig.DEBUG) {
+        if (!BuildConfig.DIAGNOSTICS) {
             gba.onDiagnosticEvent = null
             return
         }
