@@ -16,7 +16,6 @@
         <item name="android:statusBarColor">@color/raven_primary_dark</item>
         <item name="android:navigationBarColor">@color/raven_primary_dark</item>
         <item name="android:windowLightStatusBar">false</item>
-        <item name="android:windowLightNavigationBar">false</item>
 
         <item name="android:textColorPrimary">@color/raven_text_primary</item>
         <item name="android:textColorSecondary">@color/raven_text_secondary</item>
