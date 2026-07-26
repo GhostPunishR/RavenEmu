@@ -332,7 +332,7 @@ La documentation doit décrire l'état réel du projet.
 Les fonctionnalités expérimentales ne doivent pas être présentées comme
 compatibles avec tous les jeux.
 
-Les fichiers du dossier `docs` utilisent une ponctuation simple. Le caractère
-`—` n'y est pas utilisé.
+Les fichiers du dossier `docs` utilisent une ponctuation simple. Le tiret
+cadratin n'y est pas utilisé.
 
 Toute décision structurante nouvelle doit être ajoutée à ce document.
