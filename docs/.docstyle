@@ -1,8 +1,0 @@
-# Règles simples pour les fichiers du dossier docs
-#
-# Ce fichier sert de rappel aux contributeurs.
-
-forbidden_punctuation=tiret_cadratin
-required_language=fr
-require_honest_compatibility_status=true
-require_public_technical_sources=true
