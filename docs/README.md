@@ -29,7 +29,7 @@ Ce dossier regroupe la documentation technique et communautaire du projet.
 - Ne pas inclure de ROM, BIOS, sauvegarde ou donnée protégée.
 - Citer les références techniques publiques utilisées.
 - Utiliser des titres et une ponctuation simples.
-- Ne pas utiliser le caractère `—` dans les fichiers du dossier `docs`.
+- Ne pas utiliser le tiret cadratin dans les fichiers du dossier `docs`.
 
 ## Validation minimale
 
