@@ -60,6 +60,31 @@ data class CartridgeHeader(
     val globalChecksumValid: Boolean,
 ) {
     companion object {
+        /** Premier octet du code fabricant, quand la cartouche en porte un. */
+        private const val MANUFACTURER_CODE_START = 0x013F
+        private const val MANUFACTURER_CODE_SIZE = 4
+
+        /**
+         * `true` si les quatre octets précédant l'indicateur couleur forment un
+         * code fabricant plutôt que la fin du titre.
+         *
+         * Un tel code est toujours fait de quatre majuscules ou chiffres — le
+         * dernier désignant la région, comme le `F` de `APSF` sur une cartouche
+         * française. Un titre qui occuperait cette zone contiendrait presque
+         * toujours autre chose : une espace, une ponctuation, une minuscule.
+         * Le test se trompe donc au pire sur un titre de quinze caractères
+         * entièrement en majuscules et sans séparateur, cas qu'aucune cartouche
+         * connue ne présente.
+         */
+        private fun hasManufacturerCode(rom: ByteArray): Boolean {
+            for (i in 0 until MANUFACTURER_CODE_SIZE) {
+                val c = rom[MANUFACTURER_CODE_START + i].toInt() and 0xFF
+                val alphanumeric = c in 0x41..0x5A || c in 0x30..0x39
+                if (!alphanumeric) return false
+            }
+            return true
+        }
+
         const val HEADER_END = 0x0150
         const val MIN_ROM_SIZE = 0x8000
         const val MAX_ROM_SIZE = 8 * 1024 * 1024
@@ -81,9 +106,17 @@ data class CartridgeHeader(
             }
 
             val cgbFlag = rom[0x0143].toInt() and 0xFF
-            // Sur les cartouches GBC, l'octet 0x0143 fait partie de la zone
-            // titre : on ne garde alors que 15 caractères.
-            val titleEnd = if (cgbFlag == 0x80 || cgbFlag == 0xC0) 0x0143 else 0x0144
+            val supportsColor = cgbFlag == 0x80 || cgbFlag == 0xC0
+            // La zone titre a rétréci au fil des générations de cartouches :
+            // 16 caractères à l'origine, puis 15 quand 0x0143 est devenu
+            // l'indicateur couleur, puis 11 quand les quatre octets suivants
+            // ont accueilli le code fabricant. Rien dans l'en-tête ne dit
+            // laquelle des deux dernières s'applique, d'où le test ci-dessous.
+            val titleEnd = when {
+                !supportsColor -> 0x0144
+                hasManufacturerCode(rom) -> MANUFACTURER_CODE_START
+                else -> 0x0143
+            }
             val title = buildString {
                 for (i in 0x0134 until titleEnd) {
                     val c = rom[i].toInt() and 0xFF

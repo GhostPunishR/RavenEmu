@@ -30,6 +30,56 @@ class CartridgeHeaderTest {
         assertFalse(compatible.requiresCgb)
     }
 
+    /**
+     * Sur les cartouches les plus récentes, les quatre octets qui précèdent
+     * l'indicateur couleur portent le code fabricant, pas la fin du titre.
+     * Pokémon Version Jaune enchaîne les deux sans séparateur : lu naïvement,
+     * son titre devient « POKEMON YELAPSF ».
+     */
+    @Test
+    fun `le code fabricant ne deborde pas sur le titre`() {
+        val rom = TestRoms.build(cgbFlag = 0x80)
+        "POKEMON YEL".forEachIndexed { i, c -> rom[0x0134 + i] = c.code.toByte() }
+        "APSF".forEachIndexed { i, c -> rom[0x013F + i] = c.code.toByte() }
+        assertEquals("POKEMON YEL", CartridgeHeader.parse(rom).title)
+    }
+
+    /**
+     * Le titre s'arrête déjà sur son octet nul ; la détection du code
+     * fabricant ne doit pas changer ce cas, qui est celui de la majorité des
+     * cartouches couleur.
+     */
+    @Test
+    fun `un titre termine avant le code fabricant reste intact`() {
+        val rom = TestRoms.build(cgbFlag = 0xC0)
+        "PM_CRYSTAL".forEachIndexed { i, c -> rom[0x0134 + i] = c.code.toByte() }
+        rom[0x013E] = 0
+        "BYTF".forEachIndexed { i, c -> rom[0x013F + i] = c.code.toByte() }
+        assertEquals("PM_CRYSTAL", CartridgeHeader.parse(rom).title)
+    }
+
+    /**
+     * La contrepartie : une cartouche couleur dont le titre occupe vraiment
+     * cette zone ne doit pas être tronquée. Une espace suffit à écarter
+     * l'hypothèse du code fabricant, qui n'en contient jamais.
+     */
+    @Test
+    fun `un titre long occupant la zone n'est pas tronque`() {
+        val rom = TestRoms.build(cgbFlag = 0x80)
+        val long = "ZELDA DX ROUGE!"
+        long.forEachIndexed { i, c -> rom[0x0134 + i] = c.code.toByte() }
+        assertEquals(long, CartridgeHeader.parse(rom).title)
+    }
+
+    /** Sans indicateur couleur, la zone titre garde ses seize caractères. */
+    @Test
+    fun `une cartouche monochrome garde un titre de seize caracteres`() {
+        val rom = TestRoms.build(cgbFlag = 0x00)
+        val long = "SUPER MARIOLAND1"
+        long.forEachIndexed { i, c -> rom[0x0134 + i] = c.code.toByte() }
+        assertEquals(long, CartridgeHeader.parse(rom).title)
+    }
+
     @Test
     fun `mapping des types de cartouche`() {
         val cases = mapOf(
