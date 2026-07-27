@@ -1,9 +1,9 @@
 package com.ravenemu.romlibrary
 
-import com.ravenemu.core.gba.cartridge.GbaCartridge
+import com.ravenemu.core.gba.GbaConsoleProvider
 import com.ravenemu.core.gba.cartridge.GbaHeader
 import com.ravenemu.core.gba.save.GbaSaveType
-import com.ravenemu.emulation.api.ConsoleType
+import com.ravenemu.emulation.api.ConsoleProvider
 import com.ravenemu.emulation.api.RomLoadException
 
 /**
@@ -15,11 +15,7 @@ import com.ravenemu.emulation.api.RomLoadException
  */
 class GbaRomAnalyzer : RomAnalyzer {
 
-    override val console: ConsoleType = ConsoleType.GAME_BOY_ADVANCE
-    override val maxRomSizeBytes: Int = GbaCartridge.MAX_ROM_SIZE
-
-    override fun canAnalyze(fileName: String): Boolean =
-        fileName.substringAfterLast('.', "").lowercase() in console.romExtensions
+    override val provider: ConsoleProvider = GbaConsoleProvider()
 
     override fun analyze(
         uri: String,

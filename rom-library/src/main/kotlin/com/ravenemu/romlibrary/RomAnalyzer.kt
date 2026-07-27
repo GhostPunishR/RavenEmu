@@ -1,6 +1,8 @@
 package com.ravenemu.romlibrary
 
+import com.ravenemu.core.gb.GameBoyConsoleProvider
 import com.ravenemu.core.gb.cartridge.CartridgeHeader
+import com.ravenemu.emulation.api.ConsoleProvider
 import com.ravenemu.emulation.api.ConsoleType
 import com.ravenemu.emulation.api.RomLoadException
 
@@ -13,14 +15,22 @@ sealed class AnalysisResult {
 /**
  * Analyseur de ROM d'une console. Chaque console future fournit le sien ;
  * la bibliothèque les interroge via [canAnalyze] puis [analyze].
+ *
+ * Ce que l'analyseur sait de la console — extensions reconnues, taille
+ * maximale acceptée — vient du [ConsoleProvider] publié par le module de
+ * moteur, et non d'une seconde déclaration tenue à jour en parallèle.
  */
 interface RomAnalyzer {
-    val console: ConsoleType
+
+    /** Console servie, telle que déclarée par son module de moteur. */
+    val provider: ConsoleProvider
+
+    val console: ConsoleType get() = provider.console
 
     /** Taille maximale acceptée par le moteur de cette console. */
-    val maxRomSizeBytes: Int
+    val maxRomSizeBytes: Int get() = provider.maxRomSizeBytes
 
-    fun canAnalyze(fileName: String): Boolean
+    fun canAnalyze(fileName: String): Boolean = provider.handles(fileName)
 
     /**
      * Analyse le contenu complet d'un fichier ROM : validation de taille et
@@ -38,11 +48,7 @@ interface RomAnalyzer {
 /** Analyseur Game Boy : fichiers `.gb`, en-tête de cartouche DMG. */
 class GameBoyRomAnalyzer : RomAnalyzer {
 
-    override val console: ConsoleType = ConsoleType.GAME_BOY
-    override val maxRomSizeBytes: Int = CartridgeHeader.MAX_ROM_SIZE
-
-    override fun canAnalyze(fileName: String): Boolean =
-        fileName.substringAfterLast('.', "").lowercase() in console.romExtensions
+    override val provider: ConsoleProvider = GameBoyConsoleProvider()
 
     override fun analyze(
         uri: String,

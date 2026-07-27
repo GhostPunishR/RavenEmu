@@ -211,8 +211,8 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
     }
 
     private fun startEmulation(rom: ByteArray) {
-        // La fabrique reçoit le réglage de sauvegarde propre à ce jeu.
-        val newCore = RavenEmulatorCoreFactory(settings.forcedSaveType(romSha256))
+        // Le registre reçoit le réglage de sauvegarde propre à ce jeu.
+        val newCore = RavenConsoles.registry(settings.forcedSaveType(romSha256))
             .create(console)
         try {
             val battery = saveStore.read(romSha256, romFileName, settings.saveDirectory)
