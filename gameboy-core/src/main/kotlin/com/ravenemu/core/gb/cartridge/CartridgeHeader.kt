@@ -46,10 +46,8 @@ data class CartridgeHeader(
     val region: RomRegion,
     /** Octet 0x0143 : 0x80 = compatible GBC, 0xC0 = GBC uniquement. */
     val cgbFlag: Int,
-    /** `true` si la cartouche annonce des fonctions Game Boy Color. */
-    val supportsCgb: Boolean,
-    /** `true` si la cartouche exige une Game Boy Color. */
-    val requiresCgb: Boolean,
+    /** Compatibilité déclarée par la cartouche, déduite de [cgbFlag]. */
+    val cartridgeMode: GameBoyCartridgeMode,
     /** Checksum d'en-tête déclaré (0x014D). */
     val headerChecksum: Int,
     /** `true` si le checksum d'en-tête recalculé correspond. */
@@ -59,6 +57,16 @@ data class CartridgeHeader(
     /** `true` si le checksum global recalculé correspond. */
     val globalChecksumValid: Boolean,
 ) {
+    /**
+     * `true` si la cartouche annonce des fonctions Game Boy Color. Déduit de
+     * [cartridgeMode] plutôt que relu de l'octet d'en-tête : une seule source
+     * de vérité pour la compatibilité déclarée.
+     */
+    val supportsCgb: Boolean get() = cartridgeMode.usesColor
+
+    /** `true` si la cartouche exige une Game Boy Color. */
+    val requiresCgb: Boolean get() = cartridgeMode == GameBoyCartridgeMode.CGB_ONLY
+
     companion object {
         /** Premier octet du code fabricant, quand la cartouche en porte un. */
         private const val MANUFACTURER_CODE_START = 0x013F
@@ -197,8 +205,7 @@ data class CartridgeHeader(
                 ramSizeBytes = if (hasRam || mbc == MbcType.MBC2) ramSize else 0,
                 region = region,
                 cgbFlag = cgbFlag,
-                supportsCgb = cgbFlag == 0x80 || cgbFlag == 0xC0,
-                requiresCgb = cgbFlag == 0xC0,
+                cartridgeMode = GameBoyCartridgeMode.fromCgbFlag(cgbFlag),
                 headerChecksum = declaredHeaderChecksum,
                 headerChecksumValid = computed == declaredHeaderChecksum,
                 globalChecksum = declaredGlobal,
