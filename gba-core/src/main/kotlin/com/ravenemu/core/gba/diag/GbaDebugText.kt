@@ -56,7 +56,40 @@ fun GbaDebugSnapshot.toDebugText(
             ),
         )
     }
+    builder.append('\n').append(videoLine())
     if (hasAnomalies) builder.append('\n').append(anomalyLine())
+    return builder.toString()
+}
+
+/**
+ * État des couches d'affichage : mode vidéo, plans actifs avec leur priorité,
+ * sprites et leur mode de projection, fenêtres, mélange.
+ *
+ * C'est la ligne qui répond à « pourquoi cet élément ne s'affiche-t-il pas ? ».
+ * Un plan absent de la liste n'est pas activé ; un plan présent mais invisible
+ * est masqué par une fenêtre, recouvert par une priorité plus forte, ou effacé
+ * par le mélange. Les trois se distinguent d'un coup d'œil.
+ */
+private fun GbaDebugSnapshot.videoLine(): String {
+    val builder = StringBuilder(64)
+    builder.append("m").append(dispcnt and 0x7)
+    if (dispcnt and 0x0080 != 0) builder.append(" BLANC")
+    for (bg in 0 until 4) {
+        if (bgEnabled(bg)) builder.append("  BG").append(bg).append('p').append(bgPriority(bg))
+    }
+    if (dispcnt and 0x1000 != 0) {
+        builder.append("  OBJ").append(if (dispcnt and 0x0040 != 0) "1D" else "2D")
+    }
+    val windows = StringBuilder(3)
+    if (dispcnt and 0x2000 != 0) windows.append('0')
+    if (dispcnt and 0x4000 != 0) windows.append('1')
+    if (dispcnt and 0x8000.toInt() != 0) windows.append('O')
+    if (windows.isNotEmpty()) builder.append("  WIN").append(windows)
+    when ((blendControl ushr 6) and 0x3) {
+        1 -> builder.append("  BLD alpha")
+        2 -> builder.append("  BLD clair")
+        3 -> builder.append("  BLD sombre")
+    }
     return builder.toString()
 }
 

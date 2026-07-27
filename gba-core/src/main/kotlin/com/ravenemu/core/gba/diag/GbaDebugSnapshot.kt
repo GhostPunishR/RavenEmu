@@ -49,6 +49,15 @@ data class GbaDebugSnapshot(
     val decompressionErrorCount: Int,
     /** Adresse du premier accès hors du plan mémoire, ou 0. */
     val firstUnsupportedAddress: Int,
+    /** `DISPCNT` : mode, plans actifs, sprites, mode de projection, fenêtres. */
+    val dispcnt: Int,
+    /** `BG0CNT` à `BG3CNT` : priorité et blocs de chaque plan. */
+    val bg0Control: Int,
+    val bg1Control: Int,
+    val bg2Control: Int,
+    val bg3Control: Int,
+    /** `BLDCNT` : couches sources et cibles du mélange, et son mode. */
+    val blendControl: Int,
     /** Millisecondes passées à composer l'affichage, trame écoulée. */
     val ppuMillis: Double,
     /** Millisecondes passées en transferts DMA, trame écoulée. */
@@ -56,6 +65,19 @@ data class GbaDebugSnapshot(
     /** Millisecondes passées à mixer l'audio, trame écoulée. */
     val apuMillis: Double,
 ) {
+    /** Priorité déclarée du plan [bg] (0 = le plus proche). */
+    fun bgPriority(bg: Int): Int = bgControl(bg) and 0x3
+
+    /** `true` si le plan [bg] est activé dans `DISPCNT`. */
+    fun bgEnabled(bg: Int): Boolean = dispcnt and (1 shl (8 + bg)) != 0
+
+    private fun bgControl(bg: Int): Int = when (bg) {
+        0 -> bg0Control
+        1 -> bg1Control
+        2 -> bg2Control
+        else -> bg3Control
+    }
+
     /** `true` si une anomalie au moins a été relevée depuis le chargement. */
     val hasAnomalies: Boolean
         get() = unsupportedSwiCount > 0 ||

@@ -168,6 +168,12 @@ class GbaCore(
             decompressionErrorCount =
                 diag.count(GbaDiagnostics.Event.DECOMPRESSION_ERROR),
             firstUnsupportedAddress = diag.firstUnsupportedAddress,
+            dispcnt = m.bus.read16(IO_BASE),
+            bg0Control = m.bus.read16(IO_BASE + 0x08),
+            bg1Control = m.bus.read16(IO_BASE + 0x0A),
+            bg2Control = m.bus.read16(IO_BASE + 0x0C),
+            bg3Control = m.bus.read16(IO_BASE + 0x0E),
+            blendControl = m.bus.read16(IO_BASE + 0x50),
             ppuMillis = diag.ppuNanosLastFrame / 1_000_000.0,
             dmaMillis = diag.dmaNanosLastFrame / 1_000_000.0,
             apuMillis = diag.apuNanosLastFrame / 1_000_000.0,
@@ -202,6 +208,9 @@ class GbaCore(
     }
 
     companion object {
+        /** Base des registres d'E/S, pour la lecture des états d'affichage. */
+        private const val IO_BASE = 0x0400_0000
+
         /** 240 points × 308 + intervalles ≈ 280 896 cycles par trame. */
         const val CYCLES_PER_FRAME = 280_896
 
