@@ -1,5 +1,6 @@
 package com.ravenemu.app.emulation
 
+import com.ravenemu.emulation.api.session.EmulationSession
 import android.content.Context
 import android.media.AudioAttributes
 import android.media.AudioFormat
@@ -32,6 +33,10 @@ class AndroidAudioSink(
     private var resampled = ShortArray(0)
     private val primer: AudioBufferPrimer
     private val track: AudioTrack
+
+    /** Passé à `true` par [unblock] : plus aucune écriture n'est tentée. */
+    @Volatile
+    private var stopped = false
 
     init {
         val outputFramesPerVideoFrame =
@@ -84,6 +89,7 @@ class AndroidAudioSink(
             // Le rééchantillonnage conserve toujours le débit natif du moteur.
             // Une variation du temps de rendu ne doit jamais modifier la hauteur
             // du son, en particulier sur les moteurs GB et GBC.
+            if (stopped) return
             val needed = resampler.maxOutput(count)
             if (resampled.size < needed) resampled = ShortArray(needed)
             val produced = resampler.resample(samples, count, resampled)
@@ -143,6 +149,24 @@ class AndroidAudioSink(
             track.flush()
             primer.reset(currentUnderrunCount())
             resampler.reset()
+        } catch (_: Exception) {
+        }
+    }
+
+    /**
+     * Débloque une écriture en cours et refuse les suivantes.
+     *
+     * `AudioTrack.write` en mode bloquant n'a pas d'interruption : elle rend la
+     * main quand la file se vide. `pause` puis `flush` la vident d'un coup, et
+     * [stopped] fait échouer les écritures suivantes — c'est ce qui permet à un
+     * arrêt de session d'aboutir dans son délai au lieu d'attendre la fin du
+     * tampon.
+     */
+    override fun unblock() {
+        stopped = true
+        try {
+            track.pause()
+            track.flush()
         } catch (_: Exception) {
         }
     }
