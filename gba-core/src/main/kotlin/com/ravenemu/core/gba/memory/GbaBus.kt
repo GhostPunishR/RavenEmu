@@ -352,7 +352,14 @@ class GbaBus(
      */
     private fun handleIoWrite(offset: Int, value: Int) {
         when (offset) {
-            in 0x028..0x02F, in 0x038..0x03F -> ppu?.onAffineReferenceWrite(offset)
+            // Matrice du plan affine : rien à notifier, le PPU la relit à chaque
+            // ligne. Seul le décompte sert, pour un diagnostic.
+            in 0x020..0x027 -> diagnostics.recordBg2MatrixWrite()
+            in 0x028..0x02F -> {
+                diagnostics.recordBg2ReferenceWrite()
+                ppu?.onAffineReferenceWrite(offset)
+            }
+            in 0x038..0x03F -> ppu?.onAffineReferenceWrite(offset)
             IE_LOW -> interrupts?.enable = value
             IF_LOW -> interrupts?.acknowledge(value)
             IME -> interrupts?.masterEnable = value and 1 != 0

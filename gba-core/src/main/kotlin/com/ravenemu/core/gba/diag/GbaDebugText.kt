@@ -84,18 +84,25 @@ private fun GbaDebugSnapshot.layerPixelLine(): String {
 
 /**
  * Cadrage du plan affine `BG2`, seul existant en modes 1 et 2 : point de
- * référence en pixels, puis échelles horizontale et verticale en virgule fixe
- * 8.8 (`0100` = échelle 1).
+ * référence en pixels, échelles horizontale et verticale en virgule fixe 8.8
+ * (`0100` = échelle 1), registre de contrôle brut, puis le nombre d'écritures du
+ * jeu vers la matrice et vers le point de référence.
  *
  * Un point de référence très éloigné, ou une échelle nulle, suffit à repousser
- * toute la couche hors de l'écran sans que rien d'autre ne le laisse voir.
+ * toute la couche hors de l'écran sans que rien d'autre ne le laisse voir. Les
+ * deux décomptes disent alors si le jeu a seulement tenté de l'écrire : à zéro,
+ * la divergence est dans son déroulement ; non nuls face à une matrice nulle,
+ * c'est l'écriture qui se perd.
  */
 private fun GbaDebugSnapshot.affineLine(): String =
-    "aff BG2 x%d y%d  pa%04X pd%04X".format(
+    "aff BG2 x%d y%d  pa%04X pd%04X  cnt%04X  w%d/%d".format(
         bg2ReferenceX,
         bg2ReferenceY,
         bg2ScaleX and 0xFFFF,
         bg2ScaleY and 0xFFFF,
+        bg2Control and 0xFFFF,
+        bg2MatrixWrites,
+        bg2ReferenceWrites,
     )
 
 /**

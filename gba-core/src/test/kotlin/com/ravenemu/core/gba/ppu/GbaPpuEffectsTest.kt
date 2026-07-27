@@ -298,6 +298,31 @@ class GbaPpuEffectsTest {
         assertEquals(0, ppu.layerPixels[4], "aucun sprite visible")
     }
 
+    /**
+     * Le décompte des écritures vers la matrice affine doit suivre toutes les
+     * largeurs d'accès : un jeu y écrit indifféremment par mot, demi-mot ou
+     * copie DMA, et un décompte aveugle à l'une d'elles mènerait droit à la
+     * mauvaise conclusion.
+     */
+    @Test
+    fun `les ecritures vers la matrice affine sont comptees quelle qu'en soit la largeur`() {
+        val (bus, _) = newPpu()
+        val diagnostics = bus.diagnostics
+        assertEquals(0, diagnostics.bg2MatrixWrites, "aucune écriture au départ")
+
+        bus.write16(0x0400_0020, 0x0100)          // BG2PA seul
+        assertEquals(1, diagnostics.bg2MatrixWrites)
+
+        bus.write32(0x0400_0024, 0x0100_0000)     // BG2PC et BG2PD d'un coup
+        assertEquals(3, diagnostics.bg2MatrixWrites)
+
+        // Le point de référence a son propre décompte, distinct de la matrice.
+        assertEquals(0, diagnostics.bg2ReferenceWrites)
+        bus.write32(0x0400_0028, 0)               // BG2X
+        assertEquals(2, diagnostics.bg2ReferenceWrites)
+        assertEquals(3, diagnostics.bg2MatrixWrites, "la matrice n'a pas bougé")
+    }
+
     /** Sans activation, le comptage reste à zéro : on ne paie pas ce qu'on ne mesure pas. */
     @Test
     fun `sans activation aucun pixel n'est compte`() {

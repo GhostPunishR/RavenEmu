@@ -186,6 +186,8 @@ class GbaCore(
             bg2ReferenceY = signed28(m.bus.read32(IO_BASE + 0x2C)) shr 8,
             bg2ScaleX = m.bus.read16(IO_BASE + 0x20),
             bg2ScaleY = m.bus.read16(IO_BASE + 0x26),
+            bg2MatrixWrites = diag.bg2MatrixWrites,
+            bg2ReferenceWrites = diag.bg2ReferenceWrites,
             ppuMillis = diag.ppuNanosLastFrame / 1_000_000.0,
             dmaMillis = diag.dmaNanosLastFrame / 1_000_000.0,
             apuMillis = diag.apuNanosLastFrame / 1_000_000.0,

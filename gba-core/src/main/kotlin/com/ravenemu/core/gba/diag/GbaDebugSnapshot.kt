@@ -69,6 +69,10 @@ data class GbaDebugSnapshot(
     /** `BG2PA` et `BG2PD` en virgule fixe 8.8 : `0x0100` = échelle 1. */
     val bg2ScaleX: Int,
     val bg2ScaleY: Int,
+    /** Écritures du jeu vers la matrice `BG2PA`–`BG2PD`. */
+    val bg2MatrixWrites: Int,
+    /** Écritures du jeu vers le point de référence `BG2X`/`BG2Y`. */
+    val bg2ReferenceWrites: Int,
     /** Millisecondes passées à composer l'affichage, trame écoulée. */
     val ppuMillis: Double,
     /** Millisecondes passées en transferts DMA, trame écoulée. */

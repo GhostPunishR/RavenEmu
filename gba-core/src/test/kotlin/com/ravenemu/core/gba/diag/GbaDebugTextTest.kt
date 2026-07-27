@@ -43,6 +43,8 @@ class GbaDebugTextTest {
         bg2ReferenceY: Int = 0,
         bg2ScaleX: Int = 0x0100,
         bg2ScaleY: Int = 0x0100,
+        bg2MatrixWrites: Int = 0,
+        bg2ReferenceWrites: Int = 0,
         ppuMillis: Double = 0.0,
         dmaMillis: Double = 0.0,
         apuMillis: Double = 0.0,
@@ -78,6 +80,8 @@ class GbaDebugTextTest {
         bg2ReferenceY = bg2ReferenceY,
         bg2ScaleX = bg2ScaleX,
         bg2ScaleY = bg2ScaleY,
+        bg2MatrixWrites = bg2MatrixWrites,
+        bg2ReferenceWrites = bg2ReferenceWrites,
         ppuMillis = ppuMillis,
         dmaMillis = dmaMillis,
         apuMillis = apuMillis,
@@ -267,7 +271,10 @@ class GbaDebugTextTest {
             bg2ScaleX = 0x0080,
             bg2ScaleY = 0x0100,
         ).toDebugText(fps = 60.0, frameTimeMs = 16.0)
-        assertTrue(affine.lines().any { it == "aff BG2 x-64 y32  pa0080 pd0100" }, affine)
+        assertTrue(
+            affine.lines().any { it == "aff BG2 x-64 y32  pa0080 pd0100  cnt0000  w0/0" },
+            affine,
+        )
 
         // Mode 0 : aucun plan affine, donc rien à publier.
         val text = snapshot(dispcnt = 0x0100).toDebugText(fps = 60.0, frameTimeMs = 16.0)

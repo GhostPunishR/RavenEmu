@@ -84,6 +84,30 @@ class GbaDiagnostics {
         if (counts[Event.UNSUPPORTED_ACCESS.ordinal] == 0) firstUnsupportedAddress = address
     }
 
+    /**
+     * Écritures vers `BG2PA`–`BG2PD`, la matrice du plan affine.
+     *
+     * Un plan affine activé dont la matrice reste nulle ne dessine rien. Ce
+     * décompte distingue les deux causes possibles, qui appellent des
+     * corrections opposées : à zéro, le jeu n'a jamais tenté de l'écrire et
+     * c'est son déroulement qui diverge ; non nul avec une matrice pourtant
+     * nulle, c'est l'écriture elle-même qui se perd.
+     */
+    var bg2MatrixWrites = 0
+        private set
+
+    /** Écritures vers `BG2X`/`BG2Y`, le point de référence du plan affine. */
+    var bg2ReferenceWrites = 0
+        private set
+
+    fun recordBg2MatrixWrite() {
+        bg2MatrixWrites++
+    }
+
+    fun recordBg2ReferenceWrite() {
+        bg2ReferenceWrites++
+    }
+
     /** Cycles écoulés dans l'attente d'interruption en cours. */
     var waitCycles = 0
         private set
@@ -202,6 +226,8 @@ class GbaDiagnostics {
         lastInterruptMask = 0
         audioUnderruns = 0
         firstUnsupportedAddress = 0
+        bg2MatrixWrites = 0
+        bg2ReferenceWrites = 0
         waitCycles = 0
         measuringTime = false
         ppuNanos = 0
