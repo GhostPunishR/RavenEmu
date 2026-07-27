@@ -31,6 +31,12 @@ class GbaDebugTextTest {
         missingInterrupt: Int = 0,
         decompressionError: Int = 0,
         firstUnsupportedAddress: Int = 0,
+        dispcnt: Int = 0,
+        bg0Control: Int = 0,
+        bg1Control: Int = 0,
+        bg2Control: Int = 0,
+        bg3Control: Int = 0,
+        blendControl: Int = 0,
         ppuMillis: Double = 0.0,
         dmaMillis: Double = 0.0,
         apuMillis: Double = 0.0,
@@ -55,6 +61,12 @@ class GbaDebugTextTest {
         missingInterruptCount = missingInterrupt,
         decompressionErrorCount = decompressionError,
         firstUnsupportedAddress = firstUnsupportedAddress,
+        dispcnt = dispcnt,
+        bg0Control = bg0Control,
+        bg1Control = bg1Control,
+        bg2Control = bg2Control,
+        bg3Control = bg3Control,
+        blendControl = blendControl,
         ppuMillis = ppuMillis,
         dmaMillis = dmaMillis,
         apuMillis = apuMillis,
@@ -111,6 +123,40 @@ class GbaDebugTextTest {
     }
 
     @Test
+    fun `l'etat des couches d'affichage est resume`() {
+        // Mode 0, BG0 et BG2 actifs, sprites en projection 1D, fenêtre 0,
+        // mélange alpha : de quoi expliquer un élément absent de l'écran.
+        val text = snapshot(
+            dispcnt = 0x0000 or 0x0100 or 0x0400 or 0x1000 or 0x0040 or 0x2000,
+            bg0Control = 2,
+            bg2Control = 0,
+            blendControl = 1 shl 6,
+        ).toDebugText(fps = 60.0, frameTimeMs = 16.0)
+        assertTrue("m0" in text, text)
+        assertTrue("BG0p2" in text, text)
+        assertTrue("BG2p0" in text, text)
+        assertFalse("BG1" in text, "BG1 n'est pas activé : il ne doit pas être listé")
+        assertTrue("OBJ1D" in text, text)
+        assertTrue("WIN0" in text, text)
+        assertTrue("BLD alpha" in text, text)
+    }
+
+    @Test
+    fun `un ecran blanc force est signale`() {
+        val text = snapshot(dispcnt = 0x0080).toDebugText(fps = 60.0, frameTimeMs = 16.0)
+        assertTrue("BLANC" in text, text)
+    }
+
+    @Test
+    fun `sans sprites ni fenetre la ligne video reste sobre`() {
+        val text = snapshot(dispcnt = 0x0100).toDebugText(fps = 60.0, frameTimeMs = 16.0)
+        assertTrue("BG0p0" in text, text)
+        assertFalse("OBJ" in text, text)
+        assertFalse("WIN" in text, text)
+        assertFalse("BLD" in text, text)
+    }
+
+    @Test
     fun `seules les anomalies non nulles sont listees`() {
         val text = snapshot(unsupportedSwi = 3, decompressionError = 1)
             .toDebugText(fps = 60.0, frameTimeMs = 5.0)
@@ -147,8 +193,9 @@ class GbaDebugTextTest {
     }
 
     @Test
-    fun `le texte d'un moteur reel est complet et tient en sept lignes`() {
-        // Hors mesure : pas de ligne de répartition du temps.
+    fun `le texte d'un moteur reel contient toutes les rubriques`() {
+        // Hors mesure : pas de ligne de répartition du temps, mais la ligne
+        // d'état vidéo est toujours présente.
         val core = GbaCore()
         core.loadRom(RealisticRom.bootSequence())
         val framebuffer = IntArray(core.video.pixelCount)
@@ -156,7 +203,14 @@ class GbaDebugTextTest {
 
         val text = assertNotNull(core.debugSnapshot()).toDebugText(59.7, 4.2)
         val lines = text.lines()
-        assertTrue(lines.size == 7, "sept lignes attendues sans anomalie, obtenu :\n$text")
+        // Le contenu plutôt que le nombre de lignes : compter les lignes ne
+        // protège rien et casse dès qu'une mesure s'ajoute.
+        assertTrue(lines.any { it.startsWith("59.7 FPS") }, text)
+        assertTrue(lines.any { it.startsWith("PC ") }, text)
+        assertTrue(lines.any { it.startsWith("VCOUNT") }, text)
+        assertTrue(lines.any { it.startsWith("FIFO") }, text)
+        assertTrue(lines.any { it.startsWith("m3") }, "l'état vidéo doit figurer :\n$text")
+        assertFalse(lines.any { it.contains("cpu ") }, "hors mesure : pas de répartition")
         assertTrue(lines.none { it.isBlank() }, text)
     }
 }
