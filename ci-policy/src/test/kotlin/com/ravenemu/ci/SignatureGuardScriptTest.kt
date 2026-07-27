@@ -97,6 +97,25 @@ class SignatureGuardScriptTest {
     }
 
     @Test
+    fun `une empreinte recopiee depuis keytool est acceptee`() {
+        assumeTrue(bash.canExecute())
+        // `keytool -list -v` affiche « AB:CD:EF:... » en majuscules, alors que
+        // `apksigner` produit des minuscules d'un seul tenant. Les deux
+        // désignent le même certificat : imposer un format de recopie ferait
+        // échouer la publication pour une raison purement cosmétique.
+        assertEquals(0, run(provenance(), certAttendu = formatKeytool(CERT_TEST)))
+        assertEquals(
+            1,
+            run(provenance(cert = CERT_RELEASE), certRelease = formatKeytool(CERT_RELEASE)),
+            "Le refus du certificat Release doit valoir dans les deux formats",
+        )
+    }
+
+    /** Empreinte au format `keytool` : paires hexadécimales majuscules séparées. */
+    private fun formatKeytool(empreinte: String): String =
+        empreinte.chunked(2).joinToString(":").uppercase()
+
+    @Test
     fun `une rotation de la clé Test arrête la publication`() {
         assumeTrue(bash.canExecute())
         assertEquals(1, run(provenance(cert = CERT_AUTRE), certAttendu = CERT_TEST))

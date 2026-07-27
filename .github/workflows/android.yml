@@ -245,19 +245,28 @@ jobs:
           # shellcheck disable=SC1090
           source "$provenance"
 
+          # `keytool` affiche l'empreinte en majuscules séparées par des
+          # deux-points, `apksigner` en minuscules d'un seul tenant. Les deux
+          # désignent le même certificat : on compare des valeurs normalisées
+          # plutôt que d'imposer un format de recopie.
+          normaliser() { local v="${1//:/}"; echo "${v,,}"; }
+          cert_sha256="$(normaliser "$cert_sha256")"
+          TEST_CERT_ATTENDU="$(normaliser "$TEST_CERT_ATTENDU")"
+          RELEASE_CERT="$(normaliser "$RELEASE_CERT")"
+
           if [[ "$signature_source" != "cle-test-dediee" ]]; then
             echo "::error::L'APK a été signé avec « $signature_source » au lieu de la clé Test dédiée."
             exit 1
           fi
 
-          if [[ -n "$RELEASE_CERT" && "${cert_sha256,,}" == "${RELEASE_CERT,,}" ]]; then
+          if [[ -n "$RELEASE_CERT" && "$cert_sha256" == "$RELEASE_CERT" ]]; then
             echo "::error::L'APK Test est signé avec le certificat Release. Les deux clés doivent rester distinctes."
             exit 1
           fi
 
           if [[ -z "$TEST_CERT_ATTENDU" ]]; then
             echo "::warning::Variable RAVENEMU_TEST_CERT_SHA256 non définie : la stabilité de la signature n'est pas vérifiée. Empreinte observée : $cert_sha256"
-          elif [[ "${cert_sha256,,}" != "${TEST_CERT_ATTENDU,,}" ]]; then
+          elif [[ "$cert_sha256" != "$TEST_CERT_ATTENDU" ]]; then
             echo "::error::Certificat Test inattendu ($cert_sha256). Une rotation de clé casserait la mise à jour des APK déjà installés."
             exit 1
           fi
@@ -412,7 +421,8 @@ jobs:
             exit 1
           fi
 
-          if [[ -n "$TEST_CERT" && "${cert_sha256,,}" == "${TEST_CERT,,}" ]]; then
+          normaliser() { local v="${1//:/}"; echo "${v,,}"; }
+          if [[ -n "$TEST_CERT" && "$(normaliser "$cert_sha256")" == "$(normaliser "$TEST_CERT")" ]]; then
             echo "::error::L'APK Release est signé avec le certificat Test. Les deux clés doivent rester distinctes."
             exit 1
           fi

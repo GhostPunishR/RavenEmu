@@ -51,11 +51,62 @@ S'y ajoutent deux **variables** de dépôt (`Settings → Secrets and variables 
 | `RAVENEMU_TEST_CERT_SHA256` | Empreinte attendue du certificat Test. La publication échoue si l'APK est signé autrement — une rotation de clé accidentelle est ainsi bloquée avant diffusion. |
 | `RAVENEMU_RELEASE_CERT_SHA256` | Empreinte du certificat Release. Sert à vérifier que les deux canaux n'utilisent pas la même clé. |
 
-Relever une empreinte pour renseigner ces variables :
+### Créer la clé Test, pas à pas
+
+À faire une seule fois. `keytool` est fourni avec le JDK.
+
+**1. Générer le keystore.** Choisissez un mot de passe et notez-le : il n'est récupérable nulle part.
 
 ```bash
-keytool -list -v -keystore ravenemu-test.jks -alias <alias> | grep 'SHA256:'
+keytool -genkeypair -v \
+  -keystore ravenemu-test.jks -storetype PKCS12 \
+  -alias ravenemu-test \
+  -keyalg RSA -keysize 4096 -validity 10000 \
+  -dname "CN=RavenEmu Test, O=RavenEmu, C=FR"
 ```
+
+`-validity 10000` couvre environ 27 ans. Une clé expirée ne permet plus de publier de mise à jour.
+
+> ⚠️ **Sauvegardez ce fichier et son mot de passe hors du dépôt et hors de la machine de développement.** Les perdre signifie ne plus jamais pouvoir mettre à jour un APK Test déjà installé : Android refuse une mise à jour dont le certificat a changé. Il faudrait alors demander à chacun de désinstaller.
+
+**2. Encoder le keystore en base64**, pour le transporter dans un secret GitHub :
+
+```bash
+# Linux
+base64 -w0 ravenemu-test.jks > ravenemu-test.jks.b64
+
+# macOS
+base64 -i ravenemu-test.jks | tr -d '\n' > ravenemu-test.jks.b64
+```
+
+```powershell
+# Windows, PowerShell
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("ravenemu-test.jks")) |
+  Set-Content -NoNewline ravenemu-test.jks.b64
+```
+
+**3. Créer les quatre secrets** dans `Settings → Secrets and variables → Actions → Secrets → New repository secret` :
+
+| Secret | Valeur |
+|---|---|
+| `RAVENEMU_TEST_KEYSTORE_BASE64` | le contenu de `ravenemu-test.jks.b64`, en une seule ligne |
+| `RAVENEMU_TEST_KEYSTORE_PASSWORD` | le mot de passe du keystore |
+| `RAVENEMU_TEST_KEY_ALIAS` | `ravenemu-test` |
+| `RAVENEMU_TEST_KEY_PASSWORD` | le mot de passe de la clé (identique au précédent si `keytool` ne l'a pas demandé séparément) |
+
+**4. Supprimer le fichier `.b64`** une fois les secrets créés. Il contient le keystore en clair.
+
+**5. Pousser sur `main`.** La publication réussit alors, en signalant simplement que l'empreinte de référence n'est pas encore fixée.
+
+**6. Relever l'empreinte du certificat** dans le résumé du job « Tests, lint et APK Test » (tableau « APK Test », ligne « SHA-256 du certificat »), puis la déclarer dans `Settings → Secrets and variables → Actions → Variables` sous le nom `RAVENEMU_TEST_CERT_SHA256`.
+
+C'est la voie la plus sûre : la valeur affichée est celle du certificat réellement utilisé pour signer. La même empreinte peut aussi être relevée depuis le keystore :
+
+```bash
+keytool -list -v -keystore ravenemu-test.jks -alias ravenemu-test | grep 'SHA256:'
+```
+
+Les deux formats sont acceptés : `keytool` affiche des majuscules séparées par des deux-points, `apksigner` des minuscules d'un seul tenant, et la CI normalise avant de comparer.
 
 Le job de publication Test **échoue explicitement** si l'un des secrets `RAVENEMU_TEST_*` manque, plutôt que de diffuser un APK signé par une clé instable. De même, un tag `v*` sans secret Release fait échouer le job Release au lieu de terminer en succès sans rien publier.
 
