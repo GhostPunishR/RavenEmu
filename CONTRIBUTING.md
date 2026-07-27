@@ -69,7 +69,7 @@ Le code exécuté pendant une construction ne se limite pas au dépôt : il y a 
 
 La CI relève l'empreinte de la distribution effectivement utilisée : elle échoue si la propriété est renseignée et ne correspond pas, et publie la valeur observée dans le résumé du job si elle est absente. Cette valeur est une aide au remplissage, pas une source de confiance : c'est le site officiel qui fait foi.
 
-**Actions GitHub.** Elles sont épinglées par SHA de commit, jamais par étiquette de version : une étiquette peut être redéplacée, un SHA non.
+**Actions GitHub.** Elles sont épinglées par SHA de commit, jamais par étiquette de version : une étiquette peut être redéplacée, un SHA non. Dependabot surveille les deux écosystèmes (`gradle` et `github-actions`) et propose les mises à jour, ce qui évite que l'épinglage fige indéfiniment une version vulnérable.
 
 **Dépendances.** La vérification d'intégrité de Gradle (`gradle/verification-metadata.xml`) n'est pas encore activée. Elle exige des métadonnées couvrant **toutes** les configurations résolues, donc une machine disposant du SDK Android — sans lui, les modules Android sont exclus du build et les métadonnées produites seraient incomplètes, ce qui ferait échouer la CI à la première dépendance manquante. Pour la mettre en place :
 

@@ -1,0 +1,49 @@
+# Mises à jour de dépendances proposées automatiquement, en pull request.
+#
+# Deux écosystèmes sont surveillés, pour deux risques distincts :
+#
+# - `gradle` couvre le catalogue de versions (gradle/libs.versions.toml), les
+#   fichiers de build et le wrapper : c'est ce qui entre dans l'APK publié ;
+# - `github-actions` couvre les actions tierces du workflow. Elles sont
+#   épinglées par SHA, donc figées — et donc jamais corrigées si personne ne
+#   les met à jour. Dependabot lève exactement cette contrepartie : il propose
+#   le SHA suivant et rappelle la version qu'il désigne.
+version: 2
+
+updates:
+  - package-ecosystem: gradle
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "05:00"
+      timezone: Europe/Paris
+    open-pull-requests-limit: 5
+    commit-message:
+      # Commits conventionnels et en français, comme le reste du dépôt.
+      prefix: "build(deps)"
+    labels:
+      - dépendances
+    groups:
+      # Les bibliothèques AndroidX changent de version ensemble ; les traiter
+      # une par une multiplierait les pull requests sans rien ajouter.
+      androidx:
+        patterns:
+          - "androidx.*"
+      kotlin:
+        patterns:
+          - "org.jetbrains.kotlin*"
+          - "org.jetbrains.kotlinx*"
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "05:00"
+      timezone: Europe/Paris
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci(deps)"
+    labels:
+      - dépendances
