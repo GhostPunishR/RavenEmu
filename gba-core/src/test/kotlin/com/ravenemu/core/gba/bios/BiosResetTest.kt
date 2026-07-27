@@ -114,4 +114,46 @@ class BiosResetTest {
         const val TIMER_CONTROL = 0x102
         const val SERIAL_DATA = 0x120
     }
+
+    // ---- Matrices des plans affines ----
+
+    private fun matrix(m: GbaMachine, base: Int) = listOf(
+        m.bus.read16(0x0400_0000 + base),
+        m.bus.read16(0x0400_0000 + base + 2),
+        m.bus.read16(0x0400_0000 + base + 4),
+        m.bus.read16(0x0400_0000 + base + 6),
+    )
+
+    /**
+     * Une matrice affine nulle réduit toute la couche à un point : elle
+     * n'affiche rien. Les registres ne partent donc pas de zéro, et des jeux
+     * commerciaux en dépendent sans jamais les écrire.
+     */
+    @Test
+    fun `les matrices affines valent l'identite a l'allumage`() {
+        val m = GbaMachine(SyntheticRom.build())
+        assertEquals(listOf(0x0100, 0, 0, 0x0100), matrix(m, 0x20), "BG2")
+        assertEquals(listOf(0x0100, 0, 0, 0x0100), matrix(m, 0x30), "BG3")
+    }
+
+    /**
+     * `RegisterRamReset` remet les registres d'affichage à zéro — sauf ces
+     * matrices, qui reviennent à l'identité. Les mettre à zéro éteindrait un plan
+     * affine que le jeu croit configuré.
+     */
+    @Test
+    fun `la remise a zero des registres ramene les matrices a l'identite`() {
+        val m = GbaMachine(SyntheticRom.build())
+        // Le jeu impose sa propre transformation, puis demande la remise à zéro.
+        m.bus.write16(0x0400_0020, 0x0080)
+        m.bus.write16(0x0400_0026, 0x0040)
+        m.bus.write16(0x0400_0000, 0x1234)
+
+        m.cpu.state.regs[0] = 0xFF // tout remettre à zéro
+        m.bios.handleSwi(0x01)
+
+        assertEquals(0, m.bus.read16(0x0400_0000), "l'affichage doit bien être remis à zéro")
+        assertEquals(listOf(0x0100, 0, 0, 0x0100), matrix(m, 0x20), "BG2")
+        assertEquals(listOf(0x0100, 0, 0, 0x0100), matrix(m, 0x30), "BG3")
+    }
 }

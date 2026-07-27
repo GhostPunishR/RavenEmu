@@ -334,4 +334,33 @@ class GbaPpuEffectsTest {
 
         assertTrue(ppu.layerPixels.all { it == 0 }, ppu.layerPixels.toList().toString())
     }
+
+    /**
+     * Un plan affine dont le jeu n'écrit **jamais** la matrice doit s'afficher à
+     * l'échelle 1. Pokémon Rouge Feu en dépend : il active un plan affine pour
+     * l'image du professeur, lui fixe son point de référence, et ne touche jamais
+     * `BG2PA`–`BG2PD`. Avec une matrice partie de zéro, la couche se réduit à un
+     * point et le professeur n'apparaît pas.
+     */
+    @Test
+    fun `un plan affine s'affiche sans que le jeu ecrive sa matrice`() {
+        val (bus, ppu) = newPpu()
+        // La carte doit être **non uniforme**, sinon une matrice nulle — qui
+        // ramène tout l'écran sur la tuile (0,0) — donnerait la même couleur
+        // partout et le test ne prouverait rien.
+        reg(bus, 0x00, 0x0402)   // mode 2 + BG2
+        reg(bus, 0x0C, 0x0004)   // charBase 1, taille 128 px
+        for (i in 0 until 256) bus.vram[i] = 2   // partout la tuile 2
+        bus.vram[0] = 1                          // sauf le coin, tuile 1
+        for (i in 0 until 64) bus.vram[0x4040 + i] = 1
+        for (i in 0 until 64) bus.vram[0x4080 + i] = 2
+        palette(bus, 0, blue)
+        palette(bus, 1, green)
+        palette(bus, 2, red)
+
+        renderFrame(ppu)
+        assertEquals(GbaPpu.bgr555ToArgb(green), pixel(ppu, 0, 0), "coin haut-gauche")
+        // Sans transformation, ce point resterait sur la tuile du coin.
+        assertEquals(GbaPpu.bgr555ToArgb(red), pixel(ppu, 100, 100), "ailleurs sur la carte")
+    }
 }
