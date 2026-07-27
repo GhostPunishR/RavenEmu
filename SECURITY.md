@@ -7,10 +7,12 @@ La sécurité de RavenEmu, de ses utilisateurs et de sa chaîne de construction 
 | Version | Prise en charge |
 |---|---|
 | Branche `main` | Oui |
-| Préversion `debug-latest` | Tests uniquement |
+| Préversion `test-latest` | Tests uniquement |
 | Anciennes constructions | Non |
 
-L'APK Debug utilise une signature de développement et ne doit pas être considéré comme une version stable.
+La préversion `debug-latest` n'existe plus. Le seul APK publié est l'APK Test, signé par une clé dédiée, distincte de celle des versions Release ; il sert aux essais et ne constitue pas une version stable.
+
+Un APK Debug se construit localement, ne circule pas et n'est couvert par aucune de ces garanties.
 
 ## Signaler une vulnérabilité
 
@@ -57,6 +59,13 @@ N'effectuez pas de test susceptible de dégrader un service, d'accéder aux donn
 ## Conseils aux utilisateurs
 
 - Téléchargez RavenEmu uniquement depuis le dépôt officiel.
-- Vérifiez l'empreinte SHA-256 publiée avec l'APK Debug.
+- Vérifiez l'empreinte SHA-256 publiée à côté de l'APK Test.
+- Vérifiez le certificat de signature. Son empreinte est publiée dans les notes de chaque préversion et **ne change pas** d'une version à l'autre : si elle change, l'APK ne vient pas de ce dépôt.
+
+  ```bash
+  sha256sum -c RavenEmu-test.apk.sha256
+  apksigner verify --print-certs RavenEmu-test.apk
+  ```
+
 - N'installez pas un APK modifié provenant d'une source inconnue.
 - Utilisez uniquement des ROM, BIOS et contenus que vous êtes autorisé à posséder et à employer.

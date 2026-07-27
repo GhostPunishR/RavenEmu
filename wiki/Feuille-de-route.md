@@ -12,7 +12,7 @@ Cette page présente les priorités générales. Les issues et pull requests res
 - profils d'écran monochrome;
 - sauvegardes `.sav` et états instantanés;
 - moteur Game Boy Advance intégré;
-- APK Debug publié automatiquement.
+- APK Test publié automatiquement, signé par une clé dédiée et stable.
 
 ## Priorités actuelles
 

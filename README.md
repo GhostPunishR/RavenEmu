@@ -12,13 +12,34 @@ Les moteurs sont écrits en Kotlin pour le projet à partir de documentation tec
 
 ## Télécharger
 
-La CI publie automatiquement un APK de test après chaque construction réussie de `main`.
+La CI publie automatiquement un APK de test après chaque construction réussie de `main`, **à condition que la clé de signature Test du projet soit configurée** : sans elle, la publication est refusée plutôt que de diffuser un APK dont la signature changerait à chaque construction. Voir [RELEASING.md](RELEASING.md#secrets-et-variables-de-signature).
 
 ### [Télécharger le dernier APK Test](https://github.com/GhostPunishR/RavenEmu/releases/download/test-latest/RavenEmu-test.apk)
 
 L'empreinte SHA-256 est disponible dans le fichier [RavenEmu-test.apk.sha256](https://github.com/GhostPunishR/RavenEmu/releases/download/test-latest/RavenEmu-test.apk.sha256).
 
-L'APK Test utilise une signature de développement, conserve les diagnostics et permet à Android d'optimiser le moteur. Il sert aux essais et ne remplace pas une version Release signée. L'APK Debug reste réservé aux développeurs et n'est pas publié.
+L'APK Test conserve les diagnostics et laisse Android optimiser le moteur. Il sert aux essais et ne remplace pas une version Release. Le tag `test-latest` est mobile : le lien reste le même, le fichier change à chaque construction de `main`.
+
+### Trois constructions, trois usages
+
+| Construction | Package | Signature | Publiée | Pour quoi |
+|---|---|---|---|---|
+| **Test** | `com.ravenemu.app.profil` | Clé Test dédiée, stable | Oui, `test-latest` | Essais et mesures de compatibilité |
+| Debug | `com.ravenemu.app.debug` | Clé de débogage locale | Non | Développement, avec débogueur |
+| Release | `com.ravenemu.app` | Clé Release, distincte de la clé Test | Sur tag `v*` | Version stable |
+
+Les trois s'installent côte à côte : leurs identifiants d'application diffèrent. L'APK Test est signé par une **clé dédiée**, jamais celle des versions Release — un APK Test compromis ne peut donc pas se faire passer pour une mise à jour de l'application publiée.
+
+### Vérifier ce que vous installez
+
+L'empreinte du certificat de signature est publiée dans les notes de chaque préversion et **reste identique** d'une version Test à l'autre. C'est ce qui permet de mettre à jour l'application sans la désinstaller.
+
+```bash
+sha256sum -c RavenEmu-test.apk.sha256
+apksigner verify --print-certs RavenEmu-test.apk
+```
+
+Si l'empreinte du certificat a changé, n'installez pas : soit la clé du projet a tourné — ce qui serait annoncé —, soit l'APK ne vient pas de ce dépôt.
 
 RavenEmu ne fournit aucun jeu. Utilisez uniquement des copies que vous êtes autorisé à employer ou des homebrews librement distribués.
 
@@ -115,7 +136,9 @@ cd RavenEmu
 ./gradlew assembleDebug
 ```
 
-L'APK Test est produit dans `app/build/outputs/apk/profil/`. L'APK Debug local reste dans `app/build/outputs/apk/debug/`.
+L'APK Test est produit dans `app/build/outputs/apk/profil/`, l'APK Debug dans `app/build/outputs/apk/debug/`.
+
+Construire l'APK Test en local ne demande **aucun secret** : sans la clé Test du projet, la construction retombe sur la clé de débogage. L'APK obtenu est utilisable pour soi, mais la CI refuse de publier un APK signé autrement que par la clé dédiée. Les détails sont dans [RELEASING.md](RELEASING.md).
 
 ## Documentation
 
@@ -153,7 +176,20 @@ L'APK Test est produit dans `app/build/outputs/apk/profil/`. L'APK Debug local r
 - Certains détails audio, dont `SOUNDBIAS`, restent simplifiés
 - Chargement d'un BIOS externe non pris en charge
 
-Les états instantanés utilisent le format versionné `RVNS`. Ils ne sont pas compatibles avec les états d'autres émulateurs et une évolution du format peut rendre un ancien état illisible.
+### Sauvegardes et états
+
+- Une sauvegarde `.sav` reproduit la mémoire brute de la cartouche : ce format ne dépend pas de RavenEmu et reste stable dans le temps. C'est le support à privilégier pour conserver une progression.
+- Un état instantané utilise le format versionné `RVNS`, propre à RavenEmu. Il n'est pas compatible avec les états d'autres émulateurs, et une évolution du moteur peut rendre un ancien état illisible : il est alors **refusé**, jamais réinterprété au risque de produire un comportement faux.
+- Un état refusé laisse la partie en cours intacte et jouable.
+- Un état ne peut être chargé ni sur une autre ROM, ni sur une autre console : l'empreinte de la ROM et l'identifiant de console sont inscrits dans le fichier et vérifiés.
+
+Voir [Sauvegardes et états](https://github.com/GhostPunishR/RavenEmu/wiki/Sauvegardes-et-etats) pour le détail.
+
+### Distribution
+
+- Aucune version numérotée n'est encore publiée : seul l'APK Test l'est, et il n'est pas une version stable.
+- La compatibilité des jeux commerciaux n'est validée qu'au cas par cas ; consultez la [matrice de compatibilité](https://github.com/GhostPunishR/RavenEmu/wiki/Compatibilite-des-jeux).
+- La vérification d'intégrité des dépendances Gradle n'est pas encore activée ; le wrapper et sa distribution, eux, sont épinglés et validés à chaque construction.
 
 ## Contribuer
 

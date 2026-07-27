@@ -20,7 +20,7 @@ Voir [[Installation]].
 
 ## Écran noir
 
-- utilisez la dernière version Debug;
+- utilisez le dernier APK Test;
 - attendez quelques secondes au premier lancement;
 - vérifiez la console détectée;
 - testez une autre copie obtenue légalement;
@@ -35,7 +35,7 @@ Le moteur Game Boy Advance reste expérimental. Un écran noir peut être une in
 - fermez les applications en arrière-plan;
 - testez avec l'appareil suffisamment chargé;
 - activez la surcouche pour relever les images par seconde et le temps de trame;
-- n'utilisez pas l'APK Debug pour comparer une performance finale de production;
+- ne comparez pas une performance mesurée sur l'APK Debug à celle d'une version de production;
 - indiquez le modèle exact de l'appareil dans le rapport.
 
 ## Sauvegarde absente

@@ -32,7 +32,7 @@ La bibliothèque propose:
 
 - recherche;
 - tri;
-- filtre par console;
+- filtre par console, avec deux entrées supplémentaires pour les cartouches Game Boy monochromes et couleur;
 - vue grille ou liste;
 - détection des fichiers ajoutés, déplacés ou supprimés;
 - pochettes choisies par l'utilisateur ou placées près des jeux.
