@@ -23,6 +23,7 @@ import com.ravenemu.app.library.RomAdapter
 import com.ravenemu.app.settings.SettingsActivity
 import com.ravenemu.core.gba.save.GbaSaveType
 import com.ravenemu.emulation.api.ConsoleType
+import com.ravenemu.romlibrary.LibraryFilter
 import com.ravenemu.romlibrary.RomEntry
 import com.ravenemu.romlibrary.RomIndex
 import com.ravenemu.settings.AppSettings
@@ -154,11 +155,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun visibleEntries(): List<RomEntry> {
-        var entries = index.entries
-        val consoleFilter = settings.libraryConsoleFilter
-        if (consoleFilter != "all") {
-            entries = entries.filter { it.console.name == consoleFilter }
-        }
+        var entries = LibraryFilter.apply(index.entries, settings.libraryConsoleFilter)
         if (searchQuery.isNotBlank()) {
             val query = searchQuery.trim()
             entries = entries.filter {
@@ -248,7 +245,7 @@ class MainActivity : AppCompatActivity() {
     private fun showDetails(entry: RomEntry) {
         val details = buildString {
             appendLine(entry.fileName)
-            appendLine("Console : ${entry.console.displayName}")
+            appendLine("Console : ${entry.platformLabel}")
             appendLine("${entry.sizeBytes / 1024} Kio")
             if (entry.console == ConsoleType.GAME_BOY_ADVANCE) {
                 if (entry.gameCode.isNotBlank()) appendLine("Code jeu : ${entry.gameCode}")
@@ -323,6 +320,10 @@ class MainActivity : AppCompatActivity() {
             }
             R.id.action_filter_all -> applyConsoleFilter("all")
             R.id.action_filter_gb -> applyConsoleFilter(ConsoleType.GAME_BOY.name)
+            R.id.action_filter_gb_dmg ->
+                applyConsoleFilter(LibraryFilter.GAME_BOY_MONOCHROME_CARTRIDGES)
+            R.id.action_filter_gb_cgb ->
+                applyConsoleFilter(LibraryFilter.GAME_BOY_COLOR_CARTRIDGES)
             R.id.action_filter_gba -> applyConsoleFilter(ConsoleType.GAME_BOY_ADVANCE.name)
             R.id.action_settings ->
                 startActivity(Intent(this, SettingsActivity::class.java))

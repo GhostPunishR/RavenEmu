@@ -1,9 +1,18 @@
 package com.ravenemu.emulation.api
 
 /**
- * Consoles connues de RavenEmu. Chaque console est servie par un module de
- * moteur dédié implémentant [EmulatorCore] ; l'application ne manipule que
- * cette énumération et les interfaces de ce module.
+ * Consoles connues de RavenEmu. Chaque entrée désigne **un cœur d'émulation**,
+ * pas un modèle de console commercialisé : le module `gameboy-core` couvre à
+ * lui seul la Game Boy et la Game Boy Color, et n'apparaît donc qu'une fois.
+ *
+ * Ce que la cartouche déclare — monochrome, compatible couleur, ou couleur
+ * exigée — est une métadonnée distincte, portée par
+ * `GameBoyCartridgeMode` dans `gameboy-core`. Confondre les deux amenait à
+ * choisir un moteur d'après une extension de fichier, alors que des `.gbc`
+ * contiennent des cartouches monochromes et des `.gb` des cartouches couleur.
+ *
+ * L'application ne manipule que cette énumération et les interfaces de ce
+ * module.
  */
 enum class ConsoleType(
     /** Nom affichable de la console. */
@@ -23,16 +32,25 @@ enum class ConsoleType(
      */
     val storageId: Int,
 ) {
-    // Le moteur Game Boy prend en charge les cartouches DMG et Game Boy
-    // Color ; les deux extensions sont donc indexées par le même cœur.
+    // Cœur Game Boy (module gameboy-core) : cartouches DMG et Game Boy Color,
+    // `.gb` comme `.gbc`. Le mode exact vient de l'en-tête, pas de l'extension.
     GAME_BOY("Game Boy", setOf("gb", "gbc"), storageId = 0),
-    GAME_BOY_COLOR("Game Boy Color", setOf("gbc", "gb"), storageId = 1),
 
     // Game Boy Advance : moteur ARM7TDMI dédié (module gba-core).
     GAME_BOY_ADVANCE("Game Boy Advance", setOf("gba"), storageId = 2),
     ;
 
     companion object {
+        /**
+         * Identifiants retirés, à ne jamais réattribuer.
+         *
+         * `1` désignait `GAME_BOY_COLOR`, une seconde entrée pour le cœur Game
+         * Boy. Elle a disparu au profit de la métadonnée de cartouche, mais des
+         * fichiers l'ayant enregistrée peuvent exister : réutiliser cette valeur
+         * ferait accepter un ancien état pour la mauvaise console.
+         */
+        val RETIRED_STORAGE_IDS: Set<Int> = setOf(1)
+
         /** Console portant [storageId], ou `null` si l'identifiant est inconnu. */
         fun fromStorageId(storageId: Int): ConsoleType? =
             entries.firstOrNull { it.storageId == storageId }

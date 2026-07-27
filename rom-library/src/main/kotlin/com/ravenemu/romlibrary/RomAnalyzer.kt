@@ -71,7 +71,7 @@ class GameBoyRomAnalyzer : RomAnalyzer {
                 romSizeBytes = header.romSizeBytes,
                 ramSizeBytes = header.ramSizeBytes,
                 region = header.region,
-                supportsCgb = header.supportsCgb,
+                cartridgeMode = header.cartridgeMode,
                 headerChecksumValid = header.headerChecksumValid,
                 fingerprints = fingerprints,
                 status = header.romStatus(),

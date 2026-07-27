@@ -23,6 +23,8 @@
     <string name="library_filter_console">Filtrer par console</string>
     <string name="library_filter_all">Toutes les consoles</string>
     <string name="library_filter_gb">Game Boy / Game Boy Color</string>
+    <string name="library_filter_gb_dmg">Game Boy (monochrome)</string>
+    <string name="library_filter_gb_cgb">Game Boy Color</string>
     <string name="library_filter_gba">Game Boy Advance</string>
     <string name="library_save_type">Type de sauvegarde</string>
     <string name="library_save_type_auto">Détection automatique</string>

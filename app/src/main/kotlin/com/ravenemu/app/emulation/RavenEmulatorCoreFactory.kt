@@ -25,12 +25,13 @@ class RavenEmulatorCoreFactory(
 
     override val supportedConsoles: Set<ConsoleType> = setOf(
         ConsoleType.GAME_BOY,
-        ConsoleType.GAME_BOY_COLOR,
         ConsoleType.GAME_BOY_ADVANCE,
     )
 
+    // Le cœur Game Boy sert toute la gamme : c'est l'en-tête de la cartouche,
+    // et non la console demandée, qui décide des fonctions couleur.
     override fun create(console: ConsoleType): EmulatorCore = when (console) {
-        ConsoleType.GAME_BOY, ConsoleType.GAME_BOY_COLOR -> GameBoyCore()
+        ConsoleType.GAME_BOY -> GameBoyCore()
         ConsoleType.GAME_BOY_ADVANCE -> GbaCore(
             forcedSaveType = forcedGbaSaveType
                 ?.let { name -> runCatching { GbaSaveType.valueOf(name) }.getOrNull() },
