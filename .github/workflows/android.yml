@@ -38,6 +38,13 @@ jobs:
         with:
           persist-credentials: false
 
+      # Le wrapper Gradle est un binaire versionné dans le dépôt : il s'exécute
+      # avant tout le reste et n'est relu par personne. Cette validation compare
+      # `gradle-wrapper.jar` aux empreintes publiées par Gradle, avant qu'il ne
+      # soit lancé — un jar substitué dans une contribution est arrêté ici.
+      - name: Valider le wrapper Gradle
+        uses: gradle/actions/wrapper-validation@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+
       - name: Installer Java
         uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
         with:
@@ -49,6 +56,38 @@ jobs:
 
       - name: Tests unitaires
         run: ./gradlew test
+
+      # Le wrapper valide, la distribution qu'il télécharge reste à contrôler.
+      # `distributionSha256Sum` s'en charge à chaque exécution, sur le poste des
+      # développeurs comme ici : le wrapper refuse une archive dont l'empreinte
+      # diffère. Reste à s'assurer que la valeur inscrite dans le dépôt est bien
+      # celle que Gradle publie — sans quoi on épinglerait avec conviction une
+      # archive substituée. Cette étape compare les deux.
+      - name: Contrôler l'empreinte de la distribution Gradle
+        run: |
+          properties=gradle/wrapper/gradle-wrapper.properties
+          url="$(sed -n 's/^distributionUrl=//p' "$properties" | sed 's/\\//g')"
+          attendu="$(sed -n 's/^distributionSha256Sum=//p' "$properties")"
+
+          if [[ -z "$attendu" ]]; then
+            echo "::error::distributionSha256Sum absent de $properties : la distribution Gradle n'est pas épinglée. Voir CONTRIBUTING.md."
+            exit 1
+          fi
+
+          # Empreinte publiée par Gradle à côté de l'archive. Une panne réseau ne
+          # doit pas faire échouer la construction : le wrapper vérifie déjà
+          # l'archive localement, ce contrôle-ci porte sur la déclaration.
+          officiel="$(curl -fsSL --retry 3 --max-time 30 "$url.sha256" || true)"
+          if [[ -z "$officiel" ]]; then
+            echo "::notice::Empreinte officielle indisponible ($url.sha256), comparaison ignorée."
+            exit 0
+          fi
+
+          if [[ "${attendu,,}" != "${officiel,,}" ]]; then
+            echo "::error::distributionSha256Sum ($attendu) ne correspond pas à l'empreinte publiée par Gradle ($officiel)."
+            exit 1
+          fi
+          echo "Distribution Gradle épinglée sur l'empreinte publiée par Gradle."
 
       - name: Lint
         run: ./gradlew lint

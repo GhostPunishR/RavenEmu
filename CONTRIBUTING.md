@@ -56,6 +56,33 @@ Commandes utiles :
 ./gradlew assembleDebug
 ```
 
+## Intégrité de la chaîne de construction
+
+Le code exécuté pendant une construction ne se limite pas au dépôt : il y a aussi le wrapper Gradle, la distribution qu'il télécharge, les actions GitHub et les dépendances. Voici ce qui protège chacun de ces maillons.
+
+**Wrapper Gradle.** `gradle/wrapper/gradle-wrapper.jar` est un binaire versionné, exécuté avant tout le reste et relu par personne. La CI le compare aux empreintes publiées par Gradle **avant** de le lancer : un jar substitué dans une contribution est arrêté là. Ne remplacez jamais ce fichier à la main ; utilisez `./gradlew wrapper --gradle-version <version>`.
+
+**Distribution Gradle.** `distributionUrl` doit rester sur `https://services.gradle.org`, et `validateDistributionUrl=true` interdit qu'on l'en détourne. `distributionSha256Sum` va plus loin : le wrapper refuse l'archive téléchargée si son empreinte diffère, sur chaque poste comme en CI.
+
+En changeant de version de Gradle, il faut mettre cette empreinte à jour :
+
+1. relever l'empreinte « Binary-only (-bin) ZIP Checksum » de la nouvelle version sur <https://gradle.org/release-checksums/> ;
+2. la reporter dans `gradle/wrapper/gradle-wrapper.properties`.
+
+La CI confronte ensuite la valeur inscrite à celle que Gradle publie à côté de l'archive : épingler une empreinte ne protège que si c'est la bonne, et une valeur recopiée depuis une archive déjà substituée épinglerait la substitution.
+
+**Actions GitHub.** Elles sont épinglées par SHA de commit, jamais par étiquette de version : une étiquette peut être redéplacée, un SHA non. Dependabot surveille les deux écosystèmes (`gradle` et `github-actions`) et propose les mises à jour, ce qui évite que l'épinglage fige indéfiniment une version vulnérable.
+
+**Dépendances.** La vérification d'intégrité de Gradle (`gradle/verification-metadata.xml`) n'est pas encore activée. Elle exige des métadonnées couvrant **toutes** les configurations résolues, donc une machine disposant du SDK Android — sans lui, les modules Android sont exclus du build et les métadonnées produites seraient incomplètes, ce qui ferait échouer la CI à la première dépendance manquante. Pour la mettre en place :
+
+```bash
+./gradlew --write-verification-metadata sha256 help
+```
+
+Le fichier produit doit être relu avant d'être versionné, et complété à chaque ajout de dépendance.
+
+Ces règles sont vérifiées automatiquement par les tests du module `ci-policy`.
+
 ## Règles de développement
 
 - Respectez le style du code existant.
