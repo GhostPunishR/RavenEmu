@@ -58,6 +58,17 @@ data class GbaDebugSnapshot(
     val bg3Control: Int,
     /** `BLDCNT` : couches sources et cibles du mélange, et son mode. */
     val blendControl: Int,
+    /**
+     * Pixels produits par chaque couche à la trame précédente, indexés `BG0`…
+     * `BG3` puis `OBJ`. Vide si le comptage n'est pas activé.
+     */
+    val layerPixels: IntArray,
+    /** `BG2X` et `BG2Y` en pixels : point de référence du plan affine. */
+    val bg2ReferenceX: Int,
+    val bg2ReferenceY: Int,
+    /** `BG2PA` et `BG2PD` en virgule fixe 8.8 : `0x0100` = échelle 1. */
+    val bg2ScaleX: Int,
+    val bg2ScaleY: Int,
     /** Millisecondes passées à composer l'affichage, trame écoulée. */
     val ppuMillis: Double,
     /** Millisecondes passées en transferts DMA, trame écoulée. */

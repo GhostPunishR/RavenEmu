@@ -41,6 +41,27 @@ class GbaPpu(private val bus: GbaBus) {
      */
     internal var renderEnabled = true
 
+    /**
+     * Compte les pixels que chaque couche produit. Réservé au diagnostic : c'est
+     * un incrément par pixel dessiné, qu'on ne paie pas quand on ne mesure pas.
+     */
+    var collectLayerStats = false
+
+    /**
+     * Pixels produits par chaque couche à la trame précédente, indexés `BG0`…
+     * `BG3` puis `OBJ`.
+     *
+     * Un zéro sur une couche pourtant activée est sans appel : elle n'a rien
+     * dessiné du tout, et l'élément qu'on y cherche est ailleurs — ou son décor
+     * n'est jamais arrivé en mémoire vidéo. Un nombre élevé sur une couche dont
+     * on ne voit rien dit l'inverse : elle dessine, mais quelque chose la
+     * recouvre.
+     */
+    val layerPixels = IntArray(5)
+
+    /** Comptage de la trame en cours, publié dans [layerPixels] à sa fin. */
+    private val layerPixelsPending = IntArray(5)
+
     // Tampons de composition d'une ligne (réutilisés, sans allocation par ligne).
     // Couche la plus proche de l'observateur, et celle juste derrière : le
     // mélange alpha combine ces deux niveaux.
@@ -161,7 +182,13 @@ class GbaPpu(private val bus: GbaBus) {
                 // le jeu écrit `BGxX`/`BGxY` pour l'image à venir, et les
                 // verrouiller avant son gestionnaire reviendrait à toujours
                 // afficher l'image précédente.
-                if (vcount == 0) reloadAffineReferencePoints()
+                if (vcount == 0) {
+                    reloadAffineReferencePoints()
+                    if (collectLayerStats) {
+                        layerPixelsPending.copyInto(layerPixels)
+                        layerPixelsPending.fill(0)
+                    }
+                }
                 if (vcount == SCREEN_HEIGHT) {
                     if (dispStatIrqEnabled(VBLANK_IRQ)) interrupts?.request(Interrupt.VBLANK)
                     dma?.triggerVBlank()
@@ -368,6 +395,7 @@ class GbaPpu(private val bus: GbaBus) {
      * dessinés du fond vers l'avant, un nouveau pixel est toujours plus proche.
      */
     private fun pushPixel(x: Int, color: Int, priority: Int, layerId: Int) {
+        if (collectLayerStats) layerPixelsPending[layerId]++
         if (!simpleComposition) {
             lineColor2[x] = lineColor[x]
             linePriority2[x] = linePriority[x]
@@ -676,6 +704,7 @@ class GbaPpu(private val bus: GbaBus) {
                     continue
                 }
                 if (objOpaque[screenX]) continue // un sprite d'index inférieur prime
+                if (collectLayerStats) layerPixelsPending[LAYER_ID_OBJ]++
                 objColor[screenX] = paletteColor(OBJ_PALETTE_BASE + colorIndex)
                 objPriority[screenX] = priority
                 objOpaque[screenX] = true

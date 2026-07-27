@@ -276,4 +276,37 @@ class GbaPpuEffectsTest {
         assertEquals(GbaPpu.bgr555ToArgb(blue), pixel(ppu, 200, 10), "haut de l'image")
         assertEquals(GbaPpu.bgr555ToArgb(green), pixel(ppu, 200, 120), "bas de l'image")
     }
+
+    // ---- Comptage des pixels par couche ----
+
+    /**
+     * Le comptage ne sert à rien s'il ne reflète pas le rendu. Ici la carte
+     * affine couvre 128 × 128 pixels de l'écran : le compte doit valoir
+     * exactement cela, ni la surface de l'écran ni zéro.
+     */
+    @Test
+    fun `le comptage par couche suit les pixels reellement dessines`() {
+        val (bus, ppu) = newPpu()
+        ppu.collectLayerStats = true
+        setupAffineBg(bus, wrap = false)
+
+        renderFrame(ppu) // trame comptée
+        renderFrame(ppu) // publication du comptage précédent
+
+        assertEquals(128 * 128, ppu.layerPixels[2], "BG2 affine")
+        assertEquals(0, ppu.layerPixels[0], "BG0 éteint")
+        assertEquals(0, ppu.layerPixels[4], "aucun sprite visible")
+    }
+
+    /** Sans activation, le comptage reste à zéro : on ne paie pas ce qu'on ne mesure pas. */
+    @Test
+    fun `sans activation aucun pixel n'est compte`() {
+        val (bus, ppu) = newPpu()
+        setupAffineBg(bus, wrap = false)
+
+        renderFrame(ppu)
+        renderFrame(ppu)
+
+        assertTrue(ppu.layerPixels.all { it == 0 }, ppu.layerPixels.toList().toString())
+    }
 }

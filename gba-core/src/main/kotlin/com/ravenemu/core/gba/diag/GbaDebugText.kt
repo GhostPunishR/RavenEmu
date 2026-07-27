@@ -57,9 +57,46 @@ fun GbaDebugSnapshot.toDebugText(
         )
     }
     builder.append('\n').append(videoLine())
+    if (layerPixels.isNotEmpty()) builder.append('\n').append(layerPixelLine())
+    if ((dispcnt and 0x7) in 1..2) builder.append('\n').append(affineLine())
     if (hasAnomalies) builder.append('\n').append(anomalyLine())
     return builder.toString()
 }
+
+/**
+ * Pixels réellement produits par chaque couche activée, à la trame précédente.
+ *
+ * C'est la mesure qui départage les deux explications d'un élément manquant.
+ * Une couche activée qui affiche `0` n'a rien dessiné : ni son décor ni ses
+ * tuiles ne sont arrivés là où le rendu les cherche. Une couche qui compte des
+ * milliers de pixels alors qu'on ne la voit pas dessine bel et bien, et c'est la
+ * composition qui l'efface.
+ */
+private fun GbaDebugSnapshot.layerPixelLine(): String {
+    val builder = StringBuilder(56)
+    builder.append("px")
+    for (bg in 0 until 4) {
+        if (bgEnabled(bg)) builder.append("  BG").append(bg).append(' ').append(layerPixels[bg])
+    }
+    if (dispcnt and 0x1000 != 0) builder.append("  OBJ ").append(layerPixels[4])
+    return builder.toString()
+}
+
+/**
+ * Cadrage du plan affine `BG2`, seul existant en modes 1 et 2 : point de
+ * référence en pixels, puis échelles horizontale et verticale en virgule fixe
+ * 8.8 (`0100` = échelle 1).
+ *
+ * Un point de référence très éloigné, ou une échelle nulle, suffit à repousser
+ * toute la couche hors de l'écran sans que rien d'autre ne le laisse voir.
+ */
+private fun GbaDebugSnapshot.affineLine(): String =
+    "aff BG2 x%d y%d  pa%04X pd%04X".format(
+        bg2ReferenceX,
+        bg2ReferenceY,
+        bg2ScaleX and 0xFFFF,
+        bg2ScaleY and 0xFFFF,
+    )
 
 /**
  * État des couches d'affichage : mode vidéo, plans actifs avec leur priorité,

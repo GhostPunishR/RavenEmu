@@ -3,6 +3,7 @@ package com.ravenemu.core.gba.diag
 import com.ravenemu.core.gba.GbaCore
 import com.ravenemu.core.gba.RealisticRom
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
@@ -37,6 +38,11 @@ class GbaDebugTextTest {
         bg2Control: Int = 0,
         bg3Control: Int = 0,
         blendControl: Int = 0,
+        layerPixels: IntArray = IntArray(0),
+        bg2ReferenceX: Int = 0,
+        bg2ReferenceY: Int = 0,
+        bg2ScaleX: Int = 0x0100,
+        bg2ScaleY: Int = 0x0100,
         ppuMillis: Double = 0.0,
         dmaMillis: Double = 0.0,
         apuMillis: Double = 0.0,
@@ -67,6 +73,11 @@ class GbaDebugTextTest {
         bg2Control = bg2Control,
         bg3Control = bg3Control,
         blendControl = blendControl,
+        layerPixels = layerPixels,
+        bg2ReferenceX = bg2ReferenceX,
+        bg2ReferenceY = bg2ReferenceY,
+        bg2ScaleX = bg2ScaleX,
+        bg2ScaleY = bg2ScaleY,
         ppuMillis = ppuMillis,
         dmaMillis = dmaMillis,
         apuMillis = apuMillis,
@@ -212,5 +223,54 @@ class GbaDebugTextTest {
         assertTrue(lines.any { it.startsWith("m3") }, "l'état vidéo doit figurer :\n$text")
         assertFalse(lines.any { it.contains("cpu ") }, "hors mesure : pas de répartition")
         assertTrue(lines.none { it.isBlank() }, text)
+    }
+
+    // ---- Pixels par couche et cadrage affine ----
+
+    @Test
+    fun `les pixels comptes n'apparaissent que pour les couches activees`() {
+        val text = snapshot(
+            dispcnt = 0x1300, // BG0, BG1 et OBJ ; BG2 et BG3 éteints
+            layerPixels = intArrayOf(8000, 38400, 0, 0, 2400),
+        ).toDebugText(fps = 60.0, frameTimeMs = 16.0)
+
+        val line = text.lines().first { it.startsWith("px") }
+        assertEquals("px  BG0 8000  BG1 38400  OBJ 2400", line)
+    }
+
+    /**
+     * La mesure qui compte : une couche activée dont le compte reste à zéro n'a
+     * rien dessiné, et c'est ce zéro qu'il faut pouvoir lire.
+     */
+    @Test
+    fun `une couche activee qui ne dessine rien affiche zero`() {
+        val text = snapshot(
+            dispcnt = 0x0401, // mode 1, BG2 activé
+            layerPixels = intArrayOf(0, 0, 0, 0, 0),
+        ).toDebugText(fps = 60.0, frameTimeMs = 16.0)
+
+        assertTrue(text.lines().any { it == "px  BG2 0" }, text)
+    }
+
+    @Test
+    fun `sans comptage aucune ligne de pixels n'est ajoutee`() {
+        val text = snapshot(dispcnt = 0x0100).toDebugText(fps = 60.0, frameTimeMs = 16.0)
+        assertFalse(text.lines().any { it.startsWith("px") }, text)
+    }
+
+    @Test
+    fun `le cadrage affine n'est publie qu'aux modes qui en ont un`() {
+        val affine = snapshot(
+            dispcnt = 0x0401, // mode 1
+            bg2ReferenceX = -64,
+            bg2ReferenceY = 32,
+            bg2ScaleX = 0x0080,
+            bg2ScaleY = 0x0100,
+        ).toDebugText(fps = 60.0, frameTimeMs = 16.0)
+        assertTrue(affine.lines().any { it == "aff BG2 x-64 y32  pa0080 pd0100" }, affine)
+
+        // Mode 0 : aucun plan affine, donc rien à publier.
+        val text = snapshot(dispcnt = 0x0100).toDebugText(fps = 60.0, frameTimeMs = 16.0)
+        assertFalse(text.lines().any { it.startsWith("aff") }, text)
     }
 }
