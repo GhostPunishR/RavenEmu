@@ -29,7 +29,7 @@ import java.security.MessageDigest
  * **horloge temps réel** de cartouche pour les jeux qui en embarquent une.
  *
  * La compatibilité commerciale reste à valider ; les limites connues sont
- * documentées en AD-15.
+ * documentées dans wiki/Consoles-et-compatibilite.md.
  */
 class GbaCore(
     /**

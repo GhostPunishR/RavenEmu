@@ -41,7 +41,7 @@ include(":ci-policy")
 
 // Modules Android : inclus uniquement si un SDK Android est disponible
 // (variable d'environnement ou local.properties), afin que les modules JVM
-// restent constructibles sur toute machine. Voir docs/ARCHITECTURE.md, AD-04.
+// restent constructibles sur toute machine. Voir wiki/Architecture.md.
 val localProperties = File(rootDir, "local.properties")
 val sdkFromLocalProperties = localProperties.takeIf { it.isFile }
     ?.readLines()
