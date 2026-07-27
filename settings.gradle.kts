@@ -34,6 +34,11 @@ include(":gameboy-core")
 include(":gba-core")
 include(":rom-library")
 
+// Vérification de la configuration du dépôt (workflows GitHub Actions,
+// signature des APK) : uniquement des tests, aucun code de production.
+// Voir RELEASING.md.
+include(":ci-policy")
+
 // Modules Android : inclus uniquement si un SDK Android est disponible
 // (variable d'environnement ou local.properties), afin que les modules JVM
 // restent constructibles sur toute machine. Voir docs/ARCHITECTURE.md, AD-04.

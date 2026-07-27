@@ -9,5 +9,6 @@ tasks.register("jvmTest") {
         ":gameboy-core:test",
         ":gba-core:test",
         ":rom-library:test",
+        ":ci-policy:test",
     )
 }
