@@ -85,17 +85,30 @@ interface EmulatorCore {
     val hasBatteryRam: Boolean
 
     /**
-     * `true` si la RAM de cartouche a été modifiée depuis le dernier
-     * [exportBatteryRam]. Permet à l'appelant de ne réécrire le `.sav` que
-     * lorsque nécessaire.
+     * `true` si la RAM de cartouche a changé depuis le dernier acquittement.
+     * Permet à l'appelant de ne réécrire le `.sav` que lorsque nécessaire.
      */
     val batteryRamDirty: Boolean
 
     /**
-     * Retourne une copie de la RAM de cartouche persistante au format brut
-     * `.sav` (ou `null` sans RAM à pile) et abaisse [batteryRamDirty].
+     * Copie de la RAM de cartouche au format brut `.sav`, accompagnée de la
+     * génération qui l'identifie — ou `null` sans RAM à pile.
+     *
+     * **Ne baisse pas** [batteryRamDirty] : la sauvegarde n'est acquittée qu'au
+     * retour de [acknowledgeBatteryRamSaved], une fois l'écriture confirmée.
+     * Tant que rien n'est confirmé, le moteur continue de se déclarer modifié,
+     * et une écriture ratée sera retentée au lieu d'être perdue en silence.
      */
-    fun exportBatteryRam(): ByteArray?
+    fun snapshotBatteryRam(): BatteryRamSnapshot?
+
+    /**
+     * Acquitte la sauvegarde de la [generation] indiquée.
+     *
+     * L'acquittement est **ignoré si le jeu a modifié la RAM depuis
+     * l'instantané** : la génération courante a alors changé, et abaisser le
+     * drapeau perdrait les octets écrits entre-temps.
+     */
+    fun acknowledgeBatteryRamSaved(generation: Long)
 
     /**
      * Sérialise l'état complet du moteur en un instantané versionné propre à

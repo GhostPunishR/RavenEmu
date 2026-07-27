@@ -40,7 +40,7 @@ class Mbc2(rom: ByteArray, header: CartridgeHeader) : Cartridge(rom, header) {
         if (!ramEnabled) return
         val offset = (address - 0xA000) and 0x1FF
         ram[offset] = (value and 0x0F).toByte()
-        ramDirty = true
+        markRamWritten()
     }
 
     override fun saveState(out: DataOutputStream) {

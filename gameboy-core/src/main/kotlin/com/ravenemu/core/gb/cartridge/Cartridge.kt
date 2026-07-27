@@ -16,9 +16,26 @@ abstract class Cartridge(
     /** RAM externe brute (vide si la cartouche n'en a pas). */
     val ram: ByteArray = ByteArray(header.ramSizeBytes)
 
-    /** Vrai si la RAM a été modifiée depuis le dernier acquittement. */
-    var ramDirty: Boolean = false
-        protected set
+    /**
+     * Numéro de génération de la RAM : incrémenté à chaque écriture du jeu.
+     *
+     * Il identifie le contenu, ce qu'un simple drapeau ne sait pas faire : si
+     * le jeu écrit pendant qu'une sauvegarde est en cours, la génération avance
+     * et l'acquittement de l'ancienne est refusé.
+     */
+    var ramGeneration: Long = 0
+        private set
+
+    /** Dernière génération dont l'écriture a été confirmée. */
+    private var savedRamGeneration: Long = 0
+
+    /** Vrai si la RAM a changé depuis le dernier acquittement confirmé. */
+    val ramDirty: Boolean get() = ramGeneration != savedRamGeneration
+
+    /** À appeler à chaque écriture du jeu dans la RAM de cartouche. */
+    protected fun markRamWritten() {
+        ramGeneration++
+    }
 
     abstract fun readRom(address: Int): Int
     abstract fun writeControl(address: Int, value: Int)
@@ -39,11 +56,20 @@ abstract class Cartridge(
     open fun importBattery(data: ByteArray) {
         if (ram.isEmpty()) return
         data.copyInto(ram, 0, 0, minOf(data.size, ram.size))
-        ramDirty = false
+        markRamClean()
     }
 
-    fun acknowledgeRamSaved() {
-        ramDirty = false
+    /**
+     * Acquitte l'écriture de [generation]. Sans effet si le jeu a écrit
+     * depuis : les octets postérieurs à l'instantané doivent encore l'être.
+     */
+    fun acknowledgeRamSaved(generation: Long) {
+        if (generation == ramGeneration) savedRamGeneration = generation
+    }
+
+    /** Remet le compteur au propre : contenu chargé depuis un `.sav` ou un état. */
+    protected fun markRamClean() {
+        savedRamGeneration = ramGeneration
     }
 
     /** Sérialise l'état volatil (registres de banque, RAM, RTC…). */

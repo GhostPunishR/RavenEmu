@@ -24,6 +24,7 @@ import androidx.lifecycle.lifecycleScope
 import com.ravenemu.app.R
 import com.ravenemu.emulation.api.ConsoleType
 import com.ravenemu.emulation.api.EmulatorCore
+import com.ravenemu.emulation.api.session.EmulationSession
 import com.ravenemu.emulation.api.EmulatorButton
 import com.ravenemu.emulation.api.SaveStateException
 import com.ravenemu.input.ControlId
@@ -229,7 +230,18 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
         val audioSink = AndroidAudioSink(this, newCore.audio.sampleRateHz, samplesPerFrame)
         audioSink.setVolume(settings.audioVolume / 100f)
 
-        val newSession = EmulationSession(newCore, this, audioSink)
+        val newSession = EmulationSession(
+            newCore,
+            this,
+            audioSink,
+            // Le groupe d'ordonnancement Android décide, sur un processeur
+            // hétérogène, si le thread tourne sur un cœur puissant ou économe.
+            onThreadStart = {
+                android.os.Process.setThreadPriority(
+                    android.os.Process.THREAD_PRIORITY_URGENT_DISPLAY,
+                )
+            },
+        )
         newSession.speedLimitEnabled = settings.speedLimitEnabled
         newSession.fastForwardMultiplier = settings.fastForwardMultiplier
         newSession.audioEnabled = settings.audioEnabled
@@ -268,9 +280,14 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
         runOnUiThread { performanceOverlay.text = text }
     }
 
-    override fun onBatterySave(data: ByteArray) {
+    /**
+     * Écrit la RAM de cartouche et rend compte du résultat : c'est ce booléen
+     * qui autorise la session à acquitter la sauvegarde. La copie SAF externe
+     * reste best-effort et n'entre pas dans ce verdict — seule l'écriture
+     * privée atomique fait foi.
+     */
+    override fun onBatterySave(data: ByteArray): Boolean =
         saveStore.write(romSha256, romFileName, data, settings.saveDirectory)
-    }
 
     // ---- Menu de l'émulateur ----
 
@@ -486,7 +503,16 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
 
     override fun onDestroy() {
         super.onDestroy()
-        session?.stop()
+        // Un thread qui ne rend pas la main laisse la sortie audio en vie :
+        // la libérer sous ses pieds planterait le processus. On le journalise
+        // plutôt que de le taire.
+        val stopResult = session?.stop()
+        if (stopResult == EmulationSession.StopResult.TIMED_OUT) {
+            android.util.Log.w(
+                "RavenEmu",
+                "thread d'émulation encore actif après le délai : sortie audio non libérée",
+            )
+        }
         session = null
         core = null
     }

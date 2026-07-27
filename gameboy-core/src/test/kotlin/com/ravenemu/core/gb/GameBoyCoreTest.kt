@@ -9,6 +9,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class GameBoyCoreTest {
@@ -129,18 +130,105 @@ class GameBoyCoreTest {
         assertEquals(0b0111, m.bus.read(0xFF00) and 0x0F)
     }
 
-    @Test
-    fun `ram a pile exportee et acquittee`() {
+    /** Cartouche à pile prête à écrire : RAM externe déverrouillée. */
+    private fun batteryCore(): GameBoyCore {
         val core = loadedCore(idleRom(type = 0x03, ramSizeCode = 0x02))
+        assertNotNull(core.machine).bus.write(0x0000, 0x0A)
+        return core
+    }
+
+    @Test
+    fun `un instantane n'acquitte rien par lui-meme`() {
+        val core = batteryCore()
         assertTrue(core.hasBatteryRam)
         assertFalse(core.batteryRamDirty)
-        val m = assertNotNull(core.machine)
-        m.bus.write(0x0000, 0x0A)
-        m.bus.write(0xA000, 0x42)
+        assertNotNull(core.machine).bus.write(0xA000, 0x42)
         assertTrue(core.batteryRamDirty)
-        val sav = assertNotNull(core.exportBatteryRam())
-        assertEquals(0x42, sav[0].toInt() and 0xFF)
+
+        val snapshot = assertNotNull(core.snapshotBatteryRam())
+        assertEquals(0x42, snapshot.data[0].toInt() and 0xFF)
+        // L'écriture disque n'a pas encore eu lieu : rien n'est acquis.
+        assertTrue(core.batteryRamDirty, "l'instantané seul ne doit rien acquitter")
+
+        core.acknowledgeBatteryRamSaved(snapshot.generation)
         assertFalse(core.batteryRamDirty)
+    }
+
+    /**
+     * Le cas qui motive tout ce protocole : sans acquittement, la partie doit
+     * rester marquée à sauvegarder, sinon elle disparaît en silence.
+     */
+    @Test
+    fun `une ecriture ratee laisse la sauvegarde a refaire`() {
+        val core = batteryCore()
+        assertNotNull(core.machine).bus.write(0xA000, 0x42)
+        assertNotNull(core.snapshotBatteryRam())
+        // Aucun acquittement : l'écriture a échoué.
+        assertTrue(core.batteryRamDirty)
+    }
+
+    /**
+     * Le jeu écrit pendant que la sauvegarde est en cours : acquitter
+     * l'instantané perdrait ces octets, l'acquittement doit donc être refusé.
+     */
+    @Test
+    fun `une ecriture pendant la sauvegarde n'est pas acquittee`() {
+        val core = batteryCore()
+        val bus = assertNotNull(core.machine).bus
+        bus.write(0xA000, 0x42)
+        val snapshot = assertNotNull(core.snapshotBatteryRam())
+
+        bus.write(0xA001, 0x99) // le jeu continue de jouer
+
+        core.acknowledgeBatteryRamSaved(snapshot.generation)
+        assertTrue(core.batteryRamDirty, "les octets postérieurs restent à écrire")
+
+        // La sauvegarde suivante les emporte.
+        val second = assertNotNull(core.snapshotBatteryRam())
+        assertEquals(0x99, second.data[1].toInt() and 0xFF)
+        core.acknowledgeBatteryRamSaved(second.generation)
+        assertFalse(core.batteryRamDirty)
+    }
+
+    @Test
+    fun `deux sauvegardes successives`() {
+        val core = batteryCore()
+        val bus = assertNotNull(core.machine).bus
+        bus.write(0xA000, 0x01)
+        val first = assertNotNull(core.snapshotBatteryRam())
+        core.acknowledgeBatteryRamSaved(first.generation)
+        assertFalse(core.batteryRamDirty)
+
+        bus.write(0xA000, 0x02)
+        assertTrue(core.batteryRamDirty)
+        val second = assertNotNull(core.snapshotBatteryRam())
+        assertEquals(0x02, second.data[0].toInt() and 0xFF)
+        core.acknowledgeBatteryRamSaved(second.generation)
+        assertFalse(core.batteryRamDirty)
+    }
+
+    /** Un acquittement périmé ne doit jamais rendre la sauvegarde propre. */
+    @Test
+    fun `un acquittement perime est ignore`() {
+        val core = batteryCore()
+        val bus = assertNotNull(core.machine).bus
+        bus.write(0xA000, 0x01)
+        val stale = assertNotNull(core.snapshotBatteryRam())
+        core.acknowledgeBatteryRamSaved(stale.generation)
+
+        bus.write(0xA000, 0x02)
+        core.acknowledgeBatteryRamSaved(stale.generation)
+        assertTrue(core.batteryRamDirty)
+    }
+
+    @Test
+    fun `sans RAM persistante il n'y a rien a sauvegarder`() {
+        val core = loadedCore(idleRom(type = 0x00))
+        assertFalse(core.hasBatteryRam)
+        assertFalse(core.batteryRamDirty)
+        assertNull(core.snapshotBatteryRam())
+        // Acquitter dans le vide ne doit pas lever.
+        core.acknowledgeBatteryRamSaved(0L)
     }
 
     @Test

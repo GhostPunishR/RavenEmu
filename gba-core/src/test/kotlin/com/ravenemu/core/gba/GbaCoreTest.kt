@@ -71,6 +71,6 @@ class GbaCoreTest {
         core.loadRom(redBackdropRom())
         assertEquals(0, core.readAudio(ShortArray(64)))
         assertEquals(false, core.hasBatteryRam)
-        assertEquals(null, core.exportBatteryRam())
+        assertEquals(null, core.snapshotBatteryRam())
     }
 }

@@ -7,6 +7,7 @@ import com.ravenemu.core.gba.ppu.GbaPpu
 import com.ravenemu.core.gba.save.GbaSaveType
 import com.ravenemu.core.gba.state.GbaState
 import com.ravenemu.emulation.api.AudioSpec
+import com.ravenemu.emulation.api.BatteryRamSnapshot
 import com.ravenemu.emulation.api.ConsoleType
 import com.ravenemu.emulation.api.EmulatorButton
 import com.ravenemu.emulation.api.EmulatorCore
@@ -205,11 +206,13 @@ class GbaCore(
     override val batteryRamDirty: Boolean
         get() = machine?.cartridge?.save?.dirty ?: false
 
-    override fun exportBatteryRam(): ByteArray? {
+    override fun snapshotBatteryRam(): BatteryRamSnapshot? {
         val save = machine?.cartridge?.save ?: return null
-        val data = save.export()
-        save.acknowledgeSaved()
-        return data
+        return BatteryRamSnapshot(save.export(), save.generation)
+    }
+
+    override fun acknowledgeBatteryRamSaved(generation: Long) {
+        machine?.cartridge?.save?.acknowledgeSaved(generation)
     }
 
     override fun saveState(): ByteArray {

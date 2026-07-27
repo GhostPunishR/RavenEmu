@@ -38,7 +38,7 @@ class GbaSaveMemoryTest {
         val core = GbaCore()
         core.loadRom(SyntheticRom.build())
         assertFalse(core.hasBatteryRam)
-        assertNull(core.exportBatteryRam())
+        assertNull(core.snapshotBatteryRam())
     }
 
     @Test
@@ -170,9 +170,11 @@ class GbaSaveMemoryTest {
         core.machine!!.bus.write8(0x0E00_0000, 0x7E)
         assertTrue(core.batteryRamDirty)
 
-        val exported = core.exportBatteryRam()!!
-        assertEquals(0x7E, exported[0].toInt() and 0xFF)
-        assertFalse(core.batteryRamDirty, "l'export acquitte les modifications")
+        val snapshot = core.snapshotBatteryRam()!!
+        assertEquals(0x7E, snapshot.data[0].toInt() and 0xFF)
+        assertTrue(core.batteryRamDirty, "l'instantané seul ne doit rien acquitter")
+        core.acknowledgeBatteryRamSaved(snapshot.generation)
+        assertFalse(core.batteryRamDirty, "l'acquittement confirme la sauvegarde")
 
         core.reset()
         assertEquals(0x7E, core.machine!!.bus.read8(0x0E00_0000), "la pile survit au reset")

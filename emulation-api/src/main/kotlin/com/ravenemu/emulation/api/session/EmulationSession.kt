@@ -1,4 +1,4 @@
-package com.ravenemu.app.emulation
+package com.ravenemu.emulation.api.session
 
 import com.ravenemu.emulation.api.EmulatorButton
 import com.ravenemu.emulation.api.EmulatorCore
@@ -20,7 +20,33 @@ class EmulationSession(
     private val core: EmulatorCore,
     private val callbacks: Callbacks,
     private val audioSink: AudioSink? = null,
+    /**
+     * Appelé une fois au démarrage du thread d'émulation, **sur ce thread**.
+     *
+     * Sert à la plateforme pour demander son groupe d'ordonnancement : c'est
+     * lui qui décide, sur un processeur hétérogène, si le thread tourne sur un
+     * cœur puissant ou sur un cœur économe. Laissé vide, la session reste
+     * indépendante d'Android et donc testable.
+     */
+    private val onThreadStart: () -> Unit = {},
 ) {
+
+    /** Issue d'un appel à [stop]. */
+    enum class StopResult {
+        /** Thread terminé et sortie audio libérée. */
+        CLEAN,
+
+        /** Aucune session n'était active : appel sans effet. */
+        NOT_RUNNING,
+
+        /**
+         * Le thread n'a pas rendu la main dans le délai imparti. La sortie
+         * audio n'est **pas** libérée : le thread peut encore s'en servir, et
+         * la libérer sous ses pieds provoquerait un plantage natif. Mieux vaut
+         * une ressource retenue qu'un crash, mais l'appelant doit le savoir.
+         */
+        TIMED_OUT,
+    }
     interface Callbacks {
         /** Trame prête (appelée depuis le thread d'émulation). */
         fun onFrame(framebuffer: IntArray)
@@ -34,8 +60,24 @@ class EmulationSession(
          */
         fun onStats(fps: Double, frameTimeMs: Double)
 
-        /** RAM de cartouche à persister (thread d'émulation). */
-        fun onBatterySave(data: ByteArray)
+        /**
+         * RAM de cartouche à persister (thread d'émulation).
+         *
+         * Doit retourner `true` **uniquement si l'écriture a réellement
+         * abouti**. Sur `false`, le moteur reste marqué modifié et la
+         * sauvegarde sera retentée : c'est ce retour qui empêche une partie de
+         * disparaître en silence quand le disque est plein ou le fichier
+         * verrouillé.
+         */
+        fun onBatterySave(data: ByteArray): Boolean
+
+        /**
+         * La sortie audio a levé une exception (thread d'émulation).
+         *
+         * La session poursuit sans son plutôt que de mourir : perdre le son est
+         * désagréable, perdre la partie ne l'est pas du tout.
+         */
+        fun onAudioFailure(error: Exception) {}
     }
 
     /**
@@ -47,6 +89,16 @@ class EmulationSession(
         fun underrunCount(): Int = 0
         fun setVolume(volume: Float)
         fun pause()
+
+        /**
+         * Débloque une écriture en cours et fait échouer les suivantes.
+         *
+         * [write] est bloquante par contrat : sans ce point de sortie, un arrêt
+         * demandé pendant une écriture attendrait que la file audio se vide,
+         * bien au-delà du délai d'arrêt. Appelé avant la jointure du thread.
+         */
+        fun unblock() {}
+
         fun release()
     }
 
@@ -76,12 +128,17 @@ class EmulationSession(
 
     private var thread: Thread? = null
 
+    /** Protège la paire [running]/[thread] contre des arrêts concurrents. */
+    private val lifecycle = Any()
+
     fun start() {
-        if (running) return
-        running = true
-        thread = Thread(::loop, "RavenEmu-Emulation").also {
-            it.priority = Thread.MAX_PRIORITY - 1
-            it.start()
+        synchronized(lifecycle) {
+            if (running) return
+            running = true
+            thread = Thread(::loop, "RavenEmu-Emulation").also {
+                it.priority = Thread.MAX_PRIORITY - 1
+                it.start()
+            }
         }
         // La priorité qui compte réellement est demandée depuis le thread
         // lui-même, au début de [loop].
@@ -104,13 +161,39 @@ class EmulationSession(
     /** Sous-alimentations relevées par la sortie audio de la plateforme. */
     fun audioOutputUnderruns(): Int = audioSink?.underrunCount() ?: 0
 
-    /** Arrête le thread après une dernière sauvegarde de la RAM cartouche. */
-    fun stop() {
-        if (!running) return
-        running = false
-        thread?.join(2000)
-        thread = null
+    /**
+     * Arrête la session, dans un ordre qui ne laisse jamais le thread utiliser
+     * une ressource libérée.
+     *
+     * 1. l'arrêt est rendu visible au thread ;
+     * 2. une écriture audio bloquante est débloquée, sans quoi l'attente
+     *    durerait le temps de vider la file ;
+     * 3. le thread vide ses commandes et tente une dernière sauvegarde ;
+     * 4. sa terminaison est **confirmée** ;
+     * 5. la sortie audio n'est libérée qu'après cette confirmation.
+     *
+     * Idempotent : un second appel retourne [StopResult.NOT_RUNNING] sans rien
+     * toucher. En cas de dépassement du délai, la sortie audio reste en vie et
+     * [StopResult.TIMED_OUT] le signale — un thread encore vivant qui écrirait
+     * dans un `AudioTrack` libéré planterait le processus.
+     */
+    fun stop(timeoutMillis: Long = STOP_TIMEOUT_MILLIS): StopResult {
+        val worker = synchronized(lifecycle) {
+            if (!running) return StopResult.NOT_RUNNING
+            running = false
+            thread
+        } ?: return StopResult.NOT_RUNNING
+
+        // Débloque l'écriture audio et le stationnement de cadencement.
+        audioSink?.unblock()
+        LockSupport.unpark(worker)
+
+        worker.join(timeoutMillis)
+        if (worker.isAlive) return StopResult.TIMED_OUT
+
+        synchronized(lifecycle) { thread = null }
         audioSink?.release()
+        return StopResult.CLEAN
     }
 
     /** Exécute [action] sur le thread d'émulation (file sans verrou). */
@@ -123,14 +206,9 @@ class EmulationSession(
     }
 
     private fun loop() {
-        // `Thread.priority` ne fait que positionner une valeur de politesse Unix.
-        // Android place les threads dans des groupes d'ordonnancement, et c'est ce
-        // groupe qui décide, sur un processeur hétérogène, si le thread tourne sur
-        // un cœur puissant ou sur un cœur économe. Un émulateur a besoin du
-        // premier : on le demande explicitement.
-        android.os.Process.setThreadPriority(
-            android.os.Process.THREAD_PRIORITY_URGENT_DISPLAY,
-        )
+        // `Thread.priority` ne fait que positionner une valeur de politesse
+        // Unix ; le groupe d'ordonnancement, lui, est propre à la plateforme.
+        onThreadStart()
         val basePeriodNanos = (1_000_000_000.0 / core.video.refreshRateHz).toLong()
         val frameSkipper = AdaptiveFrameSkipper(basePeriodNanos)
         var nextFrameAt = System.nanoTime()
@@ -175,7 +253,14 @@ class EmulationSession(
             if (audioPaced) {
                 // Le débit audio reste celui du moteur. Les variations de temps
                 // de rendu ne doivent jamais modifier la hauteur du son.
-                audioSink!!.write(audioBuffer, audioCount)
+                try {
+                    audioSink!!.write(audioBuffer, audioCount)
+                } catch (e: Exception) {
+                    // Une sortie audio défaillante ne doit pas emporter la
+                    // session : la partie continue en silence, et l'arrêt
+                    // pourra encore sauvegarder la RAM de cartouche.
+                    callbacks.onAudioFailure(e)
+                }
             }
 
             if (renderVideo) callbacks.onFrame(framebuffer)
@@ -232,22 +317,30 @@ class EmulationSession(
         }
     }
 
-    private fun saveBatteryIfDirty() {
-        if (core.hasBatteryRam && core.batteryRamDirty) {
-            core.exportBatteryRam()?.let(callbacks::onBatterySave)
+    /**
+     * Sauvegarde en deux temps : instantané, écriture, puis acquittement.
+     *
+     * L'acquittement ne vient qu'après confirmation de l'écriture, et porte la
+     * génération de l'instantané. Si le jeu a écrit entre-temps, le moteur
+     * refuse cet acquittement et la sauvegarde suivante reprendra le travail.
+     */
+    private fun saveBatteryIfDirty(target: EmulatorCore = core) {
+        if (!target.hasBatteryRam || !target.batteryRamDirty) return
+        val snapshot = target.snapshotBatteryRam() ?: return
+        if (callbacks.onBatterySave(snapshot.data)) {
+            target.acknowledgeBatteryRamSaved(snapshot.generation)
         }
     }
 
     /** Force une sauvegarde de la RAM cartouche (pause, arrière-plan…). */
     fun flushBattery() {
-        post { c ->
-            if (c.hasBatteryRam && c.batteryRamDirty) {
-                c.exportBatteryRam()?.let(callbacks::onBatterySave)
-            }
-        }
+        post { c -> saveBatteryIfDirty(c) }
     }
 
     companion object {
+        /** Délai laissé au thread pour rendre la main lors d'un arrêt. */
+        const val STOP_TIMEOUT_MILLIS = 2_000L
+
         private const val BATTERY_SAVE_INTERVAL_NANOS = 5_000_000_000L
         private const val MAX_LAG_NANOS = 100_000_000L
     }
