@@ -151,7 +151,7 @@ class GameBoyCore(
         val cartridge: Cartridge = Cartridge.create(rom, clock)
 
         /** Fonctions couleur CGB actives si la cartouche les déclare. */
-        val cgbMode: Boolean = cartridge.header.supportsCgb
+        val cgbMode: Boolean = cartridge.header.cartridgeMode.usesColor
 
         val interrupts = InterruptController()
         val timer = Timer(interrupts)

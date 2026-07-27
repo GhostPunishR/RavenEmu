@@ -70,7 +70,10 @@ class RomAdapter(
             val details = if (entry.console == ConsoleType.GAME_BOY_ADVANCE) {
                 CONSOLE_LABEL_GBA
             } else {
-                CONSOLE_LABEL_GB + " · " + entry.mbcType.displayName +
+                // Monochrome ou couleur : c'est l'en-tête de la cartouche qui
+                // le dit, pas l'extension du fichier.
+                (entry.cartridgeMode?.shortLabel ?: CONSOLE_LABEL_GB) +
+                    " · " + entry.mbcType.displayName +
                     " · " + entry.region.displayName
             }
             subtitle.text = itemView.context.getString(

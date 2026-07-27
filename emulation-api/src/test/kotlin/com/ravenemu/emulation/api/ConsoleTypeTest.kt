@@ -26,8 +26,20 @@ class ConsoleTypeTest {
     @Test
     fun `les identifiants persistes sont figes`() {
         assertEquals(0, ConsoleType.GAME_BOY.storageId)
-        assertEquals(1, ConsoleType.GAME_BOY_COLOR.storageId)
         assertEquals(2, ConsoleType.GAME_BOY_ADVANCE.storageId)
+    }
+
+    @Test
+    fun `un identifiant retire n'est jamais reattribue`() {
+        // `1` a désigné `GAME_BOY_COLOR`, seconde entrée du même cœur Game Boy,
+        // avant que la compatibilité de cartouche ne devienne une métadonnée.
+        // Le réattribuer ferait accepter un ancien état pour une autre console.
+        for (retire in ConsoleType.RETIRED_STORAGE_IDS) {
+            assertNull(
+                ConsoleType.fromStorageId(retire),
+                "L'identifiant $retire a été retiré et ne doit désigner aucune console",
+            )
+        }
     }
 
     @Test

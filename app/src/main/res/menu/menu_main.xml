@@ -49,6 +49,12 @@
                 android:id="@+id/action_filter_gb"
                 android:title="@string/library_filter_gb" />
             <item
+                android:id="@+id/action_filter_gb_dmg"
+                android:title="@string/library_filter_gb_dmg" />
+            <item
+                android:id="@+id/action_filter_gb_cgb"
+                android:title="@string/library_filter_gb_cgb" />
+            <item
                 android:id="@+id/action_filter_gba"
                 android:title="@string/library_filter_gba" />
         </menu>
