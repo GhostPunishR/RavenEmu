@@ -9,6 +9,7 @@ import com.ravenemu.core.gb.io.Timer
 import com.ravenemu.core.gb.memory.MemoryBus
 import com.ravenemu.core.gb.ppu.Ppu
 import com.ravenemu.emulation.api.AudioSpec
+import com.ravenemu.emulation.api.BatteryRamSnapshot
 import com.ravenemu.emulation.api.ConsoleType
 import com.ravenemu.emulation.api.EmulatorButton
 import com.ravenemu.emulation.api.EmulatorCore
@@ -116,11 +117,14 @@ class GameBoyCore(
     override val batteryRamDirty: Boolean
         get() = machine?.cartridge?.ramDirty ?: false
 
-    override fun exportBatteryRam(): ByteArray? {
+    override fun snapshotBatteryRam(): BatteryRamSnapshot? {
         val cartridge = machine?.cartridge ?: return null
-        val data = cartridge.exportBattery()
-        cartridge.acknowledgeRamSaved()
-        return data
+        val data = cartridge.exportBattery() ?: return null
+        return BatteryRamSnapshot(data, cartridge.ramGeneration)
+    }
+
+    override fun acknowledgeBatteryRamSaved(generation: Long) {
+        machine?.cartridge?.acknowledgeRamSaved(generation)
     }
 
     override fun saveState(): ByteArray {

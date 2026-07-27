@@ -55,7 +55,7 @@ class Mbc1(rom: ByteArray, header: CartridgeHeader) : Cartridge(rom, header) {
         val offset = ramBank() * RAM_BANK_SIZE + (address - 0xA000)
         if (offset < ram.size) {
             ram[offset] = value.toByte()
-            ramDirty = true
+            markRamWritten()
         }
     }
 

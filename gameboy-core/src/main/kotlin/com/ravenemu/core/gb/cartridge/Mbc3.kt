@@ -116,23 +116,23 @@ class Mbc3(
                 val offset = ramBankOrRtc * RAM_BANK_SIZE + (address - 0xA000)
                 if (offset < ram.size) {
                     ram[offset] = value.toByte()
-                    ramDirty = true
+                    markRamWritten()
                 }
             }
-            0x08 -> if (hasRtc) { syncRtc(); rtcSeconds = value and 0x3F; ramDirty = true }
-            0x09 -> if (hasRtc) { syncRtc(); rtcMinutes = value and 0x3F; ramDirty = true }
-            0x0A -> if (hasRtc) { syncRtc(); rtcHours = value and 0x1F; ramDirty = true }
+            0x08 -> if (hasRtc) { syncRtc(); rtcSeconds = value and 0x3F; markRamWritten() }
+            0x09 -> if (hasRtc) { syncRtc(); rtcMinutes = value and 0x3F; markRamWritten() }
+            0x0A -> if (hasRtc) { syncRtc(); rtcHours = value and 0x1F; markRamWritten() }
             0x0B -> if (hasRtc) {
                 syncRtc()
                 rtcDays = (rtcDays and 0x100) or (value and 0xFF)
-                ramDirty = true
+                markRamWritten()
             }
             0x0C -> if (hasRtc) {
                 syncRtc()
                 rtcDays = (rtcDays and 0xFF) or ((value and 0x01) shl 8)
                 rtcHalt = (value and 0x40) != 0
                 rtcDayCarry = (value and 0x80) != 0
-                ramDirty = true
+                markRamWritten()
             }
         }
     }
@@ -198,7 +198,7 @@ class Mbc3(
         }
         lastSyncEpoch = ts
         syncRtc()
-        ramDirty = false
+        markRamClean()
     }
 
     override fun saveState(out: DataOutputStream) {

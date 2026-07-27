@@ -68,12 +68,38 @@ sealed class GbaSaveMemory(val type: GbaSaveType) {
     /** Contenu brut, sérialisé tel quel dans le fichier `.sav`. */
     val data: ByteArray = ByteArray(type.sizeBytes)
 
-    /** `true` si la mémoire a changé depuis le dernier acquittement. */
-    var dirty: Boolean = false
-        protected set
+    /**
+     * Numéro de génération : incrémenté à chaque écriture du jeu.
+     *
+     * Il identifie le contenu, ce qu'un simple drapeau ne sait pas faire : si
+     * le jeu écrit pendant qu'une sauvegarde est en cours, la génération avance
+     * et l'acquittement de l'ancienne est refusé.
+     */
+    var generation: Long = 0
+        private set
 
-    fun acknowledgeSaved() {
-        dirty = false
+    /** Dernière génération dont l'écriture a été confirmée. */
+    private var savedGeneration: Long = 0
+
+    /** `true` si la mémoire a changé depuis le dernier acquittement confirmé. */
+    val dirty: Boolean get() = generation != savedGeneration
+
+    /** À appeler à chaque écriture du jeu dans la mémoire de sauvegarde. */
+    protected fun markWritten() {
+        generation++
+    }
+
+    /** Remet le compteur au propre : contenu chargé depuis un `.sav` ou un état. */
+    protected fun markClean() {
+        savedGeneration = generation
+    }
+
+    /**
+     * Acquitte l'écriture de [generation]. Sans effet si le jeu a écrit
+     * depuis : les octets postérieurs à l'instantané doivent encore l'être.
+     */
+    fun acknowledgeSaved(generation: Long) {
+        if (generation == this.generation) savedGeneration = generation
     }
 
     /** Restaure un contenu `.sav` ; les tailles différentes sont tronquées ou complétées. */
@@ -81,7 +107,7 @@ sealed class GbaSaveMemory(val type: GbaSaveType) {
         val count = minOf(saved.size, data.size)
         saved.copyInto(data, 0, 0, count)
         if (count < data.size) data.fill(0, count, data.size)
-        dirty = false
+        markClean()
     }
 
     fun export(): ByteArray = data.copyOf()
@@ -92,7 +118,7 @@ sealed class GbaSaveMemory(val type: GbaSaveType) {
 
         fun write(address: Int, value: Int) {
             data[address and (data.size - 1)] = (value and 0xFF).toByte()
-            dirty = true
+            markWritten()
         }
     }
 
@@ -136,7 +162,7 @@ sealed class GbaSaveMemory(val type: GbaSaveType) {
 
             if (writeArmed) {
                 data[bank * BANK_SIZE + offset] = byte.toByte()
-                dirty = true
+                markWritten()
                 writeArmed = false
                 return
             }
@@ -158,7 +184,7 @@ sealed class GbaSaveMemory(val type: GbaSaveType) {
                         0xB0 -> if (this.type == GbaSaveType.FLASH_128K) bankSwitchArmed = true
                         0x10 -> if (eraseArmed) {
                             data.fill(0xFF.toByte())
-                            dirty = true
+                            markWritten()
                             eraseArmed = false
                         }
                     }
@@ -169,7 +195,7 @@ sealed class GbaSaveMemory(val type: GbaSaveType) {
                     eraseArmed = false
                     val start = bank * BANK_SIZE + (offset and 0xF000)
                     data.fill(0xFF.toByte(), start, start + SECTOR_SIZE)
-                    dirty = true
+                    markWritten()
                 }
                 else -> commandStep = 0
             }
@@ -279,7 +305,7 @@ sealed class GbaSaveMemory(val type: GbaSaveType) {
             for (i in 0 until 8) {
                 data[base + i] = ((bitBuffer ushr ((7 - i) * 8)) and 0xFF).toByte()
             }
-            dirty = true
+            markWritten()
         }
 
         private fun readQuadWord(offset: Int): Long {
