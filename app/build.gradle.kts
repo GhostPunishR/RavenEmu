@@ -3,6 +3,13 @@ plugins {
     alias(libs.plugins.kotlin.android)
 }
 
+/**
+ * Chemin du keystore **Test**. Sa seule présence décide de la clé utilisée
+ * pour la variante `profil` ; le nom est isolé ici pour que la déclaration de
+ * la signature et le choix du buildType ne puissent pas diverger.
+ */
+val TEST_KEYSTORE_PATH_ENV = "RAVENEMU_TEST_KEYSTORE_PATH"
+
 android {
     namespace = "com.ravenemu.app"
     compileSdk = 35
@@ -32,6 +39,19 @@ android {
                 storePassword = System.getenv("RAVENEMU_KEYSTORE_PASSWORD")
                 keyAlias = System.getenv("RAVENEMU_KEY_ALIAS")
                 keyPassword = System.getenv("RAVENEMU_KEY_PASSWORD")
+            }
+        }
+        // Signature de l'APK Test (variante `profil`). Clé **dédiée**, jamais
+        // la clé Release : un APK Test compromis ne doit pas pouvoir se faire
+        // passer pour une mise à jour de l'application publiée. Elle est
+        // alimentée par des variables `RAVENEMU_TEST_*` distinctes.
+        create("test") {
+            val keystorePath = System.getenv(TEST_KEYSTORE_PATH_ENV)
+            if (keystorePath != null) {
+                storeFile = file(keystorePath)
+                storePassword = System.getenv("RAVENEMU_TEST_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("RAVENEMU_TEST_KEY_ALIAS")
+                keyPassword = System.getenv("RAVENEMU_TEST_KEY_PASSWORD")
             }
         }
     }
@@ -64,7 +84,15 @@ android {
             applicationIdSuffix = ".profil"
             isDebuggable = false
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("debug")
+            // Clé Test dédiée quand elle est fournie (CI ou poste de
+            // développement), sinon clé de débogage : construire l'APK Test
+            // localement reste possible sans détenir le moindre secret. Seul
+            // un APK signé par la clé dédiée est publiable, la CI le vérifie.
+            signingConfig = if (System.getenv(TEST_KEYSTORE_PATH_ENV) != null) {
+                signingConfigs.getByName("test")
+            } else {
+                signingConfigs.getByName("debug")
+            }
             // Les modules bibliothèque n'ont que debug et release.
             matchingFallbacks += listOf("debug")
             buildConfigField("boolean", "DIAGNOSTICS", "true")

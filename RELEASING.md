@@ -12,20 +12,89 @@ Cette préversion contient :
 - `RavenEmu-test.apk.sha256` ;
 - le commit exact utilisé pour la construction.
 
-L'APK Test utilise la signature de développement, conserve les diagnostics et permet à Android d'optimiser le moteur. Le tag `test-latest` est mobile et ne représente pas une version stable.
+L'APK Test conserve les diagnostics et laisse Android optimiser le moteur. Le tag `test-latest` est mobile et ne représente pas une version stable.
 
 La CI ne publie aucun APK Debug. Les développeurs peuvent toujours le construire localement avec `./gradlew assembleDebug`.
 
-## Secrets de signature
+### Signature de l'APK Test
 
-Les secrets suivants sont nécessaires pour produire une version Release signée :
+L'APK Test est signé par une **clé dédiée**, distincte de la clé Release. C'est ce qui permet de mettre à jour l'application installée sans la désinstaller : Android refuse une mise à jour dont le certificat a changé. Auparavant, la variante `profil` reprenait le keystore de débogage régénéré à chaque exécution du runner, et chaque nouvelle construction cassait la mise à jour.
 
-- `RAVENEMU_KEYSTORE_BASE64` ;
-- `RAVENEMU_KEYSTORE_PASSWORD` ;
-- `RAVENEMU_KEY_ALIAS` ;
-- `RAVENEMU_KEY_PASSWORD`.
+Le package reste `com.ravenemu.app.profil` : l'APK Test et une éventuelle installation Release cohabitent sur le même appareil.
 
-Le keystore et ses mots de passe ne doivent jamais être ajoutés au dépôt, copiés dans un journal ou transmis dans une issue.
+Une construction locale n'exige aucun secret : sans clé Test, `./gradlew assembleProfil` retombe sur la clé de débogage. L'APK produit reste utilisable pour soi, mais la CI refuse de le publier.
+
+### Vérifier un APK téléchargé
+
+Chaque préversion `test-latest` publie l'empreinte du fichier, l'empreinte du certificat de signature, le commit source et le nom du package.
+
+```bash
+sha256sum -c RavenEmu-test.apk.sha256
+apksigner verify --print-certs RavenEmu-test.apk
+```
+
+L'empreinte SHA-256 du certificat doit être identique d'une préversion à l'autre. Si elle change, ne pas installer : soit la clé a tourné, soit l'APK ne vient pas de ce dépôt.
+
+## Secrets et variables de signature
+
+Deux jeux de secrets **strictement séparés**. La clé Release ne signe jamais l'APK Test, et réciproquement : un APK Test compromis ne doit pas pouvoir se faire passer pour une mise à jour de l'application publiée.
+
+| Canal | Secrets GitHub |
+|---|---|
+| Test (`com.ravenemu.app.profil`) | `RAVENEMU_TEST_KEYSTORE_BASE64`, `RAVENEMU_TEST_KEYSTORE_PASSWORD`, `RAVENEMU_TEST_KEY_ALIAS`, `RAVENEMU_TEST_KEY_PASSWORD` |
+| Release (`com.ravenemu.app`) | `RAVENEMU_KEYSTORE_BASE64`, `RAVENEMU_KEYSTORE_PASSWORD`, `RAVENEMU_KEY_ALIAS`, `RAVENEMU_KEY_PASSWORD` |
+
+S'y ajoutent deux **variables** de dépôt (`Settings → Secrets and variables → Actions → Variables`). Une empreinte de certificat est une donnée publique : elle n'a rien à faire dans un secret.
+
+| Variable | Rôle |
+|---|---|
+| `RAVENEMU_TEST_CERT_SHA256` | Empreinte attendue du certificat Test. La publication échoue si l'APK est signé autrement — une rotation de clé accidentelle est ainsi bloquée avant diffusion. |
+| `RAVENEMU_RELEASE_CERT_SHA256` | Empreinte du certificat Release. Sert à vérifier que les deux canaux n'utilisent pas la même clé. |
+
+Relever une empreinte pour renseigner ces variables :
+
+```bash
+keytool -list -v -keystore ravenemu-test.jks -alias <alias> | grep 'SHA256:'
+```
+
+Le job de publication Test **échoue explicitement** si l'un des secrets `RAVENEMU_TEST_*` manque, plutôt que de diffuser un APK signé par une clé instable. De même, un tag `v*` sans secret Release fait échouer le job Release au lieu de terminer en succès sans rien publier.
+
+Aucun keystore, mot de passe ni empreinte privée ne doit être ajouté au dépôt, copié dans un journal, ou transmis dans une issue. Les secrets ne sont lus que comme variables d'environnement de la commande qui en a besoin, jamais affichés.
+
+## Protections GitHub à configurer
+
+Ces protections ne sont pas dans le dépôt : elles se règlent dans l'interface GitHub et doivent être vérifiées après toute modification des paramètres.
+
+**Environnement `release`** (`Settings → Environments → release`) :
+
+- exiger une **approbation manuelle** (`Required reviewers`) avant l'exécution du job Release ;
+- limiter les branches et tags autorisés à `v*` (`Deployment branches and tags → Selected`) ;
+- rattacher les secrets `RAVENEMU_KEYSTORE_*` et `RAVENEMU_KEY_*` **à cet environnement**, et non au dépôt : aucun autre job ne peut alors les lire.
+
+**Branche `main`** (`Settings → Rules`) :
+
+- interdire le push direct, exiger une pull request ;
+- exiger la réussite du job « Tests, lint et APK Test » ;
+- interdire la suppression et le `force-push`.
+
+**Tags** (`Settings → Rules → Tag ruleset`) :
+
+- restreindre la création des tags `v*` aux mainteneurs ;
+- interdire la mise à jour et la suppression d'un tag `v*` existant, pour qu'une version publiée reste attachée au commit vérifié.
+
+**Actions** (`Settings → Actions → General`) :
+
+- conserver `Workflow permissions` sur `Read repository contents`, chaque job élevant ses droits localement ;
+- exiger l'approbation des workflows pour les contributions externes.
+
+## Déclenchement du job Release
+
+Le job Release ne s'exécute que dans deux cas :
+
+- push d'un tag `v*` ;
+- exécution manuelle du workflow avec l'entrée `publier_release` cochée.
+
+Il ne se déclenche donc **jamais** sur un push de branche de travail. Cette règle est vérifiée automatiquement par les tests du module `ci-policy`, qui évaluent la condition réelle du workflow pour une série de déclenchements simulés.
 
 ## Préparer une version numérotée
 
@@ -36,12 +105,13 @@ Le keystore et ses mots de passe ne doivent jamais être ajoutés au dépôt, co
 5. Exécuter les tests et le lint.
 6. Construire l’APK et l’App Bundle Release signés.
 7. Vérifier la signature, les empreintes et le contenu des artefacts.
-8. Créer un tag `vMAJEUR.MINEUR.CORRECTIF` sur le commit validé.
-9. Publier une GitHub Release avec les artefacts et les notes de version.
+8. Créer un tag `vMAJEUR.MINEUR.CORRECTIF` sur le commit validé. Le push du tag déclenche le job Release, qui attend l'approbation de l'environnement `release`.
+9. Approuver le déploiement, puis publier une GitHub Release avec les artefacts et les notes de version.
 
 Commandes de validation :
 
 ```bash
+./gradlew jvmTest   # modules JVM purs, dont la politique de publication
 ./gradlew test
 ./gradlew lint
 ./gradlew assembleRelease bundleRelease
