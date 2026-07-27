@@ -41,7 +41,8 @@ class ConsoleRegistryTest {
         override fun readAudio(buffer: ShortArray): Int = 0
         override val hasBatteryRam: Boolean = false
         override val batteryRamDirty: Boolean = false
-        override fun exportBatteryRam(): ByteArray? = null
+        override fun snapshotBatteryRam(): BatteryRamSnapshot? = null
+        override fun acknowledgeBatteryRamSaved(generation: Long) = Unit
         override fun saveState(): ByteArray = ByteArray(0)
         override fun loadState(state: ByteArray) = Unit
     }
