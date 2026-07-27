@@ -29,4 +29,4 @@
 - [Code de conduite](https://github.com/GhostPunishR/RavenEmu/blob/main/CODE_OF_CONDUCT.md)
 - [Politique de sécurité](https://github.com/GhostPunishR/RavenEmu/blob/main/SECURITY.md)
 - [Politique de confidentialité](https://github.com/GhostPunishR/RavenEmu/blob/main/PRIVACY.md)
-- [APK Debug](https://github.com/GhostPunishR/RavenEmu/releases/download/debug-latest/RavenEmu-debug.apk)
+- [APK Test](https://github.com/GhostPunishR/RavenEmu/releases/download/test-latest/RavenEmu-test.apk)

@@ -41,7 +41,7 @@ Si le son craque:
 - fermez les applications lourdes;
 - vérifiez la fréquence du problème avec la surcouche de performance;
 - testez sans économie d'énergie Android;
-- utilisez la dernière version Debug;
+- utilisez le dernier APK Test;
 - consultez [[Dépannage|Depannage]].
 
 Un problème audio sur Game Boy Advance peut venir d'une performance insuffisante plutôt que du mixage lui-même.

@@ -293,17 +293,6 @@ jobs:
               --prerelease
           fi
 
-      - name: Retirer l'ancienne préversion Debug
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          if gh release view debug-latest --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
-            gh release delete debug-latest \
-              --repo "$GITHUB_REPOSITORY" \
-              --cleanup-tag \
-              --yes
-          fi
-
   # Publication Release. Ce job ne se déclenche **jamais** sur un push de
   # branche ordinaire : il faut soit un tag `v*`, soit une exécution manuelle
   # demandant explicitement la publication. L'environnement `release` ajoute
