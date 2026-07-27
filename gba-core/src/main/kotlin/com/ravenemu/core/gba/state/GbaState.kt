@@ -48,7 +48,7 @@ object GbaState {
 
         out.writeInt(MAGIC)
         out.writeShort(VERSION)
-        out.writeByte(core.console.ordinal)
+        out.writeByte(core.console.storageId)
         out.write(core.romHash)
 
         val state = machine.cpu.state
@@ -116,7 +116,7 @@ object GbaState {
                 throw SaveStateException("Version d'état GBA non prise en charge : $version")
             }
             val console = input.readUnsignedByte()
-            if (console != core.console.ordinal) {
+            if (console != core.console.storageId) {
                 throw SaveStateException("État issu d'une autre console")
             }
             val hash = ByteArray(core.romHash.size)
