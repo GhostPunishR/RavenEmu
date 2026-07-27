@@ -10,6 +10,14 @@ import kotlinx.serialization.Serializable
  * Entrée de la bibliothèque : métadonnées d'une ROM indexée. L'URI référence
  * le document choisi par l'utilisateur (SAF) ; aucune donnée de ROM n'est
  * stockée dans l'index.
+ *
+ * **Couplage connu.** Ce modèle nomme encore des types propres à une console
+ * ([MbcType], [RomRegion], [GameBoyCartridgeMode]) : ajouter une console y
+ * ajouterait ses propres champs, et `rom-library` continue pour cette raison de
+ * dépendre des modules de moteur. Les rendre neutres suppose de changer le
+ * format de l'index et la manière dont l'application affiche le détail d'une
+ * ROM ; c'est une étape à part entière, volontairement séparée de
+ * l'introduction du contrat `ConsoleProvider`.
  */
 @Serializable
 data class RomEntry(

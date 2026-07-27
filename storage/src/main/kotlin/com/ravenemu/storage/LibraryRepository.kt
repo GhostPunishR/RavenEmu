@@ -18,13 +18,19 @@ import kotlinx.coroutines.withContext
  * L'état d'une ROM se déduit de la cartouche elle-même : aucune base
  * extérieure n'intervient, donc rien à importer ni à tenir à jour.
  */
-class LibraryRepository(context: Context) {
+class LibraryRepository(
+    context: Context,
+    /**
+     * Analyseurs consultés pour chaque fichier balayé. La valeur par défaut
+     * couvre les consoles livrées ; l'injecter permet d'en restreindre ou d'en
+     * étendre la liste sans toucher au dépôt.
+     */
+    private val analyzers: List<RomAnalyzer> =
+        listOf(GameBoyRomAnalyzer(), GbaRomAnalyzer()),
+) {
 
     private val scanner = RomFileScanner(context)
     private val indexStore = RomIndexStore(context)
-
-    private val analyzers: List<RomAnalyzer> =
-        listOf(GameBoyRomAnalyzer(), GbaRomAnalyzer())
 
     fun loadIndex(): RomIndex = indexStore.load()
 
