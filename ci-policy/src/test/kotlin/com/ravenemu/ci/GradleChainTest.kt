@@ -48,13 +48,15 @@ class GradleChainTest {
     }
 
     @Test
-    fun `l'empreinte de distribution, si elle est fixee, est un SHA-256`() {
-        // Le contrôle porte sur la forme : une valeur mal recopiée casserait
-        // toute construction, sur tous les postes, sans message exploitable.
-        val empreinte = wrapperProperties["distributionSha256Sum"] ?: return
+    fun `la distribution Gradle est epinglee par son empreinte`() {
+        // Sans cette propriété, le wrapper accepte n'importe quelle archive
+        // servie à l'URL déclarée. Avec elle, il la refuse dès que le contenu
+        // change — sur chaque poste, pas seulement en CI.
+        val empreinte = wrapperProperties["distributionSha256Sum"]
+            ?: fail("distributionSha256Sum absent : la distribution n'est pas épinglée")
         assertTrue(
             Regex("^[0-9a-f]{64}$").matches(empreinte),
-            "distributionSha256Sum doit être 64 caractères hexadécimaux minuscules",
+            "distributionSha256Sum doit être 64 caractères hexadécimaux minuscules, trouvé : $empreinte",
         )
     }
 
@@ -72,11 +74,18 @@ class GradleChainTest {
     }
 
     @Test
-    fun `la distribution utilisee est comparee a l'empreinte declaree`() {
+    fun `l'empreinte declaree est comparee a celle publiee par Gradle`() {
+        // Épingler une empreinte ne protège que si elle est la bonne : une
+        // valeur recopiée depuis une archive déjà substituée épinglerait la
+        // substitution. La CI la confronte à la source officielle.
         val build = workflow.jobs["build"]?.joinToString("\n") ?: fail("Job build absent")
         assertTrue(
             "distributionSha256Sum" in build,
-            "Le workflow doit contrôler la distribution effectivement téléchargée",
+            "Le workflow doit contrôler l'empreinte déclarée",
+        )
+        assertTrue(
+            ".sha256" in build,
+            "Le contrôle doit s'appuyer sur l'empreinte publiée à côté de l'archive",
         )
     }
 

@@ -62,12 +62,14 @@ Le code exécuté pendant une construction ne se limite pas au dépôt : il y a 
 
 **Wrapper Gradle.** `gradle/wrapper/gradle-wrapper.jar` est un binaire versionné, exécuté avant tout le reste et relu par personne. La CI le compare aux empreintes publiées par Gradle **avant** de le lancer : un jar substitué dans une contribution est arrêté là. Ne remplacez jamais ce fichier à la main ; utilisez `./gradlew wrapper --gradle-version <version>`.
 
-**Distribution Gradle.** `distributionUrl` doit rester sur `https://services.gradle.org`, et `validateDistributionUrl=true` interdit qu'on l'en détourne. La propriété `distributionSha256Sum` vérifie en plus le contenu téléchargé, sur chaque poste comme en CI. Pour la renseigner ou la mettre à jour :
+**Distribution Gradle.** `distributionUrl` doit rester sur `https://services.gradle.org`, et `validateDistributionUrl=true` interdit qu'on l'en détourne. `distributionSha256Sum` va plus loin : le wrapper refuse l'archive téléchargée si son empreinte diffère, sur chaque poste comme en CI.
 
-1. relever l'empreinte publiée sur <https://gradle.org/release-checksums/> pour la version employée ;
-2. l'ajouter à `gradle/wrapper/gradle-wrapper.properties` sous la forme `distributionSha256Sum=<64 caractères hexadécimaux>`.
+En changeant de version de Gradle, il faut mettre cette empreinte à jour :
 
-La CI relève l'empreinte de la distribution effectivement utilisée : elle échoue si la propriété est renseignée et ne correspond pas, et publie la valeur observée dans le résumé du job si elle est absente. Cette valeur est une aide au remplissage, pas une source de confiance : c'est le site officiel qui fait foi.
+1. relever l'empreinte « Binary-only (-bin) ZIP Checksum » de la nouvelle version sur <https://gradle.org/release-checksums/> ;
+2. la reporter dans `gradle/wrapper/gradle-wrapper.properties`.
+
+La CI confronte ensuite la valeur inscrite à celle que Gradle publie à côté de l'archive : épingler une empreinte ne protège que si c'est la bonne, et une valeur recopiée depuis une archive déjà substituée épinglerait la substitution.
 
 **Actions GitHub.** Elles sont épinglées par SHA de commit, jamais par étiquette de version : une étiquette peut être redéplacée, un SHA non. Dependabot surveille les deux écosystèmes (`gradle` et `github-actions`) et propose les mises à jour, ce qui évite que l'épinglage fige indéfiniment une version vulnérable.
 
