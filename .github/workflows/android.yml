@@ -38,6 +38,13 @@ jobs:
         with:
           persist-credentials: false
 
+      # Le wrapper Gradle est un binaire versionné dans le dépôt : il s'exécute
+      # avant tout le reste et n'est relu par personne. Cette validation compare
+      # `gradle-wrapper.jar` aux empreintes publiées par Gradle, avant qu'il ne
+      # soit lancé — un jar substitué dans une contribution est arrêté ici.
+      - name: Valider le wrapper Gradle
+        uses: gradle/actions/wrapper-validation@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+
       - name: Installer Java
         uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
         with:
@@ -49,6 +56,53 @@ jobs:
 
       - name: Tests unitaires
         run: ./gradlew test
+
+      # Le wrapper valide, la distribution qu'il télécharge reste à contrôler.
+      # `distributionSha256Sum` le fait à chaque exécution, y compris sur le
+      # poste des développeurs ; encore faut-il connaître la bonne valeur. Cette
+      # étape relève celle de la distribution effectivement utilisée : elle
+      # vérifie la propriété si elle est renseignée, et la publie sinon.
+      - name: Contrôler la distribution Gradle
+        run: |
+          properties=gradle/wrapper/gradle-wrapper.properties
+          url="$(sed -n 's/^distributionUrl=//p' "$properties")"
+          archive_name="${url##*/}"            # gradle-X.Y.Z-bin.zip
+          version="${archive_name#gradle-}"
+          version="${version%-bin.zip}"
+          version="${version%-all.zip}"
+          attendu="$(sed -n 's/^distributionSha256Sum=//p' "$properties")"
+
+          # `|| true` : un cache absent n'est pas une erreur de build, et sans
+          # cela l'échec de `find` arrêterait l'étape sous `bash -e`.
+          archive="$(
+            find "$HOME/.gradle/wrapper/dists" -name "gradle-$version-*.zip" -print -quit \
+              2>/dev/null || true
+          )"
+          if [[ -z "$archive" ]]; then
+            echo "::notice::Distribution Gradle $version absente du cache du runner, contrôle ignoré."
+            exit 0
+          fi
+          observe="$(sha256sum "$archive" | cut -d' ' -f1)"
+
+          if [[ -z "$attendu" ]]; then
+            echo "::warning::distributionSha256Sum absent de $properties. Valeur relevée pour Gradle $version : $observe"
+            {
+              echo "## Distribution Gradle"
+              echo ""
+              echo "\`distributionSha256Sum\` n'est pas renseigné. Empreinte relevée pour Gradle \`$version\` :"
+              echo ""
+              echo "\`\`\`properties"
+              echo "distributionSha256Sum=$observe"
+              echo "\`\`\`"
+              echo ""
+              echo "À comparer avec <https://gradle.org/release-checksums/> avant de l'ajouter."
+            } >> "$GITHUB_STEP_SUMMARY"
+          elif [[ "$attendu" != "$observe" ]]; then
+            echo "::error::La distribution Gradle $version utilisée ($observe) ne correspond pas à distributionSha256Sum ($attendu)."
+            exit 1
+          else
+            echo "Distribution Gradle $version conforme à distributionSha256Sum."
+          fi
 
       - name: Lint
         run: ./gradlew lint

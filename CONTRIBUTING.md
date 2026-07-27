@@ -56,6 +56,31 @@ Commandes utiles :
 ./gradlew assembleDebug
 ```
 
+## Intégrité de la chaîne de construction
+
+Le code exécuté pendant une construction ne se limite pas au dépôt : il y a aussi le wrapper Gradle, la distribution qu'il télécharge, les actions GitHub et les dépendances. Voici ce qui protège chacun de ces maillons.
+
+**Wrapper Gradle.** `gradle/wrapper/gradle-wrapper.jar` est un binaire versionné, exécuté avant tout le reste et relu par personne. La CI le compare aux empreintes publiées par Gradle **avant** de le lancer : un jar substitué dans une contribution est arrêté là. Ne remplacez jamais ce fichier à la main ; utilisez `./gradlew wrapper --gradle-version <version>`.
+
+**Distribution Gradle.** `distributionUrl` doit rester sur `https://services.gradle.org`, et `validateDistributionUrl=true` interdit qu'on l'en détourne. La propriété `distributionSha256Sum` vérifie en plus le contenu téléchargé, sur chaque poste comme en CI. Pour la renseigner ou la mettre à jour :
+
+1. relever l'empreinte publiée sur <https://gradle.org/release-checksums/> pour la version employée ;
+2. l'ajouter à `gradle/wrapper/gradle-wrapper.properties` sous la forme `distributionSha256Sum=<64 caractères hexadécimaux>`.
+
+La CI relève l'empreinte de la distribution effectivement utilisée : elle échoue si la propriété est renseignée et ne correspond pas, et publie la valeur observée dans le résumé du job si elle est absente. Cette valeur est une aide au remplissage, pas une source de confiance : c'est le site officiel qui fait foi.
+
+**Actions GitHub.** Elles sont épinglées par SHA de commit, jamais par étiquette de version : une étiquette peut être redéplacée, un SHA non.
+
+**Dépendances.** La vérification d'intégrité de Gradle (`gradle/verification-metadata.xml`) n'est pas encore activée. Elle exige des métadonnées couvrant **toutes** les configurations résolues, donc une machine disposant du SDK Android — sans lui, les modules Android sont exclus du build et les métadonnées produites seraient incomplètes, ce qui ferait échouer la CI à la première dépendance manquante. Pour la mettre en place :
+
+```bash
+./gradlew --write-verification-metadata sha256 help
+```
+
+Le fichier produit doit être relu avant d'être versionné, et complété à chaque ajout de dépendance.
+
+Ces règles sont vérifiées automatiquement par les tests du module `ci-policy`.
+
 ## Règles de développement
 
 - Respectez le style du code existant.
