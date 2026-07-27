@@ -92,6 +92,15 @@ class SigningPolicyTest {
     }
 
     @Test
+    fun `la publication Release échoue explicitement sans clé Release`() {
+        val release = job("release")
+        assertTrue(
+            release.contains("Exiger la clé de signature Release") && release.contains("exit 1"),
+            "Un tag de version sans clé Release doit échouer au lieu de ne rien publier",
+        )
+    }
+
+    @Test
     fun `la clé Release n'est jamais exposée aux jobs Test`() {
         for (name in listOf("build", "publish-test")) {
             assertEquals(
@@ -116,6 +125,10 @@ class SigningPolicyTest {
         assertTrue(
             job("publish-test").contains("RAVENEMU_RELEASE_CERT_SHA256"),
             "La publication Test doit refuser le certificat Release",
+        )
+        assertTrue(
+            job("release").contains("RAVENEMU_TEST_CERT_SHA256"),
+            "La publication Release doit refuser le certificat Test",
         )
     }
 

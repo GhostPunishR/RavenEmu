@@ -3,7 +3,17 @@ name: Android CI
 on:
   push:
     branches: [main, master, develop, "claude/**"]
+    tags: ["v*"]
   pull_request:
+  # Exécution manuelle. La publication Release reste refusée par défaut : elle
+  # doit être demandée explicitement, en plus des protections de
+  # l'environnement `release` (voir RELEASING.md).
+  workflow_dispatch:
+    inputs:
+      publier_release:
+        description: "Construire et publier les livrables Release signés"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -294,71 +304,111 @@ jobs:
               --yes
           fi
 
+  # Publication Release. Ce job ne se déclenche **jamais** sur un push de
+  # branche ordinaire : il faut soit un tag `v*`, soit une exécution manuelle
+  # demandant explicitement la publication. L'environnement `release` ajoute
+  # une approbation humaine et restreint l'accès aux secrets de signature
+  # (protections à configurer dans GitHub, voir RELEASING.md).
   release:
     name: Release signé (APK + AAB)
     runs-on: ubuntu-latest
     needs: build
-    if: github.event_name == 'push'
+    if: >-
+      startsWith(github.ref, 'refs/tags/v') ||
+      (github.event_name == 'workflow_dispatch' && inputs.publier_release)
+    environment: release
+    permissions:
+      contents: read
     env:
       # Secrets GitHub : le keystore et ses mots de passe ne sont jamais
-      # stockés dans le dépôt. Sans secrets, ni APK ni App Bundle Release
-      # n'est construit ni publié : seuls des livrables signés sont diffusés.
+      # stockés dans le dépôt. Ces secrets sont propres à Release et ne sont
+      # jamais utilisés pour l'APK Test, qui a sa propre clé RAVENEMU_TEST_*.
       KEYSTORE_BASE64: ${{ secrets.RAVENEMU_KEYSTORE_BASE64 }}
     steps:
-      - name: Signature non configurée
+      # Le job n'existe que pour produire des livrables signés : sans clé, il
+      # échoue au lieu de terminer en succès sans rien publier.
+      - name: Exiger la clé de signature Release
         if: env.KEYSTORE_BASE64 == ''
         run: |
-          {
-            echo "## Livrables Release non construits"
-            echo ""
-            echo "Les secrets de signature (RAVENEMU_KEYSTORE_BASE64,"
-            echo "RAVENEMU_KEYSTORE_PASSWORD, RAVENEMU_KEY_ALIAS,"
-            echo "RAVENEMU_KEY_PASSWORD) ne sont pas configurés : seuls un APK"
-            echo "et un App Bundle (.aab) signés sont publiés. Pour tester,"
-            echo "utilisez l'artefact ravenemu-test-apk du job de build"
-            echo "(voir README.md#installation)."
-          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error::Le secret RAVENEMU_KEYSTORE_BASE64 est absent : aucun livrable Release ne peut être signé. Voir RELEASING.md."
+          exit 1
 
       - name: Récupérer le dépôt
-        if: env.KEYSTORE_BASE64 != ''
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
 
       - name: Installer Java
-        if: env.KEYSTORE_BASE64 != ''
         uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
         with:
           distribution: temurin
           java-version: "21"
 
       - name: Configurer Gradle
-        if: env.KEYSTORE_BASE64 != ''
         uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
 
       - name: Restaurer le keystore depuis les secrets
-        if: env.KEYSTORE_BASE64 != ''
         run: |
-          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/ravenemu.jks"
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/ravenemu.jks"
+          if [[ ! -s "$RUNNER_TEMP/ravenemu.jks" ]]; then
+            echo "::error::RAVENEMU_KEYSTORE_BASE64 n'est pas un keystore encodé en base64 exploitable."
+            exit 1
+          fi
           echo "RAVENEMU_KEYSTORE_PATH=$RUNNER_TEMP/ravenemu.jks" >> "$GITHUB_ENV"
 
       - name: Construire l'APK et l'App Bundle Release signés
-        if: env.KEYSTORE_BASE64 != ''
         env:
           RAVENEMU_KEYSTORE_PASSWORD: ${{ secrets.RAVENEMU_KEYSTORE_PASSWORD }}
           RAVENEMU_KEY_ALIAS: ${{ secrets.RAVENEMU_KEY_ALIAS }}
           RAVENEMU_KEY_PASSWORD: ${{ secrets.RAVENEMU_KEY_PASSWORD }}
         run: ./gradlew assembleRelease bundleRelease
 
+      - name: Décrire les livrables Release (empreintes et provenance)
+        env:
+          TEST_CERT: ${{ vars.RAVENEMU_TEST_CERT_SHA256 }}
+        run: |
+          apk="$(find app/build/outputs/apk/release -type f -name '*.apk' -print -quit)"
+          aab="$(find app/build/outputs/bundle/release -type f -name '*.aab' -print -quit)"
+          if [[ -z "$apk" || -z "$aab" ]]; then
+            echo "::error::Livrables Release incomplets (APK ou AAB manquant)."
+            exit 1
+          fi
+
+          apksigner="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)"
+          cert_sha256="$(
+            "$apksigner" verify --print-certs "$apk" |
+              sed -n 's/.*certificate SHA-256 digest: *//p' | head -1
+          )"
+          if [[ -z "$cert_sha256" ]]; then
+            echo "::error::L'APK Release n'est pas signé."
+            exit 1
+          fi
+
+          if [[ -n "$TEST_CERT" && "${cert_sha256,,}" == "${TEST_CERT,,}" ]]; then
+            echo "::error::L'APK Release est signé avec le certificat Test. Les deux clés doivent rester distinctes."
+            exit 1
+          fi
+
+          {
+            echo "## Livrables Release"
+            echo ""
+            echo "| Élément | Valeur |"
+            echo "| --- | --- |"
+            echo "| Package | \`com.ravenemu.app\` |"
+            echo "| Référence | \`$GITHUB_REF\` |"
+            echo "| Commit | \`$GITHUB_SHA\` |"
+            echo "| SHA-256 de l'APK | \`$(sha256sum "$apk" | cut -d' ' -f1)\` |"
+            echo "| SHA-256 de l'AAB | \`$(sha256sum "$aab" | cut -d' ' -f1)\` |"
+            echo "| SHA-256 du certificat | \`$cert_sha256\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Publier l'APK Release signé
-        if: env.KEYSTORE_BASE64 != ''
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ravenemu-release-apk
           path: app/build/outputs/apk/release/*.apk
 
       - name: Publier l'App Bundle Release signé
-        if: env.KEYSTORE_BASE64 != ''
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ravenemu-release-aab
