@@ -136,7 +136,9 @@ class InstructionTimingTest {
         assertEquals(0, m.bus.timing.waitControl)
 
         core.loadState(state)
-        assertEquals(0x4018, m.bus.timing.waitControl)
-        assertTrue(m.bus.timing.prefetchEnabled)
+        // La restauration remplace la machine active.
+        val apres = core.machine!!
+        assertEquals(0x4018, apres.bus.timing.waitControl)
+        assertTrue(apres.bus.timing.prefetchEnabled)
     }
 }

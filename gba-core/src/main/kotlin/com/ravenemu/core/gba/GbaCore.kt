@@ -218,8 +218,26 @@ class GbaCore(
     }
 
     override fun loadState(state: ByteArray) {
-        val m = machine ?: error("Aucune ROM chargée")
-        GbaState.restore(this, m, state)
+        machine ?: error("Aucune ROM chargée")
+        // La restauration produit une machine neuve : celle en place n'est
+        // remplacée qu'après un retour normal. Un état corrompu laisse donc la
+        // partie en cours strictement intacte, et jouable.
+        val restored = GbaState.restore(this, state)
+        // Journalisation et chronométrage relèvent de l'intention de l'appelant,
+        // pas de l'état émulé : ils survivent au remplacement de la machine.
+        val wasMeasuring = measuringTime
+        restored.diagnostics.onEvent = onDiagnosticEvent
+        machine = restored
+        measuringTime = wasMeasuring
+    }
+
+    /**
+     * Construit une machine vierge pour une restauration transactionnelle. Elle
+     * ne devient active qu'après validation complète de l'état.
+     */
+    internal fun newMachineForState(): GbaMachine {
+        val rom = loadedRom ?: error("Aucune ROM chargée")
+        return GbaMachine(rom, forcedSaveType)
     }
 
     companion object {
