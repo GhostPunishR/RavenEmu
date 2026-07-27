@@ -222,4 +222,58 @@ class GbaPpuEffectsTest {
         // Hors de la fenêtre objet : plus rien, donc le fond.
         assertEquals(GbaPpu.bgr555ToArgb(blue), pixel(ppu, 100, 0))
     }
+
+    // ---- Verrouillage des points de référence affines ----
+
+    /** Cycles d'une ligne complète, intervalle horizontal compris. */
+    private val lineCycles = GbaCore.CYCLES_PER_FRAME / 228
+
+    private fun advanceLines(ppu: GbaPpu, count: Int) = ppu.tick(lineCycles * count)
+
+    /**
+     * Décale la carte de 100 pixels vers la droite : sans ce décalage, la colonne
+     * 200 tombe hors d'une carte de 128 pixels et reste au fond.
+     */
+    private fun writeBg2X(bus: GbaBus, pixels: Int) =
+        bus.write32(0x0400_0028, pixels shl 8)
+
+    /**
+     * Un jeu écrit ses registres d'affichage **pendant le VBlank**, pour l'image
+     * qui suit. Verrouiller les points de référence à l'entrée du VBlank, donc
+     * avant son gestionnaire d'interruption, revenait à afficher indéfiniment le
+     * cadrage de l'image précédente.
+     */
+    @Test
+    fun `un point de reference ecrit pendant le VBlank sert des l'image suivante`() {
+        val (bus, ppu) = newPpu()
+        setupAffineBg(bus, wrap = false)
+        renderFrame(ppu)
+        assertEquals(GbaPpu.bgr555ToArgb(blue), pixel(ppu, 200, 0), "cadrage de départ")
+
+        // Entrée dans le VBlank, puis écriture comme le ferait le jeu.
+        advanceLines(ppu, 161)
+        writeBg2X(bus, -100)
+        advanceLines(ppu, 228 - 161)
+
+        renderFrame(ppu)
+        assertEquals(GbaPpu.bgr555ToArgb(green), pixel(ppu, 200, 0))
+    }
+
+    /**
+     * Le matériel recopie aussitôt `BGxX`/`BGxY` dans le registre interne que
+     * suit le rendu : une couche affine peut donc être déplacée en cours
+     * d'image, ce dont se servent les effets ligne par ligne.
+     */
+    @Test
+    fun `ecrire un point de reference agit des la ligne suivante`() {
+        val (bus, ppu) = newPpu()
+        setupAffineBg(bus, wrap = false)
+
+        advanceLines(ppu, 80)
+        writeBg2X(bus, -100)
+        advanceLines(ppu, 80)
+
+        assertEquals(GbaPpu.bgr555ToArgb(blue), pixel(ppu, 200, 10), "haut de l'image")
+        assertEquals(GbaPpu.bgr555ToArgb(green), pixel(ppu, 200, 120), "bas de l'image")
+    }
 }

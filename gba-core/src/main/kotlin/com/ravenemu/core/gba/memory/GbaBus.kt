@@ -344,12 +344,15 @@ class GbaBus(
      * (interruptions, timers, DMA, audio). Les octets ont déjà été stockés dans
      * [io] : [value] est la valeur complète du registre après écriture.
      *
-     * L'affichage (`DISPCNT`, `DISPSTAT`, fenêtres, mélange…) n'apparaît pas
-     * ici : le PPU lit ces registres directement dans [io], donc une écriture
-     * de n'importe quelle largeur prend effet sans notification.
+     * L'affichage (`DISPCNT`, `DISPSTAT`, fenêtres, mélange…) n'apparaît
+     * quasiment pas ici : le PPU lit ces registres directement dans [io], donc
+     * une écriture de n'importe quelle largeur prend effet sans notification.
+     * Les points de référence affines font exception : le rendu suit une copie
+     * interne, qui doit être rafraîchie à l'écriture.
      */
     private fun handleIoWrite(offset: Int, value: Int) {
         when (offset) {
+            in 0x028..0x02F, in 0x038..0x03F -> ppu?.onAffineReferenceWrite(offset)
             IE_LOW -> interrupts?.enable = value
             IF_LOW -> interrupts?.acknowledge(value)
             IME -> interrupts?.masterEnable = value and 1 != 0

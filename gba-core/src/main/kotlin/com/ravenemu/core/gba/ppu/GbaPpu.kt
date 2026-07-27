@@ -156,10 +156,13 @@ class GbaPpu(private val bus: GbaBus) {
                 inHBlank = false
                 vcount = (vcount + 1) % TOTAL_LINES
                 inVBlank = vcount >= SCREEN_HEIGHT
+                // Les points de référence affines sont verrouillés au début de
+                // l'image, pas à l'entrée du VBlank : c'est pendant le VBlank que
+                // le jeu écrit `BGxX`/`BGxY` pour l'image à venir, et les
+                // verrouiller avant son gestionnaire reviendrait à toujours
+                // afficher l'image précédente.
+                if (vcount == 0) reloadAffineReferencePoints()
                 if (vcount == SCREEN_HEIGHT) {
-                    // Le VBlank reverrouille les points de référence affines
-                    // sur les valeurs écrites par le jeu.
-                    reloadAffineReferencePoints()
                     if (dispStatIrqEnabled(VBLANK_IRQ)) interrupts?.request(Interrupt.VBLANK)
                     dma?.triggerVBlank()
                 }
@@ -727,6 +730,23 @@ class GbaPpu(private val bus: GbaBus) {
     }
 
     // ---- Accès mémoire ----
+
+    /**
+     * Écriture d'un point de référence affine (`BG2X`, `BG2Y`, `BG3X`, `BG3Y`).
+     *
+     * Le matériel recopie aussitôt la valeur écrite dans le registre interne que
+     * suit le rendu, sans attendre l'image suivante. C'est ce qui permet à un jeu
+     * de déplacer une couche affine en cours d'affichage, ligne par ligne ; sans
+     * cela, l'écriture resterait sans effet jusqu'au prochain verrouillage.
+     */
+    fun onAffineReferenceWrite(offset: Int) {
+        when {
+            offset < 0x2C -> bg2RefX = signed28(reg32(0x28))
+            offset < 0x30 -> bg2RefY = signed28(reg32(0x2C))
+            offset < 0x3C -> bg3RefX = signed28(reg32(0x38))
+            else -> bg3RefY = signed28(reg32(0x3C))
+        }
+    }
 
     /** Recharge les points de référence affines depuis `BGxX`/`BGxY`. */
     private fun reloadAffineReferencePoints() {
