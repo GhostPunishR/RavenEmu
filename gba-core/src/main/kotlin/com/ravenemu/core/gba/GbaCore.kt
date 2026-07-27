@@ -23,8 +23,9 @@ import java.security.MessageDigest
  * modes bitmap, texte et affines avec sprites, fenêtres et effets de couleur.
  * Sont également gérés : entrées ([setButton] alimente `KEYINPUT`, boutons
  * `L`/`R` compris), interruptions, timers, DMA, BIOS HLE, audio ([readAudio]
- * draine les canaux PSG et Direct Sound) et **sauvegardes de cartouche**
- * (SRAM, Flash 64/128 Kio, EEPROM) exportées au format `.sav` brut.
+ * draine les canaux PSG et Direct Sound), **sauvegardes de cartouche**
+ * (SRAM, Flash 64/128 Kio, EEPROM) exportées au format `.sav` brut, et
+ * **horloge temps réel** de cartouche pour les jeux qui en embarquent une.
  *
  * La compatibilité commerciale reste à valider ; les limites connues sont
  * documentées en AD-15.

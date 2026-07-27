@@ -13,8 +13,9 @@ import com.ravenemu.emulation.api.RomLoadException
  * (32 Mio). Un accès au-delà de la taille réelle retourne `0` (pas de « open
  * bus » émulé dans le premier lot ; limite documentée).
  *
- * Les mémoires de sauvegarde (SRAM, Flash, EEPROM) ne sont pas prises en charge
- * dans ce premier lot.
+ * Outre la ROM, la cartouche porte deux composants facultatifs : sa mémoire de
+ * sauvegarde (SRAM, Flash ou EEPROM) et son port GPIO, derrière lequel se trouve
+ * l'horloge temps réel des jeux qui en embarquent une.
  */
 class GbaCartridge private constructor(
     val rom: ByteArray,
@@ -25,6 +26,15 @@ class GbaCartridge private constructor(
     /** Mémoire de sauvegarde, ou `null` si la cartouche n'en déclare aucune. */
     val save: GbaSaveMemory? = GbaSaveMemory.create(saveType)
 
+    /**
+     * Port GPIO de la cartouche, ou `null` si elle n'en a pas.
+     *
+     * Il n'est créé que pour les cartouches qui embarquent réellement une horloge
+     * temps réel : sans cela, les octets de ROM situés en `0x0800_00C4` seraient
+     * détournés au profit d'un composant absent.
+     */
+    val gpio: GbaGpio? = if (hasRealTimeClock(rom)) GbaGpio() else null
+
     /** Lit un octet à l'offset ROM (déjà replié par le bus). */
     fun read8(offset: Int): Int =
         if (offset in rom.indices) rom[offset].toInt() and 0xFF else 0
@@ -32,6 +42,35 @@ class GbaCartridge private constructor(
     companion object {
         /** Taille maximale d'une ROM GBA : 32 Mio. */
         const val MAX_ROM_SIZE = 0x0200_0000
+
+        /**
+         * Signature de la bibliothèque Seiko livrée avec toutes les cartouches à
+         * horloge (`SIIRTC_V001` chez Pokémon Rubis, Saphir et Émeraude).
+         *
+         * La chercher vaut mieux qu'une liste de codes de jeu : elle couvre les
+         * révisions et les traductions sans qu'aucune table n'ait à être tenue à
+         * jour, et son absence est une réponse tout aussi sûre.
+         */
+        private val RTC_SIGNATURE = "SIIRTC_V".toByteArray(Charsets.US_ASCII)
+
+        /** `true` si la ROM embarque la bibliothèque d'horloge temps réel. */
+        fun hasRealTimeClock(rom: ByteArray): Boolean {
+            val first = RTC_SIGNATURE[0]
+            val last = rom.size - RTC_SIGNATURE.size
+            var i = 0
+            while (i <= last) {
+                if (rom[i] == first && matchesSignature(rom, i)) return true
+                i++
+            }
+            return false
+        }
+
+        private fun matchesSignature(rom: ByteArray, at: Int): Boolean {
+            for (j in 1 until RTC_SIGNATURE.size) {
+                if (rom[at + j] != RTC_SIGNATURE[j]) return false
+            }
+            return true
+        }
 
         /**
          * Crée une cartouche à partir des octets d'une ROM.

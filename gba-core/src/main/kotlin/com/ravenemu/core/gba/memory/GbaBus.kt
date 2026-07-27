@@ -2,6 +2,7 @@ package com.ravenemu.core.gba.memory
 
 import com.ravenemu.core.gba.audio.GbaApu
 import com.ravenemu.core.gba.cartridge.GbaCartridge
+import com.ravenemu.core.gba.cartridge.GbaGpio
 import com.ravenemu.core.gba.dma.DmaController
 import com.ravenemu.core.gba.input.GbaKeypad
 import com.ravenemu.core.gba.interrupt.GbaInterruptController
@@ -40,6 +41,13 @@ class GbaBus(
     val vram = ByteArray(MemoryRegion.VRAM.size)
     val oam = ByteArray(MemoryRegion.OAM.size)
     val sram = ByteArray(MemoryRegion.SRAM.size)
+
+    /**
+     * Port GPIO de la cartouche (horloge temps réel), ou `null` si elle n'en a
+     * pas. Recopié ici plutôt que relu à travers la cartouche : le test tombe sur
+     * le chemin de tous les accès 16 bits.
+     */
+    val gpio: GbaGpio? = cartridge.gpio
 
     /** Unité graphique, rattachée après construction (registres DISPSTAT/VCOUNT). */
     var ppu: GbaPpu? = null
@@ -248,15 +256,40 @@ class GbaBus(
     private fun isEepromWindow(address: Int): Boolean =
         cartridge.save is GbaSaveMemory.Eeprom && (address ushr 24) == 0x0D
 
-    /** Lecture dans l'espace cartouche (ROM). */
-    private fun readRomRegion(address: Int): Int = cartridge.read8(romOffset(address))
+    /**
+     * `true` si l'adresse tombe sur un des registres du port GPIO de la
+     * cartouche. Ils sont visibles depuis chacun des miroirs de la ROM.
+     */
+    private fun isGpioRegister(address: Int): Boolean =
+        ((address ushr 24) and 0xFF) in 0x08..0x0D && GbaGpio.covers(romOffset(address))
 
     /**
-     * L'espace ROM est en lecture seule ; la fenêtre EEPROM est traitée au
-     * niveau des accès 16 bits, seuls utilisés par son protocole série.
+     * Lecture dans l'espace cartouche (ROM), ou du port GPIO lorsque le jeu en a
+     * autorisé la relecture. Sans cette autorisation, la lecture traverse jusqu'à
+     * la ROM : c'est ce que fait le matériel, le port ne pilotant alors pas le bus.
      */
-    @Suppress("UNUSED_PARAMETER")
-    private fun writeRomRegion(address: Int, value: Int) = Unit
+    private fun readRomRegion(address: Int): Int {
+        val port = gpio
+        if (port != null && port.readable && isGpioRegister(address)) {
+            val offset = romOffset(address)
+            val half = port.read16(offset and 0x1.inv())
+            return if (offset and 1 == 0) half and 0xFF else (half ushr 8) and 0xFF
+        }
+        return cartridge.read8(romOffset(address))
+    }
+
+    /**
+     * L'espace ROM est en lecture seule, à l'exception des registres du port
+     * GPIO. La fenêtre EEPROM, elle, est traitée au niveau des accès 16 bits,
+     * seuls utilisés par son protocole série.
+     */
+    private fun writeRomRegion(address: Int, value: Int) {
+        val port = gpio ?: return
+        if (!isGpioRegister(address)) return
+        val offset = romOffset(address)
+        // Les quatre broches tiennent dans l'octet bas de chaque registre.
+        if (offset and 1 == 0) port.write16(offset, value)
+    }
 
     /** Lecture de la zone de sauvegarde (SRAM ou Flash selon la cartouche). */
     private fun readSaveRegion(address: Int): Int = when (val save = cartridge.save) {
@@ -405,6 +438,10 @@ class GbaBus(
         // il ne doit donc pas être décomposé en deux lectures d'octet.
         val eeprom = eeprom()
         if (eeprom != null && isEepromWindow(a)) return eeprom.read()
+        // Le port GPIO est le seul endroit de la ROM qui ne soit pas une simple
+        // lecture de tableau ; il doit donc passer avant le chemin rapide.
+        val port = gpio
+        if (port != null && port.readable && isGpioRegister(a)) return port.read16(romOffset(a))
         // Chemin rapide : un seul aiguillage de région puis deux accès tableau,
         // au lieu de deux appels complets à read8.
         val block = directBlock(a)
@@ -530,6 +567,14 @@ class GbaBus(
         val eeprom = eeprom()
         if (eeprom != null && isEepromWindow(a)) {
             eeprom.write(value)
+            return
+        }
+        // Un demi-mot écrit sur le port GPIO transporte l'état des quatre broches
+        // d'un coup : le décomposer en deux octets ferait battre l'horloge deux
+        // fois, la seconde avec un octet haut vide.
+        val port = gpio
+        if (port != null && isGpioRegister(a)) {
+            port.write16(romOffset(a), value and 0xFFFF)
             return
         }
         val region = MemoryRegion.of(a) ?: return

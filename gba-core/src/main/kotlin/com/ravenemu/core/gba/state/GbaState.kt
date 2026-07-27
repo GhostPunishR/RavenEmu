@@ -2,6 +2,7 @@ package com.ravenemu.core.gba.state
 
 import com.ravenemu.core.gba.GbaCore
 import com.ravenemu.core.gba.GbaMachine
+import com.ravenemu.core.gba.cartridge.GbaGpio
 import com.ravenemu.emulation.api.SaveStateException
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -23,12 +24,17 @@ object GbaState {
 
     private const val MAGIC = 0x52564E53 // "RVNS"
     /**
+     * Version 8 : ajoute le port GPIO de la cartouche et son horloge temps réel
+     * (broches, transaction en cours, registre d'état, écart avec l'heure de
+     * l'hôte). Sans eux, recharger un état au milieu d'un dialogue avec l'horloge
+     * laisserait le jeu attendre des octets qui ne viendraient jamais.
+     *
      * Version 7 : état PPU complet (dont les points de référence affines),
      * interruptions, timers, DMA (adresses courantes et cycles dus), pause CPU
      * (`halted`), attente d'interruption du BIOS (`IntrWait`) et mémoire de
      * sauvegarde de la cartouche.
      */
-    private const val VERSION = 7
+    private const val VERSION = 8
     private const val BANK_WORDS = 28 // CpuState.exportBanks(): 6*3 + 10
     private const val TIMER_STATE_WORDS = 16
     private const val DMA_STATE_WORDS = 9 // 4 sources + 4 destinations + cycles dus
@@ -85,6 +91,11 @@ object GbaState {
         val saveData = save?.export() ?: ByteArray(0)
         out.writeInt(saveData.size)
         out.write(saveData)
+
+        // Port GPIO et horloge temps réel : présence, puis un bloc de taille fixe.
+        val gpio = machine.cartridge.gpio
+        out.writeBoolean(gpio != null)
+        if (gpio != null) for (value in gpio.exportState()) out.writeInt(value)
 
         out.flush()
         return buffer.toByteArray()
@@ -156,6 +167,14 @@ object GbaState {
                 throw SaveStateException("État instantané corrompu (sauvegarde)")
             }
             val saveData = ByteArray(saveSize).also(input::readFully)
+
+            val gpio = machine.cartridge.gpio
+            if (input.readBoolean() != (gpio != null)) {
+                throw SaveStateException("État instantané corrompu (port GPIO)")
+            }
+            val gpioState =
+                if (gpio != null) IntArray(GbaGpio.STATE_WORDS) { input.readInt() } else null
+
             if (input.read() != -1) {
                 throw SaveStateException("État instantané corrompu (données excédentaires)")
             }
@@ -188,6 +207,7 @@ object GbaState {
             machine.timers.importState(timerState)
             machine.dma.importState(dmaState)
             if (saveData.isNotEmpty()) machine.cartridge.save?.import(saveData)
+            if (gpioState != null) gpio?.importState(gpioState)
             machine.bios.waitState =
                 if (waiting) {
                     com.ravenemu.core.gba.bios.BiosWaitState(waitMask, waitDiscard)
