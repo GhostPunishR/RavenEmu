@@ -6,12 +6,11 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Rect
 import android.util.AttributeSet
+import android.util.Log
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import com.ravenemu.emulation.api.display.DisplayAdjustments
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.locks.ReentrantLock
-import kotlin.concurrent.withLock
+import com.ravenemu.emulation.api.render.FrameSwapChain
 
 /**
  * Affichage du framebuffer produit par un moteur d'émulation.
@@ -87,12 +86,15 @@ class EmulatorSurfaceView @JvmOverloads constructor(
         isAntiAlias = false
     }
 
-    // Tampon partagé entre le thread d'émulation (producteur) et le thread de
-    // rendu (consommateur), protégé par [frameLock].
-    private val frameLock = ReentrantLock()
-    private val frameReady = frameLock.newCondition()
-    private var latestFrame: IntArray? = null
-    private var frameDirty = false
+    /**
+     * Échange de trames entre le thread d'émulation et le thread de rendu.
+     *
+     * Le verrou ne sert qu'à l'échange de deux références : colorisation,
+     * réglages, remplissage du bitmap et dessin ont lieu **hors verrou**, sur un
+     * tampon que plus personne d'autre ne touche. Le thread d'émulation ne peut
+     * donc jamais attendre le rendu d'une trame.
+     */
+    private val swapChain = FrameSwapChain(1)
 
     @Volatile
     private var surfaceAvailable = false
@@ -105,12 +107,9 @@ class EmulatorSurfaceView @JvmOverloads constructor(
 
     /** Prépare la vue pour un framebuffer de [width] × [height] pixels. */
     fun configure(width: Int, height: Int) {
-        frameLock.withLock {
-            frameWidth = width
-            frameHeight = height
-            latestFrame = IntArray(width * height)
-            frameDirty = false
-        }
+        frameWidth = width
+        frameHeight = height
+        swapChain.resize(width * height)
     }
 
     /**
@@ -118,13 +117,7 @@ class EmulatorSurfaceView @JvmOverloads constructor(
      * rendu. Retour immédiat : n'attend jamais le canvas ni le vsync.
      */
     fun presentFrame(frame: IntArray) {
-        frameLock.withLock {
-            val target = latestFrame ?: return
-            if (frame.size < target.size) return
-            System.arraycopy(frame, 0, target, 0, target.size)
-            frameDirty = true
-            frameReady.signalAll()
-        }
+        swapChain.publish(frame)
     }
 
     private fun computeDestination(canvasWidth: Int, canvasHeight: Int) {
@@ -151,6 +144,7 @@ class EmulatorSurfaceView @JvmOverloads constructor(
 
     override fun surfaceCreated(holder: SurfaceHolder) {
         surfaceAvailable = true
+        swapChain.reopen()
         renderThread = RenderThread().also { it.start() }
     }
 
@@ -162,8 +156,13 @@ class EmulatorSurfaceView @JvmOverloads constructor(
         surfaceAvailable = false
         renderThread?.let { thread ->
             thread.running = false
-            frameLock.withLock { frameReady.signalAll() }
-            thread.join(500)
+            // Ferme la chaîne : c'est ce qui réveille une attente de trame et
+            // permet au thread de rendu de sortir dans son délai.
+            swapChain.close()
+            thread.join(RENDER_THREAD_JOIN_MILLIS)
+            if (thread.isAlive) {
+                Log.w(TAG, "thread de rendu encore actif après la destruction de la surface")
+            }
         }
         renderThread = null
     }
@@ -215,27 +214,17 @@ class EmulatorSurfaceView @JvmOverloads constructor(
 
         override fun run() {
             while (running) {
-                var frameToDraw: Bitmap? = null
-                frameLock.withLock {
-                    while (running && !frameDirty) {
-                        try {
-                            frameReady.await(250, TimeUnit.MILLISECONDS)
-                        } catch (_: InterruptedException) {
-                            running = false
-                        }
-                    }
-                    val source = latestFrame
-                    if (running && source != null) {
-                        frameDirty = false
-                        val width = frameWidth
-                        val height = frameHeight
-                        val bmp = ensureBitmap(width, height)
-                        val pixels = colorize(source, width * height)
-                        bmp.setPixels(pixels, 0, width, 0, 0, width, height)
-                        frameToDraw = bmp
-                    }
-                }
-                frameToDraw?.let(::drawToSurface)
+                // Seule cette ligne touche au verrou partagé, le temps d'un
+                // échange de références. Tout ce qui suit est hors verrou.
+                val source = swapChain.acquire(ACQUIRE_TIMEOUT_NANOS) ?: continue
+                if (!running) break
+                val width = frameWidth
+                val height = frameHeight
+                if (width <= 0 || height <= 0 || source.size < width * height) continue
+                val bmp = ensureBitmap(width, height)
+                val pixels = colorize(source, width * height)
+                bmp.setPixels(pixels, 0, width, 0, 0, width, height)
+                drawToSurface(bmp)
             }
         }
 
@@ -266,5 +255,15 @@ class EmulatorSurfaceView @JvmOverloads constructor(
                 }
             }
         }
+    }
+
+    private companion object {
+        const val TAG = "RavenEmuRenderer"
+
+        /** Délai d'attente d'une trame avant de rendre la main à la boucle. */
+        const val ACQUIRE_TIMEOUT_NANOS = 250_000_000L
+
+        /** Délai laissé au thread de rendu pour sortir à la destruction. */
+        const val RENDER_THREAD_JOIN_MILLIS = 500L
     }
 }
