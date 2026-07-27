@@ -62,7 +62,7 @@ Le moteur Game Boy Advance démarre désormais des jeux commerciaux testés, mai
 - Bibliothèque locale avec recherche, tri, filtres et vues grille ou liste
 - Accès aux dossiers par le sélecteur Android, sans permission globale de stockage
 - Identification par CRC32, SHA-1 et SHA-256
-- Import de métadonnées No-Intro `.dat` ou JSON, sans téléchargement de ROM
+- Badge d'intégrité calculé depuis les sommes de contrôle de la cartouche, sans base extérieure
 - Pochettes choisies par l'utilisateur ou générées localement
 - Commandes tactiles configurables par console, orientation et jeu
 - Manettes physiques, multitouch, diagonales et vibrations

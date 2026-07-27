@@ -19,8 +19,6 @@
     <string name="library_refresh_done">Bibliothèque actualisée : %1$d jeux</string>
     <string name="library_rom_details">Détails</string>
     <string name="library_choose_cover">Choisir une pochette</string>
-    <string name="library_mark_homebrew">Marquer comme homebrew</string>
-    <string name="library_unmark_homebrew">Retirer le marquage homebrew</string>
     <string name="library_size_kib">%1$d Kio</string>
     <string name="library_filter_console">Filtrer par console</string>
     <string name="library_filter_all">Toutes les consoles</string>
@@ -30,12 +28,11 @@
     <string name="library_save_type_auto">Détection automatique</string>
     <string name="library_save_type_forced">%1$s (imposé)</string>
 
-    <!-- Statuts -->
-    <string name="status_verified">Officielle vérifiée</string>
-    <string name="status_hack">ROM hack identifié</string>
-    <string name="status_modified">Modifiée ou non reconnue</string>
-    <string name="status_unknown">Inconnue</string>
-    <string name="status_homebrew">Homebrew</string>
+    <!-- Statuts déduits des sommes de contrôle de la cartouche -->
+    <string name="status_intact">Intègre</string>
+    <string name="status_modified">Modifiée</string>
+    <string name="status_header_only">En-tête vérifié</string>
+    <string name="status_invalid_header">En-tête douteux</string>
 
     <!-- Émulation -->
     <string name="emulation_menu">Menu de l\'émulateur</string>
@@ -97,14 +94,8 @@
     <string name="settings_sav_dir_none">Espace privé de l\'application</string>
     <string name="settings_covers_dir">Dossier des pochettes</string>
     <string name="settings_covers_dir_none">Aucun dossier choisi</string>
-    <string name="settings_import_references">Importer une base d\'empreintes</string>
-    <string name="settings_references_count">%1$d empreintes de référence</string>
-    <string name="settings_references_imported">%1$d empreintes importées</string>
-    <string name="settings_references_import_failed">Import impossible : %1$s</string>
-    <string name="settings_clear_references">Supprimer les bases importées</string>
-    <string name="settings_references_cleared">Bases d\'empreintes importées supprimées</string>
     <string name="settings_category_library">Bibliothèque</string>
-    <string name="settings_badges">Afficher les badges de statut</string>
+    <string name="settings_badges">Afficher les badges d\'intégrité</string>
     <string name="settings_clear_index">Nettoyer l\'index</string>
     <string name="settings_index_cleared">Index nettoyé</string>
     <string name="settings_category_debug">Débogage</string>

@@ -5,7 +5,6 @@ import android.net.Uri
 import com.ravenemu.romlibrary.AnalysisResult
 import com.ravenemu.romlibrary.GameBoyRomAnalyzer
 import com.ravenemu.romlibrary.GbaRomAnalyzer
-import com.ravenemu.romlibrary.ReferenceDatabase
 import com.ravenemu.romlibrary.RomAnalyzer
 import com.ravenemu.romlibrary.RomIndex
 import kotlinx.coroutines.Dispatchers
@@ -16,44 +15,18 @@ import kotlinx.coroutines.withContext
  * fichiers nouveaux ou modifiés, retrait des fichiers disparus, persistance
  * de l'index. Toute l'E/S s'exécute hors du thread principal.
  *
- * La base de références sert à l'identification des ROM ; elle peut être
- * remplacée à chaud ([setReferenceDatabase]) après un import, puis appliquée
- * à l'index existant sans relire les fichiers ([reclassify]).
+ * L'état d'une ROM se déduit de la cartouche elle-même : aucune base
+ * extérieure n'intervient, donc rien à importer ni à tenir à jour.
  */
-class LibraryRepository(
-    context: Context,
-    referenceDatabase: ReferenceDatabase = ReferenceDatabase.empty(),
-) {
+class LibraryRepository(context: Context) {
+
     private val scanner = RomFileScanner(context)
     private val indexStore = RomIndexStore(context)
 
-    private var database = referenceDatabase
-    private var analyzers: List<RomAnalyzer> = buildAnalyzers(referenceDatabase)
-
-    fun setReferenceDatabase(newDatabase: ReferenceDatabase) {
-        database = newDatabase
-        analyzers = buildAnalyzers(newDatabase)
-    }
-
-    private fun buildAnalyzers(db: ReferenceDatabase): List<RomAnalyzer> =
-        listOf(GameBoyRomAnalyzer(db), GbaRomAnalyzer(db))
+    private val analyzers: List<RomAnalyzer> =
+        listOf(GameBoyRomAnalyzer(), GbaRomAnalyzer())
 
     fun loadIndex(): RomIndex = indexStore.load()
-
-    /**
-     * Recalcule le statut d'identification de chaque entrée selon la base
-     * courante, sans relire les fichiers (les empreintes sont déjà connues).
-     * Les choix utilisateur (statut forcé, pochette) sont préservés.
-     */
-    suspend fun reclassify(index: RomIndex): RomIndex = withContext(Dispatchers.IO) {
-        val updated = index.copy(
-            entries = index.entries.map { entry ->
-                entry.copy(status = database.classify(entry.fingerprints, entry.title))
-            }
-        )
-        indexStore.save(updated)
-        updated
-    }
 
     /**
      * Actualise l'index à partir des dossiers [romDirUris] et retourne le
@@ -90,7 +63,6 @@ class LibraryRepository(
                     val previous = index.byUri(uriString)
                     index = index.upsert(
                         result.entry.copy(
-                            userStatusOverride = previous?.userStatusOverride,
                             coverUri = previous?.coverUri,
                         )
                     )
