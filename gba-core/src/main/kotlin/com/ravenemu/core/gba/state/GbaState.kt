@@ -15,10 +15,16 @@ import java.io.IOException
  * versionné RavenEmu (`RVNS`).
  *
  * En-tête : magic `RVNS`, version, console, SHA-256 de la ROM. Un état ne peut
- * être restauré que sur la **même ROM** et la même console. La restauration est
- * **transactionnelle** : tout est lu et validé dans des tampons locaux avant la
- * moindre mutation de la machine ; un fichier tronqué ou trop volumineux est
- * rejeté sans effet de bord. Ce format est distinct de celui de la Game Boy.
+ * être restauré que sur la **même ROM** et la même console.
+ *
+ * La restauration est **transactionnelle par construction** : elle s'applique à
+ * une machine neuve, construite pour l'occasion, que [restore] ne retourne
+ * qu'après avoir tout lu et validé. La machine active n'est jamais touchée par
+ * une restauration qui échoue — quel que soit l'endroit où elle échoue, y
+ * compris dans un sous-système appelé en fin de lecture. Aucune discipline
+ * d'ordre n'est plus nécessaire pour ajouter un champ au format.
+ *
+ * Ce format est distinct de celui de la Game Boy.
  */
 object GbaState {
 
@@ -48,7 +54,7 @@ object GbaState {
 
         out.writeInt(MAGIC)
         out.writeShort(VERSION)
-        out.writeByte(core.console.ordinal)
+        out.writeByte(core.console.storageId)
         out.write(core.romHash)
 
         val state = machine.cpu.state
@@ -101,7 +107,13 @@ object GbaState {
         return buffer.toByteArray()
     }
 
-    fun restore(core: GbaCore, machine: GbaMachine, data: ByteArray) {
+    /**
+     * Reconstruit une machine à partir de [data]. La machine retournée est
+     * **neuve** : l'appelant ne remplace la machine active qu'après un retour
+     * normal. Toute erreur — en-tête, troncature, valeur hors bornes relevée par
+     * un sous-système — laisse la machine active strictement inchangée.
+     */
+    fun restore(core: GbaCore, data: ByteArray): GbaMachine {
         if (data.size > MAX_STATE_SIZE) {
             throw SaveStateException("État instantané trop volumineux : ${data.size} octets")
         }
@@ -116,7 +128,7 @@ object GbaState {
                 throw SaveStateException("Version d'état GBA non prise en charge : $version")
             }
             val console = input.readUnsignedByte()
-            if (console != core.console.ordinal) {
+            if (console != core.console.storageId) {
                 throw SaveStateException("État issu d'une autre console")
             }
             val hash = ByteArray(core.romHash.size)
@@ -125,98 +137,86 @@ object GbaState {
                 throw SaveStateException("État issu d'une autre ROM")
             }
 
-            // Lecture dans des tampons locaux (rien n'est encore appliqué).
+            // À partir d'ici, tout s'écrit dans une machine jetable : elle sera
+            // abandonnée telle quelle si la moindre lecture échoue.
+            val machine = core.newMachineForState()
+
+            val state = machine.cpu.state
             val regs = IntArray(16) { input.readInt() }
             val cpsr = input.readInt()
-            val halted = input.readBoolean()
+            state.halted = input.readBoolean()
             val bankCount = input.readInt()
             if (bankCount != BANK_WORDS) {
                 throw SaveStateException("État instantané corrompu (banques)")
             }
-            val banks = IntArray(bankCount) { input.readInt() }
+            state.importBanks(IntArray(bankCount) { input.readInt() })
+            state.setControlRaw(cpsr)
+            // Les registres actifs sont écrits après le mode : changer de mode
+            // ne doit pas rebasculer de banque par-dessus ce qui vient d'être lu.
+            for (i in 0 until 16) state.regs[i] = regs[i]
 
             val bus = machine.bus
-            val ewram = ByteArray(bus.ewram.size).also(input::readFully)
-            val iwram = ByteArray(bus.iwram.size).also(input::readFully)
-            val io = ByteArray(bus.io.size).also(input::readFully)
-            val palette = ByteArray(bus.paletteRam.size).also(input::readFully)
-            val vram = ByteArray(bus.vram.size).also(input::readFully)
-            val oam = ByteArray(bus.oam.size).also(input::readFully)
-            val sram = ByteArray(bus.sram.size).also(input::readFully)
-            val keypadBits = input.readInt()
+            input.readFully(bus.ewram)
+            input.readFully(bus.iwram)
+            input.readFully(bus.io)
+            // `WAITCNT` est dupliqué dans le modèle de temps d'attente : il faut
+            // le réaligner sur les registres restaurés.
+            bus.syncTimingFromIo()
+            input.readFully(bus.paletteRam)
+            input.readFully(bus.vram)
+            input.readFully(bus.oam)
+            input.readFully(bus.sram)
+            bus.keypad.pressedBits = input.readInt()
 
             val ppuFieldCount = input.readInt()
             if (ppuFieldCount != com.ravenemu.core.gba.ppu.GbaPpu.STATE_FIELD_COUNT) {
                 throw SaveStateException("État instantané corrompu (PPU)")
             }
-            val ppuFields = IntArray(ppuFieldCount) { input.readInt() }
-            val ppuFrame = IntArray(machine.ppu.frame.size) { input.readInt() }
+            machine.ppu.restoreState(IntArray(ppuFieldCount) { input.readInt() })
+            val frame = machine.ppu.frame
+            for (i in frame.indices) frame[i] = input.readInt()
 
-            val interruptEnable = input.readInt()
-            val interruptFlags = input.readInt()
-            val interruptMasterEnable = input.readBoolean()
-            val timerState = IntArray(TIMER_STATE_WORDS) { input.readInt() }
-            val dmaState = IntArray(DMA_STATE_WORDS) { input.readInt() }
+            machine.interrupts.enable = input.readInt()
+            machine.interrupts.flags = input.readInt()
+            machine.interrupts.masterEnable = input.readBoolean()
+            machine.timers.importState(IntArray(TIMER_STATE_WORDS) { input.readInt() })
+            machine.dma.importState(IntArray(DMA_STATE_WORDS) { input.readInt() })
+
+            // Attente d'interruption du BIOS : présence, masque, politique.
             val waiting = input.readBoolean()
             val waitMask = input.readInt()
             val waitDiscard = input.readBoolean()
-
-            val saveSize = input.readInt()
-            val expectedSaveSize = machine.cartridge.save?.data?.size ?: 0
-            if (saveSize != expectedSaveSize) {
-                throw SaveStateException("État instantané corrompu (sauvegarde)")
-            }
-            val saveData = ByteArray(saveSize).also(input::readFully)
-
-            val gpio = machine.cartridge.gpio
-            if (input.readBoolean() != (gpio != null)) {
-                throw SaveStateException("État instantané corrompu (port GPIO)")
-            }
-            val gpioState =
-                if (gpio != null) IntArray(GbaGpio.STATE_WORDS) { input.readInt() } else null
-
-            if (input.read() != -1) {
-                throw SaveStateException("État instantané corrompu (données excédentaires)")
-            }
-
-            // Valide d'abord les derniers champs susceptibles d'échouer.
-            machine.ppu.restoreState(ppuFields)
-
-            // Tout est lu et validé : application atomique.
-            val state = machine.cpu.state
-            state.importBanks(banks)
-            state.setControlRaw(cpsr)
-            state.halted = halted
-            for (i in 0 until 16) state.regs[i] = regs[i]
-
-            ewram.copyInto(bus.ewram)
-            iwram.copyInto(bus.iwram)
-            io.copyInto(bus.io)
-            // `WAITCNT` est dupliqué dans le modèle de temps d'attente : il faut
-            // le réaligner sur les registres restaurés.
-            bus.syncTimingFromIo()
-            palette.copyInto(bus.paletteRam)
-            vram.copyInto(bus.vram)
-            oam.copyInto(bus.oam)
-            sram.copyInto(bus.sram)
-            bus.keypad.pressedBits = keypadBits
-            ppuFrame.copyInto(machine.ppu.frame)
-            machine.interrupts.enable = interruptEnable
-            machine.interrupts.flags = interruptFlags
-            machine.interrupts.masterEnable = interruptMasterEnable
-            machine.timers.importState(timerState)
-            machine.dma.importState(dmaState)
-            if (saveData.isNotEmpty()) machine.cartridge.save?.import(saveData)
-            if (gpioState != null) gpio?.importState(gpioState)
             machine.bios.waitState =
                 if (waiting) {
                     com.ravenemu.core.gba.bios.BiosWaitState(waitMask, waitDiscard)
                 } else {
                     null
                 }
+
+            val saveSize = input.readInt()
+            val expectedSaveSize = machine.cartridge.save?.data?.size ?: 0
+            if (saveSize != expectedSaveSize) {
+                throw SaveStateException("État instantané corrompu (sauvegarde)")
+            }
+            if (saveSize > 0) {
+                machine.cartridge.save?.import(ByteArray(saveSize).also(input::readFully))
+            }
+
+            val gpio = machine.cartridge.gpio
+            if (input.readBoolean() != (gpio != null)) {
+                throw SaveStateException("État instantané corrompu (port GPIO)")
+            }
+            if (gpio != null) gpio.importState(IntArray(GbaGpio.STATE_WORDS) { input.readInt() })
+
+            if (input.read() != -1) {
+                throw SaveStateException("État instantané corrompu (données excédentaires)")
+            }
+            return machine
         } catch (e: SaveStateException) {
             throw e
         } catch (e: IOException) {
+            throw SaveStateException("État instantané corrompu ou tronqué", e)
+        } catch (e: IndexOutOfBoundsException) {
             throw SaveStateException("État instantané corrompu ou tronqué", e)
         } catch (e: IllegalArgumentException) {
             throw SaveStateException("État instantané corrompu", e)

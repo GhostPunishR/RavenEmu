@@ -7,6 +7,7 @@ import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNotSame
 
 class GbaStateTest {
 
@@ -30,8 +31,11 @@ class GbaStateTest {
         machine.cpu.state.regs[5] = 0
 
         core.loadState(state)
-        assertEquals(0x1234_5678, machine.bus.read32(0x0200_0000))
-        assertEquals(0xABCD_EF01.toInt(), machine.cpu.state.regs[5])
+        // La restauration remplace la machine : c'est la nouvelle qu'il faut
+        // interroger, l'ancienne ayant été abandonnée avec ses valeurs altérées.
+        val restored = core.machine!!
+        assertEquals(0x1234_5678, restored.bus.read32(0x0200_0000))
+        assertEquals(0xABCD_EF01.toInt(), restored.cpu.state.regs[5])
     }
 
     @Test
@@ -56,6 +60,14 @@ class GbaStateTest {
         core.loadState(state)
 
         assertContentEquals(state, core.saveState())
+    }
+
+    @Test
+    fun `une restauration valide remplace la machine active`() {
+        val core = loadedCore()
+        val avant = core.machine!!
+        core.loadState(core.saveState())
+        assertNotSame(avant, core.machine, "La machine restaurée doit être la nouvelle instance")
     }
 
     @Test

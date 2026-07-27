@@ -173,9 +173,12 @@ class BiosIntrWaitTest {
         m.cpu.state.halted = false
 
         core.loadState(state)
-        val restored = assertNotNull(m.bios.waitState)
+        // La restauration remplace la machine active : c'est la nouvelle qui
+        // porte l'état restauré, `m` restant la machine abandonnée.
+        val apres = core.machine!!
+        val restored = assertNotNull(apres.bios.waitState)
         assertEquals(vblank or timer0, restored.interruptMask)
         assertTrue(restored.discardOldFlags)
-        assertTrue(m.cpu.state.halted)
+        assertTrue(apres.cpu.state.halted)
     }
 }

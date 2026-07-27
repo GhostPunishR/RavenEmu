@@ -217,6 +217,7 @@ class DmaTimingTest {
         assertEquals(0, m.dma.pendingCycles)
 
         core.loadState(state)
-        assertEquals(expected, m.dma.pendingCycles)
+        // La restauration remplace la machine active.
+        assertEquals(expected, core.machine!!.dma.pendingCycles)
     }
 }
