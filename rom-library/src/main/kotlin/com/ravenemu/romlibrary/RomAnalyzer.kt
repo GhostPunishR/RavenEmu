@@ -24,8 +24,8 @@ interface RomAnalyzer {
 
     /**
      * Analyse le contenu complet d'un fichier ROM : validation de taille et
-     * de format, extraction d'en-tête, calcul des empreintes, classification
-     * contre la base de références.
+     * de format, extraction d'en-tête, calcul des empreintes, et état déduit
+     * des sommes de contrôle que porte la cartouche.
      */
     fun analyze(
         uri: String,
@@ -36,9 +36,7 @@ interface RomAnalyzer {
 }
 
 /** Analyseur Game Boy : fichiers `.gb`, en-tête de cartouche DMG. */
-class GameBoyRomAnalyzer(
-    private val references: ReferenceDatabase = ReferenceDatabase.empty(),
-) : RomAnalyzer {
+class GameBoyRomAnalyzer : RomAnalyzer {
 
     override val console: ConsoleType = ConsoleType.GAME_BOY
     override val maxRomSizeBytes: Int = CartridgeHeader.MAX_ROM_SIZE
@@ -76,7 +74,7 @@ class GameBoyRomAnalyzer(
                 supportsCgb = header.supportsCgb,
                 headerChecksumValid = header.headerChecksumValid,
                 fingerprints = fingerprints,
-                status = references.classify(fingerprints, header.title),
+                status = header.romStatus(),
             )
         )
     }

@@ -21,9 +21,8 @@
     <color name="raven_icon_background">#262835</color>
 
     <!-- Badges suffisamment sombres pour conserver un texte blanc lisible. -->
-    <color name="badge_verified">#2E7D32</color>
-    <color name="badge_hack">#8A5200</color>
-    <color name="badge_modified">#B3261E</color>
-    <color name="badge_unknown">#455A64</color>
-    <color name="badge_homebrew">#6A1B9A</color>
+    <color name="badge_intact">#2E7D32</color>
+    <color name="badge_modified">#8A5200</color>
+    <color name="badge_header_only">#455A64</color>
+    <color name="badge_invalid_header">#B3261E</color>
 </resources>

@@ -102,14 +102,14 @@ class RomAdapter(
 
             if (showBadges) {
                 badge.visibility = View.VISIBLE
-                val (label, color) = when (entry.effectiveStatus) {
-                    RomStatus.VERIFIED_OFFICIAL ->
-                        R.string.status_verified to R.color.badge_verified
-                    RomStatus.KNOWN_HACK -> R.string.status_hack to R.color.badge_hack
-                    RomStatus.MODIFIED_OR_UNRECOGNIZED ->
+                val (label, color) = when (entry.status) {
+                    RomStatus.INTACT -> R.string.status_intact to R.color.badge_intact
+                    RomStatus.MODIFIED ->
                         R.string.status_modified to R.color.badge_modified
-                    RomStatus.UNKNOWN -> R.string.status_unknown to R.color.badge_unknown
-                    RomStatus.HOMEBREW -> R.string.status_homebrew to R.color.badge_homebrew
+                    RomStatus.HEADER_ONLY ->
+                        R.string.status_header_only to R.color.badge_header_only
+                    RomStatus.INVALID_HEADER ->
+                        R.string.status_invalid_header to R.color.badge_invalid_header
                 }
                 badge.setText(label)
                 badge.setBackgroundColor(itemView.context.getColor(color))

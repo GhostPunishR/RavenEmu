@@ -21,6 +21,10 @@ data class RomEntry(
     /** Titre lu dans l'en-tête de cartouche (peut être vide). */
     val title: String,
     val fingerprints: Fingerprints,
+    /**
+     * État déduit des sommes de contrôle de la cartouche. Ce n'est pas un
+     * classement mais une mesure : il ne se force pas.
+     */
     val status: RomStatus,
     // Champs propres à la cartouche Game Boy : valeurs neutres par défaut pour
     // les consoles dont l'en-tête ne les définit pas (ex. Game Boy Advance).
@@ -40,14 +44,9 @@ data class RomEntry(
      * sous forme du nom d'énumération `GbaSaveType` ; vide si non applicable.
      */
     val saveType: String = "",
-    /** Statut forcé par l'utilisateur (ex. Homebrew déclaré), prioritaire. */
-    val userStatusOverride: RomStatus? = null,
     /** URI d'une pochette associée manuellement ou détectée localement. */
     val coverUri: String? = null,
 ) {
-    /** Statut effectif affiché : le forçage utilisateur prime. */
-    val effectiveStatus: RomStatus get() = userStatusOverride ?: status
-
     /** Nom affiché : titre d'en-tête ou nom de fichier sans extension. */
     val displayName: String
         get() = title.ifBlank { fileName.substringBeforeLast('.') }

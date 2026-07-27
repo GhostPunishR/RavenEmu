@@ -9,13 +9,11 @@ import com.ravenemu.emulation.api.RomLoadException
 /**
  * Analyseur Game Boy Advance : fichiers `.gba`, en-tête GBA (192 octets).
  *
- * Comme l'analyseur Game Boy, il calcule les empreintes et classe la ROM contre
- * la base de références (métadonnées uniquement). Une ROM dépourvue du marqueur
- * `0x96` est rejetée : ce n'est pas une cartouche Game Boy Advance.
+ * Comme l'analyseur Game Boy, il calcule les empreintes et déduit l'état de la
+ * ROM de son seul en-tête. Une ROM dépourvue du marqueur `0x96` est rejetée :
+ * ce n'est pas une cartouche Game Boy Advance.
  */
-class GbaRomAnalyzer(
-    private val references: ReferenceDatabase = ReferenceDatabase.empty(),
-) : RomAnalyzer {
+class GbaRomAnalyzer : RomAnalyzer {
 
     override val console: ConsoleType = ConsoleType.GAME_BOY_ADVANCE
     override val maxRomSizeBytes: Int = GbaCartridge.MAX_ROM_SIZE
@@ -47,7 +45,7 @@ class GbaRomAnalyzer(
                 console = console,
                 title = header.title,
                 fingerprints = fingerprints,
-                status = references.classify(fingerprints, header.title),
+                status = header.romStatus(),
                 gameCode = header.gameCode,
                 saveType = GbaSaveType.detect(data).name,
                 romSizeBytes = data.size,

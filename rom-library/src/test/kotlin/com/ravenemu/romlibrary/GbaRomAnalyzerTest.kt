@@ -67,4 +67,26 @@ class GbaRomAnalyzerTest {
         val entry = assertIs<AnalysisResult.Success>(result).entry
         assertTrue(entry.fingerprints.sha256.isNotBlank())
     }
+
+    /**
+     * La cartouche Game Boy Advance ne porte aucune somme couvrant son
+     * contenu : le badge ne peut donc vouloir dire que « l'en-tête est
+     * conforme ». Annoncer « Intègre » ici serait une garantie que rien ne
+     * soutient.
+     */
+    @Test
+    fun `une ROM GBA valide n'engage que son en-tete`() {
+        val result = analyzer.analyze("u", "jeu.gba", 0L, gbaRom())
+        val entry = assertIs<AnalysisResult.Success>(result).entry
+        assertEquals(RomStatus.HEADER_ONLY, entry.status)
+    }
+
+    @Test
+    fun `une somme d'en-tete GBA fausse est signalee`() {
+        val rom = gbaRom()
+        rom[0xBD] = (rom[0xBD].toInt() xor 0xFF).toByte()
+        val result = analyzer.analyze("u", "jeu.gba", 0L, rom)
+        val entry = assertIs<AnalysisResult.Success>(result).entry
+        assertEquals(RomStatus.INVALID_HEADER, entry.status)
+    }
 }

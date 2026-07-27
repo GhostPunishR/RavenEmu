@@ -25,11 +25,9 @@ import com.ravenemu.core.gba.save.GbaSaveType
 import com.ravenemu.emulation.api.ConsoleType
 import com.ravenemu.romlibrary.RomEntry
 import com.ravenemu.romlibrary.RomIndex
-import com.ravenemu.romlibrary.RomStatus
 import com.ravenemu.settings.AppSettings
 import com.ravenemu.storage.CoverResolver
 import com.ravenemu.storage.LibraryRepository
-import com.ravenemu.storage.ReferenceDatabaseStore
 import kotlinx.coroutines.launch
 
 /**
@@ -41,7 +39,6 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var settings: AppSettings
     private lateinit var repository: LibraryRepository
-    private lateinit var referenceStore: ReferenceDatabaseStore
     private lateinit var coverResolver: CoverResolver
     private lateinit var adapter: RomAdapter
     private lateinit var recycler: RecyclerView
@@ -82,10 +79,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         settings = AppSettings(this)
-        // Base de références locale : semence embarquée + bases importées par
-        // l'utilisateur (No-Intro / dataset JSON), uniquement des empreintes.
-        referenceStore = ReferenceDatabaseStore(this)
-        repository = LibraryRepository(this, referenceStore.load())
+        repository = LibraryRepository(this)
         coverResolver = CoverResolver(this)
 
         val toolbar = findViewById<MaterialToolbar>(R.id.toolbar)
@@ -109,12 +103,6 @@ class MainActivity : AppCompatActivity() {
 
         index = repository.loadIndex()
         render()
-        // Applique la base de références courante aux entrées déjà indexées
-        // (leur statut a pu changer depuis un import).
-        lifecycleScope.launch {
-            index = repository.reclassify(index)
-            render()
-        }
         if (index.entries.isEmpty() && settings.romDirectories.isNotEmpty()) {
             refreshLibrary()
         }
@@ -124,13 +112,6 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         adapter.showBadges = settings.showStatusBadges
         render()
-        // Une base d'empreintes a pu être importée depuis les paramètres :
-        // on la recharge et on reclasse la bibliothèque.
-        lifecycleScope.launch {
-            repository.setReferenceDatabase(referenceStore.load())
-            index = repository.reclassify(index)
-            render()
-        }
     }
 
     private fun applyLayoutManager() {
@@ -187,7 +168,7 @@ class MainActivity : AppCompatActivity() {
         }
         return when (settings.librarySortOrder) {
             "size" -> entries.sortedByDescending { it.sizeBytes }
-            "status" -> entries.sortedBy { it.effectiveStatus.ordinal }
+            "status" -> entries.sortedBy { it.status.ordinal }
             else -> entries.sortedBy { it.displayName.lowercase() }
         }
     }
@@ -204,17 +185,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showEntryOptions(entry: RomEntry) {
-        val isHomebrew = entry.userStatusOverride == RomStatus.HOMEBREW
         val isGba = entry.console == ConsoleType.GAME_BOY_ADVANCE
         val options = buildList {
             add(getString(R.string.library_rom_details))
             add(getString(R.string.library_choose_cover))
-            add(
-                getString(
-                    if (isHomebrew) R.string.library_unmark_homebrew
-                    else R.string.library_mark_homebrew
-                )
-            )
             // Le type de sauvegarde n'a de sens que pour la Game Boy Advance.
             if (isGba) add(getString(R.string.library_save_type))
         }.toTypedArray()
@@ -227,16 +201,7 @@ class MainActivity : AppCompatActivity() {
                         coverTarget = entry
                         pickCover.launch(arrayOf("image/*"))
                     }
-                    2 -> lifecycleScope.launch {
-                        val override =
-                            if (isHomebrew) null else RomStatus.HOMEBREW
-                        index = repository.update(
-                            index,
-                            entry.copy(userStatusOverride = override),
-                        )
-                        render()
-                    }
-                    3 -> showSaveTypeDialog(entry)
+                    2 -> showSaveTypeDialog(entry)
                 }
             }
             .setNegativeButton(R.string.cancel, null)
@@ -298,7 +263,7 @@ class MainActivity : AppCompatActivity() {
                 appendLine("RAM : ${entry.ramSizeBytes} octets")
                 appendLine("Pile : ${if (entry.hasBattery) "oui" else "non"}")
             }
-            appendLine("Statut : ${entry.effectiveStatus.displayName}")
+            appendLine("Statut : ${entry.status.displayName}")
             appendLine("CRC32 : ${entry.fingerprints.crc32}")
             appendLine("SHA-1 : ${entry.fingerprints.sha1}")
             appendLine("SHA-256 : ${entry.fingerprints.sha256}")

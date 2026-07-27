@@ -22,6 +22,11 @@ private fun testRom(
     var chk = 0
     for (i in 0x0134..0x014C) chk = (chk - (rom[i].toInt() and 0xFF) - 1) and 0xFF
     rom[0x014D] = chk.toByte()
+    // Somme globale : tous les octets sauf les deux qui la portent.
+    var global = 0
+    for (i in rom.indices) if (i != 0x014E && i != 0x014F) global += rom[i].toInt() and 0xFF
+    rom[0x014E] = ((global shr 8) and 0xFF).toByte()
+    rom[0x014F] = (global and 0xFF).toByte()
     return rom
 }
 
@@ -57,57 +62,50 @@ class FingerprintsTest {
     }
 }
 
-class ReferenceDatabaseTest {
+/**
+ * État déduit des seules sommes de contrôle de la cartouche : aucune base
+ * extérieure n'intervient, donc rien à importer ni à tenir à jour.
+ */
+class RomStatusTest {
 
-    private val officialRom = testRom(title = "RAVENQUEST")
-    private val officialFp = Fingerprints.of(officialRom)
+    private val analyzer = GameBoyRomAnalyzer()
 
-    private val db = ReferenceDatabase(
-        listOf(
-            ReferenceEntry("RAVENQUEST", ReferenceKind.OFFICIAL, officialFp.sha256),
-            ReferenceEntry("RAVENQUEST FR", ReferenceKind.HACK, "11".repeat(32)),
-            ReferenceEntry("RAVENDEMO", ReferenceKind.HOMEBREW, "22".repeat(32)),
-        )
-    )
+    private fun statusOf(rom: ByteArray): RomStatus =
+        (analyzer.analyze("u", "f.gb", 0, rom) as AnalysisResult.Success).entry.status
 
     @Test
-    fun `empreinte officielle verifiee`() {
-        assertEquals(
-            RomStatus.VERIFIED_OFFICIAL,
-            db.classify(officialFp, "RAVENQUEST"),
-        )
+    fun `une cartouche cohérente avec elle-même est intègre`() {
+        assertEquals(RomStatus.INTACT, statusOf(testRom()))
+    }
+
+    /**
+     * Le cas qui justifie le badge : un seul octet retouché ailleurs que dans
+     * l'en-tête suffit à faire mentir la somme globale.
+     */
+    @Test
+    fun `un seul octet modifié bascule en modifiée`() {
+        val rom = testRom()
+        rom[0x2000] = (rom[0x2000].toInt() xor 0xFF).toByte()
+        assertEquals(RomStatus.MODIFIED, statusOf(rom))
     }
 
     @Test
-    fun `titre connu mais empreinte differente = modifiee`() {
-        val altered = officialRom.copyOf().also { it[0x3000] = 0x42 }
-        assertEquals(
-            RomStatus.MODIFIED_OR_UNRECOGNIZED,
-            db.classify(Fingerprints.of(altered), "RAVENQUEST"),
-        )
+    fun `une somme d'en-tête fausse est signalée comme telle`() {
+        val rom = testRom()
+        rom[0x014D] = (rom[0x014D].toInt() xor 0xFF).toByte()
+        assertEquals(RomStatus.INVALID_HEADER, statusOf(rom))
     }
 
+    /**
+     * L'en-tête prime : sans lui, la somme globale n'a pas de sens à
+     * commenter, et annoncer « Modifiée » masquerait un fichier douteux.
+     */
     @Test
-    fun `titre inconnu et empreinte inconnue = inconnue`() {
-        val other = testRom(title = "AUTREJEU")
-        assertEquals(
-            RomStatus.UNKNOWN,
-            db.classify(Fingerprints.of(other), "AUTREJEU"),
-        )
-    }
-
-    @Test
-    fun `jamais officielle sans correspondance d'empreinte`() {
-        // Même titre, contenu différent : le statut ne peut être « officielle ».
-        val fake = testRom(title = "RAVENQUEST") { it[0x4000] = 0x01 }
-        val status = db.classify(Fingerprints.of(fake), "RAVENQUEST")
-        assertFalse(status == RomStatus.VERIFIED_OFFICIAL)
-    }
-
-    @Test
-    fun `base vide classe tout inconnu`() {
-        val db = ReferenceDatabase.empty()
-        assertEquals(RomStatus.UNKNOWN, db.classify(officialFp, "RAVENQUEST"))
+    fun `en-tête invalide prime sur la somme globale`() {
+        val rom = testRom()
+        rom[0x2000] = (rom[0x2000].toInt() xor 0xFF).toByte()
+        rom[0x014D] = (rom[0x014D].toInt() xor 0xFF).toByte()
+        assertEquals(RomStatus.INVALID_HEADER, statusOf(rom))
     }
 }
 
@@ -132,7 +130,7 @@ class GameBoyRomAnalyzerTest {
         assertEquals(MbcType.MBC1, entry.mbcType)
         assertTrue(entry.hasBattery)
         assertEquals(rom.size.toLong(), entry.sizeBytes)
-        assertEquals(RomStatus.UNKNOWN, entry.status)
+        assertEquals(RomStatus.INTACT, entry.status)
         assertTrue(entry.headerChecksumValid)
         assertEquals("RAVENQUEST", entry.displayName)
     }
@@ -143,15 +141,6 @@ class GameBoyRomAnalyzerTest {
         assertIs<AnalysisResult.Invalid>(result)
     }
 
-    @Test
-    fun `statut force par l'utilisateur prioritaire`() {
-        val rom = testRom()
-        val entry =
-            (analyzer.analyze("u", "f.gb", 0, rom) as AnalysisResult.Success).entry
-        val forced = entry.copy(userStatusOverride = RomStatus.HOMEBREW)
-        assertEquals(RomStatus.HOMEBREW, forced.effectiveStatus)
-        assertEquals(RomStatus.UNKNOWN, forced.status)
-    }
 }
 
 class RomIndexTest {
