@@ -45,6 +45,7 @@ class GbaDebugTextTest {
         bg2ScaleY: Int = 0x0100,
         bg2MatrixWrites: Int = 0,
         bg2ReferenceWrites: Int = 0,
+        swiCounts: IntArray = IntArray(0),
         ppuMillis: Double = 0.0,
         dmaMillis: Double = 0.0,
         apuMillis: Double = 0.0,
@@ -82,6 +83,7 @@ class GbaDebugTextTest {
         bg2ScaleY = bg2ScaleY,
         bg2MatrixWrites = bg2MatrixWrites,
         bg2ReferenceWrites = bg2ReferenceWrites,
+        swiCounts = swiCounts,
         ppuMillis = ppuMillis,
         dmaMillis = dmaMillis,
         apuMillis = apuMillis,
@@ -279,5 +281,31 @@ class GbaDebugTextTest {
         // Mode 0 : aucun plan affine, donc rien à publier.
         val text = snapshot(dispcnt = 0x0100).toDebugText(fps = 60.0, frameTimeMs = 16.0)
         assertFalse(text.lines().any { it.startsWith("aff") }, text)
+    }
+
+    // ---- Relevé des appels du BIOS ----
+
+    /**
+     * Ce sont les services **absents** qui instruisent : un service indispensable
+     * à une scène et jamais appelé désigne une branche du programme qui n'est pas
+     * prise. Le relevé ne doit donc lister que ce qui a réellement servi.
+     */
+    @Test
+    fun `seuls les appels BIOS reellement passes sont listes`() {
+        val counts = IntArray(0x30)
+        counts[0x05] = 60   // VBlankIntrWait
+        counts[0x0F] = 240  // ObjAffineSet
+        counts[0x12] = 6    // LZ77UnCompVram
+
+        val text = snapshot(swiCounts = counts).toDebugText(fps = 60.0, frameTimeMs = 16.0)
+        val line = text.lines().first { it.startsWith("swi") }
+        assertEquals("swi 05:60 0F:240 12:6", line)
+        assertFalse("0E:" in line, "BgAffineSet jamais appelé : il ne doit pas figurer")
+    }
+
+    @Test
+    fun `sans aucun appel BIOS la ligne est omise`() {
+        val text = snapshot().toDebugText(fps = 60.0, frameTimeMs = 16.0)
+        assertFalse(text.lines().any { it.startsWith("swi") }, text)
     }
 }

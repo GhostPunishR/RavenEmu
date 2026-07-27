@@ -59,6 +59,7 @@ fun GbaDebugSnapshot.toDebugText(
     builder.append('\n').append(videoLine())
     if (layerPixels.isNotEmpty()) builder.append('\n').append(layerPixelLine())
     if ((dispcnt and 0x7) in 1..2) builder.append('\n').append(affineLine())
+    if (swiCounts.any { it > 0 }) builder.append('\n').append(swiLine())
     if (hasAnomalies) builder.append('\n').append(anomalyLine())
     return builder.toString()
 }
@@ -133,6 +134,24 @@ private fun GbaDebugSnapshot.videoLine(): String {
         1 -> builder.append("  BLD alpha")
         2 -> builder.append("  BLD clair")
         3 -> builder.append("  BLD sombre")
+    }
+    return builder.toString()
+}
+
+/**
+ * Services du BIOS réellement employés, avec leur nombre d'appels.
+ *
+ * Le dernier appel ne dit presque rien : c'est le plus fréquent qui l'emporte au
+ * moment du relevé. Ce qui est instructif, ce sont les **absents** — un service
+ * indispensable à une scène et jamais appelé désigne une branche du programme
+ * qui n'est pas prise, donc une divergence bien en amont de l'affichage.
+ */
+private fun GbaDebugSnapshot.swiLine(): String {
+    val builder = StringBuilder(64)
+    builder.append("swi")
+    for (number in swiCounts.indices) {
+        val count = swiCounts[number]
+        if (count > 0) builder.append(' ').append("%02X".format(number)).append(':').append(count)
     }
     return builder.toString()
 }

@@ -188,6 +188,7 @@ class GbaCore(
             bg2ScaleY = m.bus.read16(IO_BASE + 0x26),
             bg2MatrixWrites = diag.bg2MatrixWrites,
             bg2ReferenceWrites = diag.bg2ReferenceWrites,
+            swiCounts = IntArray(GbaDiagnostics.SWI_RANGE) { diag.swiCount(it) },
             ppuMillis = diag.ppuNanosLastFrame / 1_000_000.0,
             dmaMillis = diag.dmaNanosLastFrame / 1_000_000.0,
             apuMillis = diag.apuNanosLastFrame / 1_000_000.0,

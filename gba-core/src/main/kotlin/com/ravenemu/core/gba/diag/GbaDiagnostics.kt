@@ -163,8 +163,21 @@ class GbaDiagnostics {
         apuNanos = 0
     }
 
+    /**
+     * Appels du BIOS effectivement passés par le jeu, indexés par numéro.
+     *
+     * Le dernier appel ne dit presque rien : c'est celui qui revient le plus
+     * souvent qui l'emporte au moment du relevé. Le relevé complet, lui, montre
+     * quels services le jeu emploie réellement — et surtout lesquels il n'emploie
+     * jamais, ce qui trahit une branche de son code qui n'est pas prise.
+     */
+    private val swiCounts = IntArray(SWI_RANGE)
+
+    fun swiCount(number: Int): Int = swiCounts[number]
+
     fun onSwi(number: Int) {
         lastSwi = number
+        if (number in swiCounts.indices) swiCounts[number]++
     }
 
     fun onInterrupt(mask: Int) {
@@ -223,6 +236,7 @@ class GbaDiagnostics {
         instructionsThisFrame = 0
         instructionsLastFrame = 0
         lastSwi = -1
+        swiCounts.fill(0)
         lastInterruptMask = 0
         audioUnderruns = 0
         firstUnsupportedAddress = 0
@@ -239,6 +253,9 @@ class GbaDiagnostics {
     }
 
     companion object {
+        /** Numéros d'appel BIOS suivis : 0x00 à 0x2F couvre tout ce qu'un jeu emploie. */
+        const val SWI_RANGE = 0x30
+
         /** Nombre maximal de signalements transmis par catégorie. */
         const val MAX_REPORTS_PER_EVENT = 8
 

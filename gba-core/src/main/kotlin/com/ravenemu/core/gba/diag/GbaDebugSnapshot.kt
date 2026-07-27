@@ -73,6 +73,11 @@ data class GbaDebugSnapshot(
     val bg2MatrixWrites: Int,
     /** Écritures du jeu vers le point de référence `BG2X`/`BG2Y`. */
     val bg2ReferenceWrites: Int,
+    /**
+     * Appels du BIOS passés par le jeu, indexés par numéro. Vide si le relevé
+     * n'est pas tenu.
+     */
+    val swiCounts: IntArray,
     /** Millisecondes passées à composer l'affichage, trame écoulée. */
     val ppuMillis: Double,
     /** Millisecondes passées en transferts DMA, trame écoulée. */
