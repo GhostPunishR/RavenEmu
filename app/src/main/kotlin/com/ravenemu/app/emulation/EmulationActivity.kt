@@ -264,10 +264,7 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
 
     override fun onStats(fps: Double, frameTimeMs: Double) {
         if (!settings.showPerformanceOverlay) return
-        // La photographie est prise sur le thread d'émulation, qui est celui qui
-        // appelle cette méthode : le moteur n'est jamais lu depuis l'interface.
-        val audioTrackUnderruns = session?.audioOutputUnderruns() ?: 0
-        val text = GbaDebugOverlay.render(core, fps, frameTimeMs, audioTrackUnderruns)
+        val text = GbaDebugOverlay.render(fps)
         runOnUiThread { performanceOverlay.text = text }
     }
 

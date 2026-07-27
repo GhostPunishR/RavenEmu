@@ -102,7 +102,7 @@ class GbaDebugTextTest {
             fifoAEmptyReads = 3,
             fifoBEmptyReads = 4,
             underruns = 2,
-        ).toDebugText(fps = 59.7, frameTimeMs = 8.25, audioTrackUnderruns = 5)
+        ).toDiagnosticText(fps = 59.7, frameTimeMs = 8.25, audioTrackUnderruns = 5)
 
         for (expected in listOf(
             "59.7 FPS", "8.25 ms", "12345 instr", "PC 08001234", "THUMB",
@@ -116,7 +116,7 @@ class GbaDebugTextTest {
 
     @Test
     fun `les valeurs absentes sont affichees sobrement`() {
-        val text = snapshot().toDebugText(fps = 60.0, frameTimeMs = 5.0)
+        val text = snapshot().toDiagnosticText(fps = 60.0, frameTimeMs = 5.0)
         assertTrue("SWI —" in text, text)
         assertTrue("IRQ —" in text, text)
         assertTrue("DMA —" in text, text)
@@ -128,14 +128,14 @@ class GbaDebugTextTest {
 
     @Test
     fun `la pause du processeur est visible`() {
-        val text = snapshot(halted = true).toDebugText(fps = 60.0, frameTimeMs = 5.0)
+        val text = snapshot(halted = true).toDiagnosticText(fps = 60.0, frameTimeMs = 5.0)
         assertTrue("en pause" in text, text)
     }
 
     @Test
     fun `l'adresse du premier acces fautif accompagne le decompte`() {
         val text = snapshot(unsupportedAccess = 64, firstUnsupportedAddress = 0xFFFF_FE00.toInt())
-            .toDebugText(fps = 60.0, frameTimeMs = 16.0)
+            .toDiagnosticText(fps = 60.0, frameTimeMs = 16.0)
         assertTrue("accès 64 @FFFFFE00" in text, text)
     }
 
@@ -148,7 +148,7 @@ class GbaDebugTextTest {
             bg0Control = 2,
             bg2Control = 0,
             blendControl = 1 shl 6,
-        ).toDebugText(fps = 60.0, frameTimeMs = 16.0)
+        ).toDiagnosticText(fps = 60.0, frameTimeMs = 16.0)
         assertTrue("m0" in text, text)
         assertTrue("BG0p2" in text, text)
         assertTrue("BG2p0" in text, text)
@@ -160,13 +160,13 @@ class GbaDebugTextTest {
 
     @Test
     fun `un ecran blanc force est signale`() {
-        val text = snapshot(dispcnt = 0x0080).toDebugText(fps = 60.0, frameTimeMs = 16.0)
+        val text = snapshot(dispcnt = 0x0080).toDiagnosticText(fps = 60.0, frameTimeMs = 16.0)
         assertTrue("BLANC" in text, text)
     }
 
     @Test
     fun `sans sprites ni fenetre la ligne video reste sobre`() {
-        val text = snapshot(dispcnt = 0x0100).toDebugText(fps = 60.0, frameTimeMs = 16.0)
+        val text = snapshot(dispcnt = 0x0100).toDiagnosticText(fps = 60.0, frameTimeMs = 16.0)
         assertTrue("BG0p0" in text, text)
         assertFalse("OBJ" in text, text)
         assertFalse("WIN" in text, text)
@@ -176,7 +176,7 @@ class GbaDebugTextTest {
     @Test
     fun `seules les anomalies non nulles sont listees`() {
         val text = snapshot(unsupportedSwi = 3, decompressionError = 1)
-            .toDebugText(fps = 60.0, frameTimeMs = 5.0)
+            .toDiagnosticText(fps = 60.0, frameTimeMs = 5.0)
         assertTrue("anomalies" in text, text)
         assertTrue("SWI 3" in text, text)
         assertTrue("décompr. 1" in text, text)
@@ -187,7 +187,7 @@ class GbaDebugTextTest {
     @Test
     fun `la repartition du temps apparait quand elle est mesuree`() {
         val text = snapshot(ppuMillis = 7.4, dmaMillis = 0.3, apuMillis = 1.1)
-            .toDebugText(fps = 35.0, frameTimeMs = 28.5)
+            .toDiagnosticText(fps = 35.0, frameTimeMs = 28.5)
         // Le processeur est obtenu par différence : 28,5 - 7,4 - 0,3 - 1,1.
         assertTrue("cpu 19.7" in text, text)
         assertTrue("ppu 7.4" in text, text)
@@ -197,7 +197,7 @@ class GbaDebugTextTest {
 
     @Test
     fun `sans mesure aucune ligne de repartition n'est ajoutee`() {
-        val text = snapshot().toDebugText(fps = 60.0, frameTimeMs = 5.0)
+        val text = snapshot().toDiagnosticText(fps = 60.0, frameTimeMs = 5.0)
         assertFalse("cpu " in text, text)
     }
 
@@ -205,7 +205,7 @@ class GbaDebugTextTest {
     fun `le temps processeur ne devient jamais negatif`() {
         // Les relevés s'additionnent sur la trame écoulée, le temps de trame est
         // celui d'une moyenne : rien ne garantit leur cohérence exacte.
-        val text = snapshot(ppuMillis = 40.0).toDebugText(fps = 30.0, frameTimeMs = 10.0)
+        val text = snapshot(ppuMillis = 40.0).toDiagnosticText(fps = 30.0, frameTimeMs = 10.0)
         assertTrue("cpu 0.0" in text, text)
     }
 
@@ -218,7 +218,7 @@ class GbaDebugTextTest {
         val framebuffer = IntArray(core.video.pixelCount)
         repeat(8) { core.runFrame(framebuffer) }
 
-        val text = assertNotNull(core.debugSnapshot()).toDebugText(59.7, 4.2)
+        val text = assertNotNull(core.debugSnapshot()).toDiagnosticText(59.7, 4.2)
         val lines = text.lines()
         // Le contenu plutôt que le nombre de lignes : compter les lignes ne
         // protège rien et casse dès qu'une mesure s'ajoute.
@@ -238,7 +238,7 @@ class GbaDebugTextTest {
         val text = snapshot(
             dispcnt = 0x1300, // BG0, BG1 et OBJ ; BG2 et BG3 éteints
             layerPixels = intArrayOf(8000, 38400, 0, 0, 2400),
-        ).toDebugText(fps = 60.0, frameTimeMs = 16.0)
+        ).toDiagnosticText(fps = 60.0, frameTimeMs = 16.0)
 
         val line = text.lines().first { it.startsWith("px") }
         assertEquals("px  BG0 8000  BG1 38400  OBJ 2400", line)
@@ -253,14 +253,14 @@ class GbaDebugTextTest {
         val text = snapshot(
             dispcnt = 0x0401, // mode 1, BG2 activé
             layerPixels = intArrayOf(0, 0, 0, 0, 0),
-        ).toDebugText(fps = 60.0, frameTimeMs = 16.0)
+        ).toDiagnosticText(fps = 60.0, frameTimeMs = 16.0)
 
         assertTrue(text.lines().any { it == "px  BG2 0" }, text)
     }
 
     @Test
     fun `sans comptage aucune ligne de pixels n'est ajoutee`() {
-        val text = snapshot(dispcnt = 0x0100).toDebugText(fps = 60.0, frameTimeMs = 16.0)
+        val text = snapshot(dispcnt = 0x0100).toDiagnosticText(fps = 60.0, frameTimeMs = 16.0)
         assertFalse(text.lines().any { it.startsWith("px") }, text)
     }
 
@@ -272,14 +272,14 @@ class GbaDebugTextTest {
             bg2ReferenceY = 32,
             bg2ScaleX = 0x0080,
             bg2ScaleY = 0x0100,
-        ).toDebugText(fps = 60.0, frameTimeMs = 16.0)
+        ).toDiagnosticText(fps = 60.0, frameTimeMs = 16.0)
         assertTrue(
             affine.lines().any { it == "aff BG2 x-64 y32  pa0080 pd0100  cnt0000  w0/0" },
             affine,
         )
 
         // Mode 0 : aucun plan affine, donc rien à publier.
-        val text = snapshot(dispcnt = 0x0100).toDebugText(fps = 60.0, frameTimeMs = 16.0)
+        val text = snapshot(dispcnt = 0x0100).toDiagnosticText(fps = 60.0, frameTimeMs = 16.0)
         assertFalse(text.lines().any { it.startsWith("aff") }, text)
     }
 
@@ -297,7 +297,7 @@ class GbaDebugTextTest {
         counts[0x0F] = 240  // ObjAffineSet
         counts[0x12] = 6    // LZ77UnCompVram
 
-        val text = snapshot(swiCounts = counts).toDebugText(fps = 60.0, frameTimeMs = 16.0)
+        val text = snapshot(swiCounts = counts).toDiagnosticText(fps = 60.0, frameTimeMs = 16.0)
         val line = text.lines().first { it.startsWith("swi") }
         assertEquals("swi 05:60 0F:240 12:6", line)
         assertFalse("0E:" in line, "BgAffineSet jamais appelé : il ne doit pas figurer")
@@ -305,7 +305,7 @@ class GbaDebugTextTest {
 
     @Test
     fun `sans aucun appel BIOS la ligne est omise`() {
-        val text = snapshot().toDebugText(fps = 60.0, frameTimeMs = 16.0)
+        val text = snapshot().toDiagnosticText(fps = 60.0, frameTimeMs = 16.0)
         assertFalse(text.lines().any { it.startsWith("swi") }, text)
     }
 }

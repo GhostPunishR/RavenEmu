@@ -1,16 +1,22 @@
 package com.ravenemu.core.gba.diag
 
 /**
- * Mise en forme d'une [GbaDebugSnapshot] pour une surcouche de débogage.
+ * Relevé complet de l'état du moteur, mis en forme pour une enquête.
+ *
+ * **La surcouche affichée à l'écran ne s'en sert pas** : elle se limite à la
+ * cadence, et c'est délibéré — un mur de chiffres gêne quand on joue. Ce relevé
+ * est l'outil qu'on rebranche en une ligne quand un jeu se comporte mal, et il
+ * est maintenu et testé pour être opérationnel ce jour-là plutôt qu'écrit dans
+ * l'urgence.
  *
  * La fonction est ici, dans le moteur, plutôt que dans la couche Android : c'est
  * du texte pur, sans dépendance de plateforme, et il est ainsi couvert par les
- * tests JVM. La couche applicative n'a plus qu'à afficher la chaîne obtenue.
+ * tests JVM.
  *
  * [fps], [frameTimeMs] et [audioTrackUnderruns] ne viennent pas du moteur :
  * seul l'appelant connaît la cadence et l'état de la sortie Android.
  */
-fun GbaDebugSnapshot.toDebugText(
+fun GbaDebugSnapshot.toDiagnosticText(
     fps: Double,
     frameTimeMs: Double,
     audioTrackUnderruns: Int = 0,
