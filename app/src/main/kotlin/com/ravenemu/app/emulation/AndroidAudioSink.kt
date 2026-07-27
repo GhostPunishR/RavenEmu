@@ -6,7 +6,6 @@ import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
 import com.ravenemu.emulation.api.audio.AudioBufferPrimer
-import com.ravenemu.emulation.api.audio.AudioRateController
 import com.ravenemu.emulation.api.audio.LinearResampler
 import kotlin.math.ceil
 
@@ -14,8 +13,8 @@ import kotlin.math.ceil
  * Sortie audio AudioTrack en mode flux.
  *
  * Le moteur produit ses échantillons à [sourceRateHz] (32768 Hz). Plutôt que
- * de laisser le système rééchantillonner vers le débit de sortie — avec une
- * qualité variable selon l'appareil — on ouvre l'AudioTrack au **débit natif**
+ * de laisser le système rééchantillonner vers le débit de sortie, avec une
+ * qualité variable selon l'appareil, on ouvre l'AudioTrack au **débit natif**
  * du périphérique et on rééchantillonne nous-mêmes ([LinearResampler]).
  *
  * [write] est bloquant : appelé depuis le thread d'émulation, il cale la
@@ -30,7 +29,6 @@ class AndroidAudioSink(
 
     private val outputRate = resolveNativeRate(context)
     private val resampler = LinearResampler(sourceRateHz, outputRate)
-    private val rateController = AudioRateController(sourceRateHz)
     private var resampled = ShortArray(0)
     private val primer: AudioBufferPrimer
     private val track: AudioTrack
@@ -45,7 +43,7 @@ class AndroidAudioSink(
         ).coerceAtLeast(0)
         // Huit trames absorbent un pic ponctuel d'ordonnancement Android.
         // Six trames sont écrites avant le premier appel à play(), soit environ
-        // 100 ms de réserve à la cadence GBA. La marge restante évite de vider
+        // 100 ms de réserve à 60 Hz. La marge restante évite de vider
         // la piste sans modifier la fréquence ni les timings du moteur.
         val bufferBytes = maxOf(
             minBuffer,
@@ -79,17 +77,16 @@ class AndroidAudioSink(
             .build()
     }
 
-    override fun write(samples: ShortArray, count: Int, targetDurationNanos: Long) {
+    override fun write(samples: ShortArray, count: Int) {
         try {
             recoverFromUnderrun()
 
-            // À vitesse réduite, produire davantage de trames de sortie évite
-            // les trous périodiques dans AudioTrack. Le contrôleur lisse et
-            // borne le ratio pour empêcher toute variation brutale.
-            val rateScale = rateController.update(count / 2, targetDurationNanos)
-            val needed = resampler.maxOutput(count, rateScale)
+            // Le rééchantillonnage conserve toujours le débit natif du moteur.
+            // Une variation du temps de rendu ne doit jamais modifier la hauteur
+            // du son, en particulier sur les moteurs GB et GBC.
+            val needed = resampler.maxOutput(count)
             if (resampled.size < needed) resampled = ShortArray(needed)
-            val produced = resampler.resample(samples, count, resampled, rateScale)
+            val produced = resampler.resample(samples, count, resampled)
 
             // WRITE_BLOCKING peut encore retourner une écriture partielle si la
             // piste change d'état. Ne jamais abandonner silencieusement la fin.
@@ -146,7 +143,6 @@ class AndroidAudioSink(
             track.flush()
             primer.reset(currentUnderrunCount())
             resampler.reset()
-            rateController.reset()
         } catch (_: Exception) {
         }
     }

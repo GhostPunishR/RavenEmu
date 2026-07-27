@@ -222,4 +222,116 @@ class GbaPpuEffectsTest {
         // Hors de la fenêtre objet : plus rien, donc le fond.
         assertEquals(GbaPpu.bgr555ToArgb(blue), pixel(ppu, 100, 0))
     }
+
+    // ---- Verrouillage des points de référence affines ----
+
+    /** Cycles d'une ligne complète, intervalle horizontal compris. */
+    private val lineCycles = GbaCore.CYCLES_PER_FRAME / 228
+
+    private fun advanceLines(ppu: GbaPpu, count: Int) = ppu.tick(lineCycles * count)
+
+    /**
+     * Décale la carte de 100 pixels vers la droite : sans ce décalage, la colonne
+     * 200 tombe hors d'une carte de 128 pixels et reste au fond.
+     */
+    private fun writeBg2X(bus: GbaBus, pixels: Int) =
+        bus.write32(0x0400_0028, pixels shl 8)
+
+    /**
+     * Un jeu écrit ses registres d'affichage **pendant le VBlank**, pour l'image
+     * qui suit. Verrouiller les points de référence à l'entrée du VBlank, donc
+     * avant son gestionnaire d'interruption, revenait à afficher indéfiniment le
+     * cadrage de l'image précédente.
+     */
+    @Test
+    fun `un point de reference ecrit pendant le VBlank sert des l'image suivante`() {
+        val (bus, ppu) = newPpu()
+        setupAffineBg(bus, wrap = false)
+        renderFrame(ppu)
+        assertEquals(GbaPpu.bgr555ToArgb(blue), pixel(ppu, 200, 0), "cadrage de départ")
+
+        // Entrée dans le VBlank, puis écriture comme le ferait le jeu.
+        advanceLines(ppu, 161)
+        writeBg2X(bus, -100)
+        advanceLines(ppu, 228 - 161)
+
+        renderFrame(ppu)
+        assertEquals(GbaPpu.bgr555ToArgb(green), pixel(ppu, 200, 0))
+    }
+
+    /**
+     * Le matériel recopie aussitôt `BGxX`/`BGxY` dans le registre interne que
+     * suit le rendu : une couche affine peut donc être déplacée en cours
+     * d'image, ce dont se servent les effets ligne par ligne.
+     */
+    @Test
+    fun `ecrire un point de reference agit des la ligne suivante`() {
+        val (bus, ppu) = newPpu()
+        setupAffineBg(bus, wrap = false)
+
+        advanceLines(ppu, 80)
+        writeBg2X(bus, -100)
+        advanceLines(ppu, 80)
+
+        assertEquals(GbaPpu.bgr555ToArgb(blue), pixel(ppu, 200, 10), "haut de l'image")
+        assertEquals(GbaPpu.bgr555ToArgb(green), pixel(ppu, 200, 120), "bas de l'image")
+    }
+
+    // ---- Comptage des pixels par couche ----
+
+    /**
+     * Le comptage ne sert à rien s'il ne reflète pas le rendu. Ici la carte
+     * affine couvre 128 × 128 pixels de l'écran : le compte doit valoir
+     * exactement cela, ni la surface de l'écran ni zéro.
+     */
+    @Test
+    fun `le comptage par couche suit les pixels reellement dessines`() {
+        val (bus, ppu) = newPpu()
+        ppu.collectLayerStats = true
+        setupAffineBg(bus, wrap = false)
+
+        renderFrame(ppu) // trame comptée
+        renderFrame(ppu) // publication du comptage précédent
+
+        assertEquals(128 * 128, ppu.layerPixels[2], "BG2 affine")
+        assertEquals(0, ppu.layerPixels[0], "BG0 éteint")
+        assertEquals(0, ppu.layerPixels[4], "aucun sprite visible")
+    }
+
+    /**
+     * Le décompte des écritures vers la matrice affine doit suivre toutes les
+     * largeurs d'accès : un jeu y écrit indifféremment par mot, demi-mot ou
+     * copie DMA, et un décompte aveugle à l'une d'elles mènerait droit à la
+     * mauvaise conclusion.
+     */
+    @Test
+    fun `les ecritures vers la matrice affine sont comptees quelle qu'en soit la largeur`() {
+        val (bus, _) = newPpu()
+        val diagnostics = bus.diagnostics
+        assertEquals(0, diagnostics.bg2MatrixWrites, "aucune écriture au départ")
+
+        bus.write16(0x0400_0020, 0x0100)          // BG2PA seul
+        assertEquals(1, diagnostics.bg2MatrixWrites)
+
+        bus.write32(0x0400_0024, 0x0100_0000)     // BG2PC et BG2PD d'un coup
+        assertEquals(3, diagnostics.bg2MatrixWrites)
+
+        // Le point de référence a son propre décompte, distinct de la matrice.
+        assertEquals(0, diagnostics.bg2ReferenceWrites)
+        bus.write32(0x0400_0028, 0)               // BG2X
+        assertEquals(2, diagnostics.bg2ReferenceWrites)
+        assertEquals(3, diagnostics.bg2MatrixWrites, "la matrice n'a pas bougé")
+    }
+
+    /** Sans activation, le comptage reste à zéro : on ne paie pas ce qu'on ne mesure pas. */
+    @Test
+    fun `sans activation aucun pixel n'est compte`() {
+        val (bus, ppu) = newPpu()
+        setupAffineBg(bus, wrap = false)
+
+        renderFrame(ppu)
+        renderFrame(ppu)
+
+        assertTrue(ppu.layerPixels.all { it == 0 }, ppu.layerPixels.toList().toString())
+    }
 }

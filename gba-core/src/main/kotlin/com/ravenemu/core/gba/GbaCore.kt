@@ -23,8 +23,9 @@ import java.security.MessageDigest
  * modes bitmap, texte et affines avec sprites, fenêtres et effets de couleur.
  * Sont également gérés : entrées ([setButton] alimente `KEYINPUT`, boutons
  * `L`/`R` compris), interruptions, timers, DMA, BIOS HLE, audio ([readAudio]
- * draine les canaux PSG et Direct Sound) et **sauvegardes de cartouche**
- * (SRAM, Flash 64/128 Kio, EEPROM) exportées au format `.sav` brut.
+ * draine les canaux PSG et Direct Sound), **sauvegardes de cartouche**
+ * (SRAM, Flash 64/128 Kio, EEPROM) exportées au format `.sav` brut, et
+ * **horloge temps réel** de cartouche pour les jeux qui en embarquent une.
  *
  * La compatibilité commerciale reste à valider ; les limites connues sont
  * documentées en AD-15.
@@ -136,7 +137,13 @@ class GbaCore(
             // même en Release.
             m.apu.onBatchNanos =
                 if (value) { nanos -> m.diagnostics.addApuNanos(nanos) } else null
+            // Même raison pour le comptage des pixels par couche : un incrément
+            // par pixel dessiné n'a rien à faire hors d'une session de mesure.
+            m.ppu.collectLayerStats = value
         }
+
+    /** Étend le signe d'une valeur 28 bits (`BG2X`/`BG2Y`, format 20.8). */
+    private fun signed28(value: Int): Int = (value shl 4) shr 4
 
     /**
      * Photographie de l'état du moteur, pour une surcouche de débogage. Retourne
@@ -168,6 +175,20 @@ class GbaCore(
             decompressionErrorCount =
                 diag.count(GbaDiagnostics.Event.DECOMPRESSION_ERROR),
             firstUnsupportedAddress = diag.firstUnsupportedAddress,
+            dispcnt = m.bus.read16(IO_BASE),
+            bg0Control = m.bus.read16(IO_BASE + 0x08),
+            bg1Control = m.bus.read16(IO_BASE + 0x0A),
+            bg2Control = m.bus.read16(IO_BASE + 0x0C),
+            bg3Control = m.bus.read16(IO_BASE + 0x0E),
+            blendControl = m.bus.read16(IO_BASE + 0x50),
+            layerPixels = m.ppu.layerPixels,
+            bg2ReferenceX = signed28(m.bus.read32(IO_BASE + 0x28)) shr 8,
+            bg2ReferenceY = signed28(m.bus.read32(IO_BASE + 0x2C)) shr 8,
+            bg2ScaleX = m.bus.read16(IO_BASE + 0x20),
+            bg2ScaleY = m.bus.read16(IO_BASE + 0x26),
+            bg2MatrixWrites = diag.bg2MatrixWrites,
+            bg2ReferenceWrites = diag.bg2ReferenceWrites,
+            swiCounts = IntArray(GbaDiagnostics.SWI_RANGE) { diag.swiCount(it) },
             ppuMillis = diag.ppuNanosLastFrame / 1_000_000.0,
             dmaMillis = diag.dmaNanosLastFrame / 1_000_000.0,
             apuMillis = diag.apuNanosLastFrame / 1_000_000.0,
@@ -202,6 +223,9 @@ class GbaCore(
     }
 
     companion object {
+        /** Base des registres d'E/S, pour la lecture des états d'affichage. */
+        private const val IO_BASE = 0x0400_0000
+
         /** 240 points × 308 + intervalles ≈ 280 896 cycles par trame. */
         const val CYCLES_PER_FRAME = 280_896
 

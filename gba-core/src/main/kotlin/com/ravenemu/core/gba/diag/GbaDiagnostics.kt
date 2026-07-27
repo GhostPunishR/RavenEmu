@@ -84,6 +84,30 @@ class GbaDiagnostics {
         if (counts[Event.UNSUPPORTED_ACCESS.ordinal] == 0) firstUnsupportedAddress = address
     }
 
+    /**
+     * Écritures vers `BG2PA`–`BG2PD`, la matrice du plan affine.
+     *
+     * Un plan affine activé dont la matrice reste nulle ne dessine rien. Ce
+     * décompte distingue les deux causes possibles, qui appellent des
+     * corrections opposées : à zéro, le jeu n'a jamais tenté de l'écrire et
+     * c'est son déroulement qui diverge ; non nul avec une matrice pourtant
+     * nulle, c'est l'écriture elle-même qui se perd.
+     */
+    var bg2MatrixWrites = 0
+        private set
+
+    /** Écritures vers `BG2X`/`BG2Y`, le point de référence du plan affine. */
+    var bg2ReferenceWrites = 0
+        private set
+
+    fun recordBg2MatrixWrite() {
+        bg2MatrixWrites++
+    }
+
+    fun recordBg2ReferenceWrite() {
+        bg2ReferenceWrites++
+    }
+
     /** Cycles écoulés dans l'attente d'interruption en cours. */
     var waitCycles = 0
         private set
@@ -139,8 +163,21 @@ class GbaDiagnostics {
         apuNanos = 0
     }
 
+    /**
+     * Appels du BIOS effectivement passés par le jeu, indexés par numéro.
+     *
+     * Le dernier appel ne dit presque rien : c'est celui qui revient le plus
+     * souvent qui l'emporte au moment du relevé. Le relevé complet, lui, montre
+     * quels services le jeu emploie réellement — et surtout lesquels il n'emploie
+     * jamais, ce qui trahit une branche de son code qui n'est pas prise.
+     */
+    private val swiCounts = IntArray(SWI_RANGE)
+
+    fun swiCount(number: Int): Int = swiCounts[number]
+
     fun onSwi(number: Int) {
         lastSwi = number
+        if (number in swiCounts.indices) swiCounts[number]++
     }
 
     fun onInterrupt(mask: Int) {
@@ -199,9 +236,12 @@ class GbaDiagnostics {
         instructionsThisFrame = 0
         instructionsLastFrame = 0
         lastSwi = -1
+        swiCounts.fill(0)
         lastInterruptMask = 0
         audioUnderruns = 0
         firstUnsupportedAddress = 0
+        bg2MatrixWrites = 0
+        bg2ReferenceWrites = 0
         waitCycles = 0
         measuringTime = false
         ppuNanos = 0
@@ -213,6 +253,9 @@ class GbaDiagnostics {
     }
 
     companion object {
+        /** Numéros d'appel BIOS suivis : 0x00 à 0x2F couvre tout ce qu'un jeu emploie. */
+        const val SWI_RANGE = 0x30
+
         /** Nombre maximal de signalements transmis par catégorie. */
         const val MAX_REPORTS_PER_EVENT = 8
 
