@@ -89,6 +89,11 @@ class GbaBus(
     /** Prochain accès facturé comme lecture d'instruction (préchargement Game Pak). */
     private var fetchAccess = false
 
+    init {
+        // État d'allumage : les matrices affines ne partent pas de zéro.
+        resetAffineMatrices()
+    }
+
     /** Récupère et remet à zéro les cycles d'attente accumulés. */
     fun takeWaitCycles(): Int {
         val value = waitCycles
@@ -230,6 +235,35 @@ class GbaBus(
         codeNonSequentialWait16 = timing.instructionWaitStates(address, 2, sequential = false)
         codeSequentialWait32 = timing.instructionWaitStates(address, 4, sequential = true)
         codeNonSequentialWait32 = timing.instructionWaitStates(address, 4, sequential = false)
+    }
+
+    /**
+     * Ramène les matrices de rotation/mise à l'échelle des plans affines à
+     * l'identité (`PA` = `PD` = 1,0 en virgule fixe 8.8, `PB` = `PC` = 0).
+     *
+     * Ces quatre registres ne valent **pas zéro** au démarrage d'une console, et
+     * la remise à zéro des registres par le BIOS ne les ramène pas à zéro non
+     * plus : elle les laisse à l'identité. La nuance n'est pas cosmétique — une
+     * matrice nulle réduit toute la couche à un point, donc à rien du tout.
+     *
+     * Des jeux commerciaux en dépendent. Pokémon Rouge Feu active un plan affine
+     * pour l'image du professeur, lui fixe son point de référence, et n'écrit
+     * **jamais** sa matrice : il compte sur l'identité laissée en place. Vérifié
+     * sur la ROM, qui ne référence nulle part `0x0400_0020`. Un moteur qui part
+     * de zéro n'affiche simplement pas le professeur.
+     */
+    fun resetAffineMatrices() {
+        for (base in intArrayOf(BG2_MATRIX, BG3_MATRIX)) {
+            writeIoHalf(base + 0, IDENTITY) // PA
+            writeIoHalf(base + 2, 0)        // PB
+            writeIoHalf(base + 4, 0)        // PC
+            writeIoHalf(base + 6, IDENTITY) // PD
+        }
+    }
+
+    private fun writeIoHalf(offset: Int, value: Int) {
+        io[offset] = (value and 0xFF).toByte()
+        io[offset + 1] = ((value ushr 8) and 0xFF).toByte()
     }
 
     /** Réaligne le modèle de temps d'attente sur le contenu courant de [io]. */
@@ -635,6 +669,13 @@ class GbaBus(
         const val IME = 0x208
 
         // Files d'échantillons Direct Sound.
+        /** Base des matrices affines de BG2 et BG3 dans l'espace d'E/S. */
+        const val BG2_MATRIX = 0x020
+        const val BG3_MATRIX = 0x030
+
+        /** Échelle 1 en virgule fixe 8.8. */
+        private const val IDENTITY = 0x0100
+
         const val FIFO_A_START = 0x0A0
         const val FIFO_B_START = 0x0A4
         const val FIFO_B_END = 0x0A7

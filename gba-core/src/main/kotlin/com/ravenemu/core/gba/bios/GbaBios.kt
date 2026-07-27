@@ -191,6 +191,10 @@ class GbaBios(
             bus.timers?.reset()
             bus.interrupts?.reset()
             bus.dma?.reset()
+            // Les matrices affines reviennent à l'identité, pas à zéro : une
+            // matrice nulle réduirait la couche à un point. Des jeux comptent
+            // sur cette identité sans jamais écrire ces registres.
+            bus.resetAffineMatrices()
         }
     }
 
