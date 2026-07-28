@@ -10,9 +10,7 @@ Son empreinte SHA-256 est disponible à la même adresse avec l'extension `.sha2
 
 [RavenEmu-test.apk.sha256](https://github.com/GhostPunishR/RavenEmu/releases/download/test-latest/RavenEmu-test.apk.sha256)
 
-La préversion `test-latest` est remplacée après chaque construction réussie de `main`. Le lien reste identique, mais le fichier et son empreinte changent — l'empreinte du **certificat de signature**, elle, ne change pas.
-
-La publication n'a lieu que si la clé de signature Test du projet est configurée. Tant qu'elle ne l'est pas, la CI refuse de publier plutôt que de diffuser un APK dont la signature changerait à chaque construction, et le lien ci-dessus reste sans cible.
+La préversion `test-latest` est remplacée après chaque construction réussie de `main`. Le lien reste identique, et le fichier comme son empreinte changent à chaque publication — l'empreinte du **certificat de signature**, elle, ne change pas.
 
 ## Installer sur Android
 
@@ -32,7 +30,13 @@ sha256sum -c RavenEmu-test.apk.sha256
 apksigner verify --print-certs RavenEmu-test.apk
 ```
 
-L'empreinte du certificat doit être **identique** à celle des préversions précédentes. Si elle a changé sans annonce, n'installez pas l'APK.
+L'empreinte du certificat doit être :
+
+```
+c439aed3f5210f88d92f435f949614cacbb4105ed7967a246abfa051d59feee1
+```
+
+Elle est identique pour toutes les préversions Test, et rappelée dans les notes de chacune. Si `apksigner` en affiche une autre, n'installez pas l'APK.
 
 ## Mettre à jour
 

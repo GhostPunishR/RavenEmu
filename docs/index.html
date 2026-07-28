@@ -69,6 +69,11 @@
             <a class="button button-secondary" href="https://github.com/GhostPunishR/RavenEmu" target="_blank" rel="noreferrer">Voir le dépôt</a>
             <a class="button button-secondary" href="#demarrer">Compiler RavenEmu</a>
           </div>
+          <p class="hero-note">
+            APK de test signé par une clé dédiée et stable, reconstruit à chaque évolution de <code>main</code>.
+            Empreinte du fichier, du certificat et commit source publiés à chaque version —
+            <a class="text-link" href="#verifier">comment vérifier</a>.
+          </p>
           <ul class="hero-points" aria-label="Principes RavenEmu">
             <li>Moteurs JVM indépendants</li>
             <li>Aucun BIOS ni ROM distribué</li>
@@ -363,6 +368,13 @@
           <h2 id="faq-title">Avant de commencer</h2>
         </div>
         <div class="faq-list">
+          <details class="faq-item reveal" id="verifier">
+            <summary>Comment vérifier que l’APK vient bien du projet ?</summary>
+            <p>Chaque préversion publie l’empreinte SHA-256 du fichier, celle du certificat de signature, le commit source et le nom du package. Les deux commandes suivantes se lancent depuis les outils Android :</p>
+            <pre><code>sha256sum -c RavenEmu-test.apk.sha256
+apksigner verify --print-certs RavenEmu-test.apk</code></pre>
+            <p>L’empreinte du certificat doit être <code>c439aed3f5210f88d92f435f949614cacbb4105ed7967a246abfa051d59feee1</code>. Elle est la même pour toutes les versions Test : c’est ce qui permet de mettre à jour l’application sans la désinstaller. Si une autre valeur apparaît, l’APK ne vient pas de ce dépôt — ne l’installe pas.</p>
+          </details>
           <details class="faq-item reveal">
             <summary>RavenEmu fournit-il des jeux ou un BIOS ?</summary>
             <p>Non. Le dépôt et l’application ne distribuent aucun BIOS, aucune ROM et aucun contenu protégé. Utilise uniquement des copies que tu es autorisé à employer ou des homebrews librement distribués.</p>

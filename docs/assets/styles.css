@@ -434,6 +434,21 @@ p {
   border-color: var(--border-strong);
 }
 
+/* Précision sous les boutons du bandeau : ce que l'on télécharge exactement,
+   et le renvoi vers la marche à suivre pour le vérifier. Discret par rapport
+   aux actions, mais lisible — c'est une information de confiance. */
+.hero-note {
+  max-width: 620px;
+  margin-top: 1.1rem;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
+.hero-note code {
+  font-size: 0.9em;
+}
+
 .hero-points {
   display: flex;
   flex-wrap: wrap;
