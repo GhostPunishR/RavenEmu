@@ -12,7 +12,7 @@ Les moteurs sont écrits en Kotlin pour le projet à partir de documentation tec
 
 ## Télécharger
 
-La CI publie automatiquement un APK de test après chaque construction réussie de `main`, **à condition que la clé de signature Test du projet soit configurée** : sans elle, la publication est refusée plutôt que de diffuser un APK dont la signature changerait à chaque construction. Voir [RELEASING.md](RELEASING.md#secrets-et-variables-de-signature).
+La CI publie automatiquement un APK de test après chaque construction réussie de `main`.
 
 ### [Télécharger le dernier APK Test](https://github.com/GhostPunishR/RavenEmu/releases/download/test-latest/RavenEmu-test.apk)
 
@@ -39,7 +39,15 @@ sha256sum -c RavenEmu-test.apk.sha256
 apksigner verify --print-certs RavenEmu-test.apk
 ```
 
-Si l'empreinte du certificat a changé, n'installez pas : soit la clé du projet a tourné — ce qui serait annoncé —, soit l'APK ne vient pas de ce dépôt.
+L'empreinte attendue est :
+
+```
+c439aed3f5210f88d92f435f949614cacbb4105ed7967a246abfa051d59feee1
+```
+
+Si `apksigner` en affiche une autre, n'installez pas : soit la clé du projet a tourné — ce qui serait annoncé ici —, soit l'APK ne vient pas de ce dépôt.
+
+Cette empreinte est aussi rappelée dans les notes de chaque préversion, avec l'empreinte du fichier et le commit qui l'a produit.
 
 RavenEmu ne fournit aucun jeu. Utilisez uniquement des copies que vous êtes autorisé à employer ou des homebrews librement distribués.
 

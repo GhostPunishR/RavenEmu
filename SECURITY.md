@@ -60,7 +60,13 @@ N'effectuez pas de test susceptible de dégrader un service, d'accéder aux donn
 
 - Téléchargez RavenEmu uniquement depuis le dépôt officiel.
 - Vérifiez l'empreinte SHA-256 publiée à côté de l'APK Test.
-- Vérifiez le certificat de signature. Son empreinte est publiée dans les notes de chaque préversion et **ne change pas** d'une version à l'autre : si elle change, l'APK ne vient pas de ce dépôt.
+- Vérifiez le certificat de signature. Son empreinte **ne change pas** d'une version à l'autre :
+
+  ```
+  c439aed3f5210f88d92f435f949614cacbb4105ed7967a246abfa051d59feee1
+  ```
+
+  Elle est rappelée dans les notes de chaque préversion. Si `apksigner` en affiche une autre, l'APK ne vient pas de ce dépôt.
 
   ```bash
   sha256sum -c RavenEmu-test.apk.sha256

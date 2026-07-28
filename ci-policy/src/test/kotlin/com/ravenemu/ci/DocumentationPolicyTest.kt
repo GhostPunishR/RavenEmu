@@ -123,6 +123,39 @@ class DocumentationPolicyTest {
     }
 
     @Test
+    fun `l'empreinte du certificat publiee est la meme partout`() {
+        // Elle est écrite dans quatre documents. Une rotation de clé qui n'en
+        // mettrait qu'un à jour laisserait ailleurs une consigne de
+        // vérification fausse — c'est-à-dire pire qu'aucune consigne : elle
+        // ferait rejeter un APK authentique, ou accepter le doute.
+        val empreinte = Regex("\\b[0-9a-f]{64}\\b")
+        val documents = listOf(
+            "README.md",
+            "SECURITY.md",
+            "wiki/Installation.md",
+            "docs/index.html",
+        )
+        val relevees = documents.associateWith { nom ->
+            empreinte.findAll(File(racine, nom).readText()).map { it.value }.toSet()
+        }
+
+        val sansEmpreinte = relevees.filterValues { it.isEmpty() }.keys
+        assertTrue(
+            sansEmpreinte.isEmpty(),
+            "Ces documents doivent publier l'empreinte du certificat Test : $sansEmpreinte",
+        )
+
+        // L'empreinte du certificat est la seule valeur de cette forme que ces
+        // documents partagent : elle doit apparaître dans chacun d'eux.
+        val communes = relevees.values.reduce { a, b -> a intersect b }
+        assertEquals(
+            1,
+            communes.size,
+            "Une et une seule empreinte doit être commune aux quatre documents, trouvé : $communes",
+        )
+    }
+
+    @Test
     fun `la politique de compatibilite des sauvegardes est ecrite`() {
         val page = File(racine, "wiki/Sauvegardes-et-etats.md").readText()
         assertTrue("RVNS" in page, "Le format d'état doit être nommé")
