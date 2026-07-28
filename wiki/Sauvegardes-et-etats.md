@@ -32,15 +32,15 @@ Les états utilisent le format RavenEmu `RVNS`. Ils ne sont pas annoncés comme 
 
 Les deux mécanismes n'offrent pas les mêmes garanties, et c'est volontaire.
 
-**Sauvegarde `.sav` — compatibilité durable.** Le fichier reproduit le contenu brut de la mémoire de la cartouche, tel que le jeu l'écrit. Ce format ne dépend pas de RavenEmu : il ne change pas d'une version à l'autre, et reste lisible par d'autres outils qui lisent le même format. C'est le support à privilégier pour conserver une progression.
+**Sauvegarde `.sav` : compatibilité durable.** Le fichier reproduit le contenu brut de la mémoire de la cartouche, tel que le jeu l'écrit. Ce format ne dépend pas de RavenEmu : il ne change pas d'une version à l'autre, et reste lisible par d'autres outils qui lisent le même format. C'est le support à privilégier pour conserver une progression.
 
-**État instantané `RVNS` — compatibilité limitée à un format donné.** Un état contient l'intégralité de la machine émulée, y compris des détails internes que les corrections de précision font évoluer. Le format porte un numéro de version, et un état d'une version antérieure est **refusé** plutôt que réinterprété au risque de produire un comportement faux.
+**État instantané `RVNS` : compatibilité limitée à un format donné.** Un état contient l'intégralité de la machine émulée, y compris des détails internes que les corrections de précision font évoluer. Le format porte un numéro de version, et un état d'une version antérieure est **refusé** plutôt que réinterprété au risque de produire un comportement faux.
 
 Ce que RavenEmu garantit :
 
 - un état n'est jamais chargé sur une autre ROM : l'empreinte SHA-256 de la ROM est inscrite dans le fichier et vérifiée ;
 - un état n'est jamais chargé sur une autre console : l'identifiant de console inscrit est figé et n'est jamais réattribué, même si la liste des consoles évolue ;
-- un état refusé — tronqué, corrompu, d'une autre version — laisse la partie en cours **strictement intacte** et jouable : la restauration se fait dans une machine neuve, qui ne remplace l'active qu'en cas de succès complet ;
+- un état refusé (tronqué, corrompu, ou d'une autre version) laisse la partie en cours **strictement intacte** et jouable : la restauration se fait dans une machine neuve, qui ne remplace l'active qu'en cas de succès complet ;
 - une sauvegarde `.sav` n'est effacée qu'après confirmation de l'écriture du nouveau fichier.
 
 Ce que RavenEmu ne garantit pas :

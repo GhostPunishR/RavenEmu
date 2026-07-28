@@ -10,7 +10,7 @@ Son empreinte SHA-256 est disponible à la même adresse avec l'extension `.sha2
 
 [RavenEmu-test.apk.sha256](https://github.com/GhostPunishR/RavenEmu/releases/download/test-latest/RavenEmu-test.apk.sha256)
 
-La préversion `test-latest` est remplacée après chaque construction réussie de `main`. Le lien reste identique, et le fichier comme son empreinte changent à chaque publication — l'empreinte du **certificat de signature**, elle, ne change pas.
+La préversion `test-latest` est remplacée après chaque construction réussie de `main`. Le lien reste identique, et le fichier comme son empreinte changent à chaque publication. L'empreinte du **certificat de signature**, elle, ne change pas.
 
 ## Installer sur Android
 
@@ -54,7 +54,7 @@ Une désinstallation peut supprimer les données internes de l'application.
 
 ## Compiler soi-même
 
-Seul l'APK Test est publié. Un APK Debug se construit localement avec le Gradle Wrapper — voir [[Compilation]] — et ne demande aucun secret de signature. Il n'est pas destiné à circuler.
+Seul l'APK Test est publié. Un APK Debug se construit localement avec le Gradle Wrapper (voir [[Compilation]]) et ne demande aucun secret de signature. Il n'est pas destiné à circuler.
 
 ## Contenu non fourni
 

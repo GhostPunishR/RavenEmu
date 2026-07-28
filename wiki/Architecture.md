@@ -34,7 +34,7 @@ L'application détecte la console d'une ROM et demande le moteur correspondant. 
 
 `ConsoleType` désigne un **cœur d'émulation**, pas un modèle commercialisé : `gameboy-core` couvre à lui seul la Game Boy et la Game Boy Color, et n'y figure donc qu'une fois.
 
-Ce que déclare la cartouche — monochrome, compatible couleur, ou couleur exigée — est une métadonnée distincte, lue à l'octet `0x0143` de l'en-tête et portée par `GameBoyCartridgeMode`. L'extension du fichier ne décide de rien : des `.gbc` contiennent des cartouches monochromes, des `.gb` des cartouches couleur.
+Ce que déclare la cartouche (monochrome, compatible couleur, ou couleur exigée) est une métadonnée distincte, lue à l'octet `0x0143` de l'en-tête et portée par `GameBoyCartridgeMode`. L'extension du fichier ne décide de rien : des `.gbc` contiennent des cartouches monochromes, des `.gb` des cartouches couleur.
 
 Les formats persistés désignent la console par un identifiant **figé** (`ConsoleType.storageId`), jamais par son rang de déclaration : ajouter ou retirer une console ne doit pas réinterpréter les fichiers déjà enregistrés par les utilisateurs. Un identifiant retiré n'est jamais réattribué.
 

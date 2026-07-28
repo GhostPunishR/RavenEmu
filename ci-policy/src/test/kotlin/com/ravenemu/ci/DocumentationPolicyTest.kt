@@ -156,6 +156,35 @@ class DocumentationPolicyTest {
     }
 
     @Test
+    fun `le wiki respecte ses regles de publication`() {
+        // Ces règles sont celles du workflow de publication du wiki, qui ne
+        // s'exécute qu'après une fusion sur `main` : une pull request pouvait
+        // donc être verte et casser la publication. Les reprendre ici les fait
+        // vérifier à chaque construction, et sur le poste du contributeur.
+        val wiki = File(racine, "wiki")
+        for (obligatoire in listOf("Home.md", "_Sidebar.md")) {
+            assertTrue(
+                File(wiki, obligatoire).isFile,
+                "Le wiki doit comporter $obligatoire",
+            )
+        }
+
+        val fautifs = wiki.walkTopDown()
+            .filter { it.isFile }
+            .flatMap { fichier ->
+                fichier.readLines().withIndex()
+                    .filter { (_, ligne) -> TIRET_CADRATIN in ligne }
+                    .map { (index, _) -> "${relatif(fichier)}:${index + 1}" }
+            }
+            .toList()
+        assertEquals(
+            emptyList(),
+            fautifs,
+            "Le tiret cadratin est interdit dans les textes du wiki",
+        )
+    }
+
+    @Test
     fun `la politique de compatibilite des sauvegardes est ecrite`() {
         val page = File(racine, "wiki/Sauvegardes-et-etats.md").readText()
         assertTrue("RVNS" in page, "Le format d'état doit être nommé")
@@ -163,5 +192,10 @@ class DocumentationPolicyTest {
             ".sav" in page && "refus" in page.lowercase(),
             "La page doit dire ce qui est garanti et ce qui ne l'est pas",
         )
+    }
+
+    private companion object {
+        /** U+2014, nommé plutôt qu'écrit pour rester lisible dans le source. */
+        const val TIRET_CADRATIN = '\u2014'
     }
 }

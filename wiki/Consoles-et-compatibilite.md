@@ -22,7 +22,7 @@ Le moteur Game Boy comprend notamment:
 
 ## Game Boy Color
 
-Il n'y a pas de « moteur Game Boy Color » séparé : le même cœur sert toute la gamme et active les fonctions couleur d'après l'octet `0x0143` de l'en-tête de cartouche. Trois cas sont distingués — monochrome, compatible couleur (`0x80`), couleur exigée (`0xC0`) — et l'extension du fichier n'entre pas en compte : un `.gbc` peut contenir une cartouche monochrome, un `.gb` une cartouche couleur.
+Il n'y a pas de « moteur Game Boy Color » séparé : le même cœur sert toute la gamme et active les fonctions couleur d'après l'octet `0x0143` de l'en-tête de cartouche. Trois cas sont distingués : monochrome, compatible couleur (`0x80`) et couleur exigée (`0xC0`). L'extension du fichier n'entre pas en compte : un `.gbc` peut contenir une cartouche monochrome, un `.gb` une cartouche couleur.
 
 Une cartouche déclarant des fonctions couleur bénéficie de:
 
