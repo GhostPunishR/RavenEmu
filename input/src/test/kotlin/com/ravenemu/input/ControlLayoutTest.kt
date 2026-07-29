@@ -2,6 +2,7 @@ package com.ravenemu.input
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -15,6 +16,60 @@ class ControlLayoutTest {
                 assertNotNull(layout.element(id), "élément $id manquant")
             }
         }
+    }
+
+    @Test
+    fun `portrait GB respecte la disposition Raven sans gachettes`() {
+        val layout = ControlLayout.ravenGbPortrait()
+        val menu = layout.element(ControlId.MENU)!!
+        val dpad = layout.element(ControlId.DPAD)!!
+
+        assertEquals(0.5f, menu.centerX)
+        assertTrue(menu.centerY < dpad.centerY, "MENU doit être sous l'écran, avant le D-pad")
+        assertFalse(layout.element(ControlId.BUTTON_L)!!.visible)
+        assertFalse(layout.element(ControlId.BUTTON_R)!!.visible)
+        assertEquals(
+            setOf(
+                ControlId.DPAD,
+                ControlId.BUTTON_A,
+                ControlId.BUTTON_B,
+                ControlId.START,
+                ControlId.SELECT,
+                ControlId.MENU,
+            ),
+            layout.elements.filter(ControlElement::visible).map(ControlElement::id).toSet(),
+        )
+    }
+
+    @Test
+    fun `portrait GBA affiche L MENU R sous ecran`() {
+        val layout = ControlLayout.ravenGbaPortrait()
+        val left = layout.element(ControlId.BUTTON_L)!!
+        val menu = layout.element(ControlId.MENU)!!
+        val right = layout.element(ControlId.BUTTON_R)!!
+        val dpad = layout.element(ControlId.DPAD)!!
+
+        assertTrue(left.visible)
+        assertTrue(right.visible)
+        assertEquals(0.5f, menu.centerX)
+        assertTrue(left.centerX < menu.centerX)
+        assertTrue(menu.centerX < right.centerX)
+        assertEquals(menu.centerY, left.centerY)
+        assertEquals(menu.centerY, right.centerY)
+        assertTrue(menu.centerY < dpad.centerY)
+    }
+
+    @Test
+    fun `rangee sous ecran s adapte au ratio portrait`() {
+        val gbScreenBottom = 0.51f
+        val gbaScreenBottom = 0.375f
+        val gbMenu = ControlLayout.ravenGbPortrait(gbScreenBottom)
+            .element(ControlId.MENU)!!
+        val gbaMenu = ControlLayout.ravenGbaPortrait(gbaScreenBottom)
+            .element(ControlId.MENU)!!
+
+        assertTrue(gbMenu.centerY > gbScreenBottom)
+        assertTrue(gbaMenu.centerY > gbaScreenBottom)
     }
 
     @Test
@@ -58,7 +113,37 @@ class ControlLayoutTest {
     }
 
     @Test
+    fun `profil personnalise conserve positions apparence et visibilite`() {
+        val custom = ControlLayout.ravenGbaPortrait()
+            .with(
+                ControlElement(
+                    id = ControlId.BUTTON_A,
+                    centerX = 0.43f,
+                    centerY = 0.57f,
+                    scale = 1.42f,
+                    opacity = 0.61f,
+                    visible = true,
+                    touchScale = 1.37f,
+                )
+            )
+            .with(customShoulder())
+            .copy(hapticFeedback = false, locked = true)
+
+        assertEquals(custom, ControlLayout.fromJson(custom.toJson()))
+    }
+
+    @Test
     fun `json corrompu renvoie null`() {
         assertNull(ControlLayout.fromJson("{invalide"))
     }
+
+    private fun customShoulder(): ControlElement = ControlElement(
+        id = ControlId.BUTTON_L,
+        centerX = 0.12f,
+        centerY = 0.33f,
+        scale = 0.82f,
+        opacity = 0.77f,
+        visible = false,
+        touchScale = 1.6f,
+    )
 }

@@ -32,6 +32,7 @@ import com.ravenemu.emulation.api.SaveStateException
 import com.ravenemu.input.ControlId
 import com.ravenemu.input.ControlLayout
 import com.ravenemu.input.GamepadMapper
+import com.ravenemu.input.TouchSkin
 import com.ravenemu.input.TouchControlsView
 import com.ravenemu.renderer.EmulatorSurfaceView
 import com.ravenemu.romlibrary.RomEntry
@@ -97,8 +98,9 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
         // L'image est ancrée en haut en portrait : on la décale sous
         // l'encoche ou la caméra perforée.
         ViewCompat.setOnApplyWindowInsetsListener(surface) { _, insets ->
-            surface.topInsetPx =
-                insets.getInsets(WindowInsetsCompat.Type.displayCutout()).top
+            val topInset = insets.getInsets(WindowInsetsCompat.Type.displayCutout()).top
+            surface.topInsetPx = topInset
+            controls.screenTopInsetPx = topInset
             insets
         }
         applyImmersiveMode()
@@ -120,6 +122,7 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
 
     private fun applyVideoSettings() {
         surface.keepAspectRatio = settings.keepAspectRatio
+        controls.skinPanelVisible = settings.keepAspectRatio
         surface.integerScaling = settings.integerScaling
         // Portrait : écran de jeu en haut, commandes en dessous. Paysage :
         // l'image remplit la hauteur, le centrage reste naturel.
@@ -175,12 +178,31 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
         val withShoulders = console == ConsoleType.GAME_BOY_ADVANCE
         return if (orientationKey() == "landscape") {
             ControlLayout.defaultLandscape(withShoulders)
+        } else if (withShoulders) {
+            ControlLayout.ravenGbaPortrait(portraitScreenBottomFraction(240f / 160f))
         } else {
-            ControlLayout.defaultPortrait(withShoulders)
+            ControlLayout.ravenGbPortrait(portraitScreenBottomFraction(160f / 144f))
         }
     }
 
+    /**
+     * Position relative du bas de l'image native quand elle occupe la largeur.
+     * Les profils par défaut placent ainsi MENU (et L/R en GBA) juste dessous
+     * sur un téléphone court comme sur un écran portrait allongé.
+     */
+    private fun portraitScreenBottomFraction(screenAspectRatio: Float): Float {
+        val metrics = resources.displayMetrics
+        if (metrics.heightPixels <= 0 || screenAspectRatio <= 0f) return 0f
+        return (metrics.widthPixels / screenAspectRatio / metrics.heightPixels)
+            .coerceIn(0f, 1f)
+    }
+
     private fun applyControlLayout() {
+        controls.skin = when {
+            orientationKey() == "landscape" -> TouchSkin.CLASSIC
+            console == ConsoleType.GAME_BOY_ADVANCE -> TouchSkin.RAVEN_GBA
+            else -> TouchSkin.RAVEN_GB
+        }
         val layout = settings.controlLayout(activeProfileKey()) ?: defaultLayout()
         controls.layoutSpec = layout.copy(hapticFeedback = settings.hapticFeedback)
     }

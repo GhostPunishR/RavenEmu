@@ -62,22 +62,96 @@ data class ControlLayout(
         }
 
         /**
-         * Disposition par défaut en portrait. L'écran de jeu étant ancré en
-         * haut, les commandes occupent le tiers médian-bas, à portée de
-         * pouce, en laissant la bordure basse aux gestes système.
+         * Skin portrait RavenEmu GB/GBC. Le menu ouvre la première rangée de
+         * commandes, centré sous l'écran ; les commandes de jeu restent plus
+         * bas, à portée des deux pouces.
+         *
+         * Les gâchettes font toujours partie du modèle afin qu'un profil
+         * sérialisé reste compatible entre versions, mais elles sont masquées.
          */
-        fun defaultPortrait(withShoulders: Boolean = false): ControlLayout = ControlLayout(
-            elements = listOf(
-                ControlElement(ControlId.DPAD, centerX = 0.20f, centerY = 0.70f),
-                ControlElement(ControlId.BUTTON_A, centerX = 0.87f, centerY = 0.63f),
-                ControlElement(ControlId.BUTTON_B, centerX = 0.71f, centerY = 0.72f),
-                ControlElement(ControlId.SELECT, centerX = 0.38f, centerY = 0.88f),
-                ControlElement(ControlId.START, centerX = 0.62f, centerY = 0.88f),
-                ControlElement(ControlId.MENU, centerX = 0.94f, centerY = 0.04f),
-                ControlElement(ControlId.BUTTON_L, centerX = 0.12f, centerY = 0.50f, visible = withShoulders),
-                ControlElement(ControlId.BUTTON_R, centerX = 0.88f, centerY = 0.50f, visible = withShoulders),
+        fun ravenGbPortrait(
+            screenBottomFraction: Float = GB_REFERENCE_SCREEN_BOTTOM,
+        ): ControlLayout {
+            val menuY = menuRowY(
+                screenBottomFraction = screenBottomFraction,
+                gap = GB_MENU_GAP,
+                minimum = GB_MENU_MIN_Y,
+                maximum = GB_MENU_MAX_Y,
             )
-        )
+            return ControlLayout(
+                elements = listOf(
+                    ControlElement(ControlId.DPAD, centerX = 0.20f, centerY = 0.69f, opacity = 0.92f),
+                    ControlElement(ControlId.BUTTON_A, centerX = 0.84f, centerY = 0.63f, opacity = 0.94f),
+                    ControlElement(ControlId.BUTTON_B, centerX = 0.69f, centerY = 0.70f, opacity = 0.90f),
+                    ControlElement(ControlId.SELECT, centerX = 0.39f, centerY = 0.88f, opacity = 0.86f),
+                    ControlElement(ControlId.START, centerX = 0.61f, centerY = 0.88f, opacity = 0.86f),
+                    ControlElement(ControlId.MENU, centerX = 0.50f, centerY = menuY, opacity = 0.90f),
+                    ControlElement(
+                        ControlId.BUTTON_L,
+                        centerX = 0.16f,
+                        centerY = menuY,
+                        opacity = 0.88f,
+                        visible = false,
+                    ),
+                    ControlElement(
+                        ControlId.BUTTON_R,
+                        centerX = 0.84f,
+                        centerY = menuY,
+                        opacity = 0.88f,
+                        visible = false,
+                    ),
+                )
+            )
+        }
+
+        /**
+         * Skin portrait RavenEmu GBA. L, MENU et R forment une rangée sous
+         * l'écran large ; les autres commandes reprennent l'ergonomie GB/GBC.
+         */
+        fun ravenGbaPortrait(
+            screenBottomFraction: Float = GBA_REFERENCE_SCREEN_BOTTOM,
+        ): ControlLayout {
+            val shoulderRowY = menuRowY(
+                screenBottomFraction = screenBottomFraction,
+                gap = GBA_MENU_GAP,
+                minimum = GBA_MENU_MIN_Y,
+                maximum = GBA_MENU_MAX_Y,
+            )
+            return ControlLayout(
+                elements = listOf(
+                    ControlElement(ControlId.DPAD, centerX = 0.20f, centerY = 0.68f, opacity = 0.92f),
+                    ControlElement(ControlId.BUTTON_A, centerX = 0.84f, centerY = 0.62f, opacity = 0.94f),
+                    ControlElement(ControlId.BUTTON_B, centerX = 0.69f, centerY = 0.69f, opacity = 0.90f),
+                    ControlElement(ControlId.SELECT, centerX = 0.39f, centerY = 0.88f, opacity = 0.86f),
+                    ControlElement(ControlId.START, centerX = 0.61f, centerY = 0.88f, opacity = 0.86f),
+                    ControlElement(
+                        ControlId.MENU,
+                        centerX = 0.50f,
+                        centerY = shoulderRowY,
+                        opacity = 0.90f,
+                    ),
+                    ControlElement(
+                        ControlId.BUTTON_L,
+                        centerX = 0.17f,
+                        centerY = shoulderRowY,
+                        opacity = 0.88f,
+                    ),
+                    ControlElement(
+                        ControlId.BUTTON_R,
+                        centerX = 0.83f,
+                        centerY = shoulderRowY,
+                        opacity = 0.88f,
+                    ),
+                )
+            )
+        }
+
+        /**
+         * Point d'entrée historique conservé pour les appelants et profils
+         * existants. Chaque console reçoit désormais son portrait dédié.
+         */
+        fun defaultPortrait(withShoulders: Boolean = false): ControlLayout =
+            if (withShoulders) ravenGbaPortrait() else ravenGbPortrait()
 
         /** Disposition par défaut en paysage : commandes de part et d'autre. */
         fun defaultLandscape(withShoulders: Boolean = false): ControlLayout = ControlLayout(
@@ -92,5 +166,21 @@ data class ControlLayout(
                 ControlElement(ControlId.BUTTON_R, centerX = 0.92f, centerY = 0.12f, visible = withShoulders),
             )
         )
+
+        private fun menuRowY(
+            screenBottomFraction: Float,
+            gap: Float,
+            minimum: Float,
+            maximum: Float,
+        ): Float = (screenBottomFraction.coerceIn(0f, 1f) + gap).coerceIn(minimum, maximum)
+
+        private const val GB_REFERENCE_SCREEN_BOTTOM = 0.42f
+        private const val GBA_REFERENCE_SCREEN_BOTTOM = 0.32f
+        private const val GB_MENU_GAP = 0.055f
+        private const val GBA_MENU_GAP = 0.05f
+        private const val GB_MENU_MIN_Y = 0.47f
+        private const val GB_MENU_MAX_Y = 0.56f
+        private const val GBA_MENU_MIN_Y = 0.37f
+        private const val GBA_MENU_MAX_Y = 0.44f
     }
 }
