@@ -33,7 +33,7 @@ class DeltaSkinInputMapper(
         val visuals = linkedSetOf<DeltaSkinVisualTarget>()
         var menu = false
 
-        representation.items.forEachIndexed { index, item ->
+        val hitItems = representation.items.mapIndexedNotNull { index, item ->
             val visualFrame = DeltaSkinLayoutCalculator.mapFrame(
                 item.frame,
                 panel,
@@ -47,10 +47,23 @@ class DeltaSkinInputMapper(
                 top = visualFrame.top - edges.top * scaleY,
                 right = visualFrame.right + edges.right * scaleX,
                 bottom = visualFrame.bottom + edges.bottom * scaleY,
-            ).intersect(panel) ?: return@forEachIndexed
-            if (!expanded.contains(x, y)) return@forEachIndexed
+            ).intersect(panel) ?: return@mapIndexedNotNull null
+            if (!expanded.contains(x, y)) return@mapIndexedNotNull null
+            HitItem(
+                index = index,
+                item = item,
+                visualFrame = visualFrame,
+                insideVisualFrame = visualFrame.contains(x, y),
+            )
+        }.let { hits ->
+            // Une frame dessinée gagne sur l'extension d'une frame voisine.
+            // Les extensions restent donc utiles dans les espaces vides sans
+            // créer de combinaison accidentelle au-dessus d'un autre bouton.
+            hits.filter(HitItem::insideVisualFrame).ifEmpty { hits }
+        }
 
-            when (val inputs = item.inputs) {
+        hitItems.forEach { hit ->
+            when (val inputs = hit.item.inputs) {
                 is DeltaSkinInputs.Buttons -> {
                     val mapped = inputs.values.mapNotNull(::mapButton)
                     val itemHasMenu =
@@ -58,11 +71,14 @@ class DeltaSkinInputMapper(
                     buttons += mapped
                     menu = menu || itemHasMenu
                     if (mapped.isNotEmpty() || itemHasMenu) {
-                        visuals += DeltaSkinVisualTarget(index, rect = visualFrame)
+                        visuals += DeltaSkinVisualTarget(
+                            hit.index,
+                            rect = hit.visualFrame,
+                        )
                     }
                 }
                 is DeltaSkinInputs.Directional -> {
-                    val cell = dpadCell(x, y, visualFrame)
+                    val cell = dpadCell(x, y, hit.visualFrame)
                     val directions = directionsForCell(cell)
                     for (direction in directions) {
                         inputs.values[direction]?.let(::mapButton)?.let(buttons::add)
@@ -72,9 +88,9 @@ class DeltaSkinInputMapper(
                     }
                     if (directions.isNotEmpty()) {
                         visuals += DeltaSkinVisualTarget(
-                            itemIndex = index,
+                            itemIndex = hit.index,
                             dpadCell = cell,
-                            rect = dpadCellRect(visualFrame, cell),
+                            rect = dpadCellRect(hit.visualFrame, cell),
                         )
                     }
                 }
@@ -82,6 +98,13 @@ class DeltaSkinInputMapper(
         }
         return DeltaSkinMappedInput(buttons = buttons, menu = menu, visuals = visuals)
     }
+
+    private data class HitItem(
+        val index: Int,
+        val item: DeltaSkinItem,
+        val visualFrame: DeltaSkinRect,
+        val insideVisualFrame: Boolean,
+    )
 
     private fun dpadCell(x: Double, y: Double, frame: DeltaSkinRect): Int {
         val clampedX = x.coerceIn(frame.left, frame.right)
