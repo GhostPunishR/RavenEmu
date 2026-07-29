@@ -62,6 +62,36 @@ class GbaPpu(private val bus: GbaBus) {
     /** Comptage de la trame en cours, publié dans [layerPixels] à sa fin. */
     private val layerPixelsPending = IntArray(5)
 
+    /**
+     * Mesure la dynamique de la trame produite. Réservé au diagnostic : c'est un
+     * balayage complet de l'image une fois par trame, qu'on ne paie pas quand on
+     * ne mesure pas.
+     */
+    var collectFrameStats = false
+
+    /**
+     * Luminance la plus sombre, la plus claire et moyenne de la trame précédente,
+     * sur `0..255`. Zéro tant que [collectFrameStats] est faux.
+     *
+     * C'est la mesure qui tranche un voile signalé à l'écran. Un voile est, par
+     * définition, une dynamique comprimée : le noir n'est plus noir. Si
+     * [frameLumaMin] reste élevé alors que l'image devrait comporter du noir,
+     * c'est le moteur qui produit déjà l'image délavée. S'il descend à zéro, le
+     * moteur est hors de cause et le voile vient de ce qui suit — post-traitement
+     * d'affichage, profil d'écran, ou composition de la surface Android.
+     *
+     * La luminance suit la pondération Rec. 709, la même que le post-traitement
+     * d'affichage : les deux étages parlent ainsi du même gris.
+     */
+    var frameLumaMin = 0
+        private set
+
+    var frameLumaMax = 0
+        private set
+
+    var frameLumaMean = 0
+        private set
+
     // Tampons de composition d'une ligne (réutilisés, sans allocation par ligne).
     // Couche la plus proche de l'observateur, et celle juste derrière : le
     // mélange alpha combine ces deux niveaux.
@@ -188,6 +218,9 @@ class GbaPpu(private val bus: GbaBus) {
                         layerPixelsPending.copyInto(layerPixels)
                         layerPixelsPending.fill(0)
                     }
+                    // La trame qui vient de s'achever est encore dans [frame] :
+                    // c'est ici, et une seule fois, qu'on la mesure.
+                    if (collectFrameStats) measureFrameLuma()
                 }
                 if (vcount == SCREEN_HEIGHT) {
                     if (dispStatIrqEnabled(VBLANK_IRQ)) interrupts?.request(Interrupt.VBLANK)
@@ -404,6 +437,32 @@ class GbaPpu(private val bus: GbaBus) {
         lineColor[x] = color
         linePriority[x] = priority
         lineLayer[x] = layerId
+    }
+
+    /**
+     * Balaie la trame achevée et publie sa dynamique de luminance.
+     *
+     * Un seul passage, sans allocation : trois multiplications et un décalage par
+     * pixel. La somme tient largement dans un entier signé — 38 400 pixels d'une
+     * luminance au plus égale à 255 plafonnent sous dix millions.
+     */
+    private fun measureFrameLuma() {
+        var min = 255
+        var max = 0
+        var sum = 0
+        for (pixel in frame) {
+            val luma = (
+                54 * ((pixel ushr 16) and 0xFF) +
+                    183 * ((pixel ushr 8) and 0xFF) +
+                    19 * (pixel and 0xFF)
+                ) ushr 8
+            if (luma < min) min = luma
+            if (luma > max) max = luma
+            sum += luma
+        }
+        frameLumaMin = min
+        frameLumaMax = max
+        frameLumaMean = sum / frame.size
     }
 
     /**

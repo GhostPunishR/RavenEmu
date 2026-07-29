@@ -141,6 +141,9 @@ class GbaCore(
             // Même raison pour le comptage des pixels par couche : un incrément
             // par pixel dessiné n'a rien à faire hors d'une session de mesure.
             m.ppu.collectLayerStats = value
+            // Et pour la dynamique de la trame : un balayage complet de l'image
+            // par trame, qui n'a de sens que pendant une enquête.
+            m.ppu.collectFrameStats = value
         }
 
     /** Étend le signe d'une valeur 28 bits (`BG2X`/`BG2Y`, format 20.8). */
@@ -182,6 +185,13 @@ class GbaCore(
             bg2Control = m.bus.read16(IO_BASE + 0x0C),
             bg3Control = m.bus.read16(IO_BASE + 0x0E),
             blendControl = m.bus.read16(IO_BASE + 0x50),
+            blendAlpha = m.bus.read16(IO_BASE + 0x52),
+            blendBrightness = m.bus.read16(IO_BASE + 0x54),
+            windowInside = m.bus.read16(IO_BASE + 0x48),
+            windowOutside = m.bus.read16(IO_BASE + 0x4A),
+            lumaMin = m.ppu.frameLumaMin,
+            lumaMax = m.ppu.frameLumaMax,
+            lumaMean = m.ppu.frameLumaMean,
             layerPixels = m.ppu.layerPixels,
             bg2ReferenceX = signed28(m.bus.read32(IO_BASE + 0x28)) shr 8,
             bg2ReferenceY = signed28(m.bus.read32(IO_BASE + 0x2C)) shr 8,
