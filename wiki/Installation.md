@@ -21,6 +21,37 @@ La préversion `test-latest` est remplacée après chaque construction réussie 
 
 L'APK Test conserve les diagnostics et laisse Android optimiser le moteur. Il reste destiné aux essais, pas à une distribution de production. Son identifiant d'application est `com.ravenemu.app.profil` : il cohabite avec une éventuelle version Release sans l'écraser.
 
+## Les avertissements d'Android sont normaux
+
+Android affiche des avertissements pour **tout** APK installé en dehors du Play Store. Ils apparaîtront donc à chaque installation de RavenEmu, et ils ne signalent rien d'anormal sur le fichier.
+
+Il faut cependant distinguer deux situations très différentes, que les libellés d'Android ne séparent pas toujours clairement.
+
+### Messages attendus, liés à l'absence d'information
+
+**« Autoriser cette source » ou « Installer des applications inconnues ».** Android exige une autorisation explicite pour l'application depuis laquelle vous installez : navigateur, gestionnaire de fichiers, messagerie. L'autorisation est donnée par source, pas globalement.
+
+**« Application non vérifiée », « développeur inconnu », « analyse impossible », ou une proposition d'envoyer le fichier à Google pour analyse.** Play Protect ne connaît ni ce certificat de signature ni ce développeur. Ces messages ne signalent pas un problème trouvé dans le fichier : ils signalent que Google n'a rien à en dire.
+
+Une application publiée sur le Play Store ne déclenche pas ces messages, non parce qu'elle serait plus sûre, mais parce que Google l'a vue passer. Un APK signé par une clé auto-signée et distribué depuis GitHub les déclenchera toujours.
+
+### Alerte à ne jamais ignorer
+
+**« Application dangereuse », « application nuisible bloquée », « cette application peut endommager votre appareil ».** C'est un **verdict**, pas une absence d'information : Play Protect annonce avoir détecté un comportement qu'il juge nuisible dans le fichier analysé.
+
+Si ce message apparaît, n'installez pas l'application, supprimez le fichier, et signalez-le dans une issue du projet en précisant depuis quelle adresse vous l'avez téléchargé. Une préversion officielle de RavenEmu ne devrait pas déclencher ce verdict ; s'il apparaît, quelque chose mérite d'être compris avant d'aller plus loin.
+
+### Ce qu'il ne faut pas faire
+
+- Ne désactivez pas Play Protect de façon générale. Il continue de rendre service pour tout le reste, y compris pour détecter ce que la vérification d'empreinte ne détecte pas.
+- Ne laissez pas l'autorisation « sources inconnues » active en permanence sur votre navigateur. Accordez-la au moment de l'installation, puis retirez-la.
+
+### Ce que la vérification d'empreinte prouve, et ce qu'elle ne prouve pas
+
+Elle prouve **qui a signé** le fichier : si l'empreinte du certificat correspond à celle publiée par le projet, l'APK vient bien de la clé de RavenEmu et n'a pas été modifié depuis.
+
+Elle ne dit **rien du contenu** lui-même. Elle répond aux messages d'absence d'information, qui portent justement sur l'origine du fichier. Elle ne répond pas à un verdict de détection, et ne doit jamais servir à en écarter un.
+
 ## Vérifier l'APK avant de l'installer
 
 Chaque préversion publie quatre informations : l'empreinte SHA-256 du fichier, l'empreinte SHA-256 du certificat de signature, le commit source et le nom du package.
