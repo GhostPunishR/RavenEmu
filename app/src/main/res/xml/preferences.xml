@@ -121,5 +121,10 @@
             android:key="debug_info"
             android:summary="@string/settings_debug_info"
             android:title="@string/settings_category_debug" />
+        <SwitchPreferenceCompat
+            android:defaultValue="false"
+            android:key="debug_video_diagnostics"
+            android:summary="@string/settings_video_diagnostics_summary"
+            android:title="@string/settings_video_diagnostics" />
     </PreferenceCategory>
 </PreferenceScreen>

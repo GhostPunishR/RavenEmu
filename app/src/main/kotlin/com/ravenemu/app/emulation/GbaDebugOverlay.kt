@@ -4,41 +4,65 @@ import android.util.Log
 import com.ravenemu.app.BuildConfig
 import com.ravenemu.core.gba.GbaCore
 import com.ravenemu.core.gba.diag.GbaDiagnostics
+import com.ravenemu.core.gba.diag.toDiagnosticText
 import com.ravenemu.emulation.api.EmulatorCore
 import com.ravenemu.emulation.api.audio.AudioTransportStats
 
 /**
- * Surcouche affichée par-dessus l'image : **la cadence, et rien d'autre**.
+ * Surcouche affichée par-dessus l'image : **la cadence par défaut**, et le
+ * relevé complet du moteur lorsqu'une enquête le demande.
  *
- * Le moteur sait produire un relevé complet de son état — instructions par
- * trame, `PC`, appels du BIOS, pixels produits par chaque couche, cadrage des
- * plans affines. Il a servi à traquer des défauts précis, et reste maintenu et
- * testé dans [com.ravenemu.core.gba.diag.toDiagnosticText]. Mais il n'a rien à
- * faire à l'écran quand on joue : un mur de chiffres masque l'image et n'apprend
- * rien à qui ne mène pas d'enquête. Le rebrancher tient en une ligne, le jour où
- * une enquête reprend.
+ * Le relevé — registres de composition, dynamique de l'image, pixels produits
+ * par chaque couche, cadrage des plans affines, répartition du temps de trame —
+ * n'a rien à faire à l'écran quand on joue : un mur de chiffres masque l'image
+ * et n'apprend rien à qui ne cherche rien. Il ne se déclenche donc que sur
+ * demande explicite, et seulement là où `BuildConfig.DIAGNOSTICS` l'autorise.
  *
- * Reste branché en revanche, et seulement là où `BuildConfig.DIAGNOSTICS`
- * l'autorise, le **journal des anomalies** : il ne coûte rien tant que rien ne
- * va mal, et c'est lui qui signale qu'il se passe quelque chose.
+ * Ce n'est pas une précaution de style : le relevé allume le chronométrage par
+ * sous-système, un incrément par pixel dessiné et un balayage complet de l'image
+ * par trame. Le laisser en place fausserait précisément ce qu'il sert à mesurer.
+ *
+ * Reste branché en permanence, toujours sous `DIAGNOSTICS`, le **journal des
+ * anomalies** : il ne coûte rien tant que rien ne va mal, et c'est lui qui
+ * signale qu'il se passe quelque chose.
  */
 object GbaDebugOverlay {
 
     private const val TAG = "RavenEmuGba"
 
     /**
-     * Texte de la surcouche : la cadence, et le transport audio quand il est
-     * relevé.
+     * Texte de la surcouche.
      *
-     * Le relevé audio est inactif hors construction de diagnostic : [stats] rend
-     * alors une chaîne vide et la surcouche se réduit à la cadence, comme
-     * auparavant. La cadence seule ne suffisait pas à instruire un craquement —
-     * elle reste à 60 alors même que la sortie se vide.
+     * Trois niveaux, du plus discret au plus bavard :
+     *
+     * - la **cadence** seule, toujours ;
+     * - le **transport audio** à sa suite, dès que [audioStats] relève quelque
+     *   chose — la cadence ne suffit pas à instruire un craquement, elle reste à
+     *   60 alors même que la sortie se vide ;
+     * - le **relevé complet du moteur** à la place de la cadence, quand la
+     *   mesure est active : registres de composition, dynamique de l'image,
+     *   pixels par couche, répartition du temps de trame.
+     *
+     * Hors construction de diagnostic, il ne reste que la cadence : rien n'est
+     * calculé, et aucun détail interne n'est exposé.
      */
-    fun render(fps: Double, stats: AudioTransportStats? = null): String {
+    fun render(
+        fps: Double,
+        frameTimeMs: Double = 0.0,
+        core: EmulatorCore? = null,
+        audioStats: AudioTransportStats? = null,
+        audioTrackUnderruns: Int = 0,
+    ): String {
+        val transport = audioStats?.summary().orEmpty()
+        val mesure = (core as? GbaCore)
+            ?.takeIf { BuildConfig.DIAGNOSTICS && it.measuringTime }
+            ?.debugSnapshot()
+            ?.toDiagnosticText(fps, frameTimeMs, audioTrackUnderruns)
+        if (mesure != null) {
+            return if (transport.isEmpty()) mesure else "$mesure\n$transport"
+        }
         val cadence = "%.1f FPS".format(fps)
-        val audio = stats?.summary().orEmpty()
-        return if (audio.isEmpty()) cadence else "$cadence  $audio"
+        return if (transport.isEmpty()) cadence else "$cadence  $transport"
     }
 
     /**
@@ -53,19 +77,20 @@ object GbaDebugOverlay {
     }
 
     /**
-     * Branche la journalisation des anomalies du moteur, en Debug uniquement.
+     * Branche la journalisation des anomalies du moteur et règle la mesure, en
+     * Debug uniquement.
      *
      * Le moteur bride lui-même le nombre de messages par catégorie : une
      * instruction indéfinie dans une boucle serrée ne produit que quelques
      * lignes, jamais une par instruction.
      *
-     * Le chronométrage par sous-système et le comptage des pixels par couche
-     * restent **éteints** : ils coûtent des lectures d'horloge et un incrément
-     * par pixel dessiné, et plus rien ne les affiche.
+     * [measuring] commande le chronométrage par sous-système, le comptage des
+     * pixels par couche et la mesure de la dynamique de l'image. Faux, rien de
+     * tout cela n'est calculé.
      */
-    fun attachLogging(core: EmulatorCore?) {
+    fun attachLogging(core: EmulatorCore?, measuring: Boolean = false) {
         val gba = core as? GbaCore ?: return
-        gba.measuringTime = false
+        gba.measuringTime = measuring && BuildConfig.DIAGNOSTICS
         if (!BuildConfig.DIAGNOSTICS) {
             gba.onDiagnosticEvent = null
             return

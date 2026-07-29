@@ -259,7 +259,9 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
         core = newCore
         session = newSession
         // Journalisation des anomalies du moteur : bridée, et Debug uniquement.
-        GbaDebugOverlay.attachLogging(newCore)
+        // La mesure, elle, ne s'allume que si l'utilisateur la demande : elle
+        // coûte assez cher pour fausser ce qu'elle observe.
+        GbaDebugOverlay.attachLogging(newCore, measuring = settings.videoDiagnostics)
 
         // La ROM est chargée : le format (monochrome DMG ou couleur CGB) est
         // connu, on (ré)applique les réglages vidéo en conséquence.
@@ -287,7 +289,13 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
 
     override fun onStats(fps: Double, frameTimeMs: Double) {
         if (!settings.showPerformanceOverlay) return
-        val text = GbaDebugOverlay.render(fps, audioStats)
+        val text = GbaDebugOverlay.render(
+            fps,
+            frameTimeMs,
+            core,
+            audioStats,
+            session?.audioOutputUnderruns() ?: 0,
+        )
         runOnUiThread { performanceOverlay.text = text }
     }
 
@@ -501,6 +509,10 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
         super.onResume()
         applyImmersiveMode()
         applyVideoSettings()
+        // Le relevé de diagnostic se règle depuis les paramètres, donc en
+        // quittant cet écran : le reprendre ici évite d'avoir à recharger la ROM
+        // pour que le changement prenne effet.
+        GbaDebugOverlay.attachLogging(core, measuring = settings.videoDiagnostics)
         session?.let { s ->
             s.audioEnabled = settings.audioEnabled
             s.setAudioVolume(settings.audioVolume / 100f)

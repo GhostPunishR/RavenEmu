@@ -62,6 +62,21 @@ class AppSettings(context: Context) {
         set(value) = prefs.edit { putBoolean("video_show_fps", value) }
 
     /**
+     * Relevé de diagnostic complet dans la surcouche, au lieu de la seule
+     * cadence : registres de composition, dynamique de l'image, pixels par
+     * couche, répartition du temps de trame.
+     *
+     * Désactivé par défaut, et sans effet hors construction de diagnostic. Il
+     * n'est pas gratuit — il allume le chronométrage par sous-système, un
+     * incrément par pixel dessiné et un balayage de l'image par trame — et c'est
+     * précisément pourquoi il se demande explicitement plutôt que de suivre
+     * l'affichage de la cadence.
+     */
+    var videoDiagnostics: Boolean
+        get() = prefs.getBoolean("debug_video_diagnostics", false)
+        set(value) = prefs.edit { putBoolean("debug_video_diagnostics", value) }
+
+    /**
      * Luminosité de l'affichage, `-100..100` (`0` = neutre). Stockée en interne
      * sur `0..200` (curseur centré sur 100) pour le `SeekBarPreference`.
      */
