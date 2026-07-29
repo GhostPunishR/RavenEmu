@@ -81,8 +81,10 @@
     <string name="settings_brightness_summary">100 = neutre. Éclaircit ou assombrit l\'image.</string>
     <string name="settings_contrast">Contraste</string>
     <string name="settings_contrast_summary">100 = neutre. Écarte ou rapproche les tons du gris moyen.</string>
-    <string name="settings_lcd_correction">Correction colorimétrique LCD</string>
-    <string name="settings_lcd_correction_summary">Simulation d\'un écran LCD réfléchissant (désature les couleurs vives). Surtout utile en Game Boy Color.</string>
+    <string name="settings_lcd_correction">Correction LCD (Game Boy / Game Boy Color)</string>
+    <string name="settings_lcd_correction_summary">Simulation d\'un écran LCD réfléchissant : désature les couleurs vives et assombrit les moyens tons.</string>
+    <string name="settings_lcd_correction_gba">Correction LCD (Game Boy Advance)</string>
+    <string name="settings_lcd_correction_gba_summary">Même simulation, appliquée aux jeux Game Boy Advance. Désactivée par défaut : elle y donne une image grise et mate.</string>
     <string name="settings_category_audio">Audio</string>
     <string name="settings_audio_enabled">Activer l\'audio</string>
     <string name="settings_audio_enabled_summary">Synthèse des 4 canaux Game Boy, synchronisée avec l\'image</string>

@@ -136,10 +136,12 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
             null
         }
         // Réglages avancés en post-traitement (aucun effet si tout est neutre).
+        // La correction LCD simule un panneau précis : elle se règle par console
+        // et n'est plus imposée à toutes.
         surface.displayAdjustments = DisplayAdjustments(
             brightness = settings.displayBrightness,
             contrast = settings.displayContrast,
-            lcdColorCorrection = settings.lcdColorCorrection,
+            lcdColorCorrection = settings.lcdColorCorrection(console),
         )
         performanceOverlay.visibility =
             if (settings.showPerformanceOverlay) View.VISIBLE else View.GONE
