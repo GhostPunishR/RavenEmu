@@ -61,19 +61,40 @@ class GbaApu {
     private var readIndex = 0
     private var available = 0
 
+    /**
+     * Cycles CPU restants avant le prochain échantillon PCM.
+     *
+     * L'ordonnanceur de la machine s'en sert pour ne jamais franchir cet instant
+     * d'un seul bond : c'est ce qui garantit que chaque valeur Direct Sound est
+     * observée pendant la durée qui lui revient.
+     *
+     * Vue de l'extérieur de [tick], cette valeur est toujours comprise entre 1
+     * et 512, la période d'un échantillon en cycles CPU. Elle devient nulle ou
+     * négative *pendant* [tick], entre l'accumulation des cycles et leur
+     * traitement : c'est précisément la condition « l'échéance est atteinte ».
+     */
+    fun cyclesUntilNextSample(): Int =
+        ((CYCLES_PER_SAMPLE - sampleTimer) shl 2) - cpuRemainder
+
     /** Avance l'APU de [cpuCycles] cycles CPU. */
     fun tick(cpuCycles: Int) {
         // L'horloge audio est le quart de l'horloge CPU.
         cpuRemainder += cpuCycles
         // Traitement par lots : appelé après chaque instruction, ce point d'entrée
-        // recevait des incréments de quelques cycles et payait le coût d'appel de
-        // quatre oscillateurs pour presque rien. Le résultat est identique — la
-        // boucle ci-dessous découpe de toute façon aux frontières d'échantillon,
-        // et rien ne lit l'état de l'unité entre deux instructions — seul le
-        // moment du calcul change.
-        if (cpuRemainder < MIN_BATCH_CPU_CYCLES) return
+        // recevrait des incréments de quelques cycles et paierait le coût d'appel
+        // de quatre oscillateurs pour presque rien. Rien n'observe l'état des
+        // oscillateurs entre deux échantillons, on peut donc accumuler jusque-là.
+        //
+        // En revanche on ne peut pas différer *au-delà* du prochain échantillon.
+        // Les canaux Direct Sound ne sont pas cadencés par cette horloge : leur
+        // valeur courante est remplacée de l'extérieur à chaque débordement de
+        // timer. Différer ferait observer, au moment d'échantillonner, une valeur
+        // postérieure à l'instant représenté, et les valeurs intermédiaires
+        // seraient perdues.
+        if (cyclesUntilNextSample() > 0) return
+        // L'échéance étant atteinte, `cpuRemainder` vaut au moins quatre cycles :
+        // le lot ci-dessous contient toujours au moins un cycle audio.
         var audioCycles = cpuRemainder shr 2
-        if (audioCycles <= 0) return
         cpuRemainder -= audioCycles shl 2
         val start = if (onBatchNanos != null) System.nanoTime() else 0L
 
@@ -385,13 +406,6 @@ class GbaApu {
 
         /** Séquenceur de trames à 512 Hz. */
         private const val SEQUENCER_PERIOD = 8192
-
-        /**
-         * Cycles CPU accumulés avant de faire tourner les oscillateurs. Un quart
-         * d'échantillon : bien trop court pour s'entendre, assez long pour éviter
-         * un appel par instruction.
-         */
-        private const val MIN_BATCH_CPU_CYCLES = 4 * CYCLES_PER_SAMPLE / 4
 
         /** Tampon de sortie : environ un dixième de seconde en stéréo. */
         private const val BUFFER_SAMPLES = 8192
