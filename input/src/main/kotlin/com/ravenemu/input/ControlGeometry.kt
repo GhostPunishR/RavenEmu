@@ -19,6 +19,41 @@ internal object ControlGeometry {
     fun radiusPx(element: ControlElement, density: Float): Float =
         baseRadiusDp(element.id) * density * element.scale
 
+    fun widthPx(
+        element: ControlElement,
+        skin: TouchSkin,
+        viewportWidth: Int,
+        density: Float,
+    ): Float {
+        val geometry = RavenSkinGeometries.forSkin(skin)
+        if (geometry != null) {
+            return geometry.controls.getValue(element.id).width * viewportWidth * element.scale
+        }
+        val radius = radiusPx(element, density)
+        return when (element.id) {
+            ControlId.DPAD, ControlId.BUTTON_A, ControlId.BUTTON_B -> radius * 2f
+            ControlId.MENU -> radius * 3.56f
+            else -> radius * 3.2f
+        }
+    }
+
+    fun heightPx(
+        element: ControlElement,
+        skin: TouchSkin,
+        viewportHeight: Int,
+        density: Float,
+    ): Float {
+        val geometry = RavenSkinGeometries.forSkin(skin)
+        if (geometry != null) {
+            return geometry.controls.getValue(element.id).height * viewportHeight * element.scale
+        }
+        val radius = radiusPx(element, density)
+        return when (element.id) {
+            ControlId.DPAD, ControlId.BUTTON_A, ControlId.BUTTON_B -> radius * 2f
+            else -> radius * 1.5f
+        }
+    }
+
     fun centerX(element: ControlElement, width: Int): Float = element.centerX * width
 
     fun centerY(element: ControlElement, height: Int): Float = element.centerY * height

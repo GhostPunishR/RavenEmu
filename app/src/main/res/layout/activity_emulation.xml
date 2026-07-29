@@ -4,15 +4,21 @@
     android:layout_height="match_parent"
     android:background="@android:color/black">
 
-    <com.ravenemu.renderer.EmulatorSurfaceView
-        android:id="@+id/surface"
+    <com.ravenemu.input.PortraitSkinLayout
+        android:id="@+id/skinLayout"
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="match_parent">
 
-    <com.ravenemu.input.TouchControlsView
-        android:id="@+id/controls"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        <com.ravenemu.renderer.EmulatorSurfaceView
+            android:id="@+id/surface"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <com.ravenemu.input.TouchControlsView
+            android:id="@+id/controls"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+    </com.ravenemu.input.PortraitSkinLayout>
 
     <TextView
         android:id="@+id/performanceOverlay"

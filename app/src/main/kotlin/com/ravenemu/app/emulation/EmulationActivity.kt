@@ -32,6 +32,7 @@ import com.ravenemu.emulation.api.SaveStateException
 import com.ravenemu.input.ControlId
 import com.ravenemu.input.ControlLayout
 import com.ravenemu.input.GamepadMapper
+import com.ravenemu.input.PortraitSkinLayout
 import com.ravenemu.input.TouchSkin
 import com.ravenemu.input.TouchControlsView
 import com.ravenemu.renderer.EmulatorSurfaceView
@@ -54,6 +55,7 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
     private lateinit var settings: AppSettings
     private lateinit var saveStore: SaveFileStore
     private lateinit var snapshotStore: SnapshotStore
+    private lateinit var skinLayout: PortraitSkinLayout
     private lateinit var surface: EmulatorSurfaceView
     private lateinit var controls: TouchControlsView
     private lateinit var performanceOverlay: TextView
@@ -89,18 +91,20 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
             ?.let { runCatching { ConsoleType.valueOf(it) }.getOrNull() }
             ?: ConsoleType.GAME_BOY
 
+        skinLayout = findViewById(R.id.skinLayout)
         surface = findViewById(R.id.surface)
         controls = findViewById(R.id.controls)
+        skinLayout.bind(surface, controls)
         performanceOverlay = findViewById(R.id.performanceOverlay)
         editorPanel = findViewById(R.id.editorPanel)
 
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        // L'image est ancrée en haut en portrait : on la décale sous
-        // l'encoche ou la caméra perforée.
-        ViewCompat.setOnApplyWindowInsetsListener(surface) { _, insets ->
+        // La coque entière, pas la surface seule, est décalée sous l'encoche.
+        // La géométrie interne du skin et la surcouche de diagnostic ne changent
+        // donc jamais selon la découpe de l'écran.
+        ViewCompat.setOnApplyWindowInsetsListener(skinLayout) { _, insets ->
             val topInset = insets.getInsets(WindowInsetsCompat.Type.displayCutout()).top
-            surface.topInsetPx = topInset
-            controls.screenTopInsetPx = topInset
+            skinLayout.topInsetPx = topInset
             insets
         }
         applyImmersiveMode()
@@ -121,13 +125,14 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
     }
 
     private fun applyVideoSettings() {
-        surface.keepAspectRatio = settings.keepAspectRatio
-        controls.skinPanelVisible = settings.keepAspectRatio
-        surface.integerScaling = settings.integerScaling
-        // Portrait : écran de jeu en haut, commandes en dessous. Paysage :
-        // l'image remplit la hauteur, le centrage reste naturel.
-        surface.topAligned =
+        val portraitSkin =
             resources.configuration.orientation != Configuration.ORIENTATION_LANDSCAPE
+        // Le skin portrait possède un écran physique au ratio natif. Le réglage
+        // d'étirement ne s'applique qu'au mode paysage classique.
+        surface.keepAspectRatio = portraitSkin || settings.keepAspectRatio
+        surface.integerScaling = settings.integerScaling
+        surface.topAligned = false
+        surface.topInsetPx = 0
         // DMG : le renderer colorise les niveaux 0..3 via le profil d'écran
         // (à chaud). Game Boy Color : le moteur produit déjà des couleurs
         // ARGB, on laisse donc le renderer les afficher telles quelles.
@@ -179,26 +184,14 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
         return if (orientationKey() == "landscape") {
             ControlLayout.defaultLandscape(withShoulders)
         } else if (withShoulders) {
-            ControlLayout.ravenGbaPortrait(portraitScreenBottomFraction(240f / 160f))
+            ControlLayout.ravenGbaPortrait()
         } else {
-            ControlLayout.ravenGbPortrait(portraitScreenBottomFraction(160f / 144f))
+            ControlLayout.ravenGbPortrait()
         }
     }
 
-    /**
-     * Position relative du bas de l'image native quand elle occupe la largeur.
-     * Les profils par défaut placent ainsi MENU (et L/R en GBA) juste dessous
-     * sur un téléphone court comme sur un écran portrait allongé.
-     */
-    private fun portraitScreenBottomFraction(screenAspectRatio: Float): Float {
-        val metrics = resources.displayMetrics
-        if (metrics.heightPixels <= 0 || screenAspectRatio <= 0f) return 0f
-        return (metrics.widthPixels / screenAspectRatio / metrics.heightPixels)
-            .coerceIn(0f, 1f)
-    }
-
     private fun applyControlLayout() {
-        controls.skin = when {
+        skinLayout.skin = when {
             orientationKey() == "landscape" -> TouchSkin.CLASSIC
             console == ConsoleType.GAME_BOY_ADVANCE -> TouchSkin.RAVEN_GBA
             else -> TouchSkin.RAVEN_GB

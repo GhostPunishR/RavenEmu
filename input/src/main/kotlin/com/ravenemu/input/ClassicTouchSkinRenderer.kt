@@ -6,7 +6,7 @@ import android.graphics.Paint
 import android.graphics.RectF
 
 /** Rendu historique utilisé en paysage et comme solution de repli. */
-internal class ClassicTouchSkinRenderer : TouchSkinRenderer {
+internal class ClassicTouchSkinRenderer {
     private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
@@ -21,7 +21,7 @@ internal class ClassicTouchSkinRenderer : TouchSkinRenderer {
     private var viewportHeight = 0
     private var density = 1f
 
-    override fun onViewportChanged(
+    fun onViewportChanged(
         width: Int,
         height: Int,
         density: Float,
@@ -33,7 +33,7 @@ internal class ClassicTouchSkinRenderer : TouchSkinRenderer {
         strokePaint.strokeWidth = 1.5f * density
     }
 
-    override fun draw(
+    fun draw(
         canvas: Canvas,
         layout: ControlLayout,
         editMode: Boolean,

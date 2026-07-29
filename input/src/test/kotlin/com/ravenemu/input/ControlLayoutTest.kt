@@ -21,10 +21,13 @@ class ControlLayoutTest {
     @Test
     fun `portrait GB respecte la disposition Raven sans gachettes`() {
         val layout = ControlLayout.ravenGbPortrait()
+        val geometry = RavenSkinGeometries.gb
         val menu = layout.element(ControlId.MENU)!!
         val dpad = layout.element(ControlId.DPAD)!!
 
         assertEquals(0.5f, menu.centerX)
+        assertEquals(geometry.controls.getValue(ControlId.MENU).centerY, menu.centerY)
+        assertTrue(menu.centerY > geometry.screenRect.bottom)
         assertTrue(menu.centerY < dpad.centerY, "MENU doit être sous l'écran, avant le D-pad")
         assertFalse(layout.element(ControlId.BUTTON_L)!!.visible)
         assertFalse(layout.element(ControlId.BUTTON_R)!!.visible)
@@ -44,6 +47,7 @@ class ControlLayoutTest {
     @Test
     fun `portrait GBA affiche L MENU R sous ecran`() {
         val layout = ControlLayout.ravenGbaPortrait()
+        val geometry = RavenSkinGeometries.gba
         val left = layout.element(ControlId.BUTTON_L)!!
         val menu = layout.element(ControlId.MENU)!!
         val right = layout.element(ControlId.BUTTON_R)!!
@@ -56,20 +60,28 @@ class ControlLayoutTest {
         assertTrue(menu.centerX < right.centerX)
         assertEquals(menu.centerY, left.centerY)
         assertEquals(menu.centerY, right.centerY)
+        assertTrue(left.centerY > geometry.screenRect.bottom)
         assertTrue(menu.centerY < dpad.centerY)
     }
 
     @Test
-    fun `rangee sous ecran s adapte au ratio portrait`() {
-        val gbScreenBottom = 0.51f
-        val gbaScreenBottom = 0.375f
-        val gbMenu = ControlLayout.ravenGbPortrait(gbScreenBottom)
-            .element(ControlId.MENU)!!
-        val gbaMenu = ControlLayout.ravenGbaPortrait(gbaScreenBottom)
-            .element(ControlId.MENU)!!
-
-        assertTrue(gbMenu.centerY > gbScreenBottom)
-        assertTrue(gbaMenu.centerY > gbaScreenBottom)
+    fun `rectangles de controle pilotent centres graphiques et tactiles`() {
+        for ((skin, geometry) in listOf(
+            TouchSkin.RAVEN_GB to RavenSkinGeometries.gb,
+            TouchSkin.RAVEN_GBA to RavenSkinGeometries.gba,
+        )) {
+            val layout = if (skin == TouchSkin.RAVEN_GB) {
+                ControlLayout.ravenGbPortrait()
+            } else {
+                ControlLayout.ravenGbaPortrait()
+            }
+            for (id in ControlId.entries) {
+                val element = layout.element(id)!!
+                val rect = geometry.controls.getValue(id)
+                assertEquals(rect.centerX, element.centerX, "$skin / $id x")
+                assertEquals(rect.centerY, element.centerY, "$skin / $id y")
+            }
+        }
     }
 
     @Test

@@ -3,92 +3,78 @@ package com.ravenemu.input
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.RectF
 import android.util.AttributeSet
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewGroup
 import com.ravenemu.emulation.api.EmulatorButton
+import kotlin.math.max
 
 /**
- * Superposition tactile dessinée localement (croix, A/B, Start/Select, menu),
- * multi-touch, avec zone tactile élargie et diagonales sur la croix.
+ * Couche interactive du skin.
  *
- * Deux modes :
- * - jeu : les pressions sont transmises via [listener] ;
- * - édition ([editMode]) : glisser pour déplacer un élément, les
- *   changements sont publiés via [onLayoutChanged] en coordonnées relatives.
+ * En portrait RavenEmu, chaque commande est une vue vectorielle distincte. La
+ * classe conserve uniquement l'entrée, les animations, le multitouch et
+ * l'éditeur. Le rendu Canvas historique reste limité au mode paysage CLASSIC.
  */
 class TouchControlsView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
-) : View(context, attrs) {
+) : ViewGroup(context, attrs) {
 
-    /** Réception des pressions de boutons logiques. */
     interface Listener {
         fun onButton(button: EmulatorButton, pressed: Boolean)
         fun onMenu()
     }
 
     var listener: Listener? = null
-
-    /** Publication de la disposition modifiée en mode édition. */
     var onLayoutChanged: ((ControlLayout) -> Unit)? = null
 
-    /** Rendu sélectionné indépendamment de la disposition sérialisée. */
     var skin: TouchSkin = TouchSkin.RAVEN_GB
         set(value) {
             if (field == value) return
             field = value
             animationState.reset()
-            configureRenderer()
-            invalidate()
-        }
-
-    /** Marge haute de l'écran de jeu (encoche/caméra), pour finir le skin dessous. */
-    var screenTopInsetPx: Int = 0
-        set(value) {
-            val clamped = value.coerceAtLeast(0)
-            if (field == clamped) return
-            field = clamped
-            configureRenderer()
-            invalidate()
-        }
-
-    /**
-     * Masque le panneau opaque lorsque l'image de jeu est volontairement
-     * étirée plein écran ; les boutons restent rendus individuellement.
-     */
-    var skinPanelVisible: Boolean = true
-        set(value) {
-            if (field == value) return
-            field = value
+            updateControlMode()
+            requestLayout()
             invalidate()
         }
 
     var layoutSpec: ControlLayout = ControlLayout.defaultPortrait()
         set(value) {
             field = value
+            requestLayout()
             invalidate()
         }
 
     var editMode: Boolean = false
         set(value) {
+            if (field == value) return
             field = value
             releaseAll()
+            requestLayout()
             invalidate()
         }
 
-    /** Élément sélectionné dans l'éditeur (pour taille/opacité externes). */
     var selectedElement: ControlId? = null
         private set
 
     private val classicRenderer = ClassicTouchSkinRenderer()
-    private val ravenGbRenderer = RavenGbSkinRenderer()
-    private val ravenGbaRenderer = RavenGbaSkinRenderer()
     private val animationState = ControlAnimationState()
+    private val controlViews = arrayOfNulls<RavenControlAssetView>(ControlId.entries.size)
+    private val selectionBounds = RectF()
+    private val selectionPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.rgb(171, 103, 255)
+        style = Paint.Style.STROKE
+        strokeWidth = 2f * resources.displayMetrics.density
+    }
     private val inputState = TouchInputState(
         onButtonChanged = { button, pressed ->
-            // Envoi logique synchrone : l'animation n'est mise à jour qu'après.
+            // L'entrée logique reste synchrone et précède toute animation.
             listener?.onButton(button, pressed)
             if (animationState.setButtonPressed(button, pressed)) {
                 animationState.advance(System.nanoTime())
@@ -103,41 +89,91 @@ class TouchControlsView @JvmOverloads constructor(
         },
     )
 
-    /** Pointeur en cours de glissement en mode édition. */
     private var dragPointer = -1
     private var dragElement: ControlId? = null
 
-    private fun elementRadius(element: ControlElement): Float =
-        ControlGeometry.radiusPx(element, resources.displayMetrics.density)
-
-    private fun elementCenterX(element: ControlElement): Float =
-        ControlGeometry.centerX(element, width)
-
-    private fun elementCenterY(element: ControlElement): Float =
-        ControlGeometry.centerY(element, height)
-
-    // ---- Dessin ----
+    init {
+        setWillNotDraw(false)
+        clipChildren = false
+        clipToPadding = false
+        ensureRavenControlViews()
+        updateControlMode()
+    }
 
     override fun onSizeChanged(width: Int, height: Int, oldWidth: Int, oldHeight: Int) {
         super.onSizeChanged(width, height, oldWidth, oldHeight)
-        configureRenderer()
+        classicRenderer.onViewportChanged(
+            width = width,
+            height = height,
+            density = resources.displayMetrics.density,
+            screenTopInsetPx = 0,
+        )
+    }
+
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        val measuredWidth = MeasureSpec.getSize(widthMeasureSpec)
+        val measuredHeight = MeasureSpec.getSize(heightMeasureSpec)
+        setMeasuredDimension(measuredWidth, measuredHeight)
+        if (skin == TouchSkin.CLASSIC) return
+
+        val density = resources.displayMetrics.density
+        for (id in ControlId.entries) {
+            val element = layoutSpec.element(id) ?: continue
+            val child = controlViews[id.ordinal] ?: continue
+            val childWidth = ControlGeometry.widthPx(element, skin, measuredWidth, density)
+                .toInt().coerceAtLeast(1)
+            val childHeight = ControlGeometry.heightPx(element, skin, measuredHeight, density)
+                .toInt().coerceAtLeast(1)
+            child.measure(
+                MeasureSpec.makeMeasureSpec(childWidth, MeasureSpec.EXACTLY),
+                MeasureSpec.makeMeasureSpec(childHeight, MeasureSpec.EXACTLY),
+            )
+        }
+    }
+
+    override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
+        if (skin == TouchSkin.CLASSIC) return
+        for (id in ControlId.entries) {
+            val element = layoutSpec.element(id) ?: continue
+            val child = controlViews[id.ordinal] ?: continue
+            val shouldShow = element.visible || editMode
+            child.visibility = if (shouldShow) View.VISIBLE else View.GONE
+            if (!shouldShow) continue
+            val centerX = ControlGeometry.centerX(element, width).toInt()
+            val centerY = ControlGeometry.centerY(element, height).toInt()
+            val childLeft = centerX - child.measuredWidth / 2
+            val childTop = centerY - child.measuredHeight / 2
+            child.layout(
+                childLeft,
+                childTop,
+                childLeft + child.measuredWidth,
+                childTop + child.measuredHeight,
+            )
+        }
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         val needsNextFrame = animationState.advance(System.nanoTime())
-        activeRenderer().draw(
-            canvas,
-            layoutSpec,
-            editMode,
-            selectedElement,
-            animationState,
-            skinPanelVisible,
-        )
+        if (skin == TouchSkin.CLASSIC) {
+            classicRenderer.draw(
+                canvas = canvas,
+                layout = layoutSpec,
+                editMode = editMode,
+                selectedElement = selectedElement,
+                animationState = animationState,
+                drawBackground = false,
+            )
+        } else {
+            applyVectorVisualState()
+        }
         if (needsNextFrame) postInvalidateOnAnimation()
     }
 
-    // ---- Tactile ----
+    override fun dispatchDraw(canvas: Canvas) {
+        super.dispatchDraw(canvas)
+        if (skin != TouchSkin.CLASSIC && editMode) drawEditorSelection(canvas)
+    }
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -145,9 +181,7 @@ class TouchControlsView @JvmOverloads constructor(
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
                 val index = event.actionIndex
-                val x = event.getX(index)
-                val y = event.getY(index)
-                val hitMask = hitMaskAt(x, y)
+                val hitMask = hitMaskAt(event.getX(index), event.getY(index))
                 val newPress = inputState.updatePointer(event.getPointerId(index), hitMask)
                 if (newPress && layoutSpec.hapticFeedback) performControlHapticFeedback()
                 if (ControlHitTester.hasMenu(hitMask)) listener?.onMenu()
@@ -169,12 +203,6 @@ class TouchControlsView @JvmOverloads constructor(
         return true
     }
 
-    private fun releaseAll() {
-        inputState.releaseAll()
-        dragPointer = -1
-        dragElement = null
-    }
-
     private fun hitMaskAt(x: Float, y: Float): Int = ControlHitTester.hitMask(
         layout = layoutSpec,
         x = x,
@@ -182,9 +210,8 @@ class TouchControlsView @JvmOverloads constructor(
         width = width,
         height = height,
         density = resources.displayMetrics.density,
+        skin = skin,
     )
-
-    // ---- Édition ----
 
     private fun handleEditTouch(event: MotionEvent): Boolean {
         if (layoutSpec.locked) return true
@@ -199,7 +226,7 @@ class TouchControlsView @JvmOverloads constructor(
                 invalidate()
             }
             MotionEvent.ACTION_MOVE -> {
-                val element = dragElement?.let { layoutSpec.element(it) } ?: return true
+                val element = dragElement?.let(layoutSpec::element) ?: return true
                 val index = event.findPointerIndex(dragPointer)
                 if (index < 0) return true
                 val updated = element.copy(
@@ -220,12 +247,15 @@ class TouchControlsView @JvmOverloads constructor(
     private fun elementAt(x: Float, y: Float): ControlId? {
         var best: ControlId? = null
         var bestDistance = Float.MAX_VALUE
+        val density = resources.displayMetrics.density
         for (element in layoutSpec.elements) {
-            val dx = x - elementCenterX(element)
-            val dy = y - elementCenterY(element)
-            val distance = dx * dx + dy * dy
-            val reach = elementRadius(element) * 1.4f
-            if (distance <= reach * reach && distance < bestDistance) {
+            val halfWidth = ControlGeometry.widthPx(element, skin, width, density) * 0.7f
+            val halfHeight = ControlGeometry.heightPx(element, skin, height, density) * 0.7f
+            if (halfWidth <= 0f || halfHeight <= 0f) continue
+            val normalizedX = (x - ControlGeometry.centerX(element, width)) / halfWidth
+            val normalizedY = (y - ControlGeometry.centerY(element, height)) / halfHeight
+            val distance = normalizedX * normalizedX + normalizedY * normalizedY
+            if (distance <= 1f && distance < bestDistance) {
                 bestDistance = distance
                 best = element.id
             }
@@ -233,8 +263,11 @@ class TouchControlsView @JvmOverloads constructor(
         return best
     }
 
-    /** Applique un réglage à l'élément sélectionné (curseurs de l'éditeur). */
-    fun adjustSelected(scale: Float? = null, opacity: Float? = null, visible: Boolean? = null) {
+    fun adjustSelected(
+        scale: Float? = null,
+        opacity: Float? = null,
+        visible: Boolean? = null,
+    ) {
         val id = selectedElement ?: return
         val element = layoutSpec.element(id) ?: return
         val updated = element.copy(
@@ -251,22 +284,68 @@ class TouchControlsView @JvmOverloads constructor(
         super.onDetachedFromWindow()
     }
 
-    private fun activeRenderer(): TouchSkinRenderer = when (skin) {
-        TouchSkin.CLASSIC -> classicRenderer
-        TouchSkin.RAVEN_GB -> ravenGbRenderer
-        TouchSkin.RAVEN_GBA -> ravenGbaRenderer
+    private fun applyVectorVisualState() {
+        val density = resources.displayMetrics.density
+        for (id in ControlId.entries) {
+            val element = layoutSpec.element(id) ?: continue
+            controlViews[id.ordinal]?.applyVisualState(
+                element = element,
+                animationState = animationState,
+                density = density,
+                editMode = editMode,
+            )
+        }
     }
 
-    private fun configureRenderer() {
-        activeRenderer().onViewportChanged(
-            width = width,
-            height = height,
-            density = resources.displayMetrics.density,
-            screenTopInsetPx = screenTopInsetPx,
+    private fun drawEditorSelection(canvas: Canvas) {
+        val id = selectedElement ?: return
+        val child = controlViews[id.ordinal] ?: return
+        if (child.visibility != View.VISIBLE) return
+        val padding = 5f * resources.displayMetrics.density
+        selectionBounds.set(
+            child.left - padding,
+            child.top - padding,
+            child.right + padding,
+            child.bottom + padding,
         )
+        val radius = max(10f * resources.displayMetrics.density, child.height * 0.18f)
+        canvas.drawRoundRect(selectionBounds, radius, radius, selectionPaint)
+    }
+
+    private fun ensureRavenControlViews() {
+        for (id in ControlId.entries) {
+            if (controlViews[id.ordinal] != null) continue
+            val view = RavenControlViewFactory.create(context, id)
+            controlViews[id.ordinal] = view
+            addView(view, generateDefaultLayoutParams())
+        }
+    }
+
+    private fun updateControlMode() {
+        val vectorMode = skin != TouchSkin.CLASSIC
+        for (child in controlViews) {
+            child?.visibility = if (vectorMode) View.VISIBLE else View.GONE
+        }
+    }
+
+    private fun releaseAll() {
+        inputState.releaseAll()
+        dragPointer = -1
+        dragElement = null
     }
 
     private fun performControlHapticFeedback() {
         performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
     }
+
+    override fun generateDefaultLayoutParams(): LayoutParams =
+        LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
+
+    override fun generateLayoutParams(attrs: AttributeSet): LayoutParams =
+        LayoutParams(context, attrs)
+
+    override fun generateLayoutParams(params: LayoutParams): LayoutParams =
+        LayoutParams(params)
+
+    override fun checkLayoutParams(params: LayoutParams): Boolean = true
 }

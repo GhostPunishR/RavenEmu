@@ -108,19 +108,66 @@ class TouchInputStateTest {
         val width = 1_000
         val height = 2_000
         val density = 1f
-        val reach = ControlGeometry.radiusPx(dpad, density) * dpad.touchScale
+        val halfWidth = ControlGeometry.widthPx(
+            dpad,
+            TouchSkin.RAVEN_GB,
+            width,
+            density,
+        ) * 0.5f * dpad.touchScale
+        val halfHeight = ControlGeometry.heightPx(
+            dpad,
+            TouchSkin.RAVEN_GB,
+            height,
+            density,
+        ) * 0.5f * dpad.touchScale
         val hitMask = ControlHitTester.hitMask(
             layout = layout,
-            x = ControlGeometry.centerX(dpad, width) + reach * 0.62f,
-            y = ControlGeometry.centerY(dpad, height) - reach * 0.62f,
+            x = ControlGeometry.centerX(dpad, width) + halfWidth * 0.62f,
+            y = ControlGeometry.centerY(dpad, height) - halfHeight * 0.62f,
             width = width,
             height = height,
             density = density,
+            skin = TouchSkin.RAVEN_GB,
         )
 
         assertTrue(hitMask and ControlHitTester.buttonMask(EmulatorButton.UP) != 0)
         assertTrue(hitMask and ControlHitTester.buttonMask(EmulatorButton.RIGHT) != 0)
         assertFalse(hitMask and ControlHitTester.buttonMask(EmulatorButton.DOWN) != 0)
         assertFalse(hitMask and ControlHitTester.buttonMask(EmulatorButton.LEFT) != 0)
+    }
+
+    @Test
+    fun `profil personnalise deplace aussi la hitbox`() {
+        val original = ControlLayout.ravenGbPortrait()
+        val movedA = original.element(ControlId.BUTTON_A)!!.copy(
+            centerX = 0.44f,
+            centerY = 0.76f,
+        )
+        val custom = original.with(movedA)
+        val width = 1_000
+        val height = 2_000
+        val atNewPosition = ControlHitTester.hitMask(
+            layout = custom,
+            x = movedA.centerX * width,
+            y = movedA.centerY * height,
+            width = width,
+            height = height,
+            density = 1f,
+            skin = TouchSkin.RAVEN_GB,
+        )
+        val oldA = original.element(ControlId.BUTTON_A)!!
+        val atOldPosition = ControlHitTester.hitMask(
+            layout = custom,
+            x = oldA.centerX * width,
+            y = oldA.centerY * height,
+            width = width,
+            height = height,
+            density = 1f,
+            skin = TouchSkin.RAVEN_GB,
+        )
+
+        val a = ControlHitTester.buttonMask(EmulatorButton.A)
+        assertTrue(atNewPosition and a != 0)
+        assertFalse(atOldPosition and a != 0)
     }
 }

@@ -69,82 +69,25 @@ data class ControlLayout(
          * Les gâchettes font toujours partie du modèle afin qu'un profil
          * sérialisé reste compatible entre versions, mais elles sont masquées.
          */
+        @Suppress("UNUSED_PARAMETER")
         fun ravenGbPortrait(
-            screenBottomFraction: Float = GB_REFERENCE_SCREEN_BOTTOM,
-        ): ControlLayout {
-            val menuY = menuRowY(
-                screenBottomFraction = screenBottomFraction,
-                gap = GB_MENU_GAP,
-                minimum = GB_MENU_MIN_Y,
-                maximum = GB_MENU_MAX_Y,
-            )
-            return ControlLayout(
-                elements = listOf(
-                    ControlElement(ControlId.DPAD, centerX = 0.20f, centerY = 0.69f, opacity = 0.92f),
-                    ControlElement(ControlId.BUTTON_A, centerX = 0.84f, centerY = 0.63f, opacity = 0.94f),
-                    ControlElement(ControlId.BUTTON_B, centerX = 0.69f, centerY = 0.70f, opacity = 0.90f),
-                    ControlElement(ControlId.SELECT, centerX = 0.39f, centerY = 0.88f, opacity = 0.86f),
-                    ControlElement(ControlId.START, centerX = 0.61f, centerY = 0.88f, opacity = 0.86f),
-                    ControlElement(ControlId.MENU, centerX = 0.50f, centerY = menuY, opacity = 0.90f),
-                    ControlElement(
-                        ControlId.BUTTON_L,
-                        centerX = 0.16f,
-                        centerY = menuY,
-                        opacity = 0.88f,
-                        visible = false,
-                    ),
-                    ControlElement(
-                        ControlId.BUTTON_R,
-                        centerX = 0.84f,
-                        centerY = menuY,
-                        opacity = 0.88f,
-                        visible = false,
-                    ),
-                )
-            )
-        }
+            screenBottomFraction: Float = RavenSkinGeometries.gb.screenRect.bottom,
+        ): ControlLayout = layoutFromGeometry(
+            geometry = RavenSkinGeometries.gb,
+            withShoulders = false,
+        )
 
         /**
          * Skin portrait RavenEmu GBA. L, MENU et R forment une rangée sous
          * l'écran large ; les autres commandes reprennent l'ergonomie GB/GBC.
          */
+        @Suppress("UNUSED_PARAMETER")
         fun ravenGbaPortrait(
-            screenBottomFraction: Float = GBA_REFERENCE_SCREEN_BOTTOM,
-        ): ControlLayout {
-            val shoulderRowY = menuRowY(
-                screenBottomFraction = screenBottomFraction,
-                gap = GBA_MENU_GAP,
-                minimum = GBA_MENU_MIN_Y,
-                maximum = GBA_MENU_MAX_Y,
-            )
-            return ControlLayout(
-                elements = listOf(
-                    ControlElement(ControlId.DPAD, centerX = 0.20f, centerY = 0.68f, opacity = 0.92f),
-                    ControlElement(ControlId.BUTTON_A, centerX = 0.84f, centerY = 0.62f, opacity = 0.94f),
-                    ControlElement(ControlId.BUTTON_B, centerX = 0.69f, centerY = 0.69f, opacity = 0.90f),
-                    ControlElement(ControlId.SELECT, centerX = 0.39f, centerY = 0.88f, opacity = 0.86f),
-                    ControlElement(ControlId.START, centerX = 0.61f, centerY = 0.88f, opacity = 0.86f),
-                    ControlElement(
-                        ControlId.MENU,
-                        centerX = 0.50f,
-                        centerY = shoulderRowY,
-                        opacity = 0.90f,
-                    ),
-                    ControlElement(
-                        ControlId.BUTTON_L,
-                        centerX = 0.17f,
-                        centerY = shoulderRowY,
-                        opacity = 0.88f,
-                    ),
-                    ControlElement(
-                        ControlId.BUTTON_R,
-                        centerX = 0.83f,
-                        centerY = shoulderRowY,
-                        opacity = 0.88f,
-                    ),
-                )
-            )
-        }
+            screenBottomFraction: Float = RavenSkinGeometries.gba.screenRect.bottom,
+        ): ControlLayout = layoutFromGeometry(
+            geometry = RavenSkinGeometries.gba,
+            withShoulders = true,
+        )
 
         /**
          * Point d'entrée historique conservé pour les appelants et profils
@@ -167,20 +110,23 @@ data class ControlLayout(
             )
         )
 
-        private fun menuRowY(
-            screenBottomFraction: Float,
-            gap: Float,
-            minimum: Float,
-            maximum: Float,
-        ): Float = (screenBottomFraction.coerceIn(0f, 1f) + gap).coerceIn(minimum, maximum)
-
-        private const val GB_REFERENCE_SCREEN_BOTTOM = 0.42f
-        private const val GBA_REFERENCE_SCREEN_BOTTOM = 0.32f
-        private const val GB_MENU_GAP = 0.055f
-        private const val GBA_MENU_GAP = 0.05f
-        private const val GB_MENU_MIN_Y = 0.47f
-        private const val GB_MENU_MAX_Y = 0.56f
-        private const val GBA_MENU_MIN_Y = 0.37f
-        private const val GBA_MENU_MAX_Y = 0.44f
+        private fun layoutFromGeometry(
+            geometry: SkinGeometry,
+            withShoulders: Boolean,
+        ): ControlLayout = ControlLayout(
+            elements = ControlId.entries.map { id ->
+                val rect = geometry.controls.getValue(id)
+                ControlElement(
+                    id = id,
+                    centerX = rect.centerX,
+                    centerY = rect.centerY,
+                    opacity = 1f,
+                    visible = when (id) {
+                        ControlId.BUTTON_L, ControlId.BUTTON_R -> withShoulders
+                        else -> true
+                    },
+                )
+            },
+        )
     }
 }

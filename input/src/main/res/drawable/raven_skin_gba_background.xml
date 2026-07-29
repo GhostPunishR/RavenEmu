@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="360dp"
+    android:height="778dp"
+    android:viewportWidth="1000"
+    android:viewportHeight="2160">
+
+    <!-- Même coque RavenEmu, ouverture GBA native plus large et moins haute. -->
+    <path
+        android:fillColor="#09090D"
+        android:fillType="evenOdd"
+        android:pathData="M92,18 H908 C954,18 982,52 982,98 V2060 C982,2112 948,2142 900,2142 H100 C50,2142 18,2110 18,2060 V98 C18,50 50,18 92,18 Z M70,119 H930 V692 H70 Z" />
+    <path
+        android:fillColor="#15151B"
+        android:fillType="evenOdd"
+        android:pathData="M105,44 H895 C932,44 956,70 956,108 V2038 C956,2078 930,2110 888,2110 H112 C70,2110 44,2078 44,2038 V108 C44,70 68,44 105,44 Z M70,119 H930 V692 H70 Z" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:pathData="M92,28 H908 C944,28 970,55 970,98 V2050 C970,2096 942,2128 900,2128 H100 C58,2128 30,2096 30,2050 V98 C30,55 56,28 92,28 Z"
+        android:strokeColor="#51238C"
+        android:strokeWidth="5" />
+
+    <!-- Cadre GBA à relief profond. -->
+    <path
+        android:fillColor="#07070A"
+        android:fillType="evenOdd"
+        android:pathData="M48,88 H952 C968,88 976,102 976,120 V716 C976,738 960,752 938,752 H62 C40,752 24,738 24,716 V120 C24,102 32,88 48,88 Z M70,119 H930 V692 H70 Z" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:pathData="M48,90 H952 C966,90 972,104 972,120 V714 C972,734 958,746 938,746 H62 C42,746 28,734 28,714 V120 C28,104 34,90 48,90 Z"
+        android:strokeColor="#30303A"
+        android:strokeWidth="8" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:pathData="M70,119 H930 V692 H70 Z"
+        android:strokeColor="#7540B7"
+        android:strokeWidth="3" />
+    <path
+        android:fillColor="#A75CFF"
+        android:pathData="M76,72 A11,11 0,1 1,75.9,72 Z" />
+    <path
+        android:fillColor="#E2C5FF"
+        android:pathData="M76,67 A5,5 0,1 1,75.9,67 Z" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:pathData="M102,68 H222 M770,68 H894"
+        android:strokeColor="#8A8792"
+        android:strokeWidth="5"
+        android:strokeLineCap="round" />
+
+    <!-- Bande de marque, puis logements L / MENU / R. -->
+    <path
+        android:fillColor="#0D0D12"
+        android:pathData="M28,732 C176,740 200,800 354,804 H646 C800,800 824,740 972,732 V952 C822,936 754,910 648,900 H352 C246,910 178,936 28,952 Z" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:pathData="M28,734 C176,742 200,802 354,806 H646 C800,802 824,742 972,734"
+        android:strokeColor="#7E42C6"
+        android:strokeWidth="4" />
+    <path
+        android:fillColor="#6E39B4"
+        android:pathData="M205,774 L258,748 L244,770 L292,760 L266,788 L218,790 Z M795,774 L742,748 L756,770 L708,760 L734,788 L782,790 Z" />
+
+    <!-- Wordmark RAVENEMU. -->
+    <path
+        android:fillColor="@android:color/transparent"
+        android:pathData="M300,780 V734 H326 C342,734 346,754 328,756 H300 M326,756 L348,780 M360,780 L378,734 L396,780 M367,763 H390 M410,734 L428,780 L446,734 M460,734 H496 M460,757 H489 M460,780 H496 M510,780 V734 L544,780 V734"
+        android:strokeColor="#E2E0E7"
+        android:strokeWidth="8"
+        android:strokeLineCap="square"
+        android:strokeLineJoin="round" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:pathData="M566,734 H602 M566,757 H595 M566,780 H602 M616,780 V734 L638,766 L660,734 V780 M678,734 V768 C678,786 714,786 714,768 V734"
+        android:strokeColor="#9554E8"
+        android:strokeWidth="8"
+        android:strokeLineCap="square"
+        android:strokeLineJoin="round" />
+
+    <!-- Creux dédiés aux trois contrôles sous l'écran. -->
+    <path
+        android:fillColor="#08080D"
+        android:pathData="M36,824 C74,806 250,806 312,830 L308,978 C224,996 98,990 42,952 Z M688,830 C750,806 926,806 964,824 L958,952 C902,990 776,996 692,978 Z M406,824 C442,806 558,806 594,824 L610,932 C568,962 432,962 390,932 Z" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:pathData="M44,836 C98,820 246,820 300,840 M700,840 C754,820 902,820 956,836 M410,834 C454,816 546,816 590,834"
+        android:strokeColor="#352044"
+        android:strokeWidth="5" />
+
+    <!-- Texture et volumes de la zone de commandes. -->
+    <path
+        android:fillColor="#17171E"
+        android:pathData="M45,1010 L356,1010 L420,1135 L365,1660 L65,1735 Z" />
+    <path
+        android:fillColor="#111118"
+        android:pathData="M955,990 L626,1015 L540,1190 L605,1735 L938,1790 Z" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:pathData="M88,1080 L338,1040 M72,1125 L352,1080 M650,1035 L925,1085 M620,1080 L942,1130 M88,1640 L340,1588 M668,1735 L924,1668"
+        android:strokeColor="#24242E"
+        android:strokeWidth="4" />
+
+    <!-- Logements des contrôles, sans faces interactives. -->
+    <path
+        android:fillColor="#08080C"
+        android:pathData="M215,1260 A185,185 0,1 1,214.9,1260 Z" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:pathData="M215,1278 A167,167 0,1 1,214.9,1278 Z"
+        android:strokeColor="#292933"
+        android:strokeWidth="6" />
+    <path
+        android:fillColor="#0A0A0F"
+        android:pathData="M805,1235 A106,106 0,1 1,804.9,1235 Z M650,1408 A106,106 0,1 1,649.9,1408 Z" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:pathData="M805,1248 A93,93 0,1 1,804.9,1248 Z M650,1421 A93,93 0,1 1,649.9,1421 Z"
+        android:strokeColor="#3B214F"
+        android:strokeWidth="5" />
+
+    <!-- Motif corbeau autour de A/B. -->
+    <path
+        android:fillColor="#0A0A10"
+        android:pathData="M526,1365 C590,1186 735,1098 930,1126 C847,1164 816,1200 786,1248 C855,1224 902,1230 950,1252 C858,1290 834,1334 812,1380 C884,1368 920,1384 956,1412 C862,1438 824,1482 798,1544 C760,1462 710,1426 648,1402 C690,1450 712,1502 708,1575 C638,1516 594,1448 526,1365 Z" />
+    <path
+        android:fillColor="#151321"
+        android:pathData="M570,1320 C650,1198 748,1150 886,1158 C800,1192 744,1240 706,1310 C770,1280 822,1276 882,1295 C794,1330 744,1380 720,1446 C682,1386 632,1350 570,1320 Z" />
+    <path
+        android:fillColor="#9D57F2"
+        android:pathData="M768,1230 C782,1220 800,1222 810,1234 C796,1245 780,1247 768,1230 Z" />
+
+    <!-- Haut-parleur et soubassement. -->
+    <path
+        android:fillColor="#050507"
+        android:pathData="M78,1742 h18 v18 h-18 Z M112,1725 h18 v18 h-18 Z M146,1717 h18 v18 h-18 Z M180,1725 h18 v18 h-18 Z M214,1742 h18 v18 h-18 Z M61,1778 h18 v18 h-18 Z M95,1762 h18 v18 h-18 Z M129,1753 h18 v18 h-18 Z M163,1753 h18 v18 h-18 Z M197,1762 h18 v18 h-18 Z M231,1778 h18 v18 h-18 Z M78,1812 h18 v18 h-18 Z M112,1797 h18 v18 h-18 Z M146,1788 h18 v18 h-18 Z M180,1797 h18 v18 h-18 Z M214,1812 h18 v18 h-18 Z M95,1845 h18 v18 h-18 Z M129,1830 h18 v18 h-18 Z M163,1830 h18 v18 h-18 Z M197,1845 h18 v18 h-18 Z" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:pathData="M44,2030 C210,2075 318,2078 410,2078 M590,2078 C682,2078 790,2075 956,2030"
+        android:strokeColor="#6E38AF"
+        android:strokeWidth="5" />
+    <path
+        android:fillColor="#8546D4"
+        android:pathData="M430,2050 L494,2022 L548,2026 L526,2042 L570,2052 L538,2065 L568,2094 L520,2077 L500,2110 L480,2077 L432,2094 L462,2065 L430,2050 Z" />
+    <path
+        android:fillColor="#B77CFF"
+        android:pathData="M478,2044 L512,2034 L536,2044 L512,2052 Z" />
+</vector>
