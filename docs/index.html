@@ -376,6 +376,12 @@ apksigner verify --print-certs RavenEmu-test.apk</code></pre>
             <p>L’empreinte du certificat doit être <code>c439aed3f5210f88d92f435f949614cacbb4105ed7967a246abfa051d59feee1</code>. Elle est la même pour toutes les versions Test : c’est ce qui permet de mettre à jour l’application sans la désinstaller. Si une autre valeur apparaît, l’APK ne vient pas de ce dépôt — ne l’installe pas.</p>
           </details>
           <details class="faq-item reveal">
+            <summary>Android affiche « source dangereuse » : est-ce grave ?</summary>
+            <p>Non, c’est attendu. Android avertit pour <strong>tout</strong> APK installé en dehors du Play Store. Deux messages peuvent apparaître : l’autorisation d’installer depuis la source utilisée (navigateur, gestionnaire de fichiers), et un avertissement de Play Protect indiquant que Google ne connaît ni le certificat ni le développeur.</p>
+            <p>Ce second message ne dit pas qu’un problème a été trouvé dans le fichier : il dit que Google ne peut rien garantir à son sujet. Une application passée par le Play Store ne le déclenche pas, non parce qu’elle serait plus sûre, mais parce que Google l’a vue passer.</p>
+            <p>C’est précisément ce que la vérification d’empreinte remplace : si le certificat correspond à celui publié par le projet, l’APK vient bien de la clé de RavenEmu. Ne désactive pas Play Protect de façon générale, et n’accorde l’autorisation « sources inconnues » qu’au moment de l’installation.</p>
+          </details>
+          <details class="faq-item reveal">
             <summary>RavenEmu fournit-il des jeux ou un BIOS ?</summary>
             <p>Non. Le dépôt et l’application ne distribuent aucun BIOS, aucune ROM et aucun contenu protégé. Utilise uniquement des copies que tu es autorisé à employer ou des homebrews librement distribués.</p>
           </details>

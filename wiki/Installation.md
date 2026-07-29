@@ -21,6 +21,27 @@ La préversion `test-latest` est remplacée après chaque construction réussie 
 
 L'APK Test conserve les diagnostics et laisse Android optimiser le moteur. Il reste destiné aux essais, pas à une distribution de production. Son identifiant d'application est `com.ravenemu.app.profil` : il cohabite avec une éventuelle version Release sans l'écraser.
 
+## Les avertissements d'Android sont normaux
+
+Android affiche des avertissements pour **tout** APK installé en dehors du Play Store. Ils apparaîtront donc à chaque installation de RavenEmu, et ils ne signalent rien d'anormal sur le fichier.
+
+Deux messages différents peuvent apparaître.
+
+**« Autoriser cette source » ou « Installer des applications inconnues ».** Android exige une autorisation explicite pour l'application depuis laquelle vous installez : navigateur, gestionnaire de fichiers, messagerie. L'autorisation est donnée par source, pas globalement.
+
+**« Application dangereuse », « source non fiable » ou « application non vérifiée », de Play Protect.** Google ne connaît ni ce certificat de signature ni ce développeur. Ce message ne dit pas qu'un problème a été trouvé dans l'APK : il dit que Google ne peut rien garantir à son sujet. C'est une absence d'information, pas un verdict.
+
+Une application publiée sur le Play Store ne déclenche pas ces messages, non parce qu'elle serait plus sûre, mais parce que Google l'a vue passer. Un APK signé par une clé auto-signée et distribué depuis GitHub les déclenchera toujours.
+
+### Ce qu'il ne faut pas faire
+
+- Ne désactivez pas Play Protect de façon générale. Il continue de rendre service pour tout le reste.
+- Ne laissez pas l'autorisation « sources inconnues » active en permanence sur votre navigateur. Accordez-la au moment de l'installation, puis retirez-la.
+
+### Ce qui remplace la garantie de Google
+
+Android dit qu'il ne peut pas se porter garant de l'origine du fichier. La vérification décrite ci-dessous permet de s'en porter garant soi-même : si l'empreinte du certificat correspond à celle publiée par le projet, l'APK vient bien de la clé de RavenEmu. L'avertissement d'Android restera affiché, mais vous saurez ce que vous installez.
+
 ## Vérifier l'APK avant de l'installer
 
 Chaque préversion publie quatre informations : l'empreinte SHA-256 du fichier, l'empreinte SHA-256 du certificat de signature, le commit source et le nom du package.

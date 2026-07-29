@@ -49,6 +49,10 @@ Si `apksigner` en affiche une autre, n'installez pas : soit la clé du projet a 
 
 Cette empreinte est aussi rappelée dans les notes de chaque préversion, avec l'empreinte du fichier et le commit qui l'a produit.
 
+### Les avertissements d'Android sont normaux
+
+Android signale toute installation faite hors du Play Store, et Play Protect ajoute que le certificat lui est inconnu. Ces messages ne veulent pas dire qu'un problème a été trouvé dans le fichier : ils veulent dire que Google ne peut rien garantir à son sujet. La vérification ci-dessus est ce qui remplace cette garantie. Voir [Installation](https://github.com/GhostPunishR/RavenEmu/wiki/Installation) pour le détail.
+
 RavenEmu ne fournit aucun jeu. Utilisez uniquement des copies que vous êtes autorisé à employer ou des homebrews librement distribués.
 
 ## État du projet
