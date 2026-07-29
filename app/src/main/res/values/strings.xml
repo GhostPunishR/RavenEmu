@@ -91,8 +91,12 @@
     <string name="settings_audio_enabled">Activer l\'audio</string>
     <string name="settings_audio_enabled_summary">Synthèse des 4 canaux Game Boy, synchronisée avec l\'image</string>
     <string name="settings_audio_volume">Volume</string>
-    <string name="settings_category_controls">Contrôles</string>
+    <string name="settings_category_controls">Contrôles tactiles</string>
     <string name="settings_haptic">Vibration des commandes</string>
+    <string name="settings_controller_skins">Skins de contrôleur</string>
+    <string name="settings_controller_skins_summary">Importer, sélectionner ou supprimer un skin Delta</string>
+    <string name="settings_delta_visual_feedback">Retour visuel des skins</string>
+    <string name="settings_delta_visual_feedback_summary">Afficher un léger calque sur la zone pressée</string>
     <string name="settings_reset_layouts">Réinitialiser les dispositions tactiles</string>
     <string name="settings_layouts_reset_done">Dispositions réinitialisées</string>
     <string name="settings_category_files">Fichiers</string>
@@ -110,4 +114,43 @@
     <!-- Divers -->
     <string name="cancel">Annuler</string>
     <string name="ok">OK</string>
+
+    <!-- Skins Delta -->
+    <string name="delta_skins_title">Skins de contrôleur</string>
+    <string name="delta_skins_import">Importer un skin Delta</string>
+    <string name="delta_skins_mode">Représentation iPhone</string>
+    <string name="delta_skins_mode_automatic">Automatique</string>
+    <string name="delta_skins_mode_standard">Standard</string>
+    <string name="delta_skins_mode_edge_to_edge">Bord à bord</string>
+    <string name="delta_skins_group_gb">GB / GBC</string>
+    <string name="delta_skins_group_gba">GBA</string>
+    <string name="delta_skins_classic">Commandes classiques</string>
+    <string name="delta_skins_classic_summary">Disposition tactile RavenEmu</string>
+    <string name="delta_skins_select">Sélectionner</string>
+    <string name="delta_skins_selected">Sélectionné</string>
+    <string name="delta_skins_delete">Supprimer</string>
+    <string name="delta_skins_availability">Portrait · standard : %1$s · bord à bord : %2$s · %3$s</string>
+    <string name="delta_skins_yes">oui</string>
+    <string name="delta_skins_no">non</string>
+    <string name="delta_skins_ignored_inputs">Entrées ignorées : %1$s</string>
+    <string name="delta_skins_replace_title">Remplacer ce skin ?</string>
+    <string name="delta_skins_replace_message">Un skin portant l’identifiant %1$s est déjà installé. Son archive et son cache seront remplacés.</string>
+    <string name="delta_skins_delete_title">Supprimer ce skin ?</string>
+    <string name="delta_skins_delete_message">%1$s sera supprimé du stockage local. Les commandes classiques seront restaurées s’il est actif.</string>
+    <string name="delta_skins_imported">Skin importé et sélectionné</string>
+    <string name="delta_skins_replaced">Skin remplacé</string>
+    <string name="delta_skins_duplicate">Ce skin est déjà installé</string>
+    <string name="delta_skins_deleted">Skin supprimé ; commandes classiques restaurées si nécessaire</string>
+    <string name="delta_skins_error_archive">Archive .deltaskin invalide</string>
+    <string name="delta_skins_error_manifest_missing">Le fichier info.json est absent</string>
+    <string name="delta_skins_error_manifest_duplicate">L’archive contient plusieurs info.json</string>
+    <string name="delta_skins_error_console">Cette console n’est pas prise en charge</string>
+    <string name="delta_skins_error_portrait">Aucune représentation iPhone portrait compatible</string>
+    <string name="delta_skins_error_asset">L’asset PDF portrait est absent</string>
+    <string name="delta_skins_error_pdf">Le PDF du skin est illisible ou contient plusieurs pages</string>
+    <string name="delta_skins_error_size">Le skin est trop volumineux</string>
+    <string name="delta_skins_error_identifier">Un skin portant cet identifiant existe déjà</string>
+    <string name="delta_skins_error_storage">Le stockage disponible est insuffisant ou inaccessible</string>
+    <string name="delta_skins_error_generic">Impossible d’importer ce skin</string>
+    <string name="delta_skins_runtime_fallback">Skin invalide : commandes classiques restaurées</string>
 </resources>

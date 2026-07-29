@@ -129,6 +129,7 @@ kotlin {
 
 dependencies {
     implementation(project(":emulation-api"))
+    implementation(project(":deltaskin"))
     implementation(project(":gameboy-core"))
     implementation(project(":gba-core"))
     implementation(project(":rom-library"))

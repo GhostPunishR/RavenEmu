@@ -171,6 +171,11 @@ class TouchControlsView @JvmOverloads constructor(
         return true
     }
 
+    override fun onVisibilityChanged(changedView: View, visibility: Int) {
+        super.onVisibilityChanged(changedView, visibility)
+        if (changedView === this && visibility != VISIBLE) releaseAll()
+    }
+
     /** Réévalue les boutons couverts par un pointeur (glissement compris). */
     private fun updatePointer(pointerId: Int, x: Float, y: Float) {
         val newButtons = buttonsAt(x, y)

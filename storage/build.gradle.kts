@@ -27,6 +27,7 @@ kotlin {
 
 dependencies {
     api(project(":rom-library"))
+    api(project(":deltaskin"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.documentfile)
     implementation(libs.kotlinx.coroutines.android)

@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.net.Uri
 import androidx.core.content.edit
+import com.ravenemu.deltaskin.DeltaSkinConsole
+import com.ravenemu.deltaskin.DeltaSkinRepresentationPreference
 import com.ravenemu.emulation.api.ConsoleType
 import com.ravenemu.input.ControlLayout
 
@@ -134,6 +136,54 @@ class AppSettings(context: Context) {
     var hapticFeedback: Boolean
         get() = prefs.getBoolean("controls_haptic", true)
         set(value) = prefs.edit { putBoolean("controls_haptic", value) }
+
+    /** Retour visuel discret au-dessus des hitboxes d'un skin Delta. */
+    var deltaSkinVisualFeedback: Boolean
+        get() = prefs.getBoolean("controls_delta_visual_feedback", true)
+        set(value) = prefs.edit { putBoolean("controls_delta_visual_feedback", value) }
+
+    var deltaSkinRepresentationPreference: DeltaSkinRepresentationPreference
+        get() = prefs.getString("controls_delta_representation", "automatic")
+            ?.let(::representationPreferenceFromStorage)
+            ?: DeltaSkinRepresentationPreference.AUTOMATIC
+        set(value) = prefs.edit {
+            putString("controls_delta_representation", representationPreferenceToStorage(value))
+        }
+
+    /**
+     * Sélection portrait séparée entre le cœur GB/GBC et le cœur GBA.
+     * `null` désigne explicitement les commandes classiques.
+     */
+    fun deltaSkinIdentifier(console: DeltaSkinConsole): String? =
+        prefs.getString(deltaSkinSelectionKey(console), null)
+
+    fun setDeltaSkinIdentifier(console: DeltaSkinConsole, identifier: String?) {
+        prefs.edit {
+            if (identifier == null) remove(deltaSkinSelectionKey(console))
+            else putString(deltaSkinSelectionKey(console), identifier)
+        }
+    }
+
+    private fun deltaSkinSelectionKey(console: DeltaSkinConsole): String = when (console) {
+        DeltaSkinConsole.GB_GBC -> "controls_delta_selected_gb_portrait"
+        DeltaSkinConsole.GBA -> "controls_delta_selected_gba_portrait"
+    }
+
+    private fun representationPreferenceFromStorage(
+        value: String,
+    ): DeltaSkinRepresentationPreference = when (value) {
+        "standard" -> DeltaSkinRepresentationPreference.STANDARD
+        "edge_to_edge" -> DeltaSkinRepresentationPreference.EDGE_TO_EDGE
+        else -> DeltaSkinRepresentationPreference.AUTOMATIC
+    }
+
+    private fun representationPreferenceToStorage(
+        value: DeltaSkinRepresentationPreference,
+    ): String = when (value) {
+        DeltaSkinRepresentationPreference.AUTOMATIC -> "automatic"
+        DeltaSkinRepresentationPreference.STANDARD -> "standard"
+        DeltaSkinRepresentationPreference.EDGE_TO_EDGE -> "edge_to_edge"
+    }
 
     /**
      * Disposition tactile d'un profil. [profile] combine orientation et,

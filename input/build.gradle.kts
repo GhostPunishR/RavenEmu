@@ -26,7 +26,9 @@ kotlin {
 
 dependencies {
     api(project(":emulation-api"))
+    api(project(":deltaskin"))
     implementation(libs.androidx.core.ktx)
+    implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)
     testImplementation(libs.kotlin.test)
     testImplementation(libs.junit4)

@@ -15,6 +15,10 @@ La disposition tactile peut être adaptée à votre appareil et à chaque consol
 
 La Game Boy Advance ajoute les gâchettes `L` et `R`.
 
+Les panneaux `.deltaskin` importés localement sont décrits dans
+[[Skins de contrôleur Delta|Skins-de-controleur]]. Ils restent séparés des
+profils de disposition classiques.
+
 ## Modifier une disposition
 
 1. Ouvrez les réglages des commandes.

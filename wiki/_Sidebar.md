@@ -7,6 +7,7 @@
 - [[Matrice de compatibilité des jeux|Compatibilite-des-jeux]]
 - [[Bibliothèque et ROM|Bibliotheque-et-ROM]]
 - [[Commandes]]
+- [[Skins de contrôleur Delta|Skins-de-controleur]]
 - [[Sauvegardes et états|Sauvegardes-et-etats]]
 - [[Affichage et audio|Affichage-et-audio]]
 - [[Dépannage|Depannage]]

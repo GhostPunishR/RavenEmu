@@ -8,6 +8,7 @@ RavenEmu sépare les moteurs d'émulation des composants Android.
 |---|---|---|
 | `app` | Android | Écrans, navigation et session d'émulation |
 | `emulation-api` | Kotlin/JVM | Contrats communs entre application et moteurs |
+| `deltaskin` | Kotlin/JVM | Manifeste, validation ZIP, stockage, disposition et inputs DeltaSkin |
 | `gameboy-core` | Kotlin/JVM | Game Boy et Game Boy Color |
 | `gba-core` | Kotlin/JVM | Game Boy Advance |
 | `rom-library` | Kotlin/JVM | En-têtes, empreintes, identification et index |

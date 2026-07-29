@@ -205,6 +205,26 @@ class EmulationSession(
         post { it.setButton(button, pressed) }
     }
 
+    /**
+     * Applique un groupe de transitions dans une seule commande de session.
+     *
+     * Les boutons combinés d'un skin tactile deviennent donc visibles ensemble
+     * par le moteur avant le prochain cycle émulé, sans intercaler une trame
+     * entre A et B.
+     */
+    fun setButtons(
+        pressed: Set<EmulatorButton>,
+        released: Set<EmulatorButton>,
+    ) {
+        if (pressed.isEmpty() && released.isEmpty()) return
+        val pressedSnapshot = pressed.toList()
+        val releasedSnapshot = released.toList()
+        post { target ->
+            releasedSnapshot.forEach { target.setButton(it, false) }
+            pressedSnapshot.forEach { target.setButton(it, true) }
+        }
+    }
+
     private fun loop() {
         // `Thread.priority` ne fait que positionner une valeur de politesse
         // Unix ; le groupe d'ordonnancement, lui, est propre à la plateforme.

@@ -23,6 +23,12 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
 import com.ravenemu.app.BuildConfig
 import com.ravenemu.app.R
+import com.ravenemu.deltaskin.DeltaSkinConsole
+import com.ravenemu.deltaskin.DeltaSkinErrorCode
+import com.ravenemu.deltaskin.DeltaSkinInsets
+import com.ravenemu.deltaskin.DeltaSkinRepresentationKind
+import com.ravenemu.deltaskin.DeltaSkinRepository
+import com.ravenemu.deltaskin.DeltaSkinSize
 import com.ravenemu.emulation.api.ConsoleType
 import com.ravenemu.emulation.api.audio.AudioTransportStats
 import com.ravenemu.emulation.api.EmulatorCore
@@ -31,6 +37,10 @@ import com.ravenemu.emulation.api.EmulatorButton
 import com.ravenemu.emulation.api.SaveStateException
 import com.ravenemu.input.ControlId
 import com.ravenemu.input.ControlLayout
+import com.ravenemu.input.DeltaSkinControllerAsset
+import com.ravenemu.input.DeltaSkinControllerConfiguration
+import com.ravenemu.input.DeltaSkinControllerView
+import com.ravenemu.input.DeltaSkinPdfRenderer
 import com.ravenemu.input.GamepadMapper
 import com.ravenemu.input.TouchControlsView
 import com.ravenemu.renderer.EmulatorSurfaceView
@@ -41,7 +51,10 @@ import com.ravenemu.emulation.api.display.MonochromeDisplayProfiles
 import com.ravenemu.storage.LibraryRepository
 import com.ravenemu.storage.SaveFileStore
 import com.ravenemu.storage.SnapshotStore
+import java.io.File
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Écran d'émulation : surface de rendu, commandes tactiles, menu de
@@ -55,6 +68,8 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
     private lateinit var snapshotStore: SnapshotStore
     private lateinit var surface: EmulatorSurfaceView
     private lateinit var controls: TouchControlsView
+    private lateinit var deltaSkinControls: DeltaSkinControllerView
+    private lateinit var deltaSkinRepository: DeltaSkinRepository
     private lateinit var performanceOverlay: TextView
     private lateinit var editorPanel: View
 
@@ -65,6 +80,10 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
 
     private var core: EmulatorCore? = null
     private var session: EmulationSession? = null
+    private var deltaSkinLoadGeneration = 0L
+    private var customSkinActive = false
+    private var restoreCustomSkinAfterEditing = false
+    private var activeDeltaSkinSha256: String? = null
 
     private lateinit var romUri: Uri
     private lateinit var romFileName: String
@@ -79,6 +98,9 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
         settings = AppSettings(this)
         saveStore = SaveFileStore(this)
         snapshotStore = SnapshotStore(this)
+        deltaSkinRepository = DeltaSkinRepository(
+            File(filesDir, "controller-skins/delta")
+        )
 
         romUri = Uri.parse(requireNotNull(intent.getStringExtra(EXTRA_URI)))
         romFileName = requireNotNull(intent.getStringExtra(EXTRA_FILE_NAME))
@@ -90,22 +112,36 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
 
         surface = findViewById(R.id.surface)
         controls = findViewById(R.id.controls)
+        deltaSkinControls = findViewById(R.id.deltaSkinControls)
         performanceOverlay = findViewById(R.id.performanceOverlay)
         editorPanel = findViewById(R.id.editorPanel)
 
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        // L'image est ancrée en haut en portrait : on la décale sous
-        // l'encoche ou la caméra perforée.
-        ViewCompat.setOnApplyWindowInsetsListener(surface) { _, insets ->
-            surface.topInsetPx =
-                insets.getInsets(WindowInsetsCompat.Type.displayCutout()).top
+        ViewCompat.setOnApplyWindowInsetsListener(
+            findViewById<View>(R.id.emulationRoot)
+        ) { _, insets ->
+            val safe = insets.getInsets(
+                WindowInsetsCompat.Type.displayCutout() or
+                    WindowInsetsCompat.Type.systemBars()
+            )
+            surface.topInsetPx = safe.top
+            deltaSkinControls.setSafeInsets(
+                DeltaSkinInsets(
+                    left = safe.left.toDouble(),
+                    top = safe.top.toDouble(),
+                    right = safe.right.toDouble(),
+                    bottom = safe.bottom.toDouble(),
+                )
+            )
             insets
         }
         applyImmersiveMode()
         applyVideoSettings()
         applyControlLayout()
         bindControls()
+        bindDeltaSkinControls()
         bindEditor()
+        applyControlPresentation()
 
         loadRomAndStart()
     }
@@ -145,6 +181,12 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
         )
         performanceOverlay.visibility =
             if (settings.showPerformanceOverlay) View.VISIBLE else View.GONE
+        if (customSkinActive) {
+            // Un skin portrait impose le ratio natif dans la zone de jeu.
+            surface.keepAspectRatio = true
+            surface.integerScaling = false
+            surface.topAligned = false
+        }
     }
 
     // ---- Profils de commandes ----
@@ -196,6 +238,129 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
             }
         }
     }
+
+    private fun bindDeltaSkinControls() {
+        deltaSkinControls.listener = object : DeltaSkinControllerView.Listener {
+            override fun onButtonChanges(
+                changes: com.ravenemu.deltaskin.DeltaSkinButtonChanges,
+            ) {
+                session?.setButtons(changes.pressed, changes.released)
+            }
+
+            override fun onMenu() {
+                showEmulatorMenu()
+            }
+
+            override fun onSkinReady(gameArea: android.graphics.Rect) {
+                customSkinActive = true
+                controls.visibility = View.GONE
+                editorPanel.visibility = View.GONE
+                surface.contentBounds = gameArea
+                surface.keepAspectRatio = true
+                surface.integerScaling = false
+                surface.topAligned = false
+            }
+
+            override fun onSkinLayoutChanged(gameArea: android.graphics.Rect) {
+                if (customSkinActive) surface.contentBounds = gameArea
+            }
+
+            override fun onSkinError(code: DeltaSkinErrorCode) {
+                handleDeltaSkinFailure(code)
+            }
+        }
+    }
+
+    /**
+     * Le mode paysage et toute erreur reviennent au chemin historique. Le skin
+     * classique reste affiché jusqu'à ce que le PDF personnalisé soit prêt.
+     */
+    private fun applyControlPresentation() {
+        if (controls.editMode) return
+        val skinConsole = deltaSkinConsole()
+        val identifier = settings.deltaSkinIdentifier(skinConsole)
+        val portrait =
+            resources.configuration.orientation != Configuration.ORIENTATION_LANDSCAPE
+        val token = ++deltaSkinLoadGeneration
+        if (!portrait || identifier == null) {
+            showClassicControls()
+            return
+        }
+
+        showClassicControls()
+        lifecycleScope.launch {
+            val installed = withContext(Dispatchers.IO) {
+                deltaSkinRepository.findByIdentifier(identifier)
+            }
+            if (token != deltaSkinLoadGeneration || controls.editMode) return@launch
+            if (installed == null || installed.metadata.console != skinConsole) {
+                handleDeltaSkinFailure(DeltaSkinErrorCode.INVALID_ARCHIVE)
+                return@launch
+            }
+            val iphone = installed.metadata.manifest.representations.iphone
+            if (iphone == null) {
+                handleDeltaSkinFailure(DeltaSkinErrorCode.PORTRAIT_REPRESENTATION_MISSING)
+                return@launch
+            }
+            val assets = buildMap {
+                for (kind in DeltaSkinRepresentationKind.entries) {
+                    val representation = iphone.portrait(kind) ?: continue
+                    val file = installed.assetFile(kind) ?: continue
+                    put(kind, DeltaSkinControllerAsset(representation, file))
+                }
+            }
+            if (assets.isEmpty()) {
+                handleDeltaSkinFailure(DeltaSkinErrorCode.RESIZABLE_ASSET_MISSING)
+                return@launch
+            }
+            activeDeltaSkinSha256 = installed.metadata.archiveSha256
+            deltaSkinControls.setConfiguration(
+                DeltaSkinControllerConfiguration(
+                    skinSha256 = installed.metadata.archiveSha256,
+                    console = skinConsole,
+                    assets = assets,
+                    preference = settings.deltaSkinRepresentationPreference,
+                    nativeScreenSize = if (skinConsole == DeltaSkinConsole.GBA) {
+                        DeltaSkinSize(240.0, 160.0)
+                    } else {
+                        DeltaSkinSize(160.0, 144.0)
+                    },
+                    hapticFeedback = settings.hapticFeedback,
+                    visualFeedback = settings.deltaSkinVisualFeedback,
+                )
+            )
+        }
+    }
+
+    private fun showClassicControls() {
+        customSkinActive = false
+        activeDeltaSkinSha256 = null
+        deltaSkinControls.setConfiguration(null)
+        controls.visibility = View.VISIBLE
+        surface.contentBounds = null
+        applyVideoSettings()
+    }
+
+    private fun handleDeltaSkinFailure(code: DeltaSkinErrorCode) {
+        if (BuildConfig.DEBUG) {
+            android.util.Log.d("RavenEmuDeltaSkin", "Fallback classique : $code")
+        }
+        activeDeltaSkinSha256?.let(DeltaSkinPdfRenderer::invalidate)
+        settings.setDeltaSkinIdentifier(deltaSkinConsole(), null)
+        showClassicControls()
+        Toast.makeText(
+            this,
+            R.string.delta_skins_runtime_fallback,
+            Toast.LENGTH_LONG,
+        ).show()
+    }
+
+    private fun deltaSkinConsole(): DeltaSkinConsole =
+        if (console == ConsoleType.GAME_BOY_ADVANCE) {
+            DeltaSkinConsole.GBA
+        } else {
+            DeltaSkinConsole.GB_GBC
+        }
 
     // ---- Chargement ----
 
@@ -465,6 +630,8 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
 
     private fun enterEditMode() {
         session?.pause()
+        restoreCustomSkinAfterEditing = customSkinActive
+        if (customSkinActive) showClassicControls()
         controls.editMode = true
         editorPanel.visibility = View.VISIBLE
     }
@@ -473,6 +640,10 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
         controls.editMode = false
         editorPanel.visibility = View.GONE
         settings.saveControlLayout(activeProfileKey(), controls.layoutSpec)
+        if (restoreCustomSkinAfterEditing) {
+            restoreCustomSkinAfterEditing = false
+            applyControlPresentation()
+        }
         session?.resume()
     }
 
@@ -503,12 +674,14 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
         super.onConfigurationChanged(newConfig)
         applyVideoSettings()
         applyControlLayout()
+        applyControlPresentation()
     }
 
     override fun onResume() {
         super.onResume()
         applyImmersiveMode()
         applyVideoSettings()
+        applyControlPresentation()
         // Le relevé de diagnostic se règle depuis les paramètres, donc en
         // quittant cet écran : le reprendre ici évite d'avoir à recharger la ROM
         // pour que le changement prenne effet.

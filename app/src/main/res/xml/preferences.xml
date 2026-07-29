@@ -92,6 +92,15 @@
             android:key="controls_haptic"
             android:title="@string/settings_haptic" />
         <Preference
+            android:key="controls_skin_manager"
+            android:summary="@string/settings_controller_skins_summary"
+            android:title="@string/settings_controller_skins" />
+        <SwitchPreferenceCompat
+            android:defaultValue="true"
+            android:key="controls_delta_visual_feedback"
+            android:summary="@string/settings_delta_visual_feedback_summary"
+            android:title="@string/settings_delta_visual_feedback" />
+        <Preference
             android:key="controls_reset_layouts"
             android:title="@string/settings_reset_layouts" />
     </PreferenceCategory>

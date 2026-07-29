@@ -6,6 +6,7 @@ tasks.register("jvmTest") {
     description = "Exécute les tests des modules JVM purs."
     dependsOn(
         ":emulation-api:test",
+        ":deltaskin:test",
         ":gameboy-core:test",
         ":gba-core:test",
         ":rom-library:test",
