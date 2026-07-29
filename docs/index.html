@@ -376,10 +376,11 @@ apksigner verify --print-certs RavenEmu-test.apk</code></pre>
             <p>L’empreinte du certificat doit être <code>c439aed3f5210f88d92f435f949614cacbb4105ed7967a246abfa051d59feee1</code>. Elle est la même pour toutes les versions Test : c’est ce qui permet de mettre à jour l’application sans la désinstaller. Si une autre valeur apparaît, l’APK ne vient pas de ce dépôt — ne l’installe pas.</p>
           </details>
           <details class="faq-item reveal">
-            <summary>Android affiche « source dangereuse » : est-ce grave ?</summary>
-            <p>Non, c’est attendu. Android avertit pour <strong>tout</strong> APK installé en dehors du Play Store. Deux messages peuvent apparaître : l’autorisation d’installer depuis la source utilisée (navigateur, gestionnaire de fichiers), et un avertissement de Play Protect indiquant que Google ne connaît ni le certificat ni le développeur.</p>
-            <p>Ce second message ne dit pas qu’un problème a été trouvé dans le fichier : il dit que Google ne peut rien garantir à son sujet. Une application passée par le Play Store ne le déclenche pas, non parce qu’elle serait plus sûre, mais parce que Google l’a vue passer.</p>
-            <p>C’est précisément ce que la vérification d’empreinte remplace : si le certificat correspond à celui publié par le projet, l’APK vient bien de la clé de RavenEmu. Ne désactive pas Play Protect de façon générale, et n’accorde l’autorisation « sources inconnues » qu’au moment de l’installation.</p>
+            <summary>Android m’avertit à l’installation : est-ce grave ?</summary>
+            <p>Cela dépend du message, et la distinction est importante.</p>
+            <p><strong>Attendu :</strong> l’autorisation d’installer depuis la source utilisée (navigateur, gestionnaire de fichiers), et les messages de Play Protect du type « application non vérifiée », « développeur inconnu » ou « analyse impossible ». Ceux-là signalent que Google ne connaît ni le certificat ni le développeur, pas qu’un problème a été trouvé. Tout APK distribué hors du Play Store les déclenche.</p>
+            <p><strong>À ne jamais ignorer :</strong> « application dangereuse », « application nuisible bloquée », « cette application peut endommager votre appareil ». C’est un verdict de détection, pas une absence d’information. N’installe pas, supprime le fichier, et signale-le dans une issue en précisant l’adresse de téléchargement.</p>
+            <p>La vérification d’empreinte prouve <em>qui a signé</em> le fichier, pas que son contenu est inoffensif. Elle répond aux messages du premier groupe, jamais à ceux du second. Ne désactive pas Play Protect de façon générale, et n’accorde l’autorisation « sources inconnues » qu’au moment de l’installation.</p>
           </details>
           <details class="faq-item reveal">
             <summary>RavenEmu fournit-il des jeux ou un BIOS ?</summary>
