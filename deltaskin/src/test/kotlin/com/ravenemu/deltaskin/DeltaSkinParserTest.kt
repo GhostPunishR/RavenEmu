@@ -109,12 +109,12 @@ class DeltaSkinParserTest {
     }
 
     @Test
-    fun `frame negative ou hors mapping est refusee`() {
+    fun `frame negative est refusee`() {
         val manifest = withStandardRepresentation { representation ->
             representation.copy(
                 items = representation.items.toMutableList().also { items ->
                     items[0] = items[0].copy(
-                        frame = DeltaSkinFrame(-1.0, 0.0, 400.0, 20.0)
+                        frame = DeltaSkinFrame(-1.0, 0.0, 20.0, 20.0)
                     )
                 }
             )
@@ -123,6 +123,37 @@ class DeltaSkinParserTest {
             DeltaSkinValidator.validate(manifest)
         }
         assertEquals(DeltaSkinErrorCode.INVALID_FRAME, error.code)
+    }
+
+    @Test
+    fun `frame largement hors mapping est refusee`() {
+        val manifest = withStandardRepresentation { representation ->
+            representation.copy(
+                items = representation.items.toMutableList().also { items ->
+                    items[0] = items[0].copy(
+                        frame = DeltaSkinFrame(300.0, 0.0, 40.0, 20.0)
+                    )
+                }
+            )
+        }
+        val error = assertFailsWith<DeltaSkinException> {
+            DeltaSkinValidator.validate(manifest)
+        }
+        assertEquals(DeltaSkinErrorCode.INVALID_FRAME, error.code)
+    }
+
+    @Test
+    fun `leger depassement arrondi en bordure est accepte`() {
+        val manifest = withStandardRepresentation { representation ->
+            representation.copy(
+                items = representation.items.toMutableList().also { items ->
+                    items[0] = items[0].copy(
+                        frame = DeltaSkinFrame(224.0, 0.0, 97.0, 29.0)
+                    )
+                }
+            )
+        }
+        DeltaSkinValidator.validate(manifest)
     }
 
     @Test

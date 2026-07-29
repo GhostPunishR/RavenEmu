@@ -2,6 +2,7 @@ package com.ravenemu.deltaskin
 
 import java.text.Normalizer
 import java.util.Locale
+import kotlin.math.max
 
 data class DeltaSkinValidation(
     val manifest: DeltaSkinManifest,
@@ -14,6 +15,7 @@ object DeltaSkinValidator {
     const val MAX_LOGICAL_VALUE = 100_000.0
     private const val MAX_TEXT_LENGTH = 512
     private const val FRAME_EPSILON = 0.000_1
+    private const val MAX_FRAME_OVERSCAN_RATIO = 0.01
 
     fun validate(manifest: DeltaSkinManifest): DeltaSkinValidation {
         requireText(manifest.name, "name")
@@ -206,8 +208,10 @@ object DeltaSkinValidator {
             mustFitMapping &&
             mapping != null &&
             (
-                frame.x + frame.width > mapping.width + FRAME_EPSILON ||
-                    frame.y + frame.height > mapping.height + FRAME_EPSILON
+                frame.x >= mapping.width ||
+                    frame.y >= mapping.height ||
+                    frame.x + frame.width > maximumFrameExtent(mapping.width) ||
+                    frame.y + frame.height > maximumFrameExtent(mapping.height)
                 )
         ) {
             throw DeltaSkinException(
@@ -216,6 +220,13 @@ object DeltaSkinValidator {
             )
         }
     }
+
+    /**
+     * Certains skins Delta arrondissent une frame de bordure un peu au-delà
+     * de mappingSize. La hitbox est ensuite bornée au panneau par l'input mapper.
+     */
+    private fun maximumFrameExtent(mappingExtent: Double): Double =
+        mappingExtent + max(FRAME_EPSILON, mappingExtent * MAX_FRAME_OVERSCAN_RATIO)
 
     private fun requireText(value: String, property: String) {
         if (value.isBlank() || value.length > MAX_TEXT_LENGTH || '\u0000' in value) {
