@@ -122,21 +122,21 @@ class DeltaSkinArchiveImporter(
             ZipFile(archiveFile, StandardCharsets.UTF_8).use { zip ->
                 val inspectedAssets = mutableSetOf<String>()
                 val pdfInfos = mutableMapOf<String, DeltaSkinPdfInfo>()
-                if (standardAsset != null && standardRepresentation != null) {
-                    pdfInfos[standardAsset] = extractAndInspectPdf(
+                standardAsset?.let { asset ->
+                    pdfInfos[asset] = extractAndInspectPdf(
                         zip = zip,
-                        sourceName = standardAsset,
+                        sourceName = asset,
                         destination = File(assetsDirectory, STANDARD_PORTRAIT_FILE),
                     )
-                    inspectedAssets += standardAsset
+                    inspectedAssets += asset
                 }
-                if (edgeAsset != null && edgeRepresentation != null) {
-                    pdfInfos[edgeAsset] = extractAndInspectPdf(
+                edgeAsset?.let { asset ->
+                    pdfInfos[asset] = extractAndInspectPdf(
                         zip = zip,
-                        sourceName = edgeAsset,
+                        sourceName = asset,
                         destination = File(assetsDirectory, EDGE_TO_EDGE_PORTRAIT_FILE),
                     )
-                    inspectedAssets += edgeAsset
+                    inspectedAssets += asset
                 }
                 referencedNames
                     .filterNot(inspectedAssets::contains)

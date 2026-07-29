@@ -44,13 +44,14 @@ class DeltaSkinParserTest {
     @Test
     fun `le paysage est parse mais ne devient pas une representation portrait`() {
         val parsed = roundTrip(DeltaSkinTestFixtures.manifest(landscape = true))
-        assertNotNull(parsed.representations.iphone?.standard?.landscape)
+        val iphone = assertNotNull(parsed.representations.iphone)
+        assertNotNull(iphone.standard?.landscape)
         assertEquals(
             setOf(
                 DeltaSkinRepresentationKind.STANDARD,
                 DeltaSkinRepresentationKind.EDGE_TO_EDGE,
             ),
-            parsed.representations.iphone?.availablePortraitKinds(),
+            iphone.availablePortraitKinds(),
         )
     }
 

@@ -1,11 +1,13 @@
 package com.ravenemu.deltaskin
 
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.MissingFieldException
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
+@OptIn(ExperimentalSerializationApi::class)
 object DeltaSkinParser {
     internal val json = Json {
         ignoreUnknownKeys = true
