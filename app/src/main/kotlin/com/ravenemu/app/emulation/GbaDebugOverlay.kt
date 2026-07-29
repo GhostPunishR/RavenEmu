@@ -5,6 +5,7 @@ import com.ravenemu.app.BuildConfig
 import com.ravenemu.core.gba.GbaCore
 import com.ravenemu.core.gba.diag.GbaDiagnostics
 import com.ravenemu.emulation.api.EmulatorCore
+import com.ravenemu.emulation.api.audio.AudioTransportStats
 
 /**
  * Surcouche affichée par-dessus l'image : **la cadence, et rien d'autre**.
@@ -26,12 +27,30 @@ object GbaDebugOverlay {
     private const val TAG = "RavenEmuGba"
 
     /**
-     * Texte de la surcouche : la cadence.
+     * Texte de la surcouche : la cadence, et le transport audio quand il est
+     * relevé.
      *
-     * Identique dans toutes les variantes de construction. Aucun détail interne
-     * n'est exposé, et rien n'est calculé pour l'afficher.
+     * Le relevé audio est inactif hors construction de diagnostic : [stats] rend
+     * alors une chaîne vide et la surcouche se réduit à la cadence, comme
+     * auparavant. La cadence seule ne suffisait pas à instruire un craquement —
+     * elle reste à 60 alors même que la sortie se vide.
      */
-    fun render(fps: Double): String = "%.1f FPS".format(fps)
+    fun render(fps: Double, stats: AudioTransportStats? = null): String {
+        val cadence = "%.1f FPS".format(fps)
+        val audio = stats?.summary().orEmpty()
+        return if (audio.isEmpty()) cadence else "$cadence  $audio"
+    }
+
+    /**
+     * Journalise un échec de la sortie audio, en Debug uniquement.
+     *
+     * La session poursuit sans son : sans cette trace, la seule manifestation
+     * serait un silence inexpliqué.
+     */
+    fun logAudioFailure(error: Exception) {
+        if (!BuildConfig.DIAGNOSTICS) return
+        Log.w(TAG, "sortie audio en échec : ${error.javaClass.simpleName}", error)
+    }
 
     /**
      * Branche la journalisation des anomalies du moteur, en Debug uniquement.

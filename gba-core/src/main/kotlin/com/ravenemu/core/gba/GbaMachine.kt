@@ -105,11 +105,38 @@ class GbaMachine(rom: ByteArray, forcedSaveType: GbaSaveType? = null) {
         }
     }
 
-    /** Avance affichage, timers et audio de [cycles] cycles CPU. */
-    private fun advancePeripherals(cycles: Int) {
-        ppu.tick(cycles)
-        timers.tick(cycles)
-        apu.tick(cycles)
+    /**
+     * Avance affichage, timers et audio de [cycles] cycles CPU, **sans jamais
+     * franchir d'un seul bond un instant observable**.
+     *
+     * Les timers et l'unité audio ne sont pas indépendants : un débordement de
+     * timer fait consommer un octet d'une FIFO Direct Sound, et cette valeur est
+     * ensuite lue au moment d'échantillonner. Avancer les deux d'un gros bloc
+     * traitait tous les débordements d'abord, puis produisait tous les
+     * échantillons ensuite : ceux-ci n'observaient alors que la dernière valeur
+     * dépilée, et tout le contenu intermédiaire du bloc était perdu.
+     *
+     * Le pas est donc borné par la plus proche des deux échéances. En pratique
+     * l'appelant avance de quelques cycles à la fois et la boucle ne tourne
+     * qu'une fois ; elle ne se scinde que sur les gros blocs, ceux des DMA.
+     *
+     * `internal` plutôt que `private` : c'est le point d'entrée que les tests
+     * d'entrelacement pilotent directement, avec des découpages choisis. Une
+     * copie de cette boucle dans un banc d'essai ne verrouillerait rien.
+     */
+    internal fun advancePeripherals(cycles: Int) {
+        var remaining = cycles
+        while (remaining > 0) {
+            val step = minOf(
+                remaining,
+                timers.cyclesUntilNextOverflow(),
+                apu.cyclesUntilNextSample(),
+            ).coerceAtLeast(1)
+            ppu.tick(step)
+            timers.tick(step)
+            apu.tick(step)
+            remaining -= step
+        }
     }
 
     companion object {

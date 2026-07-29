@@ -7,6 +7,7 @@ import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
 import com.ravenemu.emulation.api.audio.AudioBufferPrimer
+import com.ravenemu.emulation.api.audio.AudioTransportStats
 import com.ravenemu.emulation.api.audio.LinearResampler
 import kotlin.math.ceil
 
@@ -21,11 +22,15 @@ import kotlin.math.ceil
  * [write] est bloquant : appelé depuis le thread d'émulation, il cale la
  * cadence de la session sur l'horloge audio du système (synchronisation
  * audio/vidéo), quel que soit le débit de sortie.
+ *
+ * [stats] relève ce que devient chaque bloc le long de la chaîne. Inactif par
+ * défaut, il ne coûte que la lecture d'un booléen par appel.
  */
 class AndroidAudioSink(
     context: Context,
     sourceRateHz: Int,
     sourceSamplesPerFrame: Int,
+    val stats: AudioTransportStats = AudioTransportStats(),
 ) : EmulationSession.AudioSink {
 
     private val outputRate = resolveNativeRate(context)
@@ -82,39 +87,45 @@ class AndroidAudioSink(
             .build()
     }
 
+    /**
+     * Écrit un bloc, **sans rattraper d'exception**.
+     *
+     * La session appelante traite déjà l'échec : elle poursuit sans son et le
+     * rapporte par `onAudioFailure`. Rattraper ici rendait ce chemin
+     * inaccessible — une piste en erreur restait muette sans que rien, ni
+     * journal, ni compteur, ni message, ne l'indique.
+     */
     override fun write(samples: ShortArray, count: Int) {
-        try {
-            recoverFromUnderrun()
+        recoverFromUnderrun()
 
-            // Le rééchantillonnage conserve toujours le débit natif du moteur.
-            // Une variation du temps de rendu ne doit jamais modifier la hauteur
-            // du son, en particulier sur les moteurs GB et GBC.
-            if (stopped) return
-            val needed = resampler.maxOutput(count)
-            if (resampled.size < needed) resampled = ShortArray(needed)
-            val produced = resampler.resample(samples, count, resampled)
+        // Le rééchantillonnage conserve toujours le débit natif du moteur.
+        // Une variation du temps de rendu ne doit jamais modifier la hauteur
+        // du son, en particulier sur les moteurs GB et GBC.
+        if (stopped) return
+        val needed = resampler.maxOutput(count)
+        if (resampled.size < needed) resampled = ShortArray(needed)
+        val produced = resampler.resample(samples, count, resampled)
 
-            // WRITE_BLOCKING peut encore retourner une écriture partielle si la
-            // piste change d'état. Ne jamais abandonner silencieusement la fin.
-            var offset = 0
-            while (offset < produced) {
-                val written = track.write(
-                    resampled,
-                    offset,
-                    produced - offset,
-                    AudioTrack.WRITE_BLOCKING,
-                )
-                if (written <= 0) break
-                offset += written
-            }
-
-            // AudioTrack ne commence à consommer qu'après le préremplissage.
-            // Les appels suivants maintiennent cette avance au lieu de courir
-            // en permanence au bord d'une nouvelle rupture.
-            if (primer.onSamplesQueued(offset)) track.play()
-        } catch (_: Exception) {
-            // Une sortie audio défaillante ne doit pas interrompre le jeu.
+        // WRITE_BLOCKING peut encore retourner une écriture partielle si la
+        // piste change d'état. La fin du bloc est alors perdue : c'est une
+        // discontinuité, elle est comptée plutôt qu'ignorée.
+        var offset = 0
+        while (offset < produced) {
+            val written = track.write(
+                resampled,
+                offset,
+                produced - offset,
+                AudioTrack.WRITE_BLOCKING,
+            )
+            if (written <= 0) break
+            offset += written
         }
+        stats.onBlock(submitted = count, resampled = produced, written = offset)
+
+        // AudioTrack ne commence à consommer qu'après le préremplissage.
+        // Les appels suivants maintiennent cette avance au lieu de courir
+        // en permanence au bord d'une nouvelle rupture.
+        if (primer.onSamplesQueued(offset)) track.play()
     }
 
     override fun underrunCount(): Int = currentUnderrunCount()
@@ -124,7 +135,10 @@ class AndroidAudioSink(
      * son tampon devenu discontinu et on repasse par le même préremplissage.
      */
     private fun recoverFromUnderrun() {
-        if (!primer.onUnderrunCount(currentUnderrunCount())) return
+        val ruptures = currentUnderrunCount()
+        stats.onUnderrunCount(ruptures)
+        if (!primer.onUnderrunCount(ruptures)) return
+        stats.onRestart()
         track.pause()
         track.flush()
         primer.reset(currentUnderrunCount())
@@ -132,14 +146,22 @@ class AndroidAudioSink(
 
     private fun currentUnderrunCount(): Int = try {
         track.underrunCount.coerceAtLeast(0)
-    } catch (_: Exception) {
+    } catch (e: Exception) {
+        stats.onFailure(e)
         0
     }
 
+    /**
+     * Les points d'entrée qui suivent sont appelés depuis l'interface et depuis
+     * l'arrêt de session, hors du `try` de la boucle d'émulation : une exception
+     * y remonterait jusqu'à un appelant qui ne peut rien en faire, et
+     * empêcherait l'arrêt d'aboutir. Ils la retiennent donc, mais la comptent.
+     */
     override fun setVolume(volume: Float) {
         try {
             track.setVolume(volume.coerceIn(0f, 1f))
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            stats.onFailure(e)
         }
     }
 
@@ -149,7 +171,8 @@ class AndroidAudioSink(
             track.flush()
             primer.reset(currentUnderrunCount())
             resampler.reset()
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            stats.onFailure(e)
         }
     }
 
@@ -167,14 +190,16 @@ class AndroidAudioSink(
         try {
             track.pause()
             track.flush()
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            stats.onFailure(e)
         }
     }
 
     override fun release() {
         try {
             track.release()
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            stats.onFailure(e)
         }
     }
 

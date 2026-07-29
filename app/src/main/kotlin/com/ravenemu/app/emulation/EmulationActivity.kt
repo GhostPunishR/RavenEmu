@@ -21,8 +21,10 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
+import com.ravenemu.app.BuildConfig
 import com.ravenemu.app.R
 import com.ravenemu.emulation.api.ConsoleType
+import com.ravenemu.emulation.api.audio.AudioTransportStats
 import com.ravenemu.emulation.api.EmulatorCore
 import com.ravenemu.emulation.api.session.EmulationSession
 import com.ravenemu.emulation.api.EmulatorButton
@@ -55,6 +57,9 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
     private lateinit var controls: TouchControlsView
     private lateinit var performanceOverlay: TextView
     private lateinit var editorPanel: View
+
+    /** Relevé du transport audio de la session courante, ou `null`. */
+    private var audioStats: AudioTransportStats? = null
 
     private val gamepad = GamepadMapper()
 
@@ -228,6 +233,10 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
         val samplesPerFrame =
             (newCore.audio.sampleRateHz / newCore.video.refreshRateHz).toInt() + 1
         val audioSink = AndroidAudioSink(this, newCore.audio.sampleRateHz, samplesPerFrame)
+        // Relevé du transport audio : construction de diagnostic uniquement.
+        // Sans lui, un craquement ne se distingue pas de sa cause.
+        audioSink.stats.enabled = BuildConfig.DIAGNOSTICS
+        audioStats = audioSink.stats
         audioSink.setVolume(settings.audioVolume / 100f)
 
         val newSession = EmulationSession(
@@ -276,8 +285,19 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
 
     override fun onStats(fps: Double, frameTimeMs: Double) {
         if (!settings.showPerformanceOverlay) return
-        val text = GbaDebugOverlay.render(fps)
+        val text = GbaDebugOverlay.render(fps, audioStats)
         runOnUiThread { performanceOverlay.text = text }
+    }
+
+    /**
+     * Une sortie audio en échec ne coupait le son qu'en silence : le rappel
+     * n'était pas redéfini et la sortie rattrapait elle-même ses exceptions.
+     * Le compteur permet de le voir dans la surcouche, le journal de savoir
+     * quoi — en construction de diagnostic uniquement.
+     */
+    override fun onAudioFailure(error: Exception) {
+        audioStats?.onFailure(error)
+        GbaDebugOverlay.logAudioFailure(error)
     }
 
     /**

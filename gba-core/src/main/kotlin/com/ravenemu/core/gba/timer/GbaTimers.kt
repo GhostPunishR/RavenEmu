@@ -83,6 +83,23 @@ class GbaTimers(private val interrupts: GbaInterruptController) {
     fun control(timer: Int): Int = control[timer]
 
     /**
+     * Cycles CPU restants avant le prochain débordement, tous timers confondus,
+     * ou [NO_OVERFLOW] si aucun timer piloté par l'horloge n'est actif.
+     *
+     * Un débordement fait consommer un échantillon des FIFO Direct Sound :
+     * l'ordonnanceur de la machine l'utilise comme borne pour que ces
+     * consommations restent entrelacées avec la génération du PCM.
+     *
+     * La valeur est toujours strictement positive : une échéance déjà atteinte
+     * mais pas encore appliquée rend `1`, ce qui fait avancer l'ordonnanceur
+     * d'au moins un cycle et garantit sa terminaison.
+     */
+    fun cyclesUntilNextOverflow(): Int {
+        if (cyclesUntilOverflow == NO_OVERFLOW) return NO_OVERFLOW
+        return (cyclesUntilOverflow - pendingCycles).coerceAtLeast(1)
+    }
+
+    /**
      * Avance les timers pilotés par l'horloge de [cycles] cycles CPU.
      *
      * Le calcul est fait **en une division**, non pas cycle par cycle. Un canal
