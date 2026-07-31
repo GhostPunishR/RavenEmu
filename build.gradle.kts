@@ -7,13 +7,13 @@
 // avertissant à chaque construction d'un chargement multiple « qui peut casser
 // le build ». C'est la correction que Gradle recommande dans ce message même.
 //
-// AGP reste déclaré par les seuls modules Android : le déclarer ici forcerait
-// sa résolution même pour une construction JVM, alors que le dépôt tient à
-// rester constructible sans SDK Android (voir settings.gradle.kts et
+// Les greffons Android et Kotlin Android ne peuvent pas figurer ici : le second
+// référence des types AGP, et la racine est évaluée même quand aucun module
+// Android n'est inclus. Ils sont déclarés dans `android/build.gradle.kts`, qui
+// n'existe que si ce groupe l'est (voir settings.gradle.kts et
 // wiki/Architecture.md).
 plugins {
     alias(libs.plugins.kotlin.jvm) apply false
-    alias(libs.plugins.kotlin.android) apply false
     alias(libs.plugins.kotlin.serialization) apply false
 }
 
