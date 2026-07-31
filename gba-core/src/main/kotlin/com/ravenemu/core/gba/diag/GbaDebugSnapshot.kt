@@ -67,6 +67,13 @@ data class GbaDebugSnapshot(
     /** `WINOUT` : couches et effets autorisés hors fenêtre et dans la fenêtre objet. */
     val windowOutside: Int,
     /**
+     * `true` si la dynamique de l'image est relevée. Sans lui, il faudrait
+     * déduire l'activité de la mesure des valeurs elles-mêmes — et une image
+     * réellement noire est indiscernable d'une mesure éteinte, alors que c'est
+     * justement une image noire qu'on cherche à confirmer pendant un fondu.
+     */
+    val lumaMeasured: Boolean,
+    /**
      * Luminance minimale, maximale et moyenne de la trame produite par le
      * moteur, sur `0..255`. Zéro si la mesure n'est pas activée.
      *
