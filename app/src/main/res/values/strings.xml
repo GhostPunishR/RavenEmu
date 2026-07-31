@@ -94,7 +94,7 @@
     <string name="settings_category_controls">Contrôles tactiles</string>
     <string name="settings_haptic">Vibration des commandes</string>
     <string name="settings_controller_skins">Skins de contrôleur</string>
-    <string name="settings_controller_skins_summary">Importer, sélectionner ou supprimer un skin Delta</string>
+    <string name="settings_controller_skins_summary">Importer, sélectionner ou supprimer un panneau au format .deltaskin</string>
     <string name="settings_delta_visual_feedback">Retour visuel des skins</string>
     <string name="settings_delta_visual_feedback_summary">Afficher un léger calque sur la zone pressée</string>
     <string name="settings_reset_layouts">Réinitialiser les dispositions tactiles</string>
@@ -115,9 +115,10 @@
     <string name="cancel">Annuler</string>
     <string name="ok">OK</string>
 
-    <!-- Skins Delta -->
+    <!-- Skins de contrôleur au format .deltaskin -->
     <string name="delta_skins_title">Skins de contrôleur</string>
-    <string name="delta_skins_import">Importer un skin Delta</string>
+    <string name="delta_skins_compatibility">RavenEmu lit le format de fichier .deltaskin. Ce projet n\'est ni affilié à Delta, ni approuvé par ses auteurs. Les skins ne sont ni fournis ni téléchargés : vous importez les vôtres.</string>
+    <string name="delta_skins_import">Importer un fichier .deltaskin</string>
     <string name="delta_skins_mode">Représentation iPhone</string>
     <string name="delta_skins_mode_automatic">Automatique</string>
     <string name="delta_skins_mode_standard">Standard</string>

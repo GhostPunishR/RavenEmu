@@ -1,8 +1,13 @@
-# Skins de contrôleur Delta
+# Skins de contrôleur
 
-RavenEmu peut importer des panneaux de commandes au format `.deltaskin`. Le
-fichier reste local à l'appareil : RavenEmu ne télécharge aucun skin et n'en
-distribue aucun dans l'APK.
+RavenEmu lit le **format de fichier** `.deltaskin` pour importer des panneaux de
+commandes que vous fournissez vous-même. Le fichier reste local à l'appareil :
+RavenEmu ne télécharge aucun skin et n'en distribue aucun dans l'APK.
+
+> RavenEmu n'est ni affilié à Delta, ni approuvé ou soutenu par ses auteurs. La
+> prise en charge de `.deltaskin` est une compatibilité de format, rien d'autre.
+> Les skins appartiennent à leurs auteurs respectifs : vérifiez leurs conditions
+> avant de les réutiliser ou de les redistribuer.
 
 ## Compatibilité de cette première version
 
@@ -26,7 +31,7 @@ charge.
 
 1. Ouvrez **Paramètres**.
 2. Dans **Contrôles tactiles**, ouvrez **Skins de contrôleur**.
-3. Touchez **Importer un skin Delta**.
+3. Touchez **Importer un fichier .deltaskin**.
 4. Choisissez un fichier portant l'extension `.deltaskin`.
 5. Vérifiez la console et les représentations indiquées, puis sélectionnez le
    skin.

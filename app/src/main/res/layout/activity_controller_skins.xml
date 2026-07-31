@@ -13,6 +13,14 @@
         android:text="@string/delta_skins_title"
         android:textAppearance="?attr/textAppearanceHeadline5" />
 
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingHorizontal="20dp"
+        android:paddingBottom="12dp"
+        android:text="@string/delta_skins_compatibility"
+        android:textAppearance="?attr/textAppearanceCaption" />
+
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
