@@ -41,7 +41,7 @@ Le SDK Android doit être configuré.
 Le fichier produit se trouve sous:
 
 ```text
-app/build/outputs/apk/debug/
+android/app/build/outputs/apk/debug/
 ```
 
 ## Validation complète

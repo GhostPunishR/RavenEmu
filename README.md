@@ -114,16 +114,16 @@ Le moteur Game Boy Advance démarre désormais des jeux commerciaux testés, mai
 
 | Module | Type | Responsabilité |
 |---|---|---|
-| `app` | Android | Écrans, navigation et session d'émulation |
-| `emulation-api` | Kotlin/JVM | Contrats communs entre l'application et les moteurs |
-| `deltaskin` | Kotlin/JVM | Validation, manifeste, stockage et géométrie du format `.deltaskin` |
-| `gameboy-core` | Kotlin/JVM | Moteur Game Boy et Game Boy Color |
-| `gba-core` | Kotlin/JVM | Moteur Game Boy Advance |
-| `rom-library` | Kotlin/JVM | En-têtes, empreintes, identification et index |
-| `storage` | Android | Dossiers, sauvegardes, états et pochettes |
-| `renderer` | Android | Affichage du framebuffer |
-| `input` | Android | Commandes tactiles et manettes |
-| `settings` | Android | Préférences et profils |
+| `android/app` | Android | Écrans, navigation et session d'émulation |
+| `core/emulation-api` | Kotlin/JVM | Contrats communs entre l'application et les moteurs |
+| `core/deltaskin` | Kotlin/JVM | Validation, manifeste, stockage et géométrie du format `.deltaskin` |
+| `core/gameboy-core` | Kotlin/JVM | Moteur Game Boy et Game Boy Color |
+| `core/gba-core` | Kotlin/JVM | Moteur Game Boy Advance |
+| `core/rom-library` | Kotlin/JVM | En-têtes, empreintes, identification et index |
+| `android/storage` | Android | Dossiers, sauvegardes, états et pochettes |
+| `android/renderer` | Android | Affichage du framebuffer |
+| `android/input` | Android | Commandes tactiles et manettes |
+| `android/settings` | Android | Préférences et profils |
 
 Les moteurs ne dépendent pas d'Android et peuvent être testés sur une JVM de bureau. Ils restent indépendants les uns des autres. Une nouvelle console peut être ajoutée dans un module séparé qui implémente `emulation-api`.
 
@@ -154,7 +154,7 @@ cd RavenEmu
 ./gradlew assembleDebug
 ```
 
-L'APK Test est produit dans `app/build/outputs/apk/profil/`, l'APK Debug dans `app/build/outputs/apk/debug/`.
+L'APK Test est produit dans `android/app/build/outputs/apk/profil/`, l'APK Debug dans `android/android/app/build/outputs/apk/debug/`.
 
 Construire l'APK Test en local ne demande **aucun secret** : sans la clé Test du projet, la construction retombe sur la clé de débogage. L'APK obtenu est utilisable pour soi, mais la CI refuse de publier un APK signé autrement que par la clé dédiée. Les détails sont dans [RELEASING.md](RELEASING.md).
 

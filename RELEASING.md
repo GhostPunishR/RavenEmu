@@ -150,7 +150,7 @@ Il ne se déclenche donc **jamais** sur un push de branche de travail. Cette rè
 ## Préparer une version numérotée
 
 1. Choisir un numéro respectant le format `MAJEUR.MINEUR.CORRECTIF`.
-2. Mettre à jour `versionCode` et `versionName` dans `app/build.gradle.kts`.
+2. Mettre à jour `versionCode` et `versionName` dans `android/app/build.gradle.kts`.
 3. Mettre à jour la documentation, la matrice de compatibilité et les limites connues.
 4. Créer ou compléter `CHANGELOG.md` à partir de la première version numérotée.
 5. Exécuter les tests et le lint.

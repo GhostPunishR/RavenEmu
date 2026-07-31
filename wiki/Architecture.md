@@ -6,16 +6,16 @@ RavenEmu sépare les moteurs d'émulation des composants Android.
 
 | Module | Type | Responsabilité |
 |---|---|---|
-| `app` | Android | Écrans, navigation et session d'émulation |
-| `emulation-api` | Kotlin/JVM | Contrats communs entre application et moteurs |
-| `deltaskin` | Kotlin/JVM | Manifeste, validation ZIP, stockage, disposition et entrées du format `.deltaskin` |
-| `gameboy-core` | Kotlin/JVM | Game Boy et Game Boy Color |
-| `gba-core` | Kotlin/JVM | Game Boy Advance |
-| `rom-library` | Kotlin/JVM | En-têtes, empreintes, identification et index |
-| `storage` | Android | Sélecteur de documents, sauvegardes, états et pochettes |
-| `renderer` | Android | Affichage du framebuffer |
-| `input` | Android | Commandes tactiles et manettes |
-| `settings` | Android | Préférences et profils |
+| `android/app` | Android | Écrans, navigation et session d'émulation |
+| `core/emulation-api` | Kotlin/JVM | Contrats communs entre application et moteurs |
+| `core/deltaskin` | Kotlin/JVM | Manifeste, validation ZIP, stockage, disposition et entrées du format `.deltaskin` |
+| `core/gameboy-core` | Kotlin/JVM | Game Boy et Game Boy Color |
+| `core/gba-core` | Kotlin/JVM | Game Boy Advance |
+| `core/rom-library` | Kotlin/JVM | En-têtes, empreintes, identification et index |
+| `android/storage` | Android | Sélecteur de documents, sauvegardes, états et pochettes |
+| `android/renderer` | Android | Affichage du framebuffer |
+| `android/input` | Android | Commandes tactiles et manettes |
+| `android/settings` | Android | Préférences et profils |
 
 ## Principes
 

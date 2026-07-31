@@ -120,7 +120,7 @@ jobs:
       # qu'un APK téléchargé vient bien de ce dépôt et de cette clé.
       - name: Décrire l'APK Test (empreintes et provenance)
         run: |
-          apk="$(find app/build/outputs/apk/profil -type f -name '*.apk' -print -quit)"
+          apk="$(find android/app/build/outputs/apk/profil -type f -name '*.apk' -print -quit)"
           if [[ -z "$apk" ]]; then
             echo "::error::Aucun APK Test produit par assembleProfil."
             exit 1
@@ -151,7 +151,7 @@ jobs:
             echo "commit=$GITHUB_SHA"
             echo "package=$package"
             echo "signature_source=$signature_source"
-          } > app/build/outputs/apk/profil/provenance.txt
+          } > android/app/build/outputs/apk/profil/provenance.txt
 
           {
             echo "## APK Test"
@@ -188,8 +188,8 @@ jobs:
         with:
           name: ravenemu-test-apk
           path: |
-            app/build/outputs/apk/profil/*.apk
-            app/build/outputs/apk/profil/provenance.txt
+            android/app/build/outputs/apk/profil/*.apk
+            android/app/build/outputs/apk/profil/provenance.txt
 
   publish-test:
     name: APK Test téléchargeable
@@ -404,8 +404,8 @@ jobs:
         env:
           TEST_CERT: ${{ vars.RAVENEMU_TEST_CERT_SHA256 }}
         run: |
-          apk="$(find app/build/outputs/apk/release -type f -name '*.apk' -print -quit)"
-          aab="$(find app/build/outputs/bundle/release -type f -name '*.aab' -print -quit)"
+          apk="$(find android/app/build/outputs/apk/release -type f -name '*.apk' -print -quit)"
+          aab="$(find android/app/build/outputs/bundle/release -type f -name '*.aab' -print -quit)"
           if [[ -z "$apk" || -z "$aab" ]]; then
             echo "::error::Livrables Release incomplets (APK ou AAB manquant)."
             exit 1
@@ -444,10 +444,10 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ravenemu-release-apk
-          path: app/build/outputs/apk/release/*.apk
+          path: android/app/build/outputs/apk/release/*.apk
 
       - name: Publier l'App Bundle Release signé
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ravenemu-release-aab
-          path: app/build/outputs/bundle/release/*.aab
+          path: android/app/build/outputs/bundle/release/*.aab

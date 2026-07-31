@@ -5,11 +5,11 @@ tasks.register("jvmTest") {
     group = "verification"
     description = "Exécute les tests des modules JVM purs."
     dependsOn(
-        ":emulation-api:test",
-        ":deltaskin:test",
-        ":gameboy-core:test",
-        ":gba-core:test",
-        ":rom-library:test",
-        ":ci-policy:test",
+        ":core:emulation-api:test",
+        ":core:deltaskin:test",
+        ":core:gameboy-core:test",
+        ":core:gba-core:test",
+        ":core:rom-library:test",
+        ":tools:ci-policy:test",
     )
 }
