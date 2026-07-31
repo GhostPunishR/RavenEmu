@@ -123,10 +123,22 @@ class WorkflowFile(val path: File) {
          * ne saurait plus où regarder. On cherche donc le module par son nom.
          */
         fun moduleBuildFile(name: String): File {
-            val trouve = repositoryRoot.walkTopDown()
+            val candidats = repositoryRoot.walkTopDown()
                 .onEnter { it.name !in setOf(".git", "build", ".gradle") }
-                .firstOrNull { it.isFile && it.name == "build.gradle.kts" && it.parentFile.name == name }
-            return trouve ?: error("Module « $name » introuvable sous ${repositoryRoot.path}")
+                .filter { it.isFile && it.name == "build.gradle.kts" && it.parentFile.name == name }
+                .toList()
+            // Prendre le premier candidat désignerait silencieusement le mauvais
+            // module le jour où deux dossiers porteraient le même nom terminal —
+            // et la vérification continuerait de passer en contrôlant autre
+            // chose. L'ambiguïté doit être une erreur, pas un choix arbitraire.
+            return when (candidats.size) {
+                1 -> candidats.single()
+                0 -> error("Module « $name » introuvable sous ${repositoryRoot.path}")
+                else -> error(
+                    "Module « $name » ambigu : " +
+                        candidats.joinToString { it.relativeTo(repositoryRoot).path }
+                )
+            }
         }
     }
 }
