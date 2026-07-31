@@ -28,17 +28,25 @@ dependencyResolutionManagement {
 
 rootProject.name = "RavenEmu"
 
+// Plugins de convention, compilés avant le build principal.
+includeBuild("build-logic")
+
+// Les modules sont regroupés par rôle : `core/` ne dépend d'aucune plateforme,
+// `android/` porte tout ce qui touche au système, `tools/` vérifie le dépôt
+// lui-même. Le chemin de projet suit ce découpage (`:core:gba-core`), ce qui
+// rend la couche visible dans chaque dépendance déclarée.
+
 // Modules JVM purs : constructibles et testables sans SDK Android.
-include(":emulation-api")
-include(":deltaskin")
-include(":gameboy-core")
-include(":gba-core")
-include(":rom-library")
+include(":core:emulation-api")
+include(":core:deltaskin")
+include(":core:gameboy-core")
+include(":core:gba-core")
+include(":core:rom-library")
 
 // Vérification de la configuration du dépôt (workflows GitHub Actions,
 // signature des APK) : uniquement des tests, aucun code de production.
 // Voir RELEASING.md.
-include(":ci-policy")
+include(":tools:ci-policy")
 
 // Modules Android : inclus uniquement si un SDK Android est disponible
 // (variable d'environnement ou local.properties), afin que les modules JVM
@@ -56,11 +64,11 @@ val sdkDir = sequenceOf(
 ).filterNotNull().map(::File).firstOrNull(File::isDirectory)
 
 if (sdkDir != null) {
-    include(":app")
-    include(":storage")
-    include(":renderer")
-    include(":input")
-    include(":settings")
+    include(":android:app")
+    include(":android:storage")
+    include(":android:renderer")
+    include(":android:input")
+    include(":android:settings")
 } else {
     logger.lifecycle(
         "RavenEmu : SDK Android introuvable, seuls les modules JVM sont inclus " +
