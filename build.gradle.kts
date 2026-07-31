@@ -7,13 +7,18 @@
 // avertissant à chaque construction d'un chargement multiple « qui peut casser
 // le build ». C'est la correction que Gradle recommande dans ce message même.
 //
-// Les greffons Android et Kotlin Android ne peuvent pas figurer ici : le second
-// référence des types AGP, et la racine est évaluée même quand aucun module
-// Android n'est inclus. Ils sont déclarés dans `android/build.gradle.kts`, qui
-// n'existe que si ce groupe l'est (voir settings.gradle.kts et
+// AGP est déclaré ici pour la même raison, et lui aussi en `apply false` : le
+// greffon Kotlin Android référence des types AGP. Chargé depuis la racine, il
+// ne verrait pas un AGP resté propre aux modules Android — la configuration
+// échouait alors sur `com.android.build.gradle.BaseExtension`. Le déclarer ici
+// le place dans le classloader commun ; `apply false` ne l'applique pas à la
+// racine et n'exige donc aucun SDK Android (voir settings.gradle.kts et
 // wiki/Architecture.md).
 plugins {
+    alias(libs.plugins.android.application) apply false
+    alias(libs.plugins.android.library) apply false
     alias(libs.plugins.kotlin.jvm) apply false
+    alias(libs.plugins.kotlin.android) apply false
     alias(libs.plugins.kotlin.serialization) apply false
 }
 

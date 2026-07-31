@@ -5,10 +5,10 @@ plugins {
 // Un plugin de convention applique le plugin Kotlin : il doit donc l'avoir sur
 // son propre chemin de compilation.
 //
-// AGP est délibérément **absent** : les modules Android déclarent encore leurs
-// plugins eux-mêmes. Les inclure ici obligerait à résoudre AGP pour toute
-// construction, y compris celles qui ne visent que les modules JVM, et le dépôt
-// tient à rester constructible sans SDK Android.
+// AGP est délibérément **absent** : `build-logic` ne fournit que des
+// conventions JVM, aucune convention Android, et n'a donc rien à compiler
+// contre l'API d'AGP. Les greffons Android sont déclarés à la racine du build
+// principal, en `apply false`.
 // `compileOnly` et non `implementation` : les conventions compilent contre
 // l'API des plugins Kotlin, mais ne doivent pas en embarquer une seconde copie.
 // À l'exécution, le plugin vient du classloader de la racine, partagé avec les
