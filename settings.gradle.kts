@@ -30,6 +30,7 @@ rootProject.name = "RavenEmu"
 
 // Modules JVM purs : constructibles et testables sans SDK Android.
 include(":emulation-api")
+include(":deltaskin")
 include(":gameboy-core")
 include(":gba-core")
 include(":rom-library")

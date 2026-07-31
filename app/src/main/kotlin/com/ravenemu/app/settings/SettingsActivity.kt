@@ -85,6 +85,12 @@ class SettingsActivity : AppCompatActivity() {
                     true
                 }
 
+            findPreference<Preference>("controls_skin_manager")
+                ?.setOnPreferenceClickListener {
+                    startActivity(Intent(requireContext(), ControllerSkinsActivity::class.java))
+                    true
+                }
+
             findPreference<Preference>("files_sav_dir_picker")
                 ?.setOnPreferenceClickListener {
                     pickSaveDir.launch(null)

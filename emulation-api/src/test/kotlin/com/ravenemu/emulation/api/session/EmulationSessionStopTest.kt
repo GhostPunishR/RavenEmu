@@ -8,9 +8,11 @@ import com.ravenemu.emulation.api.EmulatorCore
 import com.ravenemu.emulation.api.FramebufferFormat
 import com.ravenemu.emulation.api.VideoSpec
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -38,6 +40,9 @@ class EmulationSessionStopTest {
         override val audio = AudioSpec(sampleRateHz = 32768, channelCount = 2)
         override val framebufferFormat = FramebufferFormat.INDEXED_4
         val frames = AtomicInteger()
+        val pressedButtons: MutableSet<EmulatorButton> = ConcurrentHashMap.newKeySet()
+        val firstFrameButtons = AtomicReference<Set<EmulatorButton>>()
+        val firstFrameRendered = CountDownLatch(1)
 
         /** Contenu de la « RAM de cartouche », modifiable depuis le test. */
         var generation = 0L
@@ -47,10 +52,15 @@ class EmulationSessionStopTest {
         override fun loadRom(rom: ByteArray, batteryRam: ByteArray?) = Unit
         override fun reset() = Unit
         override fun runFrame(framebuffer: IntArray) {
-            frames.incrementAndGet()
+            if (frames.incrementAndGet() == 1) {
+                firstFrameButtons.set(pressedButtons.toSet())
+                firstFrameRendered.countDown()
+            }
         }
 
-        override fun setButton(button: EmulatorButton, pressed: Boolean) = Unit
+        override fun setButton(button: EmulatorButton, pressed: Boolean) {
+            if (pressed) pressedButtons += button else pressedButtons -= button
+        }
         override fun readAudio(buffer: ShortArray): Int = 64
         override val hasBatteryRam: Boolean get() = batterySize > 0
         override val batteryRamDirty: Boolean get() = dirtyFlag
@@ -141,6 +151,23 @@ class EmulationSessionStopTest {
     }
 
     // ---- Tests ----
+
+    @Test
+    fun `une combinaison de boutons est appliquee avant la meme trame`() {
+        val core = FakeCore()
+        val session = EmulationSession(core, RecordingCallbacks())
+        session.setButtons(
+            pressed = setOf(EmulatorButton.A, EmulatorButton.B),
+            released = emptySet(),
+        )
+        session.start()
+        assertTrue(core.firstFrameRendered.await(5, TimeUnit.SECONDS))
+        assertEquals(
+            setOf(EmulatorButton.A, EmulatorButton.B),
+            core.firstFrameButtons.get(),
+        )
+        session.stop()
+    }
 
     /**
      * Le cas central : l'arrêt survient pendant une écriture audio bloquante.

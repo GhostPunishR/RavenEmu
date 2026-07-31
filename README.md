@@ -100,6 +100,9 @@ Le moteur Game Boy Advance démarre désormais des jeux commerciaux testés, mai
 - Badge d'intégrité calculé depuis les sommes de contrôle de la cartouche, sans base extérieure
 - Pochettes choisies par l'utilisateur ou générées localement
 - Commandes tactiles configurables par console, orientation et jeu
+- Import local de panneaux de commandes au format `.deltaskin` (PDF) pour GB/GBC et GBA
+  en portrait. Compatibilité de format uniquement : RavenEmu n'est pas affilié à Delta
+  et ne distribue aucun skin.
 - Manettes physiques, multitouch, diagonales et vibrations
 - Profils d'écran Game Boy et réglages de luminosité, contraste et couleur
 - Ratio natif, mise à l'échelle entière et rendu nearest-neighbor
@@ -113,6 +116,7 @@ Le moteur Game Boy Advance démarre désormais des jeux commerciaux testés, mai
 |---|---|---|
 | `app` | Android | Écrans, navigation et session d'émulation |
 | `emulation-api` | Kotlin/JVM | Contrats communs entre l'application et les moteurs |
+| `deltaskin` | Kotlin/JVM | Validation, manifeste, stockage et géométrie du format `.deltaskin` |
 | `gameboy-core` | Kotlin/JVM | Moteur Game Boy et Game Boy Color |
 | `gba-core` | Kotlin/JVM | Moteur Game Boy Advance |
 | `rom-library` | Kotlin/JVM | En-têtes, empreintes, identification et index |

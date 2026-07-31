@@ -33,5 +33,10 @@
             android:name=".settings.SettingsActivity"
             android:exported="false"
             android:label="@string/settings_title" />
+
+        <activity
+            android:name=".settings.ControllerSkinsActivity"
+            android:exported="false"
+            android:label="@string/delta_skins_title" />
     </application>
 </manifest>

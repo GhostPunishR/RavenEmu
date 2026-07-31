@@ -54,6 +54,16 @@ class EmulatorSurfaceView @JvmOverloads constructor(
     var topInsetPx: Int = 0
 
     /**
+     * Zone réservée au jeu lorsqu'un panneau de skin externe occupe le bas.
+     * `null` conserve strictement le calcul historique de la vue.
+     */
+    @Volatile
+    var contentBounds: Rect? = null
+        set(value) {
+            field = value?.let(::Rect)
+        }
+
+    /**
      * Profil d'écran monochrome : quatre couleurs ARGB appliquées aux niveaux
      * `0..3` produits par le moteur (colors[0] = niveau 0 le plus clair). Si
      * `null`, le framebuffer est traité comme des couleurs ARGB directes.
@@ -121,23 +131,29 @@ class EmulatorSurfaceView @JvmOverloads constructor(
     }
 
     private fun computeDestination(canvasWidth: Int, canvasHeight: Int) {
+        val bounds = contentBounds?.let(::Rect)
+            ?: Rect(0, 0, canvasWidth, canvasHeight)
         if (frameWidth == 0 || frameHeight == 0 || !keepAspectRatio) {
-            destRect.set(0, 0, canvasWidth, canvasHeight)
+            destRect.set(bounds)
             return
         }
-        val scaleX = canvasWidth.toFloat() / frameWidth
-        val scaleY = canvasHeight.toFloat() / frameHeight
+        val scaleX = bounds.width().toFloat() / frameWidth
+        val scaleY = bounds.height().toFloat() / frameHeight
         var scale = minOf(scaleX, scaleY)
         if (integerScaling) {
             scale = scale.toInt().coerceAtLeast(1).toFloat()
         }
         val width = (frameWidth * scale).toInt()
         val height = (frameHeight * scale).toInt()
-        val left = (canvasWidth - width) / 2
-        val top = if (topAligned && height + topInsetPx <= canvasHeight) {
-            topInsetPx
+        val left = bounds.left + (bounds.width() - width) / 2
+        val top = if (
+            contentBounds == null &&
+            topAligned &&
+            height + topInsetPx <= bounds.height()
+        ) {
+            bounds.top + topInsetPx
         } else {
-            (canvasHeight - height) / 2
+            bounds.top + (bounds.height() - height) / 2
         }
         destRect.set(left, top, left + width, top + height)
     }
