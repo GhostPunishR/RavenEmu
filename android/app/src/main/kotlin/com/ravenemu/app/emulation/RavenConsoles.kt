@@ -45,10 +45,14 @@ object RavenConsoles {
      *
      * Les analyseurs construisaient eux-mêmes leur fournisseur, ce qui obligeait
      * `rom-library` à nommer les modules de moteur concrets. Ils le reçoivent
-     * désormais d'ici, seul endroit qui les connaît déjà — et c'est le **même**
-     * objet que celui qui créera le moteur, si bien que les extensions
-     * reconnues et la taille maximale acceptée ne peuvent plus diverger entre
-     * l'indexation et le chargement.
+     * désormais d'ici, seul endroit qui les connaît déjà : les extensions
+     * reconnues et la taille maximale acceptée viennent donc du contrat publié
+     * par le module de moteur, et non d'une seconde déclaration tenue à jour en
+     * parallèle.
+     *
+     * Chaque appel construit son propre registre : l'analyseur et le moteur
+     * n'utilisent pas la même instance de fournisseur. Ce qu'ils partagent est
+     * la règle, pas l'objet.
      *
      * Le couplage de `rom-library` n'est pas supprimé pour autant : `RomEntry`
      * nomme encore des types Game Boy, par compatibilité avec l'index déjà

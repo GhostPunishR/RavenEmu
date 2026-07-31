@@ -3,6 +3,7 @@ package com.ravenemu.romlibrary
 import com.ravenemu.core.gba.cartridge.GbaHeader
 import com.ravenemu.core.gba.save.GbaSaveType
 import com.ravenemu.emulation.api.ConsoleProvider
+import com.ravenemu.emulation.api.ConsoleType
 import com.ravenemu.emulation.api.RomLoadException
 
 /**
@@ -14,6 +15,15 @@ import com.ravenemu.emulation.api.RomLoadException
  * ce n'est pas une cartouche Game Boy Advance.
  */
 class GbaRomAnalyzer(override val provider: ConsoleProvider) : RomAnalyzer {
+
+    init {
+        // Même précaution que pour l'analyseur Game Boy : le type du paramètre
+        // n'exclut pas qu'on lui remette le fournisseur d'une autre console.
+        require(provider.console == ConsoleType.GAME_BOY_ADVANCE) {
+            "GbaRomAnalyzer requiert un fournisseur ${ConsoleType.GAME_BOY_ADVANCE}, " +
+                "reçu ${provider.console}"
+        }
+    }
 
     override fun analyze(
         uri: String,
