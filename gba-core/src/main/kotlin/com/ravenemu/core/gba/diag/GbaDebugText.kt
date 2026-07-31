@@ -63,9 +63,10 @@ fun GbaDebugSnapshot.toDiagnosticText(
         )
     }
     builder.append('\n').append(videoLine())
-    // Zéro partout = mesure inactive : une ligne de zéros n'apprendrait rien et
-    // se lirait à tort comme une image noire.
-    if (lumaMax > 0) builder.append('\n').append(lumaLine())
+    // Conditionné à l'activité de la mesure, jamais aux valeurs : une image
+    // réellement noire donne trois zéros, et c'est précisément la lecture qu'on
+    // cherche à confirmer pendant un fondu ou sur un écran vidé.
+    if (lumaMeasured) builder.append('\n').append(lumaLine())
     if (layerPixels.isNotEmpty()) builder.append('\n').append(layerPixelLine())
     if ((dispcnt and 0x7) in 1..2) builder.append('\n').append(affineLine())
     if (swiCounts.any { it > 0 }) builder.append('\n').append(swiLine())

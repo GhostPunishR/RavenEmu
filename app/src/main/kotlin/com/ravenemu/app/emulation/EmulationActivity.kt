@@ -425,7 +425,8 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
         session = newSession
         // Journalisation des anomalies du moteur : bridée, et Debug uniquement.
         // La mesure, elle, ne s'allume que si l'utilisateur la demande : elle
-        // coûte assez cher pour fausser ce qu'elle observe.
+        // coûte assez cher pour fausser ce qu'elle observe. Appel direct sans
+        // risque : le thread d'émulation n'est pas encore démarré.
         GbaDebugOverlay.attachLogging(newCore, measuring = settings.videoDiagnostics)
 
         // La ROM est chargée : le format (monochrome DMG ou couleur CGB) est
@@ -685,7 +686,15 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
         // Le relevé de diagnostic se règle depuis les paramètres, donc en
         // quittant cet écran : le reprendre ici évite d'avoir à recharger la ROM
         // pour que le changement prenne effet.
-        GbaDebugOverlay.attachLogging(core, measuring = settings.videoDiagnostics)
+        //
+        // Il passe par la file de la session, comme toute autre mutation du
+        // cœur. Le moteur est mono-thread : ces drapeaux et le rappel de
+        // chronométrage sont lus par la boucle d'émulation pendant `runFrame`.
+        // Les écrire depuis le fil d'interface pourrait, par exemple, brancher
+        // le rappel de l'unité audio entre son test de nullité et son appel — et
+        // le relevé mesurerait alors le temps écoulé depuis l'origine.
+        val diagnosticsDemandes = settings.videoDiagnostics
+        session?.post { c -> GbaDebugOverlay.attachLogging(c, measuring = diagnosticsDemandes) }
         session?.let { s ->
             s.audioEnabled = settings.audioEnabled
             s.setAudioVolume(settings.audioVolume / 100f)
