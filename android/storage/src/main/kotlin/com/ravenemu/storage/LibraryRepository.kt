@@ -3,8 +3,6 @@ package com.ravenemu.storage
 import android.content.Context
 import android.net.Uri
 import com.ravenemu.romlibrary.AnalysisResult
-import com.ravenemu.romlibrary.GameBoyRomAnalyzer
-import com.ravenemu.romlibrary.GbaRomAnalyzer
 import com.ravenemu.romlibrary.RomAnalyzer
 import com.ravenemu.romlibrary.RomIndex
 import kotlinx.coroutines.Dispatchers
@@ -21,12 +19,13 @@ import kotlinx.coroutines.withContext
 class LibraryRepository(
     context: Context,
     /**
-     * Analyseurs consultés pour chaque fichier balayé. La valeur par défaut
-     * couvre les consoles livrées ; l'injecter permet d'en restreindre ou d'en
-     * étendre la liste sans toucher au dépôt.
+     * Analyseurs consultés pour chaque fichier balayé.
+     *
+     * Sans valeur par défaut : les construire ici obligerait ce module à nommer
+     * les fournisseurs de console concrets, alors que la racine de composition
+     * les connaît déjà. C'est elle qui les remet.
      */
-    private val analyzers: List<RomAnalyzer> =
-        listOf(GameBoyRomAnalyzer(), GbaRomAnalyzer()),
+    private val analyzers: List<RomAnalyzer>,
 ) {
 
     private val scanner = RomFileScanner(context)

@@ -28,6 +28,7 @@ import com.ravenemu.romlibrary.RomEntry
 import com.ravenemu.romlibrary.RomIndex
 import com.ravenemu.settings.AppSettings
 import com.ravenemu.storage.CoverResolver
+import com.ravenemu.app.emulation.RavenConsoles
 import com.ravenemu.storage.LibraryRepository
 import kotlinx.coroutines.launch
 
@@ -80,7 +81,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         settings = AppSettings(this)
-        repository = LibraryRepository(this)
+        repository = LibraryRepository(this, RavenConsoles.romAnalyzers())
         coverResolver = CoverResolver(this)
 
         val toolbar = findViewById<MaterialToolbar>(R.id.toolbar)

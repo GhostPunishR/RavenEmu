@@ -1,6 +1,5 @@
 package com.ravenemu.romlibrary
 
-import com.ravenemu.core.gba.GbaConsoleProvider
 import com.ravenemu.core.gba.cartridge.GbaHeader
 import com.ravenemu.core.gba.save.GbaSaveType
 import com.ravenemu.emulation.api.ConsoleProvider
@@ -9,13 +8,12 @@ import com.ravenemu.emulation.api.RomLoadException
 /**
  * Analyseur Game Boy Advance : fichiers `.gba`, en-tête GBA (192 octets).
  *
- * Comme l'analyseur Game Boy, il calcule les empreintes et déduit l'état de la
- * ROM de son seul en-tête. Une ROM dépourvue du marqueur `0x96` est rejetée :
+ * Comme l'analyseur Game Boy, il reçoit son fournisseur de console au lieu de
+ * le construire, calcule les empreintes et déduit l'état de la ROM de son seul
+ * en-tête. Une ROM dépourvue du marqueur `0x96` est rejetée :
  * ce n'est pas une cartouche Game Boy Advance.
  */
-class GbaRomAnalyzer : RomAnalyzer {
-
-    override val provider: ConsoleProvider = GbaConsoleProvider()
+class GbaRomAnalyzer(override val provider: ConsoleProvider) : RomAnalyzer {
 
     override fun analyze(
         uri: String,

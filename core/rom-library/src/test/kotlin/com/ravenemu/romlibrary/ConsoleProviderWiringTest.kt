@@ -44,7 +44,7 @@ class ConsoleProviderWiringTest {
 
     @Test
     fun `l'analyseur Game Boy tient ses regles de son fournisseur`() {
-        val analyseur = GameBoyRomAnalyzer()
+        val analyseur = GameBoyRomAnalyzer(GameBoyConsoleProvider())
         assertEquals(ConsoleType.GAME_BOY, analyseur.console)
         assertEquals(CartridgeHeader.MAX_ROM_SIZE, analyseur.maxRomSizeBytes)
         assertTrue(analyseur.canAnalyze("tetris.gb"))
@@ -54,7 +54,7 @@ class ConsoleProviderWiringTest {
 
     @Test
     fun `l'analyseur Game Boy Advance tient ses regles de son fournisseur`() {
-        val analyseur = GbaRomAnalyzer()
+        val analyseur = GbaRomAnalyzer(GbaConsoleProvider())
         assertEquals(ConsoleType.GAME_BOY_ADVANCE, analyseur.console)
         assertEquals(GbaCartridge.MAX_ROM_SIZE, analyseur.maxRomSizeBytes)
         assertTrue(analyseur.canAnalyze("emeraude.gba"))
@@ -64,7 +64,7 @@ class ConsoleProviderWiringTest {
     @Test
     fun `analyseur et registre rattachent un fichier a la meme console`() {
         // La duplication d'antan permettait aux deux de diverger sans bruit.
-        val analyseurs = listOf(GameBoyRomAnalyzer(), GbaRomAnalyzer())
+        val analyseurs = listOf(GameBoyRomAnalyzer(GameBoyConsoleProvider()), GbaRomAnalyzer(GbaConsoleProvider()))
         for (nom in listOf("tetris.gb", "cristal.gbc", "emeraude.gba")) {
             val parAnalyseur = analyseurs.first { it.canAnalyze(nom) }.console
             val parRegistre = registre.providerForFile(nom)?.console
@@ -76,11 +76,11 @@ class ConsoleProviderWiringTest {
     fun `un analyseur expose le fournisseur du registre pour sa console`() {
         assertEquals(
             registre.providerFor(ConsoleType.GAME_BOY)?.console,
-            GameBoyRomAnalyzer().provider.console,
+            GameBoyRomAnalyzer(GameBoyConsoleProvider()).provider.console,
         )
         assertSame(
             ConsoleType.GAME_BOY_ADVANCE,
-            GbaRomAnalyzer().provider.console,
+            GbaRomAnalyzer(GbaConsoleProvider()).provider.console,
         )
     }
 }

@@ -1,5 +1,6 @@
 package com.ravenemu.romlibrary
 
+import com.ravenemu.core.gb.GameBoyConsoleProvider
 import com.ravenemu.core.gb.cartridge.MbcType
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -68,7 +69,7 @@ class FingerprintsTest {
  */
 class RomStatusTest {
 
-    private val analyzer = GameBoyRomAnalyzer()
+    private val analyzer = GameBoyRomAnalyzer(GameBoyConsoleProvider())
 
     private fun statusOf(rom: ByteArray): RomStatus =
         (analyzer.analyze("u", "f.gb", 0, rom) as AnalysisResult.Success).entry.status
@@ -111,7 +112,7 @@ class RomStatusTest {
 
 class GameBoyRomAnalyzerTest {
 
-    private val analyzer = GameBoyRomAnalyzer()
+    private val analyzer = GameBoyRomAnalyzer(GameBoyConsoleProvider())
 
     @Test
     fun `extension gb reconnue`() {
@@ -147,7 +148,7 @@ class RomIndexTest {
 
     private fun entry(uri: String, lastModified: Long = 0L): RomEntry {
         val rom = testRom()
-        val result = GameBoyRomAnalyzer().analyze(uri, "$uri.gb", lastModified, rom)
+        val result = GameBoyRomAnalyzer(GameBoyConsoleProvider()).analyze(uri, "$uri.gb", lastModified, rom)
         return (result as AnalysisResult.Success).entry
     }
 

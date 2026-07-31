@@ -1,6 +1,5 @@
 package com.ravenemu.romlibrary
 
-import com.ravenemu.core.gb.GameBoyConsoleProvider
 import com.ravenemu.core.gb.cartridge.CartridgeHeader
 import com.ravenemu.emulation.api.ConsoleProvider
 import com.ravenemu.emulation.api.ConsoleType
@@ -45,10 +44,17 @@ interface RomAnalyzer {
     ): AnalysisResult
 }
 
-/** Analyseur Game Boy : fichiers `.gb`, en-tête de cartouche DMG. */
-class GameBoyRomAnalyzer : RomAnalyzer {
-
-    override val provider: ConsoleProvider = GameBoyConsoleProvider()
+/**
+ * Analyseur Game Boy : fichiers `.gb`, en-tête de cartouche DMG.
+ *
+ * Le fournisseur de console lui est **remis**, il ne le construit plus. Ce
+ * module n'a donc plus à nommer le fournisseur Game Boy concret : c'est la
+ * racine de composition, seul endroit qui connaît les modules de moteur, qui
+ * décide lequel servir. Les extensions reconnues et la taille maximale
+ * acceptée viennent ainsi du même objet que celui utilisé pour créer le moteur,
+ * et ne peuvent plus diverger.
+ */
+class GameBoyRomAnalyzer(override val provider: ConsoleProvider) : RomAnalyzer {
 
     override fun analyze(
         uri: String,
