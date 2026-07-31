@@ -79,6 +79,33 @@ class ModuleDependencyPolicyTest {
             }
         }
 
+    /**
+     * Accesseurs des alias Android du catalogue, sous la forme employée dans
+     * les `build.gradle.kts` (`libs.material`, `libs.kotlinx.coroutines.android`).
+     *
+     * Rien dans un alias ne dit qu'il est Android : c'est la coordonnée qui le
+     * dit. Un artefact est retenu si son groupe est celui d'AndroidX, d'AGP ou
+     * des bibliothèques Android de Google, ou si son nom porte le suffixe
+     * `-android` — la variante Android d'une bibliothèque par ailleurs
+     * multiplateforme, comme les coroutines.
+     */
+    private val aliasAndroid: List<String> = Regex("""^\s*([\w.-]+)\s*=\s*\{[^}]*module\s*=\s*"([^:"]+):([^"]+)"""", RegexOption.MULTILINE)
+        .findAll(
+            File(racine, "gradle/libs.versions.toml").readText()
+                .substringAfter("[libraries]")
+                .substringBefore("\n[plugins]")
+        )
+        .filter { correspondance ->
+            val (groupe, artefact) = correspondance.destructured.toList().drop(1)
+            groupe.startsWith("androidx.") ||
+                groupe == "androidx" ||
+                groupe.startsWith("com.android") ||
+                groupe.startsWith("com.google.android") ||
+                artefact.endsWith("-android")
+        }
+        .map { "libs." + it.groupValues[1].replace('-', '.') }
+        .toList()
+
     @Test
     fun `les modules declares sont tous rattaches a une categorie connue`() {
         val inconnus = modules.filterNot { categorie(it) in setOf("core", "android", "tools") }
@@ -100,11 +127,15 @@ class ModuleDependencyPolicyTest {
     fun `emulation-api ne depend d'aucun coeur concret`() {
         // C'est le contrat que les cœurs implémentent : s'il connaissait l'un
         // d'eux, la dépendance s'inverserait et le contrat cesserait d'en être un.
-        val dependances = dependances("core:emulation-api")
+        //
+        // La règle porte sur les seuls cœurs concrets. Exiger l'absence de
+        // *toute* dépendance de projet interdirait par avance un découpage du
+        // contrat lui-même, ce que personne n'a demandé et que rien ne motive.
+        val fautifs = dependances("core:emulation-api").filter { it in coeursConcrets }
         assertEquals(
             emptyList(),
-            dependances,
-            "emulation-api doit rester sans dépendance de projet",
+            fautifs,
+            "emulation-api dépend d'un cœur concret : la dépendance s'inverse",
         )
     }
 
@@ -120,16 +151,31 @@ class ModuleDependencyPolicyTest {
 
     @Test
     fun `aucun module JVM pur ne declare de dependance Android`() {
-        // Une dépendance `androidx` ou le plugin AGP dans `core/` ou `tools/`
-        // rendrait le module inconstructible sans SDK — et la règle ne se
-        // verrait qu'à la première machine sans SDK.
+        // Une dépendance Android dans `core/` ou `tools/` rendrait le module
+        // inconstructible sans SDK — et la règle ne se verrait qu'à la première
+        // machine sans SDK.
+        //
+        // Chercher « androidx » ne suffisait pas : `libs.material` et
+        // `libs.kotlinx.coroutines.android` sont tout aussi Android et
+        // passaient. La liste des alias concernés est donc déduite du
+        // catalogue, seule source de vérité sur ce que chaque alias désigne.
+        // Garde-fou sur la dérivation elle-même : ce sont les deux alias que la
+        // recherche textuelle laissait passer. S'ils cessaient d'être détectés,
+        // la règle redeviendrait silencieusement inopérante.
+        assertTrue(
+            listOf("libs.material", "libs.kotlinx.coroutines.android").all { it in aliasAndroid },
+            "Alias Android déduits du catalogue : $aliasAndroid",
+        )
         val fautifs = modules
             .filter { categorie(it) in setOf("core", "tools") }
-            .filter { module ->
+            .flatMap { module ->
                 val texte = buildFile(module).readText()
-                "androidx" in texte ||
-                    "libs.plugins.android" in texte ||
-                    "com.android." in texte
+                val alias = aliasAndroid.filter { accesseur ->
+                    Regex(Regex.escape(accesseur) + """(?![\w.])""").containsMatchIn(texte)
+                }
+                val brut = listOf("androidx", "libs.plugins.android", "com.android.")
+                    .filter { it in texte }
+                (alias + brut).map { "$module → $it" }
             }
         assertEquals(emptyList(), fautifs, "Dépendance Android dans un module JVM pur")
     }
