@@ -367,7 +367,7 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
     private fun loadRomAndStart() {
         // Seule la lecture de la ROM est nécessaire ici : base de références
         // par défaut (l'identification est faite par la bibliothèque).
-        val repository = LibraryRepository(this)
+        val repository = LibraryRepository(this, RavenConsoles.romAnalyzers())
         lifecycleScope.launch {
             val data = repository.readRom(romUri)
             if (data == null) {

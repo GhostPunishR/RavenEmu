@@ -71,7 +71,11 @@ if (sdkDir != null) {
     include(":android:settings")
 } else {
     logger.lifecycle(
-        "RavenEmu : SDK Android introuvable, seuls les modules JVM sont inclus " +
-            "(emulation-api, gameboy-core, gba-core, rom-library)."
+        "RavenEmu : SDK Android introuvable, seuls les modules non Android " +
+            "sont inclus (" +
+            rootProject.children.flatMap { it.children }.map { it.path.removePrefix(":") }
+                .sorted()
+                .joinToString(", ") +
+            ")."
     )
 }

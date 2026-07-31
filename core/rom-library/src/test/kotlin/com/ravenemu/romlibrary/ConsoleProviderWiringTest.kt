@@ -8,8 +8,8 @@ import com.ravenemu.emulation.api.ConsoleRegistry
 import com.ravenemu.emulation.api.ConsoleType
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
-import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 /**
@@ -44,7 +44,7 @@ class ConsoleProviderWiringTest {
 
     @Test
     fun `l'analyseur Game Boy tient ses regles de son fournisseur`() {
-        val analyseur = GameBoyRomAnalyzer()
+        val analyseur = GameBoyRomAnalyzer(GameBoyConsoleProvider())
         assertEquals(ConsoleType.GAME_BOY, analyseur.console)
         assertEquals(CartridgeHeader.MAX_ROM_SIZE, analyseur.maxRomSizeBytes)
         assertTrue(analyseur.canAnalyze("tetris.gb"))
@@ -54,7 +54,7 @@ class ConsoleProviderWiringTest {
 
     @Test
     fun `l'analyseur Game Boy Advance tient ses regles de son fournisseur`() {
-        val analyseur = GbaRomAnalyzer()
+        val analyseur = GbaRomAnalyzer(GbaConsoleProvider())
         assertEquals(ConsoleType.GAME_BOY_ADVANCE, analyseur.console)
         assertEquals(GbaCartridge.MAX_ROM_SIZE, analyseur.maxRomSizeBytes)
         assertTrue(analyseur.canAnalyze("emeraude.gba"))
@@ -64,7 +64,7 @@ class ConsoleProviderWiringTest {
     @Test
     fun `analyseur et registre rattachent un fichier a la meme console`() {
         // La duplication d'antan permettait aux deux de diverger sans bruit.
-        val analyseurs = listOf(GameBoyRomAnalyzer(), GbaRomAnalyzer())
+        val analyseurs = listOf(GameBoyRomAnalyzer(GameBoyConsoleProvider()), GbaRomAnalyzer(GbaConsoleProvider()))
         for (nom in listOf("tetris.gb", "cristal.gbc", "emeraude.gba")) {
             val parAnalyseur = analyseurs.first { it.canAnalyze(nom) }.console
             val parRegistre = registre.providerForFile(nom)?.console
@@ -73,14 +73,51 @@ class ConsoleProviderWiringTest {
     }
 
     @Test
-    fun `un analyseur expose le fournisseur du registre pour sa console`() {
+    fun `un analyseur sert la console que le registre lui associe`() {
+        // L'analyseur ne reçoit pas l'instance du registre : chaque appel
+        // construit la sienne. Ce qui doit coïncider est la console servie.
         assertEquals(
             registre.providerFor(ConsoleType.GAME_BOY)?.console,
-            GameBoyRomAnalyzer().provider.console,
+            GameBoyRomAnalyzer(GameBoyConsoleProvider()).provider.console,
         )
-        assertSame(
-            ConsoleType.GAME_BOY_ADVANCE,
-            GbaRomAnalyzer().provider.console,
+        assertEquals(
+            registre.providerFor(ConsoleType.GAME_BOY_ADVANCE)?.console,
+            GbaRomAnalyzer(GbaConsoleProvider()).provider.console,
         )
+    }
+
+    @Test
+    fun `l'analyseur Game Boy refuse le fournisseur d'une autre console`() {
+        // Le fournisseur est injecté : rien dans le type ne distingue celui du
+        // Game Boy de celui du Game Boy Advance. Une interversion produirait un
+        // index faux plutôt qu'une erreur, d'où le refus à la construction.
+        val erreur = assertFailsWith<IllegalArgumentException> {
+            GameBoyRomAnalyzer(GbaConsoleProvider())
+        }
+        assertTrue(
+            ConsoleType.GAME_BOY_ADVANCE.name in (erreur.message ?: ""),
+            "Le message doit nommer la console reçue : ${erreur.message}",
+        )
+    }
+
+    @Test
+    fun `l'analyseur Game Boy Advance refuse le fournisseur d'une autre console`() {
+        val erreur = assertFailsWith<IllegalArgumentException> {
+            GbaRomAnalyzer(GameBoyConsoleProvider())
+        }
+        assertTrue(
+            ConsoleType.GAME_BOY.name in (erreur.message ?: ""),
+            "Le message doit nommer la console reçue : ${erreur.message}",
+        )
+    }
+
+    @Test
+    fun `les analyseurs acceptent le fournisseur que le registre publie`() {
+        // Contrepartie des deux tests précédents : la précondition ne doit pas
+        // rejeter le câblage réel.
+        val gb = registre.providerFor(ConsoleType.GAME_BOY)
+        val gba = registre.providerFor(ConsoleType.GAME_BOY_ADVANCE)
+        assertEquals(ConsoleType.GAME_BOY, GameBoyRomAnalyzer(gb!!).console)
+        assertEquals(ConsoleType.GAME_BOY_ADVANCE, GbaRomAnalyzer(gba!!).console)
     }
 }

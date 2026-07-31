@@ -1,6 +1,5 @@
 package com.ravenemu.romlibrary
 
-import com.ravenemu.core.gb.GameBoyConsoleProvider
 import com.ravenemu.core.gb.cartridge.CartridgeHeader
 import com.ravenemu.emulation.api.ConsoleProvider
 import com.ravenemu.emulation.api.ConsoleType
@@ -45,10 +44,31 @@ interface RomAnalyzer {
     ): AnalysisResult
 }
 
-/** Analyseur Game Boy : fichiers `.gb`, en-tête de cartouche DMG. */
-class GameBoyRomAnalyzer : RomAnalyzer {
+/**
+ * Analyseur Game Boy : fichiers `.gb`, en-tête de cartouche DMG.
+ *
+ * Le fournisseur de console lui est **remis**, il ne le construit plus. Ce
+ * module n'a donc plus à nommer le fournisseur Game Boy concret : c'est la
+ * racine de composition, seul endroit qui connaît les modules de moteur, qui
+ * décide lequel servir. Les extensions reconnues et la taille maximale
+ * acceptée viennent ainsi du contrat publié par le module de moteur, et non
+ * d'une seconde déclaration tenue à jour en parallèle. L'analyseur et le
+ * moteur ne partagent pas pour autant la même instance de fournisseur : c'est
+ * la règle qui est commune, pas l'objet.
+ */
+class GameBoyRomAnalyzer(override val provider: ConsoleProvider) : RomAnalyzer {
 
-    override val provider: ConsoleProvider = GameBoyConsoleProvider()
+    init {
+        // Le fournisseur est injecté depuis la racine de composition : rien
+        // dans le type ne dit qu'il s'agit bien du fournisseur Game Boy. Une
+        // interversion donnerait un analyseur qui accepte les mauvaises
+        // extensions et écrit une mauvaise console dans l'index — un défaut
+        // qui ne se verrait qu'à l'usage, sur la bibliothèque de l'utilisateur.
+        require(provider.console == ConsoleType.GAME_BOY) {
+            "GameBoyRomAnalyzer requiert un fournisseur ${ConsoleType.GAME_BOY}, " +
+                "reçu ${provider.console}"
+        }
+    }
 
     override fun analyze(
         uri: String,

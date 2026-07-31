@@ -154,7 +154,7 @@ cd RavenEmu
 ./gradlew assembleDebug
 ```
 
-L'APK Test est produit dans `android/app/build/outputs/apk/profil/`, l'APK Debug dans `android/android/app/build/outputs/apk/debug/`.
+L'APK Test est produit dans `android/app/build/outputs/apk/profil/`, l'APK Debug dans `android/app/build/outputs/apk/debug/`.
 
 Construire l'APK Test en local ne demande **aucun secret** : sans la clé Test du projet, la construction retombe sur la clé de débogage. L'APK obtenu est utilisable pour soi, mais la CI refuse de publier un APK signé autrement que par la clé dédiée. Les détails sont dans [RELEASING.md](RELEASING.md).
 

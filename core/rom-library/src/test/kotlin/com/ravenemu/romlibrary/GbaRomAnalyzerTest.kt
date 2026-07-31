@@ -1,5 +1,6 @@
 package com.ravenemu.romlibrary
 
+import com.ravenemu.core.gba.GbaConsoleProvider
 import com.ravenemu.core.gba.cartridge.GbaCartridge
 import com.ravenemu.core.gba.cartridge.GbaHeader
 import com.ravenemu.emulation.api.ConsoleType
@@ -25,7 +26,7 @@ class GbaRomAnalyzerTest {
         return rom
     }
 
-    private val analyzer = GbaRomAnalyzer()
+    private val analyzer = GbaRomAnalyzer(GbaConsoleProvider())
 
     @Test
     fun `reconnait l'extension gba`() {

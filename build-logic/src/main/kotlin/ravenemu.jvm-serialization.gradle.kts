@@ -1,12 +1,8 @@
 /**
  * Modules JVM qui sérialisent en JSON.
  *
- * Le plugin de sérialisation est un plugin Kotlin : l'appliquer avec sa version
- * dans un module chargeait Kotlin une seconde fois et faisait réapparaître
- * l'avertissement que `ravenemu.jvm` supprime. Il est donc déclaré ici, sans
- * version, comme le reste.
+ * Le plugin de sérialisation est un plugin Kotlin : comme lui, il est appliqué
+ * par identifiant pour être résolu depuis le classloader de la racine.
  */
-plugins {
-    id("ravenemu.jvm")
-    kotlin("plugin.serialization")
-}
+apply(plugin = "ravenemu.jvm")
+apply(plugin = "org.jetbrains.kotlin.plugin.serialization")
