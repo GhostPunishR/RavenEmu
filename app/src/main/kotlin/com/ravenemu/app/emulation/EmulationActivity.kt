@@ -136,10 +136,12 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
             null
         }
         // Réglages avancés en post-traitement (aucun effet si tout est neutre).
+        // La correction LCD simule un panneau précis : elle se règle par console
+        // et n'est plus imposée à toutes.
         surface.displayAdjustments = DisplayAdjustments(
             brightness = settings.displayBrightness,
             contrast = settings.displayContrast,
-            lcdColorCorrection = settings.lcdColorCorrection,
+            lcdColorCorrection = settings.lcdColorCorrection(console),
         )
         performanceOverlay.visibility =
             if (settings.showPerformanceOverlay) View.VISIBLE else View.GONE
@@ -257,7 +259,10 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
         core = newCore
         session = newSession
         // Journalisation des anomalies du moteur : bridée, et Debug uniquement.
-        GbaDebugOverlay.attachLogging(newCore)
+        // La mesure, elle, ne s'allume que si l'utilisateur la demande : elle
+        // coûte assez cher pour fausser ce qu'elle observe. Appel direct sans
+        // risque : le thread d'émulation n'est pas encore démarré.
+        GbaDebugOverlay.attachLogging(newCore, measuring = settings.videoDiagnostics)
 
         // La ROM est chargée : le format (monochrome DMG ou couleur CGB) est
         // connu, on (ré)applique les réglages vidéo en conséquence.
@@ -285,7 +290,13 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
 
     override fun onStats(fps: Double, frameTimeMs: Double) {
         if (!settings.showPerformanceOverlay) return
-        val text = GbaDebugOverlay.render(fps, audioStats)
+        val text = GbaDebugOverlay.render(
+            fps,
+            frameTimeMs,
+            core,
+            audioStats,
+            session?.audioOutputUnderruns() ?: 0,
+        )
         runOnUiThread { performanceOverlay.text = text }
     }
 
@@ -499,6 +510,18 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
         super.onResume()
         applyImmersiveMode()
         applyVideoSettings()
+        // Le relevé de diagnostic se règle depuis les paramètres, donc en
+        // quittant cet écran : le reprendre ici évite d'avoir à recharger la ROM
+        // pour que le changement prenne effet.
+        //
+        // Il passe par la file de la session, comme toute autre mutation du
+        // cœur. Le moteur est mono-thread : ces drapeaux et le rappel de
+        // chronométrage sont lus par la boucle d'émulation pendant `runFrame`.
+        // Les écrire depuis le fil d'interface pourrait, par exemple, brancher
+        // le rappel de l'unité audio entre son test de nullité et son appel — et
+        // le relevé mesurerait alors le temps écoulé depuis l'origine.
+        val diagnosticsDemandes = settings.videoDiagnostics
+        session?.post { c -> GbaDebugOverlay.attachLogging(c, measuring = diagnosticsDemandes) }
         session?.let { s ->
             s.audioEnabled = settings.audioEnabled
             s.setAudioVolume(settings.audioVolume / 100f)

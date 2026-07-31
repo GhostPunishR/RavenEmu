@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.net.Uri
 import androidx.core.content.edit
+import com.ravenemu.emulation.api.ConsoleType
 import com.ravenemu.input.ControlLayout
 
 /**
@@ -61,6 +62,21 @@ class AppSettings(context: Context) {
         set(value) = prefs.edit { putBoolean("video_show_fps", value) }
 
     /**
+     * Relevé de diagnostic complet dans la surcouche, au lieu de la seule
+     * cadence : registres de composition, dynamique de l'image, pixels par
+     * couche, répartition du temps de trame.
+     *
+     * Désactivé par défaut, et sans effet hors construction de diagnostic. Il
+     * n'est pas gratuit — il allume le chronométrage par sous-système, un
+     * incrément par pixel dessiné et un balayage de l'image par trame — et c'est
+     * précisément pourquoi il se demande explicitement plutôt que de suivre
+     * l'affichage de la cadence.
+     */
+    var videoDiagnostics: Boolean
+        get() = prefs.getBoolean("debug_video_diagnostics", false)
+        set(value) = prefs.edit { putBoolean("debug_video_diagnostics", value) }
+
+    /**
      * Luminosité de l'affichage, `-100..100` (`0` = neutre). Stockée en interne
      * sur `0..200` (curseur centré sur 100) pour le `SeekBarPreference`.
      */
@@ -74,13 +90,33 @@ class AppSettings(context: Context) {
         set(value) = prefs.edit { putInt("video_contrast", (value + 100).coerceIn(0, 200)) }
 
     /**
-     * Correction colorimétrique LCD (simulation calibrable de la désaturation et
-     * du gamma d'un panneau réfléchissant). Désactivée par défaut. Surtout utile
-     * pour les couleurs vives d'une Game Boy Color.
+     * Correction colorimétrique LCD **par console** : simulation calibrable de
+     * la désaturation et du gamma d'un panneau réfléchissant. Désactivée par
+     * défaut partout.
+     *
+     * Le réglage était unique et s'appliquait à toutes les consoles. Il n'a
+     * pourtant de sens que pour le panneau qu'il simule : activé, il désature
+     * de 28 % vers la luminance et assombrit les moyens tons. Sur une Game Boy
+     * Color, dont les couleurs sont très vives, c'est l'effet recherché. Sur une
+     * Game Boy Advance, c'est un voile gris et mat appliqué à une image qui ne
+     * le demandait pas — et rien dans l'interface ne le laissait deviner.
+     *
+     * La Game Boy Advance reçoit donc sa propre clé, à `false`. La clé
+     * historique garde son sens pour la Game Boy et la Game Boy Color : leur
+     * réglage n'est ni déplacé, ni réinterprété, ni migré en silence.
      */
-    var lcdColorCorrection: Boolean
-        get() = prefs.getBoolean("video_lcd_correction", false)
-        set(value) = prefs.edit { putBoolean("video_lcd_correction", value) }
+    fun lcdColorCorrection(console: ConsoleType): Boolean =
+        prefs.getBoolean(lcdCorrectionKey(console), false)
+
+    fun setLcdColorCorrection(console: ConsoleType, value: Boolean) =
+        prefs.edit { putBoolean(lcdCorrectionKey(console), value) }
+
+    private fun lcdCorrectionKey(console: ConsoleType): String = when (console) {
+        ConsoleType.GAME_BOY_ADVANCE -> "video_lcd_correction_gba"
+        // Clé d'origine, conservée telle quelle : le réglage déjà pris par
+        // l'utilisateur pour la Game Boy et la Game Boy Color reste le sien.
+        else -> "video_lcd_correction"
+    }
 
     // ---- Audio (préparé pour la phase audio dédiée) ----
 

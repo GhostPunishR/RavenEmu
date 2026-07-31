@@ -63,6 +63,10 @@ fun GbaDebugSnapshot.toDiagnosticText(
         )
     }
     builder.append('\n').append(videoLine())
+    // Conditionné à l'activité de la mesure, jamais aux valeurs : une image
+    // réellement noire donne trois zéros, et c'est précisément la lecture qu'on
+    // cherche à confirmer pendant un fondu ou sur un écran vidé.
+    if (lumaMeasured) builder.append('\n').append(lumaLine())
     if (layerPixels.isNotEmpty()) builder.append('\n').append(layerPixelLine())
     if ((dispcnt and 0x7) in 1..2) builder.append('\n').append(affineLine())
     if (swiCounts.any { it > 0 }) builder.append('\n').append(swiLine())
@@ -136,13 +140,33 @@ private fun GbaDebugSnapshot.videoLine(): String {
     if (dispcnt and 0x4000 != 0) windows.append('1')
     if (dispcnt and 0x8000.toInt() != 0) windows.append('O')
     if (windows.isNotEmpty()) builder.append("  WIN").append(windows)
+    if (windows.isNotEmpty()) {
+        builder.append(" in%04X out%04X".format(windowInside, windowOutside))
+    }
+    // Les coefficients comptent autant que le mode : un mélange programmé avec
+    // EVA à 16 et EVB à 0 ne change rien, un éclaircissement à EVY 16 blanchit
+    // tout. Le mode seul ne dit pas lequel des deux on regarde.
     when ((blendControl ushr 6) and 0x3) {
-        1 -> builder.append("  BLD alpha")
-        2 -> builder.append("  BLD clair")
-        3 -> builder.append("  BLD sombre")
+        1 -> builder.append(
+            "  BLD alpha eva%d evb%d".format(blendAlpha and 0x1F, (blendAlpha ushr 8) and 0x1F),
+        )
+        2 -> builder.append("  BLD clair evy").append(blendBrightness and 0x1F)
+        3 -> builder.append("  BLD sombre evy").append(blendBrightness and 0x1F)
     }
     return builder.toString()
 }
+
+/**
+ * Dynamique de la trame produite par le moteur.
+ *
+ * C'est la mesure qui situe un voile signalé à l'écran, et elle se lit d'un coup
+ * d'œil : sur une image comportant du noir, `min` doit descendre près de zéro.
+ * S'il reste haut, le moteur produit déjà l'image délavée et la cause est dans
+ * la composition. S'il est à zéro alors que l'écran paraît voilé, le moteur est
+ * hors de cause : reste le post-traitement d'affichage et la surface Android.
+ */
+private fun GbaDebugSnapshot.lumaLine(): String =
+    "luma min %d  moy %d  max %d".format(lumaMin, lumaMean, lumaMax)
 
 /**
  * Services du BIOS réellement employés, avec leur nombre d'appels.

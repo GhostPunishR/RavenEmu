@@ -66,8 +66,7 @@ class GbaCore(
     override fun loadRom(rom: ByteArray, batteryRam: ByteArray?) {
         val newMachine = GbaMachine(rom, forcedSaveType)
         if (batteryRam != null) newMachine.cartridge.save?.import(batteryRam)
-        newMachine.diagnostics.onEvent = onDiagnosticEvent
-        machine = newMachine
+        install(newMachine)
         loadedRom = rom
         romHash = MessageDigest.getInstance("SHA-256").digest(rom)
     }
@@ -78,8 +77,7 @@ class GbaCore(
         val battery = machine?.cartridge?.save?.export()
         val newMachine = GbaMachine(rom, forcedSaveType)
         if (battery != null) newMachine.cartridge.save?.import(battery)
-        newMachine.diagnostics.onEvent = onDiagnosticEvent
-        machine = newMachine
+        install(newMachine)
     }
 
     override fun runFrame(framebuffer: IntArray) {
@@ -127,21 +125,44 @@ class GbaCore(
      * Chronométrage des sous-systèmes. À n'activer que pour mesurer : chaque
      * relevé coûte deux lectures d'horloge, et le but est justement de ne pas
      * fausser ce qu'on mesure.
+     *
+     * L'intention est conservée **sur le cœur**, pas sur la machine. Un
+     * power-cycle comme le chargement d'un état reconstruit la machine : lu sur
+     * elle, le réglage repartait à faux et la mesure s'éteignait toute seule au
+     * milieu d'une enquête, sans que rien ne l'annonce.
      */
-    var measuringTime: Boolean
-        get() = machine?.diagnostics?.measuringTime ?: false
+    var measuringTime: Boolean = false
         set(value) {
-            val m = machine ?: return
-            m.diagnostics.measuringTime = value
-            // Le rappel de l'unité audio n'est branché que pendant la mesure :
-            // laissé en place, il coûterait deux lectures d'horloge par lot,
-            // même en Release.
-            m.apu.onBatchNanos =
-                if (value) { nanos -> m.diagnostics.addApuNanos(nanos) } else null
-            // Même raison pour le comptage des pixels par couche : un incrément
-            // par pixel dessiné n'a rien à faire hors d'une session de mesure.
-            m.ppu.collectLayerStats = value
+            field = value
+            machine?.let { applyMeasurement(it) }
         }
+
+    /** Branche ou débranche les relevés coûteux sur une machine. */
+    private fun applyMeasurement(m: GbaMachine) {
+        m.diagnostics.measuringTime = measuringTime
+        // Le rappel de l'unité audio n'est branché que pendant la mesure :
+        // laissé en place, il coûterait deux lectures d'horloge par lot,
+        // même en Release.
+        m.apu.onBatchNanos =
+            if (measuringTime) { nanos -> m.diagnostics.addApuNanos(nanos) } else null
+        // Même raison pour le comptage des pixels par couche : un incrément
+        // par pixel dessiné n'a rien à faire hors d'une session de mesure.
+        m.ppu.collectLayerStats = measuringTime
+        // Et pour la dynamique de la trame : un balayage complet de l'image
+        // par trame, qui n'a de sens que pendant une enquête.
+        m.ppu.collectFrameStats = measuringTime
+    }
+
+    /**
+     * Installe une machine nouvellement construite : ce qui relève de la
+     * session — journalisation et mesure — lui est réappliqué, faute de quoi il
+     * disparaîtrait à chaque reconstruction.
+     */
+    private fun install(newMachine: GbaMachine) {
+        newMachine.diagnostics.onEvent = onDiagnosticEvent
+        applyMeasurement(newMachine)
+        machine = newMachine
+    }
 
     /** Étend le signe d'une valeur 28 bits (`BG2X`/`BG2Y`, format 20.8). */
     private fun signed28(value: Int): Int = (value shl 4) shr 4
@@ -182,6 +203,14 @@ class GbaCore(
             bg2Control = m.bus.read16(IO_BASE + 0x0C),
             bg3Control = m.bus.read16(IO_BASE + 0x0E),
             blendControl = m.bus.read16(IO_BASE + 0x50),
+            blendAlpha = m.bus.read16(IO_BASE + 0x52),
+            blendBrightness = m.bus.read16(IO_BASE + 0x54),
+            windowInside = m.bus.read16(IO_BASE + 0x48),
+            windowOutside = m.bus.read16(IO_BASE + 0x4A),
+            lumaMeasured = m.ppu.collectFrameStats,
+            lumaMin = m.ppu.frameLumaMin,
+            lumaMax = m.ppu.frameLumaMax,
+            lumaMean = m.ppu.frameLumaMean,
             layerPixels = m.ppu.layerPixels,
             bg2ReferenceX = signed28(m.bus.read32(IO_BASE + 0x28)) shr 8,
             bg2ReferenceY = signed28(m.bus.read32(IO_BASE + 0x2C)) shr 8,
@@ -227,11 +256,8 @@ class GbaCore(
         // partie en cours strictement intacte, et jouable.
         val restored = GbaState.restore(this, state)
         // Journalisation et chronométrage relèvent de l'intention de l'appelant,
-        // pas de l'état émulé : ils survivent au remplacement de la machine.
-        val wasMeasuring = measuringTime
-        restored.diagnostics.onEvent = onDiagnosticEvent
-        machine = restored
-        measuringTime = wasMeasuring
+        // pas de l'état émulé : `install` les réapplique à la machine neuve.
+        install(restored)
     }
 
     /**
