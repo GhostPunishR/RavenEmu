@@ -53,6 +53,8 @@ jobs:
 
       - name: Configurer Gradle
         uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
+        with:
+          cache-provider: basic
 
       - name: Tests unitaires
         run: ./gradlew test
@@ -383,6 +385,8 @@ jobs:
 
       - name: Configurer Gradle
         uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
+        with:
+          cache-provider: basic
 
       - name: Restaurer le keystore depuis les secrets
         run: |
