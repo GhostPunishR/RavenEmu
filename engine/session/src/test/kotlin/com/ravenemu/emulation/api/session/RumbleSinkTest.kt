@@ -19,9 +19,9 @@ class RumbleSinkTest {
         val on = CountDownLatch(1)
         val off = CountDownLatch(1)
         val sink = object : EmulationSession.RumbleSink {
-            @Volatile var active = false
+            @Volatile var currentState = false
             override fun setActive(active: Boolean) {
-                this.active = active
+                currentState = active
                 if (active) on.countDown() else off.countDown()
             }
         }
@@ -29,9 +29,9 @@ class RumbleSinkTest {
         session.start()
         core.rumble = true
         assertTrue(on.await(1, TimeUnit.SECONDS), "le rumble actif n'a pas été relayé")
-        assertTrue(sink.active)
+        assertTrue(sink.currentState)
         session.pause()
-        assertFalse(sink.active)
+        assertFalse(sink.currentState)
         session.stop()
         assertTrue(off.await(1, TimeUnit.SECONDS))
     }
