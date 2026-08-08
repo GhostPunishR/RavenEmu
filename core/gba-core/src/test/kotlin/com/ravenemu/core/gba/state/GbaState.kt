@@ -1,6 +1,6 @@
 package com.ravenemu.core.gba.state
 
-import com.ravenemu.core.gba.GbaCore
+import com.ravenemu.core.gba.KotlinGbaCore
 import com.ravenemu.core.gba.GbaMachine
 import com.ravenemu.core.gba.cartridge.GbaGpio
 import com.ravenemu.emulation.api.SaveStateException
@@ -26,7 +26,7 @@ import java.io.IOException
  *
  * Ce format est distinct de celui de la Game Boy.
  */
-object GbaState {
+internal object GbaState {
 
     private const val MAGIC = 0x52564E53 // "RVNS"
     /**
@@ -48,7 +48,7 @@ object GbaState {
     /** Taille maximale acceptée pour un état (garde-fou anti-« fichier trop volumineux »). */
     private const val MAX_STATE_SIZE = 1 shl 20 // 1 Mio
 
-    fun serialize(core: GbaCore, machine: GbaMachine): ByteArray {
+    fun serialize(core: KotlinGbaCore, machine: GbaMachine): ByteArray {
         val buffer = ByteArrayOutputStream(512 * 1024)
         val out = DataOutputStream(buffer)
 
@@ -113,7 +113,7 @@ object GbaState {
      * normal. Toute erreur — en-tête, troncature, valeur hors bornes relevée par
      * un sous-système — laisse la machine active strictement inchangée.
      */
-    fun restore(core: GbaCore, data: ByteArray): GbaMachine {
+    fun restore(core: KotlinGbaCore, data: ByteArray): GbaMachine {
         if (data.size > MAX_STATE_SIZE) {
             throw SaveStateException("État instantané trop volumineux : ${data.size} octets")
         }

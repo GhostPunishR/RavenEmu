@@ -96,6 +96,7 @@ data class CartridgeHeader(
         const val HEADER_END = 0x0150
         const val MIN_ROM_SIZE = 0x8000
         const val MAX_ROM_SIZE = 8 * 1024 * 1024
+        private const val ROM_BANK_SIZE = 0x4000
 
         /**
          * Décode l'en-tête d'une ROM.
@@ -156,9 +157,9 @@ data class CartridgeHeader(
 
             val romSize = when {
                 romSizeCode <= 0x08 -> MIN_ROM_SIZE shl romSizeCode
-                romSizeCode == 0x52 -> 72 * Cartridge.ROM_BANK_SIZE
-                romSizeCode == 0x53 -> 80 * Cartridge.ROM_BANK_SIZE
-                romSizeCode == 0x54 -> 96 * Cartridge.ROM_BANK_SIZE
+                romSizeCode == 0x52 -> 72 * ROM_BANK_SIZE
+                romSizeCode == 0x53 -> 80 * ROM_BANK_SIZE
+                romSizeCode == 0x54 -> 96 * ROM_BANK_SIZE
                 else -> 0
             }
             val ramSize = when {

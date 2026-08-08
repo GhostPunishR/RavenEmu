@@ -1,6 +1,6 @@
 package com.ravenemu.core.gba.ppu
 
-import com.ravenemu.core.gba.GbaCore
+import com.ravenemu.core.gba.KotlinGbaCore
 import com.ravenemu.core.gba.SyntheticRom
 import com.ravenemu.core.gba.cartridge.GbaCartridge
 import com.ravenemu.core.gba.memory.GbaBus
@@ -84,7 +84,7 @@ class PpuLayerOrderTest {
         bgControl(bus, 1, 2)
         bgControl(bus, 2, 0)
         bgControl(bus, 3, 1)
-        ppu.tick(GbaCore.CYCLES_PER_FRAME)
+        ppu.tick(KotlinGbaCore.CYCLES_PER_FRAME)
         assertEquals(GbaPpu.bgr555ToArgb(colors[2]), pixel(ppu, 0, 0))
         assertEquals(GbaPpu.bgr555ToArgb(colors[2]), pixel(ppu, 239, 159))
     }
@@ -95,7 +95,7 @@ class PpuLayerOrderTest {
         setupFourBackgrounds(bus)
         reg(bus, 0x00, 0x0F00)
         for (bg in 0 until 4) bgControl(bus, bg, 1) // toutes égales
-        ppu.tick(GbaCore.CYCLES_PER_FRAME)
+        ppu.tick(KotlinGbaCore.CYCLES_PER_FRAME)
         assertEquals(GbaPpu.bgr555ToArgb(colors[0]), pixel(ppu, 0, 0))
     }
 
@@ -109,7 +109,7 @@ class PpuLayerOrderTest {
         bgControl(bus, 1, 2)
         bgControl(bus, 2, 0)
         bgControl(bus, 3, 1)
-        ppu.tick(GbaCore.CYCLES_PER_FRAME)
+        ppu.tick(KotlinGbaCore.CYCLES_PER_FRAME)
         assertEquals(GbaPpu.bgr555ToArgb(colors[3]), pixel(ppu, 0, 0))
     }
 
@@ -123,7 +123,7 @@ class PpuLayerOrderTest {
         bgControl(bus, 1, 1)
         bgControl(bus, 2, 3)
         bgControl(bus, 3, 0) // priorité la plus forte, mais le plan n'existe pas
-        ppu.tick(GbaCore.CYCLES_PER_FRAME)
+        ppu.tick(KotlinGbaCore.CYCLES_PER_FRAME)
         assertEquals(
             GbaPpu.bgr555ToArgb(colors[1]),
             pixel(ppu, 0, 0),
@@ -158,7 +158,7 @@ class PpuLayerOrderTest {
         reg(bus, 0x26, 0x0100)
         reg(bus, 0x30, 0x0100)
         reg(bus, 0x36, 0x0100)
-        ppu.tick(GbaCore.CYCLES_PER_FRAME)
+        ppu.tick(KotlinGbaCore.CYCLES_PER_FRAME)
         assertEquals(
             GbaPpu.bgr555ToArgb(colors[1]),
             pixel(ppu, 0, 0),
@@ -176,7 +176,7 @@ class PpuLayerOrderTest {
         reg(bus, 0x26, 0x0100)
         vram16(bus, 0, colors[0])
         vram16(bus, (3 * 160 + 20) * 2, colors[1])
-        ppu.tick(GbaCore.CYCLES_PER_FRAME)
+        ppu.tick(KotlinGbaCore.CYCLES_PER_FRAME)
         assertEquals(GbaPpu.bgr555ToArgb(colors[0]), pixel(ppu, 0, 0))
         assertEquals(GbaPpu.bgr555ToArgb(colors[1]), pixel(ppu, 20, 3))
         // Hors des 160 x 128 utiles : fond.
@@ -185,7 +185,7 @@ class PpuLayerOrderTest {
         // Page 1 (DISPCNT bit 4) : la seconde moitié de la bitmap.
         reg(bus, 0x00, 0x0415)
         vram16(bus, 0xA000, colors[2])
-        ppu.tick(GbaCore.CYCLES_PER_FRAME)
+        ppu.tick(KotlinGbaCore.CYCLES_PER_FRAME)
         assertEquals(GbaPpu.bgr555ToArgb(colors[2]), pixel(ppu, 0, 0))
     }
 
@@ -201,9 +201,9 @@ class PpuLayerOrderTest {
         bgControl(bus, 1, 0)
         bgControl(bus, 2, 2)
         bgControl(bus, 3, 1)
-        ppu.tick(GbaCore.CYCLES_PER_FRAME)
+        ppu.tick(KotlinGbaCore.CYCLES_PER_FRAME)
         val first = ppu.frame.copyOf()
-        ppu.tick(GbaCore.CYCLES_PER_FRAME)
+        ppu.tick(KotlinGbaCore.CYCLES_PER_FRAME)
         assertEquals(
             first.toList(),
             ppu.frame.toList(),

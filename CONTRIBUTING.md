@@ -36,9 +36,10 @@ Prérequis recommandés :
 
 - JDK 21 ;
 - Gradle Wrapper fourni avec le dépôt ;
-- SDK Android avec `compileSdk 35` pour les modules Android.
+- SDK Android avec `compileSdk 35` pour les modules Android ;
+- Android NDK `27.2.12479018`, CMake `3.22.1` et un compilateur C++20.
 
-Les modules Kotlin/JVM peuvent être construits et testés sans SDK Android.
+Les modules JVM peuvent être construits et testés sans SDK Android. Les moteurs se valident également sur l'hôte avec CMake.
 
 Commandes utiles :
 
@@ -48,6 +49,11 @@ Commandes utiles :
 
 # Tous les tests
 ./gradlew test
+
+# Tests des moteurs C++
+cmake -S native-core -B build/native-host -DRAVENEMU_BUILD_TESTS=ON
+cmake --build build/native-host --parallel
+ctest --test-dir build/native-host --output-on-failure
 
 # Analyse Android
 ./gradlew lint
@@ -89,6 +95,7 @@ Ces règles sont vérifiées automatiquement par les tests du module `ci-policy`
 - Utilisez des noms explicites pour les classes, fonctions et variables.
 - Gardez les moteurs d'émulation indépendants d'Android.
 - Évitez les dépendances entre moteurs de consoles.
+- Placez l'exécution matérielle dans `native-core` et gardez JNI limité aux types primitifs.
 - Placez les fonctionnalités partagées derrière les contrats de `emulation-api`.
 - Ajoutez des tests synthétiques, déterministes et reproductibles.
 - Ne masquez pas un comportement incomplet derrière une valeur arbitraire.

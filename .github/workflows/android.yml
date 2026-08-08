@@ -56,6 +56,18 @@ jobs:
         with:
           cache-provider: basic
 
+      - name: Installer la chaîne C++ Android
+        run: sdkmanager "ndk;27.2.12479018" "cmake;3.22.1"
+
+      - name: Tester les cœurs C++ sur l'hôte
+        run: |
+          cmake -S native-core -B build/native-host \
+            -DRAVENEMU_BUILD_TESTS=ON \
+            -DRAVENEMU_BUILD_JNI=ON \
+            -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/native-host --parallel
+          ctest --test-dir build/native-host --output-on-failure
+
       - name: Tests unitaires
         run: ./gradlew test
 

@@ -12,7 +12,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-class GameBoyCoreTest {
+class KotlinGameBoyCoreTest {
 
     /** ROM inoffensive : boucle infinie JR -2 à l'entrée. */
     private fun idleRom(type: Int = 0x00, ramSizeCode: Int = 0x00): ByteArray =
@@ -21,8 +21,8 @@ class GameBoyCoreTest {
             rom[0x0101] = 0xFE.toByte()
         }
 
-    private fun loadedCore(rom: ByteArray = idleRom()): GameBoyCore =
-        GameBoyCore(clock = { 0L }).apply { loadRom(rom) }
+    private fun loadedCore(rom: ByteArray = idleRom()): KotlinGameBoyCore =
+        KotlinGameBoyCore(clock = { 0L }).apply { loadRom(rom) }
 
     /** ROM Game Boy Color inoffensive (boucle infinie, drapeau CGB posé). */
     private fun idleCgbRom(): ByteArray =
@@ -82,7 +82,7 @@ class GameBoyCoreTest {
 
     @Test
     fun `caracteristiques video conformes DMG`() {
-        val core = GameBoyCore()
+        val core = KotlinGameBoyCore()
         assertEquals(160, core.video.width)
         assertEquals(144, core.video.height)
         assertEquals(59.7275, core.video.refreshRateHz, 0.001)
@@ -91,13 +91,13 @@ class GameBoyCoreTest {
     @Test
     fun `runFrame sans rom leve une erreur`() {
         assertFailsWith<IllegalStateException> {
-            GameBoyCore().runFrame(IntArray(160 * 144))
+            KotlinGameBoyCore().runFrame(IntArray(160 * 144))
         }
     }
 
     @Test
     fun `rom invalide rejetee`() {
-        assertFailsWith<RomLoadException> { GameBoyCore().loadRom(ByteArray(100)) }
+        assertFailsWith<RomLoadException> { KotlinGameBoyCore().loadRom(ByteArray(100)) }
     }
 
     @Test
@@ -131,7 +131,7 @@ class GameBoyCoreTest {
     }
 
     /** Cartouche à pile prête à écrire : RAM externe déverrouillée. */
-    private fun batteryCore(): GameBoyCore {
+    private fun batteryCore(): KotlinGameBoyCore {
         val core = loadedCore(idleRom(type = 0x03, ramSizeCode = 0x02))
         assertNotNull(core.machine).bus.write(0x0000, 0x0A)
         return core
@@ -234,7 +234,7 @@ class GameBoyCoreTest {
     @Test
     fun `sav restaure au chargement`() {
         val sav = ByteArray(8 * 1024) { (it and 0xFF).toByte() }
-        val core = GameBoyCore(clock = { 0L })
+        val core = KotlinGameBoyCore(clock = { 0L })
         core.loadRom(idleRom(type = 0x03, ramSizeCode = 0x02), sav)
         val m = assertNotNull(core.machine)
         m.bus.write(0x0000, 0x0A)

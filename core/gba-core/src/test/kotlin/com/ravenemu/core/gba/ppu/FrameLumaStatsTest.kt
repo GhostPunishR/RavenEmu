@@ -1,6 +1,6 @@
 package com.ravenemu.core.gba.ppu
 
-import com.ravenemu.core.gba.GbaCore
+import com.ravenemu.core.gba.KotlinGbaCore
 import com.ravenemu.core.gba.GbaMachine
 import com.ravenemu.core.gba.SyntheticRom
 import kotlin.test.Test
@@ -29,7 +29,7 @@ class FrameLumaStatsTest {
         machine.ppu.collectFrameStats = actif
         // Deux trames : la première remplit l'image, la seconde la mesure au
         // passage de VCOUNT à zéro.
-        repeat(2) { machine.runFrame(GbaCore.CYCLES_PER_FRAME) }
+        repeat(2) { machine.runFrame(KotlinGbaCore.CYCLES_PER_FRAME) }
         return machine
     }
 
@@ -59,7 +59,7 @@ class FrameLumaStatsTest {
         val machine = GbaMachine(SyntheticRom.build())
         machine.ppu.collectFrameStats = true
         machine.bus.write16(0x0400_0000, 0x0080)
-        repeat(2) { machine.runFrame(GbaCore.CYCLES_PER_FRAME) }
+        repeat(2) { machine.runFrame(KotlinGbaCore.CYCLES_PER_FRAME) }
 
         assertEquals(255, machine.ppu.frameLumaMax)
         assertEquals(255, machine.ppu.frameLumaMin, "L'écran blanc forcé est uniforme")
@@ -79,13 +79,13 @@ class FrameLumaStatsTest {
     fun `la mesure suit le moteur quand l'image change`() {
         val machine = GbaMachine(SyntheticRom.build(SyntheticRom.backdropProgram(0x00)))
         machine.ppu.collectFrameStats = true
-        repeat(2) { machine.runFrame(GbaCore.CYCLES_PER_FRAME) }
+        repeat(2) { machine.runFrame(KotlinGbaCore.CYCLES_PER_FRAME) }
         assertEquals(0, machine.ppu.frameLumaMax, "L'image doit d'abord être noire")
 
         // Le jeu repeint son arrière-plan en blanc : la mesure doit suivre dès
         // la trame suivante, sans quoi elle décrirait une image déjà remplacée.
         machine.bus.write16(0x0500_0000, 0x7FFF)
-        repeat(2) { machine.runFrame(GbaCore.CYCLES_PER_FRAME) }
+        repeat(2) { machine.runFrame(KotlinGbaCore.CYCLES_PER_FRAME) }
         assertTrue(
             machine.ppu.frameLumaMin > 250,
             "Luminance ${machine.ppu.frameLumaMin} : l'image blanche n'est pas mesurée",
@@ -100,12 +100,12 @@ class FrameLumaStatsTest {
         val contrastee = GbaMachine(SyntheticRom.build())
         contrastee.ppu.collectFrameStats = true
         peindreMoitieBlanche(contrastee)
-        repeat(2) { contrastee.runFrame(GbaCore.CYCLES_PER_FRAME) }
+        repeat(2) { contrastee.runFrame(KotlinGbaCore.CYCLES_PER_FRAME) }
 
         val delavee = mesurer(0x00).let { noire ->
             // Gris moyen uni : `0x0F` sur les trois composantes.
             noire.bus.write16(0x0500_0000, 0x3DEF)
-            repeat(2) { noire.runFrame(GbaCore.CYCLES_PER_FRAME) }
+            repeat(2) { noire.runFrame(KotlinGbaCore.CYCLES_PER_FRAME) }
             noire
         }
 

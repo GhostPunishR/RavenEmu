@@ -1,6 +1,6 @@
 package com.ravenemu.core.gba.save
 
-import com.ravenemu.core.gba.GbaCore
+import com.ravenemu.core.gba.KotlinGbaCore
 import com.ravenemu.core.gba.GbaMachine
 import com.ravenemu.core.gba.SyntheticRom
 import kotlin.test.Test
@@ -35,7 +35,7 @@ class GbaSaveMemoryTest {
     @Test
     fun `sans marqueur aucun type n'est detecte`() {
         assertEquals(GbaSaveType.NONE, GbaSaveType.detect(SyntheticRom.build()))
-        val core = GbaCore()
+        val core = KotlinGbaCore()
         core.loadRom(SyntheticRom.build())
         assertFalse(core.hasBatteryRam)
         assertNull(core.snapshotBatteryRam())
@@ -43,7 +43,7 @@ class GbaSaveMemoryTest {
 
     @Test
     fun `le type force prime sur la detection`() {
-        val core = GbaCore(forcedSaveType = GbaSaveType.FLASH_128K)
+        val core = KotlinGbaCore(forcedSaveType = GbaSaveType.FLASH_128K)
         core.loadRom(romWithMarker("SRAM_V113"))
         assertEquals(GbaSaveType.FLASH_128K, core.saveType)
     }
@@ -165,7 +165,7 @@ class GbaSaveMemoryTest {
 
     @Test
     fun `le contenu de sauvegarde survit a un reset et s'exporte`() {
-        val core = GbaCore()
+        val core = KotlinGbaCore()
         core.loadRom(romWithMarker("SRAM_V113"))
         core.machine!!.bus.write8(0x0E00_0000, 0x7E)
         assertTrue(core.batteryRamDirty)
@@ -183,14 +183,14 @@ class GbaSaveMemoryTest {
     @Test
     fun `un sav importe au chargement est restitue`() {
         val saved = ByteArray(32 * 1024).also { it[5] = 0x33 }
-        val core = GbaCore()
+        val core = KotlinGbaCore()
         core.loadRom(romWithMarker("SRAM_V113"), saved)
         assertEquals(0x33, core.machine!!.bus.read8(0x0E00_0005))
     }
 
     @Test
     fun `la sauvegarde est incluse dans les etats instantanes`() {
-        val core = GbaCore()
+        val core = KotlinGbaCore()
         core.loadRom(romWithMarker("SRAM_V113"))
         core.machine!!.bus.write8(0x0E00_0000, 0x21)
         val state = core.saveState()

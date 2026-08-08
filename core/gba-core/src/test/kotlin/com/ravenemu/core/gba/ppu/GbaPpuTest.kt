@@ -1,6 +1,6 @@
 package com.ravenemu.core.gba.ppu
 
-import com.ravenemu.core.gba.GbaCore
+import com.ravenemu.core.gba.KotlinGbaCore
 import com.ravenemu.core.gba.SyntheticRom
 import com.ravenemu.core.gba.cartridge.GbaCartridge
 import com.ravenemu.core.gba.memory.GbaBus
@@ -32,7 +32,7 @@ class GbaPpuTest {
         bus.vram[addr + 1] = ((value ushr 8) and 0xFF).toByte()
     }
 
-    private fun renderFrame(ppu: GbaPpu) = ppu.tick(GbaCore.CYCLES_PER_FRAME)
+    private fun renderFrame(ppu: GbaPpu) = ppu.tick(KotlinGbaCore.CYCLES_PER_FRAME)
 
     private fun pixel(ppu: GbaPpu, x: Int, y: Int): Int = ppu.frame[y * 240 + x]
 

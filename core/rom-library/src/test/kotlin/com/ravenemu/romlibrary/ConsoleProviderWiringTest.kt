@@ -3,7 +3,6 @@ package com.ravenemu.romlibrary
 import com.ravenemu.core.gb.GameBoyConsoleProvider
 import com.ravenemu.core.gb.cartridge.CartridgeHeader
 import com.ravenemu.core.gba.GbaConsoleProvider
-import com.ravenemu.core.gba.cartridge.GbaCartridge
 import com.ravenemu.emulation.api.ConsoleRegistry
 import com.ravenemu.emulation.api.ConsoleType
 import kotlin.test.Test
@@ -56,7 +55,7 @@ class ConsoleProviderWiringTest {
     fun `l'analyseur Game Boy Advance tient ses regles de son fournisseur`() {
         val analyseur = GbaRomAnalyzer(GbaConsoleProvider())
         assertEquals(ConsoleType.GAME_BOY_ADVANCE, analyseur.console)
-        assertEquals(GbaCartridge.MAX_ROM_SIZE, analyseur.maxRomSizeBytes)
+        assertEquals(GbaConsoleProvider.MAX_ROM_SIZE, analyseur.maxRomSizeBytes)
         assertTrue(analyseur.canAnalyze("emeraude.gba"))
         assertFalse(analyseur.canAnalyze("tetris.gb"))
     }

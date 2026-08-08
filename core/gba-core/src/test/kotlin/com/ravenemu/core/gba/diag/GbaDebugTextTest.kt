@@ -1,6 +1,6 @@
 package com.ravenemu.core.gba.diag
 
-import com.ravenemu.core.gba.GbaCore
+import com.ravenemu.core.gba.KotlinGbaCore
 import com.ravenemu.core.gba.RealisticRom
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -229,7 +229,7 @@ class GbaDebugTextTest {
     fun `le texte d'un moteur reel contient toutes les rubriques`() {
         // Hors mesure : pas de ligne de répartition du temps, mais la ligne
         // d'état vidéo est toujours présente.
-        val core = GbaCore()
+        val core = KotlinGbaCore()
         core.loadRom(RealisticRom.bootSequence())
         val framebuffer = IntArray(core.video.pixelCount)
         repeat(8) { core.runFrame(framebuffer) }

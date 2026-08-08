@@ -300,7 +300,7 @@ class RtcTest {
     @Test
     fun `un etat instantane conserve l'horloge`() {
         val now = LocalDateTime.of(2026, 7, 27, 9, 0, 0)
-        val core = GbaCore()
+        val core = KotlinGbaCore()
         core.loadRom(romWithRtc())
         val bus = core.machine!!.bus
         bus.gpio!!.rtc.clock = { now }

@@ -8,9 +8,11 @@ RavenEmu sépare les moteurs d'émulation des composants Android.
 |---|---|---|
 | `android/app` | Android | Écrans, navigation et session d'émulation |
 | `core/emulation-api` | Kotlin/JVM | Contrats communs entre application et moteurs |
+| `native-core` | C++20 | CPU, bus, vidéo, audio et cartouches des deux cœurs |
+| `core/native-bridge` | Java/JNI | Handles natifs et transport de tableaux primitifs |
 | `core/deltaskin` | Kotlin/JVM | Manifeste, validation ZIP, stockage, disposition et entrées du format `.deltaskin` |
-| `core/gameboy-core` | Kotlin/JVM | Game Boy et Game Boy Color |
-| `core/gba-core` | Kotlin/JVM | Game Boy Advance |
+| `core/gameboy-core` | Kotlin/JVM | Adaptateur et métadonnées Game Boy/Game Boy Color |
+| `core/gba-core` | Kotlin/JVM | Adaptateur et métadonnées Game Boy Advance |
 | `core/rom-library` | Kotlin/JVM | En-têtes, empreintes, identification et index |
 | `android/storage` | Android | Sélecteur de documents, sauvegardes, états et pochettes |
 | `android/renderer` | Android | Affichage du framebuffer |
@@ -21,15 +23,19 @@ RavenEmu sépare les moteurs d'émulation des composants Android.
 
 ### Moteurs indépendants
 
-`gba-core` ne dépend pas de `gameboy-core`. Chaque console implémente les contrats de `emulation-api`.
+Le moteur GBA ne dépend pas du moteur Game Boy. Chaque implémentation C++ expose le même contrat natif, puis son adaptateur Kotlin implémente `emulation-api`.
 
-### Kotlin/JVM testable
+### C++ testable sur l'hôte
 
-Les moteurs ne dépendent pas d'Android. Les tests peuvent s'exécuter sur une JVM de bureau sans lancer un émulateur Android.
+Les moteurs ne dépendent pas d'Android. CMake construit et teste leur bibliothèque statique sur l'hôte ; la CI compile également le pont JNI avec les vrais en-têtes Java. Les contrats, métadonnées et implémentations Kotlin de référence restent testés sur JVM sans émulateur Android.
+
+### Frontière JNI étroite
+
+Les objets Kotlin ne traversent pas le moteur : JNI transporte des handles, des scalaires et des tableaux primitifs. Les fournisseurs de production créent les adaptateurs C++ ; les anciennes implémentations Kotlin ne vivent plus que dans les sources de test, comme références de régression. La session Android, le renderer, les entrées et DeltaSkin continuent d'utiliser uniquement `EmulatorCore`.
 
 ### Sélection par fabrique
 
-L'application détecte la console d'une ROM et demande le moteur correspondant. Les écrans Android n'instancient pas directement les coeurs.
+L'application détecte la console d'une ROM et demande le moteur correspondant. Les écrans Android n'instancient pas directement les cœurs.
 
 ### Un cœur par console, pas par modèle
 
@@ -55,10 +61,10 @@ Chaque moteur avance selon un budget de cycles et produit un framebuffer, des é
 
 Un nouveau moteur doit:
 
-1. vivre dans son propre module;
-2. implémenter `emulation-api`;
+1. vivre dans une implémentation C++ isolée de `native-core`;
+2. exposer un adaptateur qui implémente `emulation-api`;
 3. rester indépendant des moteurs existants;
-4. fournir des tests synthétiques;
+4. fournir des tests synthétiques natifs;
 5. ajouter sa détection à la bibliothèque;
 6. déclarer ses capacités à l'application;
 7. se voir attribuer un `storageId` **neuf**, jamais une valeur déjà employée;

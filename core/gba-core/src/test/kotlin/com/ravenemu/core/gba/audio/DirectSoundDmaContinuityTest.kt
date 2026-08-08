@@ -1,6 +1,6 @@
 package com.ravenemu.core.gba.audio
 
-import com.ravenemu.core.gba.GbaCore
+import com.ravenemu.core.gba.KotlinGbaCore
 import com.ravenemu.core.gba.GbaMachine
 import com.ravenemu.core.gba.SyntheticRom
 import kotlin.test.Test
@@ -92,7 +92,7 @@ class DirectSoundDmaContinuityTest {
     @Test
     fun `un gros DMA ne fige pas le flux Direct Sound`() {
         val m = machine()
-        m.runFrame(GbaCore.CYCLES_PER_FRAME) // amorçage du flux
+        m.runFrame(KotlinGbaCore.CYCLES_PER_FRAME) // amorçage du flux
         vider(m)
 
         val cyclesDma = grosTransfert(m)
@@ -122,7 +122,7 @@ class DirectSoundDmaContinuityTest {
         // Un jeu ne fait pas un gros DMA isolé : il en enchaîne. Le défaut se
         // rejouait à chaque transfert, ce qui donnait un son haché.
         val m = machine()
-        m.runFrame(GbaCore.CYCLES_PER_FRAME)
+        m.runFrame(KotlinGbaCore.CYCLES_PER_FRAME)
         vider(m)
 
         repeat(4) {
@@ -143,9 +143,9 @@ class DirectSoundDmaContinuityTest {
         // avance de quelques cycles par instruction et le son est correct — y
         // compris avant correction.
         val m = machine()
-        m.runFrame(GbaCore.CYCLES_PER_FRAME)
+        m.runFrame(KotlinGbaCore.CYCLES_PER_FRAME)
         vider(m)
-        m.runFrame(GbaCore.CYCLES_PER_FRAME)
+        m.runFrame(KotlinGbaCore.CYCLES_PER_FRAME)
         val pcm = vider(m)
 
         assertTrue(pcm.isNotEmpty(), "Une trame doit produire du son")

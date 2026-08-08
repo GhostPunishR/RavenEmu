@@ -1,6 +1,6 @@
 package com.ravenemu.core.gba.input
 
-import com.ravenemu.core.gba.GbaCore
+import com.ravenemu.core.gba.KotlinGbaCore
 import com.ravenemu.core.gba.SyntheticRom
 import com.ravenemu.emulation.api.EmulatorButton
 import kotlin.test.Test
@@ -55,7 +55,7 @@ class GbaKeypadTest {
 
     @Test
     fun `KEYINPUT est lisible via le bus`() {
-        val core = GbaCore()
+        val core = KotlinGbaCore()
         core.loadRom(SyntheticRom.build())
         val bus = core.machine!!.bus
         core.setButton(EmulatorButton.START, true) // bit 3

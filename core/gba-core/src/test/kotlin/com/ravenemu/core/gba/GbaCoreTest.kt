@@ -8,14 +8,14 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
-class GbaCoreTest {
+class KotlinGbaCoreTest {
 
     private fun redBackdropRom() =
         SyntheticRom.build(programWords = SyntheticRom.backdropProgram(0x1F)) // BGR555 rouge pur
 
     @Test
     fun `caracteristiques video de la GBA`() {
-        val core = GbaCore()
+        val core = KotlinGbaCore()
         assertEquals(ConsoleType.GAME_BOY_ADVANCE, core.console)
         assertEquals(240, core.video.width)
         assertEquals(160, core.video.height)
@@ -25,13 +25,13 @@ class GbaCoreTest {
 
     @Test
     fun `une ROM sans marqueur GBA est refusee`() {
-        val core = GbaCore()
+        val core = KotlinGbaCore()
         assertFailsWith<RomLoadException> { core.loadRom(ByteArray(1024)) }
     }
 
     @Test
     fun `runFrame produit une image 240x160 d'une couleur unie`() {
-        val core = GbaCore()
+        val core = KotlinGbaCore()
         core.loadRom(redBackdropRom())
         val framebuffer = IntArray(core.video.pixelCount)
         core.runFrame(framebuffer)
@@ -43,20 +43,20 @@ class GbaCoreTest {
 
     @Test
     fun `runFrame sans ROM echoue`() {
-        val core = GbaCore()
+        val core = KotlinGbaCore()
         assertFailsWith<IllegalStateException> { core.runFrame(IntArray(240 * 160)) }
     }
 
     @Test
     fun `un framebuffer trop petit est refuse`() {
-        val core = GbaCore()
+        val core = KotlinGbaCore()
         core.loadRom(redBackdropRom())
         assertFailsWith<IllegalArgumentException> { core.runFrame(IntArray(100)) }
     }
 
     @Test
     fun `reset relance le meme programme`() {
-        val core = GbaCore()
+        val core = KotlinGbaCore()
         core.loadRom(redBackdropRom())
         val framebuffer = IntArray(core.video.pixelCount)
         core.runFrame(framebuffer)
@@ -67,7 +67,7 @@ class GbaCoreTest {
 
     @Test
     fun `pas d'audio ni de RAM a pile dans ce premier lot`() {
-        val core = GbaCore()
+        val core = KotlinGbaCore()
         core.loadRom(redBackdropRom())
         assertEquals(0, core.readAudio(ShortArray(64)))
         assertEquals(false, core.hasBatteryRam)

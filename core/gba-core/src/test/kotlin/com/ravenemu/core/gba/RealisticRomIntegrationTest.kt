@@ -17,12 +17,12 @@ import kotlin.test.assertTrue
  */
 class RealisticRomIntegrationTest {
 
-    private fun witness(core: GbaCore, offset: Int): Int =
+    private fun witness(core: KotlinGbaCore, offset: Int): Int =
         core.machine!!.bus.read32(RealisticRom.Witness.BASE + offset)
 
     @Test
     fun `la sequence de demarrage complete aboutit`() {
-        val core = GbaCore()
+        val core = KotlinGbaCore()
         core.loadRom(RealisticRom.bootSequence())
         val framebuffer = IntArray(core.video.pixelCount)
         val audio = ShortArray(4096)
@@ -89,7 +89,7 @@ class RealisticRomIntegrationTest {
 
     @Test
     fun `le timer avance pendant les attentes de VBlank`() {
-        val core = GbaCore()
+        val core = KotlinGbaCore()
         core.loadRom(RealisticRom.bootSequence())
         val framebuffer = IntArray(core.video.pixelCount)
         repeat(8) { core.runFrame(framebuffer) }
@@ -105,7 +105,7 @@ class RealisticRomIntegrationTest {
 
     @Test
     fun `le programme finit en Thumb`() {
-        val core = GbaCore()
+        val core = KotlinGbaCore()
         core.loadRom(RealisticRom.bootSequence())
         val framebuffer = IntArray(core.video.pixelCount)
         repeat(8) { core.runFrame(framebuffer) }
@@ -120,7 +120,7 @@ class RealisticRomIntegrationTest {
 
     @Test
     fun `une ROM entierement en Thumb s'execute`() {
-        val core = GbaCore()
+        val core = KotlinGbaCore()
         core.loadRom(RealisticRom.thumbOnly())
         val framebuffer = IntArray(core.video.pixelCount)
         core.runFrame(framebuffer)
@@ -133,7 +133,7 @@ class RealisticRomIntegrationTest {
 
     @Test
     fun `les interruptions continuent d'arriver apres le passage en Thumb`() {
-        val core = GbaCore()
+        val core = KotlinGbaCore()
         core.loadRom(RealisticRom.bootSequence())
         val framebuffer = IntArray(core.video.pixelCount)
         repeat(8) { core.runFrame(framebuffer) }
@@ -148,7 +148,7 @@ class RealisticRomIntegrationTest {
 
     @Test
     fun `un etat instantane restaure poursuit la meme execution`() {
-        val core = GbaCore()
+        val core = KotlinGbaCore()
         core.loadRom(RealisticRom.bootSequence())
         val framebuffer = IntArray(core.video.pixelCount)
         repeat(8) { core.runFrame(framebuffer) }

@@ -154,14 +154,14 @@ class BiosIntrWaitTest {
         // jeu, et qui acquitte `IF`.
         SyntheticRom.installMinimalIrqHandler(m.bus)
 
-        m.runFrame(com.ravenemu.core.gba.GbaCore.CYCLES_PER_FRAME)
+        m.runFrame(com.ravenemu.core.gba.KotlinGbaCore.CYCLES_PER_FRAME)
 
         assertEquals(0xCD, m.bus.read32(0x0200_0000), "la suite du programme doit s'exécuter")
     }
 
     @Test
     fun `l'attente survit a un aller-retour d'etat instantane`() {
-        val core = com.ravenemu.core.gba.GbaCore()
+        val core = com.ravenemu.core.gba.KotlinGbaCore()
         core.loadRom(SyntheticRom.build())
         val m = core.machine!!
         m.cpu.state.regs[0] = 1

@@ -1,7 +1,7 @@
 package com.ravenemu.core.gba.ppu
 
 import com.ravenemu.core.gba.AllocationProbe
-import com.ravenemu.core.gba.GbaCore
+import com.ravenemu.core.gba.KotlinGbaCore
 import com.ravenemu.core.gba.SyntheticRom
 import com.ravenemu.core.gba.cartridge.GbaCartridge
 import com.ravenemu.core.gba.memory.GbaBus
@@ -66,7 +66,7 @@ class PpuAllocationTest {
     @Test
     fun `le rendu d'une trame chargee n'alloue rien`() {
         val (_, ppu) = scene()
-        val allocated = AllocationProbe.measure { ppu.tick(GbaCore.CYCLES_PER_FRAME) }
+        val allocated = AllocationProbe.measure { ppu.tick(KotlinGbaCore.CYCLES_PER_FRAME) }
         println("ALLOC[ppu]: $allocated octets par trame")
         if (!AllocationProbe.supported) return // JVM sans mesure par fil
 
@@ -82,9 +82,9 @@ class PpuAllocationTest {
     fun `debit du rendu graphique`() {
         val (_, ppu) = scene()
         val frames = 120
-        repeat(30) { ppu.tick(GbaCore.CYCLES_PER_FRAME) } // échauffement
+        repeat(30) { ppu.tick(KotlinGbaCore.CYCLES_PER_FRAME) } // échauffement
         val start = System.nanoTime()
-        repeat(frames) { ppu.tick(GbaCore.CYCLES_PER_FRAME) }
+        repeat(frames) { ppu.tick(KotlinGbaCore.CYCLES_PER_FRAME) }
         val msPerFrame = (System.nanoTime() - start) / 1_000_000.0 / frames
         println("PERF[ppu]: %.3f ms de rendu par trame (4 BG + 128 sprites)".format(msPerFrame))
         // Borne large : le rendu coûte ~2 ms sur un poste de développement, ce

@@ -1,6 +1,6 @@
 package com.ravenemu.core.gba.state
 
-import com.ravenemu.core.gba.GbaCore
+import com.ravenemu.core.gba.KotlinGbaCore
 import com.ravenemu.core.gba.SyntheticRom
 import com.ravenemu.emulation.api.SaveStateException
 import kotlin.test.Test
@@ -11,8 +11,8 @@ import kotlin.test.assertNotSame
 
 class GbaStateTest {
 
-    private fun loadedCore(): GbaCore {
-        val core = GbaCore()
+    private fun loadedCore(): KotlinGbaCore {
+        val core = KotlinGbaCore()
         core.loadRom(SyntheticRom.build(programWords = SyntheticRom.backdropProgram(0x1F)))
         return core
     }
@@ -90,7 +90,7 @@ class GbaStateTest {
         val core = loadedCore()
         val state = core.saveState()
 
-        val other = GbaCore()
+        val other = KotlinGbaCore()
         other.loadRom(
             SyntheticRom.build(
                 title = "AUTRE",

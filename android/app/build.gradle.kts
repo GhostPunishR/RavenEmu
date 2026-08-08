@@ -13,6 +13,7 @@ val TEST_KEYSTORE_PATH_ENV = "RAVENEMU_TEST_KEYSTORE_PATH"
 android {
     namespace = "com.ravenemu.app"
     compileSdk = 35
+    ndkVersion = "27.2.12479018"
 
     buildFeatures {
         // `BuildConfig.DEBUG` conditionne la surcouche de débogage GBA : elle ne
@@ -27,6 +28,12 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
+
+        externalNativeBuild {
+            cmake {
+                cppFlags += "-std=c++20"
+            }
+        }
     }
 
     signingConfigs {
@@ -99,10 +106,9 @@ android {
         }
     }
 
-    // App Bundle (.aab) pour la distribution Play Store : Google génère des
-    // APK optimisés par appareil à partir du bundle. Le moteur est en Kotlin
-    // pur (aucune bibliothèque native), donc le découpage par ABI est sans
-    // objet ; on conserve le découpage par densité et par langue (défauts AGP).
+    // App Bundle (.aab) pour la distribution Play Store : Google génère les
+    // bibliothèques C++ des cœurs pour l'ABI de chaque appareil, en plus des
+    // découpages habituels par densité et par langue.
     bundle {
         density { enableSplit = true }
         language { enableSplit = true }
@@ -112,6 +118,13 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("../../native-core/CMakeLists.txt")
+            version = "3.22.1"
+        }
     }
 
     lint {
