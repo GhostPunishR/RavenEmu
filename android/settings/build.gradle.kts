@@ -24,8 +24,8 @@ kotlin {
 }
 
 dependencies {
-    api(project(":android:input"))
-    implementation(project(":core:deltaskin"))
+    api(project(":platform:android:input"))
+    implementation(project(":features:skins"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.preference)
 }

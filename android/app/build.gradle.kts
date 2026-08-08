@@ -141,15 +141,15 @@ kotlin {
 }
 
 dependencies {
-    implementation(project(":core:emulation-api"))
-    implementation(project(":core:deltaskin"))
-    implementation(project(":core:gameboy-core"))
-    implementation(project(":core:gba-core"))
+    implementation(project(":engine:api"))
+    implementation(project(":features:skins"))
+    implementation(project(":engine:systems:gb"))
+    implementation(project(":engine:systems:gba"))
     implementation(project(":core:rom-library"))
-    implementation(project(":android:storage"))
-    implementation(project(":android:renderer"))
-    implementation(project(":android:input"))
-    implementation(project(":android:settings"))
+    implementation(project(":platform:android:storage"))
+    implementation(project(":platform:android:renderer"))
+    implementation(project(":platform:android:input"))
+    implementation(project(":platform:android:settings"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)

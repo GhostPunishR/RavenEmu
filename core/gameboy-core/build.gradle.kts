@@ -4,6 +4,6 @@ plugins {
 }
 
 dependencies {
-    api(project(":core:emulation-api"))
-    implementation(project(":core:native-bridge"))
+    api(project(":engine:api"))
+    implementation(project(":native:jni"))
 }

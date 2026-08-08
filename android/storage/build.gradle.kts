@@ -27,7 +27,7 @@ kotlin {
 
 dependencies {
     api(project(":core:rom-library"))
-    api(project(":core:deltaskin"))
+    api(project(":features:skins"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.documentfile)
     implementation(libs.kotlinx.coroutines.android)

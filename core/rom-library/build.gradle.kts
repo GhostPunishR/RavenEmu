@@ -3,8 +3,8 @@ plugins {
 }
 
 dependencies {
-    api(project(":core:emulation-api"))
-    api(project(":core:gameboy-core"))
-    api(project(":core:gba-core"))
+    api(project(":engine:api"))
+    api(project(":engine:systems:gb"))
+    api(project(":engine:systems:gba"))
     implementation(libs.kotlinx.serialization.json)
 }

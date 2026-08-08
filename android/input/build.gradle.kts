@@ -25,8 +25,8 @@ kotlin {
 }
 
 dependencies {
-    api(project(":core:emulation-api"))
-    api(project(":core:deltaskin"))
+    api(project(":engine:api"))
+    api(project(":features:skins"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)

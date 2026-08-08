@@ -31,29 +31,39 @@ rootProject.name = "RavenEmu"
 // Plugins de convention, compilés avant le build principal.
 includeBuild("build-logic")
 
-// Les modules sont regroupés par rôle : `core/` ne dépend d'aucune plateforme,
-// `android/` porte tout ce qui touche au système, `tools/` vérifie le dépôt
-// lui-même. Le chemin de projet suit ce découpage (`:core:gba-core`), ce qui
-// rend la couche visible dans chaque dépendance déclarée.
+/**
+ * Déclare un module sous son rôle architectural sans imposer, dans cette PR,
+ * un déplacement massif de ses sources. Cela permet de rendre le graphe de
+ * dépendances explicite maintenant, puis de déplacer les répertoires physiques
+ * par lots testés sans mélanger réorganisation et réécriture fonctionnelle.
+ */
+fun includeModule(path: String, directory: String) {
+    include(path)
+    project(path).projectDir = file(directory)
+}
 
-// Modules JVM purs : constructibles et testables sans SDK Android. Les
-// adaptateurs de console utilisent `core/native-bridge`; l'exécution vit dans
-// les bibliothèques C++20 indépendantes de `cores/`.
-include(":core:emulation-api")
-include(":core:native-bridge")
-include(":core:deltaskin")
-include(":core:gameboy-core")
-include(":core:gba-core")
+// Moteur Kotlin pur : contrats, orchestration et adaptateurs de consoles.
+includeModule(":engine:api", "core/emulation-api")
+includeModule(":engine:systems:gb", "core/gameboy-core")
+includeModule(":engine:systems:gba", "core/gba-core")
+
+// Frontière JVM/C++ uniquement. Les cœurs C++ vivent hors de Gradle dans cores/.
+includeModule(":native:jni", "native/jni")
+
+// Fonctions indépendantes de la plateforme.
+includeModule(":features:skins", "core/deltaskin")
+
+// Exception volontaire de cette refonte : la bibliothèque ROM vient d'être
+// profondément remaniée et reste strictement à son emplacement et sous son
+// identité actuels pour éviter tout changement fonctionnel ou de migration.
 include(":core:rom-library")
 
 // Vérification de la configuration du dépôt (workflows GitHub Actions,
-// signature des APK) : uniquement des tests, aucun code de production.
-// Voir RELEASING.md.
+// signature des APK, règles d'architecture) : uniquement des tests.
 include(":tools:ci-policy")
 
-// Modules Android : inclus uniquement si un SDK Android est disponible
-// (variable d'environnement ou local.properties), afin que les modules JVM
-// restent constructibles sur toute machine. Voir wiki/Architecture.md.
+// Modules Android : inclus uniquement si un SDK Android est disponible afin
+// que les modules JVM purs restent constructibles sur toute machine.
 val localProperties = File(rootDir, "local.properties")
 val sdkFromLocalProperties = localProperties.takeIf { it.isFile }
     ?.readLines()
@@ -67,11 +77,13 @@ val sdkDir = sequenceOf(
 ).filterNotNull().map(::File).firstOrNull(File::isDirectory)
 
 if (sdkDir != null) {
+    // L'application reste à son emplacement actuel : elle contient notamment
+    // la bibliothèque gelée pour cette refonte.
     include(":android:app")
-    include(":android:storage")
-    include(":android:renderer")
-    include(":android:input")
-    include(":android:settings")
+    includeModule(":platform:android:storage", "android/storage")
+    includeModule(":platform:android:renderer", "android/renderer")
+    includeModule(":platform:android:input", "android/input")
+    includeModule(":platform:android:settings", "android/settings")
 } else {
     logger.lifecycle(
         "RavenEmu : SDK Android introuvable, seuls les modules non Android " +

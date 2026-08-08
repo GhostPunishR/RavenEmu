@@ -24,6 +24,6 @@ kotlin {
 }
 
 dependencies {
-    implementation(project(":core:emulation-api"))
+    implementation(project(":engine:api"))
     implementation(libs.androidx.core.ktx)
 }

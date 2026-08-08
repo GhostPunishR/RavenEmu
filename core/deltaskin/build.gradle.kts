@@ -3,7 +3,6 @@ plugins {
 }
 
 dependencies {
-    api(project(":core:emulation-api"))
+    api(project(":engine:api"))
     implementation(libs.kotlinx.serialization.json)
-
 }
