@@ -14,6 +14,7 @@ import android.widget.CheckBox
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
+import android.text.format.DateUtils
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
@@ -432,8 +433,17 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
         // connu, on (ré)applique les réglages vidéo en conséquence.
         applyVideoSettings()
 
-        if (settings.autoResume) {
-            snapshotStore.read(romSha256, SnapshotStore.AUTO_SLOT)?.let { state ->
+        // Un emplacement demandé explicitement — reprise depuis l'écran des
+        // états — prime sur la reprise automatique : c'est un choix du joueur,
+        // pas un filet de sécurité.
+        val requestedSlot = intent.getIntExtra(EXTRA_RESUME_SLOT, NO_SLOT)
+        val restoreSlot = when {
+            requestedSlot != NO_SLOT -> requestedSlot
+            settings.autoResume -> SnapshotStore.AUTO_SLOT
+            else -> NO_SLOT
+        }
+        if (restoreSlot != NO_SLOT) {
+            snapshotStore.read(romSha256, restoreSlot)?.let { state ->
                 newSession.post { c ->
                     try {
                         c.loadState(state)
@@ -522,11 +532,41 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
             .show()
     }
 
+    /**
+     * Sauvegarde dans un emplacement choisi.
+     *
+     * Un emplacement unique obligeait à écraser sa seule sauvegarde pour en
+     * prendre une autre, et rendait l'écran des états sans objet. Le libellé de
+     * chaque emplacement indique s'il est déjà occupé, pour qu'un écrasement
+     * soit un choix et non une surprise.
+     */
     private fun saveSnapshot() {
         val currentSession = session ?: return
+        val occupes = snapshotStore.list(romSha256).associateBy { it.slot }
+        val labels = USER_SLOTS.map { slot ->
+            val base = getString(R.string.states_slot, slot)
+            occupes[slot]?.let { info ->
+                base + " · " + DateUtils.getRelativeTimeSpanString(
+                    info.savedAt,
+                    System.currentTimeMillis(),
+                    DateUtils.MINUTE_IN_MILLIS,
+                )
+            } ?: base
+        }.toTypedArray()
+
+        AlertDialog.Builder(this)
+            .setTitle(R.string.states_choose_slot)
+            .setItems(labels) { _, which ->
+                writeSnapshot(currentSession, USER_SLOTS.first + which)
+            }
+            .setOnCancelListener { currentSession.resume() }
+            .show()
+    }
+
+    private fun writeSnapshot(currentSession: EmulationSession, slot: Int) {
         currentSession.post { c ->
             val state = c.saveState()
-            val saved = snapshotStore.write(romSha256, USER_SLOT, state)
+            val saved = snapshotStore.write(romSha256, slot, state)
             runOnUiThread {
                 val message = if (saved) {
                     R.string.emulation_state_saved
@@ -539,9 +579,41 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
         currentSession.resume()
     }
 
+    /**
+     * Recharge un état. Seuls les emplacements réellement occupés sont
+     * proposés : offrir des emplacements vides n'apprendrait rien et ferait
+     * échouer le chargement une fois sur deux.
+     */
     private fun loadSnapshot() {
         val currentSession = session ?: return
-        val state = snapshotStore.read(romSha256, USER_SLOT)
+        val disponibles = snapshotStore.list(romSha256)
+            .filter { it.slot in USER_SLOTS }
+            .sortedBy { it.slot }
+        if (disponibles.isEmpty()) {
+            Toast.makeText(this, R.string.emulation_no_state, Toast.LENGTH_SHORT).show()
+            currentSession.resume()
+            return
+        }
+        val labels = disponibles.map { info ->
+            getString(R.string.states_slot, info.slot) + " · " +
+                DateUtils.getRelativeTimeSpanString(
+                    info.savedAt,
+                    System.currentTimeMillis(),
+                    DateUtils.MINUTE_IN_MILLIS,
+                )
+        }.toTypedArray()
+
+        AlertDialog.Builder(this)
+            .setTitle(R.string.emulation_load_state)
+            .setItems(labels) { _, which ->
+                readSnapshot(currentSession, disponibles[which].slot)
+            }
+            .setOnCancelListener { currentSession.resume() }
+            .show()
+    }
+
+    private fun readSnapshot(currentSession: EmulationSession, slot: Int) {
+        val state = snapshotStore.read(romSha256, slot)
         if (state == null) {
             Toast.makeText(this, R.string.emulation_no_state, Toast.LENGTH_SHORT).show()
             currentSession.resume()
@@ -734,16 +806,49 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
         private const val EXTRA_SHA256 = "rom_sha256"
         private const val EXTRA_TITLE = "rom_title"
         private const val EXTRA_CONSOLE = "rom_console"
+        private const val EXTRA_RESUME_SLOT = "rom_resume_slot"
 
-        /** Emplacement d'état utilisateur (le 0 est réservé à l'automatique). */
-        private const val USER_SLOT = 1
+        /**
+         * Emplacements d'états choisis par le joueur. Le 0 reste réservé à la
+         * reprise automatique : l'écraser ferait perdre la partie en cours au
+         * profit d'une sauvegarde volontaire, ce que personne n'attend.
+         */
+        val USER_SLOTS = 1..4
 
-        fun intent(context: Context, entry: RomEntry): Intent =
+        /** Aucun emplacement imposé : la reprise automatique décide. */
+        const val NO_SLOT = -1
+
+        fun intent(context: Context, entry: RomEntry, resumeSlot: Int = NO_SLOT): Intent =
+            intent(
+                context = context,
+                uri = entry.uri,
+                fileName = entry.fileName,
+                sha256 = entry.fingerprints.sha256,
+                title = entry.displayName,
+                console = entry.console.name,
+                resumeSlot = resumeSlot,
+            )
+
+        /**
+         * Variante sans [RomEntry], pour les écrans qui ne transportent que les
+         * champs nécessaires — l'entrée d'index n'est pas sérialisable dans un
+         * `Intent` et la recopier n'apporterait rien.
+         */
+        fun intent(
+            context: Context,
+            uri: String,
+            fileName: String,
+            sha256: String,
+            title: String,
+            console: String,
+            resumeSlot: Int = NO_SLOT,
+        ): Intent =
             Intent(context, EmulationActivity::class.java)
-                .putExtra(EXTRA_URI, entry.uri)
-                .putExtra(EXTRA_FILE_NAME, entry.fileName)
-                .putExtra(EXTRA_SHA256, entry.fingerprints.sha256)
-                .putExtra(EXTRA_TITLE, entry.displayName)
-                .putExtra(EXTRA_CONSOLE, entry.console.name)
+                .putExtra(EXTRA_URI, uri)
+                .putExtra(EXTRA_FILE_NAME, fileName)
+                .putExtra(EXTRA_SHA256, sha256)
+                .putExtra(EXTRA_TITLE, title)
+                .putExtra(EXTRA_CONSOLE, console)
+                .putExtra(EXTRA_RESUME_SLOT, resumeSlot)
     }
 }

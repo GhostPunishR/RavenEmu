@@ -111,6 +111,17 @@
     <string name="cancel">Annuler</string>
     <string name="ok">OK</string>
 
+    <!-- Écran des états de sauvegarde. -->
+    <string name="states_title">États de sauvegarde</string>
+    <string name="states_empty">Aucun état enregistré pour ce jeu.\n\nPendant une partie, ouvrez le menu et choisissez « Sauvegarder l\'état ».</string>
+    <string name="states_slot_auto">Reprise automatique</string>
+    <string name="states_slot">Emplacement %1$d</string>
+    <string name="states_size_kib">%1$d Kio</string>
+    <string name="states_resume">Reprendre</string>
+    <string name="states_delete">Supprimer</string>
+    <string name="states_delete_confirm">Supprimer cet état ? L\'action est définitive.</string>
+    <string name="states_choose_slot">Sauvegarder dans…</string>
+
     <!-- Skins de contrôleur au format .deltaskin -->
     <string name="delta_skins_title">Skins de contrôleur</string>
     <string name="delta_skins_compatibility">RavenEmu lit le format de fichier .deltaskin. Ce projet n\'est ni affilié à Delta, ni approuvé par ses auteurs. Les skins ne sont ni fournis ni téléchargés : vous importez les vôtres.</string>
