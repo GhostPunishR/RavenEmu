@@ -12,11 +12,24 @@ Les moteurs sont développés en **C++20** pour le projet à partir de documenta
 
 ## Télécharger
 
-La CI publie automatiquement l'APK de test issu de `main` :
-
 ### [Télécharger le dernier APK Test](https://github.com/GhostPunishR/RavenEmu/releases/download/test-latest/RavenEmu-test.apk)
 
-L'APK Test est destiné aux essais et ne constitue pas une version stable. Les informations de signature, d'installation et de vérification sont détaillées dans le [wiki](https://github.com/GhostPunishR/RavenEmu/wiki/Installation).
+La CI publie l'APK Test sous `test-latest`. Il utilise le package `com.ravenemu.app.profil`. Le build Debug local utilise `com.ravenemu.app.debug` et la Release `com.ravenemu.app`.
+
+Pour vérifier l'APK :
+
+```bash
+sha256sum -c RavenEmu-test.apk.sha256
+apksigner verify --print-certs RavenEmu-test.apk
+```
+
+Empreinte SHA-256 du certificat Test :
+
+```text
+c439aed3f5210f88d92f435f949614cacbb4105ed7967a246abfa051d59feee1
+```
+
+Les détails d'installation et de signature sont dans le [wiki](https://github.com/GhostPunishR/RavenEmu/wiki/Installation).
 
 ## État du projet
 
@@ -42,9 +55,7 @@ native/api + native/jni
 cores/common + cores/gb + cores/gbc + cores/gba
 ```
 
-Les chemins Gradle correspondent aux dossiers physiques. Les cœurs restent indépendants d'Android et l'interface native est volontairement minimale.
-
-Voir [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) et le [wiki Architecture](https://github.com/GhostPunishR/RavenEmu/wiki/Architecture) pour les détails.
+Voir [ARCHITECTURE.md](ARCHITECTURE.md) et le [wiki Architecture](https://github.com/GhostPunishR/RavenEmu/wiki/Architecture). Le dossier `docs/` est réservé au site officiel.
 
 ## Compiler
 
@@ -59,7 +70,7 @@ cd RavenEmu
 ./gradlew :app:android:assembleDebug
 ```
 
-Pour les tests C++ natifs :
+Tests C++ natifs :
 
 ```bash
 cmake -S cores -B build/native-host -DRAVENEMU_BUILD_TESTS=ON
@@ -67,24 +78,22 @@ cmake --build build/native-host --parallel
 ctest --test-dir build/native-host --output-on-failure
 ```
 
-Le guide complet est disponible dans le [wiki Compilation](https://github.com/GhostPunishR/RavenEmu/wiki/Compilation).
+Le guide complet est dans le [wiki Compilation](https://github.com/GhostPunishR/RavenEmu/wiki/Compilation).
 
 ## Documentation
 
 - [Wiki RavenEmu](https://github.com/GhostPunishR/RavenEmu/wiki)
 - [Installation](https://github.com/GhostPunishR/RavenEmu/wiki/Installation)
 - [Premiers pas](https://github.com/GhostPunishR/RavenEmu/wiki/Premiers-pas)
-- [Consoles et compatibilité](https://github.com/GhostPunishR/RavenEmu/wiki/Consoles-et-compatibilite)
+- [Compatibilité](https://github.com/GhostPunishR/RavenEmu/wiki/Compatibilite-des-jeux)
 - [Sauvegardes et états](https://github.com/GhostPunishR/RavenEmu/wiki/Sauvegardes-et-etats)
 - [Compilation](https://github.com/GhostPunishR/RavenEmu/wiki/Compilation)
 - [Architecture](https://github.com/GhostPunishR/RavenEmu/wiki/Architecture)
 - [Dépannage](https://github.com/GhostPunishR/RavenEmu/wiki/Depannage)
-- [Guide de contribution](CONTRIBUTING.md)
-- [Publication des versions](RELEASING.md)
 
 ## Contribuer
 
-Les contributions sont bienvenues. Consultez [CONTRIBUTING.md](CONTRIBUTING.md) et [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
+Consultez [CONTRIBUTING.md](CONTRIBUTING.md) et [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 
 Le code d'un autre émulateur ne doit pas être copié, traduit ou adapté dans RavenEmu. Les tests ne doivent contenir aucune ROM commerciale ni aucun BIOS protégé.
 
