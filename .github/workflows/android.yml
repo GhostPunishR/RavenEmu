@@ -109,7 +109,7 @@ jobs:
         run: ./gradlew lint
 
       - name: Construire l'APK Debug
-        run: ./gradlew assembleDebug
+        run: ./gradlew :app:android:assembleDebug
 
       - name: Restaurer la clé de signature Test
         if: env.TEST_KEYSTORE_BASE64 != ''
@@ -128,7 +128,7 @@ jobs:
           RAVENEMU_TEST_KEYSTORE_PASSWORD: ${{ secrets.RAVENEMU_TEST_KEYSTORE_PASSWORD }}
           RAVENEMU_TEST_KEY_ALIAS: ${{ secrets.RAVENEMU_TEST_KEY_ALIAS }}
           RAVENEMU_TEST_KEY_PASSWORD: ${{ secrets.RAVENEMU_TEST_KEY_PASSWORD }}
-        run: ./gradlew assembleProfil
+        run: ./gradlew :app:android:assembleProfil
 
       # Provenance de l'APK Test : empreinte du fichier, empreinte du
       # certificat de signature, commit source et nom du package. Ces quatre
@@ -136,7 +136,7 @@ jobs:
       # qu'un APK téléchargé vient bien de ce dépôt et de cette clé.
       - name: Décrire l'APK Test (empreintes et provenance)
         run: |
-          apk="$(find android/app/build/outputs/apk/profil -type f -name '*.apk' -print -quit)"
+          apk="$(find app/android/build/outputs/apk/profil -type f -name '*.apk' -print -quit)"
           if [[ -z "$apk" ]]; then
             echo "::error::Aucun APK Test produit par assembleProfil."
             exit 1
@@ -167,7 +167,7 @@ jobs:
             echo "commit=$GITHUB_SHA"
             echo "package=$package"
             echo "signature_source=$signature_source"
-          } > android/app/build/outputs/apk/profil/provenance.txt
+          } > app/android/build/outputs/apk/profil/provenance.txt
 
           {
             echo "## APK Test"
@@ -204,8 +204,8 @@ jobs:
         with:
           name: ravenemu-test-apk
           path: |
-            android/app/build/outputs/apk/profil/*.apk
-            android/app/build/outputs/apk/profil/provenance.txt
+            app/android/build/outputs/apk/profil/*.apk
+            app/android/build/outputs/apk/profil/provenance.txt
 
   publish-test:
     name: APK Test téléchargeable
@@ -416,14 +416,14 @@ jobs:
           RAVENEMU_KEYSTORE_PASSWORD: ${{ secrets.RAVENEMU_KEYSTORE_PASSWORD }}
           RAVENEMU_KEY_ALIAS: ${{ secrets.RAVENEMU_KEY_ALIAS }}
           RAVENEMU_KEY_PASSWORD: ${{ secrets.RAVENEMU_KEY_PASSWORD }}
-        run: ./gradlew assembleRelease bundleRelease
+        run: ./gradlew :app:android:assembleRelease :app:android:bundleRelease
 
       - name: Décrire les livrables Release (empreintes et provenance)
         env:
           TEST_CERT: ${{ vars.RAVENEMU_TEST_CERT_SHA256 }}
         run: |
-          apk="$(find android/app/build/outputs/apk/release -type f -name '*.apk' -print -quit)"
-          aab="$(find android/app/build/outputs/bundle/release -type f -name '*.aab' -print -quit)"
+          apk="$(find app/android/build/outputs/apk/release -type f -name '*.apk' -print -quit)"
+          aab="$(find app/android/build/outputs/bundle/release -type f -name '*.aab' -print -quit)"
           if [[ -z "$apk" || -z "$aab" ]]; then
             echo "::error::Livrables Release incomplets (APK ou AAB manquant)."
             exit 1
@@ -462,10 +462,10 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ravenemu-release-apk
-          path: android/app/build/outputs/apk/release/*.apk
+          path: app/android/build/outputs/apk/release/*.apk
 
       - name: Publier l'App Bundle Release signé
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ravenemu-release-aab
-          path: android/app/build/outputs/bundle/release/*.aab
+          path: app/android/build/outputs/bundle/release/*.aab

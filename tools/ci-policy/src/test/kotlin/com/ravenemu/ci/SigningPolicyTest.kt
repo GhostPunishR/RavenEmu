@@ -17,7 +17,7 @@ import kotlin.test.assertTrue
 class SigningPolicyTest {
 
     private val workflow = WorkflowFile.androidWorkflow()
-    private val appBuildFile = WorkflowFile.moduleBuildFile("app").readText()
+    private val appBuildFile = WorkflowFile.moduleBuildFile("app/android").readText()
 
     private fun job(name: String): String =
         workflow.jobs[name]?.joinToString("\n") ?: error("Job « $name » absent du workflow")

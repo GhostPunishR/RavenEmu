@@ -1,25 +1,22 @@
 # Architecture
 
-RavenEmu sépare les moteurs d'émulation des composants Android.
+RavenEmu V2 sépare physiquement les moteurs, l'interface native, le moteur Kotlin,
+les services Android et les features. Les chemins Gradle correspondent aux dossiers.
 
-## Modules
+## Couches
 
-| Module | Type | Responsabilité |
+| Couche | Type | Responsabilité |
 |---|---|---|
-| `android/app` | Android | Écrans, navigation et session d'émulation |
-| `core/emulation-api` | Kotlin/JVM | Contrats communs entre application et moteurs |
-| `cores/CGBRavenCore` | C++20 | CPU, bus, vidéo, audio et cartouches Game Boy / Game Boy Color |
-| `cores/GBARavenCore` | C++20 | CPU, bus, vidéo, audio, DMA, BIOS et cartouches Game Boy Advance |
-| `cores/shared` | C++20 | Contrat `Core` et utilitaires communs aux deux cœurs |
-| `core/native-bridge` | Java/JNI | Handles natifs et transport de tableaux primitifs |
-| `core/deltaskin` | Kotlin/JVM | Manifeste, validation ZIP, stockage, disposition et entrées du format `.deltaskin` |
-| `core/gameboy-core` | Kotlin/JVM | Adaptateur et métadonnées Game Boy/Game Boy Color |
-| `core/gba-core` | Kotlin/JVM | Adaptateur et métadonnées Game Boy Advance |
-| `core/rom-library` | Kotlin/JVM | En-têtes, empreintes, identification et index |
-| `android/storage` | Android | Sélecteur de documents, sauvegardes, états et pochettes |
-| `android/renderer` | Android | Affichage du framebuffer |
-| `android/input` | Android | Commandes tactiles et manettes |
-| `android/settings` | Android | Préférences et profils |
+| `app/android` | Android | Coque UI et composition finale |
+| `cores/common` | C++20 | Contrat et primitives communes |
+| `cores/gb` | C++20 | Game Boy, avec le mode CGB historique |
+| `cores/gbc` | C++20 | Frontière dédiée à l'extraction progressive du matériel CGB |
+| `cores/gba` | C++20 | Game Boy Advance |
+| `native/api` | C++20 | Contrat natif générique |
+| `native/jni` | Java/C++ | Frontière JNI uniquement |
+| `engine/*` | Kotlin/JVM | API, runtime, session, état, save, audio, diagnostics |
+| `platform/android/*` | Android | Audio, rendu, entrées, stockage, vibration, lifecycle |
+| `features/*` | JVM/Android | Library, player, settings, skins, savestates, diagnostics |
 
 ## Principes
 
@@ -41,7 +38,7 @@ L'application détecte la console d'une ROM et demande le moteur correspondant. 
 
 ### Un cœur par console, pas par modèle
 
-`ConsoleType` désigne un **cœur d'émulation**, pas un modèle commercialisé : `gameboy-core` couvre à lui seul la Game Boy et la Game Boy Color, et n'y figure donc qu'une fois.
+`ConsoleType` désigne un **cœur d'émulation**, pas un modèle commercialisé : `engine/runtime` couvre à lui seul la Game Boy et la Game Boy Color, et n'y figure donc qu'une fois.
 
 Ce que déclare la cartouche (monochrome, compatible couleur, ou couleur exigée) est une métadonnée distincte, lue à l'octet `0x0143` de l'en-tête et portée par `GameBoyCartridgeMode`. L'extension du fichier ne décide de rien : des `.gbc` contiennent des cartouches monochromes, des `.gb` des cartouches couleur.
 
@@ -63,8 +60,8 @@ Chaque moteur avance selon un budget de cycles et produit un framebuffer, des é
 
 Un nouveau moteur doit:
 
-1. vivre dans une implémentation C++ isolée sous `cores/`, un dossier par organe;
-2. exposer un adaptateur qui implémente `emulation-api`;
+1. vivre dans une implémentation C++ isolée sous `cores/`, avec ses organes séparés;
+2. exposer son adaptateur via `engine/api` et `engine/runtime`;
 3. rester indépendant des moteurs existants;
 4. fournir des tests synthétiques natifs;
 5. ajouter sa détection à la bibliothèque;

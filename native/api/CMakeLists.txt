@@ -1,0 +1,3 @@
+add_library(ravenemu_native_api INTERFACE)
+target_include_directories(ravenemu_native_api INTERFACE include)
+target_link_libraries(ravenemu_native_api INTERFACE ravenemu_cores)

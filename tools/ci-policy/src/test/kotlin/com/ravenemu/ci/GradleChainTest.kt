@@ -130,14 +130,14 @@ class GradleChainTest {
 
     @Test
     fun `les chemins d'artefact du workflow designent le module app reel`() {
-        // Regrouper les modules par rôle a déplacé `app/` sous `android/`. Le
+        // La V2 place l’application dans `app/android`. Le
         // workflow, lui, cherche l'APK à un chemin écrit en dur : rien dans le
         // build ne le relie au module, et la rupture ne se serait vue qu'à la
         // publication. Ce test relie les deux.
-        val moduleApp = WorkflowFile.moduleBuildFile("app").parentFile
+        val moduleApp = WorkflowFile.moduleBuildFile("app/android").parentFile
         val prefixeAttendu = moduleApp.relativeTo(racine).path.replace(File.separatorChar, '/')
 
-        val chemins = Regex("[\\w/-]*app/build/outputs[\\w/*.-]*")
+        val chemins = Regex("[\\w/-]+/build/outputs[\\w/*.-]*")
             .findAll(WorkflowFile.androidWorkflow().text)
             .map { it.value }
             .toSet()

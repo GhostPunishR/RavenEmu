@@ -5,8 +5,8 @@
 - Git;
 - JDK 21 recommandé, identique à la CI;
 - Gradle Wrapper fourni par le dépôt;
-- SDK Android avec `compileSdk 35` pour construire l'application;
-- Android NDK `27.2.12479018` et CMake `3.22.1`.
+- SDK Android avec `compileSdk 37` pour construire l'application;
+- Android NDK `29.0.14206865` et CMake `3.22.1`.
 
 Les modules JVM peuvent être testés sans SDK Android. Les moteurs C++ se testent séparément sur l'hôte avec un compilateur C++20 et CMake.
 
@@ -35,7 +35,7 @@ cmake --build build/native-host --parallel
 ctest --test-dir build/native-host --output-on-failure
 ```
 
-Pour compiler aussi la frontière JNI sur l'hôte, ajoutez `-DRAVENEMU_BUILD_JNI=ON`; CMake utilise alors les en-têtes du JDK installé.
+Pour compiler aussi la frontière JNI sur l'hôte, configurez `native/` : `cmake -S native -B build/native-host-jni`. CMake utilise alors les en-têtes du JDK installé.
 
 ## Lint Android
 
@@ -48,13 +48,13 @@ Le SDK Android doit être configuré.
 ## Construire l'APK Debug
 
 ```bash
-./gradlew assembleDebug
+./gradlew :app:android:assembleDebug
 ```
 
 Le fichier produit se trouve sous:
 
 ```text
-android/app/build/outputs/apk/debug/
+app/android/build/outputs/apk/debug/
 ```
 
 ## Validation complète
@@ -63,7 +63,7 @@ android/app/build/outputs/apk/debug/
 cmake -S cores -B build/native-host -DRAVENEMU_BUILD_TESTS=ON
 cmake --build build/native-host --parallel
 ctest --test-dir build/native-host --output-on-failure
-./gradlew test lint assembleDebug
+./gradlew test lint :app:android:assembleDebug
 ```
 
 C'est la séquence principale exécutée par la CI Android.

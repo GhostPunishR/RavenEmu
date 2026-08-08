@@ -12,20 +12,13 @@ plugins {
 
 tasks.register("jvmTest") {
     group = "verification"
-    description = "Exécute les tests des modules indépendants du SDK Android."
+    description = "Exécute les tests des modules JVM purs."
+    val prefixes = listOf(":engine:", ":features:library", ":features:skins", ":native:jni", ":tools:")
     dependsOn(
         provider {
             subprojects
-                .filter { project ->
-                    val purePrefix = listOf(
-                        ":engine:",
-                        ":features:",
-                        ":native:",
-                        ":core:",
-                        ":tools:",
-                    ).any(project.path::startsWith)
-                    purePrefix && project.file("build.gradle.kts").isFile
-                }
+                .filter { p -> prefixes.any { prefix -> p.path.startsWith(prefix) } }
+                .filter { it.tasks.names.contains("test") }
                 .map { "${it.path}:test" }
         }
     )

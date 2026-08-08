@@ -19,7 +19,10 @@ import org.gradle.process.CommandLineArgumentProvider
 
 val sourcesNatives = rootProject.layout.projectDirectory.dir("native")
 val cmakeNatif = sourcesNatives.file("CMakeLists.txt")
-val sourcesPontJni = sourcesNatives.dir("jni/cpp")
+val sourcesApiNative = sourcesNatives.dir("api")
+val cmakePontJni = sourcesNatives.file("jni/CMakeLists.txt")
+val includePontJni = sourcesNatives.dir("jni/include")
+val sourcePontJni = sourcesNatives.file("jni/src/jni_bridge.cpp")
 val sourcesCoeurs = rootProject.layout.projectDirectory.dir("cores")
 val dossierBuild = layout.buildDirectory.dir("native-parity")
 
@@ -35,7 +38,10 @@ val dossierBuild = layout.buildDirectory.dir("native-parity")
  */
 fun Exec.declarerSourcesNatives() {
     inputs.file(cmakeNatif).withPathSensitivity(PathSensitivity.RELATIVE)
-    inputs.dir(sourcesPontJni).withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.dir(sourcesApiNative).withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.file(cmakePontJni).withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.dir(includePontJni).withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.file(sourcePontJni).withPathSensitivity(PathSensitivity.RELATIVE)
     inputs.dir(sourcesCoeurs).withPathSensitivity(PathSensitivity.RELATIVE)
 }
 
