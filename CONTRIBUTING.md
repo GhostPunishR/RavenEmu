@@ -48,6 +48,10 @@ Commandes utiles :
 ./gradlew jvmTest
 
 # Tous les tests
+# CMake est requis : `gameboy-core` et `gba-core` construisent la bibliothèque
+# native et comparent leur implémentation Kotlin de référence au cœur C++
+# réellement livré. Sans elle, la comparaison ne porterait sur rien, aussi la
+# tâche échoue plutôt que de s'ignorer.
 ./gradlew test
 
 # Tests des moteurs C++
