@@ -43,19 +43,27 @@ public:
     void write_bcps(int value) noexcept { bcps_index_ = value & 0x3f; bcps_auto_ = (value & 0x80) != 0; }
     [[nodiscard]] int read_bcps() const noexcept { return bcps_index_ | (bcps_auto_ ? 0x80 : 0) | 0x40; }
     void write_bcpd(int value) noexcept {
+        if (lcd_enabled() && mode_ == mode_transfer) return;
         bg_cram[static_cast<std::size_t>(bcps_index_)] = static_cast<std::uint8_t>(value);
         recompute_argb(bg_cram, bg_argb_, bcps_index_);
         if (bcps_auto_) bcps_index_ = (bcps_index_ + 1) & 0x3f;
     }
-    [[nodiscard]] int read_bcpd() const noexcept { return bg_cram[static_cast<std::size_t>(bcps_index_)]; }
+    [[nodiscard]] int read_bcpd() const noexcept {
+        if (lcd_enabled() && mode_ == mode_transfer) return 0xff;
+        return bg_cram[static_cast<std::size_t>(bcps_index_)];
+    }
     void write_ocps(int value) noexcept { ocps_index_ = value & 0x3f; ocps_auto_ = (value & 0x80) != 0; }
     [[nodiscard]] int read_ocps() const noexcept { return ocps_index_ | (ocps_auto_ ? 0x80 : 0) | 0x40; }
     void write_ocpd(int value) noexcept {
+        if (lcd_enabled() && mode_ == mode_transfer) return;
         obj_cram[static_cast<std::size_t>(ocps_index_)] = static_cast<std::uint8_t>(value);
         recompute_argb(obj_cram, obj_argb_, ocps_index_);
         if (ocps_auto_) ocps_index_ = (ocps_index_ + 1) & 0x3f;
     }
-    [[nodiscard]] int read_ocpd() const noexcept { return obj_cram[static_cast<std::size_t>(ocps_index_)]; }
+    [[nodiscard]] int read_ocpd() const noexcept {
+        if (lcd_enabled() && mode_ == mode_transfer) return 0xff;
+        return obj_cram[static_cast<std::size_t>(ocps_index_)];
+    }
 
     void write_lcdc(int value) noexcept {
         const bool was_enabled = lcd_enabled();
@@ -74,12 +82,8 @@ public:
     void write_lyc(int value) noexcept { lyc_ = byte(value); check_stat(); }
 
     void tick(int cycles) {
-        if (!lcd_enabled()) return;
-        int remaining = cycles;
-        while (remaining > 0) {
-            const int step = std::min(remaining, next_event_delay());
-            line_dot_ += step; remaining -= step; process_line_position();
-        }
+        if (!lcd_enabled() || cycles <= 0) return;
+        for (int dot = 0; dot < cycles; ++dot) advance_dot();
     }
 
     [[nodiscard]] int lcdc() const noexcept { return lcdc_; }
@@ -99,24 +103,28 @@ public:
     [[nodiscard]] bool take_hblank_entry() noexcept { const bool value = entered_hblank_; entered_hblank_ = false; return value; }
 
     void save(BinaryWriter& out) const {
-        constexpr int field_count = 20;
+        constexpr int field_count = 25;
         out.i32(field_count);
         const std::array fields{
             lcdc_, stat_enable_, scy_, scx_, ly_, lyc_, bgp_, obp0_, obp1_, wy_, wx_,
             mode_, line_dot_, window_line_, stat_line_ ? 1 : 0, vram_bank_, bcps_index_,
             bcps_auto_ ? 1 : 0, ocps_index_, ocps_auto_ ? 1 : 0,
+            transfer_x_, transfer_delay_, window_started_line_ ? 1 : 0,
+            sprite_stall_remaining_, line_sprite_count_,
         };
         for (const int field : fields) out.i32(field);
         out.raw(vram); out.raw(oam); out.raw(bg_cram); out.raw(obj_cram);
     }
     void load(BinaryReader& in) {
-        if (in.i32() != 20) throw SaveStateError("État instantané corrompu (PPU)");
+        if (in.i32() != 25) throw SaveStateError("État instantané corrompu (PPU)");
         lcdc_ = in.i32(); stat_enable_ = in.i32(); scy_ = in.i32(); scx_ = in.i32();
         ly_ = in.i32(); lyc_ = in.i32(); bgp_ = in.i32(); obp0_ = in.i32(); obp1_ = in.i32();
         wy_ = in.i32(); wx_ = in.i32(); mode_ = in.i32(); line_dot_ = in.i32();
         window_line_ = in.i32(); stat_line_ = in.i32() != 0; vram_bank_ = in.i32();
         bcps_index_ = in.i32(); bcps_auto_ = in.i32() != 0; ocps_index_ = in.i32();
-        ocps_auto_ = in.i32() != 0;
+        ocps_auto_ = in.i32() != 0; transfer_x_ = in.i32(); transfer_delay_ = in.i32();
+        window_started_line_ = in.i32() != 0; sprite_stall_remaining_ = in.i32(); line_sprite_count_ = in.i32();
+        sprite_stall_used_.fill(false);
         in.raw(vram); in.raw(oam); in.raw(bg_cram); in.raw(obj_cram); rebuild_color_cache();
     }
 
@@ -127,29 +135,77 @@ public:
     std::array<std::int32_t, frame_pixels> completed_frame{};
 
 private:
-    [[nodiscard]] int next_event_delay() const noexcept {
-        if (ly_ >= height) return 456 - line_dot_;
-        if (line_dot_ < 80) return 80 - line_dot_;
-        if (line_dot_ < 252) return 252 - line_dot_;
-        return 456 - line_dot_;
-    }
-    void process_line_position() {
-        if (line_dot_ >= 456) {
-            line_dot_ -= 456; ++ly_;
-            if (ly_ == height) enter_vblank();
-            else if (ly_ > 153) { ly_ = 0; window_line_ = 0; set_mode(mode_oam); }
-            else if (ly_ < height) set_mode(mode_oam);
-            check_stat(); return;
+    void advance_dot() {
+        if (ly_ < height && mode_ == mode_transfer) advance_transfer();
+
+        ++line_dot_;
+        if (ly_ < height && line_dot_ == 80 && mode_ == mode_oam) begin_transfer();
+
+        if (line_dot_ < 456) return;
+        line_dot_ = 0;
+        ++ly_;
+        if (ly_ == height) {
+            enter_vblank();
+        } else if (ly_ > 153) {
+            ly_ = 0;
+            window_line_ = 0;
+            set_mode(mode_oam);
+        } else if (ly_ < height) {
+            set_mode(mode_oam);
         }
-        if (ly_ < height) {
-            const int expected = line_dot_ < 80 ? mode_oam : (line_dot_ < 252 ? mode_transfer : mode_hblank);
-            if (expected != mode_) {
-                set_mode(expected);
-                if (expected == mode_transfer) render_line();
-                else if (expected == mode_hblank) entered_hblank_ = true;
+        check_stat();
+    }
+
+    void begin_transfer() noexcept {
+        transfer_x_ = 0;
+        // 12 dots de mise en route du fetcher, puis rejet SCX fin.
+        transfer_delay_ = 12 + (scx_ & 7);
+        sprite_stall_remaining_ = 0;
+        window_started_line_ = false;
+        line_sprite_count_ = scan_sprites((lcdc_ & 4) != 0 ? 16 : 8);
+        sprite_stall_used_.fill(false);
+        set_mode(mode_transfer);
+    }
+
+    void advance_transfer() {
+        if (transfer_delay_ > 0) {
+            --transfer_delay_;
+            return;
+        }
+        if (sprite_stall_remaining_ > 0) {
+            --sprite_stall_remaining_;
+            return;
+        }
+
+        const int window_start = wx_ - 7;
+        if (!window_started_line_ && (lcdc_ & 0x20) != 0 && ly_ >= wy_ && wx_ <= 166 &&
+            transfer_x_ >= std::max(0, window_start)) {
+            window_started_line_ = true;
+            // Redémarrage approximatif du fetcher au passage BG -> window.
+            transfer_delay_ = 6;
+            return;
+        }
+
+        for (int i = 0; i < line_sprite_count_; ++i) {
+            if (sprite_stall_used_[static_cast<std::size_t>(i)]) continue;
+            const int index = sprite_indices_[static_cast<std::size_t>(i)] * 4;
+            const int sprite_x = oam[static_cast<std::size_t>(index + 1)] - 8;
+            if (std::max(0, sprite_x) == transfer_x_) {
+                sprite_stall_used_[static_cast<std::size_t>(i)] = true;
+                sprite_stall_remaining_ = 5; // ce dot + 5 = pénalité de 6 dots
+                return;
             }
         }
+
+        render_timed_pixel(transfer_x_);
+        ++transfer_x_;
+        if (transfer_x_ >= width) {
+            if (window_started_line_) ++window_line_;
+            set_mode(mode_hblank);
+            entered_hblank_ = true;
+        }
     }
+
     void enter_vblank() {
         set_mode(mode_vblank); interrupts_.request(Interrupt::vblank);
         completed_frame = working_frame_; frame_ready_ = true;
@@ -174,6 +230,108 @@ private:
         const int bit_index = 7 - column;
         return (((hi >> bit_index) & 1) << 1) | ((lo >> bit_index) & 1);
     }
+    void render_timed_pixel(int x) {
+        if (x < 0 || x >= width || ly_ < 0 || ly_ >= height) return;
+        const int base = ly_ * width;
+        if (cgb_mode_) render_timed_pixel_cgb(base, x);
+        else render_timed_pixel_dmg(base, x);
+    }
+
+    void render_timed_pixel_dmg(int base, int x) {
+        int color = 0;
+        if ((lcdc_ & 1) != 0) {
+            const bool use_window = window_started_line_ && x >= std::max(0, wx_ - 7);
+            const int map = use_window ? ((lcdc_ & 0x40) != 0 ? 0x1c00 : 0x1800)
+                                       : ((lcdc_ & 8) != 0 ? 0x1c00 : 0x1800);
+            const int px = use_window ? x - (wx_ - 7) : ((x + scx_) & 0xff);
+            const int py = use_window ? window_line_ : ((ly_ + scy_) & 0xff);
+            const int tile = vram_byte(0, map + (py >> 3) * 32 + (px >> 3));
+            color = tile_pixel_dmg(tile, py & 7, px & 7);
+        }
+        bg_color_line_[static_cast<std::size_t>(x)] = color;
+        bg_priority_line_[static_cast<std::size_t>(x)] = false;
+        working_frame_[static_cast<std::size_t>(base + x)] = (bgp_ >> (color * 2)) & 3;
+        render_timed_sprite_dmg(base, x);
+    }
+
+    void render_timed_sprite_dmg(int base, int x) {
+        if ((lcdc_ & 2) == 0) return;
+        const int sprite_height = (lcdc_ & 4) != 0 ? 16 : 8;
+        int best = -1;
+        int best_x = 256;
+        for (int i = 0; i < line_sprite_count_; ++i) {
+            const int sprite = sprite_indices_[static_cast<std::size_t>(i)];
+            const int index = sprite * 4;
+            const int sx = oam[static_cast<std::size_t>(index + 1)] - 8;
+            if (x < sx || x >= sx + 8) continue;
+            const int raw_x = oam[static_cast<std::size_t>(index + 1)];
+            if (raw_x < best_x || (raw_x == best_x && (best < 0 || sprite < best))) {
+                best = sprite;
+                best_x = raw_x;
+            }
+        }
+        if (best < 0) return;
+        const int index = best * 4;
+        const int sy = oam[static_cast<std::size_t>(index)] - 16;
+        const int sx = oam[static_cast<std::size_t>(index + 1)] - 8;
+        int tile = oam[static_cast<std::size_t>(index + 2)];
+        const int attr = oam[static_cast<std::size_t>(index + 3)];
+        if (sprite_height == 16) tile &= 0xfe;
+        int row = ly_ - sy;
+        if ((attr & 0x40) != 0) row = sprite_height - 1 - row;
+        const int px = x - sx;
+        const int bit_index = (attr & 0x20) != 0 ? px : 7 - px;
+        const int lo = vram_byte(0, tile * 16 + row * 2);
+        const int hi = vram_byte(0, tile * 16 + row * 2 + 1);
+        const int obj_color = (((hi >> bit_index) & 1) << 1) | ((lo >> bit_index) & 1);
+        if (obj_color == 0) return;
+        if ((attr & 0x80) != 0 && bg_color_line_[static_cast<std::size_t>(x)] != 0) return;
+        const int palette = (attr & 0x10) != 0 ? obp1_ : obp0_;
+        working_frame_[static_cast<std::size_t>(base + x)] = (palette >> (obj_color * 2)) & 3;
+    }
+
+    void render_timed_pixel_cgb(int base, int x) {
+        const bool use_window = window_started_line_ && x >= std::max(0, wx_ - 7);
+        const int map = use_window ? ((lcdc_ & 0x40) != 0 ? 0x1c00 : 0x1800)
+                                   : ((lcdc_ & 8) != 0 ? 0x1c00 : 0x1800);
+        const int px = use_window ? x - (wx_ - 7) : ((x + scx_) & 0xff);
+        const int py = use_window ? window_line_ : ((ly_ + scy_) & 0xff);
+        draw_bg_pixel_cgb(base, x, map, py >> 3, py & 7, px >> 3, px & 7);
+        render_timed_sprite_cgb(base, x);
+    }
+
+    void render_timed_sprite_cgb(int base, int x) {
+        if ((lcdc_ & 2) == 0) return;
+        const int sprite_height = (lcdc_ & 4) != 0 ? 16 : 8;
+        for (int i = 0; i < line_sprite_count_; ++i) {
+            const int sprite = sprite_indices_[static_cast<std::size_t>(i)];
+            const int index = sprite * 4;
+            const int sy = oam[static_cast<std::size_t>(index)] - 16;
+            const int sx = oam[static_cast<std::size_t>(index + 1)] - 8;
+            if (x < sx || x >= sx + 8) continue;
+            int tile = oam[static_cast<std::size_t>(index + 2)];
+            const int attr = oam[static_cast<std::size_t>(index + 3)];
+            if (sprite_height == 16) tile &= 0xfe;
+            int row = ly_ - sy;
+            if ((attr & 0x40) != 0) row = sprite_height - 1 - row;
+            const int px = x - sx;
+            const int bit_index = (attr & 0x20) != 0 ? px : 7 - px;
+            const int bank = (attr >> 3) & 1;
+            const int palette = attr & 7;
+            const int lo = vram_byte(bank, tile * 16 + row * 2);
+            const int hi = vram_byte(bank, tile * 16 + row * 2 + 1);
+            const int obj_color = (((hi >> bit_index) & 1) << 1) | ((lo >> bit_index) & 1);
+            if (obj_color == 0) continue;
+            const bool bg_visible = bg_color_line_[static_cast<std::size_t>(x)] != 0;
+            const bool master_priority = (lcdc_ & 1) != 0;
+            if (bg_visible && master_priority &&
+                (bg_priority_line_[static_cast<std::size_t>(x)] || (attr & 0x80) != 0)) return;
+            working_frame_[static_cast<std::size_t>(base + x)] =
+                obj_argb_[static_cast<std::size_t>(palette * 4 + obj_color)];
+            return; // priorité CGB : premier OBJ dans l'ordre OAM
+        }
+    }
+
     void render_line() {
         const int base = ly_ * width;
         if (cgb_mode_) { render_background_cgb(base); render_sprites_cgb(base); }
@@ -345,6 +503,12 @@ private:
     int mode_{mode_oam};
     int line_dot_{};
     int window_line_{};
+    int transfer_x_{};
+    int transfer_delay_{};
+    bool window_started_line_{};
+    int sprite_stall_remaining_{};
+    int line_sprite_count_{};
+    std::array<bool, 10> sprite_stall_used_{};
     bool stat_line_{};
     bool entered_hblank_{};
     bool frame_ready_{};
