@@ -57,7 +57,10 @@ jobs:
           cache-provider: basic
 
       - name: Installer la chaîne C++ Android
-        run: sdkmanager "ndk;27.2.12479018" "cmake;3.22.1"
+        run: |
+          sdkmanager_path="${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$sdkmanager_path"
+          "$sdkmanager_path" "ndk;27.2.12479018" "cmake;3.22.1"
 
       - name: Tester les cœurs C++ sur l'hôte
         run: |
