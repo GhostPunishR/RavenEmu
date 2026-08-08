@@ -10,9 +10,6 @@ enum class GbaSaveType(val displayName: String, val sizeBytes: Int) {
     EEPROM_8K("EEPROM 8 Kio", 8 * 1024),
     ;
 
-    val isEeprom: Boolean get() = this == EEPROM_512 || this == EEPROM_8K
-    val isFlash: Boolean get() = this == FLASH_64K || this == FLASH_128K
-
     companion object {
         /** Déduit le type des marqueurs ASCII alignés laissés dans la ROM. */
         fun detect(rom: ByteArray): GbaSaveType {

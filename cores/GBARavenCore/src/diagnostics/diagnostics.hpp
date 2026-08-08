@@ -22,7 +22,6 @@ public:
         }
     }
     void interrupt(int mask) noexcept { last_interrupt_mask = mask; }
-    void audio_underrun() noexcept { ++audio_underruns; }
     void bg2_matrix_write() noexcept { ++bg2_matrix_writes; }
     void bg2_reference_write() noexcept { ++bg2_reference_writes; }
     void wait_step(int cycles, int mask) {
@@ -62,7 +61,6 @@ public:
     int instructions_last_frame{};
     int last_swi{-1};
     int last_interrupt_mask{};
-    int audio_underruns{};
     std::int32_t first_unsupported_address{};
     int bg2_matrix_writes{};
     int bg2_reference_writes{};
