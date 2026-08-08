@@ -126,9 +126,9 @@
     <string name="library_action_remove">Retirer de la bibliothèque</string>
     <string name="library_rename_title">Renommer</string>
     <string name="library_rename_hint">Nom affiché</string>
-    <string name="library_rename_reset">Titre d'origine</string>
+    <string name="library_rename_reset">Titre d\'origine</string>
     <string name="library_remove_title">Retirer « %1$s » ?</string>
-    <string name="library_remove_message">L'entrée disparaît de la bibliothèque. Le fichier de ROM, les sauvegardes de cartouche et les états ne sont pas touchés, et un nouveau balayage la retrouvera.</string>
+    <string name="library_remove_message">L\'entrée disparaît de la bibliothèque. Le fichier de ROM, les sauvegardes de cartouche et les états ne sont pas touchés, et un nouveau balayage la retrouvera.</string>
     <string name="library_remove_confirm">Retirer</string>
 
     <!-- Écran des états de sauvegarde. -->
