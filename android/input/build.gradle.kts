@@ -1,12 +1,11 @@
 plugins {
     id("com.android.library")
-    id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
 android {
     namespace = "com.ravenemu.input"
-    compileSdk = 35
+    compileSdk = 37
 
     defaultConfig {
         minSdk = 26

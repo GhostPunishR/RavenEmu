@@ -1,5 +1,5 @@
 [versions]
-agp = "8.9.2"
+agp = "9.3.1"
 kotlin = "2.4.10"
 coroutines = "1.11.0"
 serialization = "1.11.0"
@@ -21,9 +21,9 @@ kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutine
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
 junit4 = { module = "junit:junit", version.ref = "junit" }
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test-junit", version.ref = "kotlin" }
-# Artefact du plugin Gradle Kotlin, requis par les plugins de convention de
-# `build-logic` : un plugin de convention applique le plugin, il doit donc
-# l'avoir sur son propre chemin de compilation.
+# Artefact du plugin Gradle Kotlin, requis par les plugins de convention JVM et
+# par les plugins compilateur comme kotlinx.serialization. Les modules Android
+# utilisent Kotlin intégré d'AGP 9 et n'appliquent plus kotlin-android.
 kotlin-gradle-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
 kotlin-serialization-plugin = { module = "org.jetbrains.kotlin:kotlin-serialization", version.ref = "kotlin" }
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidxCore" }
@@ -41,6 +41,5 @@ androidx-preference = { module = "androidx.preference:preference-ktx", version.r
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 android-library = { id = "com.android.library", version.ref = "agp" }
-kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }

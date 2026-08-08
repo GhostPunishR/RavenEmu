@@ -1,6 +1,5 @@
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
 }
 
 /**
@@ -12,8 +11,8 @@ val TEST_KEYSTORE_PATH_ENV = "RAVENEMU_TEST_KEYSTORE_PATH"
 
 android {
     namespace = "com.ravenemu.app"
-    compileSdk = 35
-    ndkVersion = "27.2.12479018"
+    compileSdk = 37
+    ndkVersion = "29.0.14206865"
 
     buildFeatures {
         // `BuildConfig.DEBUG` conditionne la surcouche de débogage GBA : elle ne
@@ -25,6 +24,8 @@ android {
     defaultConfig {
         applicationId = "com.ravenemu.app"
         minSdk = 26
+        // Le targetSdk reste volontairement inchangé dans cette PR structurelle :
+        // son évolution modifie le comportement Android et sera validée à part.
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"

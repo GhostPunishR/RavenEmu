@@ -1,13 +1,12 @@
 // Racine du build RavenEmu.
 //
-// Les plugins sont déclarés ici et appliqués uniquement dans les modules qui
-// les utilisent. Le graphe de projets exprime désormais les responsabilités
-// (`engine`, `native`, `features`, `platform`) plutôt que la technologie seule.
+// AGP 9 fournit Kotlin intégré aux modules Android. Le plugin Kotlin Android
+// n'est donc plus chargé ; Kotlin JVM reste versionné explicitement pour les
+// modules moteur et les plugins de convention du dépôt.
 plugins {
     alias(libs.plugins.android.application) apply false
     alias(libs.plugins.android.library) apply false
     alias(libs.plugins.kotlin.jvm) apply false
-    alias(libs.plugins.kotlin.android) apply false
     alias(libs.plugins.kotlin.serialization) apply false
 }
 
