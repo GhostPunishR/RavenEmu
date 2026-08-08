@@ -15,6 +15,26 @@
         app:title="@string/library_title"
         app:titleTextColor="@color/raven_text_primary" />
 
+    <!--
+      Sélecteur de console, permanent et visible.
+
+      Le filtre vivait dans un sous-menu de débordement : il fallait le
+      chercher pour savoir qu'il existait, et rien n'indiquait quel filtre
+      était actif. Ici l'état est lisible en permanence et le changement
+      coûte un geste. Les onglets sont construits à partir des consoles
+      réellement présentes dans la bibliothèque, pas d'une liste figée.
+    -->
+    <com.google.android.material.tabs.TabLayout
+        android:id="@+id/consoleTabs"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/raven_toolbar"
+        app:tabGravity="start"
+        app:tabIndicatorColor="@color/raven_accent"
+        app:tabMode="scrollable"
+        app:tabSelectedTextColor="@color/raven_text_primary"
+        app:tabTextColor="@color/raven_text_secondary" />
+
     <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"

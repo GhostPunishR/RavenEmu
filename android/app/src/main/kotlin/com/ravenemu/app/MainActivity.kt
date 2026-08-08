@@ -6,6 +6,8 @@ import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
@@ -18,8 +20,11 @@ import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.appbar.MaterialToolbar
+import com.google.android.material.bottomsheet.BottomSheetDialog
+import com.google.android.material.tabs.TabLayout
 import com.ravenemu.app.emulation.EmulationActivity
 import com.ravenemu.app.library.RomAdapter
+import com.ravenemu.app.library.SnapshotsActivity
 import com.ravenemu.app.settings.SettingsActivity
 import com.ravenemu.core.gba.save.GbaSaveType
 import com.ravenemu.emulation.api.ConsoleType
@@ -46,6 +51,23 @@ class MainActivity : AppCompatActivity() {
     private lateinit var recycler: RecyclerView
     private lateinit var emptyView: TextView
     private lateinit var progress: ProgressBar
+    private lateinit var consoleTabs: TabLayout
+
+    /**
+     * Écouteur conservé en champ pour pouvoir être **retiré** pendant la
+     * reconstruction de la barre : une sélection programmatique ne doit pas
+     * passer pour un choix de l'utilisateur.
+     */
+    private val tabListener = object : TabLayout.OnTabSelectedListener {
+        override fun onTabSelected(tab: TabLayout.Tab) {
+            settings.libraryConsoleFilter = tab.tag as? String ?: LibraryFilter.ALL
+            render()
+        }
+
+        override fun onTabUnselected(tab: TabLayout.Tab) = Unit
+
+        override fun onTabReselected(tab: TabLayout.Tab) = Unit
+    }
 
     private var index: RomIndex = RomIndex()
     private var searchQuery: String = ""
@@ -90,6 +112,7 @@ class MainActivity : AppCompatActivity() {
         recycler = findViewById(R.id.romList)
         emptyView = findViewById(R.id.emptyView)
         progress = findViewById(R.id.progress)
+        consoleTabs = findViewById(R.id.consoleTabs)
 
         adapter = RomAdapter(
             onClick = ::launchGame,
@@ -104,6 +127,7 @@ class MainActivity : AppCompatActivity() {
         applyLayoutManager()
 
         index = repository.loadIndex()
+        setupConsoleTabs()
         render()
         if (index.entries.isEmpty() && settings.romDirectories.isNotEmpty()) {
             refreshLibrary()
@@ -114,6 +138,60 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         adapter.showBadges = settings.showStatusBadges
         render()
+    }
+
+    /** Un onglet du sélecteur de console : le filtre qu'il applique, son nom. */
+    private data class ConsoleTab(val filter: String, val labelRes: Int)
+
+    /**
+     * Onglets à afficher, **déduits du contenu réel de la bibliothèque**.
+     *
+     * Une barre figée montrerait « Game Boy Advance » à qui n'a que des jeux
+     * Game Boy, et un onglet toujours vide invite à croire que le filtre est
+     * cassé. « Tout » reste toujours présent : c'est le repli quand la
+     * bibliothèque est vide.
+     *
+     * Aucune entrée ne peut échapper aux onglets : une cartouche Game Boy dont
+     * le mode est inconnu n'est pas couleur, elle tombe donc dans l'onglet
+     * monochrome.
+     */
+    private fun availableTabs(): List<ConsoleTab> {
+        val candidats = listOf(
+            ConsoleTab(LibraryFilter.GAME_BOY_MONOCHROME_CARTRIDGES, R.string.library_tab_gb),
+            ConsoleTab(LibraryFilter.GAME_BOY_COLOR_CARTRIDGES, R.string.library_tab_gbc),
+            ConsoleTab(ConsoleType.GAME_BOY_ADVANCE.name, R.string.library_tab_gba),
+        )
+        return buildList {
+            add(ConsoleTab(LibraryFilter.ALL, R.string.library_tab_all))
+            addAll(candidats.filter { LibraryFilter.apply(index.entries, it.filter).isNotEmpty() })
+        }
+    }
+
+    /**
+     * (Re)construit la barre d'onglets et y restaure le filtre enregistré.
+     *
+     * L'écouteur est retiré le temps de la reconstruction : sans cela, la
+     * sélection programmatique déclencherait un changement de filtre et
+     * écraserait le réglage qu'on est en train de restaurer.
+     */
+    private fun setupConsoleTabs() {
+        val tabs = availableTabs()
+        consoleTabs.removeOnTabSelectedListener(tabListener)
+        consoleTabs.removeAllTabs()
+        tabs.forEach { onglet ->
+            consoleTabs.addTab(
+                consoleTabs.newTab().setText(onglet.labelRes).setTag(onglet.filter)
+            )
+        }
+        val actif = LibraryFilter.normalize(settings.libraryConsoleFilter)
+        val position = tabs.indexOfFirst { it.filter == actif }.takeIf { it >= 0 } ?: 0
+        // Un filtre enregistré dont l'onglet a disparu — dernier jeu d'une
+        // console retiré — retombe sur « Tout » plutôt que sur une liste vide.
+        settings.libraryConsoleFilter = tabs[position].filter
+        consoleTabs.getTabAt(position)?.select()
+        consoleTabs.addOnTabSelectedListener(tabListener)
+        // Un seul onglet ne sert à rien : la barre s'efface d'elle-même.
+        consoleTabs.visibility = if (tabs.size > 1) View.VISIBLE else View.GONE
     }
 
     private fun applyLayoutManager() {
@@ -146,6 +224,7 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             index = repository.refresh(dirs)
             progress.visibility = View.GONE
+            setupConsoleTabs()
             render()
             Toast.makeText(
                 this@MainActivity,
@@ -182,24 +261,110 @@ class MainActivity : AppCompatActivity() {
         startActivity(EmulationActivity.intent(this, entry))
     }
 
+    /**
+     * Actions d'un jeu, en feuille venant du bas.
+     *
+     * La liste d'items d'une boîte de dialogue ne rappelait pas de quel jeu il
+     * s'agissait et mettait l'action destructrice au même rang que les autres.
+     * La feuille nomme le jeu, sépare « retirer » du reste, et masque le type
+     * de sauvegarde là où il n'a pas de sens.
+     */
     private fun showEntryOptions(entry: RomEntry) {
-        val isGba = entry.console == ConsoleType.GAME_BOY_ADVANCE
-        val options = buildList {
-            add(getString(R.string.library_rom_details))
-            add(getString(R.string.library_choose_cover))
-            // Le type de sauvegarde n'a de sens que pour la Game Boy Advance.
-            if (isGba) add(getString(R.string.library_save_type))
-        }.toTypedArray()
+        val vue = layoutInflater.inflate(R.layout.sheet_game_actions, null)
+        val sheet = BottomSheetDialog(this)
+        sheet.setContentView(vue)
+
+        vue.findViewById<TextView>(R.id.sheetTitle).text = entry.displayName
+        vue.findViewById<TextView>(R.id.sheetSubtitle).text = entry.platformLabel
+
+        fun action(id: Int, visible: Boolean = true, onClick: () -> Unit) {
+            val ligne = vue.findViewById<TextView>(id)
+            if (!visible) {
+                ligne.visibility = View.GONE
+                return
+            }
+            ligne.setOnClickListener {
+                sheet.dismiss()
+                onClick()
+            }
+        }
+
+        action(R.id.actionPlay) { launchGame(entry) }
+        action(R.id.actionStates) { startActivity(SnapshotsActivity.intent(this, entry)) }
+        action(R.id.actionRename) { showRenameDialog(entry) }
+        action(R.id.actionCover) {
+            coverTarget = entry
+            pickCover.launch(arrayOf("image/*"))
+        }
+        // Le type de sauvegarde n'a de sens que pour la Game Boy Advance.
+        action(
+            R.id.actionSaveType,
+            visible = entry.console == ConsoleType.GAME_BOY_ADVANCE,
+        ) { showSaveTypeDialog(entry) }
+        action(R.id.actionDetails) { showDetails(entry) }
+        action(R.id.actionRemove) { confirmRemove(entry) }
+
+        sheet.show()
+    }
+
+    /**
+     * Renommage d'une entrée.
+     *
+     * Le titre lu dans la cartouche est souvent tronqué et en majuscules. Le
+     * renommage ne touche jamais au fichier de ROM : il n'écrit que l'index.
+     * Vider le champ rend le titre d'origine plutôt que d'afficher une ligne
+     * vide.
+     */
+    private fun showRenameDialog(entry: RomEntry) {
+        val champ = EditText(this).apply {
+            setText(entry.customTitle ?: entry.displayName)
+            hint = getString(R.string.library_rename_hint)
+            setSingleLine()
+            setSelection(text.length)
+        }
+        val conteneur = FrameLayout(this).apply {
+            val marge = (24 * resources.displayMetrics.density).toInt()
+            setPadding(marge, marge / 2, marge, 0)
+            addView(champ)
+        }
         AlertDialog.Builder(this)
-            .setTitle(entry.displayName)
-            .setItems(options) { _, which ->
-                when (which) {
-                    0 -> showDetails(entry)
-                    1 -> {
-                        coverTarget = entry
-                        pickCover.launch(arrayOf("image/*"))
-                    }
-                    2 -> showSaveTypeDialog(entry)
+            .setTitle(R.string.library_rename_title)
+            .setView(conteneur)
+            .setPositiveButton(R.string.ok) { _, _ ->
+                applyRename(entry, champ.text.toString().trim())
+            }
+            .setNeutralButton(R.string.library_rename_reset) { _, _ ->
+                applyRename(entry, "")
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    private fun applyRename(entry: RomEntry, nom: String) {
+        lifecycleScope.launch {
+            index = repository.update(
+                index,
+                entry.copy(customTitle = nom.ifBlank { null }),
+            )
+            render()
+        }
+    }
+
+    /**
+     * Retrait d'une entrée : l'index seul est modifié. Ni la ROM, ni les
+     * sauvegardes de cartouche, ni les états ne sont touchés — c'est ce que
+     * dit le message, parce que « retirer » se confond aisément avec
+     * « supprimer ».
+     */
+    private fun confirmRemove(entry: RomEntry) {
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.library_remove_title, entry.displayName))
+            .setMessage(R.string.library_remove_message)
+            .setPositiveButton(R.string.library_remove_confirm) { _, _ ->
+                lifecycleScope.launch {
+                    index = repository.remove(index, entry.uri)
+                    setupConsoleTabs()
+                    render()
                 }
             }
             .setNegativeButton(R.string.cancel, null)
@@ -292,11 +457,6 @@ class MainActivity : AppCompatActivity() {
         return true
     }
 
-    private fun applyConsoleFilter(console: String) {
-        settings.libraryConsoleFilter = console
-        render()
-    }
-
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
             R.id.action_refresh -> refreshLibrary()
@@ -319,13 +479,6 @@ class MainActivity : AppCompatActivity() {
                 settings.librarySortOrder = "status"
                 render()
             }
-            R.id.action_filter_all -> applyConsoleFilter("all")
-            R.id.action_filter_gb -> applyConsoleFilter(ConsoleType.GAME_BOY.name)
-            R.id.action_filter_gb_dmg ->
-                applyConsoleFilter(LibraryFilter.GAME_BOY_MONOCHROME_CARTRIDGES)
-            R.id.action_filter_gb_cgb ->
-                applyConsoleFilter(LibraryFilter.GAME_BOY_COLOR_CARTRIDGES)
-            R.id.action_filter_gba -> applyConsoleFilter(ConsoleType.GAME_BOY_ADVANCE.name)
             R.id.action_settings ->
                 startActivity(Intent(this, SettingsActivity::class.java))
             else -> return super.onOptionsItemSelected(item)

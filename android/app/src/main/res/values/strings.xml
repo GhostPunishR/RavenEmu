@@ -112,6 +112,36 @@
     <string name="settings_debug_info">Les informations de cartouche sont visibles dans les détails de chaque jeu</string>
 
     <!-- Divers -->
+
+    <!-- Onglets de console : libellés courts, la barre doit rester lisible. -->
+    <string name="library_tab_all">Tout</string>
+    <string name="library_tab_gb">Game Boy</string>
+    <string name="library_tab_gbc">Game Boy Color</string>
+    <string name="library_tab_gba">Game Boy Advance</string>
+
+    <!-- Feuille d'actions d'un jeu. -->
+    <string name="library_action_play">Jouer</string>
+    <string name="library_action_states">États de sauvegarde</string>
+    <string name="library_action_rename">Renommer</string>
+    <string name="library_action_remove">Retirer de la bibliothèque</string>
+    <string name="library_rename_title">Renommer</string>
+    <string name="library_rename_hint">Nom affiché</string>
+    <string name="library_rename_reset">Titre d'origine</string>
+    <string name="library_remove_title">Retirer « %1$s » ?</string>
+    <string name="library_remove_message">L'entrée disparaît de la bibliothèque. Le fichier de ROM, les sauvegardes de cartouche et les états ne sont pas touchés, et un nouveau balayage la retrouvera.</string>
+    <string name="library_remove_confirm">Retirer</string>
+
+    <!-- Écran des états de sauvegarde. -->
+    <string name="states_title">États de sauvegarde</string>
+    <string name="states_empty">Aucun état enregistré pour ce jeu.\n\nPendant une partie, ouvrez le menu et choisissez « Sauvegarder l\'état ».</string>
+    <string name="states_slot_auto">Reprise automatique</string>
+    <string name="states_slot">Emplacement %1$d</string>
+    <string name="states_size_kib">%1$d Kio</string>
+    <string name="states_resume">Reprendre</string>
+    <string name="states_delete">Supprimer</string>
+    <string name="states_delete_confirm">Supprimer cet état ? L\'action est définitive.</string>
+    <string name="states_choose_slot">Sauvegarder dans…</string>
+
     <string name="cancel">Annuler</string>
     <string name="ok">OK</string>
 
