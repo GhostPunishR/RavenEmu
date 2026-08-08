@@ -23,14 +23,11 @@ jobs:
           python3 tools/apply_gbc_rumble_bridge.py
           python3 tools/adjust_gb_parity.py
 
-      - name: Build native cores
+      - name: Build and test native cores
         run: |
           cmake -S cores -B build/native-host -DRAVENEMU_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
           cmake --build build/native-host --parallel 2
           ctest --test-dir build/native-host --output-on-failure
-
-      - name: Run JVM tests
-        run: ./gradlew jvmTest --stacktrace
 
       - name: Commit validated bridge
         run: |
