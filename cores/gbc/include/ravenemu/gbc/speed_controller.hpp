@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ravenemu/binary_io.hpp"
+
 #include <algorithm>
 
 namespace ravenemu::cgb {
@@ -49,13 +51,13 @@ public:
         if (switch_dots_remaining_ == 0) double_speed_ = !double_speed_;
     }
 
-    void save(BinaryWriter& out) const {
+    void save(detail::BinaryWriter& out) const {
         out.i32(double_speed_ ? 1 : 0);
         out.i32(armed_ ? 1 : 0);
         out.i32(switch_dots_remaining_);
     }
 
-    void load(BinaryReader& in) {
+    void load(detail::BinaryReader& in) {
         double_speed_ = in.i32() != 0;
         armed_ = in.i32() != 0;
         switch_dots_remaining_ = std::max(0, in.i32());
