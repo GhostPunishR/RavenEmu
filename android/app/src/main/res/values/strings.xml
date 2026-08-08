@@ -8,13 +8,11 @@
     <string name="library_add_folder">Ajouter un dossier</string>
     <string name="library_refresh">Actualiser</string>
     <string name="library_search_hint">Rechercher un jeu</string>
-    <string name="library_view_grid">Vue grille</string>
     <string name="library_view_list">Vue liste</string>
     <string name="library_sort">Trier</string>
     <string name="library_sort_title">Par titre</string>
     <string name="library_sort_size">Par taille</string>
     <string name="library_sort_status">Par statut</string>
-    <string name="library_refreshing">Actualisation de la bibliothèque…</string>
     <string name="library_refresh_done">Bibliothèque actualisée : %1$d jeux</string>
     <string name="library_rom_details">Détails</string>
     <string name="library_choose_cover">Choisir une pochette</string>
@@ -30,14 +28,7 @@
     <string name="library_save_type_auto">Détection automatique</string>
     <string name="library_save_type_forced">%1$s (imposé)</string>
 
-    <!-- Statuts déduits des sommes de contrôle de la cartouche -->
-    <string name="status_intact">Intègre</string>
-    <string name="status_modified">Modifiée</string>
-    <string name="status_header_only">En-tête vérifié</string>
-    <string name="status_invalid_header">En-tête douteux</string>
-
     <!-- Émulation -->
-    <string name="emulation_menu">Menu de l\'émulateur</string>
     <string name="emulation_resume">Reprendre</string>
     <string name="emulation_save_state">Sauvegarder l\'état</string>
     <string name="emulation_load_state">Charger l\'état</string>
@@ -129,7 +120,6 @@
     <string name="states_slot_auto">Reprise automatique</string>
     <string name="states_slot">Emplacement %1$d</string>
     <string name="states_size_kib">%1$d Kio</string>
-    <string name="states_resume">Reprendre</string>
     <string name="states_delete">Supprimer</string>
     <string name="states_delete_confirm">Supprimer cet état ? L\'action est définitive.</string>
     <string name="states_choose_slot">Sauvegarder dans…</string>
@@ -171,6 +161,5 @@
     <string name="delta_skins_error_size">Le skin est trop volumineux</string>
     <string name="delta_skins_error_identifier">Un skin portant cet identifiant existe déjà</string>
     <string name="delta_skins_error_storage">Le stockage disponible est insuffisant ou inaccessible</string>
-    <string name="delta_skins_error_generic">Impossible d’importer ce skin</string>
     <string name="delta_skins_runtime_fallback">Skin invalide : commandes classiques restaurées</string>
 </resources>

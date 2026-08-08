@@ -11,7 +11,6 @@ class DisplayAdjustmentsTest {
     private fun g(argb: Int) = (argb ushr 8) and 0xFF
     private fun b(argb: Int) = argb and 0xFF
     private fun a(argb: Int) = (argb ushr 24) and 0xFF
-    private fun luma(argb: Int) = 0.2126 * r(argb) + 0.7152 * g(argb) + 0.0722 * b(argb)
 
     @Test
     fun `sans reglage l'identite est vraie et la sortie inchangee`() {

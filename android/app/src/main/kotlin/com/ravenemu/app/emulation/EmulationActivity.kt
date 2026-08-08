@@ -36,7 +36,6 @@ import com.ravenemu.emulation.api.EmulatorCore
 import com.ravenemu.emulation.api.session.EmulationSession
 import com.ravenemu.emulation.api.EmulatorButton
 import com.ravenemu.emulation.api.SaveStateException
-import com.ravenemu.input.ControlId
 import com.ravenemu.input.ControlLayout
 import com.ravenemu.input.DeltaSkinControllerAsset
 import com.ravenemu.input.DeltaSkinControllerConfiguration
