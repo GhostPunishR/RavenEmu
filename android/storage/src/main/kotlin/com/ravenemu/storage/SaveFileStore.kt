@@ -79,29 +79,6 @@ class SaveFileStore(private val context: Context) {
         return null
     }
 
-    /** Exporte la sauvegarde privée vers un document choisi par l'utilisateur. */
-    fun exportTo(romSha256: String, romFileName: String, destination: Uri): Boolean {
-        val data = read(romSha256, romFileName) ?: return false
-        return try {
-            context.contentResolver.openOutputStream(destination, "wt")?.use {
-                it.write(data)
-            } != null
-        } catch (_: Exception) {
-            false
-        }
-    }
-
-    /** Importe un `.sav` externe comme sauvegarde privée (écriture atomique). */
-    fun importFrom(romSha256: String, romFileName: String, source: Uri): Boolean {
-        val data = try {
-            context.contentResolver.openInputStream(source)?.use { it.readBytes() }
-        } catch (_: Exception) {
-            null
-        } ?: return false
-        if (data.size > MAX_SAVE_SIZE) return false
-        return write(romSha256, romFileName, data)
-    }
-
     private fun copyToExternal(dirUri: Uri, fileName: String, data: ByteArray) {
         try {
             val dir = DocumentFile.fromTreeUri(context, dirUri) ?: return
