@@ -7,7 +7,7 @@ Consultez la [[matrice de compatibilité détaillée des jeux|Compatibilite-des-
 Le moteur Game Boy comprend notamment:
 
 - CPU Sharp LR35902 avec instructions principales et CB;
-- gestion du délai `EI` et du comportement `HALT`;
+- gestion du délai `EI`, de `HALT` et de `STOP`;
 - rendu du fond, de la fenêtre et des sprites;
 - audio à quatre canaux;
 - timers, interruptions et DMA OAM;
@@ -15,30 +15,39 @@ Le moteur Game Boy comprend notamment:
 
 ### Limites connues
 
-- pas de câble link;
+- pas de câble link connecté à un second appareil;
 - pas de multicartouches MBC1M;
 - certains comportements matériels rares de l'audio ne sont pas reproduits;
-- pas d'effets modifiant le rendu au milieu d'une ligne.
+- les timings PPU très fins restent approximatifs dans certains cas.
 
 ## Game Boy Color
 
-Il n'y a pas de « moteur Game Boy Color » séparé : le même cœur sert toute la gamme et active les fonctions couleur d'après l'octet `0x0143` de l'en-tête de cartouche. Trois cas sont distingués : monochrome, compatible couleur (`0x80`) et couleur exigée (`0xC0`). L'extension du fichier n'entre pas en compte : un `.gbc` peut contenir une cartouche monochrome, un `.gb` une cartouche couleur.
+Les cartouches GB et GBC partagent encore l'implémentation principale du cœur, qui active le matériel couleur d'après l'octet `0x0143` de l'en-tête. Le dépôt possède toutefois une cible C++ `gbc_raven_core` dédiée, des tests matériels GBC propres et commence à extraire les composants spécifiques sous `cores/gbc`.
 
-Une cartouche déclarant des fonctions couleur bénéficie de:
+Trois modes de cartouche sont distingués: monochrome, compatible couleur (`0x80`) et couleur exigée (`0xC0`). L'extension du fichier n'entre pas en compte: un `.gbc` peut contenir une cartouche monochrome, un `.gb` une cartouche couleur.
 
-- banques VRAM et WRAM;
-- palettes couleur 15 bits;
-- attributs de tuiles;
-- HDMA et GDMA;
-- mode double vitesse;
+Une cartouche déclarant des fonctions couleur bénéficie notamment de:
+
+- deux banques VRAM et huit banques WRAM;
+- palettes couleur 15 bits et attributs de tuiles;
+- rendu PPU cadencé par dots, avec durée de transfert sensible au décalage horizontal, à la fenêtre et aux sprites;
+- restrictions d'accès VRAM, OAM et palettes pendant les phases concernées du LCD;
+- OAM DMA progressif;
+- GDMA et HDMA progressifs avec blocage du CPU pendant les transferts;
+- mode double vitesse via `KEY1` et transition déclenchée par `STOP`;
+- port série bit par bit avec horloge interne normale, horloge rapide CGB et horloge externe;
+- registre infrarouge `RP` (`FF56`) modélisé dans le cœur;
+- MBC5 rumble relié à la vibration Android;
 - sortie couleur ARGB.
 
 ### Limites connues
 
-- timing HDMA HBlank simplifié;
-- séquenceur audio non doublé en mode double vitesse;
-- registre `OPRI` non émulé;
-- rendu LCD couleur encore simplifié.
+- le PPU est désormais cadencé par dots mais certains délais du fetcher, de la fenêtre et des sprites restent des approximations et ne sont pas présentés comme cycle-perfect;
+- le registre `OPRI` (`FF6C`) n'est pas encore émulé;
+- le port série possède l'horloge externe côté cœur, mais aucun câble link entre deux sessions ou appareils n'est encore fourni;
+- le port infrarouge est modélisé logiquement, sans backend matériel entre appareils Android;
+- certains comportements audio rares restent simplifiés;
+- les contrôleurs de cartouche exotiques non implémentés sont refusés plutôt que simulés incorrectement.
 
 ## Game Boy Advance
 
