@@ -43,6 +43,9 @@ public:
     std::size_t read_audio(std::span<std::int16_t> destination) override {
         return machine_ ? machine_->apu.read_samples(destination) : 0;
     }
+    [[nodiscard]] bool rumble_active() const noexcept override {
+        return machine_ != nullptr && machine_->cartridge->rumble_active();
+    }
     [[nodiscard]] bool has_battery_ram() const noexcept override {
         return machine_ != nullptr && machine_->cartridge->has_persistent_data();
     }

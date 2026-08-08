@@ -98,6 +98,43 @@ void serial_fast_clock_test() {
     check((interrupts.flags & interrupt_mask(Interrupt::serial)) != 0, "IRQ série externe absente");
 }
 
+
+void ppu_dot_timing_test() {
+    InterruptController interrupts;
+    Ppu ppu(interrupts, true);
+    ppu.write_lcdc(0x11);
+    ppu.set_scx(7);
+    ppu.write_bcps(0);
+    ppu.write_bcpd(0x12);
+    ppu.write_lcdc(0x91);
+
+    ppu.tick(80);
+    check((ppu.read_stat() & 3) == Ppu::mode_transfer, "PPU n'entre pas en mode 3 au dot 80");
+    check(ppu.read_bcpd() == 0xff, "CRAM doit être inaccessible pendant le mode 3");
+    ppu.write_bcpd(0x34);
+
+    ppu.tick(178);
+    check((ppu.read_stat() & 3) == Ppu::mode_transfer, "mode 3 avec SCX fin trop court");
+    ppu.tick(1);
+    check((ppu.read_stat() & 3) == Ppu::mode_hblank, "PPU ne termine pas le transfert pixel au bon moment");
+    ppu.write_lcdc(0x11);
+    check(ppu.read_bcpd() == 0x12, "écriture CRAM pendant mode 3 n'a pas été bloquée");
+}
+
+void mbc5_rumble_test() {
+    auto rom = minimal_game_boy_rom();
+    rom[0x0143] = 0x80;
+    rom[0x0147] = 0x1e; // MBC5 + rumble + RAM + batterie
+    rom[0x0149] = 0x02;
+    auto image = std::make_shared<const std::vector<std::uint8_t>>(std::move(rom));
+    auto cartridge = Cartridge::create(image, [] { return std::int64_t{0}; });
+    check(!cartridge->rumble_active(), "rumble MBC5 actif au démarrage");
+    cartridge->write_control(0x4000, 0x08);
+    check(cartridge->rumble_active(), "bit rumble MBC5 ignoré");
+    cartridge->write_control(0x4000, 0x00);
+    check(!cartridge->rumble_active(), "rumble MBC5 ne s'arrête pas");
+}
+
 void oam_dma_timing_test() {
     Fixture f;
     f.bus.write(0xc000, 0xa7);
@@ -155,6 +192,8 @@ int main() {
     speed_switch_test();
     infrared_test();
     serial_fast_clock_test();
+    ppu_dot_timing_test();
+    mbc5_rumble_test();
     oam_dma_timing_test();
     vram_dma_timing_test();
 

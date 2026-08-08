@@ -17,8 +17,16 @@ public:
         if (address <= 0x1fff) ram_enabled_ = (value & 0x0f) == 0x0a;
         else if (address <= 0x2fff) rom_bank_low_ = byte(value);
         else if (address <= 0x3fff) rom_bank_high_ = value & 1;
-        else if (address <= 0x5fff) ram_bank_ = value & (has_rumble_ ? 7 : 0x0f);
+        else if (address <= 0x5fff) {
+            if (has_rumble_) {
+                rumble_active_ = (value & 0x08) != 0;
+                ram_bank_ = value & 0x07;
+            } else {
+                ram_bank_ = value & 0x0f;
+            }
+        }
     }
+    [[nodiscard]] bool rumble_active() const noexcept override { return has_rumble_ && rumble_active_; }
     int read_ram(int address) const override {
         if (!ram_enabled_ || ram_.empty()) return 0xff;
         const auto offset = static_cast<std::size_t>(ram_bank_ * ram_bank_size + address - 0xa000);
@@ -31,11 +39,11 @@ public:
     }
     void save_state(BinaryWriter& out) const override {
         out.boolean(ram_enabled_); out.i32(rom_bank_low_); out.i32(rom_bank_high_);
-        out.i32(ram_bank_); out.raw(ram_);
+        out.i32(ram_bank_); out.boolean(rumble_active_); out.raw(ram_);
     }
     void load_state(BinaryReader& in) override {
         ram_enabled_ = in.boolean(); rom_bank_low_ = in.i32(); rom_bank_high_ = in.i32();
-        ram_bank_ = in.i32(); in.raw(ram_);
+        ram_bank_ = in.i32(); rumble_active_ = in.boolean(); in.raw(ram_);
     }
 private:
     bool ram_enabled_{};
@@ -43,6 +51,7 @@ private:
     int rom_bank_high_{};
     int ram_bank_{};
     bool has_rumble_{};
+    bool rumble_active_{};
 };
 
 } // namespace ravenemu::cgb

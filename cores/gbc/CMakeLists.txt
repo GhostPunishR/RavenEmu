@@ -1,8 +1,7 @@
-# Frontière CGB distincte : le cœur complet partage encore l'implémentation GB,
-# mais les composants matériels CGB vivent et sont testés sous cores/gbc.
-add_library(gbc_raven_core INTERFACE)
-target_include_directories(gbc_raven_core INTERFACE include)
-target_link_libraries(gbc_raven_core INTERFACE gb_raven_core)
+add_library(gbc_raven_core STATIC src/core.cpp)
+target_include_directories(gbc_raven_core PUBLIC include)
+target_link_libraries(gbc_raven_core PUBLIC gb_raven_core ravenemu_common)
+set_target_properties(gbc_raven_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 if(RAVENEMU_BUILD_TESTS)
     add_executable(gbc_raven_core_tests tests/gbc_hardware_test.cpp)
