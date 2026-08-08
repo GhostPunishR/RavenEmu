@@ -94,10 +94,10 @@ Le moteur Game Boy Advance démarre désormais des jeux commerciaux testés, mai
 
 ### Application Android
 
-- Bibliothèque locale avec recherche, tri, filtres et vues grille ou liste
+- Bibliothèque locale en pages par console, avec recherche, tri et vues grille ou liste
 - Accès aux dossiers par le sélecteur Android, sans permission globale de stockage
 - Identification par CRC32, SHA-1 et SHA-256
-- Badge d'intégrité calculé depuis les sommes de contrôle de la cartouche, sans base extérieure
+- Contrôle d'intégrité calculé depuis les sommes de contrôle de la cartouche, sans base extérieure
 - Pochettes choisies par l'utilisateur ou générées localement
 - Commandes tactiles configurables par console, orientation et jeu
 - Import local de panneaux de commandes au format `.deltaskin` (PDF) pour GB/GBC et GBA

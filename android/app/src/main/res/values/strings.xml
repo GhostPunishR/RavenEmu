@@ -4,8 +4,7 @@
     <string name="footer_signature">RavenEmu By GhostPunishR</string>
 
     <!-- Bibliothèque -->
-    <string name="library_title">Bibliothèque</string>
-    <string name="library_empty">Aucun jeu détecté.\nAjoutez un dossier de ROM avec le bouton ci-dessous.</string>
+    <string name="library_empty">Aucun jeu détecté.\nAjoutez un dossier de ROM avec le bouton + de la barre.</string>
     <string name="library_add_folder">Ajouter un dossier</string>
     <string name="library_refresh">Actualiser</string>
     <string name="library_search_hint">Rechercher un jeu</string>
@@ -20,12 +19,13 @@
     <string name="library_rom_details">Détails</string>
     <string name="library_choose_cover">Choisir une pochette</string>
     <string name="library_size_kib">%1$d Kio</string>
-    <string name="library_filter_console">Filtrer par console</string>
-    <string name="library_filter_all">Toutes les consoles</string>
-    <string name="library_filter_gb">Game Boy / Game Boy Color</string>
-    <string name="library_filter_gb_dmg">Game Boy (monochrome)</string>
-    <string name="library_filter_gb_cgb">Game Boy Color</string>
-    <string name="library_filter_gba">Game Boy Advance</string>
+    <!-- Titres des pages : la console sert d’axe de navigation, pas de filtre -->
+    <string name="library_page_all">Tous les jeux</string>
+    <string name="library_page_gb">Game Boy</string>
+    <string name="library_page_gbc">Game Boy Color</string>
+    <string name="library_page_gba">Game Boy Advance</string>
+    <string name="library_empty_console">Aucun jeu %1$s dans vos dossiers.</string>
+    <string name="library_empty_search">Aucun jeu ne correspond à cette recherche.</string>
     <string name="library_save_type">Type de sauvegarde</string>
     <string name="library_save_type_auto">Détection automatique</string>
     <string name="library_save_type_forced">%1$s (imposé)</string>
@@ -101,7 +101,7 @@
     <string name="settings_covers_dir">Dossier des pochettes</string>
     <string name="settings_covers_dir_none">Aucun dossier choisi</string>
     <string name="settings_category_library">Bibliothèque</string>
-    <string name="settings_badges">Afficher les badges d\'intégrité</string>
+    <string name="settings_badges">Signaler les cartouches non intègres</string>
     <string name="settings_clear_index">Nettoyer l\'index</string>
     <string name="settings_index_cleared">Index nettoyé</string>
     <string name="settings_category_debug">Débogage</string>

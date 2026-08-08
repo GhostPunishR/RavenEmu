@@ -1,4 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Écran de la bibliothèque.
+
+  La console n'est plus une case à cocher dans un menu : c'est la page qu'on
+  feuillette, et son nom est le titre de l'écran. Les deux gestes courants —
+  ouvrir les réglages, ajouter un dossier — sont dans la barre, aux deux coins.
+  Le reste est à la jaquette.
+-->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
@@ -10,62 +18,64 @@
         android:id="@+id/toolbar"
         android:layout_width="match_parent"
         android:layout_height="?attr/actionBarSize"
-        android:background="@color/raven_toolbar"
-        android:elevation="4dp"
-        app:title="@string/library_title"
+        android:background="@color/raven_background"
+        app:titleCentered="true"
         app:titleTextColor="@color/raven_text_primary" />
 
-    <FrameLayout
+    <EditText
+        android:id="@+id/searchField"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:layout_marginEnd="12dp"
+        android:layout_marginBottom="8dp"
+        android:background="@drawable/bg_search_field"
+        android:drawableStart="@android:drawable/ic_menu_search"
+        android:drawablePadding="8dp"
+        android:drawableTint="@color/raven_text_muted"
+        android:hint="@string/library_search_hint"
+        android:imeOptions="actionSearch"
+        android:inputType="text"
+        android:maxLines="1"
+        android:minHeight="42dp"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:textColor="@color/raven_text_primary"
+        android:textColorHint="@color/raven_text_muted"
+        android:textSize="15sp" />
+
+    <androidx.viewpager2.widget.ViewPager2
+        android:id="@+id/consolePager"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1"
-        android:background="@color/raven_background">
+        android:layout_weight="1" />
 
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/romList"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:clipToPadding="false"
-            android:padding="8dp" />
-
-        <TextView
-            android:id="@+id/emptyView"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:gravity="center"
-            android:padding="32dp"
-            android:text="@string/library_empty"
-            android:textAppearance="?attr/textAppearanceBody1"
-            android:textColor="@color/raven_text_secondary"
-            android:visibility="gone" />
-
-        <ProgressBar
-            android:id="@+id/progress"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:indeterminateTint="@color/raven_accent"
-            android:visibility="gone" />
-    </FrameLayout>
-
-    <View
+    <com.ravenemu.app.library.PageIndicator
+        android:id="@+id/pageIndicator"
         android:layout_width="match_parent"
-        android:layout_height="1dp"
-        android:background="@color/raven_outline" />
+        android:layout_height="20dp"
+        android:layout_marginTop="4dp"
+        android:layout_marginBottom="4dp" />
+
+    <ProgressBar
+        android:id="@+id/progress"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:indeterminateTint="@color/raven_accent"
+        android:visibility="gone" />
 
     <TextView
         android:id="@+id/footerSignature"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@color/raven_surface"
         android:fontFamily="sans-serif-medium"
         android:gravity="center"
         android:letterSpacing="0.08"
-        android:minHeight="36dp"
+        android:minHeight="28dp"
         android:paddingStart="16dp"
         android:paddingEnd="16dp"
         android:text="@string/footer_signature"
         android:textColor="@color/raven_text_muted"
-        android:textSize="11sp" />
+        android:textSize="10sp" />
 </LinearLayout>

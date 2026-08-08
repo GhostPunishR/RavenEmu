@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Champ de recherche permanent de la bibliothèque. Il ne se replie plus dans
+  la barre d'outils : chercher un jeu est le geste le plus fréquent de cet
+  écran, il ne doit pas commencer par déplier un champ.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/raven_surface" />
+    <corners android:radius="12dp" />
+</shape>
