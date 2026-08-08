@@ -7,7 +7,9 @@ import android.view.Menu
 import android.view.MenuItem
 import android.view.View
 import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.ProgressBar
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -16,10 +18,12 @@ import androidx.core.widget.doAfterTextChanged
 import androidx.lifecycle.lifecycleScope
 import androidx.viewpager2.widget.ViewPager2
 import com.google.android.material.appbar.MaterialToolbar
+import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.ravenemu.app.emulation.EmulationActivity
 import com.ravenemu.app.library.ConsolePagerAdapter
 import com.ravenemu.app.library.CoverLoader
 import com.ravenemu.app.library.PageIndicator
+import com.ravenemu.app.library.SnapshotsActivity
 import com.ravenemu.app.settings.SettingsActivity
 import com.ravenemu.core.gba.save.GbaSaveType
 import com.ravenemu.emulation.api.ConsoleType
@@ -255,24 +259,114 @@ class MainActivity : AppCompatActivity() {
         startActivity(EmulationActivity.intent(this, entry))
     }
 
+    /**
+     * Actions d'un jeu, en feuille venant du bas.
+     *
+     * La liste d'items d'une boîte de dialogue ne rappelait pas de quel jeu il
+     * s'agissait et mettait l'action destructrice au même rang que les autres.
+     * La feuille nomme le jeu, sépare « retirer » du reste, et masque le type
+     * de sauvegarde là où il n'a pas de sens.
+     */
     private fun showEntryOptions(entry: RomEntry) {
-        val isGba = entry.console == ConsoleType.GAME_BOY_ADVANCE
-        val options = buildList {
-            add(getString(R.string.library_rom_details))
-            add(getString(R.string.library_choose_cover))
-            // Le type de sauvegarde n'a de sens que pour la Game Boy Advance.
-            if (isGba) add(getString(R.string.library_save_type))
-        }.toTypedArray()
+        val vue = layoutInflater.inflate(R.layout.sheet_game_actions, null)
+        val sheet = BottomSheetDialog(this)
+        sheet.setContentView(vue)
+
+        vue.findViewById<TextView>(R.id.sheetTitle).text = entry.displayName
+        vue.findViewById<TextView>(R.id.sheetSubtitle).text = entry.platformLabel
+
+        fun action(id: Int, visible: Boolean = true, onClick: () -> Unit) {
+            val ligne = vue.findViewById<TextView>(id)
+            if (!visible) {
+                ligne.visibility = View.GONE
+                return
+            }
+            ligne.setOnClickListener {
+                sheet.dismiss()
+                onClick()
+            }
+        }
+
+        action(R.id.actionPlay) { launchGame(entry) }
+        action(R.id.actionStates) { startActivity(SnapshotsActivity.intent(this, entry)) }
+        action(R.id.actionRename) { showRenameDialog(entry) }
+        action(R.id.actionCover) {
+            coverTarget = entry
+            pickCover.launch(arrayOf("image/*"))
+        }
+        // Le type de sauvegarde n'a de sens que pour la Game Boy Advance.
+        action(
+            R.id.actionSaveType,
+            visible = entry.console == ConsoleType.GAME_BOY_ADVANCE,
+        ) { showSaveTypeDialog(entry) }
+        action(R.id.actionDetails) { showDetails(entry) }
+        action(R.id.actionRemove) { confirmRemove(entry) }
+
+        sheet.show()
+    }
+
+    /**
+     * Renommage d'une entrée.
+     *
+     * Le titre lu dans la cartouche est souvent tronqué et en majuscules. Le
+     * renommage ne touche jamais au fichier de ROM : il n'écrit que l'index.
+     * Vider le champ rend le titre d'origine plutôt que d'afficher une ligne
+     * vide.
+     */
+    private fun showRenameDialog(entry: RomEntry) {
+        val champ = EditText(this).apply {
+            setText(entry.customTitle ?: entry.displayName)
+            hint = getString(R.string.library_rename_hint)
+            setSingleLine()
+            setSelection(text.length)
+        }
+        val conteneur = FrameLayout(this).apply {
+            val marge = (24 * resources.displayMetrics.density).toInt()
+            setPadding(marge, marge / 2, marge, 0)
+            addView(champ)
+        }
         AlertDialog.Builder(this)
-            .setTitle(entry.displayName)
-            .setItems(options) { _, which ->
-                when (which) {
-                    0 -> showDetails(entry)
-                    1 -> {
-                        coverTarget = entry
-                        pickCover.launch(arrayOf("image/*"))
-                    }
-                    2 -> showSaveTypeDialog(entry)
+            .setTitle(R.string.library_rename_title)
+            .setView(conteneur)
+            .setPositiveButton(R.string.ok) { _, _ ->
+                applyRename(entry, champ.text.toString().trim())
+            }
+            .setNeutralButton(R.string.library_rename_reset) { _, _ ->
+                applyRename(entry, "")
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    private fun applyRename(entry: RomEntry, nom: String) {
+        lifecycleScope.launch {
+            index = repository.update(
+                index,
+                entry.copy(customTitle = nom.ifBlank { null }),
+            )
+            // Le nom affiché entre dans la clé du cache de pochettes : une
+            // entrée renommée dont la jaquette est générée doit en obtenir une
+            // nouvelle, portant le nouveau nom.
+            render()
+        }
+    }
+
+    /**
+     * Retrait d'une entrée : l'index seul est modifié. Ni la ROM, ni les
+     * sauvegardes de cartouche, ni les états ne sont touchés — c'est ce que
+     * dit le message, parce que « retirer » se confond aisément avec
+     * « supprimer ».
+     */
+    private fun confirmRemove(entry: RomEntry) {
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.library_remove_title, entry.displayName))
+            .setMessage(R.string.library_remove_message)
+            .setPositiveButton(R.string.library_remove_confirm) { _, _ ->
+                lifecycleScope.launch {
+                    index = repository.remove(index, entry.uri)
+                    // Retirer le dernier jeu d'une console retire sa page :
+                    // `render` recalcule les pages avant de pousser le contenu.
+                    render()
                 }
             }
             .setNegativeButton(R.string.cancel, null)
