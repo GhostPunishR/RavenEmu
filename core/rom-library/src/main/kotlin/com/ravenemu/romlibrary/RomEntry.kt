@@ -66,10 +66,27 @@ data class RomEntry(
     val saveType: String = "",
     /** URI d'une pochette associée manuellement ou détectée localement. */
     val coverUri: String? = null,
+    /**
+     * Nom donné par l'utilisateur, qui prime sur le titre d'en-tête.
+     *
+     * Le titre lu dans la cartouche est souvent tronqué à onze ou seize
+     * caractères, parfois en majuscules sans espaces : il ne fait pas toujours
+     * une entrée de bibliothèque lisible. Ce champ laisse corriger l'affichage
+     * sans jamais toucher au fichier de ROM.
+     *
+     * Champ **additif** : un index écrit par une version antérieure ne le
+     * contient pas et se relit tel quel, la valeur par défaut s'appliquant.
+     * Aucune migration n'est donc nécessaire.
+     */
+    val customTitle: String? = null,
 ) {
-    /** Nom affiché : titre d'en-tête ou nom de fichier sans extension. */
+    /**
+     * Nom affiché : renommage de l'utilisateur, sinon titre d'en-tête, sinon
+     * nom de fichier sans extension.
+     */
     val displayName: String
-        get() = title.ifBlank { fileName.substringBeforeLast('.') }
+        get() = customTitle?.takeIf { it.isNotBlank() }
+            ?: title.ifBlank { fileName.substringBeforeLast('.') }
 
     /** `true` si la cartouche annonce des fonctions Game Boy Color. */
     val supportsCgb: Boolean

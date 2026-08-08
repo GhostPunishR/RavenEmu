@@ -87,6 +87,21 @@ class LibraryRepository(
             updated
         }
 
+    /**
+     * Retire une entrée de l'index.
+     *
+     * Seul l'index est modifié : le fichier de ROM, la sauvegarde de cartouche
+     * et les états instantanés restent sur le disque. Un nouveau balayage
+     * retrouvera l'entrée — c'est un masquage, pas une suppression, et
+     * l'interface doit le dire.
+     */
+    suspend fun remove(index: RomIndex, uri: String): RomIndex =
+        withContext(Dispatchers.IO) {
+            val updated = index.remove(uri)
+            indexStore.save(updated)
+            updated
+        }
+
     /** Vide l'index (paramètre « nettoyage de l'index »). */
     suspend fun clear(): RomIndex = withContext(Dispatchers.IO) {
         indexStore.clear()
