@@ -43,9 +43,8 @@ class NativeParityTest {
         return tampon.copyOf(produits)
     }
 
-    @Test
-    fun `le coeur natif produit les memes trames et le meme audio que le Kotlin`() {
-        val rom = SyntheticRom.build()
+    /** Compare les deux implémentations sur une ROM donnée, trame par trame. */
+    private fun comparer(rom: ByteArray, etiquette: String) {
         val reference = KotlinGbaCore()
         GbaCore().use { natif ->
             reference.loadRom(rom, null)
@@ -60,16 +59,24 @@ class NativeParityTest {
                 val rendu = trame % 3 != 0
                 reference.runFrame(trameRef, rendu)
                 natif.runFrame(trameNat, rendu)
-                assertContentEquals(trameRef, trameNat, "Trames différentes à la trame $trame")
+                assertContentEquals(
+                    trameRef,
+                    trameNat,
+                    "$etiquette : trames différentes à la trame $trame",
+                )
 
                 val audioRef = drain(reference)
                 val audioNat = drain(natif)
                 assertEquals(
                     audioRef.size,
                     audioNat.size,
-                    "Nombre d'échantillons différent à la trame $trame",
+                    "$etiquette : nombre d'échantillons différent à la trame $trame",
                 )
-                assertContentEquals(audioRef, audioNat, "Audio différent à la trame $trame")
+                assertContentEquals(
+                    audioRef,
+                    audioNat,
+                    "$etiquette : audio différent à la trame $trame",
+                )
 
                 // Les entrées passent par des chemins distincts (appel direct
                 // contre traversée JNI) : elles doivent aboutir au même KEYINPUT.
@@ -81,9 +88,32 @@ class NativeParityTest {
             assertContentEquals(
                 reference.saveState(),
                 natif.saveState(),
-                "États divergents après $FRAMES trames",
+                "$etiquette : états divergents après $FRAMES trames",
             )
         }
+    }
+
+    @Test
+    fun `le coeur natif produit les memes trames et le meme audio que le Kotlin`() {
+        comparer(SyntheticRom.build(), "ROM minimale")
+    }
+
+    @Test
+    fun `le coeur natif suit le Kotlin sur une sequence de demarrage realiste`() {
+        // La ROM minimale du test précédent ne traverse qu'une poignée
+        // d'instructions : elle prouve peu. Celle-ci enchaîne ARM et Thumb,
+        // installe un gestionnaire d'interruption, configure le mode vidéo,
+        // décompresse du LZ77 vers la VRAM, copie par DMA, arme un timer et
+        // alimente une FIFO audio. C'est là que le portage peut réellement
+        // diverger.
+        comparer(RealisticRom.bootSequence(), "séquence de démarrage")
+    }
+
+    @Test
+    fun `le coeur natif suit le Kotlin sur un programme entierement Thumb`() {
+        // Le décodage Thumb est défini hors-ligne dans le portage C++ : il
+        // mérite d'être confronté séparément du chemin ARM.
+        comparer(RealisticRom.thumbOnly(), "programme Thumb")
     }
 
     @Test
