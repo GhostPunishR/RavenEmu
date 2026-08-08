@@ -70,13 +70,33 @@ cores
 ## Cœurs C++
 
 `cores/common` porte le contrat `Core`, les primitives binaires et SHA-256.
-`cores/gb` porte le moteur Game Boy existant. Ce moteur sait déjà basculer en
-mode CGB selon l'en-tête cartouche. `cores/gbc` est une frontière et une cible C++
-distinctes ; ses organes seront extraits du moteur GB progressivement sous tests
-de parité. `cores/gba` porte le moteur Game Boy Advance.
+
+`cores/gb` porte encore l'implémentation principale commune GB/GBC. Le mode CGB
+est sélectionné à partir de l'en-tête de la cartouche et conserve la même identité
+persistée que la Game Boy afin de ne pas casser la bibliothèque ou les sauvegardes.
+
+`cores/gbc` est désormais une vraie bibliothèque statique `gbc_raven_core`, avec
+ses propres tests matériels. L'extraction est progressive plutôt qu'une copie du
+cœur GB : les composants spécifiques déjà déplacés comprennent notamment le
+contrôleur de double vitesse et le port infrarouge. Le PPU, les DMA, le port série
+et les autres organes restent encore partagés avec l'implémentation GB pendant
+leur séparation sous tests de parité.
+
+`cores/gba` porte le moteur Game Boy Advance indépendant.
 
 Les quatre suites natives (`common`, `gb`, `gbc`, `gba`) doivent pouvoir être
 construites directement avec `cmake -S cores`.
+
+## Frontières plateforme
+
+Les cœurs ne pilotent jamais directement un service Android. Par exemple, une
+cartouche MBC5 rumble expose uniquement son état de vibration dans le contrat
+moteur. `engine/session` transforme cet état en sortie abstraite et
+`platform/android/vibration` est seul responsable du `Vibrator` Android.
+
+Le même principe s'applique au port série et au port infrarouge : le modèle
+matériel reste dans le cœur, tandis qu'une future connexion entre appareils doit
+passer par une couche plateforme séparée.
 
 ## Bibliothèque ROM
 
