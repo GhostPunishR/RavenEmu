@@ -63,6 +63,11 @@ class GameBoyCore(
     override fun readAudio(buffer: ShortArray): Int =
         NativeCoreBridge.readAudio(handle(), buffer)
 
+    override val rumbleActive: Boolean
+        get() = native.takeIf { it.isInitialized() }
+            ?.let { NativeCoreBridge.rumbleActive(it.value.value()) }
+            ?: false
+
     override val hasBatteryRam: Boolean
         get() = native.takeIf { it.isInitialized() }
             ?.let { NativeCoreBridge.hasBatteryRam(it.value.value()) }
