@@ -27,33 +27,26 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "RavenEmu"
-
-// Plugins de convention, compilés avant le build principal.
 includeBuild("build-logic")
 
-// Les modules sont regroupés par rôle : `core/` ne dépend d'aucune plateforme,
-// `android/` porte tout ce qui touche au système, `tools/` vérifie le dépôt
-// lui-même. Le chemin de projet suit ce découpage (`:core:gba-core`), ce qui
-// rend la couche visible dans chaque dépendance déclarée.
+// Kotlin/JVM pur.
+include(
+    ":engine:api",
+    ":engine:runtime",
+    ":engine:session",
+    ":engine:state",
+    ":engine:save",
+    ":engine:audio",
+    ":engine:diagnostics",
+    ":native:jni",
+    ":features:library",
+    ":features:skins",
+    ":tools:ci-policy",
+)
 
-// Modules JVM purs : constructibles et testables sans SDK Android. Les
-// adaptateurs de console utilisent `core/native-bridge`; l'exécution vit dans
-// les bibliothèques C++20 indépendantes de `cores/`.
-include(":core:emulation-api")
-include(":core:native-bridge")
-include(":core:deltaskin")
-include(":core:gameboy-core")
-include(":core:gba-core")
-include(":core:rom-library")
-
-// Vérification de la configuration du dépôt (workflows GitHub Actions,
-// signature des APK) : uniquement des tests, aucun code de production.
-// Voir RELEASING.md.
-include(":tools:ci-policy")
-
-// Modules Android : inclus uniquement si un SDK Android est disponible
-// (variable d'environnement ou local.properties), afin que les modules JVM
-// restent constructibles sur toute machine. Voir wiki/Architecture.md.
+// Les couches Android ne sont incluses que lorsqu'un SDK est réellement présent,
+// afin que `engine`, `features:library`, `features:skins` et les outils restent
+// testables sur une machine JVM/C++ sans Android Studio.
 val localProperties = File(rootDir, "local.properties")
 val sdkFromLocalProperties = localProperties.takeIf { it.isFile }
     ?.readLines()
@@ -67,18 +60,19 @@ val sdkDir = sequenceOf(
 ).filterNotNull().map(::File).firstOrNull(File::isDirectory)
 
 if (sdkDir != null) {
-    include(":android:app")
-    include(":android:storage")
-    include(":android:renderer")
-    include(":android:input")
-    include(":android:settings")
-} else {
-    logger.lifecycle(
-        "RavenEmu : SDK Android introuvable, seuls les modules non Android " +
-            "sont inclus (" +
-            rootProject.children.flatMap { it.children }.map { it.path.removePrefix(":") }
-                .sorted()
-                .joinToString(", ") +
-            ")."
+    include(
+        ":app:android",
+        ":platform:android:audio",
+        ":platform:android:renderer",
+        ":platform:android:input",
+        ":platform:android:storage",
+        ":platform:android:vibration",
+        ":platform:android:lifecycle",
+        ":features:settings",
+        ":features:player",
+        ":features:savestates",
+        ":features:diagnostics",
     )
+} else {
+    logger.lifecycle("RavenEmu : SDK Android introuvable, build limité aux couches JVM/C++.")
 }

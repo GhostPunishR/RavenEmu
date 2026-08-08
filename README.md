@@ -112,25 +112,23 @@ Le moteur Game Boy Advance démarre désormais des jeux commerciaux testés, mai
 
 ## Architecture
 
-| Module | Type | Responsabilité |
+| Couche | Type | Responsabilité |
 |---|---|---|
-| `android/app` | Android | Écrans, navigation et session d'émulation |
-| `core/emulation-api` | Kotlin/JVM | Contrats communs entre l'application et les moteurs |
-| `cores/CGBRavenCore` | C++20 | Moteur Game Boy et Game Boy Color |
-| `cores/GBARavenCore` | C++20 | Moteur Game Boy Advance |
-| `cores/shared` | C++20 | Contrat `Core`, sérialisation binaire, SHA-256 |
-| `cores/bridge` | C++20 | Pont JNI, seule frontière avec la JVM |
-| `core/native-bridge` | Java/JNI | Frontière primitive entre les adaptateurs JVM et C++ |
-| `core/deltaskin` | Kotlin/JVM | Validation, manifeste, stockage et géométrie du format `.deltaskin` |
-| `core/gameboy-core` | Kotlin/JVM | Adaptateur et métadonnées Game Boy/Game Boy Color |
-| `core/gba-core` | Kotlin/JVM | Adaptateur et métadonnées Game Boy Advance |
-| `core/rom-library` | Kotlin/JVM | En-têtes, empreintes, identification et index |
-| `android/storage` | Android | Dossiers, sauvegardes, états et pochettes |
-| `android/renderer` | Android | Affichage du framebuffer |
-| `android/input` | Android | Commandes tactiles et manettes |
-| `android/settings` | Android | Préférences et profils |
+| `app/android` | Android | Coque UI, navigation et composition finale |
+| `cores/common` | C++20 | Contrat natif et primitives communes |
+| `cores/gb` | C++20 | Moteur Game Boy et mode CGB existant |
+| `cores/gbc` | C++20 | Frontière d'extraction Game Boy Color sous parité |
+| `cores/gba` | C++20 | Moteur Game Boy Advance |
+| `native/api` | C++20 | Interface native générique |
+| `native/jni` | Java/C++ JNI | Seule frontière JVM ↔ C++ |
+| `engine/*` | Kotlin/JVM | API, runtime, session, état, sauvegarde, audio, diagnostics |
+| `platform/android/*` | Android | Audio, rendu, entrées, stockage, vibration, lifecycle |
+| `features/*` | JVM/Android | Bibliothèque, player, réglages, skins, savestates, diagnostics |
 
-Les moteurs C++ ne dépendent pas d'Android et possèdent des tests natifs sur l'hôte. Les adaptateurs JVM gardent le contrat `emulation-api`, de sorte que la session Android, le renderer, les entrées et DeltaSkin ne connaissent pas JNI. Les deux cœurs restent indépendants l'un de l'autre.
+Les chemins Gradle correspondent aux chemins physiques. La description complète
+et les règles de dépendances sont dans [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+La bibliothèque ROM est déplacée mécaniquement vers `features/library` sans
+modifier ses sources, modèles persistés ou son comportement.
 
 ## Compiler
 
@@ -138,8 +136,8 @@ Les moteurs C++ ne dépendent pas d'Android et possèdent des tests natifs sur l
 
 - JDK 21 recommandé
 - Gradle Wrapper fourni
-- SDK Android avec `compileSdk 35` pour construire l'application
-- Android NDK `27.2.12479018` et CMake `3.22.1`
+- SDK Android avec `compileSdk 37` pour construire l'application
+- Android NDK `29.0.14206865` et CMake `3.22.1`
 
 Les modules JVM restent testables sans SDK Android. Les moteurs C++ peuvent aussi être validés directement avec un compilateur C++20 et CMake.
 
@@ -159,13 +157,13 @@ ctest --test-dir build/native-host --output-on-failure
 ./gradlew lint
 
 # APK Test optimisé
-./gradlew assembleProfil
+./gradlew :app:android:assembleProfil
 
 # APK Debug local pour le développement
-./gradlew assembleDebug
+./gradlew :app:android:assembleDebug
 ```
 
-L'APK Test est produit dans `android/app/build/outputs/apk/profil/`, l'APK Debug dans `android/app/build/outputs/apk/debug/`.
+L'APK Test est produit dans `app/android/build/outputs/apk/profil/`, l'APK Debug dans `app/android/build/outputs/apk/debug/`.
 
 Construire l'APK Test en local ne demande **aucun secret** : sans la clé Test du projet, la construction retombe sur la clé de débogage. L'APK obtenu est utilisable pour soi, mais la CI refuse de publier un APK signé autrement que par la clé dédiée. Les détails sont dans [RELEASING.md](RELEASING.md).
 
@@ -179,6 +177,7 @@ Construire l'APK Test en local ne demande **aucun secret** : sans la clé Test d
 - [Matrice de compatibilité des jeux](https://github.com/GhostPunishR/RavenEmu/wiki/Compatibilite-des-jeux)
 - [Compilation](https://github.com/GhostPunishR/RavenEmu/wiki/Compilation)
 - [Architecture](https://github.com/GhostPunishR/RavenEmu/wiki/Architecture)
+- [Architecture technique V2](docs/ARCHITECTURE.md)
 - [Dépannage](https://github.com/GhostPunishR/RavenEmu/wiki/Depannage)
 - [Guide de contribution](CONTRIBUTING.md)
 - [Code de conduite](CODE_OF_CONDUCT.md)

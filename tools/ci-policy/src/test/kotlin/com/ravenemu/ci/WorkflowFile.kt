@@ -116,13 +116,18 @@ class WorkflowFile(val path: File) {
          * Fichier de build du module [name], **quel que soit le dossier qui le
          * regroupe**.
          *
-         * Les modules sont rangés par rôle (`core/`, `android/`, `tools/`), et
+         * Les modules sont rangés par rôle (`app/`, `engine/`, `features/`, `platform/`, `tools/`), et
          * ce classement peut encore évoluer. Coder le chemin en dur ferait
          * échouer la vérification au prochain déplacement — non pas parce que
          * la règle vérifiée aurait cessé d'être vraie, mais parce que le test
          * ne saurait plus où regarder. On cherche donc le module par son nom.
          */
         fun moduleBuildFile(name: String): File {
+            if ('/' in name) {
+                val exact = File(repositoryRoot, "$name/build.gradle.kts")
+                require(exact.isFile) { "Module « $name » introuvable sous ${repositoryRoot.path}" }
+                return exact
+            }
             val candidats = repositoryRoot.walkTopDown()
                 .onEnter { it.name !in setOf(".git", "build", ".gradle") }
                 .filter { it.isFile && it.name == "build.gradle.kts" && it.parentFile.name == name }
