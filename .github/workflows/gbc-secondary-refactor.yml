@@ -1,0 +1,39 @@
+name: GBC secondary refactor
+
+on:
+  push:
+    branches:
+      - feat/gbc-completeness
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-test:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/gbc-completeness
+          fetch-depth: 0
+
+      - name: Apply GBC secondary refactor
+        run: python3 tools/apply_gbc_secondary.py
+
+      - name: Build native cores
+        run: |
+          cmake -S cores -B build/native-host -DRAVENEMU_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
+          cmake --build build/native-host --parallel 2
+
+      - name: Run native tests
+        run: ctest --test-dir build/native-host --output-on-failure
+
+      - name: Commit validated refactor
+        run: |
+          git rm tools/apply_gbc_secondary.py .github/workflows/gbc-secondary-refactor.yml
+          git add -A
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "feat(gbc): finaliser périphériques et cible GBC"
+          git push origin HEAD:feat/gbc-completeness
