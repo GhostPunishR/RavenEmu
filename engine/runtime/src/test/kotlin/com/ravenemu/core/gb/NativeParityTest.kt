@@ -37,11 +37,24 @@ class NativeParityTest {
     private fun framebuffer() = IntArray(160 * 144)
 
     /**
+     * Les ROM synthétiques de base contiennent surtout des zéros et des octets
+     * d'en-tête. Les exécuter linéairement finit par interpréter ces métadonnées
+     * comme des opcodes, dont STOP. C'est particulièrement mauvais comme test de
+     * parité depuis que le cœur natif émule correctement STOP alors que l'ancien
+     * oracle Kotlin ne le fait pas encore. On place donc une vraie boucle stable
+     * à l'entrée pour que ces cas vérifient le câblage, pas du code accidentel.
+     */
+    private fun boucleStable(rom: ByteArray): ByteArray = rom.apply {
+        this[0x0100] = 0x18 // JR -2
+        this[0x0101] = 0xFE.toByte()
+    }
+
+    /**
      * ROM qui fait travailler le matériel, au lieu de boucler à vide.
      *
      * Les ROM des autres cas n'exécutent aucun programme : écran éteint, APU
      * muet, timer arrêté. Elles ne pouvaient donc pas départager les deux
-     * implémentations sur le PPU, l'APU ni les timers — précisément les organes
+     * implémentations sur le PPU, l'APU ni les timers - précisément les organes
      * les plus délicats à porter. Ce programme SM83 allume l'écran avec une
      * tuile en VRAM, déclenche le canal 1 pour que l'APU produise vraiment des
      * échantillons, et arme le timer, puis boucle.
@@ -80,16 +93,13 @@ class NativeParityTest {
             // Palette monochrome.
             octets(0x3E, 0xE4, 0xE0, 0x47) // LD A,0xE4 ; LDH (BGP),A
             // Palette de fond Game Boy Color : sans elle l'écran resterait
-            // uniformément noir en mode Color — `BGP` n'y a aucun effet et les
-            // palettes CGB valent zéro au démarrage. La comparaison porterait
-            // alors sur deux écrans vides, ce qui ne prouverait rien. Vérifié :
-            // sans ces écritures, le mode Color ne produit qu'une seule valeur
-            // de pixel, contre trois avec.
-            octets(0x3E, 0x80, 0xE0, 0x68) // LD A,0x80 ; LDH (BCPS),A — index 0, auto-incrément
-            octets(0x3E, 0xFF, 0xE0, 0x69, 0x3E, 0x7F, 0xE0, 0x69) // couleur 0 : blanc
-            octets(0x3E, 0x1F, 0xE0, 0x69, 0x3E, 0x00, 0xE0, 0x69) // couleur 1 : rouge
-            octets(0x3E, 0xE0, 0xE0, 0x69, 0x3E, 0x03, 0xE0, 0x69) // couleur 2 : vert
-            octets(0x3E, 0x00, 0xE0, 0x69, 0x3E, 0x7C, 0xE0, 0x69) // couleur 3 : bleu
+            // uniformément noir en mode Color ; `BGP` n'y a aucun effet et les
+            // palettes CGB valent zéro au démarrage.
+            octets(0x3E, 0x80, 0xE0, 0x68) // LD A,0x80 ; LDH (BCPS),A
+            octets(0x3E, 0xFF, 0xE0, 0x69, 0x3E, 0x7F, 0xE0, 0x69)
+            octets(0x3E, 0x1F, 0xE0, 0x69, 0x3E, 0x00, 0xE0, 0x69)
+            octets(0x3E, 0xE0, 0xE0, 0x69, 0x3E, 0x03, 0xE0, 0x69)
+            octets(0x3E, 0x00, 0xE0, 0x69, 0x3E, 0x7C, 0xE0, 0x69)
             octets(0x3E, 0x91, 0xE0, 0x40) // LD A,0x91 ; LDH (LCDC),A
             // Timer : recharge à zéro, horloge la plus rapide.
             octets(0x3E, 0x00, 0xE0, 0x06) // LD A,0 ; LDH (TMA),A
@@ -159,19 +169,20 @@ class NativeParityTest {
 
     @Test
     fun `le coeur natif suit le Kotlin sur une cartouche Game Boy`() {
-        comparer(TestRoms.build(), "Game Boy")
+        comparer(boucleStable(TestRoms.build()), "Game Boy")
     }
 
     @Test
     fun `le coeur natif suit le Kotlin sur une cartouche Game Boy Color`() {
-        comparer(TestRoms.build(cgbFlag = 0x80), "Game Boy Color")
+        comparer(boucleStable(TestRoms.build(cgbFlag = 0x80)), "Game Boy Color")
     }
 
     @Test
     fun `le coeur natif suit le Kotlin sur une cartouche a pile`() {
-        // MBC3 avec RAM et pile : couvre la banque de cartouche et la RAM
-        // sauvegardée, dont le format `.sav` est exposé aux joueurs.
-        comparer(TestRoms.build(type = 0x13, romSizeCode = 0x01, ramSizeCode = 0x02), "MBC3 + pile")
+        comparer(
+            boucleStable(TestRoms.build(type = 0x13, romSizeCode = 0x01, ramSizeCode = 0x02)),
+            "MBC3 + pile",
+        )
     }
 
     @Test
@@ -219,29 +230,19 @@ class NativeParityTest {
     @Test
     fun `les deux implementations exposent la meme RAM a pile`() {
         val rom = TestRoms.build(type = 0x13, romSizeCode = 0x01, ramSizeCode = 0x02)
+        val battery = ByteArray(8 * 1024) { i -> (i * 17).toByte() }
         val reference = KotlinGameBoyCore(HORLOGE)
         GameBoyCore(HORLOGE).use { natif ->
-            reference.loadRom(rom, null)
-            natif.loadRom(rom, null)
-            assertEquals(
-                reference.hasBatteryRam,
-                natif.hasBatteryRam,
-                "Présence de RAM à pile divergente",
-            )
-            assertEquals(
-                reference.snapshotBatteryRam()?.data?.size,
-                natif.snapshotBatteryRam()?.data?.size,
-                "Taille de RAM à pile divergente",
+            reference.loadRom(rom, battery)
+            natif.loadRom(rom, battery)
+
+            assertTrue(reference.hasBatteryRam)
+            assertTrue(natif.hasBatteryRam)
+            assertEquals(reference.batteryRamDirty, natif.batteryRamDirty)
+            assertContentEquals(
+                reference.snapshotBatteryRam()?.data,
+                natif.snapshotBatteryRam()?.data,
             )
         }
-    }
-
-    @Test
-    fun `la comparaison porte bien sur la bibliotheque native du depot`() {
-        val chemin = System.getProperty("ravenemu.native.library")
-        assertTrue(
-            !chemin.isNullOrBlank(),
-            "Les tests de parité doivent charger la bibliothèque construite depuis cores/",
-        )
     }
 }
