@@ -1,5 +1,6 @@
 plugins {
     id("ravenemu.jvm")
+    id("ravenemu.native-parity")
 }
 
 dependencies {
