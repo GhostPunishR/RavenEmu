@@ -1,63 +1,56 @@
 <?xml version="1.0" encoding="utf-8"?>
-<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+<!--
+  Vignette de la bibliothèque : la jaquette, et son titre dessous.
+
+  Plus de carte, plus de contour, plus d'ombre, plus de ligne de détails
+  techniques. Une grille de jaquettes se lit par les images ; tout ce qui les
+  encadre les met à distance et fait ressembler la page à un tableau. La taille
+  du fichier, le type de MBC et la région restent consultables sur appui long,
+  là où on les cherche vraiment.
+-->
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_margin="6dp"
-    app:cardBackgroundColor="@color/raven_surface"
-    app:cardCornerRadius="12dp"
-    app:cardElevation="2dp"
-    app:rippleColor="@color/raven_ripple"
-    app:strokeColor="@color/raven_outline"
-    app:strokeWidth="1dp">
+    android:background="?attr/selectableItemBackground"
+    android:paddingStart="4dp"
+    android:paddingTop="6dp"
+    android:paddingEnd="4dp"
+    android:paddingBottom="10dp">
 
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+    <ImageView
+        android:id="@+id/cover"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
         android:background="@color/raven_surface"
-        android:orientation="vertical">
+        android:contentDescription="@null"
+        android:scaleType="centerCrop"
+        app:layout_constraintDimensionRatio="H,6:7"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
 
-        <ImageView
-            android:id="@+id/cover"
-            android:layout_width="match_parent"
-            android:layout_height="150dp"
-            android:background="@color/raven_surface_variant"
-            android:contentDescription="@null"
-            android:scaleType="centerCrop" />
+    <View
+        android:id="@+id/statusDot"
+        android:layout_width="10dp"
+        android:layout_height="10dp"
+        android:layout_margin="4dp"
+        android:background="@drawable/bg_status_dot"
+        android:visibility="gone"
+        app:layout_constraintEnd_toEndOf="@id/cover"
+        app:layout_constraintTop_toTopOf="@id/cover" />
 
-        <TextView
-            android:id="@+id/title"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:ellipsize="end"
-            android:maxLines="1"
-            android:paddingStart="8dp"
-            android:paddingTop="8dp"
-            android:paddingEnd="8dp"
-            android:textAppearance="?attr/textAppearanceSubtitle2"
-            android:textColor="@color/raven_text_primary" />
-
-        <TextView
-            android:id="@+id/subtitle"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:ellipsize="end"
-            android:maxLines="1"
-            android:paddingStart="8dp"
-            android:paddingEnd="8dp"
-            android:textAppearance="?attr/textAppearanceCaption"
-            android:textColor="@color/raven_text_secondary" />
-
-        <TextView
-            android:id="@+id/badge"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_margin="8dp"
-            android:paddingStart="8dp"
-            android:paddingTop="2dp"
-            android:paddingEnd="8dp"
-            android:paddingBottom="2dp"
-            android:textColor="@color/raven_badge_text"
-            android:textSize="11sp" />
-    </LinearLayout>
-</com.google.android.material.card.MaterialCardView>
+    <TextView
+        android:id="@+id/title"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:ellipsize="end"
+        android:gravity="center_horizontal"
+        android:maxLines="3"
+        android:textColor="@color/raven_text_secondary"
+        android:textSize="11sp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/cover" />
+</androidx.constraintlayout.widget.ConstraintLayout>

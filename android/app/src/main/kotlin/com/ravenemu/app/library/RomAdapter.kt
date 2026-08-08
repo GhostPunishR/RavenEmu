@@ -1,5 +1,6 @@
 package com.ravenemu.app.library
 
+import android.graphics.drawable.GradientDrawable
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -20,19 +21,44 @@ import kotlinx.coroutines.Job
  * le fournisseur de documents et par le décodeur d'images, sur le fil
  * d'affichage, à chaque vignette entrant à l'écran. Il revient à
  * [CoverLoader], qui le mémorise et l'exécute en arrière-plan.
+ *
+ * La grille ne montre plus que la jaquette et le titre. Les détails techniques
+ * — taille, MBC, région — n'ont pas disparu : ils sont sur l'appui long, là où
+ * on les cherche, et non sous chaque vignette où ils encombraient la page.
  */
 class RomAdapter(
     private val onClick: (RomEntry) -> Unit,
     private val onLongClick: (RomEntry) -> Unit,
     private val covers: CoverLoader,
-    var showBadges: Boolean = true,
-    var gridMode: Boolean = true,
+    showBadges: Boolean = true,
+    gridMode: Boolean = true,
 ) : RecyclerView.Adapter<RomAdapter.Holder>() {
 
     private val items = mutableListOf<RomEntry>()
 
+    /**
+     * Grille ou liste. Le changement passe par un rebâtissage complet parce
+     * qu'il change le type de vue de chaque élément : un simple `submit` ne
+     * verrait aucune différence dans les données et laisserait à l'écran les
+     * vues de l'ancien mode.
+     */
+    var gridMode: Boolean = gridMode
+        set(value) {
+            if (field == value) return
+            field = value
+            notifyDataSetChanged()
+        }
+
+    /** Pastilles d'état. Leur bascule ne change que la liaison des vues. */
+    var showBadges: Boolean = showBadges
+        set(value) {
+            if (field == value) return
+            field = value
+            notifyItemRangeChanged(0, items.size)
+        }
+
     private companion object {
-        // Étiquettes courtes : le sous-titre d'une vignette reste lisible.
+        // Étiquettes courtes : le sous-titre d'une ligne reste lisible.
         const val CONSOLE_LABEL_GB = "GB"
         const val CONSOLE_LABEL_GBA = "GBA"
 
@@ -104,8 +130,10 @@ class RomAdapter(
     inner class Holder(view: View) : RecyclerView.ViewHolder(view) {
         private val cover: ImageView = view.findViewById(R.id.cover)
         private val title: TextView = view.findViewById(R.id.title)
-        private val subtitle: TextView = view.findViewById(R.id.subtitle)
-        private val badge: TextView = view.findViewById(R.id.badge)
+        private val statusDot: View = view.findViewById(R.id.statusDot)
+
+        /** Absent de la grille, qui ne montre que la jaquette et le titre. */
+        private val subtitle: TextView? = view.findViewById(R.id.subtitle)
 
         private var job: Job? = null
         private var key: String? = null
@@ -118,6 +146,18 @@ class RomAdapter(
 
         fun bind(entry: RomEntry) {
             title.text = entry.displayName
+            subtitle?.text = detailsDe(entry)
+            bindCover(entry)
+            bindStatus(entry)
+
+            itemView.setOnClickListener { onClick(items[bindingAdapterPosition]) }
+            itemView.setOnLongClickListener {
+                onLongClick(items[bindingAdapterPosition])
+                true
+            }
+        }
+
+        private fun detailsDe(entry: RomEntry): String {
             val sizeKib = entry.sizeBytes / 1024
             // La console est toujours indiquée ; les champs MBC et région sont
             // propres à la cartouche Game Boy et n'ont pas d'équivalent GBA.
@@ -130,35 +170,32 @@ class RomAdapter(
                     " · " + entry.mbcType.displayName +
                     " · " + entry.region.displayName
             }
-            subtitle.text = itemView.context.getString(
-                R.string.library_size_kib,
-                sizeKib,
-            ) + " · " + details
+            return itemView.context.getString(R.string.library_size_kib, sizeKib) + " · " + details
+        }
 
-            bindCover(entry)
-
-            if (showBadges) {
-                badge.visibility = View.VISIBLE
-                val (label, color) = when (entry.status) {
-                    RomStatus.INTACT -> R.string.status_intact to R.color.badge_intact
-                    RomStatus.MODIFIED ->
-                        R.string.status_modified to R.color.badge_modified
-                    RomStatus.HEADER_ONLY ->
-                        R.string.status_header_only to R.color.badge_header_only
-                    RomStatus.INVALID_HEADER ->
-                        R.string.status_invalid_header to R.color.badge_invalid_header
-                }
-                badge.setText(label)
-                badge.setBackgroundColor(itemView.context.getColor(color))
-            } else {
-                badge.visibility = View.GONE
+        /**
+         * L'état ne se signale que lorsqu'il y a quelque chose à signaler.
+         * Décorer chaque cartouche conforme d'une étiquette n'apprendrait rien
+         * et couvrirait les jaquettes ; l'anomalie, elle, mérite un point.
+         */
+        private fun bindStatus(entry: RomEntry) {
+            val couleur = when (entry.status) {
+                RomStatus.INTACT -> null
+                RomStatus.MODIFIED -> R.color.badge_modified
+                RomStatus.HEADER_ONLY -> R.color.badge_header_only
+                RomStatus.INVALID_HEADER -> R.color.badge_invalid_header
             }
-
-            itemView.setOnClickListener { onClick(items[bindingAdapterPosition]) }
-            itemView.setOnLongClickListener {
-                onLongClick(items[bindingAdapterPosition])
-                true
+            if (!showBadges || couleur == null) {
+                statusDot.visibility = View.GONE
+                return
             }
+            statusDot.visibility = View.VISIBLE
+            // La teinte ne passe pas par `backgroundTintList` : elle
+            // recouvrirait le liseré sombre qui détache la pastille d'une
+            // jaquette claire. Seul le remplissage change.
+            (statusDot.background?.mutate() as? GradientDrawable)
+                ?.setColor(itemView.context.getColor(couleur))
+            statusDot.contentDescription = entry.status.displayName
         }
 
         private fun bindCover(entry: RomEntry) {
@@ -171,17 +208,32 @@ class RomAdapter(
             if (prete != null) {
                 // Chemin courant après le premier défilement : aucune
                 // allocation, aucune entrée-sortie, rien d'asynchrone.
-                cover.setImageBitmap(prete)
+                appliquer(prete)
                 return
             }
 
             // La vignette est recyclée : effacer l'image précédente évite
-            // qu'un autre jeu ne s'affiche le temps du chargement.
+            // qu'un autre jeu ne s'affiche le temps du chargement, et remettre
+            // la couleur neutre évite qu'un titre garde la teinte du précédent.
             cover.setImageDrawable(null)
-            job = covers.load(entry, cle, taille, taille) { bitmap ->
+            title.setTextColor(if (gridMode) CoverAccent.DEFAUT else neutre())
+            job = covers.load(entry, cle, taille, taille) { cover ->
                 // La vignette a pu être réaffectée entre-temps.
-                if (key == cle) cover.setImageBitmap(bitmap)
+                if (key == cle) appliquer(cover)
             }
         }
+
+        /**
+         * Le titre emprunte sa couleur à la jaquette : sur fond noir, c'est ce
+         * qui rattache le texte à l'image qu'il nomme. La liste garde en
+         * revanche un titre neutre — elle sert à comparer des entrées, et une
+         * colonne de couleurs différentes s'y lit mal.
+         */
+        private fun appliquer(cover: CoverLoader.Cover) {
+            this.cover.setImageBitmap(cover.bitmap)
+            title.setTextColor(if (gridMode) cover.accent else neutre())
+        }
+
+        private fun neutre(): Int = itemView.context.getColor(R.color.raven_text_primary)
     }
 }

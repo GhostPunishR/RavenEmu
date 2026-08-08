@@ -6,25 +6,25 @@ import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import android.widget.EditText
 import android.widget.ProgressBar
-import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.appcompat.widget.SearchView
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.widget.doAfterTextChanged
 import androidx.lifecycle.lifecycleScope
-import androidx.recyclerview.widget.GridLayoutManager
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
+import androidx.viewpager2.widget.ViewPager2
 import com.google.android.material.appbar.MaterialToolbar
 import com.ravenemu.app.emulation.EmulationActivity
+import com.ravenemu.app.library.ConsolePagerAdapter
 import com.ravenemu.app.library.CoverLoader
-import com.ravenemu.app.library.RomAdapter
+import com.ravenemu.app.library.PageIndicator
 import com.ravenemu.app.settings.SettingsActivity
 import com.ravenemu.core.gba.save.GbaSaveType
 import com.ravenemu.emulation.api.ConsoleType
 import com.ravenemu.romlibrary.LibraryFilter
+import com.ravenemu.romlibrary.LibraryPages
 import com.ravenemu.romlibrary.RomEntry
 import com.ravenemu.romlibrary.RomIndex
 import com.ravenemu.settings.AppSettings
@@ -34,9 +34,13 @@ import com.ravenemu.storage.LibraryRepository
 import kotlinx.coroutines.launch
 
 /**
- * Écran d'accueil : bibliothèque visuelle des jeux détectés dans les dossiers
- * choisis par l'utilisateur (SAF), avec recherche, tri, filtrage, badges de
- * statut et actualisation manuelle.
+ * Écran d'accueil : bibliothèque des jeux détectés dans les dossiers choisis
+ * par l'utilisateur (SAF).
+ *
+ * La console n'est plus un filtre caché dans un menu mais la page que l'on
+ * feuillette, et son nom est le titre de l'écran. Le reste de la surface
+ * revient aux jaquettes : la recherche a son champ, les deux gestes courants
+ * leurs coins de barre, et tout ce qui s'utilise rarement le menu débordant.
  */
 class MainActivity : AppCompatActivity() {
 
@@ -44,13 +48,17 @@ class MainActivity : AppCompatActivity() {
     private lateinit var repository: LibraryRepository
     private lateinit var coverResolver: CoverResolver
     private lateinit var covers: CoverLoader
-    private lateinit var adapter: RomAdapter
-    private lateinit var recycler: RecyclerView
-    private lateinit var emptyView: TextView
+    private lateinit var pagerAdapter: ConsolePagerAdapter
+    private lateinit var pager: ViewPager2
+    private lateinit var indicator: PageIndicator
+    private lateinit var searchField: EditText
     private lateinit var progress: ProgressBar
 
     private var index: RomIndex = RomIndex()
     private var searchQuery: String = ""
+
+    /** Filtres des pages affichées, dans l'ordre où on les feuillette. */
+    private var pages: List<String> = emptyList()
 
     private val openRomFolder =
         registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
@@ -97,20 +105,42 @@ class MainActivity : AppCompatActivity() {
 
         val toolbar = findViewById<MaterialToolbar>(R.id.toolbar)
         setSupportActionBar(toolbar)
+        // Les réglages quittent le menu débordant pour le coin gauche : c'est
+        // l'autre destination fréquente de cet écran, à égalité avec l'ajout
+        // d'un dossier qui occupe le coin droit.
+        toolbar.setNavigationIcon(android.R.drawable.ic_menu_preferences)
+        toolbar.setNavigationContentDescription(R.string.settings_title)
+        toolbar.setNavigationOnClickListener {
+            startActivity(Intent(this, SettingsActivity::class.java))
+        }
 
-        recycler = findViewById(R.id.romList)
-        emptyView = findViewById(R.id.emptyView)
         progress = findViewById(R.id.progress)
+        pager = findViewById(R.id.consolePager)
+        indicator = findViewById(R.id.pageIndicator)
+        searchField = findViewById(R.id.searchField)
 
-        adapter = RomAdapter(
+        pagerAdapter = ConsolePagerAdapter(
+            covers = covers,
             onClick = ::launchGame,
             onLongClick = ::showEntryOptions,
-            covers = covers,
-            showBadges = settings.showStatusBadges,
-            gridMode = settings.libraryViewMode == "grid",
+            spanCount = ::gridSpanCount,
+            entriesFor = ::visibleEntries,
+            emptyMessage = ::emptyMessage,
         )
-        recycler.adapter = adapter
-        applyLayoutManager()
+        pager.adapter = pagerAdapter
+        searchField.doAfterTextChanged {
+            searchQuery = it?.toString().orEmpty()
+            pagerAdapter.refresh()
+        }
+        pager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
+            override fun onPageSelected(position: Int) {
+                indicator.setCurrent(position)
+                // La page ouverte est retrouvée au prochain démarrage : c'est
+                // le même réglage qu'utilisait le filtre par console.
+                pagerAdapter.pageAt(position)?.let { settings.libraryConsoleFilter = it }
+                updateTitle()
+            }
+        })
 
         index = repository.loadIndex()
         render()
@@ -121,21 +151,17 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        adapter.showBadges = settings.showStatusBadges
         render()
     }
 
-    private fun applyLayoutManager() {
-        recycler.layoutManager = if (adapter.gridMode) {
-            GridLayoutManager(this, gridSpanCount())
-        } else {
-            LinearLayoutManager(this)
-        }
-    }
-
+    /**
+     * Colonnes de la grille. Une vignette vise environ 100 dp : c'est la
+     * largeur à laquelle une jaquette reste reconnaissable et son titre
+     * lisible sur trois lignes.
+     */
     private fun gridSpanCount(): Int {
         val widthDp = resources.configuration.screenWidthDp
-        return (widthDp / 140).coerceIn(2, 8)
+        return (widthDp / 100).coerceIn(3, 8)
     }
 
     private fun persistTreePermission(uri: Uri) {
@@ -164,8 +190,9 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun visibleEntries(): List<RomEntry> {
-        var entries = LibraryFilter.apply(index.entries, settings.libraryConsoleFilter)
+    /** Contenu d'une page : les entrées de sa console, cherchées et triées. */
+    private fun visibleEntries(filter: String): List<RomEntry> {
+        var entries = LibraryFilter.apply(index.entries, filter)
         if (searchQuery.isNotBlank()) {
             val query = searchQuery.trim()
             entries = entries.filter {
@@ -180,11 +207,48 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Message d'une page vide. « Aucun jeu », « aucun jeu de cette console » et
+     * « aucun résultat » appellent trois gestes différents : les confondre
+     * laisserait l'utilisateur devant une page blanche sans savoir quoi faire.
+     */
+    private fun emptyMessage(filter: String): CharSequence = when {
+        index.entries.isEmpty() -> getString(R.string.library_empty)
+        searchQuery.isNotBlank() -> getString(R.string.library_empty_search)
+        else -> getString(R.string.library_empty_console, pageLabel(filter))
+    }
+
     private fun render() {
-        val entries = visibleEntries()
-        adapter.submit(entries)
-        emptyView.visibility =
-            if (entries.isEmpty()) View.VISIBLE else View.GONE
+        pagerAdapter.gridMode = settings.libraryViewMode == "grid"
+        pagerAdapter.showBadges = settings.showStatusBadges
+
+        val nouvelles = LibraryPages.forEntries(index.entries)
+        if (nouvelles != pages) {
+            // Une console apparaît ou disparaît : les pages sont rebâties, et
+            // l'écran revient sur celle que l'utilisateur regardait — ou sur la
+            // première si sa console n'a plus de jeux.
+            pages = nouvelles
+            pagerAdapter.setPages(nouvelles)
+            val cible = LibraryPages.indexOf(nouvelles, settings.libraryConsoleFilter)
+            pager.setCurrentItem(cible, false)
+            indicator.setPages(nouvelles.size, cible)
+        } else {
+            pagerAdapter.refresh()
+        }
+        updateTitle()
+    }
+
+    /** Le titre de l'écran est le nom de la console feuilletée. */
+    private fun updateTitle() {
+        val filtre = pagerAdapter.pageAt(pager.currentItem) ?: LibraryFilter.ALL
+        supportActionBar?.title = pageLabel(filtre)
+    }
+
+    private fun pageLabel(filter: String): String = when (filter) {
+        LibraryFilter.ALL -> getString(R.string.library_page_all)
+        LibraryFilter.GAME_BOY_MONOCHROME_CARTRIDGES -> getString(R.string.library_page_gb)
+        LibraryFilter.GAME_BOY_COLOR_CARTRIDGES -> getString(R.string.library_page_gbc)
+        else -> getString(R.string.library_page_gba)
     }
 
     private fun launchGame(entry: RomEntry) {
@@ -286,24 +350,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.menu_main, menu)
-        val searchItem = menu.findItem(R.id.action_search)
-        (searchItem.actionView as? SearchView)?.setOnQueryTextListener(
-            object : SearchView.OnQueryTextListener {
-                override fun onQueryTextSubmit(query: String?): Boolean = true
-
-                override fun onQueryTextChange(newText: String?): Boolean {
-                    searchQuery = newText.orEmpty()
-                    render()
-                    return true
-                }
-            }
-        )
         return true
-    }
-
-    private fun applyConsoleFilter(console: String) {
-        settings.libraryConsoleFilter = console
-        render()
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
@@ -311,9 +358,8 @@ class MainActivity : AppCompatActivity() {
             R.id.action_refresh -> refreshLibrary()
             R.id.action_add_folder -> openRomFolder.launch(null)
             R.id.action_toggle_view -> {
-                adapter.gridMode = !adapter.gridMode
-                settings.libraryViewMode = if (adapter.gridMode) "grid" else "list"
-                applyLayoutManager()
+                val grille = settings.libraryViewMode != "grid"
+                settings.libraryViewMode = if (grille) "grid" else "list"
                 render()
             }
             R.id.action_sort_title -> {
@@ -328,15 +374,6 @@ class MainActivity : AppCompatActivity() {
                 settings.librarySortOrder = "status"
                 render()
             }
-            R.id.action_filter_all -> applyConsoleFilter("all")
-            R.id.action_filter_gb -> applyConsoleFilter(ConsoleType.GAME_BOY.name)
-            R.id.action_filter_gb_dmg ->
-                applyConsoleFilter(LibraryFilter.GAME_BOY_MONOCHROME_CARTRIDGES)
-            R.id.action_filter_gb_cgb ->
-                applyConsoleFilter(LibraryFilter.GAME_BOY_COLOR_CARTRIDGES)
-            R.id.action_filter_gba -> applyConsoleFilter(ConsoleType.GAME_BOY_ADVANCE.name)
-            R.id.action_settings ->
-                startActivity(Intent(this, SettingsActivity::class.java))
             else -> return super.onOptionsItemSelected(item)
         }
         return true
