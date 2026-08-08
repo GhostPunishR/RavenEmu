@@ -28,7 +28,7 @@ Cette commande vérifie les modules disponibles. Sans SDK Android, elle couvre l
 ## Tester les moteurs C++
 
 ```bash
-cmake -S native-core -B build/native-host \
+cmake -S cores -B build/native-host \
   -DRAVENEMU_BUILD_TESTS=ON \
   -DCMAKE_BUILD_TYPE=Release
 cmake --build build/native-host --parallel
@@ -60,7 +60,7 @@ android/app/build/outputs/apk/debug/
 ## Validation complète
 
 ```bash
-cmake -S native-core -B build/native-host -DRAVENEMU_BUILD_TESTS=ON
+cmake -S cores -B build/native-host -DRAVENEMU_BUILD_TESTS=ON
 cmake --build build/native-host --parallel
 ctest --test-dir build/native-host --output-on-failure
 ./gradlew test lint assembleDebug

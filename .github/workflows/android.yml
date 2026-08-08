@@ -64,7 +64,7 @@ jobs:
 
       - name: Tester les cœurs C++ sur l'hôte
         run: |
-          cmake -S native-core -B build/native-host \
+          cmake -S cores -B build/native-host \
             -DRAVENEMU_BUILD_TESTS=ON \
             -DRAVENEMU_BUILD_JNI=ON \
             -DCMAKE_BUILD_TYPE=Release

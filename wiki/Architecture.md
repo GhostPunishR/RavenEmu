@@ -8,7 +8,9 @@ RavenEmu sépare les moteurs d'émulation des composants Android.
 |---|---|---|
 | `android/app` | Android | Écrans, navigation et session d'émulation |
 | `core/emulation-api` | Kotlin/JVM | Contrats communs entre application et moteurs |
-| `native-core` | C++20 | CPU, bus, vidéo, audio et cartouches des deux cœurs |
+| `cores/CGBRavenCore` | C++20 | CPU, bus, vidéo, audio et cartouches Game Boy / Game Boy Color |
+| `cores/GBARavenCore` | C++20 | CPU, bus, vidéo, audio, DMA, BIOS et cartouches Game Boy Advance |
+| `cores/shared` | C++20 | Contrat `Core` et utilitaires communs aux deux cœurs |
 | `core/native-bridge` | Java/JNI | Handles natifs et transport de tableaux primitifs |
 | `core/deltaskin` | Kotlin/JVM | Manifeste, validation ZIP, stockage, disposition et entrées du format `.deltaskin` |
 | `core/gameboy-core` | Kotlin/JVM | Adaptateur et métadonnées Game Boy/Game Boy Color |
@@ -61,7 +63,7 @@ Chaque moteur avance selon un budget de cycles et produit un framebuffer, des é
 
 Un nouveau moteur doit:
 
-1. vivre dans une implémentation C++ isolée de `native-core`;
+1. vivre dans une implémentation C++ isolée sous `cores/`, un dossier par organe;
 2. exposer un adaptateur qui implémente `emulation-api`;
 3. rester indépendant des moteurs existants;
 4. fournir des tests synthétiques natifs;

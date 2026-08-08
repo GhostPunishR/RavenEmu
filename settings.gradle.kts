@@ -38,7 +38,7 @@ includeBuild("build-logic")
 
 // Modules JVM purs : constructibles et testables sans SDK Android. Les
 // adaptateurs de console utilisent `core/native-bridge`; l'exécution vit dans
-// la bibliothèque C++20 indépendante `native-core`.
+// les bibliothèques C++20 indépendantes de `cores/`.
 include(":core:emulation-api")
 include(":core:native-bridge")
 include(":core:deltaskin")
