@@ -60,13 +60,12 @@ jobs:
         run: |
           sdkmanager_path="${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager"
           test -x "$sdkmanager_path"
-          "$sdkmanager_path" "ndk;27.2.12479018" "cmake;3.22.1"
+          "$sdkmanager_path" "ndk;29.0.14206865" "cmake;3.22.1"
 
       - name: Tester les cœurs C++ sur l'hôte
         run: |
           cmake -S cores -B build/native-host \
             -DRAVENEMU_BUILD_TESTS=ON \
-            -DRAVENEMU_BUILD_JNI=ON \
             -DCMAKE_BUILD_TYPE=Release
           cmake --build build/native-host --parallel
           ctest --test-dir build/native-host --output-on-failure
