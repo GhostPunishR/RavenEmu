@@ -25,7 +25,7 @@ object AllocationProbe {
 
     /** Octets alloués par le fil courant depuis son démarrage, ou -1. */
     fun allocatedBytes(): Long =
-        bean?.getThreadAllocatedBytes(Thread.currentThread().threadId()) ?: -1L
+        bean?.getThreadAllocatedBytes(Thread.currentThread().id) ?: -1L
 
     /**
      * Exécute [block] et retourne les octets alloués pendant son exécution.

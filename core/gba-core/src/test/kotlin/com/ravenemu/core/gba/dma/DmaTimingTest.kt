@@ -205,7 +205,7 @@ class DmaTimingTest {
 
     @Test
     fun `les cycles dus survivent a un aller-retour d'etat instantane`() {
-        val core = com.ravenemu.core.gba.GbaCore()
+        val core = com.ravenemu.core.gba.KotlinGbaCore()
         core.loadRom(SyntheticRom.build())
         val m = core.machine!!
         armChannel0(m, 0x0200_0000, 0x0200_1000, count = 16)

@@ -1,6 +1,6 @@
 package com.ravenemu.core.gba.state
 
-import com.ravenemu.core.gba.GbaCore
+import com.ravenemu.core.gba.KotlinGbaCore
 import com.ravenemu.core.gba.SyntheticRom
 import com.ravenemu.core.gba.ppu.GbaPpu
 import com.ravenemu.core.gba.save.GbaSaveType
@@ -23,8 +23,8 @@ import kotlin.test.assertTrue
  */
 class GbaStateTransactionTest {
 
-    private fun coreEnCours(): GbaCore {
-        val core = GbaCore()
+    private fun coreEnCours(): KotlinGbaCore {
+        val core = KotlinGbaCore()
         core.loadRom(SyntheticRom.build(programWords = SyntheticRom.backdropProgram(0x1F)))
         // Une partie déjà avancée : registres, mémoire et PPU hors de leur
         // valeur de démarrage, sans quoi « intact » ne prouverait rien.
@@ -41,7 +41,7 @@ class GbaStateTransactionTest {
      * Vérifie qu'une tentative de restauration refusée ne laisse aucune trace :
      * même machine, même état sérialisé, même image produite ensuite.
      */
-    private fun resteIntact(nom: String, corrompre: (GbaCore, ByteArray) -> ByteArray) {
+    private fun resteIntact(nom: String, corrompre: (KotlinGbaCore, ByteArray) -> ByteArray) {
         val core = coreEnCours()
         val machineAvant = core.machine!!
         val etatAvant = core.saveState()
@@ -55,7 +55,7 @@ class GbaStateTransactionTest {
         // La partie doit rester jouable, pas seulement identique sur le papier.
         val image = IntArray(core.video.pixelCount)
         core.runFrame(image)
-        val temoin = GbaCore().apply {
+        val temoin = KotlinGbaCore().apply {
             loadRom(SyntheticRom.build(programWords = SyntheticRom.backdropProgram(0x1F)))
             loadState(etatAvant)
         }
@@ -122,7 +122,7 @@ class GbaStateTransactionTest {
     fun `une taille de sauvegarde incoherente laisse la partie intacte`() {
         // Une cartouche à mémoire Flash : le bloc de sauvegarde est alors
         // présent et sa taille annoncée peut être falsifiée.
-        val core = GbaCore(forcedSaveType = GbaSaveType.FLASH_128K)
+        val core = KotlinGbaCore(forcedSaveType = GbaSaveType.FLASH_128K)
         core.loadRom(SyntheticRom.build(programWords = SyntheticRom.backdropProgram(0x1F)))
         core.runFrame(IntArray(core.video.pixelCount))
 
@@ -170,7 +170,7 @@ class GbaStateTransactionTest {
     }
 
     /** Position du premier champ PPU dans l'état sérialisé. */
-    private fun decalageChampsPpu(core: GbaCore): Int {
+    private fun decalageChampsPpu(core: KotlinGbaCore): Int {
         val machine = core.machine!!
         val enTete = 4 + 2 + 1 + core.romHash.size
         val cpu = 16 * 4 + 4 + 1 + 4 + machine.cpu.state.exportBanks().size * 4
@@ -182,7 +182,7 @@ class GbaStateTransactionTest {
     }
 
     /** Position de la taille annoncée du bloc de sauvegarde de cartouche. */
-    private fun decalageTailleSauvegarde(core: GbaCore): Int {
+    private fun decalageTailleSauvegarde(core: KotlinGbaCore): Int {
         val machine = core.machine!!
         val ppu = GbaPpu.STATE_FIELD_COUNT * 4 + machine.ppu.frame.size * 4
         val peripheriques = 4 + 4 + 1 + // IE, IF, IME

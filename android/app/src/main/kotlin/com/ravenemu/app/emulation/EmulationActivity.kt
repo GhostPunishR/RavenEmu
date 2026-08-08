@@ -391,6 +391,7 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
             val battery = saveStore.read(romSha256, romFileName, settings.saveDirectory)
             newCore.loadRom(rom, battery)
         } catch (e: Exception) {
+            runCatching { (newCore as? AutoCloseable)?.close() }
             Toast.makeText(this, R.string.emulation_rom_error, Toast.LENGTH_LONG).show()
             finish()
             return
@@ -719,15 +720,18 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
 
     override fun onDestroy() {
         super.onDestroy()
+        val currentCore = core
         // Un thread qui ne rend pas la main laisse la sortie audio en vie :
-        // la libérer sous ses pieds planterait le processus. On le journalise
-        // plutôt que de le taire.
+        // libérer sa sortie ou son cœur natif sous ses pieds planterait le
+        // processus. On le journalise plutôt que de le taire.
         val stopResult = session?.stop()
         if (stopResult == EmulationSession.StopResult.TIMED_OUT) {
             android.util.Log.w(
                 "RavenEmu",
-                "thread d'émulation encore actif après le délai : sortie audio non libérée",
+                "thread d'émulation encore actif après le délai : ressources non libérées",
             )
+        } else {
+            runCatching { (currentCore as? AutoCloseable)?.close() }
         }
         session = null
         core = null

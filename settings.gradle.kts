@@ -36,8 +36,11 @@ includeBuild("build-logic")
 // lui-même. Le chemin de projet suit ce découpage (`:core:gba-core`), ce qui
 // rend la couche visible dans chaque dépendance déclarée.
 
-// Modules JVM purs : constructibles et testables sans SDK Android.
+// Modules JVM purs : constructibles et testables sans SDK Android. Les
+// adaptateurs de console utilisent `core/native-bridge`; l'exécution vit dans
+// la bibliothèque C++20 indépendante `native-core`.
 include(":core:emulation-api")
+include(":core:native-bridge")
 include(":core:deltaskin")
 include(":core:gameboy-core")
 include(":core:gba-core")

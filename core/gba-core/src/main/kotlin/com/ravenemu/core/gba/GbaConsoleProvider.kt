@@ -1,6 +1,5 @@
 package com.ravenemu.core.gba
 
-import com.ravenemu.core.gba.cartridge.GbaCartridge
 import com.ravenemu.core.gba.save.GbaSaveType
 import com.ravenemu.emulation.api.ConsoleProvider
 import com.ravenemu.emulation.api.ConsoleType
@@ -20,7 +19,12 @@ class GbaConsoleProvider(
 
     override val console: ConsoleType = ConsoleType.GAME_BOY_ADVANCE
 
-    override val maxRomSizeBytes: Int = GbaCartridge.MAX_ROM_SIZE
+    override val maxRomSizeBytes: Int = MAX_ROM_SIZE
 
     override fun createCore(): EmulatorCore = GbaCore(forcedSaveType = forcedSaveType)
+
+    companion object {
+        /** Taille matérielle maximale de l'espace ROM GBA : 32 Mio. */
+        const val MAX_ROM_SIZE = 0x0200_0000
+    }
 }

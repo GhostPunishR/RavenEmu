@@ -2,7 +2,7 @@
 
 Bienvenue sur le wiki officiel de **RavenEmu**, un émulateur Game Boy, Game Boy Color et Game Boy Advance pour Android.
 
-Les moteurs sont écrits en Kotlin pour le projet à partir de documentation technique publique. RavenEmu n'intègre aucun coeur d'émulation tiers et ne fournit aucun BIOS, aucune ROM ni aucun contenu protégé.
+Les moteurs sont écrits en C++20 pour le projet à partir de documentation technique publique et reliés à l'application par JNI. RavenEmu n'intègre aucun cœur d'émulation tiers et ne fournit aucun BIOS, aucune ROM ni aucun contenu protégé.
 
 ## Commencer
 

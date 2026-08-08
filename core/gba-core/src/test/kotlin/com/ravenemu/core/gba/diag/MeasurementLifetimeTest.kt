@@ -1,6 +1,7 @@
 package com.ravenemu.core.gba.diag
 
 import com.ravenemu.core.gba.GbaCore
+import com.ravenemu.core.gba.KotlinGbaCore
 import com.ravenemu.core.gba.SyntheticRom
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -18,7 +19,7 @@ import kotlin.test.assertTrue
  */
 class MeasurementLifetimeTest {
 
-    private fun coeur() = GbaCore().apply { loadRom(SyntheticRom.build()) }
+    private fun coeur() = KotlinGbaCore().apply { loadRom(SyntheticRom.build()) }
 
     @Test
     fun `la mesure survit a une remise a zero`() {
@@ -58,7 +59,7 @@ class MeasurementLifetimeTest {
     @Test
     fun `la mesure demandee avant le chargement d'une ROM s'applique quand meme`() {
         // L'écran d'émulation règle le diagnostic avant de charger la cartouche.
-        val core = GbaCore()
+        val core = KotlinGbaCore()
         core.measuringTime = true
         core.loadRom(SyntheticRom.build())
 
@@ -90,5 +91,16 @@ class MeasurementLifetimeTest {
         val texte = assertNotNull(core.debugSnapshot())
             .toDiagnosticText(fps = 60.0, frameTimeMs = 16.0)
         assertFalse("luma" in texte, "Sans mesure, aucune valeur à afficher :\n$texte")
+    }
+
+    @Test
+    fun `l'adaptateur natif conserve l'intention avant d'ouvrir son handle`() {
+        val core = GbaCore()
+
+        core.measuringTime = true
+        assertTrue(core.measuringTime)
+
+        core.measuringTime = false
+        assertFalse(core.measuringTime)
     }
 }

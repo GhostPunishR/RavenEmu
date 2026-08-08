@@ -1,7 +1,7 @@
 package com.ravenemu.core.gba.audio
 
 import com.ravenemu.core.gba.AllocationProbe
-import com.ravenemu.core.gba.GbaCore
+import com.ravenemu.core.gba.KotlinGbaCore
 import com.ravenemu.core.gba.GbaMachine
 import com.ravenemu.core.gba.SyntheticRom
 import kotlin.test.Test
@@ -52,7 +52,7 @@ class ApuAllocationTest {
         val drain = ShortArray(4096)
 
         val allocated = AllocationProbe.measure {
-            m.apu.tick(GbaCore.CYCLES_PER_FRAME)
+            m.apu.tick(KotlinGbaCore.CYCLES_PER_FRAME)
             m.apu.readSamples(drain)
         }
         println("ALLOC[apu]: $allocated octets par trame")
@@ -103,12 +103,12 @@ class ApuAllocationTest {
         val frames = 300
 
         repeat(60) { // échauffement
-            m.apu.tick(GbaCore.CYCLES_PER_FRAME)
+            m.apu.tick(KotlinGbaCore.CYCLES_PER_FRAME)
             m.apu.readSamples(drain)
         }
         val start = System.nanoTime()
         repeat(frames) {
-            m.apu.tick(GbaCore.CYCLES_PER_FRAME)
+            m.apu.tick(KotlinGbaCore.CYCLES_PER_FRAME)
             m.apu.readSamples(drain)
         }
         val msPerFrame = (System.nanoTime() - start) / 1_000_000.0 / frames

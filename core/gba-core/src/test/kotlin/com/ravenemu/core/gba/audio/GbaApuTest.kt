@@ -1,6 +1,6 @@
 package com.ravenemu.core.gba.audio
 
-import com.ravenemu.core.gba.GbaCore
+import com.ravenemu.core.gba.KotlinGbaCore
 import com.ravenemu.core.gba.GbaMachine
 import com.ravenemu.core.gba.SyntheticRom
 import kotlin.test.Test
@@ -52,7 +52,7 @@ class GbaApuTest {
         enableSound(m.bus)
         // Une trame complète doit produire environ 32768 / 59,73 échantillons
         // par canal, soit le double en stéréo entrelacé.
-        m.apu.tick(GbaCore.CYCLES_PER_FRAME)
+        m.apu.tick(KotlinGbaCore.CYCLES_PER_FRAME)
         val buffer = ShortArray(4096)
         val count = m.apu.readSamples(buffer)
         val expected = 2 * GbaApu.SAMPLE_RATE_HZ / 60
@@ -112,7 +112,7 @@ class GbaApuTest {
 
     @Test
     fun `readAudio du coeur draine les echantillons`() {
-        val core = GbaCore()
+        val core = KotlinGbaCore()
         core.loadRom(SyntheticRom.build())
         core.machine!!.bus.write16(0x0400_0084, 0x0080)
         val framebuffer = IntArray(core.video.pixelCount)

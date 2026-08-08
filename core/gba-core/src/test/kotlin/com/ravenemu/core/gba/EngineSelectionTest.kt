@@ -19,15 +19,15 @@ class EngineSelectionTest {
     private val factory = object : EmulatorCoreFactory {
         override val supportedConsoles = setOf(ConsoleType.GAME_BOY_ADVANCE)
         override fun create(console: ConsoleType): EmulatorCore = when (console) {
-            ConsoleType.GAME_BOY_ADVANCE -> GbaCore()
+            ConsoleType.GAME_BOY_ADVANCE -> KotlinGbaCore()
             else -> throw IllegalArgumentException("Console non prise en charge : $console")
         }
     }
 
     @Test
-    fun `la fabrique produit un GbaCore pour la GBA`() {
+    fun `la fabrique produit un KotlinGbaCore pour la GBA`() {
         val core = factory.create(ConsoleType.GAME_BOY_ADVANCE)
-        assertTrue(core is GbaCore)
+        assertTrue(core is KotlinGbaCore)
         assertEquals(ConsoleType.GAME_BOY_ADVANCE, core.console)
     }
 

@@ -25,7 +25,7 @@ internal object GameBoyState {
     /** Garde-fou contre les fichiers corrompus provoquant de fortes allocations. */
     private const val MAX_STATE_SIZE = 1 shl 20
 
-    fun serialize(core: GameBoyCore, m: GameBoyCore.Machine): ByteArray {
+    fun serialize(core: KotlinGameBoyCore, m: KotlinGameBoyCore.Machine): ByteArray {
         val buffer = ByteArrayOutputStream(64 * 1024)
         val out = DataOutputStream(buffer)
 
@@ -88,7 +88,7 @@ internal object GameBoyState {
         return buffer.toByteArray()
     }
 
-    fun restore(core: GameBoyCore, state: ByteArray): GameBoyCore.Machine {
+    fun restore(core: KotlinGameBoyCore, state: ByteArray): KotlinGameBoyCore.Machine {
         if (state.size > MAX_STATE_SIZE) {
             throw SaveStateException("État instantané trop volumineux : ${state.size} octets")
         }

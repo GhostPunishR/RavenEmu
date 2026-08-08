@@ -126,7 +126,7 @@ class InstructionTimingTest {
 
     @Test
     fun `un etat instantane restaure retrouve les temps d'attente`() {
-        val core = com.ravenemu.core.gba.GbaCore()
+        val core = com.ravenemu.core.gba.KotlinGbaCore()
         core.loadRom(SyntheticRom.build())
         val m = core.machine!!
         m.bus.write16(0x0400_0204, 0x0008 or 0x0010 or 0x4000)

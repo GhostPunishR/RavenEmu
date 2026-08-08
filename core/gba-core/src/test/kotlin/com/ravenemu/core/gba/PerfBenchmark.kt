@@ -26,15 +26,15 @@ class PerfBenchmark {
         0xEAFFFFFB.toInt(), // B (boucle)
     )
 
-    private fun core(prepare: (GbaCore) -> Unit = {}): GbaCore {
-        val core = GbaCore()
+    private fun core(prepare: (KotlinGbaCore) -> Unit = {}): KotlinGbaCore {
+        val core = KotlinGbaCore()
         core.loadRom(SyntheticRom.build(programWords = busyLoop))
         prepare(core)
         return core
     }
 
     /** Charge graphique maximale : quatre arrière-plans, 128 sprites, fenêtres. */
-    private fun heavyScene(core: GbaCore) {
+    private fun heavyScene(core: KotlinGbaCore) {
         val bus = core.machine!!.bus
         bus.write16(0x0400_0000, 0x1F00) // mode 0, BG0-3 et OBJ
         for (bg in 0 until 4) {
@@ -50,7 +50,7 @@ class PerfBenchmark {
     }
 
     /** Active l'audio complet : quatre canaux PSG et les deux Direct Sound. */
-    private fun loudScene(core: GbaCore) {
+    private fun loudScene(core: KotlinGbaCore) {
         val bus = core.machine!!.bus
         bus.write16(0x0400_0084, 0x0080)
         bus.write16(0x0400_0082, 0x3F02)
@@ -106,7 +106,7 @@ class PerfBenchmark {
 
     @Test
     fun `banc d'essai d'une charge Thumb en cartouche`() {
-        val core = GbaCore()
+        val core = KotlinGbaCore()
         core.loadRom(thumbFromRomImage())
         val fb = IntArray(core.video.pixelCount)
         val ms = milliseconds(warmup = 40, frames = 120) { core.runFrame(fb) }
@@ -126,7 +126,7 @@ class PerfBenchmark {
      */
     @Test
     fun `banc d'essai d'une charge proche d'un jeu`() {
-        val core = GbaCore()
+        val core = KotlinGbaCore()
         core.loadRom(thumbFromRomImage())
         val bus = core.machine!!.bus
         bus.write16(0x0400_0000, 0x1F00) // mode 0, BG0-3 et OBJ
@@ -168,7 +168,7 @@ class PerfBenchmark {
         println("=== Banc d'essai RavenEmu GBA (JVM de bureau, valeurs indicatives) ===")
 
         // --- Trame complète, selon la charge ---
-        for ((label, prepare) in listOf<Pair<String, (GbaCore) -> Unit>>(
+        for ((label, prepare) in listOf<Pair<String, (KotlinGbaCore) -> Unit>>(
             "écran noir" to {},
             "4 arrière-plans + 128 sprites" to ::heavyScene,
             "graphismes + audio complet" to { c -> heavyScene(c); loudScene(c) },
@@ -197,7 +197,7 @@ class PerfBenchmark {
         }
 
         // --- Coût de chaque sous-système, isolément ---
-        val cycles = GbaCore.CYCLES_PER_FRAME
+        val cycles = KotlinGbaCore.CYCLES_PER_FRAME
 
         val cpuCore = core()
         val cpuMachine = cpuCore.machine!!

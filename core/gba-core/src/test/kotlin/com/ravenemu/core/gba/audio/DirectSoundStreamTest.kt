@@ -1,6 +1,6 @@
 package com.ravenemu.core.gba.audio
 
-import com.ravenemu.core.gba.GbaCore
+import com.ravenemu.core.gba.KotlinGbaCore
 import com.ravenemu.core.gba.GbaMachine
 import com.ravenemu.core.gba.SyntheticRom
 import com.ravenemu.core.gba.diag.GbaDiagnostics
@@ -47,7 +47,7 @@ class DirectSoundStreamTest {
     @Test
     fun `le flux reste dans le tampon programme`() {
         val m = machine()
-        repeat(4) { m.runFrame(GbaCore.CYCLES_PER_FRAME) }
+        repeat(4) { m.runFrame(KotlinGbaCore.CYCLES_PER_FRAME) }
 
         val source = m.dma.exportState()[1]
         assertTrue(
@@ -66,7 +66,7 @@ class DirectSoundStreamTest {
         val m = machine()
         // Un débordement tous les 256 cycles donne 1097 débordements complets
         // par trame, avec 64 cycles conservés pour la trame suivante.
-        m.runFrame(GbaCore.CYCLES_PER_FRAME)
+        m.runFrame(KotlinGbaCore.CYCLES_PER_FRAME)
         val consumed = 280_896 / 256
 
         // Le registre visible reste inchangé, mais l'adresse interne du DMA
@@ -117,12 +117,12 @@ class DirectSoundStreamTest {
         }
         // L'appel direct donne un budget exact, sans le léger dépassement
         // possible de la dernière instruction CPU d'une trame complète.
-        m.timers.tick(GbaCore.CYCLES_PER_FRAME)
+        m.timers.tick(KotlinGbaCore.CYCLES_PER_FRAME)
 
-        val expected = GbaCore.CYCLES_PER_FRAME / 256
+        val expected = KotlinGbaCore.CYCLES_PER_FRAME / 256
         assertEquals(expected, pops)
         assertEquals(
-            0xFF00 + (GbaCore.CYCLES_PER_FRAME % 256),
+            0xFF00 + (KotlinGbaCore.CYCLES_PER_FRAME % 256),
             m.timers.counter(0),
             "phase du timer après une trame",
         )

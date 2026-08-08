@@ -1,6 +1,6 @@
 package com.ravenemu.core.gba.diag
 
-import com.ravenemu.core.gba.GbaCore
+import com.ravenemu.core.gba.KotlinGbaCore
 import com.ravenemu.core.gba.GbaMachine
 import com.ravenemu.core.gba.RealisticRom
 import com.ravenemu.core.gba.SyntheticRom
@@ -148,7 +148,7 @@ class GbaDiagnosticsTest {
         // viendra jamais.
         m.bios.handleSwi(0x05)
         assertTrue(m.cpu.state.halted)
-        repeat(3) { m.runFrame(GbaCore.CYCLES_PER_FRAME) }
+        repeat(3) { m.runFrame(KotlinGbaCore.CYCLES_PER_FRAME) }
 
         assertEquals(
             1,
@@ -166,7 +166,7 @@ class GbaDiagnosticsTest {
         m.bus.write16(0x0400_0004, 0x0008) // DISPSTAT : IRQ VBlank
         m.bus.write16(0x0400_0200, 0x0001) // IE
         m.bios.handleSwi(0x05)
-        repeat(3) { m.runFrame(GbaCore.CYCLES_PER_FRAME) }
+        repeat(3) { m.runFrame(KotlinGbaCore.CYCLES_PER_FRAME) }
         assertEquals(0, m.diagnostics.count(GbaDiagnostics.Event.MISSING_INTERRUPT))
     }
 
@@ -174,7 +174,7 @@ class GbaDiagnosticsTest {
 
     @Test
     fun `les instructions par trame sont comptees`() {
-        val core = GbaCore()
+        val core = KotlinGbaCore()
         core.loadRom(RealisticRom.bootSequence())
         val framebuffer = IntArray(core.video.pixelCount)
         repeat(3) { core.runFrame(framebuffer) }
@@ -188,7 +188,7 @@ class GbaDiagnosticsTest {
 
     @Test
     fun `la photographie de debogage reflete l'etat du moteur`() {
-        val core = GbaCore()
+        val core = KotlinGbaCore()
         core.loadRom(RealisticRom.bootSequence())
         val framebuffer = IntArray(core.video.pixelCount)
         repeat(8) { core.runFrame(framebuffer) }
@@ -211,7 +211,7 @@ class GbaDiagnosticsTest {
 
     @Test
     fun `les sous-alimentations audio sont comptees`() {
-        val core = GbaCore()
+        val core = KotlinGbaCore()
         core.loadRom(SyntheticRom.build())
         val buffer = ShortArray(64)
         // Aucun cycle écoulé : rien n'est prêt.
@@ -226,7 +226,7 @@ class GbaDiagnosticsTest {
 
     @Test
     fun `sans auditeur le moteur ne journalise rien`() {
-        val core = GbaCore()
+        val core = KotlinGbaCore()
         core.loadRom(SyntheticRom.build())
         assertEquals(null, core.onDiagnosticEvent)
         // Provoque une anomalie : le compteur monte, rien n'est émis.

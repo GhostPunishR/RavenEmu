@@ -96,7 +96,7 @@ class PerfRegressionTest {
         val drain = ShortArray(4096)
 
         val allocated = AllocationProbe.measure(warmups = 10) {
-            m.apu.tick(GbaCore.CYCLES_PER_FRAME)
+            m.apu.tick(KotlinGbaCore.CYCLES_PER_FRAME)
             m.apu.readSamples(drain)
         }
         if (!AllocationProbe.supported) return
@@ -107,7 +107,7 @@ class PerfRegressionTest {
 
     @Test
     fun `le rendu d'une ligne n'alloue rien`() {
-        val core = GbaCore()
+        val core = KotlinGbaCore()
         core.loadRom(SyntheticRom.build(programWords = busyLoop))
         val bus = core.machine!!.bus
         bus.write16(0x0400_0000, 0x1F00)
@@ -116,7 +116,7 @@ class PerfRegressionTest {
 
         val ppu = core.machine!!.ppu
         val allocated =
-            AllocationProbe.measure(warmups = 10) { ppu.tick(GbaCore.CYCLES_PER_FRAME) }
+            AllocationProbe.measure(warmups = 10) { ppu.tick(KotlinGbaCore.CYCLES_PER_FRAME) }
         if (!AllocationProbe.supported) return
         assertTrue(allocated < 8192, "le rendu a alloué $allocated octets par trame")
     }
@@ -127,7 +127,7 @@ class PerfRegressionTest {
         // la seconde. Elle ne détecte qu'un effondrement — boucle infinie, coût
         // par instruction devenu absurde — jamais une variation de quelques
         // pourcents, et n'exprime aucune promesse de cadence.
-        val core = GbaCore()
+        val core = KotlinGbaCore()
         core.loadRom(SyntheticRom.build(programWords = busyLoop))
         val fb = IntArray(core.video.pixelCount)
         repeat(5) { core.runFrame(fb) }
@@ -141,13 +141,13 @@ class PerfRegressionTest {
     fun `le compteur d'instructions par trame reste plausible`() {
         // Détecte une boucle d'exécution cassée : trop peu d'instructions signale
         // un blocage, une explosion signale un coût par instruction devenu nul.
-        val core = GbaCore()
+        val core = KotlinGbaCore()
         core.loadRom(SyntheticRom.build(programWords = busyLoop))
         val fb = IntArray(core.video.pixelCount)
         repeat(3) { core.runFrame(fb) }
         val instructions = core.debugSnapshot()!!.instructionsPerFrame
         assertTrue(
-            instructions in 1_000..GbaCore.CYCLES_PER_FRAME,
+            instructions in 1_000..KotlinGbaCore.CYCLES_PER_FRAME,
             "instructions par trame invraisemblable : $instructions",
         )
     }

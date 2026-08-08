@@ -8,7 +8,7 @@
 
 **RavenEmu** est un émulateur Game Boy, Game Boy Color et Game Boy Advance pour Android.
 
-Les moteurs sont écrits en Kotlin pour le projet à partir de documentation technique publique. RavenEmu n'intègre aucun cœur d'émulation tiers et ne fournit aucun BIOS, aucune ROM ni aucun contenu protégé.
+Les moteurs d'exécution sont écrits en C++20 pour le projet à partir de documentation technique publique, puis exposés à l'application par une frontière JNI minimale. RavenEmu n'intègre aucun cœur d'émulation tiers et ne fournit aucun BIOS, aucune ROM ni aucun contenu protégé.
 
 ## Télécharger
 
@@ -116,16 +116,18 @@ Le moteur Game Boy Advance démarre désormais des jeux commerciaux testés, mai
 |---|---|---|
 | `android/app` | Android | Écrans, navigation et session d'émulation |
 | `core/emulation-api` | Kotlin/JVM | Contrats communs entre l'application et les moteurs |
+| `native-core` | C++20 | Moteurs Game Boy/Game Boy Color et Game Boy Advance |
+| `core/native-bridge` | Java/JNI | Frontière primitive entre les adaptateurs JVM et C++ |
 | `core/deltaskin` | Kotlin/JVM | Validation, manifeste, stockage et géométrie du format `.deltaskin` |
-| `core/gameboy-core` | Kotlin/JVM | Moteur Game Boy et Game Boy Color |
-| `core/gba-core` | Kotlin/JVM | Moteur Game Boy Advance |
+| `core/gameboy-core` | Kotlin/JVM | Adaptateur et métadonnées Game Boy/Game Boy Color |
+| `core/gba-core` | Kotlin/JVM | Adaptateur et métadonnées Game Boy Advance |
 | `core/rom-library` | Kotlin/JVM | En-têtes, empreintes, identification et index |
 | `android/storage` | Android | Dossiers, sauvegardes, états et pochettes |
 | `android/renderer` | Android | Affichage du framebuffer |
 | `android/input` | Android | Commandes tactiles et manettes |
 | `android/settings` | Android | Préférences et profils |
 
-Les moteurs ne dépendent pas d'Android et peuvent être testés sur une JVM de bureau. Ils restent indépendants les uns des autres. Une nouvelle console peut être ajoutée dans un module séparé qui implémente `emulation-api`.
+Les moteurs C++ ne dépendent pas d'Android et possèdent des tests natifs sur l'hôte. Les adaptateurs JVM gardent le contrat `emulation-api`, de sorte que la session Android, le renderer, les entrées et DeltaSkin ne connaissent pas JNI. Les deux cœurs restent indépendants l'un de l'autre.
 
 ## Compiler
 
@@ -134,8 +136,9 @@ Les moteurs ne dépendent pas d'Android et peuvent être testés sur une JVM de 
 - JDK 21 recommandé
 - Gradle Wrapper fourni
 - SDK Android avec `compileSdk 35` pour construire l'application
+- Android NDK `27.2.12479018` et CMake `3.22.1`
 
-Les modules Kotlin/JVM restent testables sans SDK Android.
+Les modules JVM restent testables sans SDK Android. Les moteurs C++ peuvent aussi être validés directement avec un compilateur C++20 et CMake.
 
 ```bash
 git clone https://github.com/GhostPunishR/RavenEmu.git
@@ -143,6 +146,11 @@ cd RavenEmu
 
 # Tests
 ./gradlew test
+
+# Tests natifs des deux cœurs
+cmake -S native-core -B build/native-host -DRAVENEMU_BUILD_TESTS=ON
+cmake --build build/native-host --parallel
+ctest --test-dir build/native-host --output-on-failure
 
 # Validation Android
 ./gradlew lint

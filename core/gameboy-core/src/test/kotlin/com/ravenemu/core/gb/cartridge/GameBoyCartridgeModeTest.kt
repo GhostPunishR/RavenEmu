@@ -1,6 +1,6 @@
 package com.ravenemu.core.gb.cartridge
 
-import com.ravenemu.core.gb.GameBoyCore
+import com.ravenemu.core.gb.KotlinGameBoyCore
 import com.ravenemu.core.gb.TestRoms
 import com.ravenemu.emulation.api.ConsoleType
 import com.ravenemu.emulation.api.FramebufferFormat
@@ -23,8 +23,8 @@ class GameBoyCartridgeModeTest {
     private fun header(cgbFlag: Int): CartridgeHeader =
         CartridgeHeader.parse(TestRoms.build(cgbFlag = cgbFlag))
 
-    private fun coreFor(cgbFlag: Int): GameBoyCore =
-        GameBoyCore().apply { loadRom(TestRoms.build(cgbFlag = cgbFlag)) }
+    private fun coreFor(cgbFlag: Int): KotlinGameBoyCore =
+        KotlinGameBoyCore().apply { loadRom(TestRoms.build(cgbFlag = cgbFlag)) }
 
     @Test
     fun `une cartouche monochrome est en mode DMG`() {
@@ -92,7 +92,7 @@ class GameBoyCartridgeModeTest {
     fun `le format de trame suit la cartouche apres un changement de ROM`() {
         // Le format est une propriété du moteur chargé, pas de sa construction :
         // recharger une autre cartouche doit le faire basculer.
-        val core = GameBoyCore()
+        val core = KotlinGameBoyCore()
         core.loadRom(TestRoms.build(cgbFlag = 0xC0))
         assertEquals(FramebufferFormat.ARGB_8888, core.framebufferFormat)
         core.loadRom(TestRoms.build(cgbFlag = 0x00))

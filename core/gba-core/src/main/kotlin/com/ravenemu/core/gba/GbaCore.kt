@@ -1,11 +1,8 @@
 package com.ravenemu.core.gba
 
-import com.ravenemu.core.gba.audio.GbaApu
 import com.ravenemu.core.gba.diag.GbaDebugSnapshot
 import com.ravenemu.core.gba.diag.GbaDiagnostics
-import com.ravenemu.core.gba.ppu.GbaPpu
 import com.ravenemu.core.gba.save.GbaSaveType
-import com.ravenemu.core.gba.state.GbaState
 import com.ravenemu.emulation.api.AudioSpec
 import com.ravenemu.emulation.api.BatteryRamSnapshot
 import com.ravenemu.emulation.api.ConsoleType
@@ -13,270 +10,189 @@ import com.ravenemu.emulation.api.EmulatorButton
 import com.ravenemu.emulation.api.EmulatorCore
 import com.ravenemu.emulation.api.FramebufferFormat
 import com.ravenemu.emulation.api.VideoSpec
+import com.ravenemu.nativebridge.NativeCoreBridge
+import com.ravenemu.nativebridge.NativeCoreHandle
 import java.security.MessageDigest
 
-/**
- * Moteur Game Boy Advance de RavenEmu : assemble la [GbaMachine] (CPU ARM7TDMI,
- * bus, PPU) et expose le contrat [EmulatorCore]. Mono-thread et passif :
- * l'appelant pilote la cadence via [runFrame].
- *
- * Le CPU couvre l'essentiel du jeu d'instructions ARM/Thumb, le PPU rend les
- * modes bitmap, texte et affines avec sprites, fenêtres et effets de couleur.
- * Sont également gérés : entrées ([setButton] alimente `KEYINPUT`, boutons
- * `L`/`R` compris), interruptions, timers, DMA, BIOS HLE, audio ([readAudio]
- * draine les canaux PSG et Direct Sound), **sauvegardes de cartouche**
- * (SRAM, Flash 64/128 Kio, EEPROM) exportées au format `.sav` brut, et
- * **horloge temps réel** de cartouche pour les jeux qui en embarquent une.
- *
- * La compatibilité commerciale reste à valider ; les limites connues sont
- * documentées dans wiki/Consoles-et-compatibilite.md.
- */
+/** Thin Kotlin adapter over RavenEmu's C++20 Game Boy Advance core. */
 class GbaCore(
-    /**
-     * Impose un type de mémoire de sauvegarde au lieu de la détection
-     * automatique (réglage par jeu). `null` = détection.
-     */
-    var forcedSaveType: GbaSaveType? = null,
-) : EmulatorCore {
+    forcedSaveType: GbaSaveType? = null,
+) : EmulatorCore, AutoCloseable {
+
+    var forcedSaveType: GbaSaveType? = forcedSaveType
+        set(value) {
+            field = value
+            native?.let {
+                NativeCoreBridge.setGbaForcedSaveType(
+                    it.value(),
+                    value?.ordinal ?: NO_FORCED_SAVE,
+                )
+            }
+        }
+    private var native: NativeCoreHandle? = null
+    private var closed = false
 
     override val console: ConsoleType = ConsoleType.GAME_BOY_ADVANCE
-
-    override val video: VideoSpec = VideoSpec(
-        width = GbaPpu.SCREEN_WIDTH,
-        height = GbaPpu.SCREEN_HEIGHT,
-        refreshRateHz = REFRESH_RATE_HZ,
-    )
-
-    override val audio: AudioSpec =
-        AudioSpec(sampleRateHz = GbaApu.SAMPLE_RATE_HZ, channelCount = 2)
-
+    override val video: VideoSpec = VideoSpec(240, 160, REFRESH_RATE_HZ)
+    override val audio: AudioSpec = AudioSpec(32_768, 2)
     override val framebufferFormat: FramebufferFormat = FramebufferFormat.ARGB_8888
-
     override val supportsVideoFrameSkipping: Boolean = true
 
-    internal var machine: GbaMachine? = null
-        private set
-
-    private var loadedRom: ByteArray? = null
-
-    /** SHA-256 de la ROM chargée, utilisé pour lier états et sauvegardes. */
     var romHash: ByteArray = ByteArray(0)
         private set
 
+    var onDiagnosticEvent: ((GbaDiagnostics.Event, String) -> Unit)? = null
+
+    private var measuringTimeRequested = false
+
+    var measuringTime: Boolean
+        get() = measuringTimeRequested
+        set(value) {
+            measuringTimeRequested = value
+            native?.let { NativeCoreBridge.setMeasuringTime(it.value(), value) }
+        }
+
+    val saveType: GbaSaveType
+        get() = native
+            ?.let { GbaSaveType.entries[NativeCoreBridge.gbaSaveType(it.value())] }
+            ?: GbaSaveType.NONE
+
     override fun loadRom(rom: ByteArray, batteryRam: ByteArray?) {
-        val newMachine = GbaMachine(rom, forcedSaveType)
-        if (batteryRam != null) newMachine.cartridge.save?.import(batteryRam)
-        install(newMachine)
-        loadedRom = rom
+        NativeCoreBridge.loadRom(handle(), rom, batteryRam)
         romHash = MessageDigest.getInstance("SHA-256").digest(rom)
+        drainDiagnostics()
     }
 
     override fun reset() {
-        val rom = loadedRom ?: error("Aucune ROM chargée")
-        // Power-cycle : la mémoire de sauvegarde survit, le reste repart à zéro.
-        val battery = machine?.cartridge?.save?.export()
-        val newMachine = GbaMachine(rom, forcedSaveType)
-        if (battery != null) newMachine.cartridge.save?.import(battery)
-        install(newMachine)
+        NativeCoreBridge.reset(handle())
+        drainDiagnostics()
     }
 
-    override fun runFrame(framebuffer: IntArray) {
-        runFrame(framebuffer, renderVideo = true)
-    }
+    override fun runFrame(framebuffer: IntArray) = runFrame(framebuffer, true)
 
     override fun runFrame(framebuffer: IntArray, renderVideo: Boolean) {
-        val m = machine ?: error("Aucune ROM chargée")
-        require(framebuffer.size >= video.pixelCount) {
-            "Framebuffer trop petit : ${framebuffer.size} < ${video.pixelCount}"
-        }
-        m.ppu.renderEnabled = renderVideo
-        try {
-            m.runFrame(CYCLES_PER_FRAME)
-        } finally {
-            // Une demande de saut ne doit jamais survivre à la trame courante.
-            m.ppu.renderEnabled = true
-        }
-        if (renderVideo) {
-            System.arraycopy(m.ppu.frame, 0, framebuffer, 0, video.pixelCount)
-        }
+        NativeCoreBridge.runFrame(handle(), framebuffer, renderVideo)
+        drainDiagnostics()
     }
 
     override fun setButton(button: EmulatorButton, pressed: Boolean) {
-        machine?.bus?.keypad?.setButton(button, pressed)
+        NativeCoreBridge.setButton(handle(), button.ordinal, pressed)
     }
 
     override fun readAudio(buffer: ShortArray): Int =
-        machine?.apu?.readSamples(buffer) ?: 0
-
-    /**
-     * Journal des anomalies du moteur. Branché par la couche applicative en
-     * **Debug uniquement** ; laissé à `null`, aucun message n'est produit et
-     * aucune chaîne n'est même construite.
-     */
-    var onDiagnosticEvent: ((GbaDiagnostics.Event, String) -> Unit)? = null
-        set(value) {
-            field = value
-            // Le rappel survit à un redémarrage : la machine est reconstruite,
-            // pas l'intention de journaliser.
-            machine?.diagnostics?.onEvent = value
-        }
-
-    /**
-     * Chronométrage des sous-systèmes. À n'activer que pour mesurer : chaque
-     * relevé coûte deux lectures d'horloge, et le but est justement de ne pas
-     * fausser ce qu'on mesure.
-     *
-     * L'intention est conservée **sur le cœur**, pas sur la machine. Un
-     * power-cycle comme le chargement d'un état reconstruit la machine : lu sur
-     * elle, le réglage repartait à faux et la mesure s'éteignait toute seule au
-     * milieu d'une enquête, sans que rien ne l'annonce.
-     */
-    var measuringTime: Boolean = false
-        set(value) {
-            field = value
-            machine?.let { applyMeasurement(it) }
-        }
-
-    /** Branche ou débranche les relevés coûteux sur une machine. */
-    private fun applyMeasurement(m: GbaMachine) {
-        m.diagnostics.measuringTime = measuringTime
-        // Le rappel de l'unité audio n'est branché que pendant la mesure :
-        // laissé en place, il coûterait deux lectures d'horloge par lot,
-        // même en Release.
-        m.apu.onBatchNanos =
-            if (measuringTime) { nanos -> m.diagnostics.addApuNanos(nanos) } else null
-        // Même raison pour le comptage des pixels par couche : un incrément
-        // par pixel dessiné n'a rien à faire hors d'une session de mesure.
-        m.ppu.collectLayerStats = measuringTime
-        // Et pour la dynamique de la trame : un balayage complet de l'image
-        // par trame, qui n'a de sens que pendant une enquête.
-        m.ppu.collectFrameStats = measuringTime
-    }
-
-    /**
-     * Installe une machine nouvellement construite : ce qui relève de la
-     * session — journalisation et mesure — lui est réappliqué, faute de quoi il
-     * disparaîtrait à chaque reconstruction.
-     */
-    private fun install(newMachine: GbaMachine) {
-        newMachine.diagnostics.onEvent = onDiagnosticEvent
-        applyMeasurement(newMachine)
-        machine = newMachine
-    }
-
-    /** Étend le signe d'une valeur 28 bits (`BG2X`/`BG2Y`, format 20.8). */
-    private fun signed28(value: Int): Int = (value shl 4) shr 4
-
-    /**
-     * Photographie de l'état du moteur, pour une surcouche de débogage. Retourne
-     * `null` si aucune ROM n'est chargée.
-     */
-    fun debugSnapshot(): GbaDebugSnapshot? {
-        val m = machine ?: return null
-        val diag = m.diagnostics
-        return GbaDebugSnapshot(
-            instructionsPerFrame = diag.instructionsLastFrame,
-            programCounter = m.cpu.state.regs[15],
-            thumb = m.cpu.state.thumb,
-            halted = m.cpu.state.halted,
-            lastSwi = diag.lastSwi,
-            lastInterruptMask = diag.lastInterruptMask,
-            vcount = m.ppu.vcount,
-            lastDmaChannel = m.dma.lastChannel,
-            dmaActive = m.dma.isActive,
-            fifoASize = m.apu.fifoSize(0),
-            fifoBSize = m.apu.fifoSize(1),
-            fifoAEmptyReads = m.apu.fifoEmptyReads(0),
-            fifoBEmptyReads = m.apu.fifoEmptyReads(1),
-            audioUnderruns = m.apu.underruns,
-            unsupportedSwiCount = diag.count(GbaDiagnostics.Event.UNSUPPORTED_SWI),
-            undefinedInstructionCount =
-                diag.count(GbaDiagnostics.Event.UNDEFINED_INSTRUCTION),
-            unsupportedAccessCount = diag.count(GbaDiagnostics.Event.UNSUPPORTED_ACCESS),
-            missingInterruptCount = diag.count(GbaDiagnostics.Event.MISSING_INTERRUPT),
-            decompressionErrorCount =
-                diag.count(GbaDiagnostics.Event.DECOMPRESSION_ERROR),
-            firstUnsupportedAddress = diag.firstUnsupportedAddress,
-            dispcnt = m.bus.read16(IO_BASE),
-            bg0Control = m.bus.read16(IO_BASE + 0x08),
-            bg1Control = m.bus.read16(IO_BASE + 0x0A),
-            bg2Control = m.bus.read16(IO_BASE + 0x0C),
-            bg3Control = m.bus.read16(IO_BASE + 0x0E),
-            blendControl = m.bus.read16(IO_BASE + 0x50),
-            blendAlpha = m.bus.read16(IO_BASE + 0x52),
-            blendBrightness = m.bus.read16(IO_BASE + 0x54),
-            windowInside = m.bus.read16(IO_BASE + 0x48),
-            windowOutside = m.bus.read16(IO_BASE + 0x4A),
-            lumaMeasured = m.ppu.collectFrameStats,
-            lumaMin = m.ppu.frameLumaMin,
-            lumaMax = m.ppu.frameLumaMax,
-            lumaMean = m.ppu.frameLumaMean,
-            layerPixels = m.ppu.layerPixels,
-            bg2ReferenceX = signed28(m.bus.read32(IO_BASE + 0x28)) shr 8,
-            bg2ReferenceY = signed28(m.bus.read32(IO_BASE + 0x2C)) shr 8,
-            bg2ScaleX = m.bus.read16(IO_BASE + 0x20),
-            bg2ScaleY = m.bus.read16(IO_BASE + 0x26),
-            bg2MatrixWrites = diag.bg2MatrixWrites,
-            bg2ReferenceWrites = diag.bg2ReferenceWrites,
-            swiCounts = IntArray(GbaDiagnostics.SWI_RANGE) { diag.swiCount(it) },
-            ppuMillis = diag.ppuNanosLastFrame / 1_000_000.0,
-            dmaMillis = diag.dmaNanosLastFrame / 1_000_000.0,
-            apuMillis = diag.apuNanosLastFrame / 1_000_000.0,
-        )
-    }
-
-    /** Type de sauvegarde retenu pour la ROM chargée (détecté ou imposé). */
-    val saveType: GbaSaveType
-        get() = machine?.cartridge?.saveType ?: GbaSaveType.NONE
+        NativeCoreBridge.readAudio(handle(), buffer)
 
     override val hasBatteryRam: Boolean
-        get() = machine?.cartridge?.save != null
+        get() = native?.let { NativeCoreBridge.hasBatteryRam(it.value()) } ?: false
 
     override val batteryRamDirty: Boolean
-        get() = machine?.cartridge?.save?.dirty ?: false
+        get() = native?.let { NativeCoreBridge.batteryRamDirty(it.value()) } ?: false
 
     override fun snapshotBatteryRam(): BatteryRamSnapshot? {
-        val save = machine?.cartridge?.save ?: return null
-        return BatteryRamSnapshot(save.export(), save.generation)
+        val current = native ?: return null
+        val snapshot = NativeCoreBridge.snapshotBatteryRam(current.value()) ?: return null
+        return BatteryRamSnapshot(snapshot.data, snapshot.generation)
     }
 
     override fun acknowledgeBatteryRamSaved(generation: Long) {
-        machine?.cartridge?.save?.acknowledgeSaved(generation)
+        native?.let { NativeCoreBridge.acknowledgeBatteryRamSaved(it.value(), generation) }
     }
 
-    override fun saveState(): ByteArray {
-        val m = machine ?: error("Aucune ROM chargée")
-        return GbaState.serialize(this, m)
-    }
+    override fun saveState(): ByteArray = NativeCoreBridge.saveState(handle())
 
     override fun loadState(state: ByteArray) {
-        machine ?: error("Aucune ROM chargée")
-        // La restauration produit une machine neuve : celle en place n'est
-        // remplacée qu'après un retour normal. Un état corrompu laisse donc la
-        // partie en cours strictement intacte, et jouable.
-        val restored = GbaState.restore(this, state)
-        // Journalisation et chronométrage relèvent de l'intention de l'appelant,
-        // pas de l'état émulé : `install` les réapplique à la machine neuve.
-        install(restored)
+        NativeCoreBridge.loadState(handle(), state)
+        drainDiagnostics()
     }
 
-    /**
-     * Construit une machine vierge pour une restauration transactionnelle. Elle
-     * ne devient active qu'après validation complète de l'état.
-     */
-    internal fun newMachineForState(): GbaMachine {
-        val rom = loadedRom ?: error("Aucune ROM chargée")
-        return GbaMachine(rom, forcedSaveType)
+    fun debugSnapshot(): GbaDebugSnapshot? {
+        val current = native ?: return null
+        val snapshot = NativeCoreBridge.debugSnapshot(current.value()) ?: return null
+        val s = snapshot.scalars
+        require(s.size >= SNAPSHOT_SCALAR_COUNT) { "Photographie GBA native invalide" }
+        return GbaDebugSnapshot(
+            instructionsPerFrame = s[0],
+            programCounter = s[1],
+            thumb = s[2] != 0,
+            halted = s[3] != 0,
+            lastSwi = s[4],
+            lastInterruptMask = s[5],
+            vcount = s[6],
+            lastDmaChannel = s[7],
+            dmaActive = s[8] != 0,
+            fifoASize = s[9],
+            fifoBSize = s[10],
+            fifoAEmptyReads = s[11],
+            fifoBEmptyReads = s[12],
+            audioUnderruns = s[13],
+            unsupportedSwiCount = s[14],
+            undefinedInstructionCount = s[15],
+            unsupportedAccessCount = s[16],
+            missingInterruptCount = s[17],
+            decompressionErrorCount = s[18],
+            firstUnsupportedAddress = s[19],
+            dispcnt = s[20],
+            bg0Control = s[21],
+            bg1Control = s[22],
+            bg2Control = s[23],
+            bg3Control = s[24],
+            blendControl = s[25],
+            blendAlpha = s[26],
+            blendBrightness = s[27],
+            windowInside = s[28],
+            windowOutside = s[29],
+            lumaMeasured = measuringTime,
+            lumaMin = s[30],
+            lumaMax = s[31],
+            lumaMean = s[32],
+            layerPixels = snapshot.layerPixels,
+            bg2ReferenceX = s[33],
+            bg2ReferenceY = s[34],
+            bg2ScaleX = s[35],
+            bg2ScaleY = s[36],
+            bg2MatrixWrites = s[37],
+            bg2ReferenceWrites = s[38],
+            swiCounts = snapshot.swiCounts,
+            ppuMillis = snapshot.timingsMillis.getOrElse(0) { 0.0 },
+            dmaMillis = snapshot.timingsMillis.getOrElse(1) { 0.0 },
+            apuMillis = snapshot.timingsMillis.getOrElse(2) { 0.0 },
+        )
+    }
+
+    override fun close() {
+        if (closed) return
+        closed = true
+        native?.close()
+    }
+
+    private fun drainDiagnostics() {
+        val current = native ?: return
+        val batch = NativeCoreBridge.drainDiagnostics(current.value()) ?: return
+        val listener = onDiagnosticEvent ?: return
+        for (index in batch.events.indices) {
+            val event = GbaDiagnostics.Event.entries.getOrNull(batch.events[index]) ?: continue
+            listener(event, batch.details.getOrElse(index) { "" })
+        }
+    }
+
+    private fun newHandle(saveType: GbaSaveType?): NativeCoreHandle =
+        NativeCoreHandle(
+            ConsoleType.GAME_BOY_ADVANCE.storageId,
+            saveType?.ordinal ?: NO_FORCED_SAVE,
+        ).also { handle ->
+            NativeCoreBridge.setMeasuringTime(handle.value(), measuringTimeRequested)
+        }
+
+    private fun handle(): Long {
+        check(!closed) { "Le cœur natif RavenEmu est fermé" }
+        val current = native ?: newHandle(forcedSaveType).also { native = it }
+        return current.value()
     }
 
     companion object {
-        /** Base des registres d'E/S, pour la lecture des états d'affichage. */
-        private const val IO_BASE = 0x0400_0000
-
-        /** 240 points × 308 + intervalles ≈ 280 896 cycles par trame. */
         const val CYCLES_PER_FRAME = 280_896
-
-        /** 16 777 216 / 280 896 ≈ 59,7275 Hz. */
         const val REFRESH_RATE_HZ = 16_777_216.0 / CYCLES_PER_FRAME
+        private const val NO_FORCED_SAVE = -1
+        private const val SNAPSHOT_SCALAR_COUNT = 39
     }
 }

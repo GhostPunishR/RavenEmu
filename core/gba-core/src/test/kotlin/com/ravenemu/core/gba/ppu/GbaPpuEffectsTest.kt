@@ -1,6 +1,6 @@
 package com.ravenemu.core.gba.ppu
 
-import com.ravenemu.core.gba.GbaCore
+import com.ravenemu.core.gba.KotlinGbaCore
 import com.ravenemu.core.gba.SyntheticRom
 import com.ravenemu.core.gba.cartridge.GbaCartridge
 import com.ravenemu.core.gba.memory.GbaBus
@@ -34,7 +34,7 @@ class GbaPpuEffectsTest {
         bus.paletteRam[index * 2 + 1] = ((color ushr 8) and 0xFF).toByte()
     }
 
-    private fun renderFrame(ppu: GbaPpu) = ppu.tick(GbaCore.CYCLES_PER_FRAME)
+    private fun renderFrame(ppu: GbaPpu) = ppu.tick(KotlinGbaCore.CYCLES_PER_FRAME)
 
     private fun pixel(ppu: GbaPpu, x: Int, y: Int): Int = ppu.frame[y * 240 + x]
 
@@ -226,7 +226,7 @@ class GbaPpuEffectsTest {
     // ---- Verrouillage des points de référence affines ----
 
     /** Cycles d'une ligne complète, intervalle horizontal compris. */
-    private val lineCycles = GbaCore.CYCLES_PER_FRAME / 228
+    private val lineCycles = KotlinGbaCore.CYCLES_PER_FRAME / 228
 
     private fun advanceLines(ppu: GbaPpu, count: Int) = ppu.tick(lineCycles * count)
 
