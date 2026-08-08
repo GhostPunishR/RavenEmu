@@ -19,7 +19,9 @@ jobs:
           fetch-depth: 0
 
       - name: Apply GBC rumble bridge
-        run: python3 tools/apply_gbc_rumble_bridge.py
+        run: |
+          python3 tools/apply_gbc_rumble_bridge.py
+          python3 tools/adjust_gb_parity.py
 
       - name: Build native cores
         run: |
@@ -32,7 +34,7 @@ jobs:
 
       - name: Commit validated bridge
         run: |
-          git rm tools/apply_gbc_rumble_bridge.py .github/workflows/gbc-rumble-bridge.yml
+          git rm tools/apply_gbc_rumble_bridge.py tools/adjust_gb_parity.py .github/workflows/gbc-rumble-bridge.yml
           git add -A
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
