@@ -37,7 +37,6 @@ Les moteurs produisent du PCM transmis à la couche audio Android. La synchronis
 
 Si le son craque:
 
-- désactivez l'avance rapide;
 - fermez les applications lourdes;
 - vérifiez la fréquence du problème avec la surcouche de performance;
 - testez sans économie d'énergie Android;

@@ -117,15 +117,6 @@ class EmulationSession(
     var paused = false
         private set
 
-    @Volatile
-    var fastForward = false
-
-    @Volatile
-    var speedLimitEnabled = true
-
-    @Volatile
-    var fastForwardMultiplier = 2
-
     private var thread: Thread? = null
 
     /** Protège la paire [running]/[thread] contre des arrêts concurrents. */
@@ -264,12 +255,10 @@ class EmulationSession(
 
             // Audio d'abord : l'écriture bloquante cadence la session et la
             // file audio est réalimentée avant de payer le coût du rendu
-            // vidéo. Hors conditions nominales (avance rapide, audio coupé,
-            // vitesse débridée), les échantillons sont drainés puis
+            // vidéo. Si l'audio est coupé, les échantillons sont drainés puis
             // abandonnés et le cadencement par horloge reprend la main.
             val audioCount = core.readAudio(audioBuffer)
-            val audioPaced = audioSink != null && audioEnabled && audioCount > 0 &&
-                speedLimitEnabled && !fastForward
+            val audioPaced = audioSink != null && audioEnabled && audioCount > 0
             if (audioPaced) {
                 // Le débit audio reste celui du moteur. Les variations de temps
                 // de rendu ne doivent jamais modifier la hauteur du son.
@@ -302,11 +291,14 @@ class EmulationSession(
                 saveBatteryIfDirty()
             }
 
-            val period = when {
-                audioPaced -> 0L // l'écriture audio bloquante a déjà cadencé
-                !speedLimitEnabled -> 0L
-                fastForward -> basePeriodNanos / fastForwardMultiplier
-                else -> basePeriodNanos
+            // La cadence est celle de la console, sans exception.
+            // L'émulateur n'expose aucun moyen d'aller plus vite : une partie
+            // accélérée n'est plus la console qu'on prétend reproduire, et le
+            // son en porte la marque le premier.
+            val period = if (audioPaced) {
+                0L // l'écriture audio bloquante a déjà cadencé
+            } else {
+                basePeriodNanos
             }
             if (period > 0) {
                 nextFrameAt += period

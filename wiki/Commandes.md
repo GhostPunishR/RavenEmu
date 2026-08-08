@@ -42,9 +42,9 @@ En cas de problème:
 - désactivez les applications qui interceptent les boutons;
 - testez la manette dans une autre application Android.
 
-## Avance rapide
+## Vitesse d'émulation
 
-L'avance rapide augmente la vitesse d'émulation et peut rendre le son irrégulier. Elle ne doit pas être utilisée pour juger la précision audio ou les performances normales.
+RavenEmu tourne à la cadence de la console et ne propose aucun moyen de l'accélérer. Une partie accélérée n'est plus la console reproduite, et le son en porte la marque le premier.
 
 ## Profil par jeu
 

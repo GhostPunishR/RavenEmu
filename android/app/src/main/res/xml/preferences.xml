@@ -5,18 +5,6 @@
     <PreferenceCategory android:title="@string/settings_category_emulation">
         <SwitchPreferenceCompat
             android:defaultValue="true"
-            android:key="emu_speed_limit"
-            android:summary="@string/settings_speed_limit_summary"
-            android:title="@string/settings_speed_limit" />
-        <SeekBarPreference
-            android:defaultValue="2"
-            android:key="emu_fast_forward"
-            android:max="4"
-            android:title="@string/settings_fast_forward"
-            app:min="2"
-            app:showSeekBarValue="true" />
-        <SwitchPreferenceCompat
-            android:defaultValue="true"
             android:key="emu_pause_background"
             android:title="@string/settings_pause_background" />
         <SwitchPreferenceCompat

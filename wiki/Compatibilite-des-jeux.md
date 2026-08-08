@@ -44,7 +44,7 @@ Aucun jeu ne doit être ajouté sans version RavenEmu, appareil, région ou rév
 - statut atteint ;
 - problèmes vidéo, audio ou de commandes ;
 - résultat de la sauvegarde en jeu ;
-- utilisation éventuelle de l’avance rapide ou d’un état instantané.
+- utilisation éventuelle d’un état instantané.
 
 ## Règles de publication
 

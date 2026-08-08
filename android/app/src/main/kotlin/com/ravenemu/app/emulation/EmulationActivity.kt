@@ -419,8 +419,6 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
                 )
             },
         )
-        newSession.speedLimitEnabled = settings.speedLimitEnabled
-        newSession.fastForwardMultiplier = settings.fastForwardMultiplier
         newSession.audioEnabled = settings.audioEnabled
         core = newCore
         session = newSession
@@ -491,8 +489,6 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
     private fun showEmulatorMenu() {
         val currentSession = session ?: return
         currentSession.pause()
-        val fastForwardLabel = getString(R.string.emulation_fast_forward) +
-            if (currentSession.fastForward) " ✓" else ""
         val perGameLabel = getString(
             if (hasPerGameProfile()) R.string.emulation_per_game_profile_off
             else R.string.emulation_per_game_profile_on
@@ -501,7 +497,6 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
             getString(R.string.emulation_resume),
             getString(R.string.emulation_save_state),
             getString(R.string.emulation_load_state),
-            fastForwardLabel,
             getString(R.string.emulation_reset),
             getString(R.string.emulation_edit_controls),
             perGameLabel,
@@ -515,16 +510,12 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
                     1 -> saveSnapshot()
                     2 -> loadSnapshot()
                     3 -> {
-                        currentSession.fastForward = !currentSession.fastForward
-                        currentSession.resume()
-                    }
-                    4 -> {
                         currentSession.post { it.reset() }
                         currentSession.resume()
                     }
-                    5 -> enterEditMode()
-                    6 -> togglePerGameProfile()
-                    7 -> finish()
+                    4 -> enterEditMode()
+                    5 -> togglePerGameProfile()
+                    6 -> finish()
                 }
             }
             .setOnCancelListener { currentSession.resume() }
