@@ -65,10 +65,6 @@ class GbaDiagnostics {
     var lastInterruptMask = 0
         private set
 
-    /** Nombre de fois où l'audio a été réclamé alors qu'aucun échantillon n'était prêt. */
-    var audioUnderruns = 0
-        private set
-
     /**
      * Adresse du **premier** accès hors du plan mémoire, ou 0.
      *
@@ -184,10 +180,6 @@ class GbaDiagnostics {
         lastInterruptMask = mask
     }
 
-    fun onAudioUnderrun() {
-        audioUnderruns++
-    }
-
     /**
      * Suit la durée d'une pause en attente d'interruption. Passé un seuil de deux
      * trames, l'attente est signalée une fois : c'est le symptôme d'un jeu bloqué
@@ -238,7 +230,6 @@ class GbaDiagnostics {
         lastSwi = -1
         swiCounts.fill(0)
         lastInterruptMask = 0
-        audioUnderruns = 0
         firstUnsupportedAddress = 0
         bg2MatrixWrites = 0
         bg2ReferenceWrites = 0

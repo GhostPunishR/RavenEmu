@@ -12,8 +12,6 @@ import androidx.recyclerview.widget.RecyclerView
 import com.ravenemu.app.R
 import com.ravenemu.deltaskin.DeltaSkinConsole
 import com.ravenemu.deltaskin.DeltaSkinInstalledSkin
-import com.ravenemu.deltaskin.DeltaSkinRepresentationKind
-import com.ravenemu.deltaskin.DeltaSkinRepresentationPreference
 import com.ravenemu.deltaskin.DeltaSkinRepresentationSelector
 import com.ravenemu.input.DeltaSkinPdfRenderer
 import com.ravenemu.settings.AppSettings

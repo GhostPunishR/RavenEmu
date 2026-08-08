@@ -16,10 +16,6 @@ constexpr std::size_t save_size(GbaSaveType type) noexcept {
     return 0;
 }
 
-constexpr bool is_eeprom(GbaSaveType type) noexcept {
-    return type == GbaSaveType::eeprom_512 || type == GbaSaveType::eeprom_8k;
-}
-
 class SaveMemory {
 public:
     explicit SaveMemory(GbaSaveType type) : type_(type), data_(save_size(type)) {}

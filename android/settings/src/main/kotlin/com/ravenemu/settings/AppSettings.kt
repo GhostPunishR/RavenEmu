@@ -100,9 +100,6 @@ class AppSettings(context: Context) {
     fun lcdColorCorrection(console: ConsoleType): Boolean =
         prefs.getBoolean(lcdCorrectionKey(console), false)
 
-    fun setLcdColorCorrection(console: ConsoleType, value: Boolean) =
-        prefs.edit { putBoolean(lcdCorrectionKey(console), value) }
-
     private fun lcdCorrectionKey(console: ConsoleType): String = when (console) {
         ConsoleType.GAME_BOY_ADVANCE -> "video_lcd_correction_gba"
         // Clé d'origine, conservée telle quelle : le réglage déjà pris par
