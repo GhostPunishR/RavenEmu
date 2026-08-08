@@ -42,7 +42,6 @@
     <string name="emulation_save_state">Sauvegarder l\'état</string>
     <string name="emulation_load_state">Charger l\'état</string>
     <string name="emulation_reset">Réinitialiser le jeu</string>
-    <string name="emulation_fast_forward">Avance rapide</string>
     <string name="emulation_edit_controls">Modifier les commandes</string>
     <string name="emulation_quit">Quitter</string>
     <string name="emulation_state_saved">État sauvegardé</string>
@@ -66,9 +65,6 @@
     <!-- Paramètres -->
     <string name="settings_title">Paramètres</string>
     <string name="settings_category_emulation">Émulation</string>
-    <string name="settings_speed_limit">Limiter la vitesse</string>
-    <string name="settings_speed_limit_summary">Respecter la cadence native (59,7 Hz)</string>
-    <string name="settings_fast_forward">Multiplicateur d\'avance rapide</string>
     <string name="settings_pause_background">Pause en arrière-plan</string>
     <string name="settings_auto_resume">Reprise automatique</string>
     <string name="settings_auto_resume_summary">Recharger le dernier état au lancement d\'un jeu</string>

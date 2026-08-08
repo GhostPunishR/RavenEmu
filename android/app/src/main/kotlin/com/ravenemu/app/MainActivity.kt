@@ -19,6 +19,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.appbar.MaterialToolbar
 import com.ravenemu.app.emulation.EmulationActivity
+import com.ravenemu.app.library.CoverLoader
 import com.ravenemu.app.library.RomAdapter
 import com.ravenemu.app.settings.SettingsActivity
 import com.ravenemu.core.gba.save.GbaSaveType
@@ -42,6 +43,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var settings: AppSettings
     private lateinit var repository: LibraryRepository
     private lateinit var coverResolver: CoverResolver
+    private lateinit var covers: CoverLoader
     private lateinit var adapter: RomAdapter
     private lateinit var recycler: RecyclerView
     private lateinit var emptyView: TextView
@@ -70,6 +72,9 @@ class MainActivity : AppCompatActivity() {
                 )
                 lifecycleScope.launch {
                     index = repository.update(index, target.copy(coverUri = uri.toString()))
+                    // La pochette a changé : la recherche précédente, y compris
+                    // son résultat négatif, ne vaut plus.
+                    covers.invalidate(target)
                     render()
                 }
             }
@@ -83,6 +88,12 @@ class MainActivity : AppCompatActivity() {
         settings = AppSettings(this)
         repository = LibraryRepository(this, RavenConsoles.romAnalyzers())
         coverResolver = CoverResolver(this)
+        covers = CoverLoader(
+            context = this,
+            resolver = coverResolver,
+            scope = lifecycleScope,
+            coversDirectory = { settings.coversDirectory },
+        )
 
         val toolbar = findViewById<MaterialToolbar>(R.id.toolbar)
         setSupportActionBar(toolbar)
@@ -94,9 +105,7 @@ class MainActivity : AppCompatActivity() {
         adapter = RomAdapter(
             onClick = ::launchGame,
             onLongClick = ::showEntryOptions,
-            coverUriProvider = { entry ->
-                coverResolver.resolve(entry, null, settings.coversDirectory)
-            },
+            covers = covers,
             showBadges = settings.showStatusBadges,
             gridMode = settings.libraryViewMode == "grid",
         )

@@ -21,16 +21,6 @@ class AppSettings(context: Context) {
 
     // ---- Émulation ----
 
-    /** Multiplicateur d'avance rapide (2–4). */
-    var fastForwardMultiplier: Int
-        get() = prefs.getInt("emu_fast_forward", 2).coerceIn(2, 4)
-        set(value) = prefs.edit { putInt("emu_fast_forward", value.coerceIn(2, 4)) }
-
-    /** Limiter la vitesse à la cadence native (débridé sinon). */
-    var speedLimitEnabled: Boolean
-        get() = prefs.getBoolean("emu_speed_limit", true)
-        set(value) = prefs.edit { putBoolean("emu_speed_limit", value) }
-
     /** Pause automatique quand l'application passe en arrière-plan. */
     var pauseInBackground: Boolean
         get() = prefs.getBoolean("emu_pause_background", true)

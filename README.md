@@ -107,7 +107,7 @@ Le moteur Game Boy Advance démarre désormais des jeux commerciaux testés, mai
 - Profils d'écran Game Boy et réglages de luminosité, contraste et couleur
 - Ratio natif, mise à l'échelle entière et rendu nearest-neighbor
 - Sauvegardes `.sav` automatiques et états instantanés versionnés
-- Avance rapide et surcouche de performance
+- Surcouche de performance
 - Aucun réseau et aucune télémétrie dans l'application
 
 ## Architecture

@@ -24,7 +24,6 @@ Lors du premier lancement:
 
 - vérifiez la disposition des commandes tactiles;
 - choisissez un profil d'écran;
-- gardez l'avance rapide désactivée pour un premier test;
 - activez la surcouche de performance si un jeu GBA semble lent.
 
 ## 4. Quitter proprement
