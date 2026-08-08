@@ -1,9 +1,8 @@
 cmake_minimum_required(VERSION 3.22.1)
 
-project(ravenemu_native LANGUAGES CXX)
+project(ravenemu_cores LANGUAGES CXX)
 
 option(RAVENEMU_BUILD_TESTS "Construire les tests des cœurs" OFF)
-option(RAVENEMU_BUILD_JNI "Construire le pont JNI hors Android" OFF)
 
 # Réglages communs à toutes les cibles : C++20, avertissements en erreurs de
 # relecture. `-Wconversion` et `-Wsign-conversion` sont indispensables ici —
@@ -19,7 +18,6 @@ else()
     )
 endif()
 
-
 # Doit précéder les sous-répertoires : CTest n'enregistre que les suites
 # déclarées après lui.
 if(RAVENEMU_BUILD_TESTS)
@@ -30,10 +28,7 @@ add_subdirectory(shared)
 add_subdirectory(CGBRavenCore)
 add_subdirectory(GBARavenCore)
 
-# Cible d'assemblage : ce que le pont JNI et les tests consomment.
+# Cible d'assemblage consommée par les tests et par la couche `native/`.
+# `cores/` ne connaît volontairement ni JNI, ni Android, ni la JVM.
 add_library(ravenemu_cores INTERFACE)
 target_link_libraries(ravenemu_cores INTERFACE cgb_raven_core gba_raven_core)
-
-if(ANDROID OR RAVENEMU_BUILD_JNI)
-    add_subdirectory(bridge)
-endif()

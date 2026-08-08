@@ -17,19 +17,20 @@ import org.gradle.process.CommandLineArgumentProvider
  * pas le code livré. Sans CMake, la tâche échoue et le dit.
  */
 
-val sourcesNatives = rootProject.layout.projectDirectory.dir("cores")
+val sourcesNatives = rootProject.layout.projectDirectory.dir("native")
+val sourcesCoeurs = rootProject.layout.projectDirectory.dir("cores")
 val dossierBuild = layout.buildDirectory.dir("native-parity")
 
 val configurerCoeursNatifs by tasks.registering(Exec::class) {
     group = "build"
-    description = "Configure la construction CMake des cœurs natifs pour les tests de parité."
+    description = "Configure la construction CMake du pont natif et des cœurs pour les tests de parité."
     inputs.dir(sourcesNatives).withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.dir(sourcesCoeurs).withPathSensitivity(PathSensitivity.RELATIVE)
     outputs.file(dossierBuild.map { it.file("CMakeCache.txt") })
     commandLine(
         "cmake",
         "-S", sourcesNatives.asFile.absolutePath,
         "-B", dossierBuild.get().asFile.absolutePath,
-        "-DRAVENEMU_BUILD_JNI=ON",
         "-DCMAKE_BUILD_TYPE=Release",
     )
 }
@@ -39,7 +40,8 @@ val construireCoeursNatifs by tasks.registering(Exec::class) {
     description = "Construit la bibliothèque native que les tests de parité chargent."
     dependsOn(configurerCoeursNatifs)
     inputs.dir(sourcesNatives).withPathSensitivity(PathSensitivity.RELATIVE)
-    outputs.dir(dossierBuild.map { it.dir("bridge") })
+    inputs.dir(sourcesCoeurs).withPathSensitivity(PathSensitivity.RELATIVE)
+    outputs.dir(dossierBuild)
     commandLine("cmake", "--build", dossierBuild.get().asFile.absolutePath, "--parallel")
 }
 
