@@ -51,7 +51,7 @@ Commandes utiles :
 ./gradlew test
 
 # Tests des moteurs C++
-cmake -S native-core -B build/native-host -DRAVENEMU_BUILD_TESTS=ON
+cmake -S cores -B build/native-host -DRAVENEMU_BUILD_TESTS=ON
 cmake --build build/native-host --parallel
 ctest --test-dir build/native-host --output-on-failure
 
@@ -95,7 +95,7 @@ Ces règles sont vérifiées automatiquement par les tests du module `ci-policy`
 - Utilisez des noms explicites pour les classes, fonctions et variables.
 - Gardez les moteurs d'émulation indépendants d'Android.
 - Évitez les dépendances entre moteurs de consoles.
-- Placez l'exécution matérielle dans `native-core` et gardez JNI limité aux types primitifs.
+- Placez l'exécution matérielle dans `cores/CGBRavenCore` ou `cores/GBARavenCore`, un dossier par organe, et gardez JNI limité aux types primitifs.
 - Placez les fonctionnalités partagées derrière les contrats de `emulation-api`.
 - Ajoutez des tests synthétiques, déterministes et reproductibles.
 - Ne masquez pas un comportement incomplet derrière une valeur arbitraire.

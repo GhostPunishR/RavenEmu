@@ -116,7 +116,10 @@ Le moteur Game Boy Advance démarre désormais des jeux commerciaux testés, mai
 |---|---|---|
 | `android/app` | Android | Écrans, navigation et session d'émulation |
 | `core/emulation-api` | Kotlin/JVM | Contrats communs entre l'application et les moteurs |
-| `native-core` | C++20 | Moteurs Game Boy/Game Boy Color et Game Boy Advance |
+| `cores/CGBRavenCore` | C++20 | Moteur Game Boy et Game Boy Color |
+| `cores/GBARavenCore` | C++20 | Moteur Game Boy Advance |
+| `cores/shared` | C++20 | Contrat `Core`, sérialisation binaire, SHA-256 |
+| `cores/bridge` | C++20 | Pont JNI, seule frontière avec la JVM |
 | `core/native-bridge` | Java/JNI | Frontière primitive entre les adaptateurs JVM et C++ |
 | `core/deltaskin` | Kotlin/JVM | Validation, manifeste, stockage et géométrie du format `.deltaskin` |
 | `core/gameboy-core` | Kotlin/JVM | Adaptateur et métadonnées Game Boy/Game Boy Color |
@@ -148,7 +151,7 @@ cd RavenEmu
 ./gradlew test
 
 # Tests natifs des deux cœurs
-cmake -S native-core -B build/native-host -DRAVENEMU_BUILD_TESTS=ON
+cmake -S cores -B build/native-host -DRAVENEMU_BUILD_TESTS=ON
 cmake --build build/native-host --parallel
 ctest --test-dir build/native-host --output-on-failure
 
