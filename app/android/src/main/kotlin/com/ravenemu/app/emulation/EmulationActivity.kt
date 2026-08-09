@@ -183,9 +183,15 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
         performanceOverlay.visibility =
             if (settings.showPerformanceOverlay) View.VISIBLE else View.GONE
         if (customSkinActive) {
-            // Un skin portrait impose le ratio natif dans la zone de jeu.
+            // Un skin portrait impose le ratio natif dans la zone de jeu, et
+            // son propre cadrage : ni centrage vertical libre, ni étirement.
+            //
+            // La mise à l'échelle entière, elle, reste au joueur. La forcer à
+            // l'arrêt rendait le réglage sans effet dès qu'un skin était actif,
+            // sans que rien ne le dise : le joueur cochait la case, l'image ne
+            // changeait pas, et l'ondulation des décors en défilement restait.
             surface.keepAspectRatio = true
-            surface.integerScaling = false
+            surface.integerScaling = settings.integerScaling
             surface.topAligned = false
         }
     }
@@ -258,7 +264,7 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
                 editorPanel.visibility = View.GONE
                 surface.contentBounds = gameArea
                 surface.keepAspectRatio = true
-                surface.integerScaling = false
+                surface.integerScaling = settings.integerScaling
                 surface.topAligned = false
             }
 
