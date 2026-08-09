@@ -19,8 +19,15 @@
             android:defaultValue="true"
             android:key="video_keep_aspect"
             android:title="@string/settings_keep_aspect" />
+        <!--
+          La mise à l'échelle entière n'a de sens qu'avec le ratio conservé :
+          sans lui, l'image est étirée au cadre et le facteur d'agrandissement
+          n'est plus le sien. La dépendance grise donc le réglage plutôt que de
+          le laisser cocher sans effet.
+        -->
         <SwitchPreferenceCompat
             android:defaultValue="false"
+            android:dependency="video_keep_aspect"
             android:key="video_integer_scaling"
             android:summary="@string/settings_integer_scaling_summary"
             android:title="@string/settings_integer_scaling" />
