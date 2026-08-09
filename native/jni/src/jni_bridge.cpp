@@ -150,16 +150,48 @@ std::vector<std::uint8_t> read_bytes(JNIEnv* env, jbyteArray source, bool nullab
     return result;
 }
 
-jbyteArray make_byte_array(JNIEnv* env, std::span<const std::uint8_t> source) {
-    if (source.size() > static_cast<std::size_t>(std::numeric_limits<jsize>::max())) {
+/**
+ * Convertit une taille native en longueur de tableau Java.
+ *
+ * `jsize` est un entier **signé** 32 bits. Une conversion sans contrôle
+ * enroulerait une taille trop grande vers une longueur négative ou tronquée, et
+ * le tableau rendu à Kotlin ne contiendrait alors pas ce que le natif croit y
+ * avoir écrit. Le contrôle est ici plutôt que chez chaque appelant : dupliqué,
+ * il finissait par manquer à l'un d'eux.
+ */
+jsize checked_length(std::size_t size) {
+    if (size > static_cast<std::size_t>(std::numeric_limits<jsize>::max())) {
         throw std::length_error("Tableau natif trop volumineux");
     }
-    const auto result = env->NewByteArray(static_cast<jsize>(source.size()));
-    if (result != nullptr && !source.empty()) {
+    return static_cast<jsize>(size);
+}
+
+/**
+ * Signale l'échec d'une allocation ou d'une recherche côté JVM.
+ *
+ * Ces appels rendent `nullptr` après avoir armé une exception Java. Poursuivre
+ * les appels JNI dans cet état est indéfini, et rendre le `nullptr` au chaînage
+ * qui suit revient exactement à cela : il finirait déréférencé par le prochain
+ * appel. On interrompt donc le travail natif, et `translate_exception` laisse
+ * remonter l'exception Java déjà en attente.
+ */
+template <typename Handle>
+Handle require_jvm(Handle handle, const char* what) {
+    if (handle == nullptr) throw std::runtime_error(what);
+    return handle;
+}
+
+jbyteArray make_byte_array(JNIEnv* env, std::span<const std::uint8_t> source) {
+    const auto length = checked_length(source.size());
+    const auto result = require_jvm(
+        env->NewByteArray(length),
+        "Allocation d'un tableau d'octets Java impossible"
+    );
+    if (length > 0) {
         env->SetByteArrayRegion(
             result,
             0,
-            static_cast<jsize>(source.size()),
+            length,
             reinterpret_cast<const jbyte*>(source.data())
         );
     }
@@ -168,16 +200,25 @@ jbyteArray make_byte_array(JNIEnv* env, std::span<const std::uint8_t> source) {
 
 jintArray make_int_array(JNIEnv* env, std::span<const std::int32_t> source) {
     static_assert(sizeof(jint) == sizeof(std::int32_t));
-    const auto result = env->NewIntArray(static_cast<jsize>(source.size()));
-    if (result != nullptr && !source.empty()) {
+    const auto length = checked_length(source.size());
+    const auto result = require_jvm(
+        env->NewIntArray(length),
+        "Allocation d'un tableau d'entiers Java impossible"
+    );
+    if (length > 0) {
         env->SetIntArrayRegion(
             result,
             0,
-            static_cast<jsize>(source.size()),
+            length,
             reinterpret_cast<const jint*>(source.data())
         );
     }
     return result;
+}
+
+/** Classe Java attendue par le pont : son absence est une erreur de build. */
+jclass require_class(JNIEnv* env, const char* name) {
+    return require_jvm(env->FindClass(name), name);
 }
 
 } // namespace
@@ -368,7 +409,7 @@ Java_com_ravenemu_nativebridge_NativeCoreBridge_snapshotBatteryRam(
         auto snapshot = core_from(handle).snapshot_battery_ram();
         if (!snapshot) return nullptr;
         const auto data = make_byte_array(env, snapshot->data);
-        const auto klass = env->FindClass("com/ravenemu/nativebridge/NativeBatterySnapshot");
+        const auto klass = require_class(env, "com/ravenemu/nativebridge/NativeBatterySnapshot");
         const auto constructor = env->GetMethodID(klass, "<init>", "([BJ)V");
         const auto result = env->NewObject(
             klass,
@@ -527,7 +568,7 @@ Java_com_ravenemu_nativebridge_NativeCoreBridge_debugSnapshot(
             value.apu_millis,
         };
         env->SetDoubleArrayRegion(timings, 0, 3, timing_values.data());
-        const auto klass = env->FindClass("com/ravenemu/nativebridge/NativeGbaDebugSnapshot");
+        const auto klass = require_class(env, "com/ravenemu/nativebridge/NativeGbaDebugSnapshot");
         const auto constructor = env->GetMethodID(klass, "<init>", "([I[I[I[D)V");
         const auto result = env->NewObject(
             klass,
@@ -560,18 +601,17 @@ Java_com_ravenemu_nativebridge_NativeCoreBridge_drainDiagnostics(
             event_values.push_back(static_cast<std::int32_t>(message.event));
         }
         const auto events = make_int_array(env, event_values);
-        const auto string_class = env->FindClass("java/lang/String");
-        const auto details = env->NewObjectArray(
-            static_cast<jsize>(messages.size()),
-            string_class,
-            nullptr
+        const auto string_class = require_class(env, "java/lang/String");
+        const auto details = require_jvm(
+            env->NewObjectArray(checked_length(messages.size()), string_class, nullptr),
+            "Allocation du tableau de diagnostics Java impossible"
         );
         for (std::size_t index = 0; index < messages.size(); ++index) {
             const auto text = env->NewStringUTF(messages[index].detail.c_str());
             env->SetObjectArrayElement(details, static_cast<jsize>(index), text);
             env->DeleteLocalRef(text);
         }
-        const auto klass = env->FindClass("com/ravenemu/nativebridge/NativeDiagnosticBatch");
+        const auto klass = require_class(env, "com/ravenemu/nativebridge/NativeDiagnosticBatch");
         const auto constructor = env->GetMethodID(
             klass,
             "<init>",
