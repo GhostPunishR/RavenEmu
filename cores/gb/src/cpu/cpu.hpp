@@ -10,6 +10,10 @@ public:
     Cpu(Bus& bus, InterruptController& interrupts) : bus_(bus), interrupts_(interrupts) {}
 
     int step() {
+        if (stopped) {
+            if (bus_.stop_wake_requested()) stopped = false;
+            else return 0;
+        }
         if (locked) return 4;
         const bool enable_ime = ei_pending; ei_pending = false;
         if (halted) {
@@ -35,16 +39,16 @@ public:
 
     void save(BinaryWriter& out) const {
         out.i32(af()); out.i32(bc()); out.i32(de()); out.i32(hl()); out.i32(sp); out.i32(pc);
-        out.boolean(ime); out.boolean(halted); out.boolean(ei_pending); out.boolean(halt_bug); out.boolean(locked);
+        out.boolean(ime); out.boolean(halted); out.boolean(ei_pending); out.boolean(halt_bug); out.boolean(locked); out.boolean(stopped);
     }
     void load(BinaryReader& in) {
         set_af(in.i32()); set_bc(in.i32()); set_de(in.i32()); set_hl(in.i32()); sp = in.i32(); pc = in.i32();
-        ime = in.boolean(); halted = in.boolean(); ei_pending = in.boolean(); halt_bug = in.boolean(); locked = in.boolean();
+        ime = in.boolean(); halted = in.boolean(); ei_pending = in.boolean(); halt_bug = in.boolean(); locked = in.boolean(); stopped = in.boolean();
     }
 
     int a{0x01}; int f{0xb0}; int b{}; int c{0x13}; int d{}; int e{0xd8}; int h{0x01}; int l{0x4d};
     int sp{0xfffe}; int pc{0x0100};
-    bool ime{}; bool halted{}; bool locked{}; bool ei_pending{}; bool halt_bug{};
+    bool ime{}; bool halted{}; bool locked{}; bool ei_pending{}; bool halt_bug{}; bool stopped{};
 
 private:
     static constexpr int flag_z = 0x80;
@@ -153,7 +157,7 @@ private:
         case 0x0a: a = bus_.read(bc()); return 8; case 0x0b: set_bc(word(bc() - 1)); return 8;
         case 0x0c: c = inc8(c); return 4; case 0x0d: c = dec8(c); return 4; case 0x0e: c = fetch_byte(); return 8;
         case 0x0f: a = rrc(a); f &= ~flag_z; return 4;
-        case 0x10: static_cast<void>(fetch_byte()); bus_.on_stop(); return 4; case 0x11: set_de(fetch_word()); return 12;
+        case 0x10: static_cast<void>(fetch_byte()); if (!bus_.on_stop()) stopped = true; return 4; case 0x11: set_de(fetch_word()); return 12;
         case 0x12: bus_.write(de(), a); return 8; case 0x13: set_de(word(de() + 1)); return 8;
         case 0x14: d = inc8(d); return 4; case 0x15: d = dec8(d); return 4; case 0x16: d = fetch_byte(); return 8;
         case 0x17: a = rl(a); f &= ~flag_z; return 4; case 0x18: return jump_relative(true); case 0x19: add_hl(de()); return 8;

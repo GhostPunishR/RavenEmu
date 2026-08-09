@@ -1,7 +1,9 @@
 add_library(gb_raven_core STATIC src/core.cpp)
 target_include_directories(gb_raven_core
     PUBLIC include
-    PRIVATE src
+    PRIVATE
+        src
+        ${CMAKE_CURRENT_LIST_DIR}/../gbc/include
 )
 target_link_libraries(gb_raven_core PUBLIC ravenemu_common)
 set_target_properties(gb_raven_core PROPERTIES POSITION_INDEPENDENT_CODE ON)

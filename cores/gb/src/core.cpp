@@ -33,14 +33,18 @@ public:
         if (framebuffer.size() < Ppu::frame_pixels) throw std::invalid_argument("Framebuffer trop petit");
         int ppu_cycles{};
         while (ppu_cycles < 70'224) {
-            const int consumed = machine_->cpu.step(); machine_->tick(consumed);
-            ppu_cycles += consumed >> machine_->speed.peripheral_shift();
+            const int advanced = machine_->step();
+            if (advanced <= 0) break;
+            ppu_cycles += advanced;
         }
         std::copy(machine_->ppu.completed_frame.begin(), machine_->ppu.completed_frame.end(), framebuffer.begin());
     }
     void set_button(Button button, bool pressed) override { if (machine_) machine_->joypad.set_button(button, pressed); }
     std::size_t read_audio(std::span<std::int16_t> destination) override {
         return machine_ ? machine_->apu.read_samples(destination) : 0;
+    }
+    [[nodiscard]] bool rumble_active() const noexcept override {
+        return machine_ != nullptr && machine_->cartridge->rumble_active();
     }
     [[nodiscard]] bool has_battery_ram() const noexcept override {
         return machine_ != nullptr && machine_->cartridge->has_persistent_data();
@@ -60,7 +64,7 @@ public:
 
     [[nodiscard]] std::vector<std::uint8_t> save_state() const override {
         require_loaded(); BinaryWriter out(64 * 1024);
-        out.u32(0x52564e53U); out.u16(4); out.u8(static_cast<std::uint8_t>(Console::game_boy)); out.raw(rom_hash_);
+        out.u32(0x52564e53U); out.u16(5); out.u8(static_cast<std::uint8_t>(Console::game_boy)); out.raw(rom_hash_);
         machine_->cpu.save(out);
         out.i32(machine_->interrupts.flags); out.i32(machine_->interrupts.enable);
         machine_->timer.save(out); machine_->serial.save(out); machine_->joypad.save(out);
@@ -73,7 +77,7 @@ public:
         if (state.size() > (1U << 20U)) throw SaveStateError("État instantané trop volumineux");
         BinaryReader in(state);
         if (in.u32() != 0x52564e53U) throw SaveStateError("Ce fichier n'est pas un état RavenEmu");
-        const auto version = in.u16(); if (version != 4) throw SaveStateError("Version d'état non prise en charge");
+        const auto version = in.u16(); if (version != 5) throw SaveStateError("Version d'état non prise en charge");
         if (in.u8() != static_cast<std::uint8_t>(Console::game_boy)) throw SaveStateError("État issu d'une autre console");
         std::array<std::uint8_t, 32> hash{}; in.raw(hash);
         if (hash != rom_hash_) throw SaveStateError("État issu d'une autre ROM");

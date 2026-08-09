@@ -158,6 +158,7 @@ public:
     virtual void run_frame(std::span<std::int32_t> framebuffer, bool render_video) = 0;
     virtual void set_button(Button button, bool pressed) = 0;
     virtual std::size_t read_audio(std::span<std::int16_t> destination) = 0;
+    [[nodiscard]] virtual bool rumble_active() const noexcept { return false; }
 
     [[nodiscard]] virtual bool has_battery_ram() const noexcept = 0;
     [[nodiscard]] virtual bool battery_ram_dirty() const noexcept = 0;

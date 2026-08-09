@@ -19,6 +19,7 @@ public:
     [[nodiscard]] virtual int read_ram(int address) const = 0;
     virtual void write_ram(int address, int value) = 0;
     virtual void tick(int) {}
+    [[nodiscard]] virtual bool rumble_active() const noexcept { return false; }
     virtual void save_state(BinaryWriter& out) const = 0;
     virtual void load_state(BinaryReader& in) = 0;
 

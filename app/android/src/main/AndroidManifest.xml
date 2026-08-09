@@ -2,8 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Aucune permission : l'accès aux fichiers passe par le Storage Access
-         Framework (documents choisis par l'utilisateur). -->
+    <!-- L'application ne demande ni accès global au stockage ni réseau. Le
+         module vibration ajoute uniquement VIBRATE pour les cartouches rumble. -->
 
     <application
         android:allowBackup="true"

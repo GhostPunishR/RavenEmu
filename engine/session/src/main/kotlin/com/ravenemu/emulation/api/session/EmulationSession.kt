@@ -20,6 +20,7 @@ class EmulationSession(
     private val core: EmulatorCore,
     private val callbacks: Callbacks,
     private val audioSink: AudioSink? = null,
+    private val rumbleSink: RumbleSink? = null,
     /**
      * Appelé une fois au démarrage du thread d'émulation, **sur ce thread**.
      *
@@ -84,6 +85,12 @@ class EmulationSession(
      * Sortie audio de la plateforme. [write] doit être bloquante : c'est elle
      * qui cadence la session quand l'audio est actif (synchronisation A/V).
      */
+    interface RumbleSink {
+        /** Active ou coupe la vibration continue demandée par la cartouche. */
+        fun setActive(active: Boolean)
+        fun release() { setActive(false) }
+    }
+
     interface AudioSink {
         fun write(samples: ShortArray, count: Int)
         fun underrunCount(): Int = 0
@@ -138,6 +145,7 @@ class EmulationSession(
     fun pause() {
         paused = true
         audioSink?.pause()
+        rumbleSink?.setActive(false)
     }
 
     fun resume() {
@@ -184,6 +192,7 @@ class EmulationSession(
 
         synchronized(lifecycle) { thread = null }
         audioSink?.release()
+        rumbleSink?.release()
         return StopResult.CLEAN
     }
 
@@ -227,6 +236,7 @@ class EmulationSession(
         var fpsFrames = 0
         var workNanos = 0L
         var lastBatteryCheck = System.nanoTime()
+        var lastRumbleActive = false
 
         while (running) {
             drainCommands()
@@ -247,6 +257,11 @@ class EmulationSession(
                 !core.supportsVideoFrameSkipping || frameSkipper.shouldRender()
             val workStart = System.nanoTime()
             core.runFrame(framebuffer, renderVideo)
+            val rumbleActive = core.rumbleActive
+            if (rumbleActive != lastRumbleActive) {
+                rumbleSink?.setActive(rumbleActive)
+                lastRumbleActive = rumbleActive
+            }
             val frameWorkNanos = System.nanoTime() - workStart
             workNanos += frameWorkNanos
             if (core.supportsVideoFrameSkipping) {
@@ -314,6 +329,7 @@ class EmulationSession(
             }
         }
 
+        rumbleSink?.setActive(false)
         drainCommands()
         saveBatteryIfDirty()
     }

@@ -51,6 +51,7 @@ import com.ravenemu.emulation.api.display.MonochromeDisplayProfiles
 import com.ravenemu.storage.LibraryRepository
 import com.ravenemu.storage.SaveFileStore
 import com.ravenemu.storage.SnapshotStore
+import com.ravenemu.platform.vibration.AndroidRumbleSink
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -411,6 +412,7 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
             newCore,
             this,
             audioSink,
+            AndroidRumbleSink(this),
             // Le groupe d'ordonnancement Android décide, sur un processeur
             // hétérogène, si le thread tourne sur un cœur puissant ou économe.
             onThreadStart = {

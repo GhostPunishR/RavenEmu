@@ -279,6 +279,19 @@ Java_com_ravenemu_nativebridge_NativeCoreBridge_readAudio(
     });
 }
 
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_ravenemu_nativebridge_NativeCoreBridge_rumbleActive(
+    JNIEnv* env,
+    jclass,
+    jlong handle
+) {
+    return guarded<jboolean>(env, JNI_FALSE, [&] {
+        return static_cast<jboolean>(
+            core_from(handle).rumble_active() ? JNI_TRUE : JNI_FALSE
+        );
+    });
+}
+
 extern "C" JNIEXPORT jint JNICALL
 Java_com_ravenemu_nativebridge_NativeCoreBridge_framebufferFormat(
     JNIEnv* env,

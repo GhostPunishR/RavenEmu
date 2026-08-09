@@ -81,6 +81,9 @@ interface EmulatorCore {
      */
     fun readAudio(buffer: ShortArray): Int
 
+    /** État instantané du moteur de vibration matériel de la cartouche. */
+    val rumbleActive: Boolean get() = false
+
     /** `true` si la cartouche chargée possède une RAM sauvegardée par pile. */
     val hasBatteryRam: Boolean
 
