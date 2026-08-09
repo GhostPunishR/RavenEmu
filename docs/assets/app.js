@@ -1,10 +1,5 @@
 document.documentElement.classList.add("js");
 
-const menuStyles = document.createElement("link");
-menuStyles.rel = "stylesheet";
-menuStyles.href = "assets/mobile-menu.css";
-document.head.appendChild(menuStyles);
-
 const header = document.querySelector(".site-header");
 const menuButton = document.querySelector(".menu-toggle");
 const navigation = document.querySelector(".site-nav");
