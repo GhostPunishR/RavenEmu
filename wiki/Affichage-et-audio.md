@@ -6,8 +6,6 @@ Le moteur monochrome produit quatre niveaux. Le renderer applique ensuite un pro
 
 - Game Boy DMG;
 - Game Boy Pocket;
-- Game Boy Light éteinte;
-- Game Boy Light allumée;
 - noir et blanc.
 
 Le profil peut être changé sans modifier le fonctionnement interne du jeu.

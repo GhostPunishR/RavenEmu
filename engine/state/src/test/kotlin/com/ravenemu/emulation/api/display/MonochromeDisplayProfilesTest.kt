@@ -15,11 +15,33 @@ class MonochromeDisplayProfilesTest {
     }
 
     @Test
-    fun `cinq profils attendus dans l'ordre`() {
+    fun `trois profils attendus dans l'ordre`() {
         assertEquals(
-            listOf("dmg", "pocket", "light_off", "light_on", "black_white"),
+            listOf("dmg", "pocket", "black_white"),
             MonochromeDisplayProfiles.all.map { it.id },
         )
+    }
+
+    @Test
+    fun `les profils retires ne reviennent pas au catalogue`() {
+        val actifs = MonochromeDisplayProfiles.all.map { it.id }.toSet()
+        val revenus = MonochromeDisplayProfiles.retiredIds intersect actifs
+        assertEquals(
+            emptySet(),
+            revenus,
+            "un identifiant retiré désigne à nouveau un profil : la préférence " +
+                "enregistrée chez les joueurs qui l'avaient choisi changerait de sens",
+        )
+    }
+
+    @Test
+    fun `un profil retire retombe sur le defaut`() {
+        // La préférence est persistée par identifiant : celle d'un joueur qui
+        // avait choisi un profil Game Boy Light survit au retrait, et donne le
+        // profil par défaut plutôt qu'un écran vide.
+        for (id in MonochromeDisplayProfiles.retiredIds) {
+            assertEquals(MonochromeDisplayProfiles.default.id, MonochromeDisplayProfiles.byId(id).id, id)
+        }
     }
 
     @Test

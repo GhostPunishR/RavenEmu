@@ -51,32 +51,6 @@ object MonochromeDisplayProfiles {
         ),
     )
 
-    /** Game Boy Light, rétroéclairage éteint : proche de la Pocket, en gris. */
-    val LIGHT_OFF: MonochromeDisplayProfile = Profile(
-        id = "light_off",
-        displayName = "Game Boy Light — Éclairage éteint",
-        description = "Simulation de l'écran de la Game Boy Light, rétroéclairage éteint.",
-        palette = intArrayOf(
-            0xFFC2C4BB.toInt(),
-            0xFF888B81.toInt(),
-            0xFF4C4E46.toInt(),
-            0xFF191A15.toInt(),
-        ),
-    )
-
-    /** Game Boy Light, rétroéclairage allumé : dominante cyan très modérée. */
-    val LIGHT_ON: MonochromeDisplayProfile = Profile(
-        id = "light_on",
-        displayName = "Game Boy Light — Éclairage allumé",
-        description = "Simulation de l'écran rétroéclairé de la Game Boy Light, teinte bleu-vert modérée.",
-        palette = intArrayOf(
-            0xFF9FC7BE.toInt(), // cyan-vert clair, sans néon
-            0xFF6E9E96.toInt(),
-            0xFF3B5E58.toInt(),
-            0xFF122522.toInt(),
-        ),
-    )
-
     /** Accessibilité : niveaux de gris neutres à contraste élevé. */
     val BLACK_WHITE: MonochromeDisplayProfile = Profile(
         id = "black_white",
@@ -92,7 +66,23 @@ object MonochromeDisplayProfiles {
 
     /** Tous les profils, dans l'ordre d'affichage des paramètres. */
     val all: List<MonochromeDisplayProfile> =
-        listOf(DMG, POCKET, LIGHT_OFF, LIGHT_ON, BLACK_WHITE)
+        listOf(DMG, POCKET, BLACK_WHITE)
+
+    /**
+     * Identifiants retirés du catalogue.
+     *
+     * Les deux profils Game Boy Light ont été écartés : entre l'écran éteint et
+     * la Pocket, l'écart était trop faible pour se voir, et la variante allumée
+     * n'apportait qu'une teinte. Un réglage que personne ne distingue encombre
+     * la liste sans rien offrir.
+     *
+     * Ils sont nommés ici plutôt qu'oubliés : [byId] retombe déjà sur le profil
+     * par défaut pour un identifiant inconnu, et c'est ce qui protège la
+     * préférence enregistrée chez un joueur qui les avait choisis. Cette liste
+     * fige ce comportement, et interdit de réattribuer ces identifiants à un
+     * futur profil qui apparaîtrait alors sans prévenir chez ces joueurs.
+     */
+    val retiredIds: Set<String> = setOf("light_off", "light_on")
 
     /** Profil par défaut : Game Boy DMG. */
     val default: MonochromeDisplayProfile = DMG
