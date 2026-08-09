@@ -44,7 +44,33 @@ void throw_kotlin_exception(JNIEnv* env, const char* class_name, const char* mes
     env->DeleteLocalRef(klass);
 }
 
+/**
+ * Lève une exception Java sans argument de cause.
+ *
+ * `ThrowNew` déréférence la classe qu'on lui passe. `FindClass` retourne
+ * `nullptr` quand elle échoue, et lui transmettre ce `nullptr` ferait tomber le
+ * processus au lieu de remonter l'erreur qu'on essayait précisément de
+ * signaler : le contrôle n'est pas défensif, il est ce qui distingue une
+ * exception Kotlin d'un arrêt brutal.
+ */
+void throw_simple_exception(JNIEnv* env, const char* class_name, const char* message) noexcept {
+    const auto klass = env->FindClass(class_name);
+    if (klass == nullptr) return;
+    env->ThrowNew(klass, message);
+    env->DeleteLocalRef(klass);
+}
+
 void translate_exception(JNIEnv* env) noexcept {
+    // Une exception Java déjà en attente est la cause première de l'exception
+    // C++ qu'on s'apprête à traduire : c'est elle qui porte l'information, et
+    // la remplacer par un message de repli ferait perdre le diagnostic.
+    //
+    // Elle doit surtout être laissée en place plutôt que contournée : appeler
+    // JNI alors qu'une exception est en attente est un comportement indéfini,
+    // et `FindClass` est en droit d'y retourner `nullptr`. Traduire malgré tout
+    // revenait donc à transformer une erreur signalable en plantage natif.
+    if (env->ExceptionCheck()) return;
+
     try {
         throw;
     } catch (const ravenemu::RomLoadError& error) {
@@ -60,13 +86,13 @@ void translate_exception(JNIEnv* env) noexcept {
             error.what()
         );
     } catch (const std::invalid_argument& error) {
-        env->ThrowNew(env->FindClass("java/lang/IllegalArgumentException"), error.what());
+        throw_simple_exception(env, "java/lang/IllegalArgumentException", error.what());
     } catch (const std::logic_error& error) {
-        env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), error.what());
+        throw_simple_exception(env, "java/lang/IllegalStateException", error.what());
     } catch (const std::exception& error) {
-        env->ThrowNew(env->FindClass("java/lang/RuntimeException"), error.what());
+        throw_simple_exception(env, "java/lang/RuntimeException", error.what());
     } catch (...) {
-        env->ThrowNew(env->FindClass("java/lang/RuntimeException"), "Erreur native RavenEmu inconnue");
+        throw_simple_exception(env, "java/lang/RuntimeException", "Erreur native RavenEmu inconnue");
     }
 }
 
@@ -116,6 +142,9 @@ std::vector<std::uint8_t> read_bytes(JNIEnv* env, jbyteArray source, bool nullab
             length,
             reinterpret_cast<jbyte*>(result.data())
         );
+        // L'exception Java levée par la copie est laissée en attente : c'est
+        // elle qui remontera à Kotlin. L'exception C++ ne sert qu'à interrompre
+        // le travail natif en cours, `translate_exception` la voit et s'efface.
         if (env->ExceptionCheck()) throw std::runtime_error("Lecture d'un tableau Java impossible");
     }
     return result;

@@ -10,17 +10,41 @@ Issue associée : #
 
 ## Modules concernés
 
-- [ ] `app`
-- [ ] `emulation-api`
-- [ ] `gameboy-core`
-- [ ] `gba-core`
-- [ ] `rom-library`
-- [ ] `storage`
-- [ ] `renderer`
-- [ ] `input`
-- [ ] `settings`
+Les frontières sont celles d'[ARCHITECTURE.md](https://github.com/GhostPunishR/RavenEmu/blob/main/ARCHITECTURE.md),
+du bas de la pile vers le haut. Cochez les couches réellement touchées : une
+modification qui en traverse plusieurs mérite d'être justifiée dans la
+description.
+
+Cœurs C++ (`cores/`, aucune connaissance de JNI, de la JVM ni d'Android) :
+
+- [ ] `cores/common`
+- [ ] `cores/gb`
+- [ ] `cores/gbc`
+- [ ] `cores/gba`
+
+Frontière native :
+
+- [ ] `native/api`
+- [ ] `native/jni`
+
+Moteur (`engine/`, Kotlin/JVM pur, jamais dépendant d'Android) :
+
+- [ ] `engine/api`
+- [ ] `engine/runtime`
+- [ ] `engine/session`
+- [ ] `engine/state`, `engine/save`, `engine/audio` ou `engine/diagnostics`
+
+Plateforme et produit :
+
+- [ ] `platform/android/*` (audio, renderer, input, storage, vibration, lifecycle)
+- [ ] `features/*` (library, player, settings, skins, savestates, diagnostics)
+- [ ] `app/android`
+
+Outillage :
+
+- [ ] `build-logic`, `gradle` ou `tools`
 - [ ] Documentation, site ou Wiki
-- [ ] GitHub Actions ou outils
+- [ ] GitHub Actions
 
 ## Type de modification
 
@@ -34,14 +58,28 @@ Issue associée : #
 
 ## Validation
 
-Indiquez les commandes exécutées et leurs résultats.
+Indiquez les commandes exécutées et leurs résultats. Les commandes sont celles
+du [guide de contribution](https://github.com/GhostPunishR/RavenEmu/blob/main/CONTRIBUTING.md).
+
+Sans SDK Android :
 
 - [ ] `./gradlew jvmTest`
+- [ ] `cmake -S cores -B build/native-host -DRAVENEMU_BUILD_TESTS=ON` puis `ctest --test-dir build/native-host --output-on-failure`
+
+Avec SDK Android :
+
 - [ ] `./gradlew test`
 - [ ] `./gradlew lint`
 - [ ] `./gradlew assembleDebug`
 - [ ] Test manuel sur Android
+
+Autre :
+
 - [ ] Documentation mise à jour si nécessaire
+
+Si une commande n'a pas pu être exécutée, dites-le ici plutôt que de laisser la
+case vide sans explication : une validation manquante qu'on annonce se rattrape,
+une validation manquante qu'on tait se découvre en production.
 
 ## Références techniques
 

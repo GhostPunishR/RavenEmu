@@ -82,6 +82,19 @@ contrôleur de double vitesse et le port infrarouge. Le PPU, les DMA, le port s�
 et les autres organes restent encore partagés avec l'implémentation GB pendant
 leur séparation sous tests de parité.
 
+Le dossier porte donc **deux** cibles, et la distinction commande la suite de
+l'extraction :
+
+- `gbc_hardware` rassemble les composants CGB déjà extraits. C'est elle que
+  `gb_raven_core` lie, parce que l'implémentation unifiée DMG/CGB les consomme.
+- `gbc_raven_core` est la façade publique du cœur couleur ; elle s'appuie sur
+  `gb_raven_core`.
+
+Les deux arêtes vont en sens inverse et sont toutes les deux justes ; une cible
+unique créerait un cycle. `gbc_hardware` reste INTERFACE tant que les composants
+extraits ne sont que des en-têtes, et devient STATIC dès que l'un d'eux gagne un
+`.cpp` — sans qu'aucune autre cible n'ait à changer.
+
 `cores/gba` porte le moteur Game Boy Advance indépendant.
 
 Les quatre suites natives (`common`, `gb`, `gbc`, `gba`) doivent pouvoir être
