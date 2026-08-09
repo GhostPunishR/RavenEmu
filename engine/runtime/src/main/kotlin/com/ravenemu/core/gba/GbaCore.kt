@@ -17,6 +17,7 @@ import java.security.MessageDigest
 /** Thin Kotlin adapter over RavenEmu's C++20 Game Boy Advance core. */
 class GbaCore(
     forcedSaveType: GbaSaveType? = null,
+    forcedRtc: Boolean? = null,
 ) : EmulatorCore, AutoCloseable {
 
     var forcedSaveType: GbaSaveType? = forcedSaveType
@@ -29,6 +30,32 @@ class GbaCore(
                 )
             }
         }
+
+    /**
+     * Impose la présence de l'horloge de cartouche, ou `null` pour laisser la
+     * détection décider.
+     *
+     * La détection cherche la bibliothèque Seiko des cartouches d'origine et ne
+     * peut rien affirmer d'une ROM modifiée : un jeu peut piloter l'horloge sans
+     * porter cette signature. Sans ce réglage, un tel jeu annonce que l'heure
+     * est illisible et le joueur n'a aucun recours.
+     *
+     * Pris en compte au prochain chargement de ROM.
+     */
+    var forcedRtc: Boolean? = forcedRtc
+        set(value) {
+            field = value
+            native?.let { NativeCoreBridge.setGbaForcedRtc(it.value(), value.toNativeRtc()) }
+        }
+
+    /**
+     * Horloge réellement présente sur la cartouche chargée.
+     *
+     * Distinct de [forcedRtc], qui dit ce que l'utilisateur demande : c'est
+     * cette valeur-ci que le jeu voit, et donc celle qu'une interface montre.
+     */
+    val rtcActive: Boolean
+        get() = native?.let { NativeCoreBridge.gbaRtcActive(it.value()) } ?: false
     private var native: NativeCoreHandle? = null
     private var closed = false
 
@@ -181,6 +208,10 @@ class GbaCore(
             saveType?.ordinal ?: NO_FORCED_SAVE,
         ).also { handle ->
             NativeCoreBridge.setMeasuringTime(handle.value(), measuringTimeRequested)
+            // Le cœur natif se construit avec le seul type de sauvegarde ; le
+            // réglage d'horloge est appliqué juste après, avant tout chargement
+            // de ROM, seul moment où il est lu.
+            NativeCoreBridge.setGbaForcedRtc(handle.value(), forcedRtc.toNativeRtc())
         }
 
     private fun handle(): Long {
@@ -194,5 +225,12 @@ class GbaCore(
         const val REFRESH_RATE_HZ = 16_777_216.0 / CYCLES_PER_FRAME
         private const val NO_FORCED_SAVE = -1
         private const val SNAPSHOT_SCALAR_COUNT = 39
+
+        /** Tri-état d'horloge tel que l'attend le pont : -1 auto, 0 absente, 1 présente. */
+        private fun Boolean?.toNativeRtc(): Int = when (this) {
+            null -> -1
+            false -> 0
+            true -> 1
+        }
     }
 }

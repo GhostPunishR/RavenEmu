@@ -38,6 +38,16 @@ public final class NativeCoreBridge {
     public static native void setClockEpoch(long handle, boolean overridden, long epochSeconds);
     public static native int gbaSaveType(long handle);
     public static native void setGbaForcedSaveType(long handle, int forcedSaveType);
+    public static native boolean gbaRtcActive(long handle);
+
+    /**
+     * Impose la présence de l'horloge de cartouche Game Boy Advance.
+     *
+     * <p>Tri-état transporté en entier, faute d'{@code Optional} à la frontière
+     * JNI : négatif rend la main à la détection, zéro impose l'absence, positif
+     * impose la présence. Pris en compte au prochain chargement de ROM.
+     */
+    public static native void setGbaForcedRtc(long handle, int forcedRtc);
     public static native void setMeasuringTime(long handle, boolean enabled);
     public static native boolean measuringTime(long handle);
     public static native NativeGbaDebugSnapshot debugSnapshot(long handle);

@@ -299,6 +299,11 @@ class MainActivity : AppCompatActivity() {
             R.id.actionSaveType,
             visible = entry.console == ConsoleType.GAME_BOY_ADVANCE,
         ) { showSaveTypeDialog(entry) }
+        // L'horloge de cartouche non plus : elle est propre au Game Boy Advance.
+        action(
+            R.id.actionRtc,
+            visible = entry.console == ConsoleType.GAME_BOY_ADVANCE,
+        ) { showRtcDialog(entry) }
         action(R.id.actionDetails) { showDetails(entry) }
         action(R.id.actionRemove) { confirmRemove(entry) }
 
@@ -410,6 +415,43 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
+    /** Libellé de l'horloge de cartouche : choix utilisateur ou détection. */
+    private fun rtcLabel(entry: RomEntry): String {
+        val forced = settings.forcedRtc(entry.fingerprints.sha256)
+            ?: return getString(R.string.library_rtc_auto)
+        val state = getString(
+            if (forced) R.string.library_rtc_present else R.string.library_rtc_absent
+        )
+        return getString(R.string.library_rtc_forced, state)
+    }
+
+    /**
+     * Choix de la présence de l'horloge de cartouche d'un jeu Game Boy Advance.
+     *
+     * La détection cherche la bibliothèque Seiko des cartouches d'origine et ne
+     * peut rien affirmer d'une ROM modifiée : certaines pilotent l'horloge sans
+     * porter cette signature, et annoncent alors que l'heure est illisible.
+     */
+    private fun showRtcDialog(entry: RomEntry) {
+        val choices = listOf(null, true, false)
+        val labels = arrayOf(
+            getString(R.string.library_rtc_auto),
+            getString(R.string.library_rtc_on),
+            getString(R.string.library_rtc_off),
+        )
+        val checked = choices.indexOf(settings.forcedRtc(entry.fingerprints.sha256))
+
+        AlertDialog.Builder(this)
+            .setTitle(R.string.library_rtc)
+            .setSingleChoiceItems(labels, checked) { dialog, which ->
+                settings.setForcedRtc(entry.fingerprints.sha256, choices[which])
+                dialog.dismiss()
+                render()
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
     private fun showDetails(entry: RomEntry) {
         val details = buildString {
             appendLine(entry.fileName)
@@ -418,6 +460,7 @@ class MainActivity : AppCompatActivity() {
             if (entry.console == ConsoleType.GAME_BOY_ADVANCE) {
                 if (entry.gameCode.isNotBlank()) appendLine("Code jeu : ${entry.gameCode}")
                 appendLine("Sauvegarde : ${saveTypeLabel(entry)}")
+                appendLine("Horloge : ${rtcLabel(entry)}")
                 appendLine(
                     "En-tête : ${if (entry.headerChecksumValid) "valide" else "somme incorrecte"}"
                 )

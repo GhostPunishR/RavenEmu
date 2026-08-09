@@ -128,6 +128,16 @@ std::optional<ravenemu::GbaSaveType> gba_save_type_from(jint value) {
     return static_cast<ravenemu::GbaSaveType>(value);
 }
 
+/**
+ * Réglage tri-état de l'horloge de cartouche, transporté en entier faute
+ * d'`Optional` à la frontière JNI : négatif rend la main à la détection, zéro
+ * impose l'absence, positif impose la présence.
+ */
+std::optional<bool> forced_rtc_from(jint value) {
+    if (value < 0) return std::nullopt;
+    return value != 0;
+}
+
 std::vector<std::uint8_t> read_bytes(JNIEnv* env, jbyteArray source, bool nullable) {
     if (source == nullptr) {
         if (nullable) return {};
@@ -501,6 +511,29 @@ Java_com_ravenemu_nativebridge_NativeCoreBridge_setGbaForcedSaveType(
         core_from(handle).set_gba_forced_save_type(
             gba_save_type_from(forced_save_type)
         );
+    });
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_ravenemu_nativebridge_NativeCoreBridge_gbaRtcActive(
+    JNIEnv* env,
+    jclass,
+    jlong handle
+) {
+    return guarded<jboolean>(env, JNI_FALSE, [&] {
+        return static_cast<jboolean>(core_from(handle).gba_rtc_active() ? JNI_TRUE : JNI_FALSE);
+    });
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_ravenemu_nativebridge_NativeCoreBridge_setGbaForcedRtc(
+    JNIEnv* env,
+    jclass,
+    jlong handle,
+    jint forced_rtc
+) {
+    guarded_void(env, [&] {
+        core_from(handle).set_gba_forced_rtc(forced_rtc_from(forced_rtc));
     });
 }
 

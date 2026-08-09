@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <ctime>
 #include <memory>
+#include <optional>
 #include <string_view>
 #include <vector>
 
@@ -121,9 +122,13 @@ private:
 
 /** Cartouche et bus partageant une horloge figée, pour un résultat reproductible. */
 struct Fixture {
-    explicit Fixture(bool with_rtc = true, std::int64_t epoch = frozen_epoch)
+    explicit Fixture(
+        bool with_rtc = true,
+        std::optional<bool> forced_rtc = std::nullopt,
+        std::int64_t epoch = frozen_epoch
+    )
         : image(std::make_shared<const std::vector<std::uint8_t>>(rom(with_rtc))),
-          cartridge(image, GbaSaveType::sram, [epoch] { return epoch; }),
+          cartridge(image, GbaSaveType::sram, forced_rtc, [epoch] { return epoch; }),
           bus(cartridge),
           master(bus) {}
 
@@ -136,6 +141,37 @@ struct Fixture {
 void detection_test() {
     check(Fixture{true}.cartridge.gpio() != nullptr, "marqueur SIIRTC présent : GPIO non instancié");
     check(Fixture{false}.cartridge.gpio() == nullptr, "marqueur SIIRTC absent : GPIO instancié quand même");
+    check(Fixture{true}.cartridge.rtc_detected(), "marqueur présent non signalé");
+    check(!Fixture{false}.cartridge.rtc_detected(), "marqueur absent signalé présent");
+}
+
+/**
+ * La détection cherche la bibliothèque Seiko des cartouches d'origine ; elle ne
+ * peut rien affirmer d'une ROM modifiée. Un jeu peut piloter le composant sans
+ * porter la chaîne — c'est le cas des hacks qui ajoutent eux-mêmes le pilote —
+ * et une ROM peut la porter sans que le matériel soit là. Le choix explicite de
+ * l'appelant prime donc dans les deux sens, et la détection reste consultable.
+ */
+void forced_rtc_test() {
+    Fixture forced_on{false, true};
+    check(forced_on.cartridge.gpio() != nullptr, "RTC forcé actif : GPIO absent");
+    check(!forced_on.cartridge.rtc_detected(), "RTC forcé actif : détection faussement signalée");
+
+    Fixture forced_off{true, false};
+    check(forced_off.cartridge.gpio() == nullptr, "RTC forcé inactif : GPIO présent malgré tout");
+    check(forced_off.cartridge.rtc_detected(), "RTC forcé inactif : détection perdue");
+
+    // Le forçage doit produire une horloge réellement fonctionnelle, pas un
+    // composant présent mais muet : c'est tout l'objet du réglage.
+    const auto expected = local_time(frozen_epoch);
+    forced_on.master.begin();
+    forced_on.master.command(cmd_read_date_time);
+    std::array<int, 7> bytes{};
+    for (auto& value : bytes) value = forced_on.master.read_byte();
+    forced_on.master.end();
+    check(bytes[0] == to_bcd((expected.tm_year + 1900) % 100), "RTC forcé : année incorrecte");
+    check(bytes[2] == to_bcd(expected.tm_mday), "RTC forcé : jour incorrect");
+    check(bytes[4] == to_bcd(expected.tm_hour), "RTC forcé : heure incorrecte");
 }
 
 void status_test() {
@@ -309,6 +345,7 @@ void absent_rtc_reads_rom_test() {
 int main() {
     using namespace ravenemu::gba::testing;
     detection_test();
+    forced_rtc_test();
     status_test();
     date_time_read_test();
     time_only_read_test();

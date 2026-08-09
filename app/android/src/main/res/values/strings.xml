@@ -27,6 +27,13 @@
     <string name="library_save_type">Type de sauvegarde</string>
     <string name="library_save_type_auto">Détection automatique</string>
     <string name="library_save_type_forced">%1$s (imposé)</string>
+    <string name="library_rtc">Horloge de cartouche</string>
+    <string name="library_rtc_auto">Détection automatique</string>
+    <string name="library_rtc_on">Toujours activée</string>
+    <string name="library_rtc_off">Toujours désactivée</string>
+    <string name="library_rtc_present">présente</string>
+    <string name="library_rtc_absent">absente</string>
+    <string name="library_rtc_forced">%1$s (imposée)</string>
 
     <!-- Émulation -->
     <string name="emulation_resume">Reprendre</string>

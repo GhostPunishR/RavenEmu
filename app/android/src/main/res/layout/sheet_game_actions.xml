@@ -63,6 +63,11 @@
         android:text="@string/library_save_type" />
 
     <TextView
+        android:id="@+id/actionRtc"
+        style="@style/RavenSheetAction"
+        android:text="@string/library_rtc" />
+
+    <TextView
         android:id="@+id/actionDetails"
         style="@style/RavenSheetAction"
         android:text="@string/library_rom_details" />

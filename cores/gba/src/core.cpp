@@ -61,6 +61,18 @@ public:
     void set_gba_forced_save_type(std::optional<GbaSaveType> value) noexcept override {
         forced_ = value;
     }
+    /**
+     * Horloge réellement présente sur la cartouche émulée.
+     *
+     * Distinct du réglage : il dit ce que l'appelant demande, celui-ci ce que le
+     * jeu voit. C'est cette valeur-là qu'une interface doit montrer.
+     */
+    [[nodiscard]] bool gba_rtc_active() const noexcept override {
+        return machine_ != nullptr && machine_->cartridge.gpio() != nullptr;
+    }
+    void set_gba_forced_rtc(std::optional<bool> value) noexcept override {
+        forced_rtc_ = value;
+    }
     void set_clock_epoch(std::optional<std::int64_t> value) noexcept override { clock_override_ = value; }
     void set_measuring_time(bool value) noexcept override {
         measuring_time_ = value; if (machine_) configure_measurement(*machine_, value);
@@ -171,11 +183,12 @@ private:
         return std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
     }
     [[nodiscard]] std::unique_ptr<Machine> new_machine(RomImage rom) const {
-        return std::make_unique<Machine>(rom, forced_, [this] { return current_epoch(); });
+        return std::make_unique<Machine>(rom, forced_, forced_rtc_, [this] { return current_epoch(); });
     }
     void require_loaded() const { if (!machine_) throw std::logic_error("Aucune ROM chargée"); }
 
     std::optional<GbaSaveType> forced_;
+    std::optional<bool> forced_rtc_;
     std::unique_ptr<Machine> machine_;
     RomImage loaded_rom_;
     std::array<std::uint8_t, 32> rom_hash_{};
