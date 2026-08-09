@@ -28,13 +28,21 @@ object RavenConsoles {
      *   Game Boy Advance (nom d'énumération `GbaSaveType`), ou `null` pour la
      *   détection automatique. Réglage par jeu de la bibliothèque ; un nom
      *   inconnu est ignoré au profit de la détection.
+     * @param forcedGbaRtc présence imposée de l'horloge de cartouche Game Boy
+     *   Advance, ou `null` pour la détection automatique. Également un réglage
+     *   par jeu : la signature que cherche la détection manque à certaines ROM
+     *   modifiées qui pilotent pourtant l'horloge.
      */
-    fun registry(forcedGbaSaveType: String? = null): ConsoleRegistry = ConsoleRegistry(
+    fun registry(
+        forcedGbaSaveType: String? = null,
+        forcedGbaRtc: Boolean? = null,
+    ): ConsoleRegistry = ConsoleRegistry(
         listOf(
             GameBoyConsoleProvider(),
             GbaConsoleProvider(
                 forcedSaveType = forcedGbaSaveType
                     ?.let { name -> runCatching { GbaSaveType.valueOf(name) }.getOrNull() },
+                forcedRtc = forcedGbaRtc,
             ),
         )
     )

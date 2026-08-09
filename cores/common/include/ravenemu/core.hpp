@@ -175,6 +175,14 @@ public:
     [[nodiscard]] virtual std::vector<DiagnosticMessage> drain_diagnostics() { return {}; }
     [[nodiscard]] virtual GbaSaveType gba_save_type() const noexcept { return GbaSaveType::none; }
     virtual void set_gba_forced_save_type(std::optional<GbaSaveType>) noexcept {}
+    /** Horloge de cartouche réellement présente sur le jeu chargé. */
+    [[nodiscard]] virtual bool gba_rtc_active() const noexcept { return false; }
+    /**
+     * Impose la présence ou l'absence de l'horloge de cartouche, ou rend la
+     * main à la détection avec `std::nullopt`. Pris en compte au prochain
+     * chargement de ROM ou à la prochaine réinitialisation.
+     */
+    virtual void set_gba_forced_rtc(std::optional<bool>) noexcept {}
 };
 
 [[nodiscard]] std::unique_ptr<Core> make_game_boy_core();

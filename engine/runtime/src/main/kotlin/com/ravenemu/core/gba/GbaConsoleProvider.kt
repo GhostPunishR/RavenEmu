@@ -15,13 +15,19 @@ class GbaConsoleProvider(
      * fournisseur ne fait que le transmettre.
      */
     private val forcedSaveType: GbaSaveType? = null,
+    /**
+     * Présence imposée de l'horloge de cartouche, ou `null` pour la détection.
+     * Même logique que ci-dessus : réglage par jeu, simplement transmis.
+     */
+    private val forcedRtc: Boolean? = null,
 ) : ConsoleProvider {
 
     override val console: ConsoleType = ConsoleType.GAME_BOY_ADVANCE
 
     override val maxRomSizeBytes: Int = MAX_ROM_SIZE
 
-    override fun createCore(): EmulatorCore = GbaCore(forcedSaveType = forcedSaveType)
+    override fun createCore(): EmulatorCore =
+        GbaCore(forcedSaveType = forcedSaveType, forcedRtc = forcedRtc)
 
     companion object {
         /** Taille matérielle maximale de l'espace ROM GBA : 32 Mio. */

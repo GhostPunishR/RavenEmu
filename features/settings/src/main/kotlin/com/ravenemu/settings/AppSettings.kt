@@ -249,4 +249,24 @@ class AppSettings(context: Context) {
             else putString("game_save_type_$romSha256", type)
         }
     }
+
+    /**
+     * Présence imposée de l'horloge de cartouche pour un jeu Game Boy Advance,
+     * ou `null` pour laisser la détection automatique décider.
+     *
+     * La détection cherche la bibliothèque Seiko des cartouches d'origine :
+     * elle ne peut rien affirmer d'une ROM modifiée, dont certaines pilotent
+     * l'horloge sans porter cette signature. Sans ce réglage, un tel jeu
+     * annonce que l'heure est illisible et le joueur n'a aucun recours.
+     */
+    fun forcedRtc(romSha256: String): Boolean? =
+        if (prefs.contains(rtcKey(romSha256))) prefs.getBoolean(rtcKey(romSha256), false) else null
+
+    fun setForcedRtc(romSha256: String, forced: Boolean?) {
+        prefs.edit {
+            if (forced == null) remove(rtcKey(romSha256)) else putBoolean(rtcKey(romSha256), forced)
+        }
+    }
+
+    private fun rtcKey(romSha256: String) = "game_rtc_$romSha256"
 }
