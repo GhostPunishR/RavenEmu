@@ -216,6 +216,9 @@ class RomAdapter(
             // qu'un autre jeu ne s'affiche le temps du chargement, et remettre
             // la couleur neutre évite qu'un titre garde la teinte du précédent.
             cover.setImageDrawable(null)
+            // Le temps du chargement, la case reprend sa teinte d'attente : une
+            // grille de trous noirs se lirait comme un défaut d'affichage.
+            cover.setBackgroundResource(R.color.raven_surface)
             title.setTextColor(if (gridMode) CoverAccent.DEFAUT else neutre())
             job = covers.load(entry, cle, taille, taille) { cover ->
                 // La vignette a pu être réaffectée entre-temps.
@@ -231,6 +234,12 @@ class RomAdapter(
          */
         private fun appliquer(cover: CoverLoader.Cover) {
             this.cover.setImageBitmap(cover.bitmap)
+            // La case est au ratio 6:7, les jaquettes ne le sont pas : montrer
+            // l'image entière laisse forcément du vide sur deux côtés. Ce vide
+            // ne doit pas se voir. La teinte d'attente est donc retirée dès que
+            // l'image est posée, et le fond de la page passe au travers : la
+            // jaquette paraît alors seule, sans cadre ni débordement.
+            this.cover.background = null
             title.setTextColor(if (gridMode) cover.accent else neutre())
         }
 

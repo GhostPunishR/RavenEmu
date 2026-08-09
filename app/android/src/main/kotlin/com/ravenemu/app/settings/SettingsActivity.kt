@@ -66,6 +66,15 @@ class SettingsActivity : AppCompatActivity() {
                     MonochromeDisplayProfiles.all.map { it.displayName }.toTypedArray()
                 preference.entryValues =
                     MonochromeDisplayProfiles.all.map { it.id }.toTypedArray()
+                // Un profil retiré du catalogue peut rester enregistré chez un
+                // joueur qui l'avait choisi. La liste n'a alors aucune entrée
+                // correspondante : le résumé s'affiche vide et la boîte de
+                // dialogue ne coche rien. Le moteur, lui, applique déjà le
+                // profil par défaut — la préférence est ramenée dessus pour que
+                // l'écran montre ce qui est réellement appliqué.
+                if (MonochromeDisplayProfiles.all.none { it.id == preference.value }) {
+                    preference.value = MonochromeDisplayProfiles.default.id
+                }
             }
 
             findPreference<Preference>("controls_reset_layouts")
