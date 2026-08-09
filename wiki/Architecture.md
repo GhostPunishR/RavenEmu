@@ -22,7 +22,7 @@ les services Android et les features. Les chemins Gradle correspondent aux dossi
 
 ### Moteurs indépendants
 
-Le moteur GBA ne dépend pas du moteur Game Boy. Chaque implémentation C++ expose le même contrat natif, puis son adaptateur Kotlin implémente `emulation-api`.
+Le moteur GBA ne dépend pas du moteur Game Boy. Chaque implémentation C++ expose le même contrat natif, puis son adaptateur Kotlin implémente le contrat porté par `engine/api`.
 
 ### C++ testable sur l'hôte
 

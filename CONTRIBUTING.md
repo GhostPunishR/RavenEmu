@@ -36,8 +36,8 @@ Prérequis recommandés :
 
 - JDK 21 ;
 - Gradle Wrapper fourni avec le dépôt ;
-- SDK Android avec `compileSdk 35` pour les modules Android ;
-- Android NDK `27.2.12479018`, CMake `3.22.1` et un compilateur C++20.
+- SDK Android avec `compileSdk 37` pour les modules Android ;
+- Android NDK `29.0.14206865`, CMake `3.22.1` et un compilateur C++20.
 
 Les modules JVM peuvent être construits et testés sans SDK Android. Les moteurs se valident également sur l'hôte avec CMake.
 
@@ -48,10 +48,10 @@ Commandes utiles :
 ./gradlew jvmTest
 
 # Tous les tests
-# CMake est requis : `gameboy-core` et `gba-core` construisent la bibliothèque
-# native et comparent leur implémentation Kotlin de référence au cœur C++
-# réellement livré. Sans elle, la comparaison ne porterait sur rien, aussi la
-# tâche échoue plutôt que de s'ignorer.
+# CMake est requis : `engine:runtime` construit la bibliothèque native et
+# compare ses implémentations Kotlin de référence, Game Boy comme Game Boy
+# Advance, au cœur C++ réellement livré. Sans elle, la comparaison ne porterait
+# sur rien, aussi la tâche échoue plutôt que de s'ignorer.
 ./gradlew test
 
 # Tests des moteurs C++
