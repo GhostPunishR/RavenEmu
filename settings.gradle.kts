@@ -10,6 +10,31 @@ pluginManagement {
         }
         gradlePluginPortal()
     }
+
+    // Version des greffons Android, déclarée sans les résoudre.
+    //
+    // Les déclarer à la racine du build en `apply false` les mettait sur le
+    // chemin de compilation dès la configuration, donc **téléchargés depuis le
+    // dépôt Google même quand aucun module Android n'est inclus**. La promesse
+    // faite plus bas — rester constructible sur une machine JVM/C++ sans SDK
+    // Android — supposait alors quand même d'atteindre `dl.google.com`.
+    //
+    // Ici, le couple identifiant/version est seulement enregistré : la
+    // résolution n'a lieu que si un module applique réellement le greffon, ce
+    // que seuls les modules Android font, et seulement lorsqu'ils sont inclus.
+    //
+    // Le catalogue de versions n'est pas encore lisible à ce stade du build :
+    // il est déclaré plus bas, dans `dependencyResolutionManagement`. La
+    // version est donc relue directement dans le catalogue plutôt que recopiée,
+    // pour qu'il reste la source unique.
+    val agpVersion = File(rootDir, "gradle/libs.versions.toml").readLines()
+        .first { it.substringBefore('=').trim() == "agp" }
+        .substringAfter('"').substringBefore('"')
+
+    plugins {
+        id("com.android.application") version agpVersion
+        id("com.android.library") version agpVersion
+    }
 }
 
 dependencyResolutionManagement {
