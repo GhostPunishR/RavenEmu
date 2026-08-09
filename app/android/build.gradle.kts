@@ -24,8 +24,16 @@ android {
     defaultConfig {
         applicationId = "com.ravenemu.app"
         minSdk = 26
-        // Le targetSdk reste volontairement inchangé dans cette PR structurelle :
-        // son évolution modifie le comportement Android et sera validée à part.
+        // Volontairement en retard sur `compileSdk` : compiler contre l'API 37
+        // donne accès aux nouvelles API, alors que relever `targetSdk` active
+        // les changements de comportement de la plateforme — contraintes de
+        // fenêtre, services de premier plan, alignement mémoire des
+        // bibliothèques natives. Un émulateur les ressent tous.
+        //
+        // Ce décalage n'est donc pas un oubli, mais il ne peut pas durer
+        // indéfiniment : Google impose un `targetSdk` minimal pour publier sur
+        // le Play Store. Le relever demande une validation sur appareil, hors
+        // de portée de la CI actuelle qui construit sans exécuter.
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
