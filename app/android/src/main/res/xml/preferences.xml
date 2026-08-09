@@ -22,6 +22,7 @@
         <SwitchPreferenceCompat
             android:defaultValue="false"
             android:key="video_integer_scaling"
+            android:summary="@string/settings_integer_scaling_summary"
             android:title="@string/settings_integer_scaling" />
         <ListPreference
             android:defaultValue="dmg"
