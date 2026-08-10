@@ -16,14 +16,12 @@ import android.widget.TextView
 import android.widget.Toast
 import android.text.format.DateUtils
 import androidx.appcompat.app.AlertDialog
-import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
-import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
 import com.ravenemu.app.BuildConfig
 import com.ravenemu.app.R
+import com.ravenemu.app.RavenActivity
 import com.ravenemu.deltaskin.DeltaSkinConsole
 import com.ravenemu.deltaskin.DeltaSkinErrorCode
 import com.ravenemu.deltaskin.DeltaSkinInsets
@@ -62,7 +60,10 @@ import kotlinx.coroutines.withContext
  * l'émulateur, éditeur de disposition, manettes physiques, cycle de vie
  * Android (pause en arrière-plan, sauvegardes de secours).
  */
-class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
+class EmulationActivity : RavenActivity(), EmulationSession.Callbacks {
+
+    // Cet écran transmet déjà les insets à la surface et aux Delta Skins.
+    override val applyDisplayCutoutInsetsToContent: Boolean = false
 
     private lateinit var settings: AppSettings
     private lateinit var saveStore: SaveFileStore
@@ -136,7 +137,6 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
             )
             insets
         }
-        applyImmersiveMode()
         applyVideoSettings()
         applyControlLayout()
         bindControls()
@@ -145,14 +145,6 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
         applyControlPresentation()
 
         loadRomAndStart()
-    }
-
-    private fun applyImmersiveMode() {
-        WindowCompat.setDecorFitsSystemWindows(window, false)
-        val controller = WindowInsetsControllerCompat(window, window.decorView)
-        controller.hide(WindowInsetsCompat.Type.systemBars())
-        controller.systemBarsBehavior =
-            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
     }
 
     private fun applyVideoSettings() {
@@ -754,7 +746,6 @@ class EmulationActivity : AppCompatActivity(), EmulationSession.Callbacks {
 
     override fun onResume() {
         super.onResume()
-        applyImmersiveMode()
         applyVideoSettings()
         applyControlPresentation()
         // Le relevé de diagnostic se règle depuis les paramètres, donc en

@@ -12,7 +12,6 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
-import androidx.appcompat.app.AppCompatActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.widget.doAfterTextChanged
 import androidx.lifecycle.lifecycleScope
@@ -46,7 +45,7 @@ import kotlinx.coroutines.launch
  * revient aux jaquettes : la recherche a son champ, les deux gestes courants
  * leurs coins de barre, et tout ce qui s'utilise rarement le menu débordant.
  */
-class MainActivity : AppCompatActivity() {
+class MainActivity : RavenActivity() {
 
     private lateinit var settings: AppSettings
     private lateinit var repository: LibraryRepository

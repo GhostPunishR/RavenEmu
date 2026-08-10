@@ -4,17 +4,17 @@ import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AppCompatActivity
 import androidx.preference.ListPreference
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
 import com.ravenemu.app.R
+import com.ravenemu.app.RavenActivity
 import com.ravenemu.settings.AppSettings
 import com.ravenemu.emulation.api.display.MonochromeDisplayProfiles
 import com.ravenemu.storage.RomIndexStore
 
 /** Onglet Paramètres : émulation, vidéo, audio, contrôles, fichiers, bibliothèque, débogage. */
-class SettingsActivity : AppCompatActivity() {
+class SettingsActivity : RavenActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
