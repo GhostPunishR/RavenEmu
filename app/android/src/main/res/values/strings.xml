@@ -6,6 +6,7 @@
     <!-- Bibliothèque -->
     <string name="library_empty">Aucun jeu détecté.\nAjoutez un dossier de ROM avec le bouton + de la barre.</string>
     <string name="library_add_folder">Ajouter un dossier</string>
+    <string name="library_more_options">Plus d’options</string>
     <string name="library_refresh">Actualiser</string>
     <string name="library_search_hint">Rechercher un jeu</string>
     <string name="library_view_list">Vue liste</string>

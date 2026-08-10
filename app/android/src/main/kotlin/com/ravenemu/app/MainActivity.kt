@@ -4,7 +4,6 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.view.Menu
 import android.view.MenuItem
 import android.view.View
 import android.view.WindowManager
@@ -13,8 +12,9 @@ import android.widget.FrameLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
-import androidx.appcompat.app.AlertDialog
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.widget.PopupMenu
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.widget.doAfterTextChanged
@@ -63,6 +63,7 @@ class MainActivity : RavenActivity() {
     private lateinit var indicator: PageIndicator
     private lateinit var searchField: EditText
     private lateinit var progress: ProgressBar
+    private lateinit var toolbarTitle: TextView
 
     private var index: RomIndex = RomIndex()
     private var searchQuery: String = ""
@@ -115,15 +116,19 @@ class MainActivity : RavenActivity() {
         )
 
         val toolbar = findViewById<MaterialToolbar>(R.id.toolbar)
-        applyLibraryInsets(toolbar)
-        setSupportActionBar(toolbar)
-        // Les réglages quittent le menu débordant pour le coin gauche : c'est
-        // l'autre destination fréquente de cet écran, à égalité avec l'ajout
-        // d'un dossier qui occupe le coin droit.
-        toolbar.setNavigationIcon(android.R.drawable.ic_menu_preferences)
-        toolbar.setNavigationContentDescription(R.string.settings_title)
-        toolbar.setNavigationOnClickListener {
+        val settingsButton = findViewById<View>(R.id.settingsButton)
+        val toolbarActions = findViewById<View>(R.id.toolbarActions)
+        toolbarTitle = findViewById(R.id.toolbarTitle)
+        applyLibraryInsets(toolbar, settingsButton, toolbarActions)
+
+        settingsButton.setOnClickListener {
             startActivity(Intent(this, SettingsActivity::class.java))
+        }
+        findViewById<View>(R.id.addFolderButton).setOnClickListener {
+            openRomFolder.launch(null)
+        }
+        findViewById<View>(R.id.moreOptionsButton).setOnClickListener {
+            showLibraryMenu(it)
         }
 
         progress = findViewById(R.id.progress)
@@ -176,7 +181,11 @@ class MainActivity : RavenActivity() {
      * cutout est ajoutée au-dessus. Les barres système, masquées, ne participent
      * jamais à ce calcul.
      */
-    private fun applyLibraryInsets(toolbar: MaterialToolbar) {
+    private fun applyLibraryInsets(
+        toolbar: MaterialToolbar,
+        settingsButton: View,
+        toolbarActions: View,
+    ) {
         val root = findViewById<View>(R.id.libraryRoot)
         val content = findViewById<View>(R.id.libraryContent)
         val toolbarHeight = toolbar.layoutParams.height
@@ -188,14 +197,18 @@ class MainActivity : RavenActivity() {
         val contentPaddingTop = content.paddingTop
         val contentPaddingRight = content.paddingRight
         val contentPaddingBottom = content.paddingBottom
+        val settingsMarginStart =
+            (settingsButton.layoutParams as FrameLayout.LayoutParams).marginStart
+        val actionsMarginEnd =
+            (toolbarActions.layoutParams as FrameLayout.LayoutParams).marginEnd
 
         ViewCompat.setOnApplyWindowInsetsListener(root) { _, insets ->
             val cutout = insets.getInsets(WindowInsetsCompat.Type.displayCutout())
 
             toolbar.setPadding(
-                toolbarPaddingLeft + cutout.left,
+                toolbarPaddingLeft,
                 toolbarPaddingTop + cutout.top,
-                toolbarPaddingRight + cutout.right,
+                toolbarPaddingRight,
                 toolbarPaddingBottom,
             )
             val expectedToolbarHeight = toolbarHeight + cutout.top
@@ -203,6 +216,18 @@ class MainActivity : RavenActivity() {
                 toolbar.layoutParams = toolbar.layoutParams.apply {
                     height = expectedToolbarHeight
                 }
+            }
+            val expectedSettingsMargin = settingsMarginStart + cutout.left
+            val settingsParams = settingsButton.layoutParams as FrameLayout.LayoutParams
+            if (settingsParams.marginStart != expectedSettingsMargin) {
+                settingsParams.marginStart = expectedSettingsMargin
+                settingsButton.layoutParams = settingsParams
+            }
+            val expectedActionsMargin = actionsMarginEnd + cutout.right
+            val actionsParams = toolbarActions.layoutParams as FrameLayout.LayoutParams
+            if (actionsParams.marginEnd != expectedActionsMargin) {
+                actionsParams.marginEnd = expectedActionsMargin
+                toolbarActions.layoutParams = actionsParams
             }
             content.setPadding(
                 contentPaddingLeft + cutout.left,
@@ -307,7 +332,7 @@ class MainActivity : RavenActivity() {
     /** Le titre de l'écran est le nom de la console feuilletée. */
     private fun updateTitle() {
         val filtre = pagerAdapter.pageAt(pager.currentItem) ?: LibraryFilter.ALL
-        supportActionBar?.title = pageLabel(filtre)
+        toolbarTitle.text = pageLabel(filtre)
     }
 
     private fun pageLabel(filter: String): String = when (filter) {
@@ -547,12 +572,17 @@ class MainActivity : RavenActivity() {
 
     // ---- Menu ----
 
-    override fun onCreateOptionsMenu(menu: Menu): Boolean {
-        menuInflater.inflate(R.menu.menu_main, menu)
-        return true
+    private fun showLibraryMenu(anchor: View) {
+        PopupMenu(this, anchor).apply {
+            menuInflater.inflate(R.menu.menu_main, menu)
+            // L'ajout possède déjà son action « + » dédiée dans le header.
+            menu.findItem(R.id.action_add_folder).isVisible = false
+            setOnMenuItemClickListener { onLibraryMenuItemSelected(it) }
+            show()
+        }
     }
 
-    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+    private fun onLibraryMenuItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
             R.id.action_refresh -> refreshLibrary()
             R.id.action_add_folder -> openRomFolder.launch(null)
@@ -573,7 +603,7 @@ class MainActivity : RavenActivity() {
                 settings.librarySortOrder = "status"
                 render()
             }
-            else -> return super.onOptionsItemSelected(item)
+            else -> return false
         }
         return true
     }
