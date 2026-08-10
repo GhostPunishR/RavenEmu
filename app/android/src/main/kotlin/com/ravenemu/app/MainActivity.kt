@@ -2,10 +2,12 @@ package com.ravenemu.app
 
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import android.view.WindowManager
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ProgressBar
@@ -13,6 +15,8 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.core.widget.doAfterTextChanged
 import androidx.lifecycle.lifecycleScope
 import androidx.viewpager2.widget.ViewPager2
@@ -46,6 +50,9 @@ import kotlinx.coroutines.launch
  * leurs coins de barre, et tout ce qui s'utilise rarement le menu débordant.
  */
 class MainActivity : RavenActivity() {
+
+    // Le header distribue lui-même le cutout pour occuper le bord supérieur.
+    override val applyDisplayCutoutInsetsToContent: Boolean = false
 
     private lateinit var settings: AppSettings
     private lateinit var repository: LibraryRepository
@@ -94,6 +101,7 @@ class MainActivity : RavenActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableLibraryCutoutLayout()
         setContentView(R.layout.activity_main)
 
         settings = AppSettings(this)
@@ -107,6 +115,7 @@ class MainActivity : RavenActivity() {
         )
 
         val toolbar = findViewById<MaterialToolbar>(R.id.toolbar)
+        applyLibraryInsets(toolbar)
         setSupportActionBar(toolbar)
         // Les réglages quittent le menu débordant pour le coin gauche : c'est
         // l'autre destination fréquente de cet écran, à égalité avec l'ajout
@@ -150,6 +159,60 @@ class MainActivity : RavenActivity() {
         if (index.entries.isEmpty() && settings.romDirectories.isNotEmpty()) {
             refreshLibrary()
         }
+    }
+
+    /** Étend le fond du header dans les cutouts des bords courts. */
+    private fun enableLibraryCutoutLayout() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            window.attributes = window.attributes.apply {
+                layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            }
+        }
+    }
+
+    /**
+     * La rangée de la toolbar reste compacte ; seule la zone physique du
+     * cutout est ajoutée au-dessus. Les barres système, masquées, ne participent
+     * jamais à ce calcul.
+     */
+    private fun applyLibraryInsets(toolbar: MaterialToolbar) {
+        val root = findViewById<View>(R.id.libraryRoot)
+        val content = findViewById<View>(R.id.libraryContent)
+        val toolbarHeight = toolbar.layoutParams.height
+        val toolbarPaddingLeft = toolbar.paddingLeft
+        val toolbarPaddingTop = toolbar.paddingTop
+        val toolbarPaddingRight = toolbar.paddingRight
+        val toolbarPaddingBottom = toolbar.paddingBottom
+        val contentPaddingLeft = content.paddingLeft
+        val contentPaddingTop = content.paddingTop
+        val contentPaddingRight = content.paddingRight
+        val contentPaddingBottom = content.paddingBottom
+
+        ViewCompat.setOnApplyWindowInsetsListener(root) { _, insets ->
+            val cutout = insets.getInsets(WindowInsetsCompat.Type.displayCutout())
+
+            toolbar.setPadding(
+                toolbarPaddingLeft + cutout.left,
+                toolbarPaddingTop + cutout.top,
+                toolbarPaddingRight + cutout.right,
+                toolbarPaddingBottom,
+            )
+            val expectedToolbarHeight = toolbarHeight + cutout.top
+            if (toolbar.layoutParams.height != expectedToolbarHeight) {
+                toolbar.layoutParams = toolbar.layoutParams.apply {
+                    height = expectedToolbarHeight
+                }
+            }
+            content.setPadding(
+                contentPaddingLeft + cutout.left,
+                contentPaddingTop,
+                contentPaddingRight + cutout.right,
+                contentPaddingBottom + cutout.bottom,
+            )
+            insets
+        }
+        ViewCompat.requestApplyInsets(root)
     }
 
     override fun onResume() {
