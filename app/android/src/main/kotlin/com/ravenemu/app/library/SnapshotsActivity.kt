@@ -6,11 +6,11 @@ import android.os.Bundle
 import android.view.View
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
-import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.appbar.MaterialToolbar
 import com.ravenemu.app.R
+import com.ravenemu.app.RavenActivity
 import com.ravenemu.app.emulation.EmulationActivity
 import com.ravenemu.romlibrary.RomEntry
 import com.ravenemu.storage.SnapshotInfo
@@ -28,7 +28,7 @@ import com.ravenemu.storage.SnapshotStore
  * une entrée d'index n'est pas sérialisable dans un `Intent`, et la recopier
  * n'apporterait rien.
  */
-class SnapshotsActivity : AppCompatActivity() {
+class SnapshotsActivity : RavenActivity() {
 
     private lateinit var store: SnapshotStore
     private lateinit var adapter: SnapshotAdapter

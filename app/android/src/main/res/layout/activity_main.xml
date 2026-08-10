@@ -9,6 +9,7 @@
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/libraryRoot"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/raven_background"
@@ -17,65 +18,166 @@
     <com.google.android.material.appbar.MaterialToolbar
         android:id="@+id/toolbar"
         android:layout_width="match_parent"
-        android:layout_height="?attr/actionBarSize"
+        android:layout_height="48dp"
         android:background="@color/raven_background"
-        app:titleCentered="true"
-        app:titleTextColor="@color/raven_text_primary" />
+        android:gravity="center_vertical"
+        android:minHeight="48dp"
+        android:paddingStart="0dp"
+        android:paddingTop="0dp"
+        android:paddingEnd="0dp"
+        android:paddingBottom="0dp"
+        app:contentInsetEnd="0dp"
+        app:contentInsetEndWithActions="0dp"
+        app:contentInsetStart="0dp"
+        app:contentInsetStartWithNavigation="0dp"
+        app:titleMarginBottom="0dp"
+        app:titleMarginEnd="0dp"
+        app:titleMarginStart="0dp"
+        app:titleMarginTop="0dp">
 
-    <EditText
-        android:id="@+id/searchField"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="12dp"
-        android:layout_marginEnd="12dp"
-        android:layout_marginBottom="8dp"
-        android:background="@drawable/bg_search_field"
-        android:drawableStart="@android:drawable/ic_menu_search"
-        android:drawablePadding="8dp"
-        android:drawableTint="@color/raven_text_muted"
-        android:hint="@string/library_search_hint"
-        android:imeOptions="actionSearch"
-        android:inputType="text"
-        android:maxLines="1"
-        android:minHeight="42dp"
-        android:paddingStart="12dp"
-        android:paddingEnd="12dp"
-        android:textColor="@color/raven_text_primary"
-        android:textColorHint="@color/raven_text_muted"
-        android:textSize="15sp" />
+        <!--
+          La toolbar n'utilise pas ses contrôles internes : ce calque pleine
+          largeur garde le titre au centre physique de l'écran, tandis que les
+          zones tactiles latérales restent indépendantes et font 48 dp.
+        -->
+        <FrameLayout
+            android:id="@+id/headerControls"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_gravity="center_vertical">
 
-    <androidx.viewpager2.widget.ViewPager2
-        android:id="@+id/consolePager"
+            <androidx.appcompat.widget.AppCompatImageButton
+                android:id="@+id/settingsButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_gravity="start|center_vertical"
+                android:layout_marginStart="4dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/settings_title"
+                android:paddingStart="12dp"
+                android:paddingTop="10dp"
+                android:paddingEnd="12dp"
+                android:paddingBottom="14dp"
+                android:scaleType="fitCenter"
+                app:srcCompat="@drawable/ic_settings_24"
+                app:tint="@color/raven_text_primary" />
+
+            <TextView
+                android:id="@+id/toolbarTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:layout_gravity="center"
+                android:ellipsize="end"
+                android:gravity="center"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:text="@string/library_page_all"
+                android:textAppearance="?attr/textAppearanceHeadline6"
+                android:textColor="@color/raven_text_primary"
+                android:translationY="-1dp" />
+
+            <LinearLayout
+                android:id="@+id/toolbarActions"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:layout_gravity="end|center_vertical"
+                android:layout_marginEnd="4dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <androidx.appcompat.widget.AppCompatImageButton
+                    android:id="@+id/addFolderButton"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/library_add_folder"
+                    android:paddingStart="12dp"
+                    android:paddingTop="10dp"
+                    android:paddingEnd="12dp"
+                    android:paddingBottom="14dp"
+                    android:scaleType="fitCenter"
+                    app:srcCompat="@drawable/ic_add_24"
+                    app:tint="@color/raven_accent" />
+
+                <androidx.appcompat.widget.AppCompatImageButton
+                    android:id="@+id/moreOptionsButton"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/library_more_options"
+                    android:paddingStart="12dp"
+                    android:paddingTop="10dp"
+                    android:paddingEnd="12dp"
+                    android:paddingBottom="14dp"
+                    android:scaleType="fitCenter"
+                    app:srcCompat="@drawable/ic_more_vert_24"
+                    app:tint="@color/raven_text_primary" />
+            </LinearLayout>
+        </FrameLayout>
+    </com.google.android.material.appbar.MaterialToolbar>
+
+    <LinearLayout
+        android:id="@+id/libraryContent"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1" />
+        android:layout_weight="1"
+        android:orientation="vertical">
 
-    <com.ravenemu.app.library.PageIndicator
-        android:id="@+id/pageIndicator"
-        android:layout_width="match_parent"
-        android:layout_height="20dp"
-        android:layout_marginTop="4dp"
-        android:layout_marginBottom="4dp" />
+        <EditText
+            android:id="@+id/searchField"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:layout_marginEnd="12dp"
+            android:layout_marginBottom="8dp"
+            android:background="@drawable/bg_search_field"
+            android:drawableStart="@android:drawable/ic_menu_search"
+            android:drawablePadding="8dp"
+            android:drawableTint="@color/raven_text_muted"
+            android:hint="@string/library_search_hint"
+            android:imeOptions="actionSearch"
+            android:inputType="text"
+            android:maxLines="1"
+            android:minHeight="42dp"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:textColor="@color/raven_text_primary"
+            android:textColorHint="@color/raven_text_muted"
+            android:textSize="15sp" />
 
-    <ProgressBar
-        android:id="@+id/progress"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="center_horizontal"
-        android:indeterminateTint="@color/raven_accent"
-        android:visibility="gone" />
+        <androidx.viewpager2.widget.ViewPager2
+            android:id="@+id/consolePager"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
 
-    <TextView
-        android:id="@+id/footerSignature"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:fontFamily="sans-serif-medium"
-        android:gravity="center"
-        android:letterSpacing="0.08"
-        android:minHeight="28dp"
-        android:paddingStart="16dp"
-        android:paddingEnd="16dp"
-        android:text="@string/footer_signature"
-        android:textColor="@color/raven_text_muted"
-        android:textSize="10sp" />
+        <com.ravenemu.app.library.PageIndicator
+            android:id="@+id/pageIndicator"
+            android:layout_width="match_parent"
+            android:layout_height="20dp"
+            android:layout_marginTop="4dp"
+            android:layout_marginBottom="4dp" />
+
+        <ProgressBar
+            android:id="@+id/progress"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:indeterminateTint="@color/raven_accent"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/footerSignature"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:fontFamily="sans-serif-medium"
+            android:gravity="center"
+            android:letterSpacing="0.08"
+            android:minHeight="28dp"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:text="@string/footer_signature"
+            android:textColor="@color/raven_text_muted"
+            android:textSize="10sp" />
+    </LinearLayout>
 </LinearLayout>

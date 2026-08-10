@@ -11,12 +11,12 @@ import android.widget.Spinner
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
-import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.ravenemu.app.BuildConfig
 import com.ravenemu.app.R
+import com.ravenemu.app.RavenActivity
 import com.ravenemu.deltaskin.DeltaSkinConsole
 import com.ravenemu.deltaskin.DeltaSkinErrorCode
 import com.ravenemu.deltaskin.DeltaSkinException
@@ -33,7 +33,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class ControllerSkinsActivity : AppCompatActivity(), ControllerSkinsAdapter.Listener {
+class ControllerSkinsActivity : RavenActivity(), ControllerSkinsAdapter.Listener {
     private lateinit var settings: AppSettings
     private lateinit var store: AndroidDeltaSkinArchiveImporter
     private lateinit var adapter: ControllerSkinsAdapter

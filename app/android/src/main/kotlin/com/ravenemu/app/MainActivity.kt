@@ -2,18 +2,21 @@ package com.ravenemu.app
 
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
-import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import android.view.WindowManager
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
-import androidx.appcompat.app.AlertDialog
-import androidx.appcompat.app.AppCompatActivity
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.widget.PopupMenu
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.core.widget.doAfterTextChanged
 import androidx.lifecycle.lifecycleScope
 import androidx.viewpager2.widget.ViewPager2
@@ -46,7 +49,10 @@ import kotlinx.coroutines.launch
  * revient aux jaquettes : la recherche a son champ, les deux gestes courants
  * leurs coins de barre, et tout ce qui s'utilise rarement le menu débordant.
  */
-class MainActivity : AppCompatActivity() {
+class MainActivity : RavenActivity() {
+
+    // Le header distribue lui-même le cutout pour occuper le bord supérieur.
+    override val applyDisplayCutoutInsetsToContent: Boolean = false
 
     private lateinit var settings: AppSettings
     private lateinit var repository: LibraryRepository
@@ -57,6 +63,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var indicator: PageIndicator
     private lateinit var searchField: EditText
     private lateinit var progress: ProgressBar
+    private lateinit var toolbarTitle: TextView
 
     private var index: RomIndex = RomIndex()
     private var searchQuery: String = ""
@@ -95,6 +102,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableLibraryCutoutLayout()
         setContentView(R.layout.activity_main)
 
         settings = AppSettings(this)
@@ -108,14 +116,19 @@ class MainActivity : AppCompatActivity() {
         )
 
         val toolbar = findViewById<MaterialToolbar>(R.id.toolbar)
-        setSupportActionBar(toolbar)
-        // Les réglages quittent le menu débordant pour le coin gauche : c'est
-        // l'autre destination fréquente de cet écran, à égalité avec l'ajout
-        // d'un dossier qui occupe le coin droit.
-        toolbar.setNavigationIcon(android.R.drawable.ic_menu_preferences)
-        toolbar.setNavigationContentDescription(R.string.settings_title)
-        toolbar.setNavigationOnClickListener {
+        val settingsButton = findViewById<View>(R.id.settingsButton)
+        val toolbarActions = findViewById<View>(R.id.toolbarActions)
+        toolbarTitle = findViewById(R.id.toolbarTitle)
+        applyLibraryInsets(toolbar, settingsButton, toolbarActions)
+
+        settingsButton.setOnClickListener {
             startActivity(Intent(this, SettingsActivity::class.java))
+        }
+        findViewById<View>(R.id.addFolderButton).setOnClickListener {
+            openRomFolder.launch(null)
+        }
+        findViewById<View>(R.id.moreOptionsButton).setOnClickListener {
+            showLibraryMenu(it)
         }
 
         progress = findViewById(R.id.progress)
@@ -151,6 +164,80 @@ class MainActivity : AppCompatActivity() {
         if (index.entries.isEmpty() && settings.romDirectories.isNotEmpty()) {
             refreshLibrary()
         }
+    }
+
+    /** Étend le fond du header dans les cutouts des bords courts. */
+    private fun enableLibraryCutoutLayout() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            window.attributes = window.attributes.apply {
+                layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            }
+        }
+    }
+
+    /**
+     * La rangée de la toolbar reste compacte ; seule la zone physique du
+     * cutout est ajoutée au-dessus. Les barres système, masquées, ne participent
+     * jamais à ce calcul.
+     */
+    private fun applyLibraryInsets(
+        toolbar: MaterialToolbar,
+        settingsButton: View,
+        toolbarActions: View,
+    ) {
+        val root = findViewById<View>(R.id.libraryRoot)
+        val content = findViewById<View>(R.id.libraryContent)
+        val toolbarHeight = toolbar.layoutParams.height
+        val toolbarPaddingLeft = toolbar.paddingLeft
+        val toolbarPaddingTop = toolbar.paddingTop
+        val toolbarPaddingRight = toolbar.paddingRight
+        val toolbarPaddingBottom = toolbar.paddingBottom
+        val contentPaddingLeft = content.paddingLeft
+        val contentPaddingTop = content.paddingTop
+        val contentPaddingRight = content.paddingRight
+        val contentPaddingBottom = content.paddingBottom
+        val settingsMarginStart =
+            (settingsButton.layoutParams as FrameLayout.LayoutParams).marginStart
+        val actionsMarginEnd =
+            (toolbarActions.layoutParams as FrameLayout.LayoutParams).marginEnd
+
+        ViewCompat.setOnApplyWindowInsetsListener(root) { _, insets ->
+            val cutout = insets.getInsets(WindowInsetsCompat.Type.displayCutout())
+
+            toolbar.setPadding(
+                toolbarPaddingLeft,
+                toolbarPaddingTop + cutout.top,
+                toolbarPaddingRight,
+                toolbarPaddingBottom,
+            )
+            val expectedToolbarHeight = toolbarHeight + cutout.top
+            if (toolbar.layoutParams.height != expectedToolbarHeight) {
+                toolbar.layoutParams = toolbar.layoutParams.apply {
+                    height = expectedToolbarHeight
+                }
+            }
+            val expectedSettingsMargin = settingsMarginStart + cutout.left
+            val settingsParams = settingsButton.layoutParams as FrameLayout.LayoutParams
+            if (settingsParams.marginStart != expectedSettingsMargin) {
+                settingsParams.marginStart = expectedSettingsMargin
+                settingsButton.layoutParams = settingsParams
+            }
+            val expectedActionsMargin = actionsMarginEnd + cutout.right
+            val actionsParams = toolbarActions.layoutParams as FrameLayout.LayoutParams
+            if (actionsParams.marginEnd != expectedActionsMargin) {
+                actionsParams.marginEnd = expectedActionsMargin
+                toolbarActions.layoutParams = actionsParams
+            }
+            content.setPadding(
+                contentPaddingLeft + cutout.left,
+                contentPaddingTop,
+                contentPaddingRight + cutout.right,
+                contentPaddingBottom + cutout.bottom,
+            )
+            insets
+        }
+        ViewCompat.requestApplyInsets(root)
     }
 
     override fun onResume() {
@@ -245,7 +332,7 @@ class MainActivity : AppCompatActivity() {
     /** Le titre de l'écran est le nom de la console feuilletée. */
     private fun updateTitle() {
         val filtre = pagerAdapter.pageAt(pager.currentItem) ?: LibraryFilter.ALL
-        supportActionBar?.title = pageLabel(filtre)
+        toolbarTitle.text = pageLabel(filtre)
     }
 
     private fun pageLabel(filter: String): String = when (filter) {
@@ -485,12 +572,17 @@ class MainActivity : AppCompatActivity() {
 
     // ---- Menu ----
 
-    override fun onCreateOptionsMenu(menu: Menu): Boolean {
-        menuInflater.inflate(R.menu.menu_main, menu)
-        return true
+    private fun showLibraryMenu(anchor: View) {
+        PopupMenu(this, anchor).apply {
+            menuInflater.inflate(R.menu.menu_main, menu)
+            // L'ajout possède déjà son action « + » dédiée dans le header.
+            menu.findItem(R.id.action_add_folder).isVisible = false
+            setOnMenuItemClickListener { onLibraryMenuItemSelected(it) }
+            show()
+        }
     }
 
-    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+    private fun onLibraryMenuItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
             R.id.action_refresh -> refreshLibrary()
             R.id.action_add_folder -> openRomFolder.launch(null)
@@ -511,7 +603,7 @@ class MainActivity : AppCompatActivity() {
                 settings.librarySortOrder = "status"
                 render()
             }
-            else -> return super.onOptionsItemSelected(item)
+            else -> return false
         }
         return true
     }
