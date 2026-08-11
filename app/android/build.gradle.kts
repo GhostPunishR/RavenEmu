@@ -159,6 +159,7 @@ dependencies {
     implementation(project(":engine:diagnostics"))
 
     implementation(project(":features:library"))
+    implementation(project(":features:cheats"))
     implementation(project(":features:skins"))
     implementation(project(":features:settings"))
     implementation(project(":features:player"))

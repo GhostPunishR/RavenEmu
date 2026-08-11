@@ -120,6 +120,17 @@ Core& core_from(jlong handle) {
     return *reinterpret_cast<Core*>(static_cast<std::uintptr_t>(handle));
 }
 
+ravenemu::CheatCapableCore* cheat_core_from(Core& core) noexcept {
+    return dynamic_cast<ravenemu::CheatCapableCore*>(&core);
+}
+
+ravenemu::CheatFormat cheat_format_from(jint value) {
+    if (value != static_cast<jint>(ravenemu::CheatFormat::gameshark_gb_gbc)) {
+        throw std::invalid_argument("Format de cheat RavenEmu inconnu");
+    }
+    return static_cast<ravenemu::CheatFormat>(value);
+}
+
 std::optional<ravenemu::GbaSaveType> gba_save_type_from(jint value) {
     if (value < 0) return std::nullopt;
     if (value > static_cast<jint>(ravenemu::GbaSaveType::eeprom_8k)) {
@@ -158,6 +169,20 @@ std::vector<std::uint8_t> read_bytes(JNIEnv* env, jbyteArray source, bool nullab
         if (env->ExceptionCheck()) throw std::runtime_error("Lecture d'un tableau Java impossible");
     }
     return result;
+}
+
+std::string read_utf8(JNIEnv* env, jstring source) {
+    if (source == nullptr) throw std::invalid_argument("Code de cheat absent");
+    const char* characters = env->GetStringUTFChars(source, nullptr);
+    if (characters == nullptr) throw std::runtime_error("Code de cheat Java inaccessible");
+    try {
+        std::string result(characters);
+        env->ReleaseStringUTFChars(source, characters);
+        return result;
+    } catch (...) {
+        env->ReleaseStringUTFChars(source, characters);
+        throw;
+    }
 }
 
 /**
@@ -380,6 +405,83 @@ Java_com_ravenemu_nativebridge_NativeCoreBridge_framebufferFormat(
 ) {
     return guarded<jint>(env, 0, [&] {
         return static_cast<jint>(core_from(handle).framebuffer_format());
+    });
+}
+
+extern "C" JNIEXPORT jintArray JNICALL
+Java_com_ravenemu_nativebridge_NativeCoreBridge_supportedCheatFormats(
+    JNIEnv* env,
+    jclass,
+    jlong handle
+) {
+    return guarded<jintArray>(env, nullptr, [&] {
+        auto* capability = cheat_core_from(core_from(handle));
+        if (capability == nullptr) {
+            return make_int_array(env, std::span<const std::int32_t>{});
+        }
+        const auto formats = capability->supported_cheat_formats();
+        std::vector<std::int32_t> ids;
+        ids.reserve(formats.size());
+        for (const auto format : formats) {
+            ids.push_back(static_cast<std::int32_t>(format));
+        }
+        return make_int_array(env, ids);
+    });
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_ravenemu_nativebridge_NativeCoreBridge_replaceActiveCheats(
+    JNIEnv* env,
+    jclass,
+    jlong handle,
+    jintArray formats,
+    jobjectArray codes
+) {
+    guarded_void(env, [&] {
+        if (formats == nullptr || codes == nullptr) {
+            throw std::invalid_argument("Liste de cheats absente");
+        }
+        const auto format_count = env->GetArrayLength(formats);
+        const auto code_count = env->GetArrayLength(codes);
+        if (format_count != code_count) {
+            throw std::invalid_argument("Formats et codes de cheats incohérents");
+        }
+        if (code_count > 65'536) {
+            throw std::invalid_argument("Trop de lignes de cheats actives");
+        }
+        std::vector<jint> format_values(static_cast<std::size_t>(format_count));
+        if (format_count > 0) {
+            env->GetIntArrayRegion(formats, 0, format_count, format_values.data());
+            if (env->ExceptionCheck()) {
+                throw std::runtime_error("Formats de cheats Java inaccessibles");
+            }
+        }
+
+        std::vector<ravenemu::CheatCode> replacement;
+        replacement.reserve(static_cast<std::size_t>(code_count));
+        for (jsize index = 0; index < code_count; ++index) {
+            const auto code = static_cast<jstring>(env->GetObjectArrayElement(codes, index));
+            if (env->ExceptionCheck()) {
+                throw std::runtime_error("Code de cheat Java inaccessible");
+            }
+            try {
+                replacement.push_back({
+                    cheat_format_from(format_values[static_cast<std::size_t>(index)]),
+                    read_utf8(env, code),
+                });
+            } catch (...) {
+                env->DeleteLocalRef(code);
+                throw;
+            }
+            env->DeleteLocalRef(code);
+        }
+
+        auto* capability = cheat_core_from(core_from(handle));
+        if (capability == nullptr) {
+            if (replacement.empty()) return;
+            throw std::invalid_argument("Ce cœur ne prend pas en charge les cheats");
+        }
+        capability->replace_active_cheats(replacement);
     });
 }
 

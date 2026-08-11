@@ -29,6 +29,8 @@ public final class NativeCoreBridge {
     public static native int readAudio(long handle, short[] destination);
     public static native boolean rumbleActive(long handle);
     public static native int framebufferFormat(long handle);
+    public static native int[] supportedCheatFormats(long handle);
+    public static native void replaceActiveCheats(long handle, int[] formats, String[] codes);
     public static native boolean hasBatteryRam(long handle);
     public static native boolean batteryRamDirty(long handle);
     public static native NativeBatterySnapshot snapshotBatteryRam(long handle);

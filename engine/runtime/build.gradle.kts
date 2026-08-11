@@ -5,6 +5,7 @@ plugins {
 
 dependencies {
     api(project(":engine:api"))
+    api(project(":engine:cheats"))
     api(project(":engine:save"))
     api(project(":engine:diagnostics"))
     implementation(project(":native:jni"))

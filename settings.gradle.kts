@@ -32,6 +32,7 @@ includeBuild("build-logic")
 // Kotlin/JVM pur.
 include(
     ":engine:api",
+    ":engine:cheats",
     ":engine:runtime",
     ":engine:session",
     ":engine:state",
@@ -40,6 +41,7 @@ include(
     ":engine:diagnostics",
     ":native:jni",
     ":features:library",
+    ":features:cheats",
     ":features:skins",
     ":tools:ci-policy",
 )

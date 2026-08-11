@@ -40,6 +40,7 @@
     <string name="emulation_resume">Reprendre</string>
     <string name="emulation_save_state">Sauvegarder l\'état</string>
     <string name="emulation_load_state">Charger l\'état</string>
+    <string name="emulation_cheats">Cheats</string>
     <string name="emulation_reset">Réinitialiser le jeu</string>
     <string name="emulation_edit_controls">Modifier les commandes</string>
     <string name="emulation_quit">Quitter</string>
@@ -52,6 +53,27 @@
     <string name="emulation_state_load_failed">Impossible de charger l\'état</string>
     <string name="emulation_no_state">Aucun état sauvegardé</string>
     <string name="emulation_rom_error">Impossible de lire cette ROM</string>
+
+    <!-- Cheats propres à la ROM courante -->
+    <string name="cheat_none">Aucun cheat enregistré pour ce jeu.</string>
+    <string name="cheat_add">Ajouter un cheat</string>
+    <string name="cheat_edit">Modifier le cheat</string>
+    <string name="cheat_delete">Supprimer le cheat</string>
+    <string name="cheat_delete_confirm">Supprimer « %1$s » ?</string>
+    <string name="cheat_name">Nom</string>
+    <string name="cheat_format">Type</string>
+    <string name="cheat_codes">Codes, un par ligne</string>
+    <string name="cheat_codes_help">8 chiffres hexadécimaux par ligne. Espaces et tirets sont acceptés.</string>
+    <string name="cheat_close">Fermer</string>
+    <string name="cheat_save">Enregistrer</string>
+    <string name="cheat_save_failed">Impossible d’enregistrer les cheats.</string>
+    <string name="cheat_name_required">Donnez un nom à ce cheat.</string>
+    <string name="cheat_code_error_line">Ligne %1$d : %2$s</string>
+    <string name="cheat_error_empty">saisissez un code</string>
+    <string name="cheat_error_length">le code doit contenir exactement 8 chiffres hexadécimaux</string>
+    <string name="cheat_error_hex">caractère non hexadécimal</string>
+    <string name="cheat_error_command">banque ou variante GameShark non prise en charge</string>
+    <string name="cheat_error_address">l’adresse doit être comprise entre A000 et DFFF</string>
 
     <!-- Éditeur de commandes -->
     <string name="editor_hint">Glissez un élément pour le déplacer</string>

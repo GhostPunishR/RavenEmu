@@ -18,6 +18,27 @@ public:
     virtual void write_control(int address, int value) = 0;
     [[nodiscard]] virtual int read_ram(int address) const = 0;
     virtual void write_ram(int address, int value) = 0;
+
+    /**
+     * Écriture GameShark dans la banque de RAM externe demandée, sans modifier
+     * les registres du MBC. Retourne false si la cartouche ne possède pas cette
+     * banque ou si les paramètres sortent de l'espace émulé.
+     */
+    virtual bool write_cheat_ram(int bank, int address, int value) noexcept {
+        if (bank < 0 || address < 0xa000 || address > 0xbfff || value < 0 || value > 0xff) {
+            return false;
+        }
+        const auto offset = static_cast<std::size_t>(bank) *
+                static_cast<std::size_t>(ram_bank_size)
+            + static_cast<std::size_t>(address - 0xa000);
+        if (offset >= ram_.size()) return false;
+        const auto byte_value = static_cast<std::uint8_t>(value);
+        if (ram_[offset] != byte_value) {
+            ram_[offset] = byte_value;
+            mark_written();
+        }
+        return true;
+    }
     virtual void tick(int) {}
     [[nodiscard]] virtual bool rumble_active() const noexcept { return false; }
     virtual void save_state(BinaryWriter& out) const = 0;

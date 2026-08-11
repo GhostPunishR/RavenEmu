@@ -1,17 +1,35 @@
 #include "machine/machine.hpp"
+#include "cheats/game_shark.hpp"
 
+#include "ravenemu/cheats.hpp"
 #include "ravenemu/sha256.hpp"
 
 namespace ravenemu {
 namespace cgb {
 
-class GameBoyCore final : public Core {
+class GameBoyCore final : public Core, public CheatCapableCore {
 public:
     [[nodiscard]] Console console() const noexcept override { return Console::game_boy; }
     [[nodiscard]] VideoSpec video_spec() const noexcept override { return {160, 144, 4'194'304.0 / 70'224.0}; }
     [[nodiscard]] AudioSpec audio_spec() const noexcept override { return {Apu::sample_rate, 2}; }
     [[nodiscard]] FramebufferFormat framebuffer_format() const noexcept override {
         return machine_ != nullptr && machine_->cgb_mode ? FramebufferFormat::argb_8888 : FramebufferFormat::indexed_4;
+    }
+    [[nodiscard]] std::vector<CheatFormat> supported_cheat_formats() const override {
+        if (machine_ != nullptr && machine_->cgb_mode) {
+            return {CheatFormat::gameshark_gb_gbc};
+        }
+        return {};
+    }
+    void replace_active_cheats(std::span<const CheatCode> codes) override {
+        require_loaded();
+        if (!machine_->cgb_mode && !codes.empty()) {
+            throw std::invalid_argument("Les cheats GameShark sont disponibles uniquement en mode Game Boy Color");
+        }
+        std::vector<GameSharkRamWrite> replacement;
+        replacement.reserve(codes.size());
+        for (const auto& code : codes) replacement.push_back(GameSharkRamWrite::parse(code));
+        active_cheats_ = std::move(replacement);
     }
 
     void load_rom(std::span<const std::uint8_t> rom, std::span<const std::uint8_t> battery) override {
@@ -37,6 +55,7 @@ public:
             if (advanced <= 0) break;
             ppu_cycles += advanced;
         }
+        apply_active_cheats();
         std::copy(machine_->ppu.completed_frame.begin(), machine_->ppu.completed_frame.end(), framebuffer.begin());
     }
     void set_button(Button button, bool pressed) override { if (machine_) machine_->joypad.set_button(button, pressed); }
@@ -103,11 +122,21 @@ private:
     void require_loaded() const {
         if (!machine_) throw std::logic_error("Aucune ROM chargée");
     }
+    void apply_active_cheats() noexcept {
+        for (const auto& cheat : active_cheats_) {
+            static_cast<void>(machine_->bus.write_cheat(
+                cheat.external_ram_bank,
+                cheat.address,
+                cheat.value
+            ));
+        }
+    }
 
     std::unique_ptr<Machine> machine_;
     RomImage loaded_rom_;
     std::array<std::uint8_t, 32> rom_hash_{};
     std::optional<std::int64_t> clock_override_;
+    std::vector<GameSharkRamWrite> active_cheats_;
 };
 
 } // namespace cgb

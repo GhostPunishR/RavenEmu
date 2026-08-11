@@ -9,9 +9,13 @@ import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
+import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.CheckBox
+import android.widget.EditText
+import android.widget.LinearLayout
 import android.widget.SeekBar
+import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
 import android.text.format.DateUtils
@@ -22,6 +26,7 @@ import androidx.lifecycle.lifecycleScope
 import com.ravenemu.app.BuildConfig
 import com.ravenemu.app.R
 import com.ravenemu.app.RavenActivity
+import com.ravenemu.cheats.CheatStore
 import com.ravenemu.deltaskin.DeltaSkinConsole
 import com.ravenemu.deltaskin.DeltaSkinErrorCode
 import com.ravenemu.deltaskin.DeltaSkinInsets
@@ -34,6 +39,14 @@ import com.ravenemu.emulation.api.EmulatorCore
 import com.ravenemu.emulation.api.session.EmulationSession
 import com.ravenemu.emulation.api.EmulatorButton
 import com.ravenemu.emulation.api.SaveStateException
+import com.ravenemu.emulation.cheats.CheatCapableCore
+import com.ravenemu.emulation.cheats.CheatCode
+import com.ravenemu.emulation.cheats.CheatCodeListParseResult
+import com.ravenemu.emulation.cheats.CheatDefinition
+import com.ravenemu.emulation.cheats.CheatFormat
+import com.ravenemu.emulation.cheats.CheatParseError
+import com.ravenemu.emulation.cheats.CheatParserRegistry
+import com.ravenemu.emulation.cheats.CheatSupport
 import com.ravenemu.input.ControlLayout
 import com.ravenemu.input.DeltaSkinControllerAsset
 import com.ravenemu.input.DeltaSkinControllerConfiguration
@@ -50,7 +63,9 @@ import com.ravenemu.storage.LibraryRepository
 import com.ravenemu.storage.SaveFileStore
 import com.ravenemu.storage.SnapshotStore
 import com.ravenemu.platform.vibration.AndroidRumbleSink
+import com.google.android.material.textfield.TextInputLayout
 import java.io.File
+import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -68,6 +83,7 @@ class EmulationActivity : RavenActivity(), EmulationSession.Callbacks {
     private lateinit var settings: AppSettings
     private lateinit var saveStore: SaveFileStore
     private lateinit var snapshotStore: SnapshotStore
+    private lateinit var cheatStore: CheatStore
     private lateinit var surface: EmulatorSurfaceView
     private lateinit var controls: TouchControlsView
     private lateinit var deltaSkinControls: DeltaSkinControllerView
@@ -82,6 +98,10 @@ class EmulationActivity : RavenActivity(), EmulationSession.Callbacks {
 
     private var core: EmulatorCore? = null
     private var session: EmulationSession? = null
+    private var cheatSupport: CheatSupport? = null
+    private var cheats: List<CheatDefinition> = emptyList()
+    private var cheatPersistenceBusy = false
+    private var menuFlowSession: EmulationSession? = null
     private var deltaSkinLoadGeneration = 0L
     private var customSkinActive = false
     private var restoreCustomSkinAfterEditing = false
@@ -100,6 +120,7 @@ class EmulationActivity : RavenActivity(), EmulationSession.Callbacks {
         settings = AppSettings(this)
         saveStore = SaveFileStore(this)
         snapshotStore = SnapshotStore(this)
+        cheatStore = CheatStore(File(filesDir, "cheats"))
         deltaSkinRepository = DeltaSkinRepository(
             File(filesDir, "controller-skins/delta")
         )
@@ -378,6 +399,7 @@ class EmulationActivity : RavenActivity(), EmulationSession.Callbacks {
                 finish()
                 return@launch
             }
+            cheats = withContext(Dispatchers.IO) { cheatStore.load(romSha256) }
             startEmulation(data)
         }
     }
@@ -398,6 +420,9 @@ class EmulationActivity : RavenActivity(), EmulationSession.Callbacks {
             finish()
             return
         }
+        cheatSupport = (newCore as? CheatCapableCore)
+            ?.cheatSupport
+            ?.takeIf { it.formats.isNotEmpty() }
         surface.configure(newCore.video.width, newCore.video.height)
 
         val samplesPerFrame =
@@ -455,6 +480,12 @@ class EmulationActivity : RavenActivity(), EmulationSession.Callbacks {
                 }
             }
         }
+        val initiallyActive = activeCheatCodes(cheats)
+        if (cheatSupport != null && initiallyActive.isNotEmpty()) {
+            newSession.post { loadedCore ->
+                (loadedCore as? CheatCapableCore)?.replaceActiveCheats(initiallyActive)
+            }
+        }
         newSession.start()
     }
 
@@ -499,39 +530,68 @@ class EmulationActivity : RavenActivity(), EmulationSession.Callbacks {
     // ---- Menu de l'émulateur ----
 
     private fun showEmulatorMenu() {
-        val currentSession = session ?: return
-        currentSession.pause()
+        val currentSession = beginMenuFlow() ?: return
         val perGameLabel = getString(
             if (hasPerGameProfile()) R.string.emulation_per_game_profile_off
             else R.string.emulation_per_game_profile_on
         )
-        val items = arrayOf(
-            getString(R.string.emulation_resume),
-            getString(R.string.emulation_save_state),
-            getString(R.string.emulation_load_state),
-            getString(R.string.emulation_reset),
-            getString(R.string.emulation_edit_controls),
-            perGameLabel,
-            getString(R.string.emulation_quit),
-        )
+        val actions = EmulatorMenuPolicy.actions(cheatSupport)
+        val items = actions.map { action ->
+            when (action) {
+                EmulatorMenuAction.RESUME -> getString(R.string.emulation_resume)
+                EmulatorMenuAction.SAVE_STATE -> getString(R.string.emulation_save_state)
+                EmulatorMenuAction.LOAD_STATE -> getString(R.string.emulation_load_state)
+                EmulatorMenuAction.CHEATS -> getString(R.string.emulation_cheats)
+                EmulatorMenuAction.RESET -> getString(R.string.emulation_reset)
+                EmulatorMenuAction.EDIT_CONTROLS -> getString(R.string.emulation_edit_controls)
+                EmulatorMenuAction.TOGGLE_PER_GAME_PROFILE -> perGameLabel
+                EmulatorMenuAction.QUIT -> getString(R.string.emulation_quit)
+            }
+        }.toTypedArray()
         AlertDialog.Builder(this)
             .setTitle(romTitle.ifBlank { romFileName })
             .setItems(items) { _, which ->
-                when (which) {
-                    0 -> currentSession.resume()
-                    1 -> saveSnapshot()
-                    2 -> loadSnapshot()
-                    3 -> {
+                when (actions[which]) {
+                    EmulatorMenuAction.RESUME -> finishMenuFlow()
+                    EmulatorMenuAction.SAVE_STATE -> saveSnapshot()
+                    EmulatorMenuAction.LOAD_STATE -> loadSnapshot()
+                    EmulatorMenuAction.CHEATS -> showCheatManager()
+                    EmulatorMenuAction.RESET -> {
                         currentSession.post { it.reset() }
-                        currentSession.resume()
+                        finishMenuFlow()
                     }
-                    4 -> enterEditMode()
-                    5 -> togglePerGameProfile()
-                    6 -> finish()
+                    EmulatorMenuAction.EDIT_CONTROLS -> {
+                        // L'éditeur devient propriétaire de la pause.
+                        menuFlowSession = null
+                        enterEditMode()
+                    }
+                    EmulatorMenuAction.TOGGLE_PER_GAME_PROFILE -> {
+                        togglePerGameProfile()
+                        finishMenuFlow()
+                    }
+                    EmulatorMenuAction.QUIT -> {
+                        menuFlowSession = null
+                        finish()
+                    }
                 }
             }
-            .setOnCancelListener { currentSession.resume() }
+            .setOnCancelListener { finishMenuFlow() }
             .show()
+    }
+
+    private fun beginMenuFlow(): EmulationSession? {
+        menuFlowSession?.let { return it }
+        val current = session ?: return null
+        current.pause()
+        menuFlowSession = current
+        return current
+    }
+
+    /** Termine une chaîne de dialogues exactement une fois. */
+    private fun finishMenuFlow() {
+        val paused = menuFlowSession ?: return
+        menuFlowSession = null
+        paused.resume()
     }
 
     /**
@@ -561,7 +621,7 @@ class EmulationActivity : RavenActivity(), EmulationSession.Callbacks {
             .setItems(labels) { _, which ->
                 writeSnapshot(currentSession, USER_SLOTS.first + which)
             }
-            .setOnCancelListener { currentSession.resume() }
+            .setOnCancelListener { finishMenuFlow() }
             .show()
     }
 
@@ -578,7 +638,7 @@ class EmulationActivity : RavenActivity(), EmulationSession.Callbacks {
                 Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
             }
         }
-        currentSession.resume()
+        finishMenuFlow()
     }
 
     /**
@@ -593,7 +653,7 @@ class EmulationActivity : RavenActivity(), EmulationSession.Callbacks {
             .sortedBy { it.slot }
         if (disponibles.isEmpty()) {
             Toast.makeText(this, R.string.emulation_no_state, Toast.LENGTH_SHORT).show()
-            currentSession.resume()
+            finishMenuFlow()
             return
         }
         val labels = disponibles.map { info ->
@@ -610,7 +670,7 @@ class EmulationActivity : RavenActivity(), EmulationSession.Callbacks {
             .setItems(labels) { _, which ->
                 readSnapshot(currentSession, disponibles[which].slot)
             }
-            .setOnCancelListener { currentSession.resume() }
+            .setOnCancelListener { finishMenuFlow() }
             .show()
     }
 
@@ -618,7 +678,7 @@ class EmulationActivity : RavenActivity(), EmulationSession.Callbacks {
         val state = snapshotStore.read(romSha256, slot)
         if (state == null) {
             Toast.makeText(this, R.string.emulation_no_state, Toast.LENGTH_SHORT).show()
-            currentSession.resume()
+            finishMenuFlow()
             return
         }
         currentSession.post { c ->
@@ -634,7 +694,7 @@ class EmulationActivity : RavenActivity(), EmulationSession.Callbacks {
                 }
             }
         }
-        currentSession.resume()
+        finishMenuFlow()
     }
 
     private fun togglePerGameProfile() {
@@ -648,7 +708,233 @@ class EmulationActivity : RavenActivity(), EmulationSession.Callbacks {
                 .show()
         }
         applyControlLayout()
-        session?.resume()
+    }
+
+    // ---- Cheats propres à la ROM ----
+
+    private fun showCheatManager() {
+        val support = cheatSupport
+        if (support == null || support.formats.isEmpty()) {
+            finishMenuFlow()
+            return
+        }
+
+        val content = layoutInflater.inflate(R.layout.dialog_cheats, null)
+        val list = content.findViewById<LinearLayout>(R.id.cheatList)
+        val empty = content.findViewById<TextView>(R.id.cheatEmpty)
+        val add = content.findViewById<Button>(R.id.cheatAdd)
+
+        lateinit var refresh: () -> Unit
+        refresh = {
+            add.isEnabled = !cheatPersistenceBusy
+            renderCheatRows(list, empty, support, refresh)
+        }
+
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(R.string.emulation_cheats)
+            .setView(content)
+            .setNegativeButton(R.string.cheat_close, null)
+            .create()
+        add.setOnClickListener { showCheatEditor(support, existing = null, refresh) }
+        dialog.setOnDismissListener { finishMenuFlow() }
+        refresh()
+        dialog.show()
+    }
+
+    private fun renderCheatRows(
+        container: LinearLayout,
+        empty: TextView,
+        support: CheatSupport,
+        refresh: () -> Unit,
+    ) {
+        container.removeAllViews()
+        empty.visibility = if (cheats.isEmpty()) View.VISIBLE else View.GONE
+        cheats.forEach { definition ->
+            val row = layoutInflater.inflate(R.layout.item_cheat, container, false)
+            val enabled = row.findViewById<CheckBox>(R.id.cheatEnabled)
+            val itemName = row.findViewById<TextView>(R.id.cheatItemName)
+            val itemCodes = row.findViewById<TextView>(R.id.cheatItemCodes)
+            val edit = row.findViewById<View>(R.id.cheatEdit)
+            val delete = row.findViewById<View>(R.id.cheatDelete)
+
+            itemName.text = definition.name
+            itemCodes.text = definition.codes.joinToString("\n")
+            enabled.isChecked = definition.enabled
+            enabled.contentDescription = definition.name
+            enabled.isEnabled = !cheatPersistenceBusy && support.supports(definition.format)
+            edit.isEnabled = !cheatPersistenceBusy && support.supports(definition.format)
+            delete.isEnabled = !cheatPersistenceBusy
+            enabled.setOnCheckedChangeListener { _, checked ->
+                val updated = cheats.map {
+                    if (it.id == definition.id) it.copy(enabled = checked) else it
+                }
+                persistAndApplyCheats(updated) { refresh() }
+                refresh()
+            }
+            edit.setOnClickListener { showCheatEditor(support, definition, refresh) }
+            delete.setOnClickListener {
+                AlertDialog.Builder(this)
+                    .setMessage(getString(R.string.cheat_delete_confirm, definition.name))
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .setPositiveButton(R.string.cheat_delete) { _, _ ->
+                        persistAndApplyCheats(
+                            cheats.filterNot { it.id == definition.id }
+                        ) { refresh() }
+                        refresh()
+                    }
+                    .show()
+            }
+            container.addView(row)
+        }
+    }
+
+    private fun showCheatEditor(
+        support: CheatSupport,
+        existing: CheatDefinition?,
+        onSaved: () -> Unit,
+    ) {
+        val formats = support.formats.sortedBy(CheatFormat::storageId)
+        if (formats.isEmpty()) return
+
+        val content = layoutInflater.inflate(R.layout.dialog_cheat_editor, null)
+        val nameLayout = content.findViewById<TextInputLayout>(R.id.cheatNameLayout)
+        val name = content.findViewById<EditText>(R.id.cheatName)
+        val format = content.findViewById<Spinner>(R.id.cheatFormat)
+        val codesLayout = content.findViewById<TextInputLayout>(R.id.cheatCodesLayout)
+        val codes = content.findViewById<EditText>(R.id.cheatCodes)
+
+        val formatAdapter = ArrayAdapter(
+            this,
+            android.R.layout.simple_spinner_item,
+            formats.map(CheatFormat::displayName),
+        ).also { it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
+        format.adapter = formatAdapter
+        existing?.let { definition ->
+            name.setText(definition.name)
+            codes.setText(definition.codes.joinToString("\n"))
+            format.setSelection(formats.indexOf(definition.format).coerceAtLeast(0))
+        }
+
+        val title = if (existing == null) R.string.cheat_add else R.string.cheat_edit
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(title)
+            .setView(content)
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(R.string.cheat_save, null)
+            .create()
+        dialog.setOnShowListener {
+            val save = dialog.getButton(android.content.DialogInterface.BUTTON_POSITIVE)
+            save.setOnClickListener {
+                nameLayout.error = null
+                codesLayout.error = null
+                val trimmedName = name.text?.toString()?.trim().orEmpty()
+                if (trimmedName.isEmpty()) {
+                    nameLayout.error = getString(R.string.cheat_name_required)
+                    return@setOnClickListener
+                }
+                val selectedFormat = formats[format.selectedItemPosition]
+                when (
+                    val parsed = CheatParserRegistry.DEFAULT.parseLines(
+                        selectedFormat,
+                        codes.text?.toString().orEmpty(),
+                    )
+                ) {
+                    is CheatCodeListParseResult.Failure -> {
+                        codesLayout.error = getString(
+                            R.string.cheat_code_error_line,
+                            parsed.failure.lineNumber,
+                            getString(cheatErrorMessage(parsed.failure.error)),
+                        )
+                    }
+                    is CheatCodeListParseResult.Success -> {
+                        val definition = CheatDefinition(
+                            id = existing?.id ?: UUID.randomUUID().toString(),
+                            name = trimmedName,
+                            codes = parsed.codes.map(CheatCode::normalized),
+                            format = selectedFormat,
+                            enabled = existing?.enabled ?: true,
+                        )
+                        val updated = if (existing == null) {
+                            cheats + definition
+                        } else {
+                            cheats.map { if (it.id == existing.id) definition else it }
+                        }
+                        save.isEnabled = false
+                        persistAndApplyCheats(updated) { saved ->
+                            save.isEnabled = true
+                            if (saved) {
+                                dialog.dismiss()
+                                onSaved()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        dialog.show()
+    }
+
+    private fun cheatErrorMessage(error: CheatParseError): Int = when (error) {
+        CheatParseError.EMPTY -> R.string.cheat_error_empty
+        CheatParseError.WRONG_LENGTH -> R.string.cheat_error_length
+        CheatParseError.NON_HEXADECIMAL_CHARACTER -> R.string.cheat_error_hex
+        CheatParseError.UNSUPPORTED_BANK_OR_COMMAND -> R.string.cheat_error_command
+        CheatParseError.ADDRESS_OUT_OF_RANGE -> R.string.cheat_error_address
+    }
+
+    /**
+     * Persiste d'abord la configuration, puis remplace atomiquement la liste
+     * active sur le thread de la session. Une seule écriture peut être en vol,
+     * ce qui empêche deux clics rapides de perdre une modification.
+     */
+    private fun persistAndApplyCheats(
+        updated: List<CheatDefinition>,
+        onComplete: (Boolean) -> Unit,
+    ) {
+        if (cheatPersistenceBusy) {
+            onComplete(false)
+            return
+        }
+        cheatPersistenceBusy = true
+        lifecycleScope.launch {
+            val saved = withContext(Dispatchers.IO) {
+                cheatStore.save(romSha256, updated)
+            }
+            if (saved) {
+                cheats = updated
+                val active = activeCheatCodes(updated)
+                session?.post { loadedCore ->
+                    (loadedCore as? CheatCapableCore)?.replaceActiveCheats(active)
+                }
+            } else {
+                Toast.makeText(
+                    this@EmulationActivity,
+                    R.string.cheat_save_failed,
+                    Toast.LENGTH_SHORT,
+                ).show()
+            }
+            cheatPersistenceBusy = false
+            onComplete(saved)
+        }
+    }
+
+    /** Parse défensivement la persistance avant la frontière JNI. */
+    private fun activeCheatCodes(definitions: List<CheatDefinition>): List<CheatCode> {
+        val supported = cheatSupport?.formats.orEmpty()
+        val active = mutableListOf<CheatCode>()
+        definitions.forEach { definition ->
+            if (!definition.enabled || definition.format !in supported) return@forEach
+            when (
+                val parsed = CheatParserRegistry.DEFAULT.parseLines(
+                    definition.format,
+                    definition.codes.joinToString("\n"),
+                )
+            ) {
+                is CheatCodeListParseResult.Success -> active += parsed.codes
+                is CheatCodeListParseResult.Failure -> Unit
+            }
+        }
+        return active
     }
 
     // ---- Éditeur de commandes ----
@@ -764,7 +1050,7 @@ class EmulationActivity : RavenActivity(), EmulationSession.Callbacks {
             s.audioEnabled = settings.audioEnabled
             s.setAudioVolume(settings.audioVolume / 100f)
         }
-        if (!controls.editMode) session?.resume()
+        if (!controls.editMode && menuFlowSession == null) session?.resume()
     }
 
     override fun onPause() {

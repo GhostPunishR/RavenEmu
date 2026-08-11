@@ -7,6 +7,10 @@ import com.ravenemu.emulation.api.EmulatorButton
 import com.ravenemu.emulation.api.EmulatorCore
 import com.ravenemu.emulation.api.FramebufferFormat
 import com.ravenemu.emulation.api.VideoSpec
+import com.ravenemu.emulation.cheats.CheatCapableCore
+import com.ravenemu.emulation.cheats.CheatCode
+import com.ravenemu.emulation.cheats.CheatFormat
+import com.ravenemu.emulation.cheats.CheatSupport
 import com.ravenemu.nativebridge.NativeCoreBridge
 import com.ravenemu.nativebridge.NativeCoreHandle
 import java.security.MessageDigest
@@ -14,7 +18,7 @@ import java.security.MessageDigest
 /** Thin Kotlin adapter over RavenEmu's C++20 Game Boy/Game Boy Color core. */
 class GameBoyCore(
     private val clock: () -> Long = SYSTEM_CLOCK,
-) : EmulatorCore, AutoCloseable {
+) : EmulatorCore, CheatCapableCore, AutoCloseable {
 
     private val native = lazy(LazyThreadSafetyMode.NONE) {
         NativeCoreHandle(ConsoleType.GAME_BOY.storageId, NO_FORCED_SAVE)
@@ -30,6 +34,17 @@ class GameBoyCore(
             FramebufferFormat.entries[NativeCoreBridge.framebufferFormat(handle())]
         } else {
             FramebufferFormat.INDEXED_4
+        }
+
+    override val cheatSupport: CheatSupport
+        get() {
+            if (!native.isInitialized()) return CheatSupport(emptySet())
+            val formats = NativeCoreBridge.supportedCheatFormats(handle()).map { id ->
+                requireNotNull(CheatFormat.fromStorageId(id)) {
+                    "Format de cheat natif inconnu : $id"
+                }
+            }.toSet()
+            return CheatSupport(formats)
         }
 
     var romHash: ByteArray = ByteArray(0)
@@ -58,6 +73,14 @@ class GameBoyCore(
 
     override fun setButton(button: EmulatorButton, pressed: Boolean) {
         NativeCoreBridge.setButton(handle(), button.ordinal, pressed)
+    }
+
+    override fun replaceActiveCheats(codes: List<CheatCode>) {
+        NativeCoreBridge.replaceActiveCheats(
+            handle(),
+            codes.map { it.format.storageId }.toIntArray(),
+            codes.map(CheatCode::normalized).toTypedArray(),
+        )
     }
 
     override fun readAudio(buffer: ShortArray): Int =

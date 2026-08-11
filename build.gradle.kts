@@ -32,7 +32,14 @@ plugins {
 tasks.register("jvmTest") {
     group = "verification"
     description = "Exécute les tests des modules JVM purs."
-    val prefixes = listOf(":engine:", ":features:library", ":features:skins", ":native:jni", ":tools:")
+    val prefixes = listOf(
+        ":engine:",
+        ":features:cheats",
+        ":features:library",
+        ":features:skins",
+        ":native:jni",
+        ":tools:",
+    )
     dependsOn(
         provider {
             subprojects

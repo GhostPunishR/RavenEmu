@@ -26,6 +26,18 @@ public:
         ram_[static_cast<std::size_t>((address - 0xa000) & 0x1ff)] = static_cast<std::uint8_t>(value & 0x0f);
         mark_written();
     }
+    bool write_cheat_ram(int bank, int address, int value) noexcept override {
+        if (bank != 0 || address < 0xa000 || address > 0xbfff || value < 0 || value > 0xff) {
+            return false;
+        }
+        const auto offset = static_cast<std::size_t>((address - 0xa000) & 0x1ff);
+        const auto nibble = static_cast<std::uint8_t>(value & 0x0f);
+        if (ram_[offset] != nibble) {
+            ram_[offset] = nibble;
+            mark_written();
+        }
+        return true;
+    }
     void save_state(BinaryWriter& out) const override {
         out.boolean(ram_enabled_); out.i32(rom_bank_); out.raw(ram_);
     }

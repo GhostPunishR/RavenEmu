@@ -32,6 +32,28 @@ public:
         write_internal(addr, byte(value));
     }
 
+    /**
+     * Écriture de cheat bornée à la RAM documentée par GameShark. Elle ignore
+     * les blocages DMA, car l'adaptateur réécrit à la frontière de trame et
+     * non comme un accès CPU concurrent.
+     */
+    bool write_cheat(int external_ram_bank, int address, int value) noexcept {
+        if (external_ram_bank < 0 || external_ram_bank > 0x0f ||
+            value < 0 || value > 0xff || address < 0xa000 || address > 0xdfff) {
+            return false;
+        }
+        if (address <= 0xbfff) {
+            return cartridge_.write_cheat_ram(external_ram_bank, address, value);
+        }
+        if (address <= 0xcfff) {
+            wram[static_cast<std::size_t>(address - 0xc000)] = static_cast<std::uint8_t>(value);
+            return true;
+        }
+        wram[static_cast<std::size_t>(wram_bank() * 0x1000 + address - 0xd000)] =
+            static_cast<std::uint8_t>(value);
+        return true;
+    }
+
     bool on_stop() override { return speed_.begin_switch_from_stop(); }
     bool stop_wake_requested() override { return joypad_.take_stop_wake(); }
     [[nodiscard]] bool cpu_blocked() const noexcept override {
