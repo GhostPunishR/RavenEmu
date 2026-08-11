@@ -19,6 +19,10 @@ class GameBoyCheatIntegrationTest {
             core.loadRom(cheatRom(), null)
             val capability = core as CheatCapableCore
             assertTrue(capability.cheatSupport.supports(CheatFormat.GAMESHARK_GB_GBC))
+            assertEquals(
+                setOf(CheatFormat.GAMESHARK_GB_GBC),
+                capability.cheatSupport.formats,
+            )
 
             core.runFrame(frame)
             assertEquals(0x01, batteryByte(core, 0))
@@ -81,6 +85,23 @@ class GameBoyCheatIntegrationTest {
             assertTrue(core.cheatSupport.formats.isEmpty())
             assertFailsWith<IllegalArgumentException> {
                 core.replaceActiveCheats(listOf(activeCode))
+            }
+        }
+    }
+
+    @Test
+    fun `le coeur CGB refuse le format GBA`() {
+        GameBoyCore().use { core ->
+            core.loadRom(cheatRom(), null)
+            assertFailsWith<IllegalArgumentException> {
+                core.replaceActiveCheats(
+                    listOf(
+                        CheatCode(
+                            CheatFormat.GAMESHARK_GBA_V1_V2,
+                            "CD93194F 089CE0B4",
+                        )
+                    )
+                )
             }
         }
     }

@@ -10,6 +10,10 @@ import com.ravenemu.emulation.api.EmulatorButton
 import com.ravenemu.emulation.api.EmulatorCore
 import com.ravenemu.emulation.api.FramebufferFormat
 import com.ravenemu.emulation.api.VideoSpec
+import com.ravenemu.emulation.cheats.CheatCapableCore
+import com.ravenemu.emulation.cheats.CheatCode
+import com.ravenemu.emulation.cheats.CheatFormat
+import com.ravenemu.emulation.cheats.CheatSupport
 import com.ravenemu.nativebridge.NativeCoreBridge
 import com.ravenemu.nativebridge.NativeCoreHandle
 import java.security.MessageDigest
@@ -18,7 +22,7 @@ import java.security.MessageDigest
 class GbaCore(
     forcedSaveType: GbaSaveType? = null,
     forcedRtc: Boolean? = null,
-) : EmulatorCore, AutoCloseable {
+) : EmulatorCore, CheatCapableCore, AutoCloseable {
 
     var forcedSaveType: GbaSaveType? = forcedSaveType
         set(value) {
@@ -65,6 +69,17 @@ class GbaCore(
     override val framebufferFormat: FramebufferFormat = FramebufferFormat.ARGB_8888
     override val supportsVideoFrameSkipping: Boolean = true
 
+    override val cheatSupport: CheatSupport
+        get() {
+            val current = native ?: return CheatSupport(emptySet())
+            val formats = NativeCoreBridge.supportedCheatFormats(current.value()).map { id ->
+                requireNotNull(CheatFormat.fromStorageId(id)) {
+                    "Format de cheat natif inconnu : $id"
+                }
+            }.toSet()
+            return CheatSupport(formats)
+        }
+
     var romHash: ByteArray = ByteArray(0)
         private set
 
@@ -104,6 +119,14 @@ class GbaCore(
 
     override fun setButton(button: EmulatorButton, pressed: Boolean) {
         NativeCoreBridge.setButton(handle(), button.ordinal, pressed)
+    }
+
+    override fun replaceActiveCheats(codes: List<CheatCode>) {
+        NativeCoreBridge.replaceActiveCheats(
+            handle(),
+            codes.map { it.format.storageId }.toIntArray(),
+            codes.map(CheatCode::normalized).toTypedArray(),
+        )
     }
 
     override fun readAudio(buffer: ShortArray): Int =

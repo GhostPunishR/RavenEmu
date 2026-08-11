@@ -1,11 +1,13 @@
 #include "machine/machine.hpp"
+#include "cheats/gameshark_v1_v2.hpp"
 
+#include "ravenemu/cheats.hpp"
 #include "ravenemu/sha256.hpp"
 
 namespace ravenemu {
 namespace gba {
 
-class GbaCore final : public Core {
+class GbaCore final : public Core, public CheatCapableCore {
 public:
     explicit GbaCore(std::optional<GbaSaveType> forced) : forced_(forced) {}
     [[nodiscard]] Console console() const noexcept override { return Console::game_boy_advance; }
@@ -13,6 +15,24 @@ public:
     [[nodiscard]] AudioSpec audio_spec() const noexcept override { return {Apu::sample_rate, 2}; }
     [[nodiscard]] FramebufferFormat framebuffer_format() const noexcept override { return FramebufferFormat::argb_8888; }
     [[nodiscard]] bool supports_video_frame_skipping() const noexcept override { return true; }
+    [[nodiscard]] std::vector<CheatFormat> supported_cheat_formats() const override {
+        if (machine_ != nullptr) return {CheatFormat::gameshark_gba_v1_v2};
+        return {};
+    }
+    void replace_active_cheats(std::span<const CheatCode> codes) override {
+        require_loaded();
+        std::vector<GameSharkV1V2Program> replacement;
+        replacement.reserve(codes.size());
+        const auto rom = std::span<const std::uint8_t>{
+            loaded_rom_->data(),
+            loaded_rom_->size(),
+        };
+        for (const auto& code : codes) {
+            replacement.push_back(GameSharkV1V2Program::compile(code, rom));
+        }
+        active_cheats_ = std::move(replacement);
+        synchronize_cheat_rom_patches();
+    }
 
     void load_rom(std::span<const std::uint8_t> rom, std::span<const std::uint8_t> battery) override {
         if (rom.size() > Cartridge::max_rom_size) throw RomLoadError("ROM GBA trop volumineuse");
@@ -22,6 +42,8 @@ public:
         auto replacement = new_machine(image);
         if (!battery.empty() && replacement->cartridge.save()) replacement->cartridge.save()->import(battery);
         loaded_rom_ = std::move(image); rom_hash_ = detail::sha256(rom); machine_ = std::move(replacement);
+        active_cheats_.clear();
+        synchronize_cheat_rom_patches();
     }
     void reset() override {
         require_loaded(); std::vector<std::uint8_t> battery;
@@ -29,6 +51,7 @@ public:
         auto replacement = new_machine(loaded_rom_);
         if (!battery.empty() && replacement->cartridge.save()) replacement->cartridge.save()->import(battery);
         configure_measurement(*replacement, measuring_time_); machine_ = std::move(replacement);
+        synchronize_cheat_rom_patches();
     }
     void run_frame(std::span<std::int32_t> framebuffer, bool render_video) override {
         require_loaded();
@@ -36,6 +59,7 @@ public:
         machine_->ppu.render_enabled = render_video;
         try { machine_->run_frame(280'896); } catch (...) { machine_->ppu.render_enabled = true; throw; }
         machine_->ppu.render_enabled = true;
+        apply_active_cheats();
         if (render_video) std::copy(machine_->ppu.frame.begin(), machine_->ppu.frame.end(), framebuffer.begin());
     }
     void set_button(Button button, bool pressed) override { if (machine_) machine_->bus.keypad.set_button(button, pressed); }
@@ -161,6 +185,7 @@ public:
         if (gpio) { std::array<std::int32_t, Gpio::state_words> gpio_state{}; for (auto& value : gpio_state) value = in.i32(); gpio->import_state(gpio_state); }
         if (!in.exhausted()) throw SaveStateError("État GBA corrompu (données excédentaires)");
         configure_measurement(m, measuring_time_); machine_ = std::move(replacement);
+        synchronize_cheat_rom_patches();
     }
 
 private:
@@ -186,6 +211,18 @@ private:
         return std::make_unique<Machine>(rom, forced_, forced_rtc_, [this] { return current_epoch(); });
     }
     void require_loaded() const { if (!machine_) throw std::logic_error("Aucune ROM chargée"); }
+    void apply_active_cheats() noexcept {
+        for (const auto& cheat : active_cheats_) cheat.apply(machine_->bus);
+    }
+    void synchronize_cheat_rom_patches() {
+        if (!machine_) return;
+        std::vector<CheatRomPatch> patches;
+        for (const auto& cheat : active_cheats_) {
+            const auto current = cheat.rom_patches();
+            patches.insert(patches.end(), current.begin(), current.end());
+        }
+        machine_->bus.set_cheat_rom_patches(patches);
+    }
 
     std::optional<GbaSaveType> forced_;
     std::optional<bool> forced_rtc_;
@@ -194,6 +231,7 @@ private:
     std::array<std::uint8_t, 32> rom_hash_{};
     std::optional<std::int64_t> clock_override_;
     bool measuring_time_{};
+    std::vector<GameSharkV1V2Program> active_cheats_;
 };
 
 

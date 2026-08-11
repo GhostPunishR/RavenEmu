@@ -60,6 +60,7 @@ int Bus::read8_raw(std::int32_t address) {
     case 0x06: return vram[static_cast<std::size_t>(vram_offset(address))];
     case 0x07: return oam[raw & 0x3ffU];
     case 0x08: case 0x09: case 0x0a: case 0x0b: case 0x0c: case 0x0d: {
+        if (const auto patched = cheat_rom_byte(address)) return *patched;
         auto* port = cartridge.gpio();
         if (port && port->readable() && gpio_register(address)) {
             const auto offset = rom_offset(address);
@@ -186,6 +187,85 @@ void Bus::write32(std::int32_t address, std::int32_t value) {
         write16_raw(aligned, static_cast<int>(u32(value) & 0xffffU));
         write16_raw(add32(aligned, 2), static_cast<int>(u32(value) >> 16U));
     }
+}
+
+bool Bus::cheat_region_allowed(
+    std::uint32_t address,
+    int width,
+    bool write
+) noexcept {
+    if (width != 1 && width != 2 && width != 4) return false;
+    const auto byte_width = static_cast<std::uint32_t>(width);
+    if ((address % byte_width) != 0U) return false;
+    const auto last = static_cast<std::uint64_t>(address) + byte_width - 1U;
+    if ((last >> 24U) != (address >> 24U)) return false;
+
+    const auto region = (address >> 24U) & 0xffU;
+    if (write) {
+        return (region >= 0x02U && region <= 0x07U) ||
+            region == 0x0eU || region == 0x0fU;
+    }
+    return region >= 0x02U && region <= 0x07U;
+}
+
+bool Bus::write_cheat(std::uint32_t address, std::uint32_t value, int width) {
+    if (!cheat_region_allowed(address, width, true)) return false;
+    const auto signed_address = i32(address);
+    const auto region = (address >> 24U) & 0xffU;
+    if (width == 1) {
+        if (region == 0x05U || region == 0x06U) {
+            const auto aligned = i32(address & ~1U);
+            const auto byte = static_cast<int>(value & 0xffU);
+            write8_raw(aligned, byte);
+            write8_raw(add32(aligned, 1), byte);
+        } else if (region != 0x07U) {
+            write8_raw(signed_address, static_cast<int>(value & 0xffU));
+            if (region == 0x04U) {
+                propagate_io_write(
+                    static_cast<int>(address & 0x3ffU),
+                    static_cast<std::int32_t>(value & 0xffU),
+                    1
+                );
+            }
+        }
+    } else if (width == 2) {
+        write16_raw(signed_address, static_cast<int>(value & 0xffffU));
+    } else if (region == 0x04U) {
+        const auto offset = static_cast<int>(address & 0x3ffU);
+        for (unsigned index = 0; index < 4; ++index) {
+            io[static_cast<std::size_t>(offset) + index] =
+                static_cast<std::uint8_t>(value >> (index * 8U));
+        }
+        propagate_io_write(offset, i32(value), 4);
+    } else {
+        write16_raw(signed_address, static_cast<int>(value & 0xffffU));
+        write16_raw(add32(signed_address, 2), static_cast<int>(value >> 16U));
+    }
+    return true;
+}
+
+std::optional<std::uint32_t> Bus::read_cheat(std::uint32_t address, int width) {
+    if (!cheat_region_allowed(address, width, false)) return std::nullopt;
+    const auto signed_address = i32(address);
+    auto result = static_cast<std::uint32_t>(read8_raw(signed_address));
+    for (int index = 1; index < width; ++index) {
+        result |= static_cast<std::uint32_t>(read8_raw(add32(signed_address, index)))
+            << static_cast<unsigned>(index * 8);
+    }
+    return result;
+}
+
+void Bus::set_cheat_rom_patches(std::span<const CheatRomPatch> patches) {
+    cheat_rom_patches_.assign(patches.begin(), patches.end());
+}
+
+std::optional<int> Bus::cheat_rom_byte(std::int32_t address) const noexcept {
+    const auto offset = static_cast<std::uint32_t>(rom_offset(address));
+    for (auto patch = cheat_rom_patches_.rbegin(); patch != cheat_rom_patches_.rend(); ++patch) {
+        if (offset == patch->offset) return static_cast<int>(patch->value & 0xffU);
+        if (offset == patch->offset + 1U) return static_cast<int>(patch->value >> 8U);
+    }
+    return std::nullopt;
 }
 
 int Bus::io_half(int offset) const noexcept {

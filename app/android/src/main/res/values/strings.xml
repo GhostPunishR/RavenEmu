@@ -63,17 +63,21 @@
     <string name="cheat_name">Nom</string>
     <string name="cheat_format">Type</string>
     <string name="cheat_codes">Codes, un par ligne</string>
-    <string name="cheat_codes_help">8 chiffres hexadécimaux par ligne. Espaces et tirets sont acceptés.</string>
+    <string name="cheat_codes_help">Un code par ligne. La syntaxe dépend du type sélectionné.</string>
     <string name="cheat_close">Fermer</string>
     <string name="cheat_save">Enregistrer</string>
     <string name="cheat_save_failed">Impossible d’enregistrer les cheats.</string>
     <string name="cheat_name_required">Donnez un nom à ce cheat.</string>
     <string name="cheat_code_error_line">Ligne %1$d : %2$s</string>
     <string name="cheat_error_empty">saisissez un code</string>
-    <string name="cheat_error_length">le code doit contenir exactement 8 chiffres hexadécimaux</string>
+    <string name="cheat_error_length">longueur incorrecte pour le format sélectionné</string>
     <string name="cheat_error_hex">caractère non hexadécimal</string>
-    <string name="cheat_error_command">banque ou variante GameShark non prise en charge</string>
-    <string name="cheat_error_address">l’adresse doit être comprise entre A000 et DFFF</string>
+    <string name="cheat_error_command">commande, banque ou syntaxe non prise en charge</string>
+    <string name="cheat_error_address">adresse hors de la mémoire autorisée pour ce format</string>
+    <string name="cheat_error_alignment">adresse non alignée pour cette largeur d’écriture</string>
+    <string name="cheat_error_value_width">valeur incompatible avec le type de commande sélectionné</string>
+    <string name="cheat_error_incomplete_command">commande multiligne incomplète</string>
+    <string name="cheat_error_master_code">Master Code GameShark non pris en charge ou invalide</string>
 
     <!-- Éditeur de commandes -->
     <string name="editor_hint">Glissez un élément pour le déplacer</string>

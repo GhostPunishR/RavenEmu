@@ -10,6 +10,7 @@ namespace ravenemu {
 /** Identifiants natifs figés, alignés sur CheatFormat.storageId côté Kotlin. */
 enum class CheatFormat : std::uint8_t {
     gameshark_gb_gbc = 0,
+    gameshark_gba_v1_v2 = 1,
 };
 
 struct CheatCode {

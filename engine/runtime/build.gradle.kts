@@ -9,4 +9,5 @@ dependencies {
     api(project(":engine:save"))
     api(project(":engine:diagnostics"))
     implementation(project(":native:jni"))
+    testImplementation(project(":engine:session"))
 }

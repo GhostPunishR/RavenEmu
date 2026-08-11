@@ -793,7 +793,7 @@ class EmulationActivity : RavenActivity(), EmulationSession.Callbacks {
         existing: CheatDefinition?,
         onSaved: () -> Unit,
     ) {
-        val formats = support.formats.sortedBy(CheatFormat::storageId)
+        val formats = EmulatorMenuPolicy.cheatFormats(support)
         if (formats.isEmpty()) return
 
         val content = layoutInflater.inflate(R.layout.dialog_cheat_editor, null)
@@ -880,6 +880,10 @@ class EmulationActivity : RavenActivity(), EmulationSession.Callbacks {
         CheatParseError.NON_HEXADECIMAL_CHARACTER -> R.string.cheat_error_hex
         CheatParseError.UNSUPPORTED_BANK_OR_COMMAND -> R.string.cheat_error_command
         CheatParseError.ADDRESS_OUT_OF_RANGE -> R.string.cheat_error_address
+        CheatParseError.ADDRESS_MISALIGNED -> R.string.cheat_error_alignment
+        CheatParseError.VALUE_WIDTH_INVALID -> R.string.cheat_error_value_width
+        CheatParseError.INCOMPLETE_COMMAND -> R.string.cheat_error_incomplete_command
+        CheatParseError.UNSUPPORTED_MASTER_CODE -> R.string.cheat_error_master_code
     }
 
     /**

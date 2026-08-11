@@ -6,6 +6,10 @@
 #include "input/keypad.hpp"
 #include "diagnostics/diagnostics.hpp"
 
+#include <optional>
+#include <span>
+#include <vector>
+
 namespace ravenemu::gba {
 
 class Ppu;
@@ -17,6 +21,12 @@ int ppu_dispstat_low(const Ppu*) noexcept;
 int ppu_vcount(const Ppu*) noexcept;
 void ppu_affine_reference_write(Ppu*, int) noexcept;
 void dma_control_write(DmaController*, int, int);
+
+/** Patch de lecture ROM compilé par un moteur de cheats. */
+struct CheatRomPatch {
+    std::uint32_t offset{};
+    std::uint16_t value{};
+};
 
 class Bus {
 public:
@@ -30,6 +40,17 @@ public:
     void write8(std::int32_t address, int value);
     void write16(std::int32_t address, int value);
     void write32(std::int32_t address, std::int32_t value);
+    /** Accès sans timing, mais avec les effets de bord du bus GBA émulé. */
+    [[nodiscard]] bool write_cheat(
+        std::uint32_t address,
+        std::uint32_t value,
+        int width
+    );
+    [[nodiscard]] std::optional<std::uint32_t> read_cheat(
+        std::uint32_t address,
+        int width
+    );
+    void set_cheat_rom_patches(std::span<const CheatRomPatch> patches);
     int take_wait_cycles() noexcept { return std::exchange(wait_cycles, 0); }
     void break_access_sequence() noexcept { next_sequential_address = -1; }
     void reset_affine_matrices();
@@ -58,6 +79,12 @@ public:
 
 private:
     static constexpr int io_mask = 0x3ff;
+    [[nodiscard]] static bool cheat_region_allowed(
+        std::uint32_t address,
+        int width,
+        bool write
+    ) noexcept;
+    [[nodiscard]] std::optional<int> cheat_rom_byte(std::int32_t address) const noexcept;
     void account(std::int32_t address, int width, bool fetch = false) noexcept;
     [[nodiscard]] int read8_raw(std::int32_t address);
     void write8_raw(std::int32_t address, int value);
@@ -77,6 +104,7 @@ private:
         return offset;
     }
     std::int32_t next_sequential_address{-1};
+    std::vector<CheatRomPatch> cheat_rom_patches_;
 };
 
 } // namespace ravenemu::gba

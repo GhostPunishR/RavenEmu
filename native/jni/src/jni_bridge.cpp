@@ -125,10 +125,14 @@ ravenemu::CheatCapableCore* cheat_core_from(Core& core) noexcept {
 }
 
 ravenemu::CheatFormat cheat_format_from(jint value) {
-    if (value != static_cast<jint>(ravenemu::CheatFormat::gameshark_gb_gbc)) {
+    switch (value) {
+    case static_cast<jint>(ravenemu::CheatFormat::gameshark_gb_gbc):
+        return ravenemu::CheatFormat::gameshark_gb_gbc;
+    case static_cast<jint>(ravenemu::CheatFormat::gameshark_gba_v1_v2):
+        return ravenemu::CheatFormat::gameshark_gba_v1_v2;
+    default:
         throw std::invalid_argument("Format de cheat RavenEmu inconnu");
     }
-    return static_cast<ravenemu::CheatFormat>(value);
 }
 
 std::optional<ravenemu::GbaSaveType> gba_save_type_from(jint value) {

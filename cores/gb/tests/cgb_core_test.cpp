@@ -189,6 +189,15 @@ void game_shark_real_core_test() {
     core->run_frame(frame, true);
     check(battery_byte(*core, 0) == 0x2a, "chargement d'état a perdu les cheats actifs");
 
+    const ravenemu::CheatCode gba_format{
+        ravenemu::CheatFormat::gameshark_gba_v1_v2,
+        "CD93194F 089CE0B4",
+    };
+    expect_failure<std::invalid_argument>(
+        [&] { cheats->replace_active_cheats(std::span{&gba_format, 1U}); },
+        "le cœur CGB a accepté un format de cheat GBA"
+    );
+
     auto dmg = ravenemu::make_game_boy_core();
     dmg->load_rom(minimal_game_boy_rom(), {});
     auto* dmg_cheats = dynamic_cast<ravenemu::CheatCapableCore*>(dmg.get());

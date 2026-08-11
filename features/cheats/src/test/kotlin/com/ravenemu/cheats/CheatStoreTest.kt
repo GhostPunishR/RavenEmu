@@ -47,12 +47,25 @@ class CheatStoreTest {
     @Test
     fun `les cheats sont isoles par SHA-256`() {
         val first = cheat("jeu A", enabled = true)
-        val second = cheat("jeu B", enabled = false)
+        val second = CheatDefinition(
+            id = "id-jeu-B",
+            name = "jeu B",
+            codes = listOf("cd93194f 089ce0b4", "raw 02000000 0000002a"),
+            format = CheatFormat.GAMESHARK_GBA_V1_V2,
+            enabled = false,
+        )
         assertTrue(store.save(shaA, listOf(first)))
         assertTrue(store.save(shaB, listOf(second)))
 
         assertEquals(listOf(first), store.load(shaA))
-        assertEquals(listOf(second), store.load(shaB))
+        assertEquals(
+            listOf(
+                second.copy(
+                    codes = listOf("CD93194F 089CE0B4\nRAW 02000000 0000002A")
+                )
+            ),
+            store.load(shaB),
+        )
     }
 
     @Test

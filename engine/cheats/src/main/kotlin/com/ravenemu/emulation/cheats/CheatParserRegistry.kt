@@ -14,33 +14,10 @@ class CheatParserRegistry(parsers: Iterable<CheatCodeParser>) {
     fun parse(format: CheatFormat, raw: String): CheatCodeParseResult =
         requireNotNull(byFormat[format]) { "Aucun parseur pour ${format.name}" }.parse(raw)
 
-    /** Une ligne non vide de l'éditeur correspond à un code du même cheat. */
-    fun parseLines(format: CheatFormat, raw: String): CheatCodeListParseResult {
-        val lines = raw.lineSequence()
-            .mapIndexedNotNull { index, line ->
-                line.takeIf { it.isNotBlank() }?.let { index + 1 to it }
-            }
-            .toList()
-        if (lines.isEmpty()) {
-            return CheatCodeListParseResult.Failure(
-                CheatLineFailure(1, CheatParseError.EMPTY)
-            )
-        }
-        val parsed = ArrayList<CheatCode>(lines.size)
-        for ((lineNumber, line) in lines) {
-            when (val result = parse(format, line)) {
-                is CheatCodeParseResult.Success -> parsed += result.code
-                is CheatCodeParseResult.Failure -> {
-                    return CheatCodeListParseResult.Failure(
-                        CheatLineFailure(lineNumber, result.error)
-                    )
-                }
-            }
-        }
-        return CheatCodeListParseResult.Success(parsed)
-    }
+    fun parseLines(format: CheatFormat, raw: String): CheatCodeListParseResult =
+        requireNotNull(byFormat[format]) { "Aucun parseur pour ${format.name}" }.parseLines(raw)
 
     companion object {
-        val DEFAULT = CheatParserRegistry(listOf(GameSharkGbParser))
+        val DEFAULT = CheatParserRegistry(listOf(GameSharkGbParser, GameSharkGbaV1V2Parser))
     }
 }

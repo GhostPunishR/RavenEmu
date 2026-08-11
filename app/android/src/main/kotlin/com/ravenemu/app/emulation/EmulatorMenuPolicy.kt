@@ -1,5 +1,6 @@
 package com.ravenemu.app.emulation
 
+import com.ravenemu.emulation.cheats.CheatFormat
 import com.ravenemu.emulation.cheats.CheatSupport
 
 internal enum class EmulatorMenuAction {
@@ -27,4 +28,8 @@ internal object EmulatorMenuPolicy {
         add(EmulatorMenuAction.TOGGLE_PER_GAME_PROFILE)
         add(EmulatorMenuAction.QUIT)
     }
+
+    /** Le sélecteur ne propose jamais un format absent de la capability active. */
+    fun cheatFormats(support: CheatSupport): List<CheatFormat> =
+        support.formats.sortedBy(CheatFormat::storageId)
 }
