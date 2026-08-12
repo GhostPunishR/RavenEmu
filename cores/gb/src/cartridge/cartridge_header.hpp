@@ -14,6 +14,8 @@ struct CartridgeHeader {
     bool has_rtc{};
     int ram_size{};
     bool uses_color{};
+    bool requires_color{};
+    bool mbc1_multicart{};
 
     static constexpr std::size_t min_rom_size = 0x8000;
     static constexpr std::size_t max_rom_size = 8U * 1024U * 1024U;
@@ -65,7 +67,25 @@ struct CartridgeHeader {
         }
         const auto cgb_flag = rom[0x143];
         header.uses_color = cgb_flag == 0x80 || cgb_flag == 0xc0;
+        header.requires_color = cgb_flag == 0xc0;
+        // MBC1M n'a pas de type d'en-tête distinct. Son câblage 1 Mio se
+        // reconnaît à un second en-tête autonome dans la banque $10. Le
+        // checksum suffit ici : RavenEmu ne stocke ni ne compare le logo
+        // protégé présent dans les cartouches commerciales.
+        header.mbc1_multicart = header.mbc == MbcType::mbc1 && rom.size() == 0x100000 &&
+            valid_header_checksum(rom, 0) && valid_header_checksum(rom, 0x40000);
         return header;
+    }
+
+private:
+    static bool valid_header_checksum(std::span<const std::uint8_t> rom,
+                                      std::size_t base) noexcept {
+        if (base + 0x14d >= rom.size()) return false;
+        std::uint8_t checksum{};
+        for (std::size_t offset = 0x134; offset <= 0x14c; ++offset) {
+            checksum = static_cast<std::uint8_t>(checksum - rom[base + offset] - 1U);
+        }
+        return checksum == rom[base + 0x14d];
     }
 };
 

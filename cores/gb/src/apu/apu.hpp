@@ -1,12 +1,16 @@
 #pragma once
 
 #include "support/bits.hpp"
+#include <ravenemu/gb/hardware_mode.hpp>
 
 namespace ravenemu::cgb {
 
 class Apu {
 public:
     static constexpr int sample_rate = 32768;
+
+    explicit Apu(gb::HardwareMode hardware_mode = gb::HardwareMode::dmg)
+        : hardware_mode_(hardware_mode) {}
 
     void tick(int cycles) {
         int remaining = cycles;
@@ -34,8 +38,53 @@ public:
         return copied;
     }
 
+    [[nodiscard]] int read_pcm12() const noexcept {
+        return square1_.output() | (square2_.output() << 4);
+    }
+
+    [[nodiscard]] int read_pcm34() const noexcept {
+        return wave_.output() | (noise_.output() << 4);
+    }
+
+    void reset_for_boot_rom() noexcept {
+        power_down();
+        frame_step_ = 0;
+        frame_timer_ = frame_period;
+        sample_timer_ = cycles_per_sample;
+        ring_read_ = 0; ring_write_ = 0; ring_count_ = 0;
+        capacitor_left_ = 0; capacitor_right_ = 0;
+    }
+
+    /** État observable à l'entrée $0100 sans redistribuer de boot ROM. */
+    void initialize_hle_post_boot() noexcept {
+        square1_.reset(); square2_.reset(); wave_.reset(); noise_.reset();
+        power_on_ = true;
+        raw_registers_.fill(0);
+        nr50_ = 0x77;
+        nr51_ = 0xf3;
+        raw_registers_[0x01] = 0x80; // NR11 : duty 2, longueur masquée en lecture
+        raw_registers_[0x02] = 0xf3; // NR12
+        raw_registers_[0x14] = nr50_;
+        raw_registers_[0x15] = nr51_;
+        square1_.duty = 2;
+        square1_.dac_enabled = true;
+        square1_.enabled = true;
+        square1_.envelope_initial = 15;
+        square1_.envelope_period = 3;
+        square1_.volume = 15;
+        square1_.envelope_timer = 3;
+        square1_.length = 1;
+        frame_step_ = 0;
+        frame_timer_ = frame_period;
+        sample_timer_ = cycles_per_sample;
+        ring_read_ = 0; ring_write_ = 0; ring_count_ = 0;
+        capacitor_left_ = 0; capacitor_right_ = 0;
+    }
+
     [[nodiscard]] int read(int address) const noexcept {
-        if (address >= 0xff30 && address <= 0xff3f) return wave_.ram[static_cast<std::size_t>(address - 0xff30)];
+        if (address >= 0xff30 && address <= 0xff3f) {
+            return read_wave_ram(address - 0xff30);
+        }
         const int offset = address - 0xff10;
         if (offset < 0 || offset >= static_cast<int>(raw_registers_.size())) return 0xff;
         if (address == 0xff26) {
@@ -52,17 +101,25 @@ public:
     void write(int address, int value) {
         value = byte(value);
         if (address >= 0xff30 && address <= 0xff3f) {
-            wave_.ram[static_cast<std::size_t>(address - 0xff30)] = static_cast<std::uint8_t>(value);
+            write_wave_ram(address - 0xff30, value);
             return;
         }
         const int offset = address - 0xff10;
         if (offset < 0 || offset >= static_cast<int>(raw_registers_.size())) return;
-        if (!power_on_ && address != 0xff26) return;
+        if (!power_on_ && address != 0xff26) {
+            write_length_while_powered_off(address, value);
+            return;
+        }
         raw_registers_[static_cast<std::size_t>(offset)] = value;
         switch (address) {
-        case 0xff10:
-            square1_.sweep_period = (value >> 4) & 7; square1_.sweep_negate = (value & 8) != 0;
+        case 0xff10: {
+            const bool new_negate = (value & 8) != 0;
+            if (square1_.sweep_negate && !new_negate && square1_.sweep_negate_used) {
+                square1_.enabled = false;
+            }
+            square1_.sweep_period = (value >> 4) & 7; square1_.sweep_negate = new_negate;
             square1_.sweep_shift = value & 7; break;
+        }
         case 0xff11: square1_.duty = (value >> 6) & 3; square1_.length = 64 - (value & 0x3f); break;
         case 0xff12: configure_envelope(square1_, value); break;
         case 0xff13: square1_.frequency = (square1_.frequency & 0x700) | value; break;
@@ -144,6 +201,7 @@ private:
         int sweep_timer{};
         bool sweep_enabled{};
         int shadow_frequency{};
+        bool sweep_negate_used{};
         int accumulator{};
 
         [[nodiscard]] int output() const noexcept {
@@ -173,6 +231,7 @@ private:
         int next_sweep_frequency() noexcept {
             const int delta = shadow_frequency >> sweep_shift;
             const int next = sweep_negate ? shadow_frequency - delta : shadow_frequency + delta;
+            if (sweep_negate) sweep_negate_used = true;
             if (next > 2047) enabled = false;
             return next;
         }
@@ -194,6 +253,7 @@ private:
             if (has_sweep) {
                 shadow_frequency = frequency; sweep_timer = sweep_period != 0 ? sweep_period : 8;
                 sweep_enabled = sweep_period != 0 || sweep_shift != 0;
+                sweep_negate_used = false;
                 if (sweep_shift != 0) static_cast<void>(next_sweep_frequency());
             }
         }
@@ -202,7 +262,8 @@ private:
             envelope_initial = 0; envelope_add = false; envelope_period = 0; volume = 0;
             envelope_timer = 0; frequency = 0; duty_position = 0; sweep_period = 0;
             sweep_negate = false; sweep_shift = 0; sweep_timer = 0; sweep_enabled = false;
-            shadow_frequency = 0;
+            shadow_frequency = 0; sweep_negate_used = false;
+            timer = 2048 * 4; accumulator = 0;
         }
         void save(BinaryWriter& out) const {
             out.boolean(enabled); out.boolean(dac_enabled); out.i32(duty); out.i32(length);
@@ -210,7 +271,8 @@ private:
             out.i32(envelope_period); out.i32(volume); out.i32(envelope_timer);
             out.i32(frequency); out.i32(timer); out.i32(duty_position); out.i32(sweep_period);
             out.boolean(sweep_negate); out.i32(sweep_shift); out.i32(sweep_timer);
-            out.boolean(sweep_enabled); out.i32(shadow_frequency);
+            out.boolean(sweep_enabled); out.i32(shadow_frequency); out.boolean(sweep_negate_used);
+            out.i32(accumulator);
         }
         void load(BinaryReader& in) {
             enabled = in.boolean(); dac_enabled = in.boolean(); duty = in.i32(); length = in.i32();
@@ -218,7 +280,8 @@ private:
             envelope_period = in.i32(); volume = in.i32(); envelope_timer = in.i32();
             frequency = in.i32(); timer = in.i32(); duty_position = in.i32(); sweep_period = in.i32();
             sweep_negate = in.boolean(); sweep_shift = in.i32(); sweep_timer = in.i32();
-            sweep_enabled = in.boolean(); shadow_frequency = in.i32(); accumulator = 0;
+            sweep_enabled = in.boolean(); shadow_frequency = in.i32();
+            sweep_negate_used = in.boolean(); accumulator = in.i32();
         }
     };
 
@@ -233,6 +296,7 @@ private:
         int timer{2048 * 2};
         int position{};
         int sample_buffer{};
+        int ram_access_cycles{};
         int accumulator{};
 
         [[nodiscard]] int output() const noexcept {
@@ -246,11 +310,13 @@ private:
             int remaining = cycles;
             while (remaining > 0) {
                 const int slice = std::min(timer, remaining);
+                ram_access_cycles = std::max(0, ram_access_cycles - slice);
                 accumulator += dac_output() * slice; timer -= slice; remaining -= slice;
                 if (timer <= 0) {
                     timer = (2048 - frequency) * 2; position = (position + 1) & 31;
                     const int value = ram[static_cast<std::size_t>(position >> 1)];
                     sample_buffer = (position & 1) == 0 ? value >> 4 : value & 0x0f;
+                    ram_access_cycles = 2;
                 }
             }
         }
@@ -259,20 +325,26 @@ private:
             accumulator = 0; return average;
         }
         void clock_length() noexcept { if (length_enabled && length > 0 && --length == 0) enabled = false; }
-        void trigger() noexcept { enabled = dac_enabled; if (length == 0) length = 256; timer = (2048 - frequency) * 2; position = 0; }
+        void trigger() noexcept {
+            enabled = dac_enabled; if (length == 0) length = 256;
+            timer = (2048 - frequency) * 2; position = 0; ram_access_cycles = 0;
+        }
         void reset() noexcept {
             enabled = false; dac_enabled = false; length = 0; length_enabled = false;
-            volume_code = 0; frequency = 0; position = 0; sample_buffer = 0;
+            volume_code = 0; frequency = 0; timer = 2048 * 2;
+            position = 0; sample_buffer = 0; ram_access_cycles = 0; accumulator = 0;
         }
         void save(BinaryWriter& out) const {
             out.raw(ram); out.boolean(enabled); out.boolean(dac_enabled); out.i32(length);
             out.boolean(length_enabled); out.i32(volume_code); out.i32(frequency);
-            out.i32(timer); out.i32(position); out.i32(sample_buffer);
+            out.i32(timer); out.i32(position); out.i32(sample_buffer); out.i32(ram_access_cycles);
+            out.i32(accumulator);
         }
         void load(BinaryReader& in) {
             in.raw(ram); enabled = in.boolean(); dac_enabled = in.boolean(); length = in.i32();
             length_enabled = in.boolean(); volume_code = in.i32(); frequency = in.i32();
-            timer = in.i32(); position = in.i32(); sample_buffer = in.i32(); accumulator = 0;
+            timer = in.i32(); position = in.i32(); sample_buffer = in.i32();
+            ram_access_cycles = std::max(0, in.i32()); accumulator = in.i32();
         }
     };
 
@@ -327,21 +399,55 @@ private:
         void reset() noexcept {
             enabled = false; dac_enabled = false; length = 0; length_enabled = false;
             envelope_initial = 0; envelope_add = false; envelope_period = 0; volume = 0;
-            envelope_timer = 0; divisor_code = 0; width_mode7 = false; clock_shift = 0; lfsr = 0x7fff;
+            envelope_timer = 0; divisor_code = 0; width_mode7 = false; clock_shift = 0;
+            lfsr = 0x7fff; timer = 8; accumulator = 0;
         }
         void save(BinaryWriter& out) const {
             out.boolean(enabled); out.boolean(dac_enabled); out.i32(length); out.boolean(length_enabled);
             out.i32(envelope_initial); out.boolean(envelope_add); out.i32(envelope_period);
             out.i32(volume); out.i32(envelope_timer); out.i32(divisor_code);
             out.boolean(width_mode7); out.i32(clock_shift); out.i32(lfsr); out.i32(timer);
+            out.i32(accumulator);
         }
         void load(BinaryReader& in) {
             enabled = in.boolean(); dac_enabled = in.boolean(); length = in.i32(); length_enabled = in.boolean();
             envelope_initial = in.i32(); envelope_add = in.boolean(); envelope_period = in.i32();
             volume = in.i32(); envelope_timer = in.i32(); divisor_code = in.i32();
-            width_mode7 = in.boolean(); clock_shift = in.i32(); lfsr = in.i32(); timer = in.i32(); accumulator = 0;
+            width_mode7 = in.boolean(); clock_shift = in.i32(); lfsr = in.i32(); timer = in.i32();
+            accumulator = in.i32();
         }
     };
+
+    [[nodiscard]] int read_wave_ram(int requested_index) const noexcept {
+        if (!wave_.enabled) {
+            return wave_.ram[static_cast<std::size_t>(requested_index & 0x0f)];
+        }
+        if (!gb::is_cgb_hardware(hardware_mode_) && wave_.ram_access_cycles <= 0) return 0xff;
+        return wave_.ram[static_cast<std::size_t>((wave_.position >> 1) & 0x0f)];
+    }
+
+    void write_wave_ram(int requested_index, int value) noexcept {
+        int index = requested_index & 0x0f;
+        if (wave_.enabled) {
+            if (!gb::is_cgb_hardware(hardware_mode_) && wave_.ram_access_cycles <= 0) return;
+            index = (wave_.position >> 1) & 0x0f;
+        }
+        wave_.ram[static_cast<std::size_t>(index)] = static_cast<std::uint8_t>(value);
+    }
+
+    void write_length_while_powered_off(int address, int value) noexcept {
+        // Sur les modèles monochromes, les quatre compteurs de longueur sont
+        // encore câblés lorsque NR52 coupe le reste de l'APU. Le CGB bloque
+        // aussi ces écritures.
+        if (gb::is_cgb_hardware(hardware_mode_)) return;
+        switch (address) {
+        case 0xff11: square1_.length = 64 - (value & 0x3f); break;
+        case 0xff16: square2_.length = 64 - (value & 0x3f); break;
+        case 0xff1b: wave_.length = 256 - value; break;
+        case 0xff20: noise_.length = 64 - (value & 0x3f); break;
+        default: break;
+        }
+    }
 
     static void configure_envelope(Square& square, int value) noexcept {
         square.envelope_initial = (value >> 4) & 0x0f; square.envelope_add = (value & 8) != 0;
@@ -388,7 +494,17 @@ private:
         ring_write_ = (ring_write_ + 2) & (ring_capacity - 1); ring_count_ += 2;
     }
     void power_down() noexcept {
+        const int square1_length = square1_.length;
+        const int square2_length = square2_.length;
+        const int wave_length = wave_.length;
+        const int noise_length = noise_.length;
         power_on_ = false; square1_.reset(); square2_.reset(); wave_.reset(); noise_.reset();
+        if (!gb::is_cgb_hardware(hardware_mode_)) {
+            square1_.length = square1_length;
+            square2_.length = square2_length;
+            wave_.length = wave_length;
+            noise_.length = noise_length;
+        }
         nr50_ = 0; nr51_ = 0; raw_registers_.fill(0);
     }
 
@@ -414,6 +530,7 @@ private:
     Square square2_{false};
     Wave wave_{};
     Noise noise_{};
+    gb::HardwareMode hardware_mode_{gb::HardwareMode::dmg};
     bool power_on_{true};
     int nr50_{0x77};
     int nr51_{0xf3};

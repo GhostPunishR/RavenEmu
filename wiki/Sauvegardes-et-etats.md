@@ -24,9 +24,23 @@ Un état instantané capture l'ensemble de la machine émulée à un moment pré
 - audio;
 - timers;
 - interruptions;
-- contrôleurs de cartouche.
+- contrôleurs de cartouche;
+- mode matériel DMG/CGB, `KEY1`, `OPRI`, IR et état de la boot ROM;
+- état intermédiaire du fetcher/FIFO PPU, des DMA, des boutons et de la phase
+  libre du port série.
 
 Les états utilisent le format RavenEmu `RVNS`. Ils ne sont pas annoncés comme compatibles avec d'autres émulateurs.
+
+Le format GB/GBC courant est la **version 6**. Il enregistre les nouvelles
+frontières de M-cycle et tous les états matériels nécessaires à une reprise
+déterministe. Les versions GB/GBC antérieures, notamment la version 5, sont
+refusées avec une erreur explicite au lieu de charger silencieusement un état
+incomplet. Le format du cœur GBA évolue indépendamment.
+
+Les objets de transport externes (`LinkEndpoint` et `InfraredEndpoint`) ne font
+pas partie de la machine émulée et ne sont pas sérialisés. Après restauration,
+le cœur se reconnecte à l'endpoint que l'hôte lui a déjà fourni ; l'autre
+instance ou le backend reste responsable de sa propre restauration.
 
 ## Compatibilité des sauvegardes et des états
 

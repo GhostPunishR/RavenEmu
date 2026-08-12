@@ -6,23 +6,40 @@ Consultez la [[matrice de compatibilité détaillée des jeux|Compatibilite-des-
 
 Le moteur Game Boy comprend notamment:
 
-- CPU Sharp LR35902 avec instructions principales et CB;
-- gestion du délai `EI`, de `HALT` et de `STOP`;
-- rendu du fond, de la fenêtre et des sprites;
+- CPU Sharp LR35902 avec instructions principales et CB, accès bus ordonnancés
+  par M-cycle et timings officiels vérifiés exhaustivement;
+- délai `EI`, `DI`, interruptions, `RETI`, bug de `HALT` et `STOP`;
+- rendu du fond, de la fenêtre et des sprites par fetcher/FIFO;
 - audio à quatre canaux;
-- timers, interruptions et DMA OAM;
-- cartouches ROM seule, MBC1, MBC2, MBC3 avec horloge et MBC5.
+- timer à détection de front et fenêtre de rechargement TIMA;
+- interruptions et DMA OAM progressif;
+- cartouches ROM seule, MBC1/MBC1M, MBC2, MBC3 avec horloge et MBC5;
+- boot ROM utilisateur optionnelle via la fabrique C++ et démarrage HLE sans
+  firmware;
+- liaison série locale déterministe entre deux instances du cœur.
 
 ### Limites connues
 
-- pas de câble link connecté à un second appareil;
-- pas de multicartouches MBC1M;
-- certains comportements matériels rares de l'audio ne sont pas reproduits;
-- les timings PPU très fins restent approximatifs dans certains cas.
+- aucun backend Android, réseau ou Bluetooth n'expose encore le câble link;
+- certains comportements matériels rares de l'APU restent à reproduire;
+- certains cas fins du fetcher PPU, des sprites et de l'activation LCD restent à
+  valider sur des suites matérielles;
+- les contrôleurs MMM01, MBC6, MBC7, HuC1, HuC3, TAMA5 et Camera restent refusés
+  explicitement;
+- l'injection d'une boot ROM n'est pas encore exposée dans l'interface Android;
+- le fallback HLE cible DMG ABC/MGB et CGB ABCDE; DMG0, SGB, SGB2 et AGB ne
+  disposent pas encore de profils de démarrage sélectionnables;
+- avec une boot ROM utilisateur, les valeurs réellement non initialisées au
+  power-on sont normalisées à zéro plutôt que randomisées.
 
 ## Game Boy Color
 
-Les cartouches GB et GBC partagent encore l'implémentation principale du cœur, qui active le matériel couleur d'après l'octet `0x0143` de l'en-tête. Le dépôt possède toutefois une cible C++ `gbc_raven_core` dédiée, des tests matériels GBC propres et commence à extraire les composants spécifiques sous `cores/gbc`.
+Les cartouches GB et GBC partagent les composants réellement communs, mais le
+modèle physique n'est plus déduit uniquement de l'octet `0x0143`. La fabrique
+publique distingue DMG, CGB natif et CGB exécutant une cartouche DMG en mode de
+compatibilité. La cible `gbc_raven_core` force un CGB physique et possède ses
+propres tests matériels, tandis que les composants spécifiques continuent leur
+extraction sous `cores/gbc` sans dupliquer le PPU.
 
 Trois modes de cartouche sont distingués: monochrome, compatible couleur (`0x80`) et couleur exigée (`0xC0`). L'extension du fichier n'entre pas en compte: un `.gbc` peut contenir une cartouche monochrome, un `.gb` une cartouche couleur.
 
@@ -30,23 +47,32 @@ Une cartouche déclarant des fonctions couleur bénéficie notamment de:
 
 - deux banques VRAM et huit banques WRAM;
 - palettes couleur 15 bits et attributs de tuiles;
-- rendu PPU cadencé par dots, avec durée de transfert sensible au décalage horizontal, à la fenêtre et aux sprites;
+- rendu PPU cadencé par dots avec fetcher/FIFO et durée de transfert sensible au
+  décalage horizontal, à la fenêtre et aux sprites;
 - restrictions d'accès VRAM, OAM et palettes pendant les phases concernées du LCD;
 - OAM DMA progressif;
 - GDMA et HDMA progressifs avec blocage du CPU pendant les transferts;
 - mode double vitesse via `KEY1` et transition déclenchée par `STOP`;
-- port série bit par bit avec horloge interne normale, horloge rapide CGB et horloge externe;
-- registre infrarouge `RP` (`FF56`) modélisé dans le cœur;
+- port série bit par bit avec diviseur libre aligné au reset, horloge interne
+  normale, horloge rapide CGB et horloge externe;
+- registre `OPRI` (`FF6C`) et priorité objet DMG/CGB;
+- registres PCM `FF76`/`FF77`;
+- registre infrarouge `RP` (`FF56`) modélisé et connectable entre deux instances;
 - MBC5 rumble relié à la vibration Android;
 - sortie couleur ARGB.
 
 ### Limites connues
 
-- le PPU est désormais cadencé par dots mais certains délais du fetcher, de la fenêtre et des sprites restent des approximations et ne sont pas présentés comme cycle-perfect;
-- le registre `OPRI` (`FF6C`) n'est pas encore émulé;
-- le port série possède l'horloge externe côté cœur, mais aucun câble link entre deux sessions ou appareils n'est encore fourni;
-- le port infrarouge est modélisé logiquement, sans backend matériel entre appareils Android;
-- certains comportements audio rares restent simplifiés;
+- certains cas fins d'annulation de fetch sprite, de transition LCD et de
+  modification de registres en milieu de ligne restent à confronter au matériel;
+- le verrouillage vidéo et les cas anormaux de `STOP` pendant la transition de
+  vitesse CGB restent à reproduire au niveau des révisions matérielles;
+- la palette HLE du mode de compatibilité CGB est générique et ne reproduit pas
+  encore la sélection de palette propre aux différentes boot ROMs;
+- le link et l'infrarouge fonctionnent entre deux machines dans le même
+  processus, sans backend entre sessions Android ou appareils;
+- certains comportements audio rares (horloge DIV-APU exacte, enveloppes
+  « zombie », corruption d'onde propre à certaines révisions) restent simplifiés;
 - les contrôleurs de cartouche exotiques non implémentés sont refusés plutôt que simulés incorrectement.
 
 ## Game Boy Advance

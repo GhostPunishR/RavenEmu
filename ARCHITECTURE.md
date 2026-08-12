@@ -69,18 +69,28 @@ cores
 
 ## Cœurs C++
 
-`cores/common` porte le contrat `Core`, les primitives binaires et SHA-256.
+`cores/common` porte le contrat `Core`, les primitives binaires et SHA-256, ainsi
+que les contrats sans dépendance plateforme `LinkEndpoint` et
+`InfraredEndpoint`.
 
-`cores/gb` porte encore l'implémentation principale commune GB/GBC. Le mode CGB
-est sélectionné à partir de l'en-tête de la cartouche et conserve la même identité
-persistée que la Game Boy afin de ne pas casser la bibliothèque ou les sauvegardes.
+`cores/gb` porte l'implémentation matérielle commune GB/GBC. Le modèle physique
+demandé à la fabrique (`automatic`, `dmg` ou `cgb`) est distinct des capacités
+annoncées par la cartouche. Il produit l'un des trois modes effectifs suivants :
 
-`cores/gbc` est désormais une vraie bibliothèque statique `gbc_raven_core`, avec
-ses propres tests matériels. L'extraction est progressive plutôt qu'une copie du
-cœur GB : les composants spécifiques déjà déplacés comprennent notamment le
-contrôleur de double vitesse et le port infrarouge. Le PPU, les DMA, le port série
-et les autres organes restent encore partagés avec l'implémentation GB pendant
-leur séparation sous tests de parité.
+- DMG ;
+- CGB natif pour une cartouche couleur ;
+- CGB exécutant une cartouche DMG en mode de compatibilité.
+
+La fabrique historique conserve le mode automatique et l'identité persistée
+Game Boy pour ne pas modifier le contrat JNI, la bibliothèque ou le stockage.
+
+`cores/gbc` est une vraie bibliothèque statique `gbc_raven_core`, avec ses
+propres tests matériels. Sa fabrique force maintenant un CGB physique : une ROM
+DMG y entre donc en mode de compatibilité au lieu de retomber sur le modèle DMG.
+L'extraction est progressive plutôt qu'une copie du cœur GB : les composants
+spécifiques déjà déplacés comprennent notamment le contrôleur de double vitesse
+et le port infrarouge. Le PPU, les DMA, le port série et les autres organes
+communs restent factorisés pendant leur séparation sous tests de parité.
 
 Le dossier porte donc **deux** cibles, et la distinction commande la suite de
 l'extraction :
@@ -95,10 +105,42 @@ unique créerait un cycle. `gbc_hardware` reste INTERFACE tant que les composant
 extraits ne sont que des en-têtes, et devient STATIC dès que l'un d'eux gagne un
 `.cpp` — sans qu'aucune autre cible n'ait à changer.
 
+### Ordonnancement GB/GBC
+
+Le CPU LR35902 ne fait plus avancer une instruction entière d'un bloc. Chaque
+lecture, écriture et cycle interne appelle le bus à une frontière de M-cycle.
+Le bus avance alors timer, série, PPU, APU, cartouche et DMA dans leurs domaines
+d'horloge respectifs ; un GDMA ou un bloc HDMA peut ainsi prendre le bus entre
+deux micro-opérations de la même instruction. La double vitesse change le ratio
+cycles CPU/dots périphériques sans accélérer le LCD.
+
+Le PPU partagé utilise un fetcher et une FIFO de pixels sauvegardables. La durée
+du mode 3 dépend du décalage fin `SCX`, du démarrage de fenêtre et des sprites,
+au lieu d'une constante par ligne. Cette architecture est la fondation des
+corrections de précision restantes ; elle n'est pas qualifiée de cycle-perfect.
+
+Une boot ROM DMG ou CGB peut être injectée par les fabriques C++ publiques. Son
+mapping et `FF50` restent dans le cœur ; aucune image n'est distribuée. Sans
+image, le cœur conserve un démarrage HLE post-boot explicite, avec des registres
+CPU/APU distincts pour DMG, CGB natif et compatibilité CGB. Lorsqu'une image est
+présente, un CGB démarre avec ses fonctions natives puis bascule, à l'écriture
+de `FF50`, vers la compatibilité si la cartouche est monochrome. Les mémoires et
+registres non documentés au vrai power-on sont initialisés à zéro de manière
+déterministe ; cette normalisation est une approximation assumée des valeurs
+électriques non initialisées. Les images CGB peuvent utiliser le format compact
+de 2 048 octets ou le layout adressé de 2 304 octets qui conserve le trou
+`0100-01FF`.
+
+Le fallback HLE cible les phases observables DMG ABC/MGB et CGB ABCDE, y compris
+le diviseur série libre aligné au reset. Les autres révisions matérielles ne
+sont pas implicitement assimilées à ces profils.
+
 `cores/gba` porte le moteur Game Boy Advance indépendant.
 
-Les quatre suites natives (`common`, `gb`, `gbc`, `gba`) doivent pouvoir être
-construites directement avec `cmake -S cores`.
+Les suites natives (`common`, GB/GBC par sous-système, `gbc`, `gba`) doivent
+pouvoir être construites directement avec `cmake -S cores`. Le runner
+`gb_conformance_runner` reçoit uniquement des ROMs de test externes fournies par
+le développeur ou la CI ; aucune ROM de conformité n'est intégrée implicitement.
 
 ## Frontières plateforme
 
@@ -108,8 +150,11 @@ moteur. `engine/session` transforme cet état en sortie abstraite et
 `platform/android/vibration` est seul responsable du `Vibrator` Android.
 
 Le même principe s'applique au port série et au port infrarouge : le modèle
-matériel reste dans le cœur, tandis qu'une future connexion entre appareils doit
-passer par une couche plateforme séparée.
+matériel reste dans le cœur. Des implémentations locales déterministes des deux
+endpoints relient déjà deux machines dans un même processus ; un futur transport
+Android, réseau ou Bluetooth devra implémenter ces contrats sans entrer dans le
+cœur. L'endpoint doit vivre au moins aussi longtemps que les cœurs connectés et
+la topologie externe n'est pas sérialisée dans les états instantanés.
 
 ## Bibliothèque ROM
 
