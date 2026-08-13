@@ -31,3 +31,9 @@ RavenEmu.
 Les catégories recommandées pour les manifests de CI sont : `cpu`, `timing`,
 `interrupts`, `timer`, `halt`, `ei`, `stop`, `memory`, `oam-dma`, `vram-dma`,
 `ppu`, `stat`, `palettes`, `speed-switch`, `serial`, `apu` et `mbc`.
+
+Les tests synthétiques internes couvrent en complément les fronts des portes
+VRAM/OAM/CRAM, leur échantillonnage à la frontière d'un M-cycle normal ou
+double, le démarrage LCD DMG/CGB, le blocage entre sources STAT et
+l'auto-incrément des palettes après une écriture refusée. Ils ne contiennent
+aucune ROM ou donnée Nintendo.

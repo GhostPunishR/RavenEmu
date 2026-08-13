@@ -30,16 +30,11 @@ public:
 
     [[nodiscard]] bool lcd_enabled() const noexcept { return (lcdc_ & 0x80) != 0; }
     [[nodiscard]] int read_vram(int address) const noexcept {
-        const bool first_line_opening = lcd_startup_line_ && mode_ == mode_transfer &&
-            reported_mode_ == mode_hblank;
-        if (lcd_enabled() &&
-            (reported_mode_ == mode_transfer || (mode_ == mode_transfer && !first_line_opening))) {
-            return 0xff;
-        }
+        if (cpu_video_bus_locks().vram_read) return 0xff;
         return vram[static_cast<std::size_t>(vram_bank_ * 0x2000 + (address & 0x1fff))];
     }
     void write_vram(int address, int value) noexcept {
-        if (lcd_enabled() && reported_mode_ == mode_transfer) return;
+        if (cpu_video_bus_locks().vram_write) return;
         vram[static_cast<std::size_t>(vram_bank_ * 0x2000 + (address & 0x1fff))] = static_cast<std::uint8_t>(value);
     }
     void write_vram_bank(int value) noexcept { if (gb::cgb_features_enabled(hardware_mode_)) vram_bank_ = value & 1; }
@@ -49,20 +44,11 @@ public:
     [[nodiscard]] int vram_bank() const noexcept { return vram_bank_; }
 
     [[nodiscard]] int read_oam(int address) const noexcept {
-        // Les phases de lecture et d'écriture OAM ne voient pas exactement
-        // le même front lors des transitions DMG. Le scan interne bloque les
-        // lectures dès son départ, tandis que le blocage mode 3 suit les bits
-        // de mode exposés au CPU.
-        if (lcd_enabled() &&
-            (mode_ == mode_oam || reported_mode_ == mode_oam || reported_mode_ == mode_transfer)) {
-            return 0xff;
-        }
+        if (cpu_video_bus_locks().oam_read) return 0xff;
         return oam[static_cast<std::size_t>(address & 0xff)];
     }
     void write_oam(int address, int value) noexcept {
-        const bool blocked = reported_mode_ == mode_transfer ||
-            (reported_mode_ == mode_oam && mode_ == mode_oam);
-        if (lcd_enabled() && blocked) return;
+        if (cpu_video_bus_locks().oam_write) return;
         oam[static_cast<std::size_t>(address & 0xff)] = static_cast<std::uint8_t>(value);
     }
     void write_oam_direct(int index, int value) noexcept { oam[static_cast<std::size_t>(index)] = static_cast<std::uint8_t>(value); }
@@ -70,25 +56,29 @@ public:
     void write_bcps(int value) noexcept { bcps_index_ = value & 0x3f; bcps_auto_ = (value & 0x80) != 0; }
     [[nodiscard]] int read_bcps() const noexcept { return bcps_index_ | (bcps_auto_ ? 0x80 : 0) | 0x40; }
     void write_bcpd(int value) noexcept {
-        if (lcd_enabled() && reported_mode_ == mode_transfer) return;
-        bg_cram[static_cast<std::size_t>(bcps_index_)] = static_cast<std::uint8_t>(value);
-        recompute_argb(bg_cram, bg_argb_, bcps_index_);
+        if (!cpu_video_bus_locks().cram) {
+            bg_cram[static_cast<std::size_t>(bcps_index_)] = static_cast<std::uint8_t>(value);
+            recompute_argb(bg_cram, bg_argb_, bcps_index_);
+        }
+        // Le compteur d'adresse appartient au registre d'index, pas à la RAM
+        // couleur : il avance même si le mode 3 rejette l'écriture de données.
         if (bcps_auto_) bcps_index_ = (bcps_index_ + 1) & 0x3f;
     }
     [[nodiscard]] int read_bcpd() const noexcept {
-        if (lcd_enabled() && reported_mode_ == mode_transfer) return 0xff;
+        if (cpu_video_bus_locks().cram) return 0xff;
         return bg_cram[static_cast<std::size_t>(bcps_index_)];
     }
     void write_ocps(int value) noexcept { ocps_index_ = value & 0x3f; ocps_auto_ = (value & 0x80) != 0; }
     [[nodiscard]] int read_ocps() const noexcept { return ocps_index_ | (ocps_auto_ ? 0x80 : 0) | 0x40; }
     void write_ocpd(int value) noexcept {
-        if (lcd_enabled() && reported_mode_ == mode_transfer) return;
-        obj_cram[static_cast<std::size_t>(ocps_index_)] = static_cast<std::uint8_t>(value);
-        recompute_argb(obj_cram, obj_argb_, ocps_index_);
+        if (!cpu_video_bus_locks().cram) {
+            obj_cram[static_cast<std::size_t>(ocps_index_)] = static_cast<std::uint8_t>(value);
+            recompute_argb(obj_cram, obj_argb_, ocps_index_);
+        }
         if (ocps_auto_) ocps_index_ = (ocps_index_ + 1) & 0x3f;
     }
     [[nodiscard]] int read_ocpd() const noexcept {
-        if (lcd_enabled() && reported_mode_ == mode_transfer) return 0xff;
+        if (cpu_video_bus_locks().cram) return 0xff;
         return obj_cram[static_cast<std::size_t>(ocps_index_)];
     }
 
@@ -284,10 +274,10 @@ public:
         lcdc_ = in.i32(); stat_enable_ = in.i32(); scy_ = in.i32(); scx_ = in.i32();
         ly_ = in.i32(); lyc_ = in.i32(); bgp_ = in.i32(); obp0_ = in.i32(); obp1_ = in.i32();
         wy_ = in.i32(); wx_ = in.i32(); mode_ = in.i32(); reported_mode_ = in.i32();
-        reported_mode_target_ = in.i32(); reported_mode_delay_ = std::clamp(in.i32(), 0, 4);
+        reported_mode_target_ = in.i32(); reported_mode_delay_ = in.i32();
         lcd_startup_line_ = in.i32() != 0;
-        lcd_startup_lines_remaining_ = std::clamp(in.i32(), 0, 3);
-        lyc_compare_delay_ = std::clamp(in.i32(), 0, 4);
+        lcd_startup_lines_remaining_ = in.i32();
+        lyc_compare_delay_ = in.i32();
         frame_mode2_delay_ = in.i32() != 0; line_dot_ = in.i32();
         window_line_ = in.i32(); lyc_equal_ = in.i32() != 0; stat_line_ = in.i32() != 0;
         vram_bank_ = in.i32();
@@ -312,6 +302,7 @@ public:
         considered_sprite_tile_count_ = std::clamp(in.i32(), 0, 10);
         oam_scan_index_ = std::clamp(in.i32(), 0, 40);
         entered_hblank_ = in.i32() != 0; frame_ready_ = in.i32() != 0;
+        validate_timing_state();
         if (window_wx_glitch_x_ < 0 || window_wx_glitch_x_ >= width ||
             (window_wx_glitch_armed_ &&
              (mode_ != mode_transfer || !window_started_line_ ||
@@ -343,6 +334,69 @@ public:
     std::array<std::int32_t, frame_pixels> completed_frame{};
 
 private:
+    struct CpuVideoBusLocks {
+        bool vram_read{};
+        bool vram_write{};
+        bool oam_read{};
+        bool oam_write{};
+        bool cram{};
+    };
+
+    [[nodiscard]] CpuVideoBusLocks cpu_video_bus_locks() const noexcept {
+        if (!lcd_enabled()) return {};
+
+        const bool transfer = mode_ == mode_transfer;
+        const bool oam_scan = mode_ == mode_oam;
+        if (hardware_mode_ != gb::HardwareMode::dmg || lcd_startup_lines_remaining_ == 0) {
+            // En régime établi, les portes du bus suivent la phase interne du
+            // PPU ; STAT n'est qu'une vue publiée de cette phase.
+            return {transfer, transfer, oam_scan || transfer,
+                    oam_scan || transfer, transfer};
+        }
+
+        // Les trois premières lignes après LCDC.7 sur DMG publient certains
+        // fronts avec quatre dots de retard. Les portes de lecture et
+        // d'écriture ne voient pas toutes le même front, ce qui est observable
+        // par lcdon_timing et lcdon_write_timing.
+        const bool first_line_transfer_opening = lcd_startup_line_ && transfer &&
+            reported_mode_ == mode_hblank;
+        return {
+            reported_mode_ == mode_transfer || (transfer && !first_line_transfer_opening),
+            reported_mode_ == mode_transfer,
+            oam_scan || reported_mode_ == mode_oam || reported_mode_ == mode_transfer,
+            reported_mode_ == mode_transfer || (reported_mode_ == mode_oam && oam_scan),
+            transfer,
+        };
+    }
+
+    void validate_timing_state() const {
+        const auto valid_mode = [](int mode) { return mode >= mode_hblank && mode <= mode_transfer; };
+        const int maximum_line_dot = lcd_startup_line_ ? 451 : 455;
+        if (!valid_mode(mode_) || !valid_mode(reported_mode_) || !valid_mode(reported_mode_target_) ||
+            reported_mode_delay_ < 0 || reported_mode_delay_ > 4 ||
+            lcd_startup_lines_remaining_ < 0 || lcd_startup_lines_remaining_ > 3 ||
+            lyc_compare_delay_ < 0 || lyc_compare_delay_ > 4 ||
+            ly_ < 0 || ly_ > 153 || line_dot_ < 0 || line_dot_ > maximum_line_dot ||
+            transfer_x_ < 0 || transfer_x_ > width || vram_bank_ < 0 || vram_bank_ > 1 ||
+            bcps_index_ < 0 || bcps_index_ > 0x3f || ocps_index_ < 0 || ocps_index_ > 0x3f) {
+            throw SaveStateError("État instantané corrompu (timing PPU)");
+        }
+        if ((lcd_startup_line_ && (ly_ != 0 || lcd_startup_lines_remaining_ == 0)) ||
+            (reported_mode_delay_ > 0 &&
+             (hardware_mode_ != gb::HardwareMode::dmg || lcd_startup_lines_remaining_ == 0 ||
+              reported_mode_ == reported_mode_target_)) ||
+            (ly_ >= height && mode_ != mode_vblank) ||
+            (ly_ < height && mode_ == mode_vblank)) {
+            throw SaveStateError("État instantané incohérent (phase PPU)");
+        }
+        if (!lcd_enabled() &&
+            (ly_ != 0 || line_dot_ != 0 || mode_ != mode_hblank ||
+             reported_mode_ != mode_hblank || reported_mode_target_ != mode_hblank ||
+             reported_mode_delay_ != 0 || lcd_startup_line_ || lcd_startup_lines_remaining_ != 0)) {
+            throw SaveStateError("État instantané incohérent (LCD éteint)");
+        }
+    }
+
     struct BgPixel {
         std::uint8_t color{};
         std::uint8_t palette{};

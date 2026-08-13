@@ -316,6 +316,50 @@ void ppu_dot_timing_test() {
     check(ppu.read_bcpd() == 0x12, "écriture CRAM pendant mode 3 n'a pas été bloquée");
 }
 
+void video_bus_mcycle_boundary_test() {
+    Fixture normal;
+    normal.ppu.vram[0] = 0x5a;
+    normal.ppu.write_oam_direct(0, 0x6b);
+    normal.bus.write(0xff68, 0x80); // BGPI auto-incrément, adresse 0
+    normal.bus.write(0xff40, 0x91);
+    for (int cycle = 0; cycle < 18; ++cycle) normal.bus.tick_mcycle();
+    check(normal.ppu.line_dot() == 72 && normal.ppu.mode() == Ppu::mode_hblank,
+          "précondition frontière M-cycle avant mode 3 absente");
+    check(normal.bus.read_mcycle(0x8000) == 0xff && normal.ppu.line_dot() == 76,
+          "lecture VRAM ayant franchi le mode 3 non bloquée à sa frontière M-cycle");
+    normal.bus.write_mcycle(0xff69, 0x7c);
+    check(normal.ppu.bg_cram[0] == 0 && normal.bus.read(0xff68) == 0xc1,
+          "écriture BGPD mode 3 via le bus n'a pas été rejetée/auto-incrémentée");
+
+    for (int cycle = 0; cycle < 41; ++cycle) normal.bus.tick_mcycle();
+    check(normal.ppu.line_dot() == 244 && normal.ppu.mode() == Ppu::mode_transfer,
+          "précondition frontière M-cycle de fin du mode 3 absente");
+    check(normal.bus.read_mcycle(0x8000) == 0x5a && normal.ppu.mode() == Ppu::mode_hblank,
+          "lecture VRAM ayant franchi HBlank encore bloquée");
+    check(normal.bus.read_mcycle(0xfe00) == 0x6b,
+          "lecture OAM HBlank bloquée au niveau du bus CPU");
+
+    Fixture blocked_write;
+    blocked_write.ppu.vram[0] = 0x21;
+    blocked_write.bus.write(0xff40, 0x91);
+    for (int cycle = 0; cycle < 18; ++cycle) blocked_write.bus.tick_mcycle();
+    blocked_write.bus.write_mcycle(0x8000, 0x43);
+    check(blocked_write.ppu.vram[0] == 0x21,
+          "écriture VRAM ayant franchi le mode 3 acceptée à sa frontière M-cycle");
+
+    Fixture doubled;
+    doubled.speed.write_key1(1);
+    check(doubled.bus.on_stop(), "transition double vitesse non armée pour le test PPU");
+    doubled.bus.tick_speed_switch(8'200);
+    doubled.ppu.vram[0] = 0x35;
+    doubled.bus.write(0xff40, 0x91);
+    for (int cycle = 0; cycle < 37; ++cycle) doubled.bus.tick_mcycle();
+    check(doubled.ppu.line_dot() == 74,
+          "double vitesse n'applique pas deux dots PPU par M-cycle CPU");
+    check(doubled.bus.read_mcycle(0x8000) == 0xff && doubled.ppu.line_dot() == 76,
+          "verrou VRAM décalé à la frontière mode 3 en double vitesse");
+}
+
 void opri_and_hardware_mode_test() {
     InterruptController interrupts;
     Ppu dmg(interrupts, gb::HardwareMode::dmg);
@@ -651,6 +695,7 @@ int main() {
     joypad_save_state_test();
     local_link_endpoint_test();
     ppu_dot_timing_test();
+    video_bus_mcycle_boundary_test();
     opri_and_hardware_mode_test();
     boot_rom_mapping_test();
     boot_rom_power_on_state_test();

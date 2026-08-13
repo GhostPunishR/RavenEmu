@@ -68,7 +68,11 @@ Dans le cœur GB/GBC, chaque accès CPU et chaque cycle interne est ordonnancé 
 une frontière de M-cycle. Le bus avance les périphériques par dots et laisse les
 DMA prendre le bus entre deux micro-opérations. Le PPU possède un fetcher, un
 FIFO BG et un FIFO OBJ. Les phases de lecture OAM/VRAM, la fusion des priorités
-et l'état intermédiaire des deux FIFO font partie des états instantanés.
+et l'état intermédiaire des deux FIFO font partie des états instantanés. Les
+portes CPU de VRAM, OAM et CRAM suivent la phase interne, indépendamment des
+bits de mode publiés par `STAT`; leurs fronts particuliers après l'activation
+LCD du DMG sont conservés. Le bus les échantillonne après le M-cycle courant,
+avec deux dots PPU par M-cycle CPU en double vitesse.
 
 Le port série et le port infrarouge dépendent uniquement des interfaces communes
 `LinkEndpoint` et `InfraredEndpoint`. Le transport local, Android, réseau ou

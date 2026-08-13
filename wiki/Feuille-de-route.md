@@ -7,6 +7,8 @@ Cette page présente les priorités générales. Les issues et pull requests res
 - moteur Game Boy;
 - compatibilité Game Boy Color;
 - ordonnancement GB/GBC par M-cycle et PPU à fetcher/FIFO BG/OBJ séparés;
+- portes CPU VRAM/OAM/CRAM liées aux phases PPU, y compris les frontières
+  d'activation LCD et l'échantillonnage en double vitesse;
 - modes DMG, CGB natif et compatibilité CGB explicites;
 - audio, vidéo, timers et principaux contrôleurs de cartouche, dont MBC1M;
 - endpoints locaux déterministes pour série et infrarouge;

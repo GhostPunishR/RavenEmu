@@ -456,6 +456,240 @@ void mode2_stat_lead_test() {
               (interrupts.flags & interrupt_mask(Interrupt::stat)) != 0,
               "CGB n'anticipe pas le front STAT mode 2 avant VBlank");
     }
+
+    {
+        InterruptController interrupts;
+        Ppu ppu(interrupts, gb::HardwareMode::dmg);
+        ppu.write_stat(0x20);
+        ppu.tick(143 * 456 + 451);
+        interrupts.flags = 0;
+        ppu.tick(1);
+        check((interrupts.flags & interrupt_mask(Interrupt::stat)) == 0,
+              "DMG anticipe à tort la source STAT mode 2 sur la ligne 143");
+        ppu.tick(4);
+        check(ppu.ly() == 144 && ppu.mode() == Ppu::mode_vblank &&
+              (interrupts.flags & interrupt_mask(Interrupt::stat)) != 0,
+              "impulsion STAT mode 2 DMG absente à l'entrée de VBlank");
+    }
+
+    {
+        InterruptController interrupts;
+        Ppu ppu(interrupts, gb::HardwareMode::cgb_native);
+        ppu.write_stat(0x20);
+        ppu.tick(143 * 456 + 451);
+        interrupts.flags = 0;
+        ppu.tick(1);
+        check((interrupts.flags & interrupt_mask(Interrupt::stat)) != 0,
+              "CGB natif n'anticipe pas la source STAT mode 2 sur la ligne 143");
+        interrupts.flags = 0;
+        ppu.tick(4);
+        check(ppu.ly() == 144 && ppu.mode() == Ppu::mode_vblank &&
+              (interrupts.flags & interrupt_mask(Interrupt::stat)) == 0,
+              "CGB redemande une IRQ STAT sans nouveau front à l'entrée de VBlank");
+    }
+}
+
+void video_bus_lock_boundary_test() {
+    for (const auto hardware_mode : {gb::HardwareMode::dmg,
+                                     gb::HardwareMode::cgb_compatibility,
+                                     gb::HardwareMode::cgb_native}) {
+        InterruptController interrupts;
+        Ppu ppu(interrupts, hardware_mode);
+        ppu.vram[0] = 0x12;
+        ppu.write_oam_direct(0, 0x34);
+
+        check(ppu.mode() == Ppu::mode_oam, "précondition mode 2 absente");
+        check(ppu.read_vram(0) == 0x12, "VRAM bloquée à tort pendant le mode 2");
+        ppu.write_vram(0, 0x56);
+        check(ppu.read_oam(0) == 0xff, "lecture OAM autorisée pendant le mode 2");
+        ppu.write_oam(0, 0x78);
+        check(ppu.oam[0] == 0x34, "écriture OAM acceptée pendant le mode 2");
+
+        while (ppu.mode() != Ppu::mode_transfer) ppu.tick(1);
+        check(ppu.read_vram(0) == 0xff && ppu.read_oam(0) == 0xff,
+              "mémoire vidéo lisible par le CPU pendant le mode 3");
+        ppu.write_vram(0, 0x9a);
+        ppu.write_oam(0, 0xbc);
+        check(ppu.vram[0] == 0x56 && ppu.oam[0] == 0x34,
+              "écriture vidéo mode 3 non rejetée");
+
+        while (ppu.mode() == Ppu::mode_transfer) ppu.tick(1);
+        check(ppu.mode() == Ppu::mode_hblank && ppu.read_vram(0) == 0x56 &&
+              ppu.read_oam(0) == 0x34,
+              "portes VRAM/OAM non rouvertes à l'entrée de HBlank");
+        ppu.write_vram(0, 0xde);
+        ppu.write_oam(0, 0xf0);
+        check(ppu.vram[0] == 0xde && ppu.oam[0] == 0xf0,
+              "écriture vidéo HBlank rejetée");
+    }
+}
+
+void dmg_lcd_startup_bus_gate_test() {
+    InterruptController interrupts;
+    Ppu ppu(interrupts, gb::HardwareMode::dmg);
+    ppu.write_lcdc(0x11);
+    ppu.write_vram(0, 0x10);
+    ppu.write_oam(0, 0x20);
+    ppu.write_lcdc(0x91);
+
+    ppu.tick(75);
+    check(ppu.mode() == Ppu::mode_hblank && ppu.read_vram(0) == 0x10 &&
+          ppu.read_oam(0) == 0x20,
+          "portes vidéo fermées avant le transfert partiel de la ligne LCD initiale");
+    ppu.tick(1);
+    check(ppu.line_dot() == 76 && ppu.mode() == Ppu::mode_hblank,
+          "mode 3 DMG publié sans son retard d'activation LCD");
+    ppu.write_vram(0, 0x11);
+    ppu.write_oam(0, 0x21);
+    check(ppu.read_vram(0) == 0x11 && ppu.read_oam(0) == 0x21,
+          "ouverture bus de la première ligne DMG non conservée");
+
+    ppu.tick(4);
+    check(ppu.mode() == Ppu::mode_transfer && ppu.read_vram(0) == 0xff &&
+          ppu.read_oam(0) == 0xff,
+          "portes vidéo DMG non fermées avec la publication du mode 3");
+    while (ppu.transfer_x() < Ppu::width) ppu.tick(1);
+    check(ppu.mode() == Ppu::mode_transfer && ppu.read_vram(0) == 0xff,
+          "fin interne du transfert DMG a rouvert le bus avant le front publié");
+    ppu.tick(4);
+    check(ppu.mode() == Ppu::mode_hblank && ppu.read_vram(0) == 0x11 &&
+          ppu.read_oam(0) == 0x21,
+          "portes vidéo DMG non rouvertes après le retard de fin de mode 3");
+
+    while (ppu.ly() == 0) ppu.tick(1);
+    check(ppu.mode() == Ppu::mode_hblank && ppu.read_oam(0) == 0xff,
+          "scan OAM interne DMG n'a pas fermé sa porte de lecture");
+    ppu.write_oam(0, 0x22);
+    check(ppu.oam[0] == 0x22,
+          "porte d'écriture OAM DMG n'a pas conservé son front distinct au démarrage de ligne");
+    ppu.tick(4);
+    ppu.write_oam(0, 0x23);
+    check(ppu.mode() == Ppu::mode_oam && ppu.oam[0] == 0x22,
+          "écriture OAM acceptée après publication du mode 2 DMG");
+}
+
+void cgb_lcd_startup_bus_gate_test() {
+    for (const auto hardware_mode : {gb::HardwareMode::cgb_compatibility,
+                                     gb::HardwareMode::cgb_native}) {
+        InterruptController interrupts;
+        Ppu ppu(interrupts, hardware_mode);
+        ppu.write_lcdc(0x11);
+        ppu.write_vram(0, 0x31);
+        ppu.write_oam(0, 0x41);
+        ppu.write_lcdc(0x91);
+        ppu.tick(75);
+        check(ppu.read_vram(0) == 0x31 && ppu.read_oam(0) == 0x41,
+              "matériel CGB ferme le bus avant le mode 3 initial");
+        ppu.tick(1);
+        check(ppu.mode() == Ppu::mode_transfer && ppu.read_vram(0) == 0xff &&
+              ppu.read_oam(0) == 0xff,
+              "matériel CGB ne ferme pas le bus au front interne du mode 3 initial");
+        ppu.write_vram(0, 0x32);
+        ppu.write_oam(0, 0x42);
+        check(ppu.vram[0] == 0x31 && ppu.oam[0] == 0x41,
+              "écriture vidéo CGB acceptée au début du mode 3 initial");
+    }
+}
+
+void cgb_cram_lock_and_autoincrement_test() {
+    InterruptController interrupts;
+    Ppu ppu(interrupts, gb::HardwareMode::cgb_native);
+    ppu.bg_cram[63] = 0x12;
+    ppu.obj_cram[5] = 0x34;
+    ppu.write_bcps(0xbf); // auto-incrément, adresse 63
+    ppu.write_ocps(0x85); // auto-incrément, adresse 5
+    while (ppu.mode() != Ppu::mode_transfer) ppu.tick(1);
+
+    ppu.write_bcpd(0x56);
+    ppu.write_ocpd(0x78);
+    check(ppu.bg_cram[63] == 0x12 && ppu.obj_cram[5] == 0x34,
+          "écriture CRAM mode 3 non rejetée");
+    check(ppu.read_bcps() == 0xc0 && ppu.read_ocps() == 0xc6,
+          "index CRAM non auto-incrémenté après une écriture bloquée");
+    check(ppu.read_bcpd() == 0xff && ppu.read_ocpd() == 0xff,
+          "lecture CRAM autorisée pendant le mode 3");
+
+    ppu.write_bcps(0x89);
+    check(ppu.read_bcps() == 0xc9,
+          "registre d'index CRAM bloqué à tort pendant le mode 3");
+    while (ppu.mode() == Ppu::mode_transfer) ppu.tick(1);
+    ppu.write_bcps(0x3f);
+    ppu.write_ocps(0x05);
+    check(ppu.read_bcpd() == 0x12 && ppu.read_ocpd() == 0x34,
+          "CRAM non rouverte en HBlank ou donnée bloquée modifiée");
+}
+
+void lcd_disable_releases_video_bus_test() {
+    InterruptController interrupts;
+    Ppu ppu(interrupts, gb::HardwareMode::cgb_native);
+    ppu.vram[0] = 0x11;
+    ppu.write_oam_direct(0, 0x22);
+    ppu.bg_cram[0] = 0x33;
+    while (ppu.mode() != Ppu::mode_transfer) ppu.tick(1);
+    ppu.write_lcdc(0x11);
+
+    check(ppu.ly() == 0 && ppu.mode() == Ppu::mode_hblank &&
+          ppu.read_vram(0) == 0x11 && ppu.read_oam(0) == 0x22,
+          "LCDC.7 n'a pas libéré immédiatement VRAM/OAM");
+    ppu.write_vram(0, 0x44);
+    ppu.write_oam(0, 0x55);
+    ppu.write_bcps(0);
+    ppu.write_bcpd(0x66);
+    check(ppu.vram[0] == 0x44 && ppu.oam[0] == 0x55 && ppu.bg_cram[0] == 0x66,
+          "mémoire vidéo encore verrouillée LCD éteint");
+}
+
+void stat_source_blocking_test() {
+    for (const auto hardware_mode : {gb::HardwareMode::dmg,
+                                     gb::HardwareMode::cgb_compatibility,
+                                     gb::HardwareMode::cgb_native}) {
+        InterruptController interrupts;
+        Ppu ppu(interrupts, hardware_mode);
+        while (ppu.ly() != 143 || ppu.mode() != Ppu::mode_transfer) ppu.tick(1);
+        ppu.write_stat(0x18); // sources mode 0 et mode 1 consécutives
+        interrupts.flags = 0;
+        while (ppu.mode() != Ppu::mode_hblank) ppu.tick(1);
+        check((interrupts.flags & interrupt_mask(Interrupt::stat)) != 0,
+              "front STAT mode 0 absent avant VBlank");
+        interrupts.flags = 0;
+        while (ppu.mode() != Ppu::mode_vblank) ppu.tick(1);
+        check((interrupts.flags & interrupt_mask(Interrupt::stat)) == 0,
+              "source mode 1 non bloquée par la ligne STAT mode 0 déjà haute");
+    }
+
+    InterruptController interrupts;
+    Ppu ppu(interrupts, gb::HardwareMode::dmg);
+    ppu.write_lyc(0);
+    ppu.write_stat(0x48); // LYC et mode 0
+    interrupts.flags = 0;
+    while (ppu.mode() != Ppu::mode_hblank) ppu.tick(1);
+    check((interrupts.flags & interrupt_mask(Interrupt::stat)) == 0,
+          "source mode 0 non bloquée par une coïncidence LYC maintenue");
+}
+
+void startup_bus_gate_save_state_test() {
+    InterruptController source_interrupts;
+    Ppu source(source_interrupts, gb::HardwareMode::dmg);
+    source.write_lcdc(0x11);
+    source.write_vram(0, 0x71);
+    source.write_lcdc(0x91);
+    source.tick(76);
+    check(source.mode() == Ppu::mode_hblank && source.read_vram(0) == 0x71,
+          "point de sauvegarde absent du front bus LCD initial");
+
+    const auto saved = snapshot(source);
+    InterruptController restored_interrupts;
+    Ppu restored(restored_interrupts, gb::HardwareMode::dmg);
+    detail::BinaryReader reader(saved);
+    restored.load(reader);
+    check(reader.exhausted() && restored.read_vram(0) == 0x71,
+          "porte vidéo DMG mal restaurée au milieu du retard STAT");
+    source.tick(4);
+    restored.tick(4);
+    check(source.read_vram(0) == 0xff && restored.read_vram(0) == 0xff,
+          "porte vidéo restaurée diverge au front mode 3");
+    check_snapshot_equal(snapshot(source), snapshot(restored),
+                         "timing du verrou vidéo divergent après restauration");
 }
 
 void lcd_off_lyc_latch_test() {
@@ -680,6 +914,44 @@ void object_fifo_state_validation_test() {
         "couleur invalide du FIFO OBJ acceptée par le chargeur d'état");
 }
 
+void ppu_timing_state_validation_test() {
+    InterruptController interrupts;
+    Ppu source(interrupts, gb::HardwareMode::dmg);
+
+    auto invalid_mode = snapshot(source);
+    constexpr std::size_t mode_offset = 4 + 11 * 4;
+    check(invalid_mode.size() > mode_offset + 3, "état PPU trop court pour son mode interne");
+    invalid_mode[mode_offset] = 4;
+    invalid_mode[mode_offset + 1] = 0;
+    invalid_mode[mode_offset + 2] = 0;
+    invalid_mode[mode_offset + 3] = 0;
+    expect_failure<SaveStateError>(
+        [&] {
+            InterruptController restored_interrupts;
+            Ppu restored(restored_interrupts, gb::HardwareMode::dmg);
+            detail::BinaryReader reader(invalid_mode);
+            restored.load(reader);
+        },
+        "mode PPU invalide accepté par le chargeur d'état");
+
+    auto invalid_delay = snapshot(source);
+    constexpr std::size_t reported_delay_offset = 4 + 14 * 4;
+    check(invalid_delay.size() > reported_delay_offset + 3,
+          "état PPU trop court pour son retard de mode publié");
+    invalid_delay[reported_delay_offset] = 5;
+    invalid_delay[reported_delay_offset + 1] = 0;
+    invalid_delay[reported_delay_offset + 2] = 0;
+    invalid_delay[reported_delay_offset + 3] = 0;
+    expect_failure<SaveStateError>(
+        [&] {
+            InterruptController restored_interrupts;
+            Ppu restored(restored_interrupts, gb::HardwareMode::dmg);
+            detail::BinaryReader reader(invalid_delay);
+            restored.load(reader);
+        },
+        "retard de publication PPU invalide accepté au lieu d'être refusé");
+}
+
 } // namespace ravenemu::cgb::testing
 
 int main() {
@@ -698,6 +970,13 @@ int main() {
     mid_oam_scan_save_state_test();
     stat_line_edge_test();
     mode2_stat_lead_test();
+    video_bus_lock_boundary_test();
+    dmg_lcd_startup_bus_gate_test();
+    cgb_lcd_startup_bus_gate_test();
+    cgb_cram_lock_and_autoincrement_test();
+    lcd_disable_releases_video_bus_test();
+    stat_source_blocking_test();
+    startup_bus_gate_save_state_test();
     lcd_off_lyc_latch_test();
     ly_153_quirk_test();
     dmg_stat_write_glitch_test();
@@ -706,5 +985,6 @@ int main() {
     mid_object_fetch_save_state_test();
     mid_object_fifo_save_state_test();
     object_fifo_state_validation_test();
+    ppu_timing_state_validation_test();
     return 0;
 }

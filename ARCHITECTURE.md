@@ -133,6 +133,14 @@ fetch et son coût temporel même si les OBJ sont masqués. Le timing résiduel 
 l'annulation par rapport à une écriture CPU et les courses propres aux révisions
 LCD restent à mesurer ; le PPU n'est donc pas qualifié de cycle-perfect.
 
+Les portes CPU de VRAM, OAM et CRAM sont calculées séparément du mode publié
+par `STAT`. En régime établi elles suivent la phase interne du PPU ; pendant les
+trois premières lignes qui suivent `LCDC.7` sur DMG, les fronts distincts de
+lecture et d'écriture restent explicitement modélisés. Le bus les échantillonne
+après l'avancement du M-cycle, y compris en double vitesse. Une écriture CGB de
+`BGPD`/`OBPD` refusée en mode 3 laisse la CRAM intacte mais avance tout de même
+l'index lorsque l'auto-incrément est armé.
+
 Le séquenceur APU n'emploie plus un compteur autonome de 8 192 dots. Le bus
 observe le front descendant du bit 12 du diviseur interne, ou du bit 13 en
 double vitesse, y compris lors des remises à zéro par `FF04` et `STOP`. Les
@@ -146,8 +154,10 @@ de longueur et les autres variantes zombie DMG restent explicitement ouvertes.
 
 Le format d'état GB/GBC est en version 8. Il sérialise la phase du séquenceur
 APU dérivée de `DIV`, le pixel `WX` éventuellement armé, le FIFO OBJ et chaque
-phase intermédiaire de son fetch. Les versions 7 et antérieures sont refusées
-au lieu d'être chargées partiellement.
+phase intermédiaire de son fetch. Les portes du bus vidéo sont dérivées de ces
+phases sérialisées et ne constituent pas un état redondant. Les versions 7 et
+antérieures sont refusées au lieu d'être chargées partiellement ; les phases
+PPU incohérentes d'un état version 8 sont également rejetées explicitement.
 
 Une boot ROM DMG ou CGB peut être injectée par les fabriques C++ publiques. Son
 mapping et `FF50` restent dans le cœur ; aucune image n'est distribuée. Sans

@@ -35,8 +35,11 @@ Le format GB/GBC courant est la **version 8**. Il enregistre les frontières de
 M-cycle, le séquenceur APU dérivé de DIV et le pipeline PPU complet, y compris
 les octets OBJ déjà échantillonnés mais pas encore fusionnés. Les versions
 GB/GBC antérieures, notamment la version 7, sont refusées avec une erreur
-explicite au lieu de charger silencieusement un état incomplet. Le format du
-cœur GBA évolue indépendamment.
+explicite au lieu de charger silencieusement un état incomplet. Les portes
+VRAM/OAM/CRAM sont recalculées depuis les phases PPU déjà enregistrées ; aucun
+champ redondant ni changement de version n'est nécessaire. Les modes, dots ou
+retards de publication incohérents sont rejetés au chargement. Le format du cœur
+GBA évolue indépendamment.
 
 Les objets de transport externes (`LinkEndpoint` et `InfraredEndpoint`) ne font
 pas partie de la machine émulée et ne sont pas sérialisés. Après restauration,

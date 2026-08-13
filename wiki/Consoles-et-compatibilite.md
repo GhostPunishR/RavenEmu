@@ -50,7 +50,9 @@ Une cartouche déclarant des fonctions couleur bénéficie notamment de:
 - palettes couleur 15 bits et attributs de tuiles;
 - rendu PPU cadencé par dots avec FIFO BG/OBJ séparés, fetch OBJ phasé et durée
   de transfert sensible au décalage horizontal, à la fenêtre et aux sprites;
-- restrictions d'accès VRAM, OAM et palettes pendant les phases concernées du LCD;
+- portes d'accès CPU VRAM, OAM et palettes séparées du mode `STAT`, avec
+  frontières de M-cycle normales/double vitesse et auto-incrément CRAM même
+  après une écriture de données bloquée;
 - OAM DMA progressif;
 - GDMA et HDMA progressifs avec blocage du CPU pendant les transferts;
 - mode double vitesse via `KEY1` et transition déclenchée par `STOP`;
@@ -64,9 +66,10 @@ Une cartouche déclarant des fonctions couleur bénéficie notamment de:
 
 ### Limites connues
 
-- certaines courses sub-M-cycle de transition LCD, de fin d'annulation OBJ et
-  de modification de registres en milieu de ligne restent à confronter aux
-  différentes révisions matérielles;
+- les portes d'accès usuelles et le démarrage LCD DMG/CGB sont testés, mais les
+  courses propres aux révisions CGB précoces/tardives, la fin résiduelle d'une
+  annulation OBJ et d'autres modifications de registres en milieu de ligne
+  restent à confronter au matériel;
 - le verrouillage vidéo et les cas anormaux de `STOP` pendant la transition de
   vitesse CGB restent à reproduire au niveau des révisions matérielles;
 - la palette HLE du mode de compatibilité CGB est générique et ne reproduit pas
