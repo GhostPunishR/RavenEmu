@@ -139,6 +139,7 @@ public:
         window_started_line_ = false; window_y_condition_ = false;
         window_wx_glitch_armed_ = false; window_wx_glitch_x_ = 0;
         oam_scan_index_ = 0; line_sprite_count_ = 0;
+        reset_object_pipeline();
         stat_line_ = false; entered_hblank_ = false; frame_ready_ = false;
         completed_frame.fill(0); working_frame_.fill(0);
     }
@@ -156,11 +157,13 @@ public:
             lcd_startup_lines_remaining_ = 0; frame_mode2_delay_ = false;
             window_line_ = 0; window_y_condition_ = false;
             window_wx_glitch_armed_ = false;
+            reset_object_pipeline();
             completed_frame.fill(0); frame_ready_ = true;
             stat_line_ = (stat_enable_ & 0x40) != 0 && lyc_equal_;
         } else if (!was_enabled && lcd_enabled()) {
             ly_ = 0; line_dot_ = 0; window_line_ = 0; window_y_condition_ = wy_ == 0;
             window_wx_glitch_armed_ = false;
+            reset_object_pipeline();
             lyc_compare_delay_ = 0;
             update_lyc_compare();
             // Toutes les révisions commencent par un mode 0 partiel et
@@ -234,7 +237,7 @@ public:
     [[nodiscard]] bool take_hblank_entry() noexcept { const bool value = entered_hblank_; entered_hblank_ = false; return value; }
 
     void save(BinaryWriter& out) const {
-        constexpr int field_count = 57;
+        constexpr int field_count = 70;
         out.i32(field_count);
         const std::array fields{
             lcdc_, stat_enable_, scy_, scx_, ly_, lyc_, bgp_, obp0_, obp1_, wy_, wx_,
@@ -251,14 +254,23 @@ public:
             bg_fifo_head_, bg_fifo_size_, fetcher_window_ ? 1 : 0, fetcher_tile_x_,
             fetcher_phase_, fetcher_phase_dots_, fetcher_tile_, fetcher_attributes_,
             fetcher_row_, fetcher_tile_data_address_, fetcher_data_low_, fetcher_data_high_,
-            sprite_stall_remaining_, line_sprite_count_, considered_sprite_tile_count_,
+            obj_fifo_head_, obj_fifo_size_, obj_fetch_phase_, obj_fetch_phase_dots_remaining_,
+            obj_fetch_slot_, obj_fetch_sprite_, obj_fetch_screen_x_, obj_fetch_raw_x_,
+            obj_fetch_tile_, obj_fetch_attributes_, obj_fetch_row_, obj_fetch_address_,
+            obj_fetch_data_low_, obj_fetch_data_high_,
+            line_sprite_count_, considered_sprite_tile_count_,
             oam_scan_index_, entered_hblank_ ? 1 : 0, frame_ready_ ? 1 : 0,
         };
+        static_assert(fields.size() == field_count);
         for (const int field : fields) out.i32(field);
         for (const auto& pixel : bg_fifo_) {
             out.u8(pixel.color); out.u8(pixel.palette); out.boolean(pixel.priority);
         }
-        for (const bool used : sprite_stall_used_) out.boolean(used);
+        for (const auto& pixel : obj_fifo_) {
+            out.u8(pixel.color); out.u8(pixel.palette); out.boolean(pixel.behind_background);
+            out.u8(pixel.oam_index); out.u8(pixel.raw_x);
+        }
+        for (const bool used : sprite_fetch_consumed_) out.boolean(used);
         for (const int tile : considered_sprite_tiles_) out.i32(tile);
         for (const int sprite : sprite_indices_) out.i32(sprite);
         for (const int y : sprite_y_) out.i32(y);
@@ -268,7 +280,7 @@ public:
         out.raw(vram); out.raw(oam); out.raw(bg_cram); out.raw(obj_cram);
     }
     void load(BinaryReader& in) {
-        if (in.i32() != 57) throw SaveStateError("État instantané corrompu (PPU)");
+        if (in.i32() != 70) throw SaveStateError("État instantané corrompu (PPU)");
         lcdc_ = in.i32(); stat_enable_ = in.i32(); scy_ = in.i32(); scx_ = in.i32();
         ly_ = in.i32(); lyc_ = in.i32(); bgp_ = in.i32(); obp0_ = in.i32(); obp1_ = in.i32();
         wy_ = in.i32(); wx_ = in.i32(); mode_ = in.i32(); reported_mode_ = in.i32();
@@ -290,7 +302,12 @@ public:
         fetcher_window_ = in.i32() != 0; fetcher_tile_x_ = in.i32(); fetcher_phase_ = std::clamp(in.i32(), 0, 3);
         fetcher_phase_dots_ = std::max(0, in.i32()); fetcher_tile_ = in.i32(); fetcher_attributes_ = in.i32();
         fetcher_row_ = in.i32(); fetcher_tile_data_address_ = in.i32(); fetcher_data_low_ = in.i32();
-        fetcher_data_high_ = in.i32(); sprite_stall_remaining_ = std::max(0, in.i32());
+        fetcher_data_high_ = in.i32();
+        obj_fifo_head_ = in.i32(); obj_fifo_size_ = in.i32(); obj_fetch_phase_ = in.i32();
+        obj_fetch_phase_dots_remaining_ = in.i32(); obj_fetch_slot_ = in.i32();
+        obj_fetch_sprite_ = in.i32(); obj_fetch_screen_x_ = in.i32(); obj_fetch_raw_x_ = in.i32();
+        obj_fetch_tile_ = in.i32(); obj_fetch_attributes_ = in.i32(); obj_fetch_row_ = in.i32();
+        obj_fetch_address_ = in.i32(); obj_fetch_data_low_ = in.i32(); obj_fetch_data_high_ = in.i32();
         line_sprite_count_ = std::clamp(in.i32(), 0, 10);
         considered_sprite_tile_count_ = std::clamp(in.i32(), 0, 10);
         oam_scan_index_ = std::clamp(in.i32(), 0, 40);
@@ -304,7 +321,12 @@ public:
         for (auto& pixel : bg_fifo_) {
             pixel.color = in.u8(); pixel.palette = in.u8(); pixel.priority = in.boolean();
         }
-        for (auto&& used : sprite_stall_used_) used = in.boolean();
+        for (auto& pixel : obj_fifo_) {
+            pixel.color = in.u8(); pixel.palette = in.u8(); pixel.behind_background = in.boolean();
+            pixel.oam_index = in.u8(); pixel.raw_x = in.u8();
+        }
+        validate_object_pipeline_state();
+        for (auto&& used : sprite_fetch_consumed_) used = in.boolean();
         for (auto& tile : considered_sprite_tiles_) tile = in.i32();
         for (auto& sprite : sprite_indices_) sprite = in.i32();
         for (auto& y : sprite_y_) y = in.i32();
@@ -326,6 +348,20 @@ private:
         std::uint8_t palette{};
         bool priority{};
     };
+
+    struct ObjPixel {
+        std::uint8_t color{};
+        std::uint8_t palette{};
+        bool behind_background{};
+        std::uint8_t oam_index{0xff};
+        std::uint8_t raw_x{0xff};
+    };
+
+    static constexpr int obj_fetch_idle = 0;
+    static constexpr int obj_fetch_wait_bg = 1;
+    static constexpr int obj_fetch_oam = 2;
+    static constexpr int obj_fetch_low = 3;
+    static constexpr int obj_fetch_high = 4;
 
     void advance_dot() {
         if (reported_mode_delay_ > 0 && --reported_mode_delay_ == 0) {
@@ -402,38 +438,42 @@ private:
         discard_pixels_remaining_ = scx_latched_ & 7;
         window_restart_dots_remaining_ = 0;
         window_initial_skip_ = 0;
-        sprite_stall_remaining_ = 0;
         window_started_line_ = false;
         window_wx_glitch_armed_ = false;
         window_wx_glitch_x_ = 0;
-        sprite_stall_used_.fill(false);
+        sprite_fetch_consumed_.fill(false);
         considered_sprite_tiles_.fill(-1);
         considered_sprite_tile_count_ = 0;
+        reset_object_pipeline();
         reset_bg_fetcher(false);
         set_mode(mode_transfer);
     }
 
     void advance_transfer() {
-        if (sprite_stall_remaining_ > 0) {
-            --sprite_stall_remaining_;
-            return;
+        if (obj_fetch_phase_ != obj_fetch_idle) {
+            if (object_fetch_may_be_canceled() && (lcdc_ & 2) == 0) {
+                cancel_object_fetch();
+            } else {
+                advance_object_fetch();
+                return;
+            }
         }
 
         if (window_should_start()) {
             start_window_fetch();
         }
 
-        for (int i = 0; i < line_sprite_count_; ++i) {
-            if (sprite_stall_used_[static_cast<std::size_t>(i)]) continue;
-            const int sprite_x = sprite_x_[static_cast<std::size_t>(i)] - 8;
-            if (std::max(0, sprite_x) == transfer_x_) {
-                sprite_stall_used_[static_cast<std::size_t>(i)] = true;
-                const bool timing_enabled = gb::is_cgb_hardware(hardware_mode_) || (lcdc_ & 2) != 0;
-                if (timing_enabled) {
-                    sprite_stall_remaining_ = sprite_penalty(i, sprite_x) - 1;
-                    return;
-                }
-            }
+        for (;;) {
+            const int sprite_slot = next_object_at_current_x();
+            if (sprite_slot < 0) break;
+            sprite_fetch_consumed_[static_cast<std::size_t>(sprite_slot)] = true;
+            // Sur matériel CGB, le fetch OBJ continue même lorsque LCDC.1
+            // masque sa sortie. Sur DMG, un OBJ rencontré alors que ce bit est
+            // à zéro est simplement consommé par le séquenceur.
+            if (object_fetch_may_be_canceled() && (lcdc_ & 2) == 0) continue;
+            begin_object_fetch(sprite_slot);
+            advance_object_fetch();
+            return;
         }
 
         tick_bg_fetcher();
@@ -461,7 +501,7 @@ private:
 
         const bool inject_window_glitch = window_wx_glitch_armed_ &&
             transfer_x_ == window_wx_glitch_x_;
-        render_fifo_pixel(transfer_x_, pop_bg_pixel());
+        render_fifo_pixel(transfer_x_, pop_bg_pixel(), pop_obj_pixel());
         if (inject_window_glitch) {
             const int tail = (bg_fifo_head_ + bg_fifo_size_) & 15;
             bg_fifo_[static_cast<std::size_t>(tail)] = BgPixel{};
@@ -585,6 +625,208 @@ private:
         }
     }
 
+    void reset_object_fetch() noexcept {
+        obj_fetch_phase_ = obj_fetch_idle;
+        obj_fetch_phase_dots_remaining_ = 0;
+        obj_fetch_slot_ = -1;
+        obj_fetch_sprite_ = -1;
+        obj_fetch_screen_x_ = 0;
+        obj_fetch_raw_x_ = 0;
+        obj_fetch_tile_ = 0;
+        obj_fetch_attributes_ = 0;
+        obj_fetch_row_ = 0;
+        obj_fetch_address_ = 0;
+        obj_fetch_data_low_ = 0;
+        obj_fetch_data_high_ = 0;
+    }
+
+    void reset_object_pipeline() noexcept {
+        obj_fifo_.fill(ObjPixel{});
+        obj_fifo_head_ = 0;
+        obj_fifo_size_ = 0;
+        reset_object_fetch();
+    }
+
+    [[nodiscard]] bool object_fetch_may_be_canceled() const noexcept {
+        return hardware_mode_ == gb::HardwareMode::dmg;
+    }
+
+    [[nodiscard]] int next_object_at_current_x() const noexcept {
+        int best_slot = -1;
+        int best_raw_x = 256;
+        int best_oam_index = 40;
+        for (int slot = 0; slot < line_sprite_count_; ++slot) {
+            if (sprite_fetch_consumed_[static_cast<std::size_t>(slot)]) continue;
+            const int raw_x = sprite_x_[static_cast<std::size_t>(slot)];
+            if (std::max(0, raw_x - 8) != transfer_x_) continue;
+            const int oam_index = sprite_indices_[static_cast<std::size_t>(slot)];
+            if (raw_x < best_raw_x || (raw_x == best_raw_x && oam_index < best_oam_index)) {
+                best_slot = slot;
+                best_raw_x = raw_x;
+                best_oam_index = oam_index;
+            }
+        }
+        return best_slot;
+    }
+
+    void begin_object_fetch(int sprite_slot) noexcept {
+        obj_fetch_slot_ = sprite_slot;
+        obj_fetch_sprite_ = sprite_indices_[static_cast<std::size_t>(sprite_slot)];
+        obj_fetch_raw_x_ = sprite_x_[static_cast<std::size_t>(sprite_slot)];
+        obj_fetch_screen_x_ = obj_fetch_raw_x_ - 8;
+        obj_fetch_tile_ = 0;
+        obj_fetch_attributes_ = 0;
+        obj_fetch_row_ = 0;
+        obj_fetch_address_ = 0;
+        obj_fetch_data_low_ = 0;
+        obj_fetch_data_high_ = 0;
+
+        const int wait_dots = std::max(0, sprite_penalty(sprite_slot, obj_fetch_screen_x_) - 6);
+        obj_fetch_phase_ = wait_dots > 0 ? obj_fetch_wait_bg : obj_fetch_oam;
+        obj_fetch_phase_dots_remaining_ = wait_dots > 0 ? wait_dots : 2;
+    }
+
+    void cancel_object_fetch() noexcept {
+        // Le sprite reste marqué comme considéré. Le fetcher BG reprend au
+        // point atteint avant l'interruption et le FIFO OBJ déjà présent est
+        // conservé pour les pixels suivants.
+        reset_object_fetch();
+    }
+
+    void advance_object_fetch() noexcept {
+        if (obj_fetch_phase_ == obj_fetch_wait_bg) tick_bg_fetcher();
+        if (--obj_fetch_phase_dots_remaining_ > 0) return;
+
+        switch (obj_fetch_phase_) {
+        case obj_fetch_wait_bg:
+            obj_fetch_phase_ = obj_fetch_oam;
+            obj_fetch_phase_dots_remaining_ = 2;
+            break;
+        case obj_fetch_oam:
+            latch_object_parameters();
+            obj_fetch_phase_ = obj_fetch_low;
+            obj_fetch_phase_dots_remaining_ = 2;
+            break;
+        case obj_fetch_low:
+            obj_fetch_data_low_ = vram_byte(object_fetch_bank(), obj_fetch_address_);
+            obj_fetch_phase_ = obj_fetch_high;
+            obj_fetch_phase_dots_remaining_ = 2;
+            break;
+        case obj_fetch_high:
+            obj_fetch_data_high_ = vram_byte(object_fetch_bank(), obj_fetch_address_ + 1);
+            merge_fetched_object();
+            reset_object_fetch();
+            break;
+        default:
+            reset_object_fetch();
+            break;
+        }
+    }
+
+    void latch_object_parameters() noexcept {
+        const int index = obj_fetch_sprite_ * 4;
+        obj_fetch_tile_ = oam[static_cast<std::size_t>(index + 2)];
+        obj_fetch_attributes_ = oam[static_cast<std::size_t>(index + 3)];
+        const int sprite_height = (lcdc_ & 4) != 0 ? 16 : 8;
+        if (sprite_height == 16) obj_fetch_tile_ &= 0xfe;
+        const int sprite_y = sprite_y_[static_cast<std::size_t>(obj_fetch_slot_)] - 16;
+        obj_fetch_row_ = ly_ - sprite_y;
+        if ((obj_fetch_attributes_ & 0x40) != 0) {
+            obj_fetch_row_ = sprite_height - 1 - obj_fetch_row_;
+        }
+        obj_fetch_address_ = (obj_fetch_tile_ * 16 + obj_fetch_row_ * 2) & 0x1fff;
+    }
+
+    [[nodiscard]] int object_fetch_bank() const noexcept {
+        return gb::cgb_features_enabled(hardware_mode_) ? (obj_fetch_attributes_ >> 3) & 1 : 0;
+    }
+
+    void ensure_object_fifo_size(int size) noexcept {
+        while (obj_fifo_size_ < size && obj_fifo_size_ < static_cast<int>(obj_fifo_.size())) {
+            const int tail = (obj_fifo_head_ + obj_fifo_size_) & 15;
+            obj_fifo_[static_cast<std::size_t>(tail)] = ObjPixel{};
+            ++obj_fifo_size_;
+        }
+    }
+
+    [[nodiscard]] bool object_pixel_has_priority(const ObjPixel& candidate,
+                                                 const ObjPixel& current) const noexcept {
+        if (current.color == 0) return true;
+        if (!opri_dmg_priority_) return candidate.oam_index < current.oam_index;
+        return candidate.raw_x < current.raw_x ||
+            (candidate.raw_x == current.raw_x && candidate.oam_index < current.oam_index);
+    }
+
+    void merge_fetched_object() noexcept {
+        ensure_object_fifo_size(8);
+        const bool flipped = (obj_fetch_attributes_ & 0x20) != 0;
+        const std::uint8_t palette = static_cast<std::uint8_t>(
+            gb::cgb_features_enabled(hardware_mode_)
+                ? obj_fetch_attributes_ & 7
+                : (obj_fetch_attributes_ >> 4) & 1);
+        for (int source_x = 0; source_x < 8; ++source_x) {
+            const int fifo_offset = obj_fetch_screen_x_ + source_x - transfer_x_;
+            if (fifo_offset < 0 || fifo_offset >= obj_fifo_size_) continue;
+            const int bit = flipped ? source_x : 7 - source_x;
+            const int color = (((obj_fetch_data_high_ >> bit) & 1) << 1) |
+                ((obj_fetch_data_low_ >> bit) & 1);
+            if (color == 0) continue;
+            ObjPixel candidate{
+                static_cast<std::uint8_t>(color),
+                palette,
+                (obj_fetch_attributes_ & 0x80) != 0,
+                static_cast<std::uint8_t>(obj_fetch_sprite_),
+                static_cast<std::uint8_t>(obj_fetch_raw_x_),
+            };
+            const int index = (obj_fifo_head_ + fifo_offset) & 15;
+            auto& current = obj_fifo_[static_cast<std::size_t>(index)];
+            if (object_pixel_has_priority(candidate, current)) current = candidate;
+        }
+    }
+
+    [[nodiscard]] ObjPixel pop_obj_pixel() noexcept {
+        if (obj_fifo_size_ <= 0) return {};
+        const auto result = obj_fifo_[static_cast<std::size_t>(obj_fifo_head_)];
+        obj_fifo_[static_cast<std::size_t>(obj_fifo_head_)] = ObjPixel{};
+        obj_fifo_head_ = (obj_fifo_head_ + 1) & 15;
+        --obj_fifo_size_;
+        return result;
+    }
+
+    void validate_object_pipeline_state() const {
+        if (obj_fifo_head_ < 0 || obj_fifo_head_ >= static_cast<int>(obj_fifo_.size()) ||
+            obj_fifo_size_ < 0 || obj_fifo_size_ > static_cast<int>(obj_fifo_.size()) ||
+            obj_fetch_phase_ < obj_fetch_idle || obj_fetch_phase_ > obj_fetch_high) {
+            throw SaveStateError("État instantané corrompu (pipeline OBJ PPU)");
+        }
+        for (const auto& pixel : obj_fifo_) {
+            if (pixel.color > 3 || pixel.palette > 7 ||
+                (pixel.color != 0 && pixel.oam_index >= 40)) {
+                throw SaveStateError("État instantané corrompu (FIFO OBJ PPU)");
+            }
+        }
+        if (obj_fetch_phase_ == obj_fetch_idle) {
+            if (obj_fetch_phase_dots_remaining_ != 0 || obj_fetch_slot_ != -1 ||
+                obj_fetch_sprite_ != -1) {
+                throw SaveStateError("État instantané corrompu (fetch OBJ PPU inactif)");
+            }
+            return;
+        }
+        if (obj_fetch_phase_dots_remaining_ <= 0 || obj_fetch_phase_dots_remaining_ > 11 ||
+            obj_fetch_slot_ < 0 || obj_fetch_slot_ >= line_sprite_count_ ||
+            obj_fetch_sprite_ < 0 || obj_fetch_sprite_ >= 40 ||
+            obj_fetch_screen_x_ < -8 || obj_fetch_screen_x_ > 247 ||
+            obj_fetch_raw_x_ < 0 || obj_fetch_raw_x_ > 255 ||
+            obj_fetch_tile_ < 0 || obj_fetch_tile_ > 255 ||
+            obj_fetch_attributes_ < 0 || obj_fetch_attributes_ > 255 ||
+            obj_fetch_row_ < 0 || obj_fetch_row_ > 15 ||
+            obj_fetch_address_ < 0 || obj_fetch_address_ >= 0x2000 ||
+            obj_fetch_data_low_ < 0 || obj_fetch_data_low_ > 255 ||
+            obj_fetch_data_high_ < 0 || obj_fetch_data_high_ > 255) {
+            throw SaveStateError("État instantané corrompu (fetch OBJ PPU)");
+        }
+    }
+
     int sprite_penalty(int sprite_slot, int sprite_x) noexcept {
         const int raw_x = sprite_x_[static_cast<std::size_t>(sprite_slot)];
         const int coordinate = fetcher_window_ ? sprite_x - (wx_ - 7) : sprite_x + scx_latched_;
@@ -600,13 +842,7 @@ private:
         if (first_for_tile && considered_sprite_tile_count_ < static_cast<int>(considered_sprite_tiles_.size())) {
             considered_sprite_tiles_[static_cast<std::size_t>(considered_sprite_tile_count_++)] = tile_key;
         }
-        if (raw_x == 0) {
-            // Le premier fetch X=0 recouvre quatre dots du pipeline initial;
-            // les suivants, sur la même tuile, ne paient plus que les six
-            // dots du fetch OBJ.
-            if (!first_for_tile) return 6;
-            return considered_sprite_tile_count_ > 1 ? 11 : 7;
-        }
+        if (raw_x == 0) return 11;
         if (!first_for_tile) return 6;
         const int fine = wrapped & 7;
         const int fetch_wait = std::max(0, 7 - fine - 2);
@@ -617,14 +853,14 @@ private:
         return 6 + fetch_wait - (fine == 0 ? 4 : 3);
     }
 
-    void render_fifo_pixel(int x, const BgPixel& pixel) {
+    void render_fifo_pixel(int x, const BgPixel& pixel, const ObjPixel& object) {
         const int base = ly_ * width;
         if (hardware_mode_ == gb::HardwareMode::cgb_native) {
             bg_color_line_[static_cast<std::size_t>(x)] = pixel.color;
             bg_priority_line_[static_cast<std::size_t>(x)] = pixel.priority;
             working_frame_[static_cast<std::size_t>(base + x)] =
                 bg_argb_[static_cast<std::size_t>(pixel.palette * 4 + pixel.color)];
-            render_timed_sprite_cgb(base, x);
+            render_object_cgb(base, x, object);
             return;
         }
 
@@ -636,7 +872,7 @@ private:
             hardware_mode_ == gb::HardwareMode::cgb_compatibility
                 ? bg_argb_[static_cast<std::size_t>(shade)]
                 : shade;
-        render_timed_sprite_dmg(base, x);
+        render_object_dmg(base, x, object);
     }
 
     void enter_vblank() {
@@ -695,96 +931,28 @@ private:
         return ly_ == 153 && line_dot_ >= 4 ? 0 : ly_;
     }
 
-    void render_timed_sprite_dmg(int base, int x) {
-        if ((lcdc_ & 2) == 0) return;
-        const int sprite_height = (lcdc_ & 4) != 0 ? 16 : 8;
-        int best = -1;
-        int best_x = 256;
-        int best_color{};
-        for (int i = 0; i < line_sprite_count_; ++i) {
-            const int sprite = sprite_indices_[static_cast<std::size_t>(i)];
-            const int index = sprite * 4;
-            const int sy = sprite_y_[static_cast<std::size_t>(i)] - 16;
-            const int sx = sprite_x_[static_cast<std::size_t>(i)] - 8;
-            if (x < sx || x >= sx + 8) continue;
-            int tile = oam[static_cast<std::size_t>(index + 2)];
-            const int attr = oam[static_cast<std::size_t>(index + 3)];
-            if (sprite_height == 16) tile &= 0xfe;
-            int row = ly_ - sy;
-            if ((attr & 0x40) != 0) row = sprite_height - 1 - row;
-            const int px = x - sx;
-            const int bit_index = (attr & 0x20) != 0 ? px : 7 - px;
-            const int lo = vram_byte(0, tile * 16 + row * 2);
-            const int hi = vram_byte(0, tile * 16 + row * 2 + 1);
-            const int color = (((hi >> bit_index) & 1) << 1) | ((lo >> bit_index) & 1);
-            if (color == 0) continue;
-            const int raw_x = sprite_x_[static_cast<std::size_t>(i)];
-            const bool better = best < 0 || (!opri_dmg_priority_ ? sprite < best
-                : raw_x < best_x || (raw_x == best_x && sprite < best));
-            if (better) {
-                best = sprite;
-                best_x = raw_x;
-                best_color = color;
-            }
-        }
-        if (best < 0) return;
-        const int index = best * 4;
-        const int attr = oam[static_cast<std::size_t>(index + 3)];
-        if ((attr & 0x80) != 0 && bg_color_line_[static_cast<std::size_t>(x)] != 0) return;
-        const int palette = (attr & 0x10) != 0 ? obp1_ : obp0_;
-        const int shade = (palette >> (best_color * 2)) & 3;
+    void render_object_dmg(int base, int x, const ObjPixel& object) noexcept {
+        if ((lcdc_ & 2) == 0 || object.color == 0) return;
+        if (object.behind_background && bg_color_line_[static_cast<std::size_t>(x)] != 0) return;
+        const int palette = object.palette != 0 ? obp1_ : obp0_;
+        const int shade = (palette >> (object.color * 2)) & 3;
         if (hardware_mode_ == gb::HardwareMode::cgb_compatibility) {
-            const int color_palette = (attr & 0x10) != 0 ? 1 : 0;
             working_frame_[static_cast<std::size_t>(base + x)] =
-                obj_argb_[static_cast<std::size_t>(color_palette * 4 + shade)];
+                obj_argb_[static_cast<std::size_t>(object.palette * 4 + shade)];
         } else {
             working_frame_[static_cast<std::size_t>(base + x)] = shade;
         }
     }
 
-    void render_timed_sprite_cgb(int base, int x) {
-        if ((lcdc_ & 2) == 0) return;
-        const int sprite_height = (lcdc_ & 4) != 0 ? 16 : 8;
-        int best = -1;
-        int best_x = 256;
-        int best_color{};
-        for (int i = 0; i < line_sprite_count_; ++i) {
-            const int sprite = sprite_indices_[static_cast<std::size_t>(i)];
-            const int index = sprite * 4;
-            const int sy = sprite_y_[static_cast<std::size_t>(i)] - 16;
-            const int sx = sprite_x_[static_cast<std::size_t>(i)] - 8;
-            if (x < sx || x >= sx + 8) continue;
-            int tile = oam[static_cast<std::size_t>(index + 2)];
-            const int attr = oam[static_cast<std::size_t>(index + 3)];
-            if (sprite_height == 16) tile &= 0xfe;
-            int row = ly_ - sy;
-            if ((attr & 0x40) != 0) row = sprite_height - 1 - row;
-            const int px = x - sx;
-            const int bit_index = (attr & 0x20) != 0 ? px : 7 - px;
-            const int bank = (attr >> 3) & 1;
-            const int lo = vram_byte(bank, tile * 16 + row * 2);
-            const int hi = vram_byte(bank, tile * 16 + row * 2 + 1);
-            const int obj_color = (((hi >> bit_index) & 1) << 1) | ((lo >> bit_index) & 1);
-            if (obj_color == 0) continue;
-            const int raw_x = sprite_x_[static_cast<std::size_t>(i)];
-            const bool better = best < 0 || (!opri_dmg_priority_ ? sprite < best
-                : raw_x < best_x || (raw_x == best_x && sprite < best));
-            if (better) {
-                best = sprite;
-                best_x = raw_x;
-                best_color = obj_color;
-            }
-        }
-        if (best < 0) return;
-        const int index = best * 4;
-        const int attr = oam[static_cast<std::size_t>(index + 3)];
-        const int palette = attr & 7;
+    void render_object_cgb(int base, int x, const ObjPixel& object) noexcept {
+        if ((lcdc_ & 2) == 0 || object.color == 0) return;
         const bool bg_visible = bg_color_line_[static_cast<std::size_t>(x)] != 0;
-        const bool master_priority = (lcdc_ & 1) != 0;
-        if (bg_visible && master_priority &&
-            (bg_priority_line_[static_cast<std::size_t>(x)] || (attr & 0x80) != 0)) return;
+        if (bg_visible && (lcdc_ & 1) != 0 &&
+            (bg_priority_line_[static_cast<std::size_t>(x)] || object.behind_background)) {
+            return;
+        }
         working_frame_[static_cast<std::size_t>(base + x)] =
-            obj_argb_[static_cast<std::size_t>(palette * 4 + best_color)];
+            obj_argb_[static_cast<std::size_t>(object.palette * 4 + object.color)];
     }
 
     void advance_oam_scan() noexcept {
@@ -879,10 +1047,24 @@ private:
     int fetcher_tile_data_address_{};
     int fetcher_data_low_{};
     int fetcher_data_high_{};
-    int sprite_stall_remaining_{};
+    std::array<ObjPixel, 16> obj_fifo_{};
+    int obj_fifo_head_{};
+    int obj_fifo_size_{};
+    int obj_fetch_phase_{obj_fetch_idle};
+    int obj_fetch_phase_dots_remaining_{};
+    int obj_fetch_slot_{-1};
+    int obj_fetch_sprite_{-1};
+    int obj_fetch_screen_x_{};
+    int obj_fetch_raw_x_{};
+    int obj_fetch_tile_{};
+    int obj_fetch_attributes_{};
+    int obj_fetch_row_{};
+    int obj_fetch_address_{};
+    int obj_fetch_data_low_{};
+    int obj_fetch_data_high_{};
     int line_sprite_count_{};
     int oam_scan_index_{};
-    std::array<bool, 10> sprite_stall_used_{};
+    std::array<bool, 10> sprite_fetch_consumed_{};
     std::array<int, 10> considered_sprite_tiles_{};
     int considered_sprite_tile_count_{};
     bool stat_line_{};

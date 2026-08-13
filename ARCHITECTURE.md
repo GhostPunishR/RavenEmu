@@ -114,16 +114,24 @@ d'horloge respectifs ; un GDMA ou un bloc HDMA peut ainsi prendre le bus entre
 deux micro-opérations de la même instruction. La double vitesse change le ratio
 cycles CPU/dots périphériques sans accélérer le LCD.
 
-Le PPU partagé utilise un fetcher et une FIFO de pixels sauvegardables. La durée
-du mode 3 dépend du décalage fin `SCX`, du démarrage de fenêtre et des sprites,
-au lieu d'une constante par ligne. Cette architecture est la fondation des
-corrections de précision restantes. Une écriture de `WX` après le démarrage de
-la fenêtre peut maintenant armer l'injection du pixel neutre documenté dans la
-FIFO ; cet événement survit à un état instantané en milieu de scanline. Les bits
-de tuile de `SCX` sont relus aux étapes Get Tile, tandis que ses trois bits fins
-restent ceux du discard initial. Les
-annulations de fetch OBJ et les courses propres à certaines révisions restent à
-mesurer ; le PPU n'est donc pas qualifié de cycle-perfect.
+Le PPU partagé utilise un fetcher et deux FIFO sauvegardables, l'une pour le
+fond/fenêtre et l'autre pour les OBJ. La durée du mode 3 dépend du décalage fin
+`SCX`, du démarrage de fenêtre et des sprites, au lieu d'une constante par
+ligne. Une écriture de `WX` après le démarrage de la fenêtre peut armer
+l'injection du pixel neutre documenté ; les bits de tuile de `SCX` sont relus
+aux étapes Get Tile, tandis que ses trois bits fins restent ceux du discard
+initial.
+
+Le fetch OBJ est un état explicite : attente du fetch BG, lecture OAM, lecture
+des octets bas/haut en VRAM puis fusion dans le FIFO OBJ. Les coordonnées Y/X
+retenues en mode 2, le Tile ID, les attributs, la banque, les octets de tuile et
+la décision de priorité sont ainsi échantillonnés à leur phase respective au
+lieu d'être relus pour chaque pixel. La fusion conserve la priorité par X sur
+DMG/compatibilité ou par index OAM en CGB natif selon `OPRI`. Une coupure de
+`LCDC.1` annule un fetch DMG en cours, alors que le matériel CGB poursuit le
+fetch et son coût temporel même si les OBJ sont masqués. Le timing résiduel de
+l'annulation par rapport à une écriture CPU et les courses propres aux révisions
+LCD restent à mesurer ; le PPU n'est donc pas qualifié de cycle-perfect.
 
 Le séquenceur APU n'emploie plus un compteur autonome de 8 192 dots. Le bus
 observe le front descendant du bit 12 du diviseur interne, ou du bit 13 en
@@ -136,9 +144,10 @@ cas zombie portable) sont modélisés. Le profil
 matériel ne distingue pas encore le CGB-02 du CGB-04/05 ; sa variante du clock
 de longueur et les autres variantes zombie DMG restent explicitement ouvertes.
 
-Le format d'état GB/GBC est en version 7. Il sérialise la phase du séquenceur
-APU dérivée de `DIV` et le pixel `WX` éventuellement armé ; les versions 6 et
-antérieures sont refusées au lieu d'être chargées partiellement.
+Le format d'état GB/GBC est en version 8. Il sérialise la phase du séquenceur
+APU dérivée de `DIV`, le pixel `WX` éventuellement armé, le FIFO OBJ et chaque
+phase intermédiaire de son fetch. Les versions 7 et antérieures sont refusées
+au lieu d'être chargées partiellement.
 
 Une boot ROM DMG ou CGB peut être injectée par les fabriques C++ publiques. Son
 mapping et `FF50` restent dans le cœur ; aucune image n'est distribuée. Sans

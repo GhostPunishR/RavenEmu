@@ -66,8 +66,9 @@ Chaque moteur avance selon un budget de cycles et produit un framebuffer, des é
 
 Dans le cœur GB/GBC, chaque accès CPU et chaque cycle interne est ordonnancé à
 une frontière de M-cycle. Le bus avance les périphériques par dots et laisse les
-DMA prendre le bus entre deux micro-opérations. Le PPU possède un fetcher/FIFO
-dont l'état intermédiaire fait partie des états instantanés.
+DMA prendre le bus entre deux micro-opérations. Le PPU possède un fetcher, un
+FIFO BG et un FIFO OBJ. Les phases de lecture OAM/VRAM, la fusion des priorités
+et l'état intermédiaire des deux FIFO font partie des états instantanés.
 
 Le port série et le port infrarouge dépendent uniquement des interfaces communes
 `LinkEndpoint` et `InfraredEndpoint`. Le transport local, Android, réseau ou

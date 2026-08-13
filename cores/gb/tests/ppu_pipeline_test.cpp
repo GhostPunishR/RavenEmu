@@ -3,6 +3,7 @@
 #include <ravenemu/binary_io.hpp>
 
 using ravenemu::testing::check;
+using ravenemu::testing::expect_failure;
 
 namespace ravenemu::cgb::testing {
 
@@ -161,16 +162,198 @@ void mid_scanline_scx_tile_fetch_test() {
 }
 
 void sprite_penalty_test() {
+    const auto measure = [](gb::HardwareMode mode, std::initializer_list<int> raw_x,
+                            bool objects_enabled = true) {
+        InterruptController interrupts;
+        Ppu ppu(interrupts, mode);
+        int sprite{};
+        for (const int x : raw_x) {
+            ppu.write_oam_direct(sprite * 4, 16);
+            ppu.write_oam_direct(sprite * 4 + 1, x);
+            ++sprite;
+        }
+        ppu.write_lcdc(objects_enabled ? 0x93 : 0x91);
+        return enter_and_measure_mode3(ppu);
+    };
+
+    check(measure(gb::HardwareMode::dmg, {8}) == 179,
+          "premier OBJ au bord gauche ne recouvre pas le fetch BG initial");
+    check(measure(gb::HardwareMode::dmg, {0}) == 183,
+          "OBJ entièrement hors écran avec OAM X=0 n'applique pas onze dots");
+    check(measure(gb::HardwareMode::dmg, {8, 8}) == 185,
+          "deux OBJ sur le même X ne coûtent pas sept puis six dots");
+    check(measure(gb::HardwareMode::dmg, {8}, false) == 172,
+          "DMG fetch un OBJ alors que LCDC.1 est coupé avant sa rencontre");
+    check(measure(gb::HardwareMode::cgb_native, {8}, false) == 179,
+          "CGB supprime à tort le timing OBJ lorsque LCDC.1 est coupé");
+    check(measure(gb::HardwareMode::cgb_compatibility, {8}, false) == 179,
+          "compatibilité CGB supprime à tort le timing OBJ lorsque LCDC.1 est coupé");
+}
+
+void object_fifo_latches_fetched_data_test() {
     InterruptController interrupts;
     Ppu ppu(interrupts, gb::HardwareMode::dmg);
-    ppu.write_oam_direct(0, 16); // ligne 0
-    ppu.write_oam_direct(1, 8);  // pixel écran 0
-    ppu.write_oam_direct(2, 0);
+    ppu.write_lcdc(0x11);
+    ppu.set_bgp(0xe4);
+    ppu.set_obp0(0xe4);
+    ppu.write_oam_direct(0, 17); // première ligne normale après l'activation LCD
+    ppu.write_oam_direct(1, 8);
+    ppu.write_oam_direct(2, 1);
     ppu.write_oam_direct(3, 0);
-    ppu.write_lcdc(0x93); // LCD + BG + OBJ, sans redémarrage LCD
+    ppu.vram[16] = 0xff;      // tuile 1, couleur 1
+    ppu.vram[32 + 1] = 0xff;  // tuile 2, couleur 2
+    ppu.write_lcdc(0x93);
 
-    check(enter_and_measure_mode3(ppu) == 179,
-          "premier OBJ au bord gauche ne recouvre pas le fetch BG initial");
+    while (ppu.ly() != 1 || ppu.mode() != Ppu::mode_transfer || ppu.transfer_x() < 1) ppu.tick(1);
+    // Le premier pixel prouve que le fetch est terminé. Les sept pixels
+    // restants doivent venir du FIFO, sans relire OAM ni VRAM.
+    ppu.write_oam_direct(2, 2);
+    ppu.vram[16] = 0x00;
+    ppu.vram[16 + 1] = 0xff;
+    while (ppu.mode() != Ppu::mode_vblank) ppu.tick(1);
+
+    for (int x = 0; x < 8; ++x) {
+        check(ppu.completed_frame[static_cast<std::size_t>(Ppu::width + x)] == 1,
+              "FIFO OBJ a relu OAM/VRAM après la fin du fetch de tuile");
+    }
+}
+
+void object_fetch_read_phase_test() {
+    const auto prepare = [](Ppu& ppu) {
+        ppu.set_bgp(0xe4);
+        ppu.set_obp0(0xe4);
+        ppu.write_oam_direct(0, 16);
+        ppu.write_oam_direct(1, 40);
+        ppu.write_oam_direct(2, 1);
+        ppu.write_oam_direct(3, 0);
+        ppu.vram[16] = 0xff;      // tuile 1, couleur 1
+        ppu.vram[32 + 1] = 0xff;  // tuile 2, couleur 2
+        ppu.write_lcdc(0x93);
+        while (ppu.mode() != Ppu::mode_transfer || ppu.transfer_x() < 32) ppu.tick(1);
+    };
+    const auto pixel_after_oam_change = [&](int change_after_dots) {
+        InterruptController interrupts;
+        Ppu ppu(interrupts, gb::HardwareMode::dmg);
+        prepare(ppu);
+        ppu.tick(change_after_dots);
+        ppu.write_oam_direct(2, 2);
+        while (ppu.mode() != Ppu::mode_vblank) ppu.tick(1);
+        return ppu.completed_frame[32];
+    };
+
+    check(pixel_after_oam_change(2) == 2,
+          "fetch OBJ n'a pas observé Tile ID écrit avant la phase OAM");
+    check(pixel_after_oam_change(3) == 1,
+          "fetch OBJ a relu Tile ID après la phase OAM");
+
+    InterruptController interrupts;
+    Ppu split_bytes(interrupts, gb::HardwareMode::dmg);
+    prepare(split_bytes);
+    split_bytes.tick(5); // l'octet bas est lu, l'octet haut ne l'est pas encore
+    split_bytes.vram[16] = 0x00;
+    split_bytes.vram[16 + 1] = 0xff;
+    while (split_bytes.mode() != Ppu::mode_vblank) split_bytes.tick(1);
+    check(split_bytes.completed_frame[32] == 3,
+          "octets bas/haut OBJ non échantillonnés lors de leurs phases distinctes");
+}
+
+void object_scan_ten_sprite_limit_test() {
+    InterruptController interrupts;
+    Ppu ppu(interrupts, gb::HardwareMode::dmg);
+    ppu.set_bgp(0xe4);
+    ppu.set_obp0(0xe4);
+    for (int sprite = 0; sprite < 11; ++sprite) {
+        ppu.write_oam_direct(sprite * 4, 16);
+        ppu.write_oam_direct(sprite * 4 + 1, 8);
+        ppu.write_oam_direct(sprite * 4 + 2, sprite == 10 ? 1 : 0);
+        ppu.write_oam_direct(sprite * 4 + 3, 0);
+    }
+    ppu.vram[16] = 0xff;
+    ppu.write_lcdc(0x93);
+    check(enter_and_measure_mode3(ppu) == 233,
+          "scan OAM n'a pas limité le fetch aux dix premiers OBJ de la ligne");
+    while (ppu.mode() != Ppu::mode_vblank) ppu.tick(1);
+    check(ppu.completed_frame[0] == 0,
+          "onzième OBJ de la ligne rendu malgré la limite matérielle de dix");
+}
+
+void cgb_object_bank_palette_and_flip_test() {
+    InterruptController interrupts;
+    Ppu ppu(interrupts, gb::HardwareMode::cgb_native);
+    ppu.write_lcdc(0x11);
+    // Palette OBJ 3, couleur 1 : vert pur.
+    ppu.write_ocps((3 * 4 + 1) * 2); ppu.write_ocpd(0xe0);
+    ppu.write_ocps((3 * 4 + 1) * 2 + 1); ppu.write_ocpd(0x03);
+    ppu.write_oam_direct(0, 17);
+    ppu.write_oam_direct(1, 8);
+    ppu.write_oam_direct(2, 1);
+    ppu.write_oam_direct(3, 0x20 | 0x08 | 3); // flip X, banque 1, palette 3
+    ppu.vram[0x2000 + 16] = 0x01;             // bit 0 devient le pixel gauche
+    ppu.write_lcdc(0x93);
+    while (ppu.mode() != Ppu::mode_vblank) ppu.tick(1);
+
+    check(ppu.completed_frame[Ppu::width] == static_cast<std::int32_t>(0xff00ff00U),
+          "fetch OBJ CGB n'applique pas banque VRAM, palette et flip horizontal");
+    check(ppu.completed_frame[Ppu::width + 1] != static_cast<std::int32_t>(0xff00ff00U),
+          "flip horizontal CGB a produit plus d'un pixel opaque");
+}
+
+void object_fetch_cancel_test() {
+    const auto prepare = [](Ppu& ppu, int fetch_dots) {
+        ppu.set_bgp(0xe4);
+        ppu.set_obp0(0xe4);
+        ppu.write_oam_direct(0, 16);
+        ppu.write_oam_direct(1, 40); // pixel écran 32
+        ppu.write_oam_direct(2, 1);
+        ppu.write_oam_direct(3, 0);
+        ppu.vram[16] = 0xff;
+        ppu.write_lcdc(0x93);
+        while (ppu.mode() != Ppu::mode_transfer || ppu.transfer_x() < 32) ppu.tick(1);
+        ppu.tick(fetch_dots);
+    };
+
+    int latest_dmg_mode3_end{};
+    for (int cancel_after = 1; cancel_after <= 6; ++cancel_after) {
+        InterruptController dmg_interrupts;
+        Ppu dmg(dmg_interrupts, gb::HardwareMode::dmg);
+        prepare(dmg, cancel_after);
+        dmg.write_lcdc(0x91);
+        dmg.tick(1); // le prochain dot annule le fetch DMG
+        dmg.write_lcdc(0x93);
+        while (dmg.mode() == Ppu::mode_transfer) dmg.tick(1);
+        latest_dmg_mode3_end = std::max(latest_dmg_mode3_end, dmg.line_dot());
+        while (dmg.mode() != Ppu::mode_vblank) dmg.tick(1);
+        for (int x = 33; x < 40; ++x) {
+            check(dmg.completed_frame[static_cast<std::size_t>(x)] == 0,
+                  "annulation DMG tardive a tout de même rempli le FIFO OBJ");
+        }
+    }
+
+    for (const auto mode : {gb::HardwareMode::cgb_native, gb::HardwareMode::cgb_compatibility}) {
+        InterruptController cgb_interrupts;
+        Ppu cgb(cgb_interrupts, mode);
+        if (mode == gb::HardwareMode::cgb_compatibility) {
+            cgb.initialize_hle_compatibility_palettes();
+        } else {
+            cgb.write_ocps(2); cgb.write_ocpd(0x1f);
+            cgb.write_ocps(3); cgb.write_ocpd(0x00);
+        }
+        prepare(cgb, 2);
+        cgb.write_lcdc(0x91);
+        cgb.tick(1);
+        cgb.write_lcdc(0x93);
+        while (cgb.mode() == Ppu::mode_transfer) cgb.tick(1);
+        check(cgb.line_dot() > latest_dmg_mode3_end,
+              "matériel CGB a annulé le fetch OBJ comme un DMG");
+        while (cgb.mode() != Ppu::mode_vblank) cgb.tick(1);
+        if (mode == gb::HardwareMode::cgb_native) {
+            check(cgb.completed_frame[32] == static_cast<std::int32_t>(0xffff0000U),
+                  "fetch OBJ CGB poursuivi n'a pas rempli le FIFO après réactivation");
+        } else {
+            check(cgb.completed_frame[32] != cgb.completed_frame[31],
+                  "fetch OBJ en compatibilité CGB perdu lors du masquage LCDC.1");
+        }
+    }
 }
 
 int measure_mode3_after_mode2(Ppu& ppu, int remaining_mode2_dots) {
@@ -423,6 +606,80 @@ void mid_transfer_save_state_test() {
                          "restauration en milieu de fetch/FIFO PPU non déterministe");
 }
 
+void mid_object_fetch_save_state_test() {
+    InterruptController source_interrupts;
+    Ppu source(source_interrupts, gb::HardwareMode::cgb_native);
+    source.write_oam_direct(0, 16);
+    source.write_oam_direct(1, 40);
+    source.write_oam_direct(2, 1);
+    source.write_oam_direct(3, 3);
+    source.vram[16] = 0xaa;
+    source.vram[16 + 1] = 0x55;
+    source.write_lcdc(0x93);
+    while (source.mode() != Ppu::mode_transfer || source.transfer_x() < 32) source.tick(1);
+    source.tick(3);
+    check(source.transfer_x() == 32 && source.mode() == Ppu::mode_transfer,
+          "point de sauvegarde absent du milieu du fetch OBJ");
+
+    const auto saved = snapshot(source);
+    InterruptController restored_interrupts;
+    Ppu restored(restored_interrupts, gb::HardwareMode::cgb_native);
+    detail::BinaryReader reader(saved);
+    restored.load(reader);
+    check(reader.exhausted(), "état PPU en fetch OBJ laisse des données non consommées");
+    check_snapshot_equal(saved, snapshot(restored),
+                         "fetch OBJ différent immédiatement après restauration");
+
+    source.tick(1000);
+    restored.tick(1000);
+    check_snapshot_equal(snapshot(source), snapshot(restored),
+                         "restauration en plein fetch OBJ non déterministe");
+}
+
+void mid_object_fifo_save_state_test() {
+    InterruptController source_interrupts;
+    Ppu source(source_interrupts, gb::HardwareMode::dmg);
+    source.write_lcdc(0x11);
+    source.set_bgp(0xe4);
+    source.set_obp0(0xe4);
+    source.write_oam_direct(0, 17);
+    source.write_oam_direct(1, 8);
+    source.write_oam_direct(2, 1);
+    source.vram[16] = 0xff;
+    source.write_lcdc(0x93);
+    while (source.ly() != 1 || source.mode() != Ppu::mode_transfer || source.transfer_x() < 1) {
+        source.tick(1);
+    }
+
+    const auto saved = snapshot(source);
+    InterruptController restored_interrupts;
+    Ppu restored(restored_interrupts, gb::HardwareMode::dmg);
+    detail::BinaryReader reader(saved);
+    restored.load(reader);
+    check(reader.exhausted(), "état PPU avec FIFO OBJ rempli laisse des données");
+    source.tick(1000);
+    restored.tick(1000);
+    check_snapshot_equal(snapshot(source), snapshot(restored),
+                         "FIFO OBJ partiellement consommé non restauré fidèlement");
+}
+
+void object_fifo_state_validation_test() {
+    InterruptController interrupts;
+    Ppu source(interrupts, gb::HardwareMode::dmg);
+    auto corrupted = snapshot(source);
+    constexpr std::size_t object_fifo_offset = 4 + 70 * 4 + 16 * 3;
+    check(corrupted.size() > object_fifo_offset, "état PPU trop court pour contenir le FIFO OBJ");
+    corrupted[object_fifo_offset] = 4; // couleur OBJ hors de l'intervalle matériel 0..3
+    expect_failure<SaveStateError>(
+        [&] {
+            InterruptController restored_interrupts;
+            Ppu restored(restored_interrupts, gb::HardwareMode::dmg);
+            detail::BinaryReader reader(corrupted);
+            restored.load(reader);
+        },
+        "couleur invalide du FIFO OBJ acceptée par le chargeur d'état");
+}
+
 } // namespace ravenemu::cgb::testing
 
 int main() {
@@ -432,6 +689,11 @@ int main() {
     mid_scanline_wx_glitch_test();
     mid_scanline_scx_tile_fetch_test();
     sprite_penalty_test();
+    object_fifo_latches_fetched_data_test();
+    object_fetch_read_phase_test();
+    object_scan_ten_sprite_limit_test();
+    cgb_object_bank_palette_and_flip_test();
+    object_fetch_cancel_test();
     progressive_oam_scan_test();
     mid_oam_scan_save_state_test();
     stat_line_edge_test();
@@ -441,5 +703,8 @@ int main() {
     dmg_stat_write_glitch_test();
     opri_render_priority_test();
     mid_transfer_save_state_test();
+    mid_object_fetch_save_state_test();
+    mid_object_fifo_save_state_test();
+    object_fifo_state_validation_test();
     return 0;
 }

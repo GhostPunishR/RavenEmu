@@ -82,7 +82,7 @@ public:
 
     [[nodiscard]] std::vector<std::uint8_t> save_state() const override {
         require_loaded(); BinaryWriter out(64 * 1024);
-        out.u32(0x52564e53U); out.u16(7); out.u8(static_cast<std::uint8_t>(Console::game_boy)); out.raw(rom_hash_);
+        out.u32(0x52564e53U); out.u16(8); out.u8(static_cast<std::uint8_t>(Console::game_boy)); out.raw(rom_hash_);
         out.u8(static_cast<std::uint8_t>(machine_->hardware_mode));
         machine_->cpu.save(out);
         out.i32(machine_->interrupts.flags); out.i32(machine_->interrupts.enable);
@@ -96,7 +96,7 @@ public:
         if (state.size() > (1U << 20U)) throw SaveStateError("État instantané trop volumineux");
         BinaryReader in(state);
         if (in.u32() != 0x52564e53U) throw SaveStateError("Ce fichier n'est pas un état RavenEmu");
-        const auto version = in.u16(); if (version != 7) throw SaveStateError("Version d'état non prise en charge");
+        const auto version = in.u16(); if (version != 8) throw SaveStateError("Version d'état non prise en charge");
         if (in.u8() != static_cast<std::uint8_t>(Console::game_boy)) throw SaveStateError("État issu d'une autre console");
         std::array<std::uint8_t, 32> hash{}; in.raw(hash);
         if (hash != rom_hash_) throw SaveStateError("État issu d'une autre ROM");

@@ -9,7 +9,8 @@ Le moteur Game Boy comprend notamment:
 - CPU Sharp LR35902 avec instructions principales et CB, accès bus ordonnancés
   par M-cycle et timings officiels vérifiés exhaustivement;
 - délai `EI`, `DI`, interruptions, `RETI`, bug de `HALT` et `STOP`;
-- rendu du fond, de la fenêtre et des sprites par fetcher/FIFO;
+- rendu du fond, de la fenêtre et des sprites par fetcher et FIFO BG/OBJ
+  séparés, avec données OAM/VRAM échantillonnées pendant le fetch;
 - audio à quatre canaux;
 - timer à détection de front et fenêtre de rechargement TIMA;
 - interruptions et DMA OAM progressif;
@@ -22,8 +23,8 @@ Le moteur Game Boy comprend notamment:
 
 - aucun backend Android, réseau ou Bluetooth n'expose encore le câble link;
 - certains comportements matériels rares de l'APU restent à reproduire;
-- certains cas fins du fetcher PPU, des sprites et de l'activation LCD restent à
-  valider sur des suites matérielles;
+- le timing résiduel d'une annulation OBJ par écriture `LCDC.1` et certaines
+  courses d'activation LCD propres aux révisions restent à valider sur matériel;
 - les contrôleurs MMM01, MBC6, MBC7, HuC1, HuC3, TAMA5 et Camera restent refusés
   explicitement;
 - l'injection d'une boot ROM n'est pas encore exposée dans l'interface Android;
@@ -47,8 +48,8 @@ Une cartouche déclarant des fonctions couleur bénéficie notamment de:
 
 - deux banques VRAM et huit banques WRAM;
 - palettes couleur 15 bits et attributs de tuiles;
-- rendu PPU cadencé par dots avec fetcher/FIFO et durée de transfert sensible au
-  décalage horizontal, à la fenêtre et aux sprites;
+- rendu PPU cadencé par dots avec FIFO BG/OBJ séparés, fetch OBJ phasé et durée
+  de transfert sensible au décalage horizontal, à la fenêtre et aux sprites;
 - restrictions d'accès VRAM, OAM et palettes pendant les phases concernées du LCD;
 - OAM DMA progressif;
 - GDMA et HDMA progressifs avec blocage du CPU pendant les transferts;
@@ -63,16 +64,17 @@ Une cartouche déclarant des fonctions couleur bénéficie notamment de:
 
 ### Limites connues
 
-- certains cas fins d'annulation de fetch sprite, de transition LCD et de
-  modification de registres en milieu de ligne restent à confronter au matériel;
+- certaines courses sub-M-cycle de transition LCD, de fin d'annulation OBJ et
+  de modification de registres en milieu de ligne restent à confronter aux
+  différentes révisions matérielles;
 - le verrouillage vidéo et les cas anormaux de `STOP` pendant la transition de
   vitesse CGB restent à reproduire au niveau des révisions matérielles;
 - la palette HLE du mode de compatibilité CGB est générique et ne reproduit pas
   encore la sélection de palette propre aux différentes boot ROMs;
 - le link et l'infrarouge fonctionnent entre deux machines dans le même
   processus, sans backend entre sessions Android ou appareils;
-- certains comportements audio rares (horloge DIV-APU exacte, enveloppes
-  « zombie », corruption d'onde propre à certaines révisions) restent simplifiés;
+- les variantes d'enveloppes « zombie », de longueur CGB-02 et quelques
+  particularités analogiques propres aux révisions restent simplifiées;
 - les contrôleurs de cartouche exotiques non implémentés sont refusés plutôt que simulés incorrectement.
 
 ## Game Boy Advance
