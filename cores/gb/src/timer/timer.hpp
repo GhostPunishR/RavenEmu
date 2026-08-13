@@ -25,6 +25,14 @@ public:
     }
     [[nodiscard]] int read_div() const noexcept { return (div_counter_ >> 8) & 0xff; }
     [[nodiscard]] int reset_aligned_phase() const noexcept { return div_counter_ & 0x1ff; }
+    /**
+     * Ligne d'horloge du compteur DIV-APU. Le multiplexeur suit le bit 12 du
+     * diviseur interne a vitesse normale et le bit 13 en double vitesse, afin
+     * de conserver un front descendant a 512 Hz dans les deux cas.
+     */
+    [[nodiscard]] bool apu_divider_signal(bool double_speed) const noexcept {
+        return (div_counter_ & (1 << (double_speed ? 13 : 12))) != 0;
+    }
     void write_div() noexcept { set_div_counter(0); }
     void reset_for_boot_rom() noexcept {
         div_counter_ = 0;

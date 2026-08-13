@@ -137,6 +137,7 @@ public:
         line_dot_ = 0; window_line_ = 0; transfer_x_ = 0;
         lyc_equal_ = true;
         window_started_line_ = false; window_y_condition_ = false;
+        window_wx_glitch_armed_ = false; window_wx_glitch_x_ = 0;
         oam_scan_index_ = 0; line_sprite_count_ = 0;
         stat_line_ = false; entered_hblank_ = false; frame_ready_ = false;
         completed_frame.fill(0); working_frame_.fill(0);
@@ -154,10 +155,12 @@ public:
             reported_mode_target_ = mode_hblank; reported_mode_delay_ = 0; lcd_startup_line_ = false;
             lcd_startup_lines_remaining_ = 0; frame_mode2_delay_ = false;
             window_line_ = 0; window_y_condition_ = false;
+            window_wx_glitch_armed_ = false;
             completed_frame.fill(0); frame_ready_ = true;
             stat_line_ = (stat_enable_ & 0x40) != 0 && lyc_equal_;
         } else if (!was_enabled && lcd_enabled()) {
             ly_ = 0; line_dot_ = 0; window_line_ = 0; window_y_condition_ = wy_ == 0;
+            window_wx_glitch_armed_ = false;
             lyc_compare_delay_ = 0;
             update_lyc_compare();
             // Toutes les révisions commencent par un mode 0 partiel et
@@ -218,11 +221,20 @@ public:
     void set_scy(int v) noexcept { scy_ = byte(v); } void set_scx(int v) noexcept { scx_ = byte(v); }
     void set_bgp(int v) noexcept { bgp_ = byte(v); } void set_obp0(int v) noexcept { obp0_ = byte(v); }
     void set_obp1(int v) noexcept { obp1_ = byte(v); } void set_wy(int v) noexcept { wy_ = byte(v); }
-    void set_wx(int v) noexcept { wx_ = byte(v); }
+    void set_wx(int v) noexcept {
+        const int next_wx = byte(v);
+        if (next_wx != wx_) {
+            const int next_screen_x = next_wx - 7;
+            window_wx_glitch_armed_ = lcd_enabled() && mode_ == mode_transfer &&
+                window_started_line_ && next_screen_x >= transfer_x_ && next_screen_x < width;
+            window_wx_glitch_x_ = window_wx_glitch_armed_ ? next_screen_x : 0;
+        }
+        wx_ = next_wx;
+    }
     [[nodiscard]] bool take_hblank_entry() noexcept { const bool value = entered_hblank_; entered_hblank_ = false; return value; }
 
     void save(BinaryWriter& out) const {
-        constexpr int field_count = 55;
+        constexpr int field_count = 57;
         out.i32(field_count);
         const std::array fields{
             lcdc_, stat_enable_, scy_, scx_, ly_, lyc_, bgp_, obp0_, obp1_, wy_, wx_,
@@ -233,6 +245,7 @@ public:
             stat_line_ ? 1 : 0, vram_bank_, bcps_index_,
             bcps_auto_ ? 1 : 0, ocps_index_, ocps_auto_ ? 1 : 0,
             transfer_x_, window_started_line_ ? 1 : 0, window_y_condition_ ? 1 : 0,
+            window_wx_glitch_armed_ ? 1 : 0, window_wx_glitch_x_,
             opri_dmg_priority_ ? 1 : 0, scx_latched_, startup_dots_remaining_,
             discard_pixels_remaining_, window_restart_dots_remaining_, window_initial_skip_,
             bg_fifo_head_, bg_fifo_size_, fetcher_window_ ? 1 : 0, fetcher_tile_x_,
@@ -255,7 +268,7 @@ public:
         out.raw(vram); out.raw(oam); out.raw(bg_cram); out.raw(obj_cram);
     }
     void load(BinaryReader& in) {
-        if (in.i32() != 55) throw SaveStateError("État instantané corrompu (PPU)");
+        if (in.i32() != 57) throw SaveStateError("État instantané corrompu (PPU)");
         lcdc_ = in.i32(); stat_enable_ = in.i32(); scy_ = in.i32(); scx_ = in.i32();
         ly_ = in.i32(); lyc_ = in.i32(); bgp_ = in.i32(); obp0_ = in.i32(); obp1_ = in.i32();
         wy_ = in.i32(); wx_ = in.i32(); mode_ = in.i32(); reported_mode_ = in.i32();
@@ -268,7 +281,9 @@ public:
         vram_bank_ = in.i32();
         bcps_index_ = in.i32(); bcps_auto_ = in.i32() != 0; ocps_index_ = in.i32();
         ocps_auto_ = in.i32() != 0; transfer_x_ = in.i32(); window_started_line_ = in.i32() != 0;
-        window_y_condition_ = in.i32() != 0; opri_dmg_priority_ = in.i32() != 0;
+        window_y_condition_ = in.i32() != 0; window_wx_glitch_armed_ = in.i32() != 0;
+        window_wx_glitch_x_ = in.i32();
+        opri_dmg_priority_ = in.i32() != 0;
         scx_latched_ = in.i32(); startup_dots_remaining_ = in.i32(); discard_pixels_remaining_ = in.i32();
         window_restart_dots_remaining_ = in.i32(); window_initial_skip_ = in.i32();
         bg_fifo_head_ = std::clamp(in.i32(), 0, 15); bg_fifo_size_ = std::clamp(in.i32(), 0, 16);
@@ -280,6 +295,12 @@ public:
         considered_sprite_tile_count_ = std::clamp(in.i32(), 0, 10);
         oam_scan_index_ = std::clamp(in.i32(), 0, 40);
         entered_hblank_ = in.i32() != 0; frame_ready_ = in.i32() != 0;
+        if (window_wx_glitch_x_ < 0 || window_wx_glitch_x_ >= width ||
+            (window_wx_glitch_armed_ &&
+             (mode_ != mode_transfer || !window_started_line_ ||
+              window_wx_glitch_x_ < transfer_x_))) {
+            throw SaveStateError("État instantané corrompu (glitch WX PPU)");
+        }
         for (auto& pixel : bg_fifo_) {
             pixel.color = in.u8(); pixel.palette = in.u8(); pixel.priority = in.boolean();
         }
@@ -383,6 +404,8 @@ private:
         window_initial_skip_ = 0;
         sprite_stall_remaining_ = 0;
         window_started_line_ = false;
+        window_wx_glitch_armed_ = false;
+        window_wx_glitch_x_ = 0;
         sprite_stall_used_.fill(false);
         considered_sprite_tiles_.fill(-1);
         considered_sprite_tile_count_ = 0;
@@ -436,7 +459,15 @@ private:
         }
         if (bg_fifo_size_ <= 0) return;
 
+        const bool inject_window_glitch = window_wx_glitch_armed_ &&
+            transfer_x_ == window_wx_glitch_x_;
         render_fifo_pixel(transfer_x_, pop_bg_pixel());
+        if (inject_window_glitch) {
+            const int tail = (bg_fifo_head_ + bg_fifo_size_) & 15;
+            bg_fifo_[static_cast<std::size_t>(tail)] = BgPixel{};
+            ++bg_fifo_size_;
+            window_wx_glitch_armed_ = false;
+        }
         ++transfer_x_;
         if (transfer_x_ >= width) {
             if (window_started_line_) ++window_line_;
@@ -497,7 +528,10 @@ private:
 
     void fetch_tile_index() noexcept {
         const int y = fetcher_window_ ? window_line_ : ((ly_ + scy_) & 0xff);
-        const int tile_x = fetcher_window_ ? fetcher_tile_x_ : ((scx_latched_ >> 3) + fetcher_tile_x_) & 31;
+        // Les trois bits fins de SCX ne servent qu'au discard initial, mais
+        // le fetcher relit les bits de tuile à chaque étape Get Tile. Une
+        // écriture en mode 3 peut donc changer les tuiles encore non fetchées.
+        const int tile_x = fetcher_window_ ? fetcher_tile_x_ : ((scx_ >> 3) + fetcher_tile_x_) & 31;
         const int map = fetcher_window_ ? ((lcdc_ & 0x40) != 0 ? 0x1c00 : 0x1800)
                                         : ((lcdc_ & 8) != 0 ? 0x1c00 : 0x1800);
         const int map_address = map + ((y >> 3) & 31) * 32 + tile_x;
@@ -824,6 +858,8 @@ private:
     // scanline.  LCD enable/disable and frame transitions maintain it from
     // this point onward.
     bool window_y_condition_{true};
+    bool window_wx_glitch_armed_{};
+    int window_wx_glitch_x_{};
     bool opri_dmg_priority_{};
     int scx_latched_{};
     int startup_dots_remaining_{};

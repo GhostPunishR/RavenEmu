@@ -69,6 +69,50 @@ void speed_switch_test() {
     check((speed.read_key1() & 0x80) != 0, "KEY1 ne reflète pas la double vitesse");
 }
 
+void div_apu_bus_clock_test() {
+    const auto arm_one_tick_length = [](Apu& apu) {
+        apu.write(0xff11, 0x3f);
+        apu.write(0xff12, 0xf0);
+        apu.write(0xff14, 0xc0);
+        check((apu.read(0xff26) & 1) != 0, "précondition canal APU longueur 1 absente");
+    };
+
+    Fixture normal(gb::HardwareMode::dmg);
+    normal.bus.write(0xff04, 0);
+    normal.timer.tick(0x1ffc);
+    arm_one_tick_length(normal.apu);
+    normal.bus.tick_mcycle(); // bit interne 12 : 1ffc -> 2000
+    check((normal.apu.read(0xff26) & 1) == 0,
+          "front DIV-APU normal non détecté à la frontière M-cycle");
+
+    Fixture div_write(gb::HardwareMode::dmg);
+    div_write.bus.write(0xff04, 0);
+    div_write.timer.tick(0x1000); // ligne DIV-APU haute
+    arm_one_tick_length(div_write.apu);
+    div_write.bus.write(0xff04, 0);
+    check((div_write.apu.read(0xff26) & 1) == 0,
+          "écriture DIV sur ligne APU haute n'a pas produit de front descendant");
+
+    Fixture stop(gb::HardwareMode::dmg);
+    stop.bus.write(0xff04, 0);
+    stop.timer.tick(0x1000);
+    arm_one_tick_length(stop.apu);
+    check(!stop.bus.on_stop(), "STOP DMG a lancé une transition de vitesse CGB");
+    check((stop.apu.read(0xff26) & 1) == 0,
+          "reset DIV de STOP n'a pas cadencé le séquenceur APU");
+
+    Fixture doubled(gb::HardwareMode::cgb_native);
+    doubled.speed.write_key1(1);
+    check(doubled.bus.on_stop(), "STOP CGB n'a pas lancé la transition préparée");
+    doubled.bus.tick_speed_switch(8'200);
+    check(doubled.speed.double_speed(), "précondition double vitesse absente");
+    doubled.timer.tick(0x3ffc);
+    arm_one_tick_length(doubled.apu);
+    doubled.bus.tick_mcycle(); // bit interne 13 : 3ffc -> 4000
+    check((doubled.apu.read(0xff26) & 1) == 0,
+          "double vitesse n'a pas sélectionné le bit 13 pour DIV-APU");
+}
+
 void infrared_test() {
     InfraredPort ir(true);
     check(ir.read() == 0x3e, "RP désactivé doit lire FF56=$3E");
@@ -143,11 +187,15 @@ void pcm_register_test() {
     Fixture native;
     check(native.bus.read(0xff76) == 0x00 && native.bus.read(0xff77) == 0x00,
           "sorties PCM CGB au repos incorrectes");
-    native.apu.write(0xff11, 0x80); // duty 50 %, position initiale haute
+    native.apu.write(0xff11, 0xc0); // duty 75 %, étape 1 haute
     native.apu.write(0xff12, 0xf0); // DAC + volume 15
-    native.apu.write(0xff14, 0x80); // trigger
+    native.apu.write(0xff13, 0xff);
+    native.apu.write(0xff14, 0x87); // trigger, première étape forcée à zéro
+    check((native.bus.read(0xff76) & 0x0f) == 0x00,
+          "FF76 n'expose pas la première étape duty forcée à zéro");
+    native.apu.tick(4);
     check((native.bus.read(0xff76) & 0x0f) == 0x0f,
-          "FF76 n'expose pas la sortie numérique du canal 1");
+          "FF76 n'expose pas la sortie numérique après le premier clock duty");
     native.bus.write(0xff76, 0x00);
     check((native.bus.read(0xff76) & 0x0f) == 0x0f,
           "registre PCM CGB en lecture seule modifié par une écriture");
@@ -595,6 +643,7 @@ void vram_dma_timing_test() {
 int main() {
     using namespace ravenemu::cgb::testing;
     speed_switch_test();
+    div_apu_bus_clock_test();
     infrared_test();
     serial_fast_clock_test();
     pcm_register_test();

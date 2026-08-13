@@ -67,6 +67,99 @@ void window_restart_and_line_counter_test() {
     }
 }
 
+void mid_scanline_wx_glitch_test() {
+    for (const auto hardware_mode : {gb::HardwareMode::dmg,
+                                     gb::HardwareMode::cgb_compatibility,
+                                     gb::HardwareMode::cgb_native}) {
+        InterruptController interrupts;
+        Ppu ppu(interrupts, hardware_mode);
+        ppu.write_lcdc(0x11);
+        ppu.set_bgp(0xe4);
+        if (hardware_mode == gb::HardwareMode::cgb_compatibility) {
+            ppu.initialize_hle_compatibility_palettes();
+        } else if (hardware_mode == gb::HardwareMode::cgb_native) {
+            // Palette BG 0 : couleur 0 noire, couleur 1 rouge.
+            ppu.write_bcps(0); ppu.write_bcpd(0x00);
+            ppu.write_bcps(1); ppu.write_bcpd(0x00);
+            ppu.write_bcps(2); ppu.write_bcpd(0x1f);
+            ppu.write_bcps(3); ppu.write_bcpd(0x00);
+        }
+        for (int row = 0; row < 8; ++row) {
+            ppu.vram[static_cast<std::size_t>(row * 2)] = 0xff; // tuile 0, couleur 1
+        }
+        ppu.set_wy(0);
+        ppu.set_wx(7);
+        ppu.write_lcdc(0xb1);
+        while (ppu.mode() != Ppu::mode_transfer || ppu.transfer_x() < 8) ppu.tick(1);
+        ppu.set_wx(31); // nouvelle coïncidence à X=24, après le démarrage window
+
+        const auto armed_state = snapshot(ppu);
+        InterruptController restored_interrupts;
+        Ppu restored(restored_interrupts, hardware_mode);
+        detail::BinaryReader reader(armed_state);
+        restored.load(reader);
+        check(reader.exhausted(), "état PPU avec glitch WX armé laisse des données");
+
+        while (ppu.mode() != Ppu::mode_vblank) ppu.tick(1);
+        while (restored.mode() != Ppu::mode_vblank) restored.tick(1);
+        check_snapshot_equal(snapshot(ppu), snapshot(restored),
+                             "glitch WX divergent après restauration en mode 3");
+
+        const auto regular_pixel = ppu.completed_frame[0];
+        int injected_pixels{};
+        for (int x = 0; x < Ppu::width; ++x) {
+            if (ppu.completed_frame[static_cast<std::size_t>(x)] != regular_pixel) ++injected_pixels;
+        }
+        check(injected_pixels == 1,
+              "changement WX après démarrage window n'a pas injecté exactement un pixel FIFO");
+    }
+}
+
+void mid_scanline_scx_tile_fetch_test() {
+    InterruptController reference_interrupts;
+    InterruptController changed_interrupts;
+    Ppu reference(reference_interrupts, gb::HardwareMode::dmg);
+    Ppu changed(changed_interrupts, gb::HardwareMode::dmg);
+    const auto prepare = [](Ppu& ppu) {
+        ppu.write_lcdc(0x11);
+        ppu.set_bgp(0xe4);
+        for (int row = 0; row < 8; ++row) {
+            ppu.vram[static_cast<std::size_t>(row * 2)] = 0xff;      // tuile 0, couleur 1
+            ppu.vram[static_cast<std::size_t>(16 + row * 2 + 1)] = 0xff; // tuile 1, couleur 2
+        }
+        for (int tile = 0; tile < 32; ++tile) {
+            ppu.vram[static_cast<std::size_t>(0x1800 + tile)] =
+                static_cast<std::uint8_t>(tile & 1);
+        }
+        ppu.write_lcdc(0x91);
+    };
+    prepare(reference);
+    prepare(changed);
+    while (changed.mode() != Ppu::mode_transfer || changed.transfer_x() < 24) {
+        reference.tick(1);
+        changed.tick(1);
+    }
+    changed.set_scx(8); // conserve le décalage fin, décale les prochains Get Tile
+    while (changed.mode() != Ppu::mode_vblank) {
+        reference.tick(1);
+        changed.tick(1);
+    }
+
+    for (int x = 0; x < 24; ++x) {
+        check(reference.completed_frame[static_cast<std::size_t>(x)] ==
+                  changed.completed_frame[static_cast<std::size_t>(x)],
+              "écriture SCX mode 3 a modifié des pixels déjà sortis de la FIFO");
+    }
+    bool future_tile_changed{};
+    for (int x = 24; x < Ppu::width; ++x) {
+        future_tile_changed = future_tile_changed ||
+            reference.completed_frame[static_cast<std::size_t>(x)] !=
+            changed.completed_frame[static_cast<std::size_t>(x)];
+    }
+    check(future_tile_changed,
+          "fetcher BG n'a pas relu les bits de tuile SCX après une écriture mode 3");
+}
+
 void sprite_penalty_test() {
     InterruptController interrupts;
     Ppu ppu(interrupts, gb::HardwareMode::dmg);
@@ -336,6 +429,8 @@ int main() {
     using namespace ravenemu::cgb::testing;
     fifo_baseline_and_scx_test();
     window_restart_and_line_counter_test();
+    mid_scanline_wx_glitch_test();
+    mid_scanline_scx_tile_fetch_test();
     sprite_penalty_test();
     progressive_oam_scan_test();
     mid_oam_scan_save_state_test();

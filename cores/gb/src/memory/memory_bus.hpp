@@ -55,7 +55,7 @@ public:
     }
 
     bool on_stop() override {
-        timer_.write_div();
+        reset_divider();
         return speed_.begin_switch_from_stop();
     }
     bool stop_wake_requested() override { return joypad_.take_stop_wake(); }
@@ -196,7 +196,11 @@ private:
         const int cpu_cycles_per_dot = 1 << speed_.peripheral_shift();
         const int peripheral_dots = cpu_cycles / cpu_cycles_per_dot;
         for (int dot = 0; dot < peripheral_dots; ++dot) {
+            const bool apu_divider_before = timer_.apu_divider_signal(speed_.double_speed());
             timer_.tick(cpu_cycles_per_dot);
+            if (apu_divider_before && !timer_.apu_divider_signal(speed_.double_speed())) {
+                apu_.clock_divider_falling_edge();
+            }
             serial_.tick(cpu_cycles_per_dot);
             ppu_.tick(1);
             if (ppu_.take_hblank_entry()) notify_hblank();
@@ -319,7 +323,7 @@ private:
         case 0xff00: joypad_.write(value); break;
         case 0xff01: serial_.write_data(value); break;
         case 0xff02: serial_.write_control(value); break;
-        case 0xff04: timer_.write_div(); break;
+        case 0xff04: reset_divider(); break;
         case 0xff05: timer_.write_tima(value); break;
         case 0xff06: timer_.set_tma(value); break;
         case 0xff07: timer_.write_tac(value); break;
@@ -375,6 +379,14 @@ private:
             if (address >= 0xff10 && address <= 0xff3f) apu_.write(address, value);
             else if (address >= 0xff80 && address <= 0xfffe) hram[static_cast<std::size_t>(address - 0xff80)] = static_cast<std::uint8_t>(value);
             break;
+        }
+    }
+
+    void reset_divider() noexcept {
+        const bool apu_divider_before = timer_.apu_divider_signal(speed_.double_speed());
+        timer_.write_div();
+        if (apu_divider_before && !timer_.apu_divider_signal(speed_.double_speed())) {
+            apu_.clock_divider_falling_edge();
         }
     }
 

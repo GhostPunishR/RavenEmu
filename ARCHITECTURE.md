@@ -117,7 +117,28 @@ cycles CPU/dots périphériques sans accélérer le LCD.
 Le PPU partagé utilise un fetcher et une FIFO de pixels sauvegardables. La durée
 du mode 3 dépend du décalage fin `SCX`, du démarrage de fenêtre et des sprites,
 au lieu d'une constante par ligne. Cette architecture est la fondation des
-corrections de précision restantes ; elle n'est pas qualifiée de cycle-perfect.
+corrections de précision restantes. Une écriture de `WX` après le démarrage de
+la fenêtre peut maintenant armer l'injection du pixel neutre documenté dans la
+FIFO ; cet événement survit à un état instantané en milieu de scanline. Les bits
+de tuile de `SCX` sont relus aux étapes Get Tile, tandis que ses trois bits fins
+restent ceux du discard initial. Les
+annulations de fetch OBJ et les courses propres à certaines révisions restent à
+mesurer ; le PPU n'est donc pas qualifié de cycle-perfect.
+
+Le séquenceur APU n'emploie plus un compteur autonome de 8 192 dots. Le bus
+observe le front descendant du bit 12 du diviseur interne, ou du bit 13 en
+double vitesse, y compris lors des remises à zéro par `FF04` et `STOP`. Les
+compteurs de longueur, enveloppes et sweep restent ainsi liés à la phase réelle
+de `DIV`. Les comportements communs documentés (reload de longueur raccourci,
+enveloppe de période zéro, délai de trigger, corruption wave DMG pendant une
+lecture, coupure LFSR 14/15, premier pas duty, pente DAC/filtre par matériel et
+cas zombie portable) sont modélisés. Le profil
+matériel ne distingue pas encore le CGB-02 du CGB-04/05 ; sa variante du clock
+de longueur et les autres variantes zombie DMG restent explicitement ouvertes.
+
+Le format d'état GB/GBC est en version 7. Il sérialise la phase du séquenceur
+APU dérivée de `DIV` et le pixel `WX` éventuellement armé ; les versions 6 et
+antérieures sont refusées au lieu d'être chargées partiellement.
 
 Une boot ROM DMG ou CGB peut être injectée par les fabriques C++ publiques. Son
 mapping et `FF50` restent dans le cœur ; aucune image n'est distribuée. Sans
