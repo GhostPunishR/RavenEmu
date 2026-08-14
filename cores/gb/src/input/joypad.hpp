@@ -44,8 +44,33 @@ public:
         return pending;
     }
 
-    void save(BinaryWriter& out) const { out.i32(select_); }
-    void load(BinaryReader& in) { select_ = in.i32() & 0x30; stop_wake_pending_ = false; }
+    void save(BinaryWriter& out) const {
+        out.i32(4);
+        out.i32(select_);
+        out.i32(action_state_);
+        out.i32(direction_state_);
+        out.i32(stop_wake_pending_ ? 1 : 0);
+    }
+    void load(BinaryReader& in) {
+        if (in.i32() != 4) throw SaveStateError("Etat instantane corrompu (joypad)");
+        const auto nibble = [&in] {
+            const int value = in.i32();
+            if (value < 0 || value > 0x0f) {
+                throw SaveStateError("Etat instantane corrompu (joypad)");
+            }
+            return value;
+        };
+        const int select = in.i32();
+        if (select < 0 || select > 0x30 || (select & ~0x30) != 0) {
+            throw SaveStateError("Etat instantane corrompu (joypad)");
+        }
+        select_ = select;
+        action_state_ = nibble();
+        direction_state_ = nibble();
+        const int wake = in.i32();
+        if (wake < 0 || wake > 1) throw SaveStateError("Etat instantane corrompu (joypad)");
+        stop_wake_pending_ = wake != 0;
+    }
 
 private:
     InterruptController& interrupts_;

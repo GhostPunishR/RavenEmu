@@ -6,7 +6,14 @@ Cette page présente les priorités générales. Les issues et pull requests res
 
 - moteur Game Boy;
 - compatibilité Game Boy Color;
-- audio, vidéo, timers et principaux contrôleurs de cartouche;
+- ordonnancement GB/GBC par M-cycle et PPU à fetcher/FIFO BG/OBJ séparés;
+- portes CPU VRAM/OAM/CRAM liées aux phases PPU, y compris les frontières
+  d'activation LCD et l'échantillonnage en double vitesse;
+- modes DMG, CGB natif et compatibilité CGB explicites;
+- audio, vidéo, timers et principaux contrôleurs de cartouche, dont MBC1M et
+  MMM01;
+- endpoints locaux déterministes pour série et infrarouge;
+- boot ROM GB/GBC optionnelle dans l'API C++ et harness de conformité externe;
 - bibliothèque locale avec empreintes et pochettes;
 - contrôles tactiles configurables et manettes physiques;
 - profils d'écran monochrome;
@@ -19,7 +26,12 @@ Cette page présente les priorités générales. Les issues et pull requests res
 - étendre les tests sur appareils Android;
 - améliorer les performances Game Boy Advance;
 - valider davantage de jeux avec des copies obtenues légalement;
-- améliorer la précision des timings;
+- valider et affiner les cas PPU/APU les plus dépendants de la révision
+  matérielle à l'aide de suites librement utilisables;
+- exposer la sélection du modèle et la boot ROM utilisateur dans l'hôte Android;
+- fournir des backends link/IR hors du cœur;
+- ajouter progressivement les contrôleurs de cartouche exotiques sans faux
+  support;
 - compléter les fonctions vidéo et audio GBA;
 - renforcer les outils de diagnostic;
 - documenter les résultats de compatibilité.

@@ -9,8 +9,8 @@ les services Android et les features. Les chemins Gradle correspondent aux dossi
 |---|---|---|
 | `app/android` | Android | Coque UI et composition finale |
 | `cores/common` | C++20 | Contrat et primitives communes |
-| `cores/gb` | C++20 | Game Boy, avec le mode CGB historique |
-| `cores/gbc` | C++20 | Frontière dédiée à l'extraction progressive du matériel CGB |
+| `cores/gb` | C++20 | Matériel commun GB/GBC et différences DMG explicites |
+| `cores/gbc` | C++20 | Façade CGB et extraction progressive du matériel spécifique |
 | `cores/gba` | C++20 | Game Boy Advance |
 | `native/api` | C++20 | Contrat natif générique |
 | `native/jni` | Java/C++ | Frontière JNI uniquement |
@@ -36,11 +36,19 @@ Les objets Kotlin ne traversent pas le moteur : JNI transporte des handles, des 
 
 L'application détecte la console d'une ROM et demande le moteur correspondant. Les écrans Android n'instancient pas directement les cœurs.
 
-### Un cœur par console, pas par modèle
+### Identité produit et modèle matériel
 
-`ConsoleType` désigne un **cœur d'émulation**, pas un modèle commercialisé : `engine/runtime` couvre à lui seul la Game Boy et la Game Boy Color, et n'y figure donc qu'une fois.
+`ConsoleType` désigne une identité de bibliothèque et de stockage, pas le modèle
+physique sélectionné pour une exécution : `engine/runtime` couvre encore la
+Game Boy et la Game Boy Color sous la même identité persistée.
 
 Ce que déclare la cartouche (monochrome, compatible couleur, ou couleur exigée) est une métadonnée distincte, lue à l'octet `0x0143` de l'en-tête et portée par `GameBoyCartridgeMode`. L'extension du fichier ne décide de rien : des `.gbc` contiennent des cartouches monochromes, des `.gb` des cartouches couleur.
+
+La fabrique C++ choisit séparément le modèle physique `automatic`, `dmg` ou
+`cgb`. Après lecture de l'en-tête, la machine possède un mode effectif explicite
+DMG, CGB natif ou compatibilité DMG sur CGB. La façade `gbc_raven_core` force le
+dernier choix matériel au lieu de rediriger sans information vers la fabrique
+automatique.
 
 Les formats persistés désignent la console par un identifiant **figé** (`ConsoleType.storageId`), jamais par son rang de déclaration : ajouter ou retirer une console ne doit pas réinterpréter les fichiers déjà enregistrés par les utilisateurs. Un identifiant retiré n'est jamais réattribué.
 
@@ -55,6 +63,26 @@ Le stockage passe par des interfaces dédiées. Les moteurs reçoivent les octet
 ### Boucle déterministe
 
 Chaque moteur avance selon un budget de cycles et produit un framebuffer, des échantillons audio et des données de sauvegarde par l'API commune.
+
+Dans le cœur GB/GBC, chaque accès CPU et chaque cycle interne est ordonnancé à
+une frontière de M-cycle. Le bus avance les périphériques par dots et laisse les
+DMA prendre le bus entre deux micro-opérations. Le PPU possède un fetcher, un
+FIFO BG et un FIFO OBJ. Les phases de lecture OAM/VRAM, la fusion des priorités
+et l'état intermédiaire des deux FIFO font partie des états instantanés. Les
+portes CPU de VRAM, OAM et CRAM suivent la phase interne, indépendamment des
+bits de mode publiés par `STAT`; leurs fronts particuliers après l'activation
+LCD du DMG sont conservés. Le bus les échantillonne après le M-cycle courant,
+avec deux dots PPU par M-cycle CPU en double vitesse.
+
+Le DMA OAM publie sa propriété du port au scan et au fetcher OBJ ; GDMA/HDMA
+reste, lui, cadencé sur les dots LCD. Une transition `KEY1` laisse avancer le
+raster tout en figeant ses droits VRAM/OAM/CRAM selon le mode PPU de départ.
+Ces états sont restaurés et recroisés au chargement pour refuser toute phase
+DMA ou vitesse contradictoire.
+
+Le port série et le port infrarouge dépendent uniquement des interfaces communes
+`LinkEndpoint` et `InfraredEndpoint`. Le transport local, Android, réseau ou
+Bluetooth appartient à l'hôte, jamais au cœur.
 
 ## Ajouter une console
 

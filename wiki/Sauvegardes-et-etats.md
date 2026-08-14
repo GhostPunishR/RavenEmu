@@ -24,9 +24,32 @@ Un état instantané capture l'ensemble de la machine émulée à un moment pré
 - audio;
 - timers;
 - interruptions;
-- contrôleurs de cartouche.
+- contrôleurs de cartouche;
+- mode matériel DMG/CGB, `KEY1`, `OPRI`, IR et état de la boot ROM;
+- état intermédiaire du fetcher, des FIFO BG/OBJ, d'un fetch OBJ en cours, des
+  DMA, des boutons et de la phase libre du port série.
 
 Les états utilisent le format RavenEmu `RVNS`. Ils ne sont pas annoncés comme compatibles avec d'autres émulateurs.
+
+Le format GB/GBC courant est la **version 9**. Il enregistre les frontières de
+M-cycle, le séquenceur APU dérivé de DIV et le pipeline PPU complet, y compris
+les octets OBJ déjà échantillonnés mais pas encore fusionnés. La phase des DMA
+et la porte vidéo figée pendant une transition `KEY1` sont également conservées,
+ainsi que la sélection, les masques et les verrous d'une cartouche MMM01.
+L'ajout du layout interne MMM01 ne change pas cette version globale : les
+versions précédentes refusaient ce contrôleur et ne pouvaient donc produire
+aucun état MMM01 ambigu à recharger.
+Les versions GB/GBC antérieures, notamment la version 8, sont refusées avec une
+erreur explicite au lieu de charger silencieusement un état incomplet. Les
+portes VRAM/OAM/CRAM ordinaires et le mot OAM présenté par le DMA sont
+recalculés depuis les phases déjà enregistrées. Les modes, dots, retards de
+publication ou couples KEY1/PPU incohérents sont rejetés au chargement. Le
+format du cœur GBA évolue indépendamment.
+
+Les objets de transport externes (`LinkEndpoint` et `InfraredEndpoint`) ne font
+pas partie de la machine émulée et ne sont pas sérialisés. Après restauration,
+le cœur se reconnecte à l'endpoint que l'hôte lui a déjà fourni ; l'autre
+instance ou le backend reste responsable de sa propre restauration.
 
 ## Compatibilité des sauvegardes et des états
 

@@ -69,18 +69,28 @@ cores
 
 ## Cœurs C++
 
-`cores/common` porte le contrat `Core`, les primitives binaires et SHA-256.
+`cores/common` porte le contrat `Core`, les primitives binaires et SHA-256, ainsi
+que les contrats sans dépendance plateforme `LinkEndpoint` et
+`InfraredEndpoint`.
 
-`cores/gb` porte encore l'implémentation principale commune GB/GBC. Le mode CGB
-est sélectionné à partir de l'en-tête de la cartouche et conserve la même identité
-persistée que la Game Boy afin de ne pas casser la bibliothèque ou les sauvegardes.
+`cores/gb` porte l'implémentation matérielle commune GB/GBC. Le modèle physique
+demandé à la fabrique (`automatic`, `dmg` ou `cgb`) est distinct des capacités
+annoncées par la cartouche. Il produit l'un des trois modes effectifs suivants :
 
-`cores/gbc` est désormais une vraie bibliothèque statique `gbc_raven_core`, avec
-ses propres tests matériels. L'extraction est progressive plutôt qu'une copie du
-cœur GB : les composants spécifiques déjà déplacés comprennent notamment le
-contrôleur de double vitesse et le port infrarouge. Le PPU, les DMA, le port série
-et les autres organes restent encore partagés avec l'implémentation GB pendant
-leur séparation sous tests de parité.
+- DMG ;
+- CGB natif pour une cartouche couleur ;
+- CGB exécutant une cartouche DMG en mode de compatibilité.
+
+La fabrique historique conserve le mode automatique et l'identité persistée
+Game Boy pour ne pas modifier le contrat JNI, la bibliothèque ou le stockage.
+
+`cores/gbc` est une vraie bibliothèque statique `gbc_raven_core`, avec ses
+propres tests matériels. Sa fabrique force maintenant un CGB physique : une ROM
+DMG y entre donc en mode de compatibilité au lieu de retomber sur le modèle DMG.
+L'extraction est progressive plutôt qu'une copie du cœur GB : les composants
+spécifiques déjà déplacés comprennent notamment le contrôleur de double vitesse
+et le port infrarouge. Le PPU, les DMA, le port série et les autres organes
+communs restent factorisés pendant leur séparation sous tests de parité.
 
 Le dossier porte donc **deux** cibles, et la distinction commande la suite de
 l'extraction :
@@ -95,10 +105,112 @@ unique créerait un cycle. `gbc_hardware` reste INTERFACE tant que les composant
 extraits ne sont que des en-têtes, et devient STATIC dès que l'un d'eux gagne un
 `.cpp` — sans qu'aucune autre cible n'ait à changer.
 
+### Ordonnancement GB/GBC
+
+Le CPU LR35902 ne fait plus avancer une instruction entière d'un bloc. Chaque
+lecture, écriture et cycle interne appelle le bus à une frontière de M-cycle.
+Le bus avance alors timer, série, PPU, APU, cartouche et DMA dans leurs domaines
+d'horloge respectifs ; un GDMA ou un bloc HDMA peut ainsi prendre le bus entre
+deux micro-opérations de la même instruction. La double vitesse change le ratio
+cycles CPU/dots périphériques sans accélérer le LCD.
+
+Le DMA OAM possède une phase de demande, un M-cycle de démarrage et un transfert
+d'un octet par M-cycle CPU. Sa propriété du port OAM est transmise au PPU : le
+scan du mode 2 voit des objets hors écran et le fetch OBJ du mode 3 reçoit le mot
+16 bits actuellement présenté par le DMA. Cette vue transitoire est reconstruite
+depuis l'index DMA et l'OAM lors d'une restauration, sans état PPU redondant.
+GDMA/HDMA reste cadencé à un octet par deux dots dans les deux vitesses ; un
+HDMA actif ignore une nouvelle commande à bit 7 armé et ne peut être arrêté
+qu'entre deux blocs par une écriture à bit 7 nul.
+
+Le PPU partagé utilise un fetcher et deux FIFO sauvegardables, l'une pour le
+fond/fenêtre et l'autre pour les OBJ. La durée du mode 3 dépend du décalage fin
+`SCX`, du démarrage de fenêtre et des sprites, au lieu d'une constante par
+ligne. Une écriture de `WX` après le démarrage de la fenêtre peut armer
+l'injection du pixel neutre documenté ; les bits de tuile de `SCX` sont relus
+aux étapes Get Tile, tandis que ses trois bits fins restent ceux du discard
+initial.
+
+Le fetch OBJ est un état explicite : attente du fetch BG, lecture OAM, lecture
+des octets bas/haut en VRAM puis fusion dans le FIFO OBJ. Les coordonnées Y/X
+retenues en mode 2, le Tile ID, les attributs, la banque, les octets de tuile et
+la décision de priorité sont ainsi échantillonnés à leur phase respective au
+lieu d'être relus pour chaque pixel. La fusion conserve la priorité par X sur
+DMG/compatibilité ou par index OAM en CGB natif selon `OPRI`. Une coupure de
+`LCDC.1` annule un fetch DMG en cours, alors que le matériel CGB poursuit le
+fetch et son coût temporel même si les OBJ sont masqués. Le timing résiduel de
+l'annulation par rapport à une écriture CPU et les courses propres aux révisions
+LCD restent à mesurer ; le PPU n'est donc pas qualifié de cycle-perfect.
+
+Les portes CPU de VRAM, OAM et CRAM sont calculées séparément du mode publié
+par `STAT`. En régime établi elles suivent la phase interne du PPU ; pendant les
+trois premières lignes qui suivent `LCDC.7` sur DMG, les fronts distincts de
+lecture et d'écriture restent explicitement modélisés. Le bus les échantillonne
+après l'avancement du M-cycle, y compris en double vitesse. Une écriture CGB de
+`BGPD`/`OBPD` refusée en mode 3 laisse la CRAM intacte mais avance tout de même
+l'index lorsque l'auto-incrément est armé.
+
+Pendant les 2050 M-cycles d'une transition `KEY1`, le raster continue mais ses
+portes internes restent figées au niveau du mode où `STOP` a commencé : aucune
+mémoire vidéo en modes 0/1, fond sans OAM en mode 2, accès complets en mode 3.
+La phase figée est sauvegardée et validée avec le compteur du contrôleur de
+vitesse. Les effets d'interruptions pendant cette pause et les différences de
+révision CGB restent à caractériser sur matériel.
+
+Le séquenceur APU n'emploie plus un compteur autonome de 8 192 dots. Le bus
+observe le front descendant du bit 12 du diviseur interne, ou du bit 13 en
+double vitesse, y compris lors des remises à zéro par `FF04` et `STOP`. Les
+compteurs de longueur, enveloppes et sweep restent ainsi liés à la phase réelle
+de `DIV`. Les comportements communs documentés (reload de longueur raccourci,
+enveloppe de période zéro, délai de trigger, corruption wave DMG pendant une
+lecture, coupure LFSR 14/15, premier pas duty, pente DAC/filtre par matériel et
+cas zombie portable) sont modélisés. Le profil
+matériel ne distingue pas encore le CGB-02 du CGB-04/05 ; sa variante du clock
+de longueur et les autres variantes zombie DMG restent explicitement ouvertes.
+
+Le format d'état GB/GBC est en version 9. Il sérialise la phase du séquenceur
+APU dérivée de `DIV`, le pixel `WX` éventuellement armé, le FIFO OBJ et chaque
+phase intermédiaire de son fetch, ainsi que la porte vidéo figée par `KEY1`.
+Les portes ordinaires du bus vidéo et la contention OAM DMA sont dérivées des
+phases déjà sérialisées et ne constituent pas un état redondant. Les versions 8
+et antérieures sont refusées au lieu d'être chargées partiellement ; les phases
+PPU, DMA ou KEY1 incohérentes d'un état version 9 sont également rejetées
+explicitement.
+
+Une boot ROM DMG ou CGB peut être injectée par les fabriques C++ publiques. Son
+mapping et `FF50` restent dans le cœur ; aucune image n'est distribuée. Sans
+image, le cœur conserve un démarrage HLE post-boot explicite, avec des registres
+CPU/APU distincts pour DMG, CGB natif et compatibilité CGB. Lorsqu'une image est
+présente, un CGB démarre avec ses fonctions natives puis bascule, à l'écriture
+de `FF50`, vers la compatibilité si la cartouche est monochrome. Les mémoires et
+registres non documentés au vrai power-on sont initialisés à zéro de manière
+déterministe ; cette normalisation est une approximation assumée des valeurs
+électriques non initialisées. Les images CGB peuvent utiliser le format compact
+de 2 048 octets ou le layout adressé de 2 304 octets qui conserve le trou
+`0100-01FF`.
+
+Le fallback HLE cible les phases observables DMG ABC/MGB et CGB ABCDE, y compris
+le diviseur série libre aligné au reset. Les autres révisions matérielles ne
+sont pas implicitement assimilées à ces profils.
+
+Le sous-système cartouche possède désormais un contrôleur MMM01 distinct du
+MBC1. Le parseur recherche son en-tête dans les 32 derniers Kio, qui sont les
+seuls visibles au reset, puis le contrôleur conserve séparément les bits de
+sélection du jeu, leurs masques d'écriture et le verrou irréversible du mode
+mappé. Les chemins standard et multiplexés composent directement les lignes de
+banque ROM/RAM sans table par jeu. La RAM batterie reste un fichier brut ; les
+registres transitoires MMM01 appartiennent seulement à l'état instantané. Pan
+Docs ne tranche ni l'accès RAM avant mapping, ni l'effet d'une écriture qui
+change simultanément le masque RAM et arme le mapping : RavenEmu conserve le
+chemin RAM décodé et applique le masque avant le verrou, choix isolés et
+documentés en attente d'une mesure matérielle publique.
+
 `cores/gba` porte le moteur Game Boy Advance indépendant.
 
-Les quatre suites natives (`common`, `gb`, `gbc`, `gba`) doivent pouvoir être
-construites directement avec `cmake -S cores`.
+Les suites natives (`common`, GB/GBC par sous-système, `gbc`, `gba`) doivent
+pouvoir être construites directement avec `cmake -S cores`. Le runner
+`gb_conformance_runner` reçoit uniquement des ROMs de test externes fournies par
+le développeur ou la CI ; aucune ROM de conformité n'est intégrée implicitement.
 
 ## Frontières plateforme
 
@@ -108,8 +220,11 @@ moteur. `engine/session` transforme cet état en sortie abstraite et
 `platform/android/vibration` est seul responsable du `Vibrator` Android.
 
 Le même principe s'applique au port série et au port infrarouge : le modèle
-matériel reste dans le cœur, tandis qu'une future connexion entre appareils doit
-passer par une couche plateforme séparée.
+matériel reste dans le cœur. Des implémentations locales déterministes des deux
+endpoints relient déjà deux machines dans un même processus ; un futur transport
+Android, réseau ou Bluetooth devra implémenter ces contrats sans entrer dans le
+cœur. L'endpoint doit vivre au moins aussi longtemps que les cœurs connectés et
+la topologie externe n'est pas sérialisée dans les états instantanés.
 
 ## Bibliothèque ROM
 
