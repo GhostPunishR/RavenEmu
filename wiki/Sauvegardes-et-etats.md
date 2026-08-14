@@ -34,7 +34,11 @@ Les états utilisent le format RavenEmu `RVNS`. Ils ne sont pas annoncés comme 
 Le format GB/GBC courant est la **version 9**. Il enregistre les frontières de
 M-cycle, le séquenceur APU dérivé de DIV et le pipeline PPU complet, y compris
 les octets OBJ déjà échantillonnés mais pas encore fusionnés. La phase des DMA
-et la porte vidéo figée pendant une transition `KEY1` sont également conservées.
+et la porte vidéo figée pendant une transition `KEY1` sont également conservées,
+ainsi que la sélection, les masques et les verrous d'une cartouche MMM01.
+L'ajout du layout interne MMM01 ne change pas cette version globale : les
+versions précédentes refusaient ce contrôleur et ne pouvaient donc produire
+aucun état MMM01 ambigu à recharger.
 Les versions GB/GBC antérieures, notamment la version 8, sont refusées avec une
 erreur explicite au lieu de charger silencieusement un état incomplet. Les
 portes VRAM/OAM/CRAM ordinaires et le mot OAM présenté par le DMA sont

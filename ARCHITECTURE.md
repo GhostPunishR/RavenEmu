@@ -193,6 +193,18 @@ Le fallback HLE cible les phases observables DMG ABC/MGB et CGB ABCDE, y compris
 le diviseur série libre aligné au reset. Les autres révisions matérielles ne
 sont pas implicitement assimilées à ces profils.
 
+Le sous-système cartouche possède désormais un contrôleur MMM01 distinct du
+MBC1. Le parseur recherche son en-tête dans les 32 derniers Kio, qui sont les
+seuls visibles au reset, puis le contrôleur conserve séparément les bits de
+sélection du jeu, leurs masques d'écriture et le verrou irréversible du mode
+mappé. Les chemins standard et multiplexés composent directement les lignes de
+banque ROM/RAM sans table par jeu. La RAM batterie reste un fichier brut ; les
+registres transitoires MMM01 appartiennent seulement à l'état instantané. Pan
+Docs ne tranche ni l'accès RAM avant mapping, ni l'effet d'une écriture qui
+change simultanément le masque RAM et arme le mapping : RavenEmu conserve le
+chemin RAM décodé et applique le masque avant le verrou, choix isolés et
+documentés en attente d'une mesure matérielle publique.
+
 `cores/gba` porte le moteur Game Boy Advance indépendant.
 
 Les suites natives (`common`, GB/GBC par sous-système, `gbc`, `gba`) doivent

@@ -5,6 +5,7 @@
 #include "cartridge/mbc2.hpp"
 #include "cartridge/mbc3.hpp"
 #include "cartridge/mbc5.hpp"
+#include "cartridge/mmm01.hpp"
 
 namespace ravenemu::cgb {
 
@@ -16,6 +17,7 @@ std::unique_ptr<Cartridge> Cartridge::create(RomImage rom, Clock clock) {
     switch (header.mbc) {
     case MbcType::none: return std::make_unique<Mbc0>(std::move(rom), header);
     case MbcType::mbc1: return std::make_unique<Mbc1>(std::move(rom), header);
+    case MbcType::mmm01: return std::make_unique<Mmm01>(std::move(rom), header);
     case MbcType::mbc2: return std::make_unique<Mbc2>(std::move(rom), header);
     case MbcType::mbc3: return std::make_unique<Mbc3>(std::move(rom), header, std::move(clock));
     case MbcType::mbc5: return std::make_unique<Mbc5>(std::move(rom), header);

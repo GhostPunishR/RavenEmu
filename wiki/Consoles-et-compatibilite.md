@@ -14,7 +14,7 @@ Le moteur Game Boy comprend notamment:
 - audio à quatre canaux;
 - timer à détection de front et fenêtre de rechargement TIMA;
 - interruptions et DMA OAM progressif;
-- cartouches ROM seule, MBC1/MBC1M, MBC2, MBC3 avec horloge et MBC5;
+- cartouches ROM seule, MBC1/MBC1M, MMM01, MBC2, MBC3 avec horloge et MBC5;
 - boot ROM utilisateur optionnelle via la fabrique C++ et démarrage HLE sans
   firmware;
 - liaison série locale déterministe entre deux instances du cœur.
@@ -25,8 +25,10 @@ Le moteur Game Boy comprend notamment:
 - certains comportements matériels rares de l'APU restent à reproduire;
 - le timing résiduel d'une annulation OBJ par écriture `LCDC.1` et certaines
   courses d'activation LCD propres aux révisions restent à valider sur matériel;
-- les contrôleurs MMM01, MBC6, MBC7, HuC1, HuC3, TAMA5 et Camera restent refusés
+- les contrôleurs MBC6, MBC7, HuC1, HuC3, TAMA5 et Camera restent refusés
   explicitement;
+- deux comportements MMM01 non mesurés publiquement restent documentés : accès
+  RAM avant le mapping et écriture simultanée du masque RAM/bit de mapping;
 - l'injection d'une boot ROM n'est pas encore exposée dans l'interface Android;
 - le fallback HLE cible DMG ABC/MGB et CGB ABCDE; DMG0, SGB, SGB2 et AGB ne
   disposent pas encore de profils de démarrage sélectionnables;

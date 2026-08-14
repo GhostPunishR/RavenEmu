@@ -4,7 +4,7 @@
 
 namespace ravenemu::cgb {
 
-enum class MbcType : std::uint8_t { none, mbc1, mbc2, mbc3, mbc5, unsupported };
+enum class MbcType : std::uint8_t { none, mbc1, mmm01, mbc2, mbc3, mbc5, unsupported };
 
 struct CartridgeHeader {
     int cartridge_type{};
@@ -29,10 +29,12 @@ struct CartridgeHeader {
         }
 
         CartridgeHeader header;
-        header.cartridge_type = rom[0x147];
+        const auto header_base = locate_header(rom);
+        header.cartridge_type = rom[header_base + 0x147];
         switch (header.cartridge_type) {
         case 0x00: case 0x08: case 0x09: header.mbc = MbcType::none; break;
         case 0x01: case 0x02: case 0x03: header.mbc = MbcType::mbc1; break;
+        case 0x0b: case 0x0c: case 0x0d: header.mbc = MbcType::mmm01; break;
         case 0x05: case 0x06: header.mbc = MbcType::mbc2; break;
         case 0x0f: case 0x10: case 0x11: case 0x12: case 0x13: header.mbc = MbcType::mbc3; break;
         case 0x19: case 0x1a: case 0x1b: case 0x1c: case 0x1d: case 0x1e:
@@ -42,12 +44,13 @@ struct CartridgeHeader {
 
         switch (header.cartridge_type) {
         case 0x02: case 0x03: case 0x05: case 0x06: case 0x08: case 0x09:
+        case 0x0c: case 0x0d:
         case 0x10: case 0x12: case 0x13: case 0x1a: case 0x1b: case 0x1d: case 0x1e:
             header.has_ram = true; break;
         default: break;
         }
         switch (header.cartridge_type) {
-        case 0x03: case 0x06: case 0x09: case 0x0f: case 0x10: case 0x13:
+        case 0x03: case 0x06: case 0x09: case 0x0d: case 0x0f: case 0x10: case 0x13:
         case 0x1b: case 0x1e: header.has_battery = true; break;
         default: break;
         }
@@ -56,7 +59,7 @@ struct CartridgeHeader {
             header.has_ram = true;
             header.ram_size = 512;
         } else if (header.has_ram) {
-            switch (rom[0x149]) {
+            switch (rom[header_base + 0x149]) {
             case 0x01: header.ram_size = 2 * 1024; break;
             case 0x02: header.ram_size = 8 * 1024; break;
             case 0x03: header.ram_size = 32 * 1024; break;
@@ -65,7 +68,7 @@ struct CartridgeHeader {
             default: header.ram_size = 0; break;
             }
         }
-        const auto cgb_flag = rom[0x143];
+        const auto cgb_flag = rom[header_base + 0x143];
         header.uses_color = cgb_flag == 0x80 || cgb_flag == 0xc0;
         header.requires_color = cgb_flag == 0xc0;
         // MBC1M n'a pas de type d'en-tête distinct. Son câblage 1 Mio se
@@ -78,6 +81,23 @@ struct CartridgeHeader {
     }
 
 private:
+    static bool is_mmm01_type(int type) noexcept {
+        return type >= 0x0b && type <= 0x0d;
+    }
+
+    static std::size_t locate_header(std::span<const std::uint8_t> rom) noexcept {
+        // Au reset, MMM01 présente les 32 derniers Kio de la ROM : son en-tête
+        // matériel se trouve donc à la fin de l'image et non nécessairement à
+        // l'offset zéro. Le checksum évite de confondre une donnée quelconque
+        // de la dernière sous-ROM avec un en-tête MMM01.
+        const std::size_t tail_base = rom.size() - min_rom_size;
+        if (is_mmm01_type(rom[tail_base + 0x147]) &&
+            valid_header_checksum(rom, tail_base)) {
+            return tail_base;
+        }
+        return 0;
+    }
+
     static bool valid_header_checksum(std::span<const std::uint8_t> rom,
                                       std::size_t base) noexcept {
         if (base + 0x14d >= rom.size()) return false;
