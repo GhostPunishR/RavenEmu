@@ -46,11 +46,11 @@ void game_boy_smoke_test() {
     );
 
     auto old_version = before_failure;
-    old_version[4] = 7;
+    old_version[4] = 8;
     old_version[5] = 0;
     expect_failure<ravenemu::SaveStateError>(
         [&] { core->load_state(old_version); },
-        "un état GB/GBC de version 7 a été accepté comme version 8"
+        "un état GB/GBC de version 8 a été accepté comme version 9"
     );
     check(core->save_state() == before_failure,
           "le refus d'une ancienne version de save state a modifié la machine");

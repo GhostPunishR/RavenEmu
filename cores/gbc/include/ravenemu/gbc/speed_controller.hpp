@@ -66,9 +66,20 @@ public:
     }
 
     void load(detail::BinaryReader& in) {
-        double_speed_ = in.i32() != 0;
-        armed_ = in.i32() != 0;
-        switch_dots_remaining_ = std::max(0, in.i32());
+        const int double_speed = in.i32();
+        const int armed = in.i32();
+        const int remaining = in.i32();
+        const int maximum_remaining = double_speed != 0
+            ? switch_from_double_dots : switch_from_normal_dots;
+        if ((double_speed != 0 && double_speed != 1) || (armed != 0 && armed != 1) ||
+            remaining < 0 || remaining > maximum_remaining ||
+            (remaining > 0 && armed != 0) ||
+            (!cgb_mode_ && (double_speed != 0 || armed != 0 || remaining != 0))) {
+            throw SaveStateError("État instantané corrompu (KEY1)");
+        }
+        double_speed_ = double_speed != 0;
+        armed_ = armed != 0;
+        switch_dots_remaining_ = remaining;
     }
 
 private:

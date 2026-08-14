@@ -53,9 +53,12 @@ Une cartouche déclarant des fonctions couleur bénéficie notamment de:
 - portes d'accès CPU VRAM, OAM et palettes séparées du mode `STAT`, avec
   frontières de M-cycle normales/double vitesse et auto-incrément CRAM même
   après une écriture de données bloquée;
-- OAM DMA progressif;
-- GDMA et HDMA progressifs avec blocage du CPU pendant les transferts;
-- mode double vitesse via `KEY1` et transition déclenchée par `STOP`;
+- OAM DMA progressif, avec contention du scan/fetch OBJ et mot OAM 16 bits
+  présenté au PPU pendant le mode 3;
+- GDMA et HDMA progressifs avec blocage du CPU, annulation entre blocs,
+  sélection VBK par bloc et cadence identique dans les deux vitesses;
+- mode double vitesse via `KEY1`, transition déclenchée par `STOP` et portes
+  vidéo figées selon le mode PPU de départ;
 - port série bit par bit avec diviseur libre aligné au reset, horloge interne
   normale, horloge rapide CGB et horloge externe;
 - registre `OPRI` (`FF6C`) et priorité objet DMG/CGB;
@@ -70,8 +73,10 @@ Une cartouche déclarant des fonctions couleur bénéficie notamment de:
   courses propres aux révisions CGB précoces/tardives, la fin résiduelle d'une
   annulation OBJ et d'autres modifications de registres en milieu de ligne
   restent à confronter au matériel;
-- le verrouillage vidéo et les cas anormaux de `STOP` pendant la transition de
-  vitesse CGB restent à reproduire au niveau des révisions matérielles;
+- les interruptions pendant la pause de vitesse, les différences entre
+  révisions CGB et les cas anormaux de `STOP` restent à mesurer sur matériel;
+- la corruption exacte d'un GDMA lancé pendant que le PPU occupe la VRAM et le
+  démarrage volontaire d'un HDMA au milieu d'un HBlank restent à caractériser;
 - la palette HLE du mode de compatibilité CGB est générique et ne reproduit pas
   encore la sélection de palette propre aux différentes boot ROMs;
 - le link et l'infrarouge fonctionnent entre deux machines dans le même

@@ -901,7 +901,7 @@ void object_fifo_state_validation_test() {
     InterruptController interrupts;
     Ppu source(interrupts, gb::HardwareMode::dmg);
     auto corrupted = snapshot(source);
-    constexpr std::size_t object_fifo_offset = 4 + 70 * 4 + 16 * 3;
+    constexpr std::size_t object_fifo_offset = 4 + 71 * 4 + 16 * 3;
     check(corrupted.size() > object_fifo_offset, "état PPU trop court pour contenir le FIFO OBJ");
     corrupted[object_fifo_offset] = 4; // couleur OBJ hors de l'intervalle matériel 0..3
     expect_failure<SaveStateError>(

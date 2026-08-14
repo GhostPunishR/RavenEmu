@@ -44,9 +44,11 @@ La compatibilité varie selon les jeux. Consultez la [matrice de compatibilité]
 Le moteur GB/GBC distingue explicitement DMG, CGB natif et compatibilité DMG sur
 CGB. Son CPU ordonne les accès par M-cycle, son PPU utilise un fetcher avec des
 FIFO BG et OBJ séparés, et ses portes VRAM/OAM/CRAM suivent les transitions LCD
-internes plutôt qu'une approximation par ligne. Le séquenceur audio suit les
-fronts du diviseur matériel en vitesse normale ou double. RavenEmu ne revendique
-toutefois pas encore une émulation cycle-perfect.
+internes plutôt qu'une approximation par ligne. Les DMA OAM/GDMA/HDMA arbitrent
+le bus progressivement et la pause `KEY1` fige les portes vidéo selon le mode
+PPU où `STOP` est exécuté. Le séquenceur audio suit les fronts du diviseur
+matériel en vitesse normale ou double. RavenEmu ne revendique toutefois pas
+encore une émulation cycle-perfect.
 Les ROMs de test de conformité restent externes au dépôt ; le runner et son
 usage sont documentés dans [`cores/gb/tests/README.md`](cores/gb/tests/README.md).
 

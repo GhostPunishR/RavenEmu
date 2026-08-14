@@ -31,15 +31,16 @@ Un état instantané capture l'ensemble de la machine émulée à un moment pré
 
 Les états utilisent le format RavenEmu `RVNS`. Ils ne sont pas annoncés comme compatibles avec d'autres émulateurs.
 
-Le format GB/GBC courant est la **version 8**. Il enregistre les frontières de
+Le format GB/GBC courant est la **version 9**. Il enregistre les frontières de
 M-cycle, le séquenceur APU dérivé de DIV et le pipeline PPU complet, y compris
-les octets OBJ déjà échantillonnés mais pas encore fusionnés. Les versions
-GB/GBC antérieures, notamment la version 7, sont refusées avec une erreur
-explicite au lieu de charger silencieusement un état incomplet. Les portes
-VRAM/OAM/CRAM sont recalculées depuis les phases PPU déjà enregistrées ; aucun
-champ redondant ni changement de version n'est nécessaire. Les modes, dots ou
-retards de publication incohérents sont rejetés au chargement. Le format du cœur
-GBA évolue indépendamment.
+les octets OBJ déjà échantillonnés mais pas encore fusionnés. La phase des DMA
+et la porte vidéo figée pendant une transition `KEY1` sont également conservées.
+Les versions GB/GBC antérieures, notamment la version 8, sont refusées avec une
+erreur explicite au lieu de charger silencieusement un état incomplet. Les
+portes VRAM/OAM/CRAM ordinaires et le mot OAM présenté par le DMA sont
+recalculés depuis les phases déjà enregistrées. Les modes, dots, retards de
+publication ou couples KEY1/PPU incohérents sont rejetés au chargement. Le
+format du cœur GBA évolue indépendamment.
 
 Les objets de transport externes (`LinkEndpoint` et `InfraredEndpoint`) ne font
 pas partie de la machine émulée et ne sont pas sérialisés. Après restauration,

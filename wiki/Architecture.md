@@ -74,6 +74,12 @@ bits de mode publiés par `STAT`; leurs fronts particuliers après l'activation
 LCD du DMG sont conservés. Le bus les échantillonne après le M-cycle courant,
 avec deux dots PPU par M-cycle CPU en double vitesse.
 
+Le DMA OAM publie sa propriété du port au scan et au fetcher OBJ ; GDMA/HDMA
+reste, lui, cadencé sur les dots LCD. Une transition `KEY1` laisse avancer le
+raster tout en figeant ses droits VRAM/OAM/CRAM selon le mode PPU de départ.
+Ces états sont restaurés et recroisés au chargement pour refuser toute phase
+DMA ou vitesse contradictoire.
+
 Le port série et le port infrarouge dépendent uniquement des interfaces communes
 `LinkEndpoint` et `InfraredEndpoint`. Le transport local, Android, réseau ou
 Bluetooth appartient à l'hôte, jamais au cœur.

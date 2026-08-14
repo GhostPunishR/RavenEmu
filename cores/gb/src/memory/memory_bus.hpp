@@ -56,7 +56,9 @@ public:
 
     bool on_stop() override {
         reset_divider();
-        return speed_.begin_switch_from_stop();
+        if (!speed_.begin_switch_from_stop()) return false;
+        ppu_.begin_speed_switch();
+        return true;
     }
     bool stop_wake_requested() override { return joypad_.take_stop_wake(); }
     [[nodiscard]] bool cpu_blocked() const noexcept override {
@@ -93,7 +95,9 @@ public:
             if (ppu_.take_hblank_entry()) notify_hblank();
             apu_.tick(1);
             tick(0, 1);
+            const bool switching_before = speed_.switching();
             speed_.tick_peripheral(1);
+            if (switching_before && !speed_.switching()) ppu_.end_speed_switch();
             ++elapsed_dots_;
         }
         return take_elapsed_dots();
@@ -179,13 +183,24 @@ public:
             (oam_dma_active_ && oam_dma_index_ >= 0xa0) ||
             (!oam_dma_pending_ && oam_dma_startup_cycles_ != 0) ||
             (hdma_active_ && (hdma_destination_ >= 0x2000 || hdma_length_ == 0)) ||
-            hdma_block_bytes_remaining_ > hdma_length_) {
+            hdma_block_bytes_remaining_ > hdma_length_ ||
+            (!hdma_active_ && hdma_block_bytes_remaining_ != 0) ||
+            (hdma_active_ && !hdma_hblank_ && hdma_block_bytes_remaining_ == 0) ||
+            (hdma_active_ && hdma_hblank_ && !ppu_.lcd_enabled())) {
             throw SaveStateError("État instantané corrompu (DMA)");
         }
+        if (oam_dma_active_) ppu_.restore_oam_dma_bus(oam_dma_index_);
+        else ppu_.end_oam_dma();
         elapsed_dots_ = 0; // compteur de budget hôte, pas un registre matériel
         infrared_.load(in);
         boot_rom_.load(in);
-        set_hardware_mode(boot_rom_.mapped() ? boot_hardware_mode_ : post_boot_hardware_mode_);
+        const auto restored_mode = boot_rom_.mapped() ? boot_hardware_mode_ : post_boot_hardware_mode_;
+        if (!gb::cgb_features_enabled(restored_mode) &&
+            (speed_.switching() || ppu_.speed_switch_active())) {
+            throw SaveStateError("État instantané corrompu (transition KEY1 hors mode CGB)");
+        }
+        set_hardware_mode(restored_mode);
+        ppu_.validate_speed_switch_state(speed_.switching());
     }
 
     std::array<std::uint8_t, 0x8000> wram{};
@@ -421,6 +436,7 @@ private:
         oam_dma_cycle_accum_ = 0;
         oam_dma_startup_cycles_ = 0;
         oam_dma_active_ = true;
+        ppu_.begin_oam_dma();
     }
 
     [[nodiscard]] int dma_source_from_register() const noexcept {
@@ -437,12 +453,13 @@ private:
         while (oam_dma_active_ && oam_dma_cycle_accum_ >= 4) {
             oam_dma_cycle_accum_ -= 4;
             const int source = oam_dma_source_ + oam_dma_index_;
-            ppu_.write_oam_direct(oam_dma_index_, read_for_oam_dma(source));
+            ppu_.write_oam_dma_byte(oam_dma_index_, read_for_oam_dma(source));
             ++oam_dma_index_;
             if (oam_dma_index_ >= 0xa0) {
                 oam_dma_active_ = false;
                 oam_dma_cycle_accum_ = 0;
                 oam_dma_startup_cycles_ = 0;
+                ppu_.end_oam_dma();
             }
         }
     }
@@ -465,14 +482,17 @@ private:
     }
 
     void start_hdma(int value) noexcept {
-        const bool hblank = (value & 0x80) != 0 && ppu_.lcd_enabled();
-        if (hdma_active_ && hdma_hblank_ && !hblank) {
-            // Arrêt d'un HBlank DMA : le nombre de blocs restant est conservé.
-            hdma_active_ = false;
-            hdma_block_bytes_remaining_ = 0;
-            hdma_dot_accum_ = 0;
+        if (hdma_active_) {
+            if (hdma_hblank_ && (value & 0x80) == 0) {
+                // Seul bit 7=0 arrête un HBlank DMA. Une écriture avec bit 7
+                // à 1 ne recharge ni son adresse ni sa longueur.
+                hdma_active_ = false;
+                hdma_block_bytes_remaining_ = 0;
+                hdma_dot_accum_ = 0;
+            }
             return;
         }
+        const bool hblank = (value & 0x80) != 0 && ppu_.lcd_enabled();
         hdma_length_ = ((value & 0x7f) + 1) * 16;
         hdma_hblank_ = hblank;
         hdma_active_ = true;

@@ -114,6 +114,15 @@ d'horloge respectifs ; un GDMA ou un bloc HDMA peut ainsi prendre le bus entre
 deux micro-opérations de la même instruction. La double vitesse change le ratio
 cycles CPU/dots périphériques sans accélérer le LCD.
 
+Le DMA OAM possède une phase de demande, un M-cycle de démarrage et un transfert
+d'un octet par M-cycle CPU. Sa propriété du port OAM est transmise au PPU : le
+scan du mode 2 voit des objets hors écran et le fetch OBJ du mode 3 reçoit le mot
+16 bits actuellement présenté par le DMA. Cette vue transitoire est reconstruite
+depuis l'index DMA et l'OAM lors d'une restauration, sans état PPU redondant.
+GDMA/HDMA reste cadencé à un octet par deux dots dans les deux vitesses ; un
+HDMA actif ignore une nouvelle commande à bit 7 armé et ne peut être arrêté
+qu'entre deux blocs par une écriture à bit 7 nul.
+
 Le PPU partagé utilise un fetcher et deux FIFO sauvegardables, l'une pour le
 fond/fenêtre et l'autre pour les OBJ. La durée du mode 3 dépend du décalage fin
 `SCX`, du démarrage de fenêtre et des sprites, au lieu d'une constante par
@@ -141,6 +150,13 @@ après l'avancement du M-cycle, y compris en double vitesse. Une écriture CGB d
 `BGPD`/`OBPD` refusée en mode 3 laisse la CRAM intacte mais avance tout de même
 l'index lorsque l'auto-incrément est armé.
 
+Pendant les 2050 M-cycles d'une transition `KEY1`, le raster continue mais ses
+portes internes restent figées au niveau du mode où `STOP` a commencé : aucune
+mémoire vidéo en modes 0/1, fond sans OAM en mode 2, accès complets en mode 3.
+La phase figée est sauvegardée et validée avec le compteur du contrôleur de
+vitesse. Les effets d'interruptions pendant cette pause et les différences de
+révision CGB restent à caractériser sur matériel.
+
 Le séquenceur APU n'emploie plus un compteur autonome de 8 192 dots. Le bus
 observe le front descendant du bit 12 du diviseur interne, ou du bit 13 en
 double vitesse, y compris lors des remises à zéro par `FF04` et `STOP`. Les
@@ -152,12 +168,14 @@ cas zombie portable) sont modélisés. Le profil
 matériel ne distingue pas encore le CGB-02 du CGB-04/05 ; sa variante du clock
 de longueur et les autres variantes zombie DMG restent explicitement ouvertes.
 
-Le format d'état GB/GBC est en version 8. Il sérialise la phase du séquenceur
+Le format d'état GB/GBC est en version 9. Il sérialise la phase du séquenceur
 APU dérivée de `DIV`, le pixel `WX` éventuellement armé, le FIFO OBJ et chaque
-phase intermédiaire de son fetch. Les portes du bus vidéo sont dérivées de ces
-phases sérialisées et ne constituent pas un état redondant. Les versions 7 et
-antérieures sont refusées au lieu d'être chargées partiellement ; les phases
-PPU incohérentes d'un état version 8 sont également rejetées explicitement.
+phase intermédiaire de son fetch, ainsi que la porte vidéo figée par `KEY1`.
+Les portes ordinaires du bus vidéo et la contention OAM DMA sont dérivées des
+phases déjà sérialisées et ne constituent pas un état redondant. Les versions 8
+et antérieures sont refusées au lieu d'être chargées partiellement ; les phases
+PPU, DMA ou KEY1 incohérentes d'un état version 9 sont également rejetées
+explicitement.
 
 Une boot ROM DMG ou CGB peut être injectée par les fabriques C++ publiques. Son
 mapping et `FF50` restent dans le cœur ; aucune image n'est distribuée. Sans

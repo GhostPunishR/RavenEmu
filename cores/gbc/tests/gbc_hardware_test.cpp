@@ -57,6 +57,18 @@ struct Fixture {
     MemoryBus bus;
 };
 
+void set_cgb_background_color0(Fixture& fixture, int bgr555) {
+    fixture.bus.write(0xff68, 0x80); // index 0 + auto-incrément
+    fixture.bus.write(0xff69, bgr555 & 0xff);
+    fixture.bus.write(0xff69, (bgr555 >> 8) & 0x7f);
+}
+
+void advance_to_first_vblank(Fixture& fixture) {
+    int guard = 40'000; // couvre aussi les M-cycles CPU en double vitesse
+    while (fixture.ppu.ly() != 144 && guard-- > 0) fixture.bus.tick_mcycle();
+    check(guard > 0, "PPU n'a pas atteint le premier VBlank dans le budget attendu");
+}
+
 void speed_switch_test() {
     SpeedController speed(true);
     check((speed.read_key1() & 0x80) == 0, "KEY1 démarre en vitesse normale");
@@ -67,6 +79,133 @@ void speed_switch_test() {
     speed.tick_peripheral(1);
     check(speed.double_speed(), "double vitesse non activée");
     check((speed.read_key1() & 0x80) != 0, "KEY1 ne reflète pas la double vitesse");
+
+    detail::BinaryWriter invalid_writer;
+    invalid_writer.i32(0); invalid_writer.i32(1); invalid_writer.i32(1);
+    const auto invalid_state = std::move(invalid_writer).take();
+    expect_failure<ravenemu::SaveStateError>(
+        [&] {
+            SpeedController invalid(true);
+            detail::BinaryReader reader(invalid_state);
+            invalid.load(reader);
+        },
+        "état KEY1 simultanément armé et en transition accepté"
+    );
+}
+
+void speed_switch_video_lock_test() {
+    constexpr auto black = static_cast<std::int32_t>(0xff000000U);
+    constexpr auto white = static_cast<std::int32_t>(0xffffffffU);
+
+    {
+        Fixture hblank;
+        set_cgb_background_color0(hblank, 0x7fff);
+        hblank.bus.write(0xff40, 0x91);
+        check(hblank.ppu.mode() == Ppu::mode_hblank,
+              "précondition KEY1 mode 0 absente");
+        hblank.bus.write(0xff4d, 1);
+        check(hblank.bus.on_stop() && hblank.ppu.speed_switch_active(),
+              "STOP n'a pas figé les portes vidéo du mode 0");
+        hblank.bus.tick_speed_switch(8'199);
+        check(hblank.ppu.speed_switch_active(),
+              "portes vidéo KEY1 restaurées un dot trop tôt");
+        hblank.bus.tick_speed_switch(1);
+        check(!hblank.ppu.speed_switch_active(),
+              "portes vidéo KEY1 non restaurées avec la nouvelle vitesse");
+        advance_to_first_vblank(hblank);
+        check(hblank.ppu.completed_frame[0] == black,
+              "transition KEY1 lancée en mode 0 n'a pas produit le pixel noir matériel");
+    }
+
+    {
+        Fixture transfer;
+        set_cgb_background_color0(transfer, 0x7fff);
+        transfer.bus.write(0xff40, 0x91);
+        int guard = 64;
+        while (transfer.ppu.mode() != Ppu::mode_transfer && guard-- > 0) {
+            transfer.bus.tick_mcycle();
+        }
+        check(guard > 0 && transfer.ppu.transfer_x() == 0,
+              "précondition KEY1 au début du mode 3 absente");
+        transfer.bus.write(0xff4d, 1);
+        check(transfer.bus.on_stop(), "transition KEY1 mode 3 non lancée");
+        transfer.bus.tick_speed_switch(8'200);
+        advance_to_first_vblank(transfer);
+        check(transfer.ppu.completed_frame[0] == white,
+              "transition KEY1 lancée en mode 3 a bloqué un accès vidéo autorisé");
+    }
+
+    {
+        Fixture oam_scan;
+        set_cgb_background_color0(oam_scan, 0x7fff);
+        oam_scan.ppu.write_oam_direct(0, 17); // OBJ visible sur LY=1, X=0
+        oam_scan.ppu.write_oam_direct(1, 8);
+        oam_scan.ppu.write_oam_direct(2, 1);
+        oam_scan.ppu.vram[16] = 0x80; // couleur OBJ 1, CRAM OBJ noire par défaut
+        oam_scan.bus.write(0xff40, 0x93);
+        int guard = 256;
+        while ((oam_scan.ppu.ly() != 1 || oam_scan.ppu.mode() != Ppu::mode_oam) &&
+               guard-- > 0) {
+            oam_scan.bus.tick_mcycle();
+        }
+        check(guard > 0, "précondition KEY1 mode 2 absente");
+        oam_scan.bus.write(0xff4d, 1);
+        check(oam_scan.bus.on_stop(), "transition KEY1 mode 2 non lancée");
+        oam_scan.bus.tick_speed_switch(8'200);
+        advance_to_first_vblank(oam_scan);
+        check(oam_scan.ppu.completed_frame[Ppu::width] == white,
+              "transition KEY1 mode 2 a laissé le PPU lire l'OAM des objets");
+    }
+}
+
+void speed_switch_save_state_test() {
+    Fixture source;
+    source.bus.write(0xff40, 0x91);
+    source.bus.write(0xff4d, 1);
+    check(source.bus.on_stop(), "transition KEY1 non lancée avant sauvegarde");
+    source.bus.tick_speed_switch(123);
+
+    detail::BinaryWriter writer;
+    source.ppu.save(writer);
+    source.speed.save(writer);
+    source.bus.save(writer);
+    const auto state = std::move(writer).take();
+
+    Fixture restored;
+    detail::BinaryReader reader(state);
+    restored.ppu.load(reader);
+    restored.speed.load(reader);
+    restored.bus.load(reader);
+    check(reader.exhausted() && restored.ppu.speed_switch_active() &&
+          restored.speed.switch_dots_remaining() == source.speed.switch_dots_remaining(),
+          "phase vidéo KEY1 non restaurée au dot près");
+
+    const int remaining = source.speed.switch_dots_remaining();
+    source.bus.tick_speed_switch(remaining);
+    restored.bus.tick_speed_switch(remaining);
+    check(!source.ppu.speed_switch_active() && !restored.ppu.speed_switch_active() &&
+          source.speed.double_speed() == restored.speed.double_speed() &&
+          source.ppu.ly() == restored.ppu.ly() &&
+          source.ppu.line_dot() == restored.ppu.line_dot(),
+          "reprise KEY1 non déterministe après restauration");
+
+    SpeedController idle(true);
+    detail::BinaryWriter inconsistent_writer;
+    source.ppu.begin_speed_switch();
+    source.ppu.save(inconsistent_writer);
+    idle.save(inconsistent_writer);
+    source.bus.save(inconsistent_writer);
+    const auto inconsistent = std::move(inconsistent_writer).take();
+    expect_failure<ravenemu::SaveStateError>(
+        [&] {
+            Fixture invalid;
+            detail::BinaryReader invalid_reader(inconsistent);
+            invalid.ppu.load(invalid_reader);
+            invalid.speed.load(invalid_reader);
+            invalid.bus.load(invalid_reader);
+        },
+        "état KEY1 incohérent entre contrôleur et portes PPU accepté"
+    );
 }
 
 void div_apu_bus_clock_test() {
@@ -605,6 +744,107 @@ void oam_dma_timing_test() {
           "DMG doit restreindre le CPU à HRAM pendant OAM DMA");
 }
 
+void oam_dma_ppu_contention_test() {
+    {
+        Fixture control;
+        control.ppu.write_oam_direct(40, 17);
+        control.ppu.write_oam_direct(41, 8);
+        control.bus.write(0xff40, 0x93);
+        int guard = 256;
+        while ((control.ppu.ly() != 1 || control.ppu.mode() != Ppu::mode_transfer) &&
+               guard-- > 0) {
+            control.bus.tick_mcycle();
+        }
+        check(guard > 0 && control.ppu.selected_object_count() == 1,
+              "précondition scan OAM sans DMA absente");
+    }
+
+    {
+        Fixture blocked;
+        // Le contenu source reproduit exactement l'OAM : l'absence d'objet
+        // vient donc de la prise du port, pas des octets copiés par le DMA.
+        for (int index = 0; index < 0xa0; ++index) {
+            const int value = index == 40 ? 17 : index == 41 ? 8 : 0;
+            blocked.ppu.write_oam_direct(index, value);
+            blocked.bus.write(0xc000 + index, value);
+        }
+        blocked.bus.write(0xff40, 0x93);
+        blocked.bus.write(0xff46, 0xc0);
+        int guard = 256;
+        while ((blocked.ppu.ly() != 1 || blocked.ppu.mode() != Ppu::mode_transfer) &&
+               guard-- > 0) {
+            blocked.bus.tick_mcycle();
+        }
+        check(guard > 0 && blocked.bus.dma_active() &&
+              blocked.ppu.selected_object_count() == 0,
+              "scan OAM a lu des objets pendant la prise de port du DMA");
+    }
+
+    {
+        Fixture transfer;
+        set_cgb_background_color0(transfer, 0x7fff);
+        // Palette OBJ 0 : couleur 1 rouge, couleur 2 verte.
+        transfer.bus.write(0xff6a, 2); transfer.bus.write(0xff6b, 0x1f);
+        transfer.bus.write(0xff6a, 3); transfer.bus.write(0xff6b, 0x00);
+        transfer.bus.write(0xff6a, 4); transfer.bus.write(0xff6b, 0xe0);
+        transfer.bus.write(0xff6a, 5); transfer.bus.write(0xff6b, 0x03);
+        transfer.ppu.write_oam_direct(0, 17);
+        transfer.ppu.write_oam_direct(1, 80); // écran X=72 sur LY=1
+        transfer.ppu.write_oam_direct(2, 1);
+        transfer.ppu.write_oam_direct(3, 0);
+        transfer.ppu.vram[16] = 0x80;      // tuile 1 : couleur 1
+        transfer.ppu.vram[32 + 1] = 0x80; // tuile 2 : couleur 2
+        for (int index = 0; index < 0xa0; ++index) {
+            // Tous les mots DMA exposent tuile 2/attributs 0, sauf les octets
+            // tile/attr de l'OBJ demandé, qui restent volontairement 1/0.
+            const int value = (index & 1) == 0 ? (index == 2 ? 1 : 2) : 0;
+            transfer.bus.write(0xc000 + index, value);
+        }
+        transfer.bus.write(0xff40, 0x93);
+        int guard = 256;
+        while ((transfer.ppu.ly() != 1 || transfer.ppu.mode() != Ppu::mode_transfer) &&
+               guard-- > 0) {
+            transfer.bus.tick_mcycle();
+        }
+        check(guard > 0 && transfer.ppu.selected_object_count() == 1,
+              "précondition fetch OBJ mode 3 absente");
+        transfer.bus.write(0xff46, 0xc0);
+        advance_to_first_vblank(transfer);
+        check(transfer.ppu.completed_frame[Ppu::width + 72] ==
+                  static_cast<std::int32_t>(0xff00ff00U),
+              "fetch OBJ mode 3 n'a pas lu le mot 16 bits présenté par l'OAM DMA");
+    }
+}
+
+void oam_dma_save_state_test() {
+    Fixture source;
+    for (int index = 0; index < 0xa0; ++index) source.bus.write(0xc000 + index, index ^ 0x5a);
+    source.bus.write(0xff46, 0xc0);
+    source.bus.tick(12, 12); // démarrage + deux octets transférés
+    check(source.bus.dma_active() && source.ppu.oam_dma_active(),
+          "précondition save state OAM DMA active absente");
+
+    detail::BinaryWriter writer;
+    source.ppu.save(writer);
+    source.speed.save(writer);
+    source.bus.save(writer);
+    const auto state = std::move(writer).take();
+
+    Fixture restored;
+    detail::BinaryReader reader(state);
+    restored.ppu.load(reader);
+    restored.speed.load(reader);
+    restored.bus.load(reader);
+    check(reader.exhausted() && restored.bus.dma_active() && restored.ppu.oam_dma_active(),
+          "propriété du port OAM DMA non reconstruite après restauration");
+
+    source.bus.tick(4 * 158, 4 * 158);
+    restored.bus.tick(4 * 158, 4 * 158);
+    check(!restored.bus.dma_active() && !restored.ppu.oam_dma_active() &&
+          restored.ppu.oam == source.ppu.oam,
+          "OAM DMA restauré n'a pas repris jusqu'au même octet final");
+}
+
 void vram_dma_timing_test() {
     Fixture f;
     for (int i = 0; i < 32; ++i) f.bus.write(0xc000 + i, 0x40 + i);
@@ -680,6 +920,66 @@ void vram_dma_timing_test() {
           "overflow destination VRAM du GDMA a rebouclé vers 8000");
     check(overflow.bus.read(0xff55) == 0x80,
           "GDMA arrêté sur overflow ne signale pas le bloc restant");
+
+    Fixture active_control;
+    active_control.ppu.write_lcdc(0x91);
+    active_control.bus.write(0xff55, 0x82); // trois blocs HBlank
+    active_control.bus.write(0xff55, 0x80); // ne doit ni relancer ni raccourcir
+    check(active_control.bus.read(0xff55) == 0x02,
+          "écriture bit 7=1 a rechargé un HDMA déjà actif");
+    active_control.bus.notify_hblank();
+    active_control.bus.tick(0, 32);
+    check(active_control.bus.read(0xff55) == 0x01,
+          "longueur HDMA active altérée par une écriture FF55 ignorée");
+
+    Fixture bank_switch;
+    for (int index = 0; index < 32; ++index) {
+        bank_switch.bus.write(0xc000 + index, 0x90 + index);
+    }
+    bank_switch.ppu.write_lcdc(0x91);
+    bank_switch.bus.write(0xff51, 0xc0);
+    bank_switch.bus.write(0xff52, 0x0f); // quatre bits bas masqués
+    bank_switch.bus.write(0xff53, 0xe0); // bits hauts destination masqués
+    bank_switch.bus.write(0xff54, 0x0f); // quatre bits bas masqués
+    bank_switch.bus.write(0xff4f, 0);
+    bank_switch.bus.write(0xff55, 0x81);
+    bank_switch.bus.notify_hblank();
+    bank_switch.bus.tick(0, 32);
+    bank_switch.bus.write(0xff4f, 1);
+    bank_switch.bus.notify_hblank();
+    bank_switch.bus.tick(0, 32);
+    check(bank_switch.ppu.vram[0] == 0x90 &&
+          bank_switch.ppu.vram[15] == 0x9f &&
+          bank_switch.ppu.vram[0x2000 + 16] == 0xa0 &&
+          bank_switch.ppu.vram[0x2000 + 31] == 0xaf,
+          "masques HDMA ou sélection VBK par bloc incorrects");
+
+    Fixture state_source;
+    for (int index = 0; index < 16; ++index) {
+        state_source.bus.write(0xc000 + index, 0xb0 + index);
+    }
+    state_source.bus.write(0xff51, 0xc0);
+    state_source.bus.write(0xff52, 0x00);
+    state_source.bus.write(0xff53, 0x00);
+    state_source.bus.write(0xff54, 0x00);
+    state_source.bus.write(0xff55, 0x00);
+    state_source.bus.tick(0, 15); // sept octets et un dot résiduel
+    detail::BinaryWriter state_writer;
+    state_source.ppu.save(state_writer);
+    state_source.speed.save(state_writer);
+    state_source.bus.save(state_writer);
+    const auto dma_state = std::move(state_writer).take();
+
+    Fixture state_restored;
+    detail::BinaryReader state_reader(dma_state);
+    state_restored.ppu.load(state_reader);
+    state_restored.speed.load(state_reader);
+    state_restored.bus.load(state_reader);
+    state_source.bus.tick(0, 17);
+    state_restored.bus.tick(0, 17);
+    check(state_reader.exhausted() && state_restored.bus.read(0xff55) == 0xff &&
+          state_restored.ppu.vram == state_source.ppu.vram,
+          "phase impaire GDMA non restaurée au dot près");
 }
 
 } // namespace ravenemu::cgb::testing
@@ -687,6 +987,8 @@ void vram_dma_timing_test() {
 int main() {
     using namespace ravenemu::cgb::testing;
     speed_switch_test();
+    speed_switch_video_lock_test();
+    speed_switch_save_state_test();
     div_apu_bus_clock_test();
     infrared_test();
     serial_fast_clock_test();
@@ -703,6 +1005,8 @@ int main() {
     hle_post_boot_register_test();
     mbc5_rumble_test();
     oam_dma_timing_test();
+    oam_dma_ppu_contention_test();
+    oam_dma_save_state_test();
     vram_dma_timing_test();
 
     auto rom = minimal_game_boy_rom();

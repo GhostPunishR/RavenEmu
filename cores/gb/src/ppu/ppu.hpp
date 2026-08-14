@@ -25,7 +25,10 @@ public:
 
     void set_hardware_mode(gb::HardwareMode mode) noexcept {
         hardware_mode_ = mode;
-        if (!gb::cgb_features_enabled(mode)) vram_bank_ = 0;
+        if (!gb::cgb_features_enabled(mode)) {
+            vram_bank_ = 0;
+            speed_switch_video_access_ = speed_switch_access_inactive;
+        }
     }
 
     [[nodiscard]] bool lcd_enabled() const noexcept { return (lcdc_ & 0x80) != 0; }
@@ -52,6 +55,39 @@ public:
         oam[static_cast<std::size_t>(address & 0xff)] = static_cast<std::uint8_t>(value);
     }
     void write_oam_direct(int index, int value) noexcept { oam[static_cast<std::size_t>(index)] = static_cast<std::uint8_t>(value); }
+
+    /** Prend le port OAM pour un nouveau DMA. Le mot vu par le fetcher OBJ
+     * reste indéfini jusqu'au premier octet effectivement transféré. */
+    void begin_oam_dma() noexcept {
+        oam_dma_active_ = true;
+        oam_dma_bus_low_ = 0xff;
+        oam_dma_bus_high_ = 0xff;
+    }
+    void write_oam_dma_byte(int index, int value) noexcept {
+        if (index < 0 || index >= static_cast<int>(oam.size())) return;
+        oam[static_cast<std::size_t>(index)] = static_cast<std::uint8_t>(value);
+        const int word_index = index & ~1;
+        oam_dma_bus_low_ = oam[static_cast<std::size_t>(word_index)];
+        oam_dma_bus_high_ = oam[static_cast<std::size_t>(word_index + 1)];
+    }
+    void restore_oam_dma_bus(int transferred_bytes) noexcept {
+        if (transferred_bytes <= 0) {
+            begin_oam_dma();
+            return;
+        }
+        const int last_index = std::clamp(transferred_bytes - 1, 0,
+                                          static_cast<int>(oam.size()) - 1);
+        oam_dma_active_ = true;
+        const int word_index = last_index & ~1;
+        oam_dma_bus_low_ = oam[static_cast<std::size_t>(word_index)];
+        oam_dma_bus_high_ = oam[static_cast<std::size_t>(word_index + 1)];
+    }
+    void end_oam_dma() noexcept {
+        oam_dma_active_ = false;
+        oam_dma_bus_low_ = 0xff;
+        oam_dma_bus_high_ = 0xff;
+    }
+    [[nodiscard]] bool oam_dma_active() const noexcept { return oam_dma_active_; }
 
     void write_bcps(int value) noexcept { bcps_index_ = value & 0x3f; bcps_auto_ = (value & 0x80) != 0; }
     [[nodiscard]] int read_bcps() const noexcept { return bcps_index_ | (bcps_auto_ ? 0x80 : 0) | 0x40; }
@@ -129,6 +165,8 @@ public:
         window_started_line_ = false; window_y_condition_ = false;
         window_wx_glitch_armed_ = false; window_wx_glitch_x_ = 0;
         oam_scan_index_ = 0; line_sprite_count_ = 0;
+        speed_switch_video_access_ = speed_switch_access_inactive;
+        end_oam_dma();
         reset_object_pipeline();
         stat_line_ = false; entered_hblank_ = false; frame_ready_ = false;
         completed_frame.fill(0); working_frame_.fill(0);
@@ -197,6 +235,33 @@ public:
         for (int dot = 0; dot < cycles; ++dot) advance_dot();
     }
 
+    /**
+     * Fige les portes vidéo internes au niveau observé lorsque STOP lance une
+     * transition KEY1. Le raster continue d'avancer, mais les arbitres mémoire
+     * conservent ce niveau jusqu'à la fin des 2050 M-cycles.
+     */
+    void begin_speed_switch() noexcept {
+        if (!gb::cgb_features_enabled(hardware_mode_)) return;
+        if (mode_ == mode_transfer) {
+            speed_switch_video_access_ = speed_switch_access_all;
+        } else if (mode_ == mode_oam) {
+            speed_switch_video_access_ = speed_switch_access_background;
+        } else {
+            speed_switch_video_access_ = speed_switch_access_none;
+        }
+    }
+    void end_speed_switch() noexcept {
+        speed_switch_video_access_ = speed_switch_access_inactive;
+    }
+    [[nodiscard]] bool speed_switch_active() const noexcept {
+        return speed_switch_video_access_ != speed_switch_access_inactive;
+    }
+    void validate_speed_switch_state(bool controller_switching) const {
+        if (speed_switch_active() != controller_switching) {
+            throw SaveStateError("État instantané corrompu (transition KEY1/PPU)");
+        }
+    }
+
     [[nodiscard]] int lcdc() const noexcept { return lcdc_; }
     [[nodiscard]] int scy() const noexcept { return scy_; }
     [[nodiscard]] int scx() const noexcept { return scx_; }
@@ -211,6 +276,7 @@ public:
     [[nodiscard]] int line_dot() const noexcept { return line_dot_; }
     [[nodiscard]] int transfer_x() const noexcept { return transfer_x_; }
     [[nodiscard]] int window_line() const noexcept { return window_line_; }
+    [[nodiscard]] int selected_object_count() const noexcept { return line_sprite_count_; }
     void set_scy(int v) noexcept { scy_ = byte(v); } void set_scx(int v) noexcept { scx_ = byte(v); }
     void set_bgp(int v) noexcept { bgp_ = byte(v); } void set_obp0(int v) noexcept { obp0_ = byte(v); }
     void set_obp1(int v) noexcept { obp1_ = byte(v); } void set_wy(int v) noexcept { wy_ = byte(v); }
@@ -227,13 +293,13 @@ public:
     [[nodiscard]] bool take_hblank_entry() noexcept { const bool value = entered_hblank_; entered_hblank_ = false; return value; }
 
     void save(BinaryWriter& out) const {
-        constexpr int field_count = 70;
+        constexpr int field_count = 71;
         out.i32(field_count);
         const std::array fields{
             lcdc_, stat_enable_, scy_, scx_, ly_, lyc_, bgp_, obp0_, obp1_, wy_, wx_,
             mode_, reported_mode_, reported_mode_target_, reported_mode_delay_,
             lcd_startup_line_ ? 1 : 0, lcd_startup_lines_remaining_, lyc_compare_delay_,
-            frame_mode2_delay_ ? 1 : 0, line_dot_, window_line_,
+            frame_mode2_delay_ ? 1 : 0, speed_switch_video_access_, line_dot_, window_line_,
             lyc_equal_ ? 1 : 0,
             stat_line_ ? 1 : 0, vram_bank_, bcps_index_,
             bcps_auto_ ? 1 : 0, ocps_index_, ocps_auto_ ? 1 : 0,
@@ -270,7 +336,7 @@ public:
         out.raw(vram); out.raw(oam); out.raw(bg_cram); out.raw(obj_cram);
     }
     void load(BinaryReader& in) {
-        if (in.i32() != 70) throw SaveStateError("État instantané corrompu (PPU)");
+        if (in.i32() != 71) throw SaveStateError("État instantané corrompu (PPU)");
         lcdc_ = in.i32(); stat_enable_ = in.i32(); scy_ = in.i32(); scx_ = in.i32();
         ly_ = in.i32(); lyc_ = in.i32(); bgp_ = in.i32(); obp0_ = in.i32(); obp1_ = in.i32();
         wy_ = in.i32(); wx_ = in.i32(); mode_ = in.i32(); reported_mode_ = in.i32();
@@ -278,7 +344,8 @@ public:
         lcd_startup_line_ = in.i32() != 0;
         lcd_startup_lines_remaining_ = in.i32();
         lyc_compare_delay_ = in.i32();
-        frame_mode2_delay_ = in.i32() != 0; line_dot_ = in.i32();
+        frame_mode2_delay_ = in.i32() != 0; speed_switch_video_access_ = in.i32();
+        line_dot_ = in.i32();
         window_line_ = in.i32(); lyc_equal_ = in.i32() != 0; stat_line_ = in.i32() != 0;
         vram_bank_ = in.i32();
         bcps_index_ = in.i32(); bcps_auto_ = in.i32() != 0; ocps_index_ = in.i32();
@@ -334,6 +401,24 @@ public:
     std::array<std::int32_t, frame_pixels> completed_frame{};
 
 private:
+    static constexpr int speed_switch_access_inactive = -1;
+    static constexpr int speed_switch_access_none = 0;
+    static constexpr int speed_switch_access_background = 1;
+    static constexpr int speed_switch_access_all = 2;
+
+    [[nodiscard]] bool ppu_vram_available() const noexcept {
+        return speed_switch_video_access_ == speed_switch_access_inactive ||
+            speed_switch_video_access_ >= speed_switch_access_background;
+    }
+    [[nodiscard]] bool ppu_oam_available() const noexcept {
+        return speed_switch_video_access_ == speed_switch_access_inactive ||
+            speed_switch_video_access_ == speed_switch_access_all;
+    }
+    [[nodiscard]] bool ppu_cram_available() const noexcept {
+        return speed_switch_video_access_ == speed_switch_access_inactive ||
+            speed_switch_video_access_ >= speed_switch_access_background;
+    }
+
     struct CpuVideoBusLocks {
         bool vram_read{};
         bool vram_write{};
@@ -376,6 +461,9 @@ private:
             reported_mode_delay_ < 0 || reported_mode_delay_ > 4 ||
             lcd_startup_lines_remaining_ < 0 || lcd_startup_lines_remaining_ > 3 ||
             lyc_compare_delay_ < 0 || lyc_compare_delay_ > 4 ||
+            speed_switch_video_access_ < speed_switch_access_inactive ||
+            speed_switch_video_access_ > speed_switch_access_all ||
+            (speed_switch_active() && !gb::cgb_features_enabled(hardware_mode_)) ||
             ly_ < 0 || ly_ > 153 || line_dot_ < 0 || line_dot_ > maximum_line_dot ||
             transfer_x_ < 0 || transfer_x_ > width || vram_bank_ < 0 || vram_bank_ > 1 ||
             bcps_index_ < 0 || bcps_index_ > 0x3f || ocps_index_ < 0 || ocps_index_ > 0x3f) {
@@ -778,9 +866,19 @@ private:
     }
 
     void latch_object_parameters() noexcept {
-        const int index = obj_fetch_sprite_ * 4;
-        obj_fetch_tile_ = oam[static_cast<std::size_t>(index + 2)];
-        obj_fetch_attributes_ = oam[static_cast<std::size_t>(index + 3)];
+        if (!ppu_oam_available()) {
+            obj_fetch_tile_ = 0xff;
+            obj_fetch_attributes_ = 0xff;
+        } else if (oam_dma_active_) {
+            // Pendant le mode 3, le fetcher OBJ reçoit le mot 16 bits que le
+            // DMA présente au port OAM, indépendamment de l'entrée demandée.
+            obj_fetch_tile_ = oam_dma_bus_low_;
+            obj_fetch_attributes_ = oam_dma_bus_high_;
+        } else {
+            const int index = obj_fetch_sprite_ * 4;
+            obj_fetch_tile_ = oam[static_cast<std::size_t>(index + 2)];
+            obj_fetch_attributes_ = oam[static_cast<std::size_t>(index + 3)];
+        }
         const int sprite_height = (lcdc_ & 4) != 0 ? 16 : 8;
         if (sprite_height == 16) obj_fetch_tile_ &= 0xfe;
         const int sprite_y = sprite_y_[static_cast<std::size_t>(obj_fetch_slot_)] - 16;
@@ -909,6 +1007,11 @@ private:
 
     void render_fifo_pixel(int x, const BgPixel& pixel, const ObjPixel& object) {
         const int base = ly_ * width;
+        if (!ppu_cram_available() && gb::is_cgb_hardware(hardware_mode_)) {
+            working_frame_[static_cast<std::size_t>(base + x)] =
+                static_cast<std::int32_t>(0xff000000U);
+            return;
+        }
         if (hardware_mode_ == gb::HardwareMode::cgb_native) {
             bg_color_line_[static_cast<std::size_t>(x)] = pixel.color;
             bg_priority_line_[static_cast<std::size_t>(x)] = pixel.priority;
@@ -979,6 +1082,7 @@ private:
     void update_lyc_compare() noexcept { lyc_equal_ = visible_ly() == lyc_; }
 
     [[nodiscard]] int vram_byte(int bank, int address) const noexcept {
+        if (!ppu_vram_available()) return 0xff;
         return vram[static_cast<std::size_t>(bank * 0x2000 + (address & 0x1fff))];
     }
     [[nodiscard]] int visible_ly() const noexcept {
@@ -1015,8 +1119,9 @@ private:
         // interne ; un OAM DMA ultérieur ne peut donc plus les réécrire.
         if ((line_dot_ & 1) == 0 || oam_scan_index_ >= 40) return;
         const int sprite = oam_scan_index_++;
-        const int raw_y = oam[static_cast<std::size_t>(sprite * 4)];
-        const int raw_x = oam[static_cast<std::size_t>(sprite * 4 + 1)];
+        const bool port_available = ppu_oam_available() && !oam_dma_active_;
+        const int raw_y = port_available ? oam[static_cast<std::size_t>(sprite * 4)] : 0xff;
+        const int raw_x = port_available ? oam[static_cast<std::size_t>(sprite * 4 + 1)] : 0xff;
         const int y = raw_y - 16;
         const int sprite_height = (lcdc_ & 4) != 0 ? 16 : 8;
         if (line_sprite_count_ >= 10 || ly_ < y || ly_ >= y + sprite_height) return;
@@ -1070,6 +1175,7 @@ private:
     int lcd_startup_lines_remaining_{};
     int lyc_compare_delay_{};
     bool frame_mode2_delay_{};
+    int speed_switch_video_access_{speed_switch_access_inactive};
     int line_dot_{};
     int window_line_{};
     bool lyc_equal_{true};
@@ -1116,6 +1222,9 @@ private:
     int obj_fetch_address_{};
     int obj_fetch_data_low_{};
     int obj_fetch_data_high_{};
+    bool oam_dma_active_{};
+    int oam_dma_bus_low_{0xff};
+    int oam_dma_bus_high_{0xff};
     int line_sprite_count_{};
     int oam_scan_index_{};
     std::array<bool, 10> sprite_fetch_consumed_{};
