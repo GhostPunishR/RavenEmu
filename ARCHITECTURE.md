@@ -11,7 +11,8 @@ RavenEmu/
 │   ├── common/
 │   ├── gb/
 │   ├── gbc/
-│   └── gba/
+│   ├── gba/
+│   └── nds/
 ├── native/
 │   ├── api/
 │   └── jni/
@@ -97,7 +98,23 @@ extraits ne sont que des en-têtes, et devient STATIC dès que l'un d'eux gagne 
 
 `cores/gba` porte le moteur Game Boy Advance indépendant.
 
-Les quatre suites natives (`common`, `gb`, `gbc`, `gba`) doivent pouvoir être
+`cores/nds` est une **fondation**, pas un moteur. Il porte l'identité de la
+console, décode et contrôle l'en-tête de cartouche, et publie le contrat vidéo
+et audio. Toute demande d'exécution est refusée par une erreur nommée : un écran
+noir laisserait croire à une émulation muette, là où il n'y a encore rien.
+
+Deux décisions y sont prises, parce qu'elles engagent le reste du projet et
+qu'il vaut mieux les arrêter avant d'écrire un moteur autour :
+
+- **Identité persistée.** La console prend l'identifiant 3. Le 1 reste retiré,
+  ayant désigné une seconde entrée Game Boy Color, et ne sera jamais réattribué.
+- **Deux écrans dans un tampon unique.** Le contrat vidéo de RavenEmu ne décrit
+  qu'un écran. Plutôt que de l'élargir pour une seule console, les deux écrans
+  sont empilés : l'écran haut occupe les 192 premières lignes, l'écran bas les
+  192 suivantes. L'agencement réel — côte à côte, un seul écran, proportions
+  libres — reste à la couche qui affiche, seule à connaître l'appareil.
+
+Les suites natives (`common`, `gb`, `gbc`, `gba`, `nds`) doivent pouvoir être
 construites directement avec `cmake -S cores`.
 
 ## Frontières plateforme

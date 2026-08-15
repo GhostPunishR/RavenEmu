@@ -38,6 +38,7 @@ Les détails d'installation et de signature sont dans le [wiki](https://github.c
 | Game Boy | Avancé |
 | Game Boy Color | Intégré au moteur GB, extraction dédiée en cours |
 | Game Boy Advance | Expérimental |
+| Nintendo DS | Fondations : identité, en-tête de cartouche et contrat d'écran. **N'émule rien encore.** |
 
 La compatibilité varie selon les jeux. Consultez la [matrice de compatibilité](https://github.com/GhostPunishR/RavenEmu/wiki/Compatibilite-des-jeux).
 
@@ -52,7 +53,7 @@ engine
     ↓
 native/api + native/jni
     ↓
-cores/common + cores/gb + cores/gbc + cores/gba
+cores/common + cores/gb + cores/gbc + cores/gba + cores/nds
 ```
 
 Voir [ARCHITECTURE.md](ARCHITECTURE.md) et le [wiki Architecture](https://github.com/GhostPunishR/RavenEmu/wiki/Architecture). Le dossier `docs/` est réservé au site officiel.
