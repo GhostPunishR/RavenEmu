@@ -98,10 +98,23 @@ extraits ne sont que des en-têtes, et devient STATIC dès que l'un d'eux gagne 
 
 `cores/gba` porte le moteur Game Boy Advance indépendant.
 
-`cores/nds` est une **fondation**, pas un moteur. Il porte l'identité de la
-console, décode et contrôle l'en-tête de cartouche, et publie le contrat vidéo
-et audio. Toute demande d'exécution est refusée par une erreur nommée : un écran
-noir laisserait croire à une émulation muette, là où il n'y a encore rien.
+`cores/nds` est une **fondation**, pas encore un moteur. Il porte l'identité de
+la console, décode et contrôle l'en-tête de cartouche, publie le contrat vidéo
+et audio, et exécute le jeu d'instructions ARM du processeur principal. Toute
+demande de faire tourner une image est en revanche refusée par une erreur
+nommée : un écran noir laisserait croire à une émulation muette, là où il
+manque encore la carte mémoire, le second processeur et l'affichage.
+
+`cores/nds/src/cpu` tient ce processeur. Il ne connaît pas la carte mémoire de
+la console : il passe par une frontière `Bus` abstraite, ce qui permet de
+l'éprouver contre une simple mémoire de test — sans cartouche, sans banques
+vidéo, sans ARM7 — et donc de distinguer une faute du processeur d'une faute de
+la machine autour. Le jeu ARM 32 bits d'ARMv5TE y est complet, `CLZ`, `BLX` et
+l'arithmétique saturante comprises. Le jeu Thumb, les multiplications signées de
+la variante DSP et le coprocesseur CP15 ne le sont pas : ils sont décodés et
+comptés comme non implémentés plutôt que passés sous silence, parce qu'une
+instruction inconnue exécutée sans bruit donne un jeu qui part à la dérive sans
+qu'on sache où.
 
 Deux décisions y sont prises, parce qu'elles engagent le reste du projet et
 qu'il vaut mieux les arrêter avant d'écrire un moteur autour :

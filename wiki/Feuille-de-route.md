@@ -26,18 +26,23 @@ Cette page présente les priorités générales. Les issues et pull requests res
 
 ## Nintendo DS
 
-Le travail est amorce mais rien n'est encore emule. Ce qui existe aujourd'hui:
+Le travail est amorcé mais aucune image n'est encore émulée. Ce qui existe
+aujourd'hui :
 
-- l'identite de la console et son identifiant persiste;
-- le decodage et le controle de l'en-tete de cartouche;
-- le contrat video, deux ecrans de 256 sur 192 empiles dans un tampon unique;
-- le contrat audio annonce par le materiel.
+- l'identité de la console et son identifiant persisté;
+- le décodage et le contrôle de l'en-tête de cartouche;
+- le contrat vidéo, deux écrans de 256 sur 192 empilés dans un tampon unique;
+- le contrat audio annoncé par le matériel;
+- le processeur principal ARM946E-S, jeu d'instructions ARM 32 bits complet
+  (`CLZ`, `BLX` et arithmétique saturante comprises), éprouvé contre une
+  mémoire de test.
 
-Toute demande d'execution est refusee par une erreur nommee, volontairement:
-un ecran noir laisserait croire a une emulation silencieuse. Restent a ecrire
-les deux processeurs, les moteurs 2D et 3D, les banques video commutables, la
-communication entre processeurs, l'ecran tactile et le son. La console
-n'apparait pas encore dans la bibliotheque de l'application.
+Toute demande d'exécution reste refusée par une erreur nommée, volontairement :
+un écran noir laisserait croire à une émulation silencieuse. Restent à écrire le
+jeu Thumb et le coprocesseur CP15, la carte mémoire, le second processeur, les
+moteurs 2D et 3D, les banques vidéo commutables, la communication entre
+processeurs, l'écran tactile et le son. La console n'apparaît pas encore dans la
+bibliothèque de l'application.
 
 ## Pistes futures
 

@@ -1,4 +1,8 @@
-add_library(nds_raven_core STATIC src/cartridge_header.cpp src/core.cpp)
+add_library(nds_raven_core STATIC
+    src/cartridge_header.cpp
+    src/core.cpp
+    src/cpu/arm9.cpp
+)
 target_include_directories(nds_raven_core
     PUBLIC include
     PRIVATE src
@@ -16,4 +20,14 @@ if(RAVENEMU_BUILD_TESTS)
     )
     target_link_libraries(nds_raven_core_tests PRIVATE nds_raven_core)
     add_test(NAME nds_raven_core COMMAND nds_raven_core_tests)
+
+    # Le processeur vit lui aussi dans `src/` : il est éprouvé contre une mémoire
+    # de test, sans rien du reste de la console.
+    add_executable(nds_raven_arm9_tests tests/arm9_test.cpp)
+    target_include_directories(nds_raven_arm9_tests PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/src
+        ${CMAKE_CURRENT_LIST_DIR}/../common/tests/support
+    )
+    target_link_libraries(nds_raven_arm9_tests PRIVATE nds_raven_core)
+    add_test(NAME nds_raven_arm9 COMMAND nds_raven_arm9_tests)
 endif()
