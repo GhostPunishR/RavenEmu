@@ -1,4 +1,4 @@
-#include "memory/memory_map.hpp"
+#include "memory/arm9_memory_map.hpp"
 
 #include <algorithm>
 #include <numeric>
@@ -23,7 +23,7 @@ struct BankLayout {
     std::uint8_t destination_mask;
 };
 
-constexpr std::array<BankLayout, MemoryMap::vram_bank_count> bank_layouts{{
+constexpr std::array<BankLayout, Arm9MemoryMap::vram_bank_count> bank_layouts{{
     {128U * 1024U, 0x0'0000U, 0x3},   // A
     {128U * 1024U, 0x2'0000U, 0x3},   // B
     {128U * 1024U, 0x4'0000U, 0x7},   // C
@@ -45,8 +45,8 @@ constexpr std::uint32_t vram_total_bytes = []() {
 }();
 
 /** Décalage d'une banque dans le bloc unique qui les porte toutes. */
-constexpr std::array<std::uint32_t, MemoryMap::vram_bank_count> bank_offsets = []() {
-    std::array<std::uint32_t, MemoryMap::vram_bank_count> offsets{};
+constexpr std::array<std::uint32_t, Arm9MemoryMap::vram_bank_count> bank_offsets = []() {
+    std::array<std::uint32_t, Arm9MemoryMap::vram_bank_count> offsets{};
     std::uint32_t cursor = 0;
     for (std::size_t index = 0; index < bank_layouts.size(); ++index) {
         offsets[index] = cursor;
@@ -57,54 +57,42 @@ constexpr std::array<std::uint32_t, MemoryMap::vram_bank_count> bank_offsets = [
 
 } // namespace
 
-MemoryMap::MemoryMap()
-    : main_ram_(main_ram_bytes, 0),
-      shared_wram_(shared_wram_bytes, 0),
+Arm9MemoryMap::Arm9MemoryMap(SystemMemory& system)
+    : system_(system),
       palette_(palette_bytes, 0),
       oam_(oam_bytes, 0),
       vram_(vram_total_bytes, 0) {}
 
-void MemoryMap::reset() noexcept {
-    std::fill(main_ram_.begin(), main_ram_.end(), std::uint8_t{0});
-    std::fill(shared_wram_.begin(), shared_wram_.end(), std::uint8_t{0});
+void Arm9MemoryMap::reset() noexcept {
+    // La mémoire partagée est remise à zéro par son propriétaire, non par
+    // chacune des deux vues : la vider deux fois n'aurait pas de sens, et la
+    // vider depuis l'une effacerait le travail de l'autre.
     std::fill(palette_.begin(), palette_.end(), std::uint8_t{0});
     std::fill(oam_.begin(), oam_.end(), std::uint8_t{0});
     std::fill(vram_.begin(), vram_.end(), std::uint8_t{0});
     std::fill(vram_control_.begin(), vram_control_.end(), std::uint8_t{0});
-    // Au démarrage, le processeur principal reçoit toute la mémoire commune.
-    shared_wram_control_ = 0;
     unmapped_ = 0;
     first_unmapped_ = 0;
     unimplemented_io_ = 0;
     first_unimplemented_io_ = 0;
 }
 
-std::span<std::uint8_t> MemoryMap::vram_bank(std::size_t index) noexcept {
+std::span<std::uint8_t> Arm9MemoryMap::vram_bank(std::size_t index) noexcept {
     if (index >= vram_bank_count) return {};
     return std::span<std::uint8_t>{vram_}.subspan(bank_offsets[index], bank_layouts[index].size);
 }
 
-MemoryMap::SharedWindow MemoryMap::shared_window() const noexcept {
-    // Quatre découpages, et l'un d'eux ne laisse rien au processeur principal.
-    switch (shared_wram_control_) {
-    case 0: return {0U, shared_wram_bytes};
-    case 1: return {shared_wram_bytes / 2U, shared_wram_bytes / 2U};
-    case 2: return {0U, shared_wram_bytes / 2U};
-    default: return {0U, 0U};
-    }
-}
-
-void MemoryMap::note_unmapped(std::uint32_t address) noexcept {
+void Arm9MemoryMap::note_unmapped(std::uint32_t address) noexcept {
     if (unmapped_ == 0U) first_unmapped_ = address;
     ++unmapped_;
 }
 
-void MemoryMap::note_unimplemented_io(std::uint32_t address) noexcept {
+void Arm9MemoryMap::note_unimplemented_io(std::uint32_t address) noexcept {
     if (unimplemented_io_ == 0U) first_unimplemented_io_ = address;
     ++unimplemented_io_;
 }
 
-MemoryMap::Location MemoryMap::locate_video(std::uint32_t address) noexcept {
+Arm9MemoryMap::Location Arm9MemoryMap::locate_video(std::uint32_t address) noexcept {
     // Chaque banque est bornée par ses deux extrémités, comparées à l'adresse
     // elle-même. Passer par un décalage relatif à la fenêtre demanderait de se
     // garder d'un débordement par le bas, et cette garde ne serait jamais
@@ -125,14 +113,14 @@ MemoryMap::Location MemoryMap::locate_video(std::uint32_t address) noexcept {
     return {Region::video, nullptr};
 }
 
-MemoryMap::Location MemoryMap::locate(std::uint32_t address) noexcept {
+Arm9MemoryMap::Location Arm9MemoryMap::locate(std::uint32_t address) noexcept {
     switch (address >> 24U) {
     case 0x02:
-        return {Region::main_ram, &main_ram_[address % main_ram_bytes]};
+        return {Region::main_ram, &system_.main_ram()[address % main_ram_bytes]};
     case 0x03: {
         const auto window = shared_window();
         if (window.size == 0U) return {Region::shared_wram, nullptr};
-        return {Region::shared_wram, &shared_wram_[window.offset + (address % window.size)]};
+        return {Region::shared_wram, &system_.shared_wram()[window.offset + (address % window.size)]};
     }
     case 0x04:
         return {Region::input_output, nullptr};
@@ -164,24 +152,26 @@ MemoryMap::Location MemoryMap::locate(std::uint32_t address) noexcept {
  * le traitent avant, puisqu'ils doivent de toute façon en rendre la valeur. Une
  * garde de plus ici ne serait jamais exercée.
  */
-bool MemoryMap::bank_control_index(std::uint32_t address, std::size_t& index) noexcept {
+bool Arm9MemoryMap::bank_control_index(std::uint32_t address, std::size_t& index) noexcept {
     if (address < vram_control_base || address > vram_control_base + 9U) return false;
     const auto offset = address - vram_control_base;
     index = offset < 7U ? offset : offset - 1U;
     return true;
 }
 
-std::uint8_t MemoryMap::read_io(std::uint32_t address) noexcept {
-    if (address == shared_wram_control) return shared_wram_control_;
+std::uint8_t Arm9MemoryMap::read_io(std::uint32_t address) noexcept {
+    if (address == shared_wram_control) return system_.shared_control();
     std::size_t index = 0;
     if (bank_control_index(address, index)) return vram_control_[index];
     note_unimplemented_io(address);
     return 0;
 }
 
-void MemoryMap::write_io(std::uint32_t address, std::uint8_t value) noexcept {
+void Arm9MemoryMap::write_io(std::uint32_t address, std::uint8_t value) noexcept {
     if (address == shared_wram_control) {
-        shared_wram_control_ = value & 0x3U;
+        // Le partage se commande depuis ce processeur seulement : c'est lui qui
+        // décide de ce qu'il cède à l'autre.
+        system_.set_shared_control(value);
         return;
     }
     std::size_t index = 0;
@@ -189,7 +179,7 @@ void MemoryMap::write_io(std::uint32_t address, std::uint8_t value) noexcept {
     note_unimplemented_io(address);
 }
 
-std::uint32_t MemoryMap::read(std::uint32_t address, std::uint32_t width) noexcept {
+std::uint32_t Arm9MemoryMap::read(std::uint32_t address, std::uint32_t width) noexcept {
     std::uint32_t value = 0;
     for (std::uint32_t index = 0; index < width; ++index) {
         const auto byte_address = address + index;
@@ -207,7 +197,7 @@ std::uint32_t MemoryMap::read(std::uint32_t address, std::uint32_t width) noexce
     return value;
 }
 
-void MemoryMap::write(std::uint32_t address, std::uint32_t value, std::uint32_t width) noexcept {
+void Arm9MemoryMap::write(std::uint32_t address, std::uint32_t value, std::uint32_t width) noexcept {
     // La palette, les banques vidéo et la mémoire d'objets refusent l'écriture
     // d'un octet seul. Le matériel l'ignore ; le refus est donc silencieux, et
     // ce silence est le comportement juste.
@@ -227,27 +217,27 @@ void MemoryMap::write(std::uint32_t address, std::uint32_t value, std::uint32_t 
     }
 }
 
-std::uint8_t MemoryMap::read8(std::uint32_t address) {
+std::uint8_t Arm9MemoryMap::read8(std::uint32_t address) {
     return static_cast<std::uint8_t>(read(address, 1U));
 }
 
-std::uint16_t MemoryMap::read16(std::uint32_t address) {
+std::uint16_t Arm9MemoryMap::read16(std::uint32_t address) {
     return static_cast<std::uint16_t>(read(address & ~1U, 2U));
 }
 
-std::uint32_t MemoryMap::read32(std::uint32_t address) {
+std::uint32_t Arm9MemoryMap::read32(std::uint32_t address) {
     return read(address & ~3U, 4U);
 }
 
-void MemoryMap::write8(std::uint32_t address, std::uint8_t value) {
+void Arm9MemoryMap::write8(std::uint32_t address, std::uint8_t value) {
     write(address, value, 1U);
 }
 
-void MemoryMap::write16(std::uint32_t address, std::uint16_t value) {
+void Arm9MemoryMap::write16(std::uint32_t address, std::uint16_t value) {
     write(address & ~1U, value, 2U);
 }
 
-void MemoryMap::write32(std::uint32_t address, std::uint32_t value) {
+void Arm9MemoryMap::write32(std::uint32_t address, std::uint32_t value) {
     write(address & ~3U, value, 4U);
 }
 

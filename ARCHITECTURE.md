@@ -100,11 +100,12 @@ extraits ne sont que des en-têtes, et devient STATIC dès que l'un d'eux gagne 
 
 `cores/nds` est une **fondation**, pas encore un moteur. Il porte l'identité de
 la console, décode et contrôle l'en-tête de cartouche, publie le contrat vidéo
-et audio, exécute les deux jeux d'instructions du processeur principal ainsi que
-son coprocesseur système, et décode la carte mémoire que celui-ci voit. Toute
-demande de faire tourner une image est en revanche refusée par une erreur
-nommée : un écran noir laisserait croire à une émulation muette, là où il manque
-encore le second processeur et l'affichage.
+et audio, exécute les deux processeurs de la console avec leurs jeux
+d'instructions et le coprocesseur système du principal, et décode les cartes
+mémoire que chacun voit. Toute demande de faire tourner une image est en revanche
+refusée par une erreur nommée : un écran noir laisserait croire à une émulation
+muette, là où il manque encore la communication entre les deux processeurs et
+l'affichage.
 
 `cores/nds/src/cpu` tient les deux processeurs. Ils ne connaissent pas la carte
 mémoire de la console : ils passent par une frontière `Bus` abstraite, ce qui
@@ -161,18 +162,32 @@ sont pas écrits : ils sont décodés et comptés comme non implémentés plutô
 passés sous silence, parce qu'une instruction inconnue exécutée sans bruit donne
 un jeu qui part à la dérive sans qu'on sache où. Aucune durée n'est comptée non
 plus — une instruction par pas, sans cache et sans attente de bus — la justesse
-temporelle dépendant en outre de la carte mémoire, qui n'existe pas encore.
+temporelle demandant un modèle de durée que rien ne consomme encore.
 
-`cores/nds/src/memory` porte la carte mémoire, c'est-à-dire ce à quoi mène une
-adresse. Rien n'y est acquis : le même nombre désigne deux choses différentes
-selon la configuration, et deux mécanismes y pourvoient. Le partage de la
-mémoire commune répartit trente-deux kilooctets entre les deux processeurs en
-quatre découpages, dont l'un ne laisse rien au processeur principal — et « rien »
-est un état légitime, pas une panne. Les mémoires locales du cœur, elles, ne
-passent jamais par cette carte : le processeur les consulte avant le bus, si
-bien qu'une adresse peut ne rien désigner ici tout en répondant très bien au
-processeur. Le reste est du miroir, parce que le matériel ne décode pas les bits
-hauts.
+`cores/nds/src/memory` porte les cartes mémoire, c'est-à-dire ce à quoi mène une
+adresse. Il y en a **deux**, une par processeur, et elles ne voient pas la même
+chose : le processeur secondaire ignore la palette, la mémoire d'objets et la
+plupart des banques vidéo, et dispose en propre de soixante-quatre kilooctets de
+mémoire de travail que l'autre ne voit pas.
+
+Ce qu'elles partagent vit dans `SystemMemory` : la mémoire principale et la
+mémoire commune. Les tenir là plutôt que dans l'une des deux cartes est ce qui
+permet qu'une écriture faite par un processeur soit vue par l'autre, sans quoi
+la communication entre eux serait impossible à écrire.
+
+Rien n'y est acquis : le même nombre désigne deux choses différentes selon la
+configuration, et trois mécanismes y pourvoient. Le partage de la mémoire commune
+répartit trente-deux kilooctets entre les deux processeurs en quatre découpages
+**complémentaires** — ce que l'un reçoit, l'autre ne l'a pas — dont deux ne
+laissent rien à l'un d'eux, et « rien » est un état légitime, pas une panne. Les
+deux fenêtres sont calculées depuis le même registre, de sorte qu'aucun découpage
+ne puisse rendre les deux processeurs propriétaires du même octet. Privé de sa
+part, le processeur secondaire ne se retrouve pas devant une fenêtre muette :
+elle donne alors sur sa mémoire propre, et un programme qui s'y adresse continue
+de fonctionner. Les mémoires locales du processeur principal, enfin, ne passent
+jamais par sa carte : il les consulte avant le bus, si bien qu'une adresse peut
+ne rien désigner là tout en lui répondant très bien. Le reste est du miroir,
+parce que le matériel ne décode pas les bits hauts.
 
 Les neuf banques vidéo existent et sont atteignables par la fenêtre de
 transfert, celle qu'on emprunte pour les remplir. L'aiguillage qui les présente

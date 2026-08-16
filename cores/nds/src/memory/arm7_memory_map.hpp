@@ -1,0 +1,111 @@
+#pragma once
+
+#include "cpu/bus.hpp"
+#include "memory/system_memory.hpp"
+
+#include <cstdint>
+#include <span>
+#include <vector>
+
+namespace ravenemu::nds {
+
+/**
+ * Carte mémoire vue par le processeur secondaire.
+ *
+ * Elle est beaucoup plus courte que celle du processeur principal, et c'est
+ * fidèle : ce processeur ne voit ni palette, ni mémoire d'objets, ni la plupart
+ * des banques vidéo. Il tient l'amorçage, le son, l'écran tactile et la liaison
+ * sans fil, et sa mémoire s'organise autour de cela.
+ *
+ * ### Ce qu'il partage, ce qu'il a en propre
+ *
+ * La mémoire principale et la mémoire commune viennent de `SystemMemory` : ce
+ * sont les mêmes octets que ceux du processeur principal, et c'est par eux que
+ * les deux se parleront. En propre, il a soixante-quatre kilooctets de mémoire
+ * de travail que l'autre ne voit pas.
+ *
+ * ### Le repli quand il n'a aucune part
+ *
+ * Le partage de la mémoire commune peut ne rien lui laisser. Dans ce cas, la
+ * fenêtre qui lui était destinée ne devient pas muette : elle donne sur sa
+ * mémoire propre. Le matériel prévoit ce repli, et il compte — un programme qui
+ * s'y adresse continue de fonctionner après que l'autre processeur lui a tout
+ * pris, au lieu de lire du vide.
+ *
+ * ### Ce qui n'est pas décodé
+ *
+ * Son propre programme d'amorçage, la cartouche, le port Game Boy Advance, et
+ * les banques vidéo qui peuvent lui être confiées. Aucun de ces contenus
+ * n'existe encore : les accès rendent zéro et sont comptés, plutôt qu'absorbés
+ * en silence.
+ */
+class Arm7MemoryMap final : public Bus {
+public:
+    explicit Arm7MemoryMap(SystemMemory& system);
+
+    /** Mémoire de travail que ce processeur ne partage avec personne. */
+    static constexpr std::uint32_t private_wram_bytes = 64U * 1024U;
+
+    /** Première adresse de la mémoire propre, au-delà de la fenêtre partagée. */
+    static constexpr std::uint32_t private_wram_base = 0x0380'0000;
+    /** Vue en lecture seule du partage de la mémoire commune. */
+    static constexpr std::uint32_t shared_wram_status = 0x0400'0241;
+
+    void reset() noexcept;
+
+    [[nodiscard]] std::uint8_t read8(std::uint32_t address) override;
+    [[nodiscard]] std::uint16_t read16(std::uint32_t address) override;
+    [[nodiscard]] std::uint32_t read32(std::uint32_t address) override;
+
+    void write8(std::uint32_t address, std::uint8_t value) override;
+    void write16(std::uint32_t address, std::uint16_t value) override;
+    void write32(std::uint32_t address, std::uint32_t value) override;
+
+    [[nodiscard]] std::span<std::uint8_t> private_wram() noexcept { return private_wram_; }
+
+    /** Part de la mémoire commune revenant à ce processeur. */
+    [[nodiscard]] SystemMemory::Window shared_window() const noexcept {
+        return system_.secondary_processor_window();
+    }
+
+    [[nodiscard]] std::uint32_t unmapped_count() const noexcept { return unmapped_; }
+    [[nodiscard]] std::uint32_t first_unmapped() const noexcept { return first_unmapped_; }
+
+    [[nodiscard]] std::uint32_t unimplemented_io_count() const noexcept { return unimplemented_io_; }
+    [[nodiscard]] std::uint32_t first_unimplemented_io() const noexcept { return first_unimplemented_io_; }
+
+private:
+    enum class Region {
+        unmapped,
+        main_ram,
+        shared_wram,
+        private_wram,
+        input_output,
+    };
+
+    struct Location {
+        Region region{Region::unmapped};
+        std::uint8_t* data{nullptr};
+    };
+
+    [[nodiscard]] Location locate(std::uint32_t address) noexcept;
+
+    [[nodiscard]] std::uint32_t read(std::uint32_t address, std::uint32_t width) noexcept;
+    void write(std::uint32_t address, std::uint32_t value, std::uint32_t width) noexcept;
+
+    [[nodiscard]] std::uint8_t read_io(std::uint32_t address) noexcept;
+    void write_io(std::uint32_t address, std::uint8_t value) noexcept;
+
+    void note_unmapped(std::uint32_t address) noexcept;
+    void note_unimplemented_io(std::uint32_t address) noexcept;
+
+    SystemMemory& system_;
+    std::vector<std::uint8_t> private_wram_;
+
+    std::uint32_t unmapped_{};
+    std::uint32_t first_unmapped_{};
+    std::uint32_t unimplemented_io_{};
+    std::uint32_t first_unimplemented_io_{};
+};
+
+} // namespace ravenemu::nds

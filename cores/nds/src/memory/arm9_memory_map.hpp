@@ -1,6 +1,7 @@
 #pragma once
 
 #include "cpu/bus.hpp"
+#include "memory/system_memory.hpp"
 
 #include <array>
 #include <cstdint>
@@ -11,6 +12,11 @@ namespace ravenemu::nds {
 
 /**
  * Carte mémoire vue par le processeur principal.
+ *
+ * La mémoire principale et la mémoire commune ne lui appartiennent pas : elles
+ * vivent dans `SystemMemory`, que les deux processeurs partagent. Cette carte
+ * n'en décrit que la vue — où elles répondent, et quelle part de la mémoire
+ * commune lui revient.
  *
  * ### Ce qu'elle décide
  *
@@ -53,12 +59,12 @@ namespace ravenemu::nds {
  * comportement juste, et non un manque — un programme qui écrit un octet dans
  * la palette ne change rien, sur console comme ici.
  */
-class MemoryMap final : public Bus {
+class Arm9MemoryMap final : public Bus {
 public:
-    MemoryMap();
+    explicit Arm9MemoryMap(SystemMemory& system);
 
-    static constexpr std::uint32_t main_ram_bytes = 4U * 1024U * 1024U;
-    static constexpr std::uint32_t shared_wram_bytes = 32U * 1024U;
+    static constexpr std::uint32_t main_ram_bytes = SystemMemory::main_ram_bytes;
+    static constexpr std::uint32_t shared_wram_bytes = SystemMemory::shared_wram_bytes;
     static constexpr std::uint32_t palette_bytes = 2U * 1024U;
     static constexpr std::uint32_t oam_bytes = 2U * 1024U;
 
@@ -83,20 +89,16 @@ public:
 
     // Accès direct au contenu, pour préparer un décor ou charger une image sans
     // passer par des milliers d'écritures.
-    [[nodiscard]] std::span<std::uint8_t> main_ram() noexcept { return main_ram_; }
-    [[nodiscard]] std::span<std::uint8_t> shared_wram() noexcept { return shared_wram_; }
+    [[nodiscard]] std::span<std::uint8_t> main_ram() noexcept { return system_.main_ram(); }
+    [[nodiscard]] std::span<std::uint8_t> shared_wram() noexcept { return system_.shared_wram(); }
     [[nodiscard]] std::span<std::uint8_t> palette() noexcept { return palette_; }
     [[nodiscard]] std::span<std::uint8_t> object_attributes() noexcept { return oam_; }
     [[nodiscard]] std::span<std::uint8_t> vram_bank(std::size_t index) noexcept;
 
-    /** Découpage courant de la mémoire commune, du point de vue du processeur. */
-    struct SharedWindow {
-        /** Décalage de la fenêtre dans les trente-deux kilooctets. */
-        std::uint32_t offset;
-        /** Étendue de la fenêtre, nulle si le processeur n'en a aucune part. */
-        std::uint32_t size;
-    };
-    [[nodiscard]] SharedWindow shared_window() const noexcept;
+    /** Part de la mémoire commune revenant à ce processeur. */
+    [[nodiscard]] SystemMemory::Window shared_window() const noexcept {
+        return system_.main_processor_window();
+    }
 
     /** Accès à une adresse que rien ne décode. */
     [[nodiscard]] std::uint32_t unmapped_count() const noexcept { return unmapped_; }
@@ -144,15 +146,13 @@ private:
             region == Region::object_attributes;
     }
 
-    std::vector<std::uint8_t> main_ram_;
-    std::vector<std::uint8_t> shared_wram_;
+    SystemMemory& system_;
     std::vector<std::uint8_t> palette_;
     std::vector<std::uint8_t> oam_;
     std::vector<std::uint8_t> vram_;
 
     /** Un octet de commande par banque vidéo. */
     std::array<std::uint8_t, vram_bank_count> vram_control_{};
-    std::uint8_t shared_wram_control_{};
 
     std::uint32_t unmapped_{};
     std::uint32_t first_unmapped_{};

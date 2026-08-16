@@ -38,19 +38,21 @@ aujourd'hui :
   passage de l'un à l'autre, éprouvés contre une mémoire de test;
 - son coprocesseur système : mémoires locales, base des vecteurs d'exception,
   attente d'interruption, registres de protection et de cache;
-- la carte mémoire vue par ce processeur : mémoire principale, mémoire commune
-  partagée entre les deux processeurs, palette, mémoire d'objets et les neuf
-  banques vidéo par leur fenêtre de transfert;
+- la carte mémoire vue par ce processeur : mémoire principale, mémoire commune,
+  palette, mémoire d'objets et les neuf banques vidéo par leur fenêtre de
+  transfert;
 - le processeur secondaire ARM7TDMI, jeu ARMv4T, servi par la même
   implémentation que le principal, avec les différences d'architecture nommées
-  et éprouvées une à une.
+  et éprouvées une à une;
+- sa carte mémoire à lui, sa mémoire de travail propre, et la mémoire que les
+  deux processeurs se partagent avec son découpage en quatre parts
+  complémentaires.
 
 Toute demande d'exécution reste refusée par une erreur nommée, volontairement :
 un écran noir laisserait croire à une émulation silencieuse. Restent à écrire la
-carte mémoire du processeur secondaire, la communication entre les deux, les
-moteurs 2D et 3D, l'aiguillage des banques vidéo vers ces moteurs, la cartouche,
-l'écran tactile et le son. La console n'apparaît pas encore dans la bibliothèque
-de l'application.
+communication entre les deux processeurs, les moteurs 2D et 3D, l'aiguillage des
+banques vidéo vers ces moteurs, la cartouche, l'écran tactile et le son. La
+console n'apparaît pas encore dans la bibliothèque de l'application.
 
 ## Pistes futures
 

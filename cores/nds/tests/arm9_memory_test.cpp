@@ -1,5 +1,6 @@
 #include "cpu/arm_core.hpp"
-#include "memory/memory_map.hpp"
+#include "memory/arm9_memory_map.hpp"
+#include "memory/system_memory.hpp"
 
 #include "check.hpp"
 
@@ -63,7 +64,7 @@ constexpr std::uint32_t block_transfer(
 /** Commande de banque vidéo : allumée et dirigée vers la fenêtre de transfert. */
 constexpr std::uint8_t bank_to_transfer_window = 0x80;
 
-void write_word(MemoryMap& map, std::uint32_t address, std::uint32_t value) {
+void write_word(Arm9MemoryMap& map, std::uint32_t address, std::uint32_t value) {
     map.write32(address, value);
 }
 
@@ -73,23 +74,24 @@ void les_quantites_sont_celles_du_materiel() {
     // Comparer une région à la constante qui la définit ne prouverait rien :
     // muter la constante muterait les deux côtés. Ce sont les quantités du
     // matériel qu'il faut figer.
-    check(MemoryMap::main_ram_bytes == 4U * 1024U * 1024U, "quatre mégaoctets de mémoire principale");
-    check(MemoryMap::shared_wram_bytes == 32U * 1024U, "trente-deux kilooctets de mémoire commune");
-    check(MemoryMap::palette_bytes == 2U * 1024U, "deux kilooctets de palette");
-    check(MemoryMap::oam_bytes == 2U * 1024U, "deux kilooctets de mémoire d'objets");
-    check(MemoryMap::vram_bank_count == 9U, "neuf banques vidéo");
-    check(MemoryMap::vram_transfer_base == 0x0680'0000U, "la fenêtre de transfert commence à son adresse");
-    check(MemoryMap::vram_control_base == 0x0400'0240U, "les commandes de banques commencent à la leur");
-    check(MemoryMap::shared_wram_control == 0x0400'0247U, "le registre de partage est à la sienne");
+    check(Arm9MemoryMap::main_ram_bytes == 4U * 1024U * 1024U, "quatre mégaoctets de mémoire principale");
+    check(Arm9MemoryMap::shared_wram_bytes == 32U * 1024U, "trente-deux kilooctets de mémoire commune");
+    check(Arm9MemoryMap::palette_bytes == 2U * 1024U, "deux kilooctets de palette");
+    check(Arm9MemoryMap::oam_bytes == 2U * 1024U, "deux kilooctets de mémoire d'objets");
+    check(Arm9MemoryMap::vram_bank_count == 9U, "neuf banques vidéo");
+    check(Arm9MemoryMap::vram_transfer_base == 0x0680'0000U, "la fenêtre de transfert commence à son adresse");
+    check(Arm9MemoryMap::vram_control_base == 0x0400'0240U, "les commandes de banques commencent à la leur");
+    check(Arm9MemoryMap::shared_wram_control == 0x0400'0247U, "le registre de partage est à la sienne");
 
     // Les neuf banques totalisent six cent cinquante-six kilooctets.
-    MemoryMap map;
+    SystemMemory system;
+    Arm9MemoryMap map{system};
     std::size_t total = 0;
-    for (std::size_t index = 0; index < MemoryMap::vram_bank_count; ++index) {
+    for (std::size_t index = 0; index < Arm9MemoryMap::vram_bank_count; ++index) {
         total += map.vram_bank(index).size();
     }
     check(total == 656U * 1024U, "les neuf banques totalisent la mémoire vidéo de la console");
-    check(map.vram_bank(MemoryMap::vram_bank_count).empty(), "au-delà, il n'y a pas de banque");
+    check(map.vram_bank(Arm9MemoryMap::vram_bank_count).empty(), "au-delà, il n'y a pas de banque");
 }
 
 void chaque_region_repond_a_sa_place() {
@@ -99,14 +101,16 @@ void chaque_region_repond_a_sa_place() {
         const char* label;
     };
     constexpr Case cases[] = {
-        {main_ram_base, MemoryMap::main_ram_bytes, "mémoire principale"},
-        {shared_wram_base, MemoryMap::shared_wram_bytes, "mémoire commune"},
-        {palette_base, MemoryMap::palette_bytes, "palette"},
-        {oam_base, MemoryMap::oam_bytes, "mémoire d'objets"},
+        {main_ram_base, Arm9MemoryMap::main_ram_bytes, "mémoire principale"},
+        {shared_wram_base, Arm9MemoryMap::shared_wram_bytes, "mémoire commune"},
+        {palette_base, Arm9MemoryMap::palette_bytes, "palette"},
+        {oam_base, Arm9MemoryMap::oam_bytes, "mémoire d'objets"},
     };
 
     for (const auto& scenario : cases) {
-        MemoryMap map;
+        SystemMemory system;
+        Arm9MemoryMap map{system};
+        system.reset();
         map.reset();
         write_word(map, scenario.base, 0x1234'5678U);
         check(map.read32(scenario.base) == 0x1234'5678U, std::string{scenario.label} + " : aller-retour");
@@ -135,7 +139,9 @@ void chaque_region_repond_a_sa_place() {
 }
 
 void les_regions_ne_se_recouvrent_pas() {
-    MemoryMap map;
+    SystemMemory system;
+    Arm9MemoryMap map{system};
+    system.reset();
     map.reset();
     write_word(map, main_ram_base, 0x1111'1111U);
     write_word(map, shared_wram_base, 0x2222'2222U);
@@ -150,7 +156,9 @@ void les_regions_ne_se_recouvrent_pas() {
 }
 
 void les_trois_largeurs_d_acces() {
-    MemoryMap map;
+    SystemMemory system;
+    Arm9MemoryMap map{system};
+    system.reset();
     map.reset();
     write_word(map, main_ram_base, 0x1234'5678U);
     check(map.read8(main_ram_base) == 0x78U, "octet bas");
@@ -178,7 +186,9 @@ void les_trois_largeurs_d_acces() {
 }
 
 void un_octet_seul_n_entre_pas_partout() {
-    MemoryMap map;
+    SystemMemory system;
+    Arm9MemoryMap map{system};
+    system.reset();
     map.reset();
 
     // La palette, les banques vidéo et la mémoire d'objets ignorent l'écriture
@@ -191,10 +201,10 @@ void un_octet_seul_n_entre_pas_partout() {
     map.write8(oam_base, 0xffU);
     check(map.read16(oam_base) == 0x5678U, "la mémoire d'objets aussi");
 
-    map.write8(MemoryMap::vram_control_base, bank_to_transfer_window);
-    map.write16(MemoryMap::vram_transfer_base, 0x9abcU);
-    map.write8(MemoryMap::vram_transfer_base, 0xffU);
-    check(map.read16(MemoryMap::vram_transfer_base) == 0x9abcU, "les banques vidéo aussi");
+    map.write8(Arm9MemoryMap::vram_control_base, bank_to_transfer_window);
+    map.write16(Arm9MemoryMap::vram_transfer_base, 0x9abcU);
+    map.write8(Arm9MemoryMap::vram_transfer_base, 0xffU);
+    check(map.read16(Arm9MemoryMap::vram_transfer_base) == 0x9abcU, "les banques vidéo aussi");
 
     // La mémoire principale et la mémoire commune l'acceptent, elles.
     map.write16(main_ram_base, 0x1234U);
@@ -209,11 +219,13 @@ void un_octet_seul_n_entre_pas_partout() {
 
 void le_partage_de_la_memoire_commune() {
     {   // Au démarrage, le processeur principal reçoit les trente-deux kilooctets.
-        MemoryMap map;
+        SystemMemory system;
+        Arm9MemoryMap map{system};
+        system.reset();
         map.reset();
         const auto window = map.shared_window();
         check(window.offset == 0U, "la fenêtre commence au début");
-        check(window.size == MemoryMap::shared_wram_bytes, "et couvre tout");
+        check(window.size == Arm9MemoryMap::shared_wram_bytes, "et couvre tout");
     }
     {   // Les quatre découpages, du point de vue du processeur principal.
         struct Case {
@@ -223,93 +235,109 @@ void le_partage_de_la_memoire_commune() {
             const char* label;
         };
         constexpr Case cases[] = {
-            {0, 0U, MemoryMap::shared_wram_bytes, "tout au processeur principal"},
-            {1, MemoryMap::shared_wram_bytes / 2U, MemoryMap::shared_wram_bytes / 2U, "la moitié haute"},
-            {2, 0U, MemoryMap::shared_wram_bytes / 2U, "la moitié basse"},
+            {0, 0U, Arm9MemoryMap::shared_wram_bytes, "tout au processeur principal"},
+            {1, Arm9MemoryMap::shared_wram_bytes / 2U, Arm9MemoryMap::shared_wram_bytes / 2U, "la moitié haute"},
+            {2, 0U, Arm9MemoryMap::shared_wram_bytes / 2U, "la moitié basse"},
             {3, 0U, 0U, "rien du tout"},
         };
         for (const auto& scenario : cases) {
-            MemoryMap map;
+            SystemMemory system;
+            Arm9MemoryMap map{system};
+            system.reset();
             map.reset();
-            map.write8(MemoryMap::shared_wram_control, scenario.control);
+            map.write8(Arm9MemoryMap::shared_wram_control, scenario.control);
             const auto window = map.shared_window();
             check(window.offset == scenario.offset, std::string{scenario.label} + " : décalage");
             check(window.size == scenario.size, std::string{scenario.label} + " : étendue");
             check(
-                map.read8(MemoryMap::shared_wram_control) == scenario.control,
+                map.read8(Arm9MemoryMap::shared_wram_control) == scenario.control,
                 std::string{scenario.label} + " : le registre se relit"
             );
         }
     }
     {   // Les deux moitiés sont bien distinctes, et le découpage les échange.
-        MemoryMap map;
+        SystemMemory system;
+        Arm9MemoryMap map{system};
+        system.reset();
         map.reset();
-        map.write8(MemoryMap::shared_wram_control, 2U);          // moitié basse
+        map.write8(Arm9MemoryMap::shared_wram_control, 2U);          // moitié basse
         write_word(map, shared_wram_base, 0x1111'1111U);
-        map.write8(MemoryMap::shared_wram_control, 1U);          // moitié haute
+        map.write8(Arm9MemoryMap::shared_wram_control, 1U);          // moitié haute
         write_word(map, shared_wram_base, 0x2222'2222U);
 
         check(map.read32(shared_wram_base) == 0x2222'2222U, "la moitié haute garde la sienne");
-        map.write8(MemoryMap::shared_wram_control, 2U);
+        map.write8(Arm9MemoryMap::shared_wram_control, 2U);
         check(map.read32(shared_wram_base) == 0x1111'1111U, "et la moitié basse la sienne");
 
-        map.write8(MemoryMap::shared_wram_control, 0U);
+        map.write8(Arm9MemoryMap::shared_wram_control, 0U);
         check(map.read32(shared_wram_base) == 0x1111'1111U, "vue entière, la moitié basse vient en premier");
         check(
-            map.read32(shared_wram_base + MemoryMap::shared_wram_bytes / 2U) == 0x2222'2222U,
+            map.read32(shared_wram_base + Arm9MemoryMap::shared_wram_bytes / 2U) == 0x2222'2222U,
             "et la moitié haute ensuite"
         );
     }
     {   // Le miroir a le pas de la fenêtre, pas celui de la mémoire entière :
         // avec seize kilooctets, l'adresse suivante retombe au début.
-        MemoryMap map;
+        SystemMemory system;
+        Arm9MemoryMap map{system};
+        system.reset();
         map.reset();
-        map.write8(MemoryMap::shared_wram_control, 2U);          // moitié basse
+        map.write8(Arm9MemoryMap::shared_wram_control, 2U);          // moitié basse
         write_word(map, shared_wram_base, 0x1234'5678U);
         check(
-            map.read32(shared_wram_base + MemoryMap::shared_wram_bytes / 2U) == 0x1234'5678U,
+            map.read32(shared_wram_base + Arm9MemoryMap::shared_wram_bytes / 2U) == 0x1234'5678U,
             "la fenêtre de seize kilooctets se répète à son pas"
         );
         // Et ce miroir n'est pas l'autre moitié : celle-ci est restée vierge.
-        map.write8(MemoryMap::shared_wram_control, 1U);
+        map.write8(Arm9MemoryMap::shared_wram_control, 1U);
         check(map.read32(shared_wram_base) == 0U, "la moitié haute n'a pas été touchée");
     }
     {   // N'en avoir aucune part est un état légitime : la région ne répond plus.
-        MemoryMap map;
+        SystemMemory system;
+        Arm9MemoryMap map{system};
+        system.reset();
         map.reset();
-        map.write8(MemoryMap::shared_wram_control, 3U);
+        map.write8(Arm9MemoryMap::shared_wram_control, 3U);
         static_cast<void>(map.read32(shared_wram_base));
         check(map.unmapped_count() == 4U, "sans part, la région ne décode plus rien");
         check(map.first_unmapped() == shared_wram_base, "et l'adresse est retenue");
     }
     {   // Seuls les deux bits bas du registre comptent.
-        MemoryMap map;
+        SystemMemory system;
+        Arm9MemoryMap map{system};
+        system.reset();
         map.reset();
-        map.write8(MemoryMap::shared_wram_control, 0xfeU);
-        check(map.read8(MemoryMap::shared_wram_control) == 2U, "le registre ne garde que deux bits");
+        map.write8(Arm9MemoryMap::shared_wram_control, 0xfeU);
+        check(map.read8(Arm9MemoryMap::shared_wram_control) == 2U, "le registre ne garde que deux bits");
     }
 }
 
 void les_banques_video_repondent_par_leur_fenetre() {
     {   // Éteinte, une banque ne répond pas.
-        MemoryMap map;
+        SystemMemory system;
+        Arm9MemoryMap map{system};
+        system.reset();
         map.reset();
-        static_cast<void>(map.read32(MemoryMap::vram_transfer_base));
+        static_cast<void>(map.read32(Arm9MemoryMap::vram_transfer_base));
         check(map.unmapped_count() == 4U, "une banque éteinte ne décode rien");
     }
     {   // Allumée et dirigée vers la fenêtre de transfert, elle répond.
-        MemoryMap map;
+        SystemMemory system;
+        Arm9MemoryMap map{system};
+        system.reset();
         map.reset();
-        map.write8(MemoryMap::vram_control_base, bank_to_transfer_window);
-        write_word(map, MemoryMap::vram_transfer_base, 0x1234'5678U);
-        check(map.read32(MemoryMap::vram_transfer_base) == 0x1234'5678U, "la banque A répond");
+        map.write8(Arm9MemoryMap::vram_control_base, bank_to_transfer_window);
+        write_word(map, Arm9MemoryMap::vram_transfer_base, 0x1234'5678U);
+        check(map.read32(Arm9MemoryMap::vram_transfer_base) == 0x1234'5678U, "la banque A répond");
         check(map.unmapped_count() == 0U, "sans accès inconnu");
     }
     {   // Dirigée vers un moteur graphique, elle quitte cette fenêtre.
-        MemoryMap map;
+        SystemMemory system;
+        Arm9MemoryMap map{system};
+        system.reset();
         map.reset();
-        map.write8(MemoryMap::vram_control_base, bank_to_transfer_window | 1U);
-        static_cast<void>(map.read32(MemoryMap::vram_transfer_base));
+        map.write8(Arm9MemoryMap::vram_control_base, bank_to_transfer_window | 1U);
+        static_cast<void>(map.read32(Arm9MemoryMap::vram_transfer_base));
         check(map.unmapped_count() == 4U, "une banque dirigée ailleurs ne répond plus ici");
     }
     {   // Les neuf banques ont chacune leur place et leur taille.
@@ -330,35 +358,37 @@ void les_banques_video_repondent_par_leur_fenetre() {
             {0xa'0000U,  16U * 1024U, "I"},
         };
 
-        MemoryMap map;
+        SystemMemory system;
+        Arm9MemoryMap map{system};
+        system.reset();
         map.reset();
         // Le registre du partage de la mémoire commune s'est glissé au milieu
         // des commandes de banques : les deux dernières sont décalées d'un cran.
         for (std::uint32_t index = 0; index < 7U; ++index) {
-            map.write8(MemoryMap::vram_control_base + index, bank_to_transfer_window);
+            map.write8(Arm9MemoryMap::vram_control_base + index, bank_to_transfer_window);
         }
-        map.write8(MemoryMap::vram_control_base + 8U, bank_to_transfer_window);
-        map.write8(MemoryMap::vram_control_base + 9U, bank_to_transfer_window);
+        map.write8(Arm9MemoryMap::vram_control_base + 8U, bank_to_transfer_window);
+        map.write8(Arm9MemoryMap::vram_control_base + 9U, bank_to_transfer_window);
 
         for (std::uint32_t index = 0; index < 9U; ++index) {
-            write_word(map, MemoryMap::vram_transfer_base + banks[index].offset, 0x1000U + index);
+            write_word(map, Arm9MemoryMap::vram_transfer_base + banks[index].offset, 0x1000U + index);
             // Le dernier mot de la banque doit répondre lui aussi : c'est ce qui
             // dit que son étendue est la bonne et qu'elle ne mord pas sur la
             // suivante.
             write_word(
                 map,
-                MemoryMap::vram_transfer_base + banks[index].offset + banks[index].size - 4U,
+                Arm9MemoryMap::vram_transfer_base + banks[index].offset + banks[index].size - 4U,
                 0x2000U + index
             );
         }
         for (std::uint32_t index = 0; index < 9U; ++index) {
             check(
-                map.read32(MemoryMap::vram_transfer_base + banks[index].offset) == 0x1000U + index,
+                map.read32(Arm9MemoryMap::vram_transfer_base + banks[index].offset) == 0x1000U + index,
                 std::string{"banque "} + banks[index].name + " : premier mot"
             );
             check(
                 map.read32(
-                    MemoryMap::vram_transfer_base + banks[index].offset + banks[index].size - 4U
+                    Arm9MemoryMap::vram_transfer_base + banks[index].offset + banks[index].size - 4U
                 ) == 0x2000U + index,
                 std::string{"banque "} + banks[index].name + " : dernier mot"
             );
@@ -370,64 +400,74 @@ void les_banques_video_repondent_par_leur_fenetre() {
         check(map.unmapped_count() == 0U, "les neuf banques répondent");
 
         // Elles ne se recouvrent pas : la dernière écriture n'a rien écrasé.
-        check(map.read32(MemoryMap::vram_transfer_base) == 0x1000U, "la banque A est intacte");
+        check(map.read32(Arm9MemoryMap::vram_transfer_base) == 0x1000U, "la banque A est intacte");
     }
     {   // La dernière banque s'arrête où elle s'arrête.
-        MemoryMap map;
+        SystemMemory system;
+        Arm9MemoryMap map{system};
+        system.reset();
         map.reset();
-        map.write8(MemoryMap::vram_control_base + 9U, bank_to_transfer_window);
-        constexpr std::uint32_t last = MemoryMap::vram_transfer_base + 0xa'0000U;
+        map.write8(Arm9MemoryMap::vram_control_base + 9U, bank_to_transfer_window);
+        constexpr std::uint32_t last = Arm9MemoryMap::vram_transfer_base + 0xa'0000U;
         write_word(map, last + 16U * 1024U - 4U, 0xdead'beefU);
         check(map.read32(last + 16U * 1024U - 4U) == 0xdead'beefU, "le dernier mot de la banque I répond");
         static_cast<void>(map.read32(last + 16U * 1024U));
         check(map.unmapped_count() == 4U, "et rien au-delà");
     }
     {   // Les fenêtres des moteurs graphiques ne sont pas encore aiguillées.
-        MemoryMap map;
+        SystemMemory system;
+        Arm9MemoryMap map{system};
+        system.reset();
         map.reset();
-        map.write8(MemoryMap::vram_control_base, bank_to_transfer_window);
+        map.write8(Arm9MemoryMap::vram_control_base, bank_to_transfer_window);
         static_cast<void>(map.read32(0x0600'0000U));
         check(map.unmapped_count() == 4U, "la fenêtre du moteur A est signalée");
     }
 }
 
 void les_registres_de_la_carte_se_relisent() {
-    MemoryMap map;
+    SystemMemory system;
+    Arm9MemoryMap map{system};
+    system.reset();
     map.reset();
     // Une écriture de mot couvre quatre commandes de banques d'un coup, comme le
     // ferait un programme d'initialisation.
-    map.write32(MemoryMap::vram_control_base, 0x8483'8281U);
-    check(map.read8(MemoryMap::vram_control_base + 0U) == 0x81U, "commande de la banque A");
-    check(map.read8(MemoryMap::vram_control_base + 1U) == 0x82U, "commande de la banque B");
-    check(map.read8(MemoryMap::vram_control_base + 2U) == 0x83U, "commande de la banque C");
-    check(map.read8(MemoryMap::vram_control_base + 3U) == 0x84U, "commande de la banque D");
+    map.write32(Arm9MemoryMap::vram_control_base, 0x8483'8281U);
+    check(map.read8(Arm9MemoryMap::vram_control_base + 0U) == 0x81U, "commande de la banque A");
+    check(map.read8(Arm9MemoryMap::vram_control_base + 1U) == 0x82U, "commande de la banque B");
+    check(map.read8(Arm9MemoryMap::vram_control_base + 2U) == 0x83U, "commande de la banque C");
+    check(map.read8(Arm9MemoryMap::vram_control_base + 3U) == 0x84U, "commande de la banque D");
     check(map.unimplemented_io_count() == 0U, "aucun de ces registres n'est inconnu");
 
     // Le registre du partage se lit à sa place, entre les commandes G et H.
-    map.write8(MemoryMap::vram_control_base + 6U, 0x87U);
-    map.write8(MemoryMap::shared_wram_control, 1U);
-    map.write8(MemoryMap::vram_control_base + 8U, 0x88U);
-    map.write8(MemoryMap::vram_control_base + 9U, 0x89U);
-    check(map.read8(MemoryMap::vram_control_base + 6U) == 0x87U, "commande de la banque G");
-    check(map.read8(MemoryMap::shared_wram_control) == 1U, "partage de la mémoire commune");
+    map.write8(Arm9MemoryMap::vram_control_base + 6U, 0x87U);
+    map.write8(Arm9MemoryMap::shared_wram_control, 1U);
+    map.write8(Arm9MemoryMap::vram_control_base + 8U, 0x88U);
+    map.write8(Arm9MemoryMap::vram_control_base + 9U, 0x89U);
+    check(map.read8(Arm9MemoryMap::vram_control_base + 6U) == 0x87U, "commande de la banque G");
+    check(map.read8(Arm9MemoryMap::shared_wram_control) == 1U, "partage de la mémoire commune");
     // Les deux dernières sont décalées d'un cran par le registre de partage :
     // les confondre ferait répondre l'une pour l'autre.
-    check(map.read8(MemoryMap::vram_control_base + 8U) == 0x88U, "commande de la banque H");
-    check(map.read8(MemoryMap::vram_control_base + 9U) == 0x89U, "commande de la banque I");
-    static_cast<void>(map.read8(MemoryMap::vram_control_base + 10U));
+    check(map.read8(Arm9MemoryMap::vram_control_base + 8U) == 0x88U, "commande de la banque H");
+    check(map.read8(Arm9MemoryMap::vram_control_base + 9U) == 0x89U, "commande de la banque I");
+    static_cast<void>(map.read8(Arm9MemoryMap::vram_control_base + 10U));
     check(map.unimplemented_io_count() == 1U, "et rien au-delà des dix octets");
 }
 
 void ce_qui_n_existe_pas_encore_est_signale() {
     {   // Le BIOS n'est pas fourni.
-        MemoryMap map;
+        SystemMemory system;
+        Arm9MemoryMap map{system};
+        system.reset();
         map.reset();
         static_cast<void>(map.read32(0xffff'0000U));
         check(map.unmapped_count() == 4U, "le BIOS est signalé");
         check(map.first_unmapped() == 0xffff'0000U, "et son adresse retenue");
     }
     {   // Le port cartouche non plus.
-        MemoryMap map;
+        SystemMemory system;
+        Arm9MemoryMap map{system};
+        system.reset();
         map.reset();
         static_cast<void>(map.read32(0x0800'0000U));
         static_cast<void>(map.read32(0x0a00'0000U));
@@ -436,13 +476,17 @@ void ce_qui_n_existe_pas_encore_est_signale() {
     {   // Les adresses basses n'appartiennent pas à cette carte : c'est la
         // mémoire locale du cœur qui les sert, et le processeur la consulte
         // avant le bus.
-        MemoryMap map;
+        SystemMemory system;
+        Arm9MemoryMap map{system};
+        system.reset();
         map.reset();
         static_cast<void>(map.read32(0x0000'0100U));
         check(map.unmapped_count() == 4U, "les adresses basses ne sont pas décodées ici");
     }
     {   // Un registre d'entrée-sortie sans effet est compté à part.
-        MemoryMap map;
+        SystemMemory system;
+        Arm9MemoryMap map{system};
+        system.reset();
         map.reset();
         static_cast<void>(map.read16(0x0400'0004U));
         check(map.unimplemented_io_count() == 2U, "un registre inconnu est compté");
@@ -454,18 +498,21 @@ void ce_qui_n_existe_pas_encore_est_signale() {
         check(map.first_unimplemented_io() == 0x0400'0004U, "sans effacer la première");
     }
     {   // La remise à zéro efface l'ardoise et le contenu.
-        MemoryMap map;
+        SystemMemory system;
+        Arm9MemoryMap map{system};
+        system.reset();
         map.reset();
         write_word(map, main_ram_base, 0xdead'beefU);
-        map.write8(MemoryMap::shared_wram_control, 3U);
-        map.write8(MemoryMap::vram_control_base, 0x81U);
+        map.write8(Arm9MemoryMap::shared_wram_control, 3U);
+        map.write8(Arm9MemoryMap::vram_control_base, 0x81U);
         static_cast<void>(map.read32(0xffff'0000U));
         static_cast<void>(map.read16(0x0400'0004U));
 
+        system.reset();
         map.reset();
         check(map.read32(main_ram_base) == 0U, "la mémoire principale est effacée");
-        check(map.shared_window().size == MemoryMap::shared_wram_bytes, "le partage revient à son état initial");
-        check(map.read8(MemoryMap::vram_control_base) == 0U, "les commandes de banques aussi");
+        check(map.shared_window().size == Arm9MemoryMap::shared_wram_bytes, "le partage revient à son état initial");
+        check(map.read8(Arm9MemoryMap::vram_control_base) == 0U, "les commandes de banques aussi");
         check(map.unmapped_count() == 0U, "le compte des adresses inconnues repart de zéro");
         check(map.first_unmapped() == 0U, "et la première est oubliée");
         check(map.unimplemented_io_count() == 0U, "celui des registres inconnus aussi");
@@ -484,7 +531,9 @@ void le_processeur_tourne_sur_la_carte() {
     constexpr std::uint32_t stack = 0x0080'4000U;                 // haut de la DTCM
     constexpr std::uint32_t dtcm_base = 0x0080'0000U;
 
-    MemoryMap map;
+    SystemMemory system;
+    Arm9MemoryMap map{system};
+    system.reset();
     map.reset();
     Arm9 cpu{map};
     cpu.reset();
@@ -538,7 +587,9 @@ void le_processeur_tourne_sur_la_carte() {
 
 /** Une mémoire locale posée par-dessus une région masque celle-ci. */
 void la_memoire_locale_passe_devant_la_carte() {
-    MemoryMap map;
+    SystemMemory system;
+    Arm9MemoryMap map{system};
+    system.reset();
     map.reset();
     Arm9 cpu{map};
     cpu.reset();

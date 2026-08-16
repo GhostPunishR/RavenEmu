@@ -4,7 +4,9 @@ add_library(nds_raven_core STATIC
     src/cpu/arm_core.cpp
     src/cpu/cp15.cpp
     src/cpu/thumb.cpp
-    src/memory/memory_map.cpp
+    src/memory/arm7_memory_map.cpp
+    src/memory/arm9_memory_map.cpp
+    src/memory/system_memory.cpp
 )
 target_include_directories(nds_raven_core
     PUBLIC include
@@ -58,13 +60,23 @@ if(RAVENEMU_BUILD_TESTS)
 
     # La carte mémoire est éprouvée pour elle-même, puis avec le processeur
     # au-dessus : c'est leur assemblage qui dit si les adresses mènent où il faut.
-    add_executable(nds_raven_memory_tests tests/memory_map_test.cpp)
-    target_include_directories(nds_raven_memory_tests PRIVATE
+    add_executable(nds_raven_arm9_memory_tests tests/arm9_memory_test.cpp)
+    target_include_directories(nds_raven_arm9_memory_tests PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/src
         ${CMAKE_CURRENT_LIST_DIR}/../common/tests/support
     )
-    target_link_libraries(nds_raven_memory_tests PRIVATE nds_raven_core)
-    add_test(NAME nds_raven_memory COMMAND nds_raven_memory_tests)
+    target_link_libraries(nds_raven_arm9_memory_tests PRIVATE nds_raven_core)
+    add_test(NAME nds_raven_arm9_memory COMMAND nds_raven_arm9_memory_tests)
+
+    # La carte du processeur secondaire est éprouvée avec celle du principal :
+    # ce qui compte est ce que les deux voient de la mémoire qu'ils partagent.
+    add_executable(nds_raven_arm7_memory_tests tests/arm7_memory_test.cpp)
+    target_include_directories(nds_raven_arm7_memory_tests PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/src
+        ${CMAKE_CURRENT_LIST_DIR}/../common/tests/support
+    )
+    target_link_libraries(nds_raven_arm7_memory_tests PRIVATE nds_raven_core)
+    add_test(NAME nds_raven_arm7_memory COMMAND nds_raven_arm7_memory_tests)
 
     # Le processeur secondaire partage son implémentation avec le principal :
     # sa suite n'éprouve donc que ce qui les sépare.
