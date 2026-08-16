@@ -2,6 +2,7 @@
 
 #include "cpu/bus.hpp"
 #include "memory/system_memory.hpp"
+#include "system/inter_processor.hpp"
 
 #include <cstdint>
 #include <span>
@@ -41,7 +42,7 @@ namespace ravenemu::nds {
  */
 class Arm7MemoryMap final : public Bus {
 public:
-    explicit Arm7MemoryMap(SystemMemory& system);
+    Arm7MemoryMap(SystemMemory& system, InterProcessor& link, InterruptController& interrupts);
 
     /** Mémoire de travail que ce processeur ne partage avec personne. */
     static constexpr std::uint32_t private_wram_bytes = 64U * 1024U;
@@ -93,13 +94,20 @@ private:
     [[nodiscard]] std::uint32_t read(std::uint32_t address, std::uint32_t width) noexcept;
     void write(std::uint32_t address, std::uint32_t value, std::uint32_t width) noexcept;
 
-    [[nodiscard]] std::uint8_t read_io(std::uint32_t address) noexcept;
-    void write_io(std::uint32_t address, std::uint8_t value) noexcept;
+    // Les entrées-sorties sont sensibles à la largeur : retirer un mot d'une
+    // file en quatre morceaux d'un octet le retirerait quatre fois. Les
+    // registres larges sont donc traités d'un bloc, et le reste octet par octet.
+    [[nodiscard]] std::uint32_t read_io(std::uint32_t address, std::uint32_t width) noexcept;
+    void write_io(std::uint32_t address, std::uint32_t value, std::uint32_t width) noexcept;
+    [[nodiscard]] std::uint8_t read_io_byte(std::uint32_t address) noexcept;
+    void write_io_byte(std::uint32_t address, std::uint8_t value) noexcept;
 
     void note_unmapped(std::uint32_t address) noexcept;
     void note_unimplemented_io(std::uint32_t address) noexcept;
 
     SystemMemory& system_;
+    InterProcessor& link_;
+    InterruptController& interrupts_;
     std::vector<std::uint8_t> private_wram_;
 
     std::uint32_t unmapped_{};

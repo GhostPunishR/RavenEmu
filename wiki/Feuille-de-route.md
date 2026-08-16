@@ -46,13 +46,17 @@ aujourd'hui :
   et éprouvées une à une;
 - sa carte mémoire à lui, sa mémoire de travail propre, et la mémoire que les
   deux processeurs se partagent avec son découpage en quatre parts
-  complémentaires.
+  complémentaires;
+- la communication entre les deux processeurs : le registre de synchronisation,
+  les deux files de seize mots, leurs erreurs de débordement, et le contrôleur
+  d'interruptions de chaque côté qui transforme un message déposé en
+  interruption réellement prise.
 
 Toute demande d'exécution reste refusée par une erreur nommée, volontairement :
-un écran noir laisserait croire à une émulation silencieuse. Restent à écrire la
-communication entre les deux processeurs, les moteurs 2D et 3D, l'aiguillage des
-banques vidéo vers ces moteurs, la cartouche, l'écran tactile et le son. La
-console n'apparaît pas encore dans la bibliothèque de l'application.
+un écran noir laisserait croire à une émulation silencieuse. Restent à écrire
+les moteurs 2D et 3D, l'aiguillage des banques vidéo vers ces moteurs, la
+cartouche, les minuteries, les transferts autonomes, l'écran tactile et le son.
+La console n'apparaît pas encore dans la bibliothèque de l'application.
 
 ## Pistes futures
 

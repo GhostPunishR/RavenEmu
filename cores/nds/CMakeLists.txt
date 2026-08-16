@@ -7,6 +7,7 @@ add_library(nds_raven_core STATIC
     src/memory/arm7_memory_map.cpp
     src/memory/arm9_memory_map.cpp
     src/memory/system_memory.cpp
+    src/system/inter_processor.cpp
 )
 target_include_directories(nds_raven_core
     PUBLIC include
@@ -87,4 +88,14 @@ if(RAVENEMU_BUILD_TESTS)
     )
     target_link_libraries(nds_raven_arm7_tests PRIVATE nds_raven_core)
     add_test(NAME nds_raven_arm7 COMMAND nds_raven_arm7_tests)
+
+    # La communication entre processeurs n'a de sens qu'avec les deux cartes et
+    # les deux contrôleurs montés ensemble : sa suite les assemble.
+    add_executable(nds_raven_link_tests tests/inter_processor_test.cpp)
+    target_include_directories(nds_raven_link_tests PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/src
+        ${CMAKE_CURRENT_LIST_DIR}/../common/tests/support
+    )
+    target_link_libraries(nds_raven_link_tests PRIVATE nds_raven_core)
+    add_test(NAME nds_raven_link COMMAND nds_raven_link_tests)
 endif()

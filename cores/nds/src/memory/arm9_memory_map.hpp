@@ -2,6 +2,7 @@
 
 #include "cpu/bus.hpp"
 #include "memory/system_memory.hpp"
+#include "system/inter_processor.hpp"
 
 #include <array>
 #include <cstdint>
@@ -61,7 +62,7 @@ namespace ravenemu::nds {
  */
 class Arm9MemoryMap final : public Bus {
 public:
-    explicit Arm9MemoryMap(SystemMemory& system);
+    Arm9MemoryMap(SystemMemory& system, InterProcessor& link, InterruptController& interrupts);
 
     static constexpr std::uint32_t main_ram_bytes = SystemMemory::main_ram_bytes;
     static constexpr std::uint32_t shared_wram_bytes = SystemMemory::shared_wram_bytes;
@@ -134,8 +135,13 @@ private:
 
     [[nodiscard]] static bool bank_control_index(std::uint32_t address, std::size_t& index) noexcept;
 
-    [[nodiscard]] std::uint8_t read_io(std::uint32_t address) noexcept;
-    void write_io(std::uint32_t address, std::uint8_t value) noexcept;
+    // Les entrées-sorties sont sensibles à la largeur : retirer un mot d'une
+    // file en quatre morceaux d'un octet le retirerait quatre fois. Les
+    // registres larges sont donc traités d'un bloc, et le reste octet par octet.
+    [[nodiscard]] std::uint32_t read_io(std::uint32_t address, std::uint32_t width) noexcept;
+    void write_io(std::uint32_t address, std::uint32_t value, std::uint32_t width) noexcept;
+    [[nodiscard]] std::uint8_t read_io_byte(std::uint32_t address) noexcept;
+    void write_io_byte(std::uint32_t address, std::uint8_t value) noexcept;
 
     void note_unmapped(std::uint32_t address) noexcept;
     void note_unimplemented_io(std::uint32_t address) noexcept;
@@ -147,6 +153,8 @@ private:
     }
 
     SystemMemory& system_;
+    InterProcessor& link_;
+    InterruptController& interrupts_;
     std::vector<std::uint8_t> palette_;
     std::vector<std::uint8_t> oam_;
     std::vector<std::uint8_t> vram_;

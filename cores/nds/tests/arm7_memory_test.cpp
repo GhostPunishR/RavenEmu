@@ -2,6 +2,7 @@
 #include "memory/arm7_memory_map.hpp"
 #include "memory/arm9_memory_map.hpp"
 #include "memory/system_memory.hpp"
+#include "system/inter_processor.hpp"
 
 #include "check.hpp"
 
@@ -50,11 +51,17 @@ constexpr std::uint32_t transfer(
 /** Les deux cartes montées sur la même mémoire système, comme sur la console. */
 struct Console {
     SystemMemory system{};
-    Arm9MemoryMap main_map{system};
-    Arm7MemoryMap secondary_map{system};
+    InterruptController main_interrupts{};
+    InterruptController secondary_interrupts{};
+    InterProcessor link{main_interrupts, secondary_interrupts};
+    Arm9MemoryMap main_map{system, link, main_interrupts};
+    Arm7MemoryMap secondary_map{system, link, secondary_interrupts};
 
     Console() {
         system.reset();
+        main_interrupts.reset();
+        secondary_interrupts.reset();
+        link.reset();
         main_map.reset();
         secondary_map.reset();
     }

@@ -2,10 +2,18 @@
 
 #include <algorithm>
 
+#include "system/registers.hpp"
+
 namespace ravenemu::nds {
 
-Arm7MemoryMap::Arm7MemoryMap(SystemMemory& system)
-    : system_(system), private_wram_(private_wram_bytes, 0) {}
+
+Arm7MemoryMap::Arm7MemoryMap(
+    SystemMemory& system,
+    InterProcessor& link,
+    InterruptController& interrupts
+)
+    : system_(system), link_(link), interrupts_(interrupts),
+      private_wram_(private_wram_bytes, 0) {}
 
 void Arm7MemoryMap::reset() noexcept {
     // La mémoire partagée est remise à zéro par son propriétaire : la vider
@@ -57,13 +65,72 @@ Arm7MemoryMap::Location Arm7MemoryMap::locate(std::uint32_t address) noexcept {
     }
 }
 
-std::uint8_t Arm7MemoryMap::read_io(std::uint32_t address) noexcept {
+
+std::uint32_t Arm7MemoryMap::read_io(std::uint32_t address, std::uint32_t width) noexcept {
+    // Les deux files et les deux registres de seize bits sont indivisibles :
+    // les lire par morceaux les ferait avancer plusieurs fois, ou ne rendrait
+    // qu'une moitié de leur état.
+    if (address == registers::queue_receive && width == 4U) {
+        return link_.receive(Processor::secondary);
+    }
+    if (address == registers::sync && width == 2U) {
+        return link_.read_sync(Processor::secondary);
+    }
+    if (address == registers::queue_control && width == 2U) {
+        return link_.read_control(Processor::secondary);
+    }
+    // Un envoi ne se relit pas : le registre est en écriture seule.
+    if (address == registers::queue_send) {
+        note_unimplemented_io(address);
+        return 0;
+    }
+
+    std::uint32_t value = 0;
+    for (std::uint32_t index = 0; index < width; ++index) {
+        value |= static_cast<std::uint32_t>(read_io_byte(address + index)) << (index * 8U);
+    }
+    return value;
+}
+
+void Arm7MemoryMap::write_io(std::uint32_t address, std::uint32_t value, std::uint32_t width) noexcept {
+    if (address == registers::queue_send && width == 4U) {
+        link_.send(Processor::secondary, value);
+        return;
+    }
+    if (address == registers::sync && width == 2U) {
+        link_.write_sync(Processor::secondary, static_cast<std::uint16_t>(value));
+        return;
+    }
+    if (address == registers::queue_control && width == 2U) {
+        link_.write_control(Processor::secondary, static_cast<std::uint16_t>(value));
+        return;
+    }
+    // Une file ne se lit pas en écrivant : le registre est en lecture seule.
+    if (address == registers::queue_receive) {
+        note_unimplemented_io(address);
+        return;
+    }
+
+    for (std::uint32_t index = 0; index < width; ++index) {
+        write_io_byte(address + index, static_cast<std::uint8_t>((value >> (index * 8U)) & 0xffU));
+    }
+}
+
+std::uint8_t Arm7MemoryMap::read_io_byte(std::uint32_t address) noexcept {
     if (address == shared_wram_status) return system_.shared_control();
+
+    if (address == registers::interrupt_master) return registers::byte_of(interrupts_.master_enable(), 0U);
+    if (address >= registers::interrupt_enable && address < registers::interrupt_enable + 4U) {
+        return registers::byte_of(interrupts_.enabled(), address - registers::interrupt_enable);
+    }
+    if (address >= registers::interrupt_request && address < registers::interrupt_request + 4U) {
+        return registers::byte_of(interrupts_.requested(), address - registers::interrupt_request);
+    }
     note_unimplemented_io(address);
     return 0;
 }
 
-void Arm7MemoryMap::write_io(std::uint32_t address, std::uint8_t value) noexcept {
+void Arm7MemoryMap::write_io_byte(std::uint32_t address, std::uint8_t value) noexcept {
     if (address == shared_wram_status) {
         // Vue en lecture seule : ce processeur constate le partage, il ne le
         // décide pas. L'écriture est ignorée par le matériel, et ce silence est
@@ -71,18 +138,39 @@ void Arm7MemoryMap::write_io(std::uint32_t address, std::uint8_t value) noexcept
         static_cast<void>(value);
         return;
     }
+
+    if (address == registers::interrupt_master) {
+        interrupts_.set_master_enable(value);
+        return;
+    }
+    if (address >= registers::interrupt_enable && address < registers::interrupt_enable + 4U) {
+        interrupts_.set_enabled(
+            registers::with_byte(interrupts_.enabled(), address - registers::interrupt_enable, value)
+        );
+        return;
+    }
+    if (address >= registers::interrupt_request && address < registers::interrupt_request + 4U) {
+        // Registre des demandes : écrire un bit à un l'efface. Un gestionnaire
+        // écrit ici pour dire qu'il a traité, non pour lever une demande.
+        interrupts_.acknowledge(
+            static_cast<std::uint32_t>(value) << ((address - registers::interrupt_request) * 8U)
+        );
+        return;
+    }
     note_unimplemented_io(address);
 }
 
 std::uint32_t Arm7MemoryMap::read(std::uint32_t address, std::uint32_t width) noexcept {
+    // Une seule région décide, celle du premier octet : un accès à cheval entre
+    // deux régions n'a pas de sens matériel.
+    if (locate(address).region == Region::input_output) return read_io(address, width);
+
     std::uint32_t value = 0;
     for (std::uint32_t index = 0; index < width; ++index) {
         const auto byte_address = address + index;
         const auto location = locate(byte_address);
         std::uint32_t byte = 0;
-        if (location.region == Region::input_output) {
-            byte = read_io(byte_address);
-        } else if (location.data != nullptr) {
+        if (location.data != nullptr) {
             byte = *location.data;
         } else {
             note_unmapped(byte_address);
@@ -93,13 +181,16 @@ std::uint32_t Arm7MemoryMap::read(std::uint32_t address, std::uint32_t width) no
 }
 
 void Arm7MemoryMap::write(std::uint32_t address, std::uint32_t value, std::uint32_t width) noexcept {
+    if (locate(address).region == Region::input_output) {
+        write_io(address, value, width);
+        return;
+    }
+
     for (std::uint32_t index = 0; index < width; ++index) {
         const auto byte_address = address + index;
         const auto byte = static_cast<std::uint8_t>((value >> (index * 8U)) & 0xffU);
         const auto location = locate(byte_address);
-        if (location.region == Region::input_output) {
-            write_io(byte_address, byte);
-        } else if (location.data != nullptr) {
+        if (location.data != nullptr) {
             *location.data = byte;
         } else {
             note_unmapped(byte_address);

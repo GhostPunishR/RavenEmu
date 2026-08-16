@@ -101,11 +101,10 @@ extraits ne sont que des en-têtes, et devient STATIC dès que l'un d'eux gagne 
 `cores/nds` est une **fondation**, pas encore un moteur. Il porte l'identité de
 la console, décode et contrôle l'en-tête de cartouche, publie le contrat vidéo
 et audio, exécute les deux processeurs de la console avec leurs jeux
-d'instructions et le coprocesseur système du principal, et décode les cartes
-mémoire que chacun voit. Toute demande de faire tourner une image est en revanche
-refusée par une erreur nommée : un écran noir laisserait croire à une émulation
-muette, là où il manque encore la communication entre les deux processeurs et
-l'affichage.
+d'instructions et le coprocesseur système du principal, décode les cartes
+mémoire que chacun voit, et les fait dialoguer. Toute demande de faire tourner
+une image est en revanche refusée par une erreur nommée : un écran noir
+laisserait croire à une émulation muette, là où il manque encore l'affichage.
 
 `cores/nds/src/cpu` tient les deux processeurs. Ils ne connaissent pas la carte
 mémoire de la console : ils passent par une frontière `Bus` abstraite, ce qui
@@ -195,6 +194,46 @@ aux moteurs 2D et 3D viendra avec ces moteurs, seuls à pouvoir dire s'il est
 juste ; d'ici là, un accès à ces fenêtres est compté, pas absorbé en silence. Le
 BIOS, la cartouche et le port Game Boy Advance ne sont pas décodés non plus,
 faute de contenu à leur donner.
+
+`cores/nds/src/system` porte ce qui n'appartient à aucun des deux processeurs
+mais les relie. C'est ici que la console cesse d'être deux machines côte à côte :
+les deux cartes mémoire donnaient déjà sur les mêmes octets, mais rien ne
+permettait à l'un de dire à l'autre qu'il y avait écrit.
+
+Deux mécanismes, et ils ne se remplacent pas. Le registre de synchronisation
+porte quatre bits dans chaque sens : ce que l'un écrit, l'autre le relit à
+l'autre bout du registre, de sorte que les deux côtés voient le même nombre aux
+champs échangés près. Il sert aux échanges brefs — un état, un accusé, une étape
+d'amorçage. Les deux files portent seize mots chacune, une par sens, et servent
+aux commandes et à leurs réponses.
+
+**Le destinataire de chaque interruption est le point délicat.** La file qui se
+remplit réveille celui qui reçoit ; la file qui se vide réveille celui qui
+envoie, puisque c'est lui qui attend de pouvoir en déposer d'autres. Se tromper
+de côté donne deux processeurs qui s'attendent l'un l'autre sans fin, et rien
+dans le code ne le signalerait : les deux chemins compilent, et seule une suite
+qui monte les deux processeurs ensemble peut trancher. Ces réveils se posent sur
+un front, non sur un niveau — une file déjà pleine qu'on remplit encore ne
+réveille personne une seconde fois.
+
+Déborder une file n'est pas refusé. Le matériel inscrit une erreur, rend la
+dernière valeur lue ou écarte le mot, et continue ; le logiciel est censé
+consulter cette erreur, qui ne s'efface qu'en écrivant un bit à un. Lever une
+exception serait infidèle : un programme qui déborde sa file ne s'arrête pas sur
+console.
+
+Le contrôleur d'interruptions de chaque processeur transforme ces demandes en
+interruption réellement prise, ou les laisse dormir. Son registre de demandes se
+comporte à l'envers de ce qu'on attend — **écrire un bit à un l'efface** — parce
+que c'est ainsi qu'un gestionnaire acquitte ; l'écrire normalement donnerait des
+interruptions qui se redéclenchent sans fin. Il accepte toutes les sources, y
+compris celles qu'aucun organe ne pose encore : ni retour de balayage, ni
+minuteries, ni transferts autonomes.
+
+Ces registres ont contraint les deux cartes mémoire à connaître la largeur de
+l'accès qu'on leur demande, là où elles décomposaient jusqu'ici en octets. Lire
+une file est **indivisible** : la décomposer en quatre lectures d'octet la
+viderait quatre fois.
 
 Deux décisions y sont prises, parce qu'elles engagent le reste du projet et
 qu'il vaut mieux les arrêter avant d'écrire un moteur autour :
