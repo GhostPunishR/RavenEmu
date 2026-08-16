@@ -1,30 +1,17 @@
 #include "cpu/arm9.hpp"
 
+#include "cpu/bits.hpp"
+
 #include <bit>
 
 namespace ravenemu::nds {
 
+using detail::bit;
+using detail::bits;
+using detail::rotate_right;
+using detail::sign_extend;
+
 namespace {
-
-constexpr std::uint32_t bits(std::uint32_t value, unsigned low, unsigned count) noexcept {
-    return (value >> low) & ((1U << count) - 1U);
-}
-
-constexpr bool bit(std::uint32_t value, unsigned index) noexcept {
-    return ((value >> index) & 1U) != 0U;
-}
-
-constexpr std::uint32_t rotate_right(std::uint32_t value, std::uint32_t amount) noexcept {
-    amount &= 31U;
-    if (amount == 0U) return value;
-    return (value >> amount) | (value << (32U - amount));
-}
-
-/** Étend un champ signé de [width] bits sur 32. */
-constexpr std::uint32_t sign_extend(std::uint32_t value, unsigned width) noexcept {
-    const auto shift = 32U - width;
-    return static_cast<std::uint32_t>(static_cast<std::int32_t>(value << shift) >> shift);
-}
 
 constexpr std::uint32_t saturate(std::int64_t value, bool& saturated) noexcept {
     constexpr std::int64_t high = 0x7fff'ffff;
@@ -202,7 +189,10 @@ void Arm9::restore_cpsr_from_spsr() noexcept {
 void Arm9::raise_undefined(std::uint32_t opcode) {
     if (unimplemented_ == 0U) first_unimplemented_ = opcode;
     ++unimplemented_;
-    enter_exception(CpuMode::undefined, undefined_vector, state_.registers[15] - 4U, false);
+    // L'adresse de reprise se compte depuis l'instruction fautive, dont la
+    // largeur dépend de l'état : quatre octets en ARM, deux en Thumb.
+    const auto width = state_.thumb() ? 2U : 4U;
+    enter_exception(CpuMode::undefined, undefined_vector, state_.registers[15] - width, false);
 }
 
 void Arm9::step() {
@@ -217,16 +207,22 @@ void Arm9::step() {
         return;
     }
 
+    const auto pc = state_.registers[15];
+    branched_ = false;
+
+    // Le compteur de programme avance de deux instructions avant l'exécution,
+    // comme sur le matériel où deux sont déjà engagées dans le pipeline. Ce sont
+    // donc quatre octets d'avance en Thumb et huit en ARM, et des programmes
+    // s'en servent pour calculer des adresses relatives.
     if (state_.thumb()) {
-        // Le jeu Thumb n'est pas encore écrit. Le signaler par l'exception
-        // prévue à cet effet vaut mieux que d'exécuter des octets au hasard.
-        raise_undefined(0U);
+        const auto opcode = bus_.read16(pc & ~1U);
+        state_.registers[15] = pc + 4U;
+        execute_thumb(opcode);
+        if (!branched_) state_.registers[15] = pc + 2U;
         return;
     }
 
-    const auto pc = state_.registers[15];
     const auto opcode = bus_.read32(pc & ~3U);
-    branched_ = false;
     state_.registers[15] = pc + 8U;
     execute(opcode);
     if (!branched_) state_.registers[15] = pc + 4U;

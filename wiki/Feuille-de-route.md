@@ -33,16 +33,16 @@ aujourd'hui :
 - le décodage et le contrôle de l'en-tête de cartouche;
 - le contrat vidéo, deux écrans de 256 sur 192 empilés dans un tampon unique;
 - le contrat audio annoncé par le matériel;
-- le processeur principal ARM946E-S, jeu d'instructions ARM 32 bits complet
-  (`CLZ`, `BLX` et arithmétique saturante comprises), éprouvé contre une
-  mémoire de test.
+- le processeur principal ARM946E-S, ses deux jeux d'instructions — ARM 32 bits
+  (`CLZ`, `BLX` et arithmétique saturante comprises) et Thumb 16 bits — et le
+  passage de l'un à l'autre, éprouvés contre une mémoire de test.
 
 Toute demande d'exécution reste refusée par une erreur nommée, volontairement :
 un écran noir laisserait croire à une émulation silencieuse. Restent à écrire le
-jeu Thumb et le coprocesseur CP15, la carte mémoire, le second processeur, les
-moteurs 2D et 3D, les banques vidéo commutables, la communication entre
-processeurs, l'écran tactile et le son. La console n'apparaît pas encore dans la
-bibliothèque de l'application.
+coprocesseur CP15, la carte mémoire, le second processeur, les moteurs 2D et 3D,
+les banques vidéo commutables, la communication entre processeurs, l'écran
+tactile et le son. La console n'apparaît pas encore dans la bibliothèque de
+l'application.
 
 ## Pistes futures
 

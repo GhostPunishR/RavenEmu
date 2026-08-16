@@ -6,7 +6,7 @@
 namespace ravenemu::nds {
 
 /**
- * Cœur ARM946E-S de la Nintendo DS, jeu d'instructions ARM.
+ * Cœur ARM946E-S de la Nintendo DS, jeux d'instructions ARM et Thumb.
  *
  * ### Ce qui est couvert
  *
@@ -17,22 +17,32 @@ namespace ravenemu::nds {
  * d'état, appel superviseur, et les ajouts d'ARMv5TE que sont `CLZ`, `BLX` sous
  * ses deux formes et l'arithmétique saturante.
  *
+ * L'intégralité du jeu Thumb 16 bits qui l'accompagne, et le passage d'un jeu à
+ * l'autre dans les deux sens — par `BX`, par `BLX`, par un retour d'exception,
+ * par une adresse dépilée. Un jeu de la console alterne sans cesse entre les
+ * deux : le code compact est en Thumb, les gestionnaires d'interruption et le
+ * code sensible en ARM.
+ *
  * ### Ce qui ne l'est pas
  *
- * Le jeu Thumb, les multiplications signées de la variante DSP (`SMLAxy` et sa
- * famille) et les instructions de coprocesseur, qui supposent le CP15 et sa
- * gestion des caches, des mémoires locales et des régions de protection. Elles
- * sont décodées et signalées comme non implémentées plutôt que silencieusement
- * ignorées : une instruction inconnue exécutée sans bruit donne un jeu qui part
- * à la dérive sans qu'on sache où.
+ * Les multiplications signées de la variante DSP (`SMLAxy` et sa famille), le
+ * point d'arrêt matériel et les instructions de coprocesseur, qui supposent le
+ * CP15 et sa gestion des caches, des mémoires locales et des régions de
+ * protection. Elles sont décodées et signalées comme non implémentées plutôt
+ * que silencieusement ignorées : une instruction inconnue exécutée sans bruit
+ * donne un jeu qui part à la dérive sans qu'on sache où.
+ *
+ * Aucune durée n'est comptée non plus. Une instruction par `step()`, sans
+ * cache, sans mémoire locale et sans attente de bus : la justesse temporelle
+ * dépend du CP15 et de la carte mémoire, qui n'existent pas encore.
  *
  * ### Sur le compteur de programme
  *
  * Pendant l'exécution d'une instruction, `R15` vaut l'adresse de celle-ci plus
- * huit, comme sur le matériel où deux instructions sont déjà engagées dans le
- * pipeline. Cette avance n'est pas une commodité de mise en œuvre : des
- * programmes s'en servent pour calculer des adresses relatives, et la retirer
- * casserait leur arithmétique.
+ * deux instructions — huit octets en ARM, quatre en Thumb — comme sur le
+ * matériel où deux sont déjà engagées dans le pipeline. Cette avance n'est pas
+ * une commodité de mise en œuvre : des programmes s'en servent pour calculer
+ * des adresses relatives, et la retirer casserait leur arithmétique.
  */
 class Arm9 {
 public:
@@ -92,6 +102,25 @@ private:
     void execute_saturating(std::uint32_t opcode);
     void execute_clz(std::uint32_t opcode);
     void execute_branch_exchange(std::uint32_t opcode, bool link);
+
+    void execute_thumb(std::uint32_t opcode);
+    void thumb_shift_immediate(std::uint32_t opcode);
+    void thumb_add_subtract(std::uint32_t opcode);
+    void thumb_immediate_operation(std::uint32_t opcode);
+    void thumb_alu_operation(std::uint32_t opcode);
+    void thumb_high_register(std::uint32_t opcode);
+    void thumb_load_pc_relative(std::uint32_t opcode);
+    void thumb_transfer_register_offset(std::uint32_t opcode);
+    void thumb_transfer_immediate_offset(std::uint32_t opcode);
+    void thumb_transfer_halfword(std::uint32_t opcode);
+    void thumb_transfer_stack(std::uint32_t opcode);
+    void thumb_load_address(std::uint32_t opcode);
+    void thumb_adjust_stack(std::uint32_t opcode);
+    void thumb_push_pop(std::uint32_t opcode);
+    void thumb_block_transfer(std::uint32_t opcode);
+    void thumb_conditional_branch(std::uint32_t opcode);
+    void thumb_branch(std::uint32_t opcode);
+    void thumb_long_branch(std::uint32_t opcode);
 
     void write_register(std::uint32_t index, std::uint32_t value) noexcept;
     [[nodiscard]] std::uint32_t read_register(std::uint32_t index) const noexcept {

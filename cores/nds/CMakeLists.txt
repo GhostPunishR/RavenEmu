@@ -2,6 +2,7 @@ add_library(nds_raven_core STATIC
     src/cartridge_header.cpp
     src/core.cpp
     src/cpu/arm9.cpp
+    src/cpu/thumb.cpp
 )
 target_include_directories(nds_raven_core
     PUBLIC include
@@ -30,4 +31,15 @@ if(RAVENEMU_BUILD_TESTS)
     )
     target_link_libraries(nds_raven_arm9_tests PRIVATE nds_raven_core)
     add_test(NAME nds_raven_arm9 COMMAND nds_raven_arm9_tests)
+
+    # Le jeu Thumb a sa propre suite : ses fautes sont d'une autre nature — des
+    # indicateurs écrits d'office et un état qui bascule — et les mélanger
+    # rendrait un échec plus long à situer.
+    add_executable(nds_raven_thumb_tests tests/thumb_test.cpp)
+    target_include_directories(nds_raven_thumb_tests PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/src
+        ${CMAKE_CURRENT_LIST_DIR}/../common/tests/support
+    )
+    target_link_libraries(nds_raven_thumb_tests PRIVATE nds_raven_core)
+    add_test(NAME nds_raven_thumb COMMAND nds_raven_thumb_tests)
 endif()

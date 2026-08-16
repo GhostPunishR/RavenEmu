@@ -100,7 +100,7 @@ extraits ne sont que des en-têtes, et devient STATIC dès que l'un d'eux gagne 
 
 `cores/nds` est une **fondation**, pas encore un moteur. Il porte l'identité de
 la console, décode et contrôle l'en-tête de cartouche, publie le contrat vidéo
-et audio, et exécute le jeu d'instructions ARM du processeur principal. Toute
+et audio, et exécute les deux jeux d'instructions du processeur principal. Toute
 demande de faire tourner une image est en revanche refusée par une erreur
 nommée : un écran noir laisserait croire à une émulation muette, là où il
 manque encore la carte mémoire, le second processeur et l'affichage.
@@ -109,12 +109,24 @@ manque encore la carte mémoire, le second processeur et l'affichage.
 la console : il passe par une frontière `Bus` abstraite, ce qui permet de
 l'éprouver contre une simple mémoire de test — sans cartouche, sans banques
 vidéo, sans ARM7 — et donc de distinguer une faute du processeur d'une faute de
-la machine autour. Le jeu ARM 32 bits d'ARMv5TE y est complet, `CLZ`, `BLX` et
-l'arithmétique saturante comprises. Le jeu Thumb, les multiplications signées de
-la variante DSP et le coprocesseur CP15 ne le sont pas : ils sont décodés et
-comptés comme non implémentés plutôt que passés sous silence, parce qu'une
-instruction inconnue exécutée sans bruit donne un jeu qui part à la dérive sans
-qu'on sache où.
+la machine autour.
+
+Les deux jeux d'instructions y sont complets : ARM 32 bits, avec `CLZ`, `BLX` et
+l'arithmétique saturante, et Thumb 16 bits, avec le passage d'un jeu à l'autre
+dans les deux sens. Un jeu de la console alterne sans cesse entre eux — le code
+compact en Thumb, les gestionnaires d'interruption en ARM — si bien qu'un cœur
+qui n'en connaîtrait qu'un ne ferait rien tourner. Les deux jeux partagent le
+décaleur, les indicateurs et le banc de registres ; ils diffèrent surtout sur un
+point, que le code isole : Thumb écrit ses indicateurs d'office, là où ARM
+demande un bit `S` explicite.
+
+Les multiplications signées de la variante DSP, le point d'arrêt matériel et le
+coprocesseur CP15 ne sont pas écrits : ils sont décodés et comptés comme non
+implémentés plutôt que passés sous silence, parce qu'une instruction inconnue
+exécutée sans bruit donne un jeu qui part à la dérive sans qu'on sache où.
+Aucune durée n'est comptée non plus — une instruction par pas, sans cache ni
+mémoire locale — la justesse temporelle dépendant du CP15 et de la carte
+mémoire, qui n'existent pas encore.
 
 Deux décisions y sont prises, parce qu'elles engagent le reste du projet et
 qu'il vaut mieux les arrêter avant d'écrire un moteur autour :

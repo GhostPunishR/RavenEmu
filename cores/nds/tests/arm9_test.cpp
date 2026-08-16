@@ -1379,15 +1379,20 @@ void les_exceptions_basculent_de_mode_et_de_vecteur() {
         check(machine.cpu.unimplemented_count() == 2U, "les suivantes sont comptées");
         check(machine.cpu.first_unimplemented() == (coprocessor_data_operation | 0x11U), "sans effacer la première");
     }
-    {   // Le jeu Thumb n'existe pas encore : il est signalé, pas exécuté au hasard.
+    {   // Le bit d'état gouverne la largeur du décodage. Le même mot en mémoire
+        // n'est pas la même instruction selon l'état, et c'est ce que ce cas
+        // vérifie : la suite Thumb couvre le jeu lui-même, celle-ci se contente
+        // de constater que `step` change bien de décodeur.
         Machine machine;
-        machine.cpu.state().cpsr =
-            static_cast<std::uint32_t>(CpuMode::system) | psr::thumb;
+        machine.cpu.state().cpsr = static_cast<std::uint32_t>(CpuMode::system) | psr::thumb;
         machine.reg(15) = program_base;
+        // `MOV r0, #0x42` en Thumb tient sur un demi-mot ; lu comme un mot ARM,
+        // ce serait tout autre chose.
+        machine.bus.write16(program_base, 0x2042U);
         machine.cpu.step();
-        check(machine.cpu.unimplemented_count() == 1U, "l'état Thumb est signalé");
-        check(machine.cpu.state().mode() == CpuMode::undefined, "par l'exception prévue à cet effet");
-        check(!machine.cpu.state().thumb(), "et l'exception ramène en ARM");
+        check(machine.reg(0) == 0x42U, "l'état Thumb fait décoder un demi-mot");
+        check(machine.reg(15) == program_base + 2U, "et n'avance que de deux octets");
+        check(machine.cpu.unimplemented_count() == 0U, "sans rien signaler d'inconnu");
     }
     {   // Interruption ordinaire, prise entre deux instructions.
         Machine machine;
