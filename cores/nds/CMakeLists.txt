@@ -2,6 +2,7 @@ add_library(nds_raven_core STATIC
     src/cartridge_header.cpp
     src/core.cpp
     src/cpu/arm9.cpp
+    src/cpu/cp15.cpp
     src/cpu/thumb.cpp
 )
 target_include_directories(nds_raven_core
@@ -42,4 +43,15 @@ if(RAVENEMU_BUILD_TESTS)
     )
     target_link_libraries(nds_raven_thumb_tests PRIVATE nds_raven_core)
     add_test(NAME nds_raven_thumb COMMAND nds_raven_thumb_tests)
+
+    # Le coprocesseur système a sa propre suite : elle éprouve autant son banc
+    # de registres que ce que le processeur fait différemment une fois qu'il est
+    # configuré.
+    add_executable(nds_raven_cp15_tests tests/cp15_test.cpp)
+    target_include_directories(nds_raven_cp15_tests PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/src
+        ${CMAKE_CURRENT_LIST_DIR}/../common/tests/support
+    )
+    target_link_libraries(nds_raven_cp15_tests PRIVATE nds_raven_core)
+    add_test(NAME nds_raven_cp15 COMMAND nds_raven_cp15_tests)
 endif()

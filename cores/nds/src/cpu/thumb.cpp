@@ -296,7 +296,7 @@ void Arm9::thumb_load_pc_relative(std::uint32_t opcode) {
     // réaligner une seconde fois à l'accès rendrait celle-ci indifférente, donc
     // impossible à éprouver.
     const auto base = state_.registers[15] & ~3U;
-    write_register(bits(opcode, 8, 3), bus_.read32(base + (bits(opcode, 0, 8) << 2U)));
+    write_register(bits(opcode, 8, 3), load32(base + (bits(opcode, 0, 8) << 2U)));
 }
 
 void Arm9::thumb_transfer_register_offset(std::uint32_t opcode) {
@@ -305,21 +305,21 @@ void Arm9::thumb_transfer_register_offset(std::uint32_t opcode) {
 
     if (bit(opcode, 9)) {
         switch (bits(opcode, 10, 2)) {
-        case 0x0: bus_.write16(address & ~1U, static_cast<std::uint16_t>(read_register(rd))); break;
-        case 0x1: write_register(rd, sign_extend(bus_.read8(address), 8)); break;
-        case 0x2: write_register(rd, bus_.read16(address & ~1U)); break;
-        default: write_register(rd, sign_extend(bus_.read16(address & ~1U), 16)); break;
+        case 0x0: store16(address & ~1U, static_cast<std::uint16_t>(read_register(rd))); break;
+        case 0x1: write_register(rd, sign_extend(load8(address), 8)); break;
+        case 0x2: write_register(rd, load16(address & ~1U)); break;
+        default: write_register(rd, sign_extend(load16(address & ~1U), 16)); break;
         }
         return;
     }
 
     switch (bits(opcode, 10, 2)) {
-    case 0x0: bus_.write32(address & ~3U, read_register(rd)); break;
-    case 0x1: bus_.write8(address, static_cast<std::uint8_t>(read_register(rd))); break;
+    case 0x0: store32(address & ~3U, read_register(rd)); break;
+    case 0x1: store8(address, static_cast<std::uint8_t>(read_register(rd))); break;
     case 0x2:
-        write_register(rd, rotate_right(bus_.read32(address & ~3U), (address & 3U) * 8U));
+        write_register(rd, rotate_right(load32(address & ~3U), (address & 3U) * 8U));
         break;
-    default: write_register(rd, bus_.read8(address)); break;
+    default: write_register(rd, load8(address)); break;
     }
 }
 
@@ -333,28 +333,28 @@ void Arm9::thumb_transfer_immediate_offset(std::uint32_t opcode) {
     const auto address = base + offset;
 
     if (bit(opcode, 11)) {
-        if (byte_access) write_register(rd, bus_.read8(address));
-        else write_register(rd, rotate_right(bus_.read32(address & ~3U), (address & 3U) * 8U));
+        if (byte_access) write_register(rd, load8(address));
+        else write_register(rd, rotate_right(load32(address & ~3U), (address & 3U) * 8U));
     } else {
-        if (byte_access) bus_.write8(address, static_cast<std::uint8_t>(read_register(rd)));
-        else bus_.write32(address & ~3U, read_register(rd));
+        if (byte_access) store8(address, static_cast<std::uint8_t>(read_register(rd)));
+        else store32(address & ~3U, read_register(rd));
     }
 }
 
 void Arm9::thumb_transfer_halfword(std::uint32_t opcode) {
     const auto rd = bits(opcode, 0, 3);
     const auto address = read_register(bits(opcode, 3, 3)) + (bits(opcode, 6, 5) << 1U);
-    if (bit(opcode, 11)) write_register(rd, bus_.read16(address & ~1U));
-    else bus_.write16(address & ~1U, static_cast<std::uint16_t>(read_register(rd)));
+    if (bit(opcode, 11)) write_register(rd, load16(address & ~1U));
+    else store16(address & ~1U, static_cast<std::uint16_t>(read_register(rd)));
 }
 
 void Arm9::thumb_transfer_stack(std::uint32_t opcode) {
     const auto rd = bits(opcode, 8, 3);
     const auto address = read_register(13) + (bits(opcode, 0, 8) << 2U);
     if (bit(opcode, 11)) {
-        write_register(rd, rotate_right(bus_.read32(address & ~3U), (address & 3U) * 8U));
+        write_register(rd, rotate_right(load32(address & ~3U), (address & 3U) * 8U));
     } else {
-        bus_.write32(address & ~3U, read_register(rd));
+        store32(address & ~3U, read_register(rd));
     }
 }
 
@@ -392,7 +392,7 @@ void Arm9::thumb_push_pop(std::uint32_t opcode) {
         auto address = stack;
         for (std::uint32_t index = 0; index < 16U; ++index) {
             if (!bit(list, index)) continue;
-            const auto value = bus_.read32(address & ~3U);
+            const auto value = load32(address & ~3U);
             if (index == 15U) {
                 // Le retour d'un appel peut ramener en ARM : le bit bas de
                 // l'adresse dépilée décide de l'état.
@@ -413,7 +413,7 @@ void Arm9::thumb_push_pop(std::uint32_t opcode) {
     auto address = base;
     for (std::uint32_t index = 0; index < 16U; ++index) {
         if (!bit(list, index)) continue;
-        bus_.write32(address & ~3U, read_register(index));
+        store32(address & ~3U, read_register(index));
         address += 4U;
     }
     write_register(13, base);
@@ -435,8 +435,8 @@ void Arm9::thumb_block_transfer(std::uint32_t opcode) {
 
     for (std::uint32_t index = 0; index < 8U; ++index) {
         if (!bit(list, index)) continue;
-        if (load) state_.registers[index] = bus_.read32(address & ~3U);
-        else bus_.write32(address & ~3U, read_register(index));
+        if (load) state_.registers[index] = load32(address & ~3U);
+        else store32(address & ~3U, read_register(index));
         address += 4U;
     }
 

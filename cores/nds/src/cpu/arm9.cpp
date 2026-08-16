@@ -25,12 +25,58 @@ constexpr std::uint32_t saturate(std::int64_t value, bool& saturated) noexcept {
 
 void Arm9::reset() noexcept {
     state_ = CpuState{};
+    cp15_.reset();
     branched_ = false;
     irq_line_ = false;
     fiq_line_ = false;
     unimplemented_ = 0;
     first_unimplemented_ = 0;
     state_.registers[15] = reset_vector;
+}
+
+std::uint32_t Arm9::fetch32(std::uint32_t address) {
+    std::uint32_t value = 0;
+    if (cp15_.fetch(address, 4U, value)) return value;
+    return bus_.read32(address);
+}
+
+std::uint32_t Arm9::fetch16(std::uint32_t address) {
+    std::uint32_t value = 0;
+    if (cp15_.fetch(address, 2U, value)) return value;
+    return bus_.read16(address);
+}
+
+std::uint32_t Arm9::load32(std::uint32_t address) {
+    std::uint32_t value = 0;
+    if (cp15_.load(address, 4U, value)) return value;
+    return bus_.read32(address);
+}
+
+std::uint32_t Arm9::load16(std::uint32_t address) {
+    std::uint32_t value = 0;
+    if (cp15_.load(address, 2U, value)) return value;
+    return bus_.read16(address);
+}
+
+std::uint32_t Arm9::load8(std::uint32_t address) {
+    std::uint32_t value = 0;
+    if (cp15_.load(address, 1U, value)) return value;
+    return bus_.read8(address);
+}
+
+void Arm9::store32(std::uint32_t address, std::uint32_t value) {
+    if (cp15_.store(address, 4U, value)) return;
+    bus_.write32(address, value);
+}
+
+void Arm9::store16(std::uint32_t address, std::uint32_t value) {
+    if (cp15_.store(address, 2U, value)) return;
+    bus_.write16(address, static_cast<std::uint16_t>(value));
+}
+
+void Arm9::store8(std::uint32_t address, std::uint32_t value) {
+    if (cp15_.store(address, 1U, value)) return;
+    bus_.write8(address, static_cast<std::uint8_t>(value));
 }
 
 bool Arm9::condition_met(std::uint32_t opcode) const noexcept {
@@ -174,7 +220,7 @@ void Arm9::enter_exception(
     state_.cpsr &= ~psr::thumb;
     state_.cpsr |= psr::irq_disable;
     if (mask_fiq) state_.cpsr |= psr::fiq_disable;
-    state_.registers[15] = vector;
+    state_.registers[15] = cp15_.exception_base() + vector;
     branched_ = true;
 }
 
@@ -196,6 +242,14 @@ void Arm9::raise_undefined(std::uint32_t opcode) {
 }
 
 void Arm9::step() {
+    // L'attente d'interruption arrête le cœur sans le faire tourner à vide. Une
+    // ligne posée le réveille même si le masque l'empêche d'être prise : c'est
+    // l'attente qui s'achève, pas l'interruption qui s'impose.
+    if (cp15_.halted()) {
+        if (!irq_line_ && !fiq_line_) return;
+        cp15_.wake();
+    }
+
     // Les lignes d'interruption sont échantillonnées entre deux instructions :
     // le matériel ne coupe pas une instruction en cours.
     if (fiq_line_ && !state_.flag(psr::fiq_disable)) {
@@ -215,14 +269,14 @@ void Arm9::step() {
     // donc quatre octets d'avance en Thumb et huit en ARM, et des programmes
     // s'en servent pour calculer des adresses relatives.
     if (state_.thumb()) {
-        const auto opcode = bus_.read16(pc & ~1U);
+        const auto opcode = fetch16(pc & ~1U);
         state_.registers[15] = pc + 4U;
         execute_thumb(opcode);
         if (!branched_) state_.registers[15] = pc + 2U;
         return;
     }
 
-    const auto opcode = bus_.read32(pc & ~3U);
+    const auto opcode = fetch32(pc & ~3U);
     state_.registers[15] = pc + 8U;
     execute(opcode);
     if (!branched_) state_.registers[15] = pc + 4U;
@@ -311,13 +365,46 @@ void Arm9::execute(std::uint32_t opcode) {
             );
             return;
         }
-        [[fallthrough]];
+        // `MCR` et `MRC` portent le bit 4 ; `CDP`, qui ne l'a pas, n'a aucun
+        // emploi sur ce cœur.
+        if (bit(opcode, 4)) { execute_coprocessor(opcode); return; }
+        raise_undefined(opcode);
+        return;
     default:
-        // Coprocesseurs : le CP15 du 946E-S gouverne caches, mémoires locales
-        // et régions de protection. Il fera l'objet de son propre lot.
+        // Transferts de coprocesseur (`LDC`, `STC`) : le CP15 n'en accepte
+        // aucun, et le cœur n'a pas d'autre coprocesseur.
         raise_undefined(opcode);
         return;
     }
+}
+
+void Arm9::execute_coprocessor(std::uint32_t opcode) {
+    // Le 946E-S n'a que le coprocesseur quinze. En désigner un autre n'est pas
+    // une lacune de l'émulateur mais une instruction fautive.
+    if (bits(opcode, 8, 4) != 15U) {
+        raise_undefined(opcode);
+        return;
+    }
+
+    const auto operation = bits(opcode, 21, 3);
+    const auto primary = bits(opcode, 16, 4);
+    const auto secondary = bits(opcode, 0, 4);
+    const auto sub_operation = bits(opcode, 5, 3);
+    const auto rd = bits(opcode, 12, 4);
+
+    if (bit(opcode, 20)) {
+        const auto value = cp15_.read(operation, primary, secondary, sub_operation);
+        // Lire vers R15 ne branche pas : ce sont les indicateurs qui reçoivent
+        // les quatre bits hauts, le reste étant perdu.
+        if (rd == 15U) {
+            state_.cpsr = (state_.cpsr & 0x0fff'ffffU) | (value & 0xf000'0000U);
+            return;
+        }
+        write_register(rd, value);
+        return;
+    }
+
+    cp15_.write(operation, primary, secondary, sub_operation, read_register(rd));
 }
 
 void Arm9::execute_data_processing(std::uint32_t opcode) {
@@ -474,12 +561,12 @@ void Arm9::execute_swap(std::uint32_t opcode) {
     const auto rd = bits(opcode, 12, 4);
     const auto source = read_register(bits(opcode, 0, 4));
     if (bit(opcode, 22)) {
-        const auto previous = bus_.read8(address);
-        bus_.write8(address, static_cast<std::uint8_t>(source));
+        const auto previous = load8(address);
+        store8(address, static_cast<std::uint8_t>(source));
         write_register(rd, previous);
     } else {
-        const auto previous = rotate_right(bus_.read32(address & ~3U), (address & 3U) * 8U);
-        bus_.write32(address & ~3U, source);
+        const auto previous = rotate_right(load32(address & ~3U), (address & 3U) * 8U);
+        store32(address & ~3U, source);
         write_register(rd, previous);
     }
 }
@@ -511,11 +598,11 @@ void Arm9::execute_halfword_transfer(std::uint32_t opcode) {
             return;
         }
         if (kind == 0x2U) {                                   // LDRD
-            write_register(rd, bus_.read32(address & ~3U));
-            write_register(rd + 1U, bus_.read32((address + 4U) & ~3U));
+            write_register(rd, load32(address & ~3U));
+            write_register(rd + 1U, load32((address + 4U) & ~3U));
         } else {                                              // STRD
-            bus_.write32(address & ~3U, read_register(rd));
-            bus_.write32((address + 4U) & ~3U, read_register(rd + 1U));
+            store32(address & ~3U, read_register(rd));
+            store32((address + 4U) & ~3U, read_register(rd + 1U));
         }
     } else if (load) {
         switch (kind) {
@@ -524,12 +611,12 @@ void Arm9::execute_halfword_transfer(std::uint32_t opcode) {
         // valeur. Le bit bas est donc ignoré, uniformément en lecture comme en
         // écriture : une règle unique vaut mieux qu'une rotation inventée qui
         // différerait entre `LDRH` et `LDRSH`.
-        case 0x1: write_register(rd, bus_.read16(address & ~1U)); break;
-        case 0x2: write_register(rd, sign_extend(bus_.read8(address), 8)); break;
-        default: write_register(rd, sign_extend(bus_.read16(address & ~1U), 16)); break;
+        case 0x1: write_register(rd, load16(address & ~1U)); break;
+        case 0x2: write_register(rd, sign_extend(load8(address), 8)); break;
+        default: write_register(rd, sign_extend(load16(address & ~1U), 16)); break;
         }
     } else {
-        bus_.write16(address & ~1U, static_cast<std::uint16_t>(read_register(rd)));
+        store16(address & ~1U, static_cast<std::uint16_t>(read_register(rd)));
     }
 
     if ((!pre || writeback) && rn != rd) write_register(rn, moved);
@@ -562,18 +649,18 @@ void Arm9::execute_single_transfer(std::uint32_t opcode) {
 
     if (load) {
         if (byte_access) {
-            write_register(rd, bus_.read8(address));
+            write_register(rd, load8(address));
         } else {
             // Une lecture de mot non alignée ne fait pas d'erreur : la donnée
             // est ramenée alignée puis tournée, comportement dont des jeux
             // dépendent.
-            const auto value = bus_.read32(address & ~3U);
+            const auto value = load32(address & ~3U);
             write_register(rd, rotate_right(value, (address & 3U) * 8U));
         }
     } else {
         const auto value = rd == 15U ? read_register(15) + 4U : read_register(rd);
-        if (byte_access) bus_.write8(address, static_cast<std::uint8_t>(value));
-        else bus_.write32(address & ~3U, value);
+        if (byte_access) store8(address, static_cast<std::uint8_t>(value));
+        else store32(address & ~3U, value);
     }
 
     if ((!pre || writeback) && !(load && rn == rd)) write_register(rn, moved);
@@ -612,7 +699,7 @@ void Arm9::execute_block_transfer(std::uint32_t opcode) {
     for (std::uint32_t index = 0; index < 16U; ++index) {
         if (!bit(list, index)) continue;
         if (load) {
-            const auto value = bus_.read32(address & ~3U);
+            const auto value = load32(address & ~3U);
             if (index == 15U) {
                 write_register(15, value & ~1U);
                 if (restores_cpsr) restore_cpsr_from_spsr();
@@ -621,7 +708,7 @@ void Arm9::execute_block_transfer(std::uint32_t opcode) {
             }
         } else {
             const auto value = index == 15U ? read_register(15) + 4U : read_register(index);
-            bus_.write32(address & ~3U, value);
+            store32(address & ~3U, value);
         }
         address += 4U;
     }

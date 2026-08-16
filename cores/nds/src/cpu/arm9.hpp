@@ -1,6 +1,7 @@
 #pragma once
 
 #include "cpu/bus.hpp"
+#include "cpu/cp15.hpp"
 #include "cpu/cpu_state.hpp"
 
 namespace ravenemu::nds {
@@ -23,18 +24,23 @@ namespace ravenemu::nds {
  * deux : le code compact est en Thumb, les gestionnaires d'interruption et le
  * code sensible en ARM.
  *
+ * Le coprocesseur système CP15, par `MCR` et `MRC`. C'est lui qui décide où
+ * répondent les mémoires locales, où se trouve la table des vecteurs, et quand
+ * le processeur s'arrête pour attendre une interruption. Voir `cp15.hpp` pour
+ * ce qu'il gouverne et ce qu'il laisse de côté.
+ *
  * ### Ce qui ne l'est pas
  *
  * Les multiplications signées de la variante DSP (`SMLAxy` et sa famille), le
- * point d'arrêt matériel et les instructions de coprocesseur, qui supposent le
- * CP15 et sa gestion des caches, des mémoires locales et des régions de
- * protection. Elles sont décodées et signalées comme non implémentées plutôt
- * que silencieusement ignorées : une instruction inconnue exécutée sans bruit
- * donne un jeu qui part à la dérive sans qu'on sache où.
+ * point d'arrêt matériel, et les autres coprocesseurs — le 946E-S n'en a pas
+ * d'autre que le CP15, si bien qu'une instruction qui en désigne un est fautive
+ * et non pas seulement non implémentée. Toutes sont décodées et signalées
+ * plutôt que silencieusement ignorées : une instruction inconnue exécutée sans
+ * bruit donne un jeu qui part à la dérive sans qu'on sache où.
  *
- * Aucune durée n'est comptée non plus. Une instruction par `step()`, sans
- * cache, sans mémoire locale et sans attente de bus : la justesse temporelle
- * dépend du CP15 et de la carte mémoire, qui n'existent pas encore.
+ * Aucune durée n'est comptée. Une instruction par `step()`, sans cache et sans
+ * attente de bus : la justesse temporelle dépend en outre de la carte mémoire,
+ * qui n'existe pas encore.
  *
  * ### Sur le compteur de programme
  *
@@ -56,6 +62,18 @@ public:
 
     [[nodiscard]] CpuState& state() noexcept { return state_; }
     [[nodiscard]] const CpuState& state() const noexcept { return state_; }
+
+    /**
+     * Coprocesseur système, indissociable du cœur.
+     *
+     * Il n'est pas facultatif : l'ARM946E-S n'existe pas sans lui, et c'est par
+     * lui que passent les mémoires locales, la base des vecteurs et l'attente
+     * d'interruption. À la remise à zéro il est transparent — mémoires locales
+     * éteintes, vecteurs en position basse — si bien qu'un cœur qu'on n'a pas
+     * configuré se comporte comme s'il n'y en avait pas.
+     */
+    [[nodiscard]] Cp15& cp15() noexcept { return cp15_; }
+    [[nodiscard]] const Cp15& cp15() const noexcept { return cp15_; }
 
     /** Niveau de la ligne d'interruption, échantillonné entre deux instructions. */
     void set_irq_line(bool asserted) noexcept { irq_line_ = asserted; }
@@ -102,6 +120,7 @@ private:
     void execute_saturating(std::uint32_t opcode);
     void execute_clz(std::uint32_t opcode);
     void execute_branch_exchange(std::uint32_t opcode, bool link);
+    void execute_coprocessor(std::uint32_t opcode);
 
     void execute_thumb(std::uint32_t opcode);
     void thumb_shift_immediate(std::uint32_t opcode);
@@ -122,6 +141,18 @@ private:
     void thumb_branch(std::uint32_t opcode);
     void thumb_long_branch(std::uint32_t opcode);
 
+    // Toute la mémoire passe par ici : les mémoires locales sont dans le cœur,
+    // pas sur le bus, et doivent donc répondre avant lui. Aucun chemin
+    // d'exécution ne doit s'adresser au bus directement.
+    [[nodiscard]] std::uint32_t fetch32(std::uint32_t address);
+    [[nodiscard]] std::uint32_t fetch16(std::uint32_t address);
+    [[nodiscard]] std::uint32_t load32(std::uint32_t address);
+    [[nodiscard]] std::uint32_t load16(std::uint32_t address);
+    [[nodiscard]] std::uint32_t load8(std::uint32_t address);
+    void store32(std::uint32_t address, std::uint32_t value);
+    void store16(std::uint32_t address, std::uint32_t value);
+    void store8(std::uint32_t address, std::uint32_t value);
+
     void write_register(std::uint32_t index, std::uint32_t value) noexcept;
     [[nodiscard]] std::uint32_t read_register(std::uint32_t index) const noexcept {
         return state_.registers[index];
@@ -135,6 +166,7 @@ private:
     void set_arithmetic_flags(std::uint32_t result, std::uint32_t left, std::uint32_t right, bool carry, bool subtract) noexcept;
 
     Bus& bus_;
+    Cp15 cp15_{};
     CpuState state_{};
     bool branched_{};
     bool irq_line_{};

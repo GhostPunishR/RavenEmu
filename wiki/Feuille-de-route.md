@@ -35,14 +35,15 @@ aujourd'hui :
 - le contrat audio annoncé par le matériel;
 - le processeur principal ARM946E-S, ses deux jeux d'instructions (ARM 32 bits,
   `CLZ`, `BLX` et arithmétique saturante comprises, et Thumb 16 bits) et le
-  passage de l'un à l'autre, éprouvés contre une mémoire de test.
+  passage de l'un à l'autre, éprouvés contre une mémoire de test;
+- son coprocesseur système : mémoires locales, base des vecteurs d'exception,
+  attente d'interruption, registres de protection et de cache.
 
 Toute demande d'exécution reste refusée par une erreur nommée, volontairement :
-un écran noir laisserait croire à une émulation silencieuse. Restent à écrire le
-coprocesseur CP15, la carte mémoire, le second processeur, les moteurs 2D et 3D,
-les banques vidéo commutables, la communication entre processeurs, l'écran
-tactile et le son. La console n'apparaît pas encore dans la bibliothèque de
-l'application.
+un écran noir laisserait croire à une émulation silencieuse. Restent à écrire la
+carte mémoire, le second processeur, les moteurs 2D et 3D, les banques vidéo
+commutables, la communication entre processeurs, l'écran tactile et le son. La
+console n'apparaît pas encore dans la bibliothèque de l'application.
 
 ## Pistes futures
 

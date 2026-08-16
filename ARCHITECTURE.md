@@ -100,10 +100,11 @@ extraits ne sont que des en-têtes, et devient STATIC dès que l'un d'eux gagne 
 
 `cores/nds` est une **fondation**, pas encore un moteur. Il porte l'identité de
 la console, décode et contrôle l'en-tête de cartouche, publie le contrat vidéo
-et audio, et exécute les deux jeux d'instructions du processeur principal. Toute
-demande de faire tourner une image est en revanche refusée par une erreur
-nommée : un écran noir laisserait croire à une émulation muette, là où il
-manque encore la carte mémoire, le second processeur et l'affichage.
+et audio, et exécute les deux jeux d'instructions du processeur principal ainsi
+que son coprocesseur système. Toute demande de faire tourner une image est en
+revanche refusée par une erreur nommée : un écran noir laisserait croire à une
+émulation muette, là où il manque encore la carte mémoire, le second processeur
+et l'affichage.
 
 `cores/nds/src/cpu` tient ce processeur. Il ne connaît pas la carte mémoire de
 la console : il passe par une frontière `Bus` abstraite, ce qui permet de
@@ -120,13 +121,27 @@ décaleur, les indicateurs et le banc de registres ; ils diffèrent surtout sur 
 point, que le code isole : Thumb écrit ses indicateurs d'office, là où ARM
 demande un bit `S` explicite.
 
-Les multiplications signées de la variante DSP, le point d'arrêt matériel et le
-coprocesseur CP15 ne sont pas écrits : ils sont décodés et comptés comme non
-implémentés plutôt que passés sous silence, parce qu'une instruction inconnue
-exécutée sans bruit donne un jeu qui part à la dérive sans qu'on sache où.
-Aucune durée n'est comptée non plus — une instruction par pas, sans cache ni
-mémoire locale — la justesse temporelle dépendant du CP15 et de la carte
-mémoire, qui n'existent pas encore.
+Le coprocesseur système CP15 les accompagne, et c'est par lui que le cœur cesse
+d'être un simple exécuteur d'instructions. Trois choses y sont observables
+depuis le processeur : les mémoires locales, qui ne sont pas sur le bus mais
+dans le cœur et répondent avant lui ; la base de la table des vecteurs, que le
+logiciel déplace ; et l'attente d'interruption, qui arrête le cœur au lieu de le
+faire tourner à vide. Sans les mémoires locales, la carte mémoire de la console
+ne peut pas être juste, parce que les mêmes adresses désignent autre chose selon
+qu'une mémoire locale les couvre ou non.
+
+Les caches ne sont pas modélisés, et les opérations qui les vident sont donc
+acceptées sans effet. L'unité de protection est tenue mais pas appliquée : ses
+registres s'écrivent et se relisent fidèlement, parce que le logiciel les relit,
+mais aucun accès n'est refusé faute d'un chemin d'exception d'abandon où le
+refus aurait un sens.
+
+Les multiplications signées de la variante DSP et le point d'arrêt matériel ne
+sont pas écrits : ils sont décodés et comptés comme non implémentés plutôt que
+passés sous silence, parce qu'une instruction inconnue exécutée sans bruit donne
+un jeu qui part à la dérive sans qu'on sache où. Aucune durée n'est comptée non
+plus — une instruction par pas, sans cache et sans attente de bus — la justesse
+temporelle dépendant en outre de la carte mémoire, qui n'existe pas encore.
 
 Deux décisions y sont prises, parce qu'elles engagent le reste du projet et
 qu'il vaut mieux les arrêter avant d'écrire un moteur autour :

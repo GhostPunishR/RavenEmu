@@ -38,7 +38,7 @@ Les détails d'installation et de signature sont dans le [wiki](https://github.c
 | Game Boy | Avancé |
 | Game Boy Color | Intégré au moteur GB, extraction dédiée en cours |
 | Game Boy Advance | Expérimental |
-| Nintendo DS | Fondations : identité, en-tête de cartouche, contrat d'écran et processeur ARM946E-S, jeux ARM et Thumb. **N'affiche encore aucune image.** |
+| Nintendo DS | Fondations : identité, en-tête de cartouche, contrat d'écran et processeur ARM946E-S complet, jeux ARM et Thumb plus coprocesseur système. **N'affiche encore aucune image.** |
 
 La compatibilité varie selon les jeux. Consultez la [matrice de compatibilité](https://github.com/GhostPunishR/RavenEmu/wiki/Compatibilite-des-jeux).
 
