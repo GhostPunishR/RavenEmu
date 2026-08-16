@@ -3,6 +3,8 @@
 #include "cpu/bus.hpp"
 #include "memory/system_memory.hpp"
 #include "system/inter_processor.hpp"
+#include "video/engine2d.hpp"
+#include "video/video_memory.hpp"
 
 #include <array>
 #include <cstdint>
@@ -43,12 +45,6 @@ namespace ravenemu::nds {
  *
  * ### Ce qu'elle ne décide pas encore
  *
- * Les fenêtres des moteurs graphiques. Les neuf banques vidéo existent et sont
- * atteignables par la fenêtre de transfert, celle qu'on emprunte pour les
- * remplir ; en revanche l'aiguillage qui les présente aux moteurs 2D et 3D
- * viendra avec ces moteurs, seuls à pouvoir dire s'il est juste. Un accès à ces
- * fenêtres est compté, pas absorbé en silence.
- *
  * Le BIOS, la cartouche et le port Game Boy Advance. Aucun de ces contenus
  * n'existe dans le dépôt, et aucun n'est fourni : les lectures rendent zéro et
  * sont comptées.
@@ -70,13 +66,18 @@ public:
     static constexpr std::uint32_t oam_bytes = 2U * 1024U;
 
     /** Nombre de banques vidéo, nommées de A à I sur le matériel. */
-    static constexpr std::size_t vram_bank_count = 9;
+    static constexpr std::size_t vram_bank_count = VideoMemory::bank_count;
     /** Première adresse de la fenêtre de transfert des banques vidéo. */
-    static constexpr std::uint32_t vram_transfer_base = 0x0680'0000;
+    static constexpr std::uint32_t vram_transfer_base = VideoMemory::transfer_base;
 
     /** Registres qui gouvernent la carte elle-même. */
     static constexpr std::uint32_t vram_control_base = 0x0400'0240;
     static constexpr std::uint32_t shared_wram_control = 0x0400'0247;
+
+    /** Bloc de registres de chaque moteur graphique. */
+    static constexpr std::uint32_t main_engine_base = 0x0400'0000;
+    static constexpr std::uint32_t secondary_engine_base = 0x0400'1000;
+    static constexpr std::uint32_t engine_register_bytes = 0x20;
 
     void reset() noexcept;
 
@@ -95,6 +96,13 @@ public:
     [[nodiscard]] std::span<std::uint8_t> palette() noexcept { return palette_; }
     [[nodiscard]] std::span<std::uint8_t> object_attributes() noexcept { return oam_; }
     [[nodiscard]] std::span<std::uint8_t> vram_bank(std::size_t index) noexcept;
+
+    /** Les banques et leur aiguillage, que les deux moteurs se partagent. */
+    [[nodiscard]] VideoMemory& video() noexcept { return video_; }
+    /** L'un des deux moteurs graphiques. */
+    [[nodiscard]] Engine2d& engine(Engine which) noexcept {
+        return which == Engine::main ? main_engine_ : secondary_engine_;
+    }
 
     /** Part de la mémoire commune revenant à ce processeur. */
     [[nodiscard]] SystemMemory::Window shared_window() const noexcept {
@@ -135,6 +143,18 @@ private:
 
     [[nodiscard]] static bool bank_control_index(std::uint32_t address, std::size_t& index) noexcept;
 
+    /**
+     * Moteur commandé par une adresse, et le rang du registre visé.
+     *
+     * Ne reconnaît que les registres réellement portés par un moteur : entre la
+     * commande d'affichage et les commandes de plans se trouvent l'état du
+     * balayage et le compteur de lignes, qui appartiennent à l'écran et non au
+     * moteur, et qui n'ont pas de jumeau du côté du moteur secondaire.
+     */
+    [[nodiscard]] Engine2d* engine_register(std::uint32_t address, std::uint32_t& offset) noexcept;
+    [[nodiscard]] std::uint8_t read_engine_byte(Engine2d& engine, std::uint32_t offset) noexcept;
+    void write_engine_byte(Engine2d& engine, std::uint32_t offset, std::uint8_t value) noexcept;
+
     // Les entrées-sorties sont sensibles à la largeur : retirer un mot d'une
     // file en quatre morceaux d'un octet le retirerait quatre fois. Les
     // registres larges sont donc traités d'un bloc, et le reste octet par octet.
@@ -157,10 +177,12 @@ private:
     InterruptController& interrupts_;
     std::vector<std::uint8_t> palette_;
     std::vector<std::uint8_t> oam_;
-    std::vector<std::uint8_t> vram_;
 
-    /** Un octet de commande par banque vidéo. */
-    std::array<std::uint8_t, vram_bank_count> vram_control_{};
+    // Les banques précèdent les moteurs, qui s'y adossent ; la palette précède
+    // les deux, pour la même raison.
+    VideoMemory video_{};
+    Engine2d main_engine_;
+    Engine2d secondary_engine_;
 
     std::uint32_t unmapped_{};
     std::uint32_t first_unmapped_{};

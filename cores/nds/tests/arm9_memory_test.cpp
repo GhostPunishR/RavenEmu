@@ -509,6 +509,101 @@ void les_registres_de_la_carte_se_relisent() {
     check(map.unimplemented_io_count() == 1U, "et rien au-delà des dix octets");
 }
 
+void les_registres_des_moteurs_repondent_a_leurs_adresses() {
+    SystemMemory system;
+    InterruptController main_interrupts;
+    InterruptController secondary_interrupts;
+    InterProcessor link{main_interrupts, secondary_interrupts};
+    Arm9MemoryMap map{system, link, main_interrupts};
+    system.reset();
+    map.reset();
+
+    // Adresses écrites littéralement, telles qu'un programme de la console les
+    // écrirait.
+    map.write32(0x0400'0000U, 0x0001'0303U);
+    check(map.read32(0x0400'0000U) == 0x0001'0303U, "la commande d'affichage se relit");
+    check(
+        map.engine(Engine::main).display_control() == 0x0001'0303U,
+        "et parvient bien au moteur"
+    );
+
+    map.write16(0x0400'0008U, 0x1234U);
+    check(map.read16(0x0400'0008U) == 0x1234U, "la commande du plan 0 se relit");
+    check(map.engine(Engine::main).background_control(0) == 0x1234U, "et parvient au moteur");
+    map.write16(0x0400'000eU, 0x5678U);
+    check(map.engine(Engine::main).background_control(3) == 0x5678U, "celle du plan 3 aussi");
+    check(map.unimplemented_io_count() == 0U, "aucun de ces registres n'est inconnu");
+
+    // Quatre octets par plan : le défilement horizontal puis le vertical.
+    map.write16(0x0400'0010U, 0x0123U);
+    map.write16(0x0400'0012U, 0x0045U);
+    map.write16(0x0400'001cU, 0x0067U);
+    map.write16(0x0400'001eU, 0x0089U);
+    check(map.engine(Engine::main).scroll_x(0) == 0x0123U, "défilement horizontal du plan 0");
+    check(map.engine(Engine::main).scroll_y(0) == 0x0045U, "et son vertical");
+    check(map.engine(Engine::main).scroll_x(3) == 0x0067U, "défilement horizontal du plan 3");
+    check(map.engine(Engine::main).scroll_y(3) == 0x0089U, "et son vertical");
+
+    // Le défilement est en écriture seule : le matériel n'en garde pas de quoi
+    // répondre, et rendre la dernière valeur écrite serait une invention.
+    const auto before_scroll = map.unimplemented_io_count();
+    static_cast<void>(map.read16(0x0400'0010U));
+    check(map.unimplemented_io_count() > before_scroll, "le défilement ne se relit pas");
+
+    // Le second moteur a le même bloc, quatre kilooctets plus loin.
+    map.write32(0x0400'1000U, 0x0001'0001U);
+    check(map.engine(Engine::secondary).display_control() == 0x0001'0001U, "le moteur secondaire");
+    check(map.engine(Engine::main).display_control() == 0x0001'0303U, "sans toucher au principal");
+
+    // Entre la commande d'affichage et les commandes de plans, quatre octets
+    // appartiennent à l'écran et non au moteur : ils ne se dédoublent pas.
+    const auto before_status = map.unimplemented_io_count();
+    static_cast<void>(map.read16(0x0400'0004U));
+    check(
+        map.unimplemented_io_count() > before_status,
+        "l'état du balayage n'est pas un registre de moteur"
+    );
+}
+
+void une_banque_se_remplit_par_le_transfert_puis_se_montre_au_moteur() {
+    SystemMemory system;
+    InterruptController main_interrupts;
+    InterruptController secondary_interrupts;
+    InterProcessor link{main_interrupts, secondary_interrupts};
+    Arm9MemoryMap map{system, link, main_interrupts};
+    system.reset();
+    map.reset();
+
+    // C'est la marche à suivre sur console : on remplit par la fenêtre de
+    // transfert, puis on branche la banque sur le moteur. Les deux ne sont
+    // jamais possibles en même temps, et c'est le point de l'aiguillage.
+    map.write8(Arm9MemoryMap::vram_control_base, 0x80U);
+    map.write16(0x0680'0000U, 0x1234U);
+    check(map.read16(0x0680'0000U) == 0x1234U, "remplie par la fenêtre de transfert");
+
+    map.write8(Arm9MemoryMap::vram_control_base, 0x81U);
+    check(map.read16(0x0680'0000U) == 0U, "branchée sur le décor, elle quitte le transfert");
+    check(
+        map.video().read_background16(Engine::main, 0) == 0x1234U,
+        "et le moteur la voit avec ce qu'on y a mis"
+    );
+
+    // Écrire par le transfert pendant qu'elle est branchée ailleurs ne fait
+    // rien : le matériel ignore l'écriture plutôt que de la détourner.
+    map.write16(0x0680'0000U, 0xffffU);
+    check(
+        map.video().read_background16(Engine::main, 0) == 0x1234U,
+        "une écriture par la fenêtre quittée n'atteint rien"
+    );
+
+    // La remise à zéro de la carte emporte les moteurs et les banques : les
+    // oublier laisserait un décor de la partie précédente à la suivante.
+    map.write32(0x0400'0000U, 0x0001'0303U);
+    map.reset();
+    check(map.engine(Engine::main).display_control() == 0U, "les moteurs sont remis à zéro");
+    check(map.video().control(0) == 0U, "les branchements de banques aussi");
+}
+
 void ce_qui_n_existe_pas_encore_est_signale() {
     {   // Le BIOS n'est pas fourni.
         SystemMemory system;
@@ -713,6 +808,8 @@ int main() {
     le_partage_de_la_memoire_commune();
     les_banques_video_repondent_par_leur_fenetre();
     les_registres_de_la_carte_se_relisent();
+    les_registres_des_moteurs_repondent_a_leurs_adresses();
+    une_banque_se_remplit_par_le_transfert_puis_se_montre_au_moteur();
     ce_qui_n_existe_pas_encore_est_signale();
     le_processeur_tourne_sur_la_carte();
     la_memoire_locale_passe_devant_la_carte();

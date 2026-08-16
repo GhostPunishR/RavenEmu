@@ -9,53 +9,10 @@ namespace ravenemu::nds {
 
 namespace {
 
-/**
- * Description d'une banque vidéo.
- *
- * Les banques n'ont ni la même taille ni la même place dans la fenêtre de
- * transfert, et le champ qui choisit leur destination n'a pas la même largeur
- * partout. Les trois tiennent ici plutôt que dans une suite de conditions.
- */
-struct BankLayout {
-    /** Étendue de la banque, en octets. */
-    std::uint32_t size;
-    /** Décalage dans la fenêtre de transfert. */
-    std::uint32_t transfer_offset;
-    /** Bits du champ de destination, dont la largeur varie selon la banque. */
-    std::uint8_t destination_mask;
-};
-
-constexpr std::array<BankLayout, Arm9MemoryMap::vram_bank_count> bank_layouts{{
-    {128U * 1024U, 0x0'0000U, 0x3},   // A
-    {128U * 1024U, 0x2'0000U, 0x3},   // B
-    {128U * 1024U, 0x4'0000U, 0x7},   // C
-    {128U * 1024U, 0x6'0000U, 0x7},   // D
-    { 64U * 1024U, 0x8'0000U, 0x7},   // E
-    { 16U * 1024U, 0x9'0000U, 0x7},   // F
-    { 16U * 1024U, 0x9'4000U, 0x7},   // G
-    { 32U * 1024U, 0x9'8000U, 0x3},   // H
-    { 16U * 1024U, 0xa'0000U, 0x3},   // I
-}};
-
-/** Bit qui allume une banque ; éteinte, elle ne répond nulle part. */
-constexpr std::uint8_t bank_enabled = 0x80;
-
-constexpr std::uint32_t vram_total_bytes = []() {
-    std::uint32_t total = 0;
-    for (const auto& layout : bank_layouts) total += layout.size;
-    return total;
-}();
-
-/** Décalage d'une banque dans le bloc unique qui les porte toutes. */
-constexpr std::array<std::uint32_t, Arm9MemoryMap::vram_bank_count> bank_offsets = []() {
-    std::array<std::uint32_t, Arm9MemoryMap::vram_bank_count> offsets{};
-    std::uint32_t cursor = 0;
-    for (std::size_t index = 0; index < bank_layouts.size(); ++index) {
-        offsets[index] = cursor;
-        cursor += bank_layouts[index].size;
-    }
-    return offsets;
-}();
+/** Rangs des registres portés par un moteur, dans son bloc. */
+constexpr std::uint32_t display_control_offset = 0x00;
+constexpr std::uint32_t background_control_offset = 0x08;
+constexpr std::uint32_t scroll_offset = 0x10;
 
 } // namespace
 
@@ -67,7 +24,8 @@ Arm9MemoryMap::Arm9MemoryMap(
     : system_(system), link_(link), interrupts_(interrupts),
       palette_(palette_bytes, 0),
       oam_(oam_bytes, 0),
-      vram_(vram_total_bytes, 0) {}
+      main_engine_(Engine::main, video_, palette_),
+      secondary_engine_(Engine::secondary, video_, palette_) {}
 
 void Arm9MemoryMap::reset() noexcept {
     // La mémoire partagée est remise à zéro par son propriétaire, non par
@@ -75,8 +33,9 @@ void Arm9MemoryMap::reset() noexcept {
     // vider depuis l'une effacerait le travail de l'autre.
     std::fill(palette_.begin(), palette_.end(), std::uint8_t{0});
     std::fill(oam_.begin(), oam_.end(), std::uint8_t{0});
-    std::fill(vram_.begin(), vram_.end(), std::uint8_t{0});
-    std::fill(vram_control_.begin(), vram_control_.end(), std::uint8_t{0});
+    video_.reset();
+    main_engine_.reset();
+    secondary_engine_.reset();
     unmapped_ = 0;
     first_unmapped_ = 0;
     unimplemented_io_ = 0;
@@ -84,8 +43,7 @@ void Arm9MemoryMap::reset() noexcept {
 }
 
 std::span<std::uint8_t> Arm9MemoryMap::vram_bank(std::size_t index) noexcept {
-    if (index >= vram_bank_count) return {};
-    return std::span<std::uint8_t>{vram_}.subspan(bank_offsets[index], bank_layouts[index].size);
+    return video_.bank(index);
 }
 
 void Arm9MemoryMap::note_unmapped(std::uint32_t address) noexcept {
@@ -99,24 +57,10 @@ void Arm9MemoryMap::note_unimplemented_io(std::uint32_t address) noexcept {
 }
 
 Arm9MemoryMap::Location Arm9MemoryMap::locate_video(std::uint32_t address) noexcept {
-    // Chaque banque est bornée par ses deux extrémités, comparées à l'adresse
-    // elle-même. Passer par un décalage relatif à la fenêtre demanderait de se
-    // garder d'un débordement par le bas, et cette garde ne serait jamais
-    // exercée puisque les bornes la rendent inutile.
-    for (std::size_t index = 0; index < bank_layouts.size(); ++index) {
-        const auto& layout = bank_layouts[index];
-        const auto base = vram_transfer_base + layout.transfer_offset;
-        if (address < base || address >= base + layout.size) continue;
-        // Une banque éteinte ne répond pas, et une banque dirigée vers un moteur
-        // graphique n'est plus visible par cette fenêtre.
-        const auto control = vram_control_[index];
-        if ((control & bank_enabled) == 0U) return {Region::video, nullptr};
-        if ((control & layout.destination_mask) != 0U) return {Region::video, nullptr};
-        return {Region::video, &vram_[bank_offsets[index] + (address - base)]};
-    }
-    // Au-delà des banques, ou en deçà, ce sont les fenêtres des moteurs
-    // graphiques : leur aiguillage viendra avec eux.
-    return {Region::video, nullptr};
+    // Les fenêtres des moteurs se lisent par les moteurs, non par le bus : le
+    // processeur n'y écrit pas des pixels, il écrit dans une banque, et c'est
+    // l'aiguillage qui décide où cette banque se montre.
+    return {Region::video, video_.transfer(address)};
 }
 
 Arm9MemoryMap::Location Arm9MemoryMap::locate(std::uint32_t address) noexcept {
@@ -163,6 +107,81 @@ bool Arm9MemoryMap::bank_control_index(std::uint32_t address, std::size_t& index
     const auto offset = address - vram_control_base;
     index = offset < 7U ? offset : offset - 1U;
     return true;
+}
+
+Engine2d* Arm9MemoryMap::engine_register(std::uint32_t address, std::uint32_t& offset) noexcept {
+    Engine2d* engine = nullptr;
+    if (address >= main_engine_base && address < main_engine_base + engine_register_bytes) {
+        engine = &main_engine_;
+        offset = address - main_engine_base;
+    } else if (
+        address >= secondary_engine_base &&
+        address < secondary_engine_base + engine_register_bytes
+    ) {
+        engine = &secondary_engine_;
+        offset = address - secondary_engine_base;
+    } else {
+        return nullptr;
+    }
+
+    // Entre la commande d'affichage et les commandes de plans, quatre octets
+    // appartiennent à l'écran, pas au moteur : ils ne se dédoublent pas.
+    if (offset >= 4U && offset < background_control_offset) return nullptr;
+    return engine;
+}
+
+std::uint8_t Arm9MemoryMap::read_engine_byte(Engine2d& engine, std::uint32_t offset) noexcept {
+    if (offset < 4U) {
+        return registers::byte_of(engine.display_control(), offset - display_control_offset);
+    }
+    if (offset < scroll_offset) {
+        const auto index = (offset - background_control_offset) / 2U;
+        return registers::byte_of(engine.background_control(index), offset & 1U);
+    }
+    // Le défilement ne se relit pas : le matériel n'en garde pas de quoi
+    // répondre, et rendre la dernière valeur écrite serait une invention.
+    note_unimplemented_io(offset);
+    return 0;
+}
+
+void Arm9MemoryMap::write_engine_byte(
+    Engine2d& engine,
+    std::uint32_t offset,
+    std::uint8_t value
+) noexcept {
+    if (offset < 4U) {
+        engine.set_display_control(
+            registers::with_byte(engine.display_control(), offset - display_control_offset, value)
+        );
+        return;
+    }
+    if (offset < scroll_offset) {
+        const auto index = (offset - background_control_offset) / 2U;
+        engine.set_background_control(
+            index,
+            static_cast<std::uint16_t>(
+                registers::with_byte(engine.background_control(index), offset & 1U, value)
+            )
+        );
+        return;
+    }
+
+    const auto index = (offset - scroll_offset) / 4U;
+    const auto within = offset & 0x3U;
+    // Quatre octets par plan : le défilement horizontal puis le vertical.
+    if (within < 2U) {
+        engine.set_scroll_x(
+            index,
+            static_cast<std::uint16_t>(registers::with_byte(engine.scroll_x(index), within, value))
+        );
+        return;
+    }
+    engine.set_scroll_y(
+        index,
+        static_cast<std::uint16_t>(
+            registers::with_byte(engine.scroll_y(index), within - 2U, value)
+        )
+    );
 }
 
 
@@ -219,7 +238,12 @@ void Arm9MemoryMap::write_io(std::uint32_t address, std::uint32_t value, std::ui
 std::uint8_t Arm9MemoryMap::read_io_byte(std::uint32_t address) noexcept {
     if (address == shared_wram_control) return system_.shared_control();
     std::size_t index = 0;
-    if (bank_control_index(address, index)) return vram_control_[index];
+    if (bank_control_index(address, index)) return video_.control(index);
+
+    std::uint32_t offset = 0;
+    if (auto* engine = engine_register(address, offset); engine != nullptr) {
+        return read_engine_byte(*engine, offset);
+    }
 
     if (address == registers::interrupt_master) return registers::byte_of(interrupts_.master_enable(), 0U);
     if (address >= registers::interrupt_enable && address < registers::interrupt_enable + 4U) {
@@ -240,7 +264,13 @@ void Arm9MemoryMap::write_io_byte(std::uint32_t address, std::uint8_t value) noe
         return;
     }
     std::size_t index = 0;
-    if (bank_control_index(address, index)) { vram_control_[index] = value; return; }
+    if (bank_control_index(address, index)) { video_.set_control(index, value); return; }
+
+    std::uint32_t offset = 0;
+    if (auto* engine = engine_register(address, offset); engine != nullptr) {
+        write_engine_byte(*engine, offset, value);
+        return;
+    }
 
     if (address == registers::interrupt_master) {
         interrupts_.set_master_enable(value);

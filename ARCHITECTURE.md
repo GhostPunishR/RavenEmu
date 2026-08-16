@@ -102,9 +102,10 @@ extraits ne sont que des en-têtes, et devient STATIC dès que l'un d'eux gagne 
 la console, décode et contrôle l'en-tête de cartouche, publie le contrat vidéo
 et audio, exécute les deux processeurs de la console avec leurs jeux
 d'instructions et le coprocesseur système du principal, décode les cartes
-mémoire que chacun voit, et les fait dialoguer. Toute demande de faire tourner
-une image est en revanche refusée par une erreur nommée : un écran noir
-laisserait croire à une émulation muette, là où il manque encore l'affichage.
+mémoire que chacun voit, les fait dialoguer, et dessine les décors en mode texte
+de ses deux moteurs graphiques. Toute demande de faire tourner une image est en
+revanche refusée par une erreur nommée : un écran noir laisserait croire à une
+émulation muette, là où il manque encore de quoi enchaîner les trames.
 
 `cores/nds/src/cpu` tient les deux processeurs. Ils ne connaissent pas la carte
 mémoire de la console : ils passent par une frontière `Bus` abstraite, ce qui
@@ -188,12 +189,10 @@ jamais par sa carte : il les consulte avant le bus, si bien qu'une adresse peut
 ne rien désigner là tout en lui répondant très bien. Le reste est du miroir,
 parce que le matériel ne décode pas les bits hauts.
 
-Les neuf banques vidéo existent et sont atteignables par la fenêtre de
-transfert, celle qu'on emprunte pour les remplir. L'aiguillage qui les présente
-aux moteurs 2D et 3D viendra avec ces moteurs, seuls à pouvoir dire s'il est
-juste ; d'ici là, un accès à ces fenêtres est compté, pas absorbé en silence. Le
-BIOS, la cartouche et le port Game Boy Advance ne sont pas décodés non plus,
-faute de contenu à leur donner.
+Les neuf banques vidéo ne vivent plus ici : elles sont passées à
+`cores/nds/src/video`, avec leur aiguillage, parce qu'une banque n'est pas une
+mémoire à une adresse fixe. Le BIOS, la cartouche et le port Game Boy Advance ne
+sont pas décodés, faute de contenu à leur donner.
 
 `cores/nds/src/system` porte ce qui n'appartient à aucun des deux processeurs
 mais les relie. C'est ici que la console cesse d'être deux machines côte à côte :
@@ -234,6 +233,66 @@ Ces registres ont contraint les deux cartes mémoire à connaître la largeur de
 l'accès qu'on leur demande, là où elles décomposaient jusqu'ici en octets. Lire
 une file est **indivisible** : la décomposer en quatre lectures d'octet la
 viderait quatre fois.
+
+`cores/nds/src/video` porte les neuf banques, leur aiguillage, et les deux
+moteurs graphiques 2D.
+
+**Une banque vidéo n'est pas une mémoire à une adresse fixe** : c'est un bloc
+qu'on branche quelque part. Le même bloc peut servir de décor au moteur
+principal, de sprites au secondaire, de texture au moteur 3D, de palette
+étendue, ou être prêté au processeur secondaire — et ce qu'il vaut à une adresse
+donnée dépend entièrement de ce branchement. Tant que personne ne lisait ces
+banques, les tenir pour de simples tableaux suffisait ; ça cesse dès qu'un
+moteur doit y trouver ses décors.
+
+Le décodage est écrit banque par banque, et non ramené à une formule commune :
+ni le nombre de destinations, ni la façon dont le champ d'écart les place, ne se
+déduisent d'une règle générale. Deux banques n'acceptent que quatre destinations,
+cinq en acceptent huit ; certaines se placent par blocs de cent vingt-huit
+kilooctets, deux d'entre elles combinent deux bits d'écart qui ne se suivent pas,
+et une seule ne commence pas au début de sa fenêtre. Une banque branchée seize
+kilooctets trop loin donne un décor faux sans que rien ne le signale.
+
+**Remplir une banque et l'afficher sont exclusifs.** Une banque branchée sur un
+moteur quitte la fenêtre de transfert, celle qu'on emprunte pour la remplir ; le
+matériel ne les distingue pas d'une banque éteinte, et le code non plus. Quand
+deux banques se disputent la même place, le résultat n'est pas défini sur
+console : ici la première dans l'ordre répond, et le recouvrement est compté
+plutôt qu'absorbé, parce qu'une faute de configuration passée sous silence se
+manifeste bien plus loin sous la forme d'un décor faux.
+
+Les deux moteurs partagent une implémentation, pour la raison qui a valu aux deux
+processeurs : deux copies dérivent. Le principal place ses décors dans une fenêtre
+quatre fois plus grande et décale ses bases par deux champs supplémentaires ; il
+reçoit le rendu 3D comme un plan, sait afficher une banque telle quelle et lire
+son image depuis la mémoire principale. Le secondaire n'a rien de tout cela.
+
+Ce lot rend les **décors en mode texte** : tuiles de huit sur huit, seize ou deux
+cent cinquante-six couleurs, retournement dans les deux sens, quatre tailles de
+carte, défilement, et la résolution des priorités entre les quatre plans et le
+fond. C'est le socle, parce que tous les autres modes s'appuient sur les mêmes
+palettes, les mêmes priorités et la même composition.
+
+Deux détails y comptent plus qu'ils n'en ont l'air. **La première couleur d'une
+palette n'est pas une couleur** : c'est l'absence de pixel, et c'est ce qui
+permet à quatre plans de se superposer sans se cacher entièrement ; une
+sous-palette déplace les quinze autres couleurs sans déplacer celle-là. Et **à
+priorité égale, le plan de plus petit numéro l'emporte**, ce qui tient à une
+comparaison stricte : la rendre large cacherait un décor derrière un autre.
+
+Un numéro de plan ne veut rien dire à lui seul : le plan 3 est un décor en
+tuiles dans un mode, une surface tournante dans un autre, et n'existe pas dans un
+troisième. Une table le dit mode par mode. Les plans qu'un mode ne donne pas ne
+sont pas comptés comme manquants, parce que le matériel n'en affiche pas non
+plus ; en revanche un plan demandé dans un mode que ce lot ne dessine pas encore
+est compté, un plan absent qui ne dit rien se confondant avec un plan vide.
+
+Ne sont pas rendus : les sprites, les décors tournants, les modes étendus, la
+grande image, le plan 3D, les fenêtres, les mélanges, la mosaïque et les palettes
+étendues. Rien ne fait non plus tourner ce moteur trame par trame : il n'y a ni
+ordonnanceur, ni compteur de lignes, ni interruption de balayage, et
+`run_frame` refuse donc toujours. Le moteur sait dessiner une ligne ; personne ne
+la lui demande encore.
 
 Deux décisions y sont prises, parce qu'elles engagent le reste du projet et
 qu'il vaut mieux les arrêter avant d'écrire un moteur autour :

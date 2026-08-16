@@ -50,13 +50,21 @@ aujourd'hui :
 - la communication entre les deux processeurs : le registre de synchronisation,
   les deux files de seize mots, leurs erreurs de débordement, et le contrôleur
   d'interruptions de chaque côté qui transforme un message déposé en
-  interruption réellement prise.
+  interruption réellement prise;
+- l'aiguillage des neuf banques vidéo, décodé banque par banque, qui décide de
+  ce que chaque moteur trouve à une place donnée;
+- les décors en mode texte des deux moteurs 2D : tuiles de huit sur huit, seize
+  ou deux cent cinquante-six couleurs, retournements, quatre tailles de carte,
+  défilement, et la résolution des priorités entre les quatre plans et le fond.
 
 Toute demande d'exécution reste refusée par une erreur nommée, volontairement :
-un écran noir laisserait croire à une émulation silencieuse. Restent à écrire
-les moteurs 2D et 3D, l'aiguillage des banques vidéo vers ces moteurs, la
-cartouche, les minuteries, les transferts autonomes, l'écran tactile et le son.
-La console n'apparaît pas encore dans la bibliothèque de l'application.
+un écran noir laisserait croire à une émulation silencieuse. Le moteur 2D sait
+dessiner une ligne, mais rien ne la lui demande encore, faute d'ordonnanceur et
+de compteur de lignes. Restent à écrire les sprites, les décors tournants et les
+modes étendus, le moteur 3D, les fenêtres et les mélanges, les palettes
+étendues, la cartouche, les minuteries, les transferts autonomes, l'écran
+tactile et le son. La console n'apparaît pas encore dans la bibliothèque de
+l'application.
 
 ## Pistes futures
 

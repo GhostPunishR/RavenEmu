@@ -8,6 +8,8 @@ add_library(nds_raven_core STATIC
     src/memory/arm9_memory_map.cpp
     src/memory/system_memory.cpp
     src/system/inter_processor.cpp
+    src/video/engine2d.cpp
+    src/video/video_memory.cpp
 )
 target_include_directories(nds_raven_core
     PUBLIC include
@@ -88,6 +90,27 @@ if(RAVENEMU_BUILD_TESTS)
     )
     target_link_libraries(nds_raven_arm7_tests PRIVATE nds_raven_core)
     add_test(NAME nds_raven_arm7 COMMAND nds_raven_arm7_tests)
+
+    # L'aiguillage des banques vidéo a sa propre suite : il ne dessine rien, mais
+    # c'est lui qui décide de ce que chaque moteur trouve à une place donnée, et
+    # une banque branchée de travers donne un décor faux sans rien signaler.
+    add_executable(nds_raven_video_memory_tests tests/video_memory_test.cpp)
+    target_include_directories(nds_raven_video_memory_tests PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/src
+        ${CMAKE_CURRENT_LIST_DIR}/../common/tests/support
+    )
+    target_link_libraries(nds_raven_video_memory_tests PRIVATE nds_raven_core)
+    add_test(NAME nds_raven_video_memory COMMAND nds_raven_video_memory_tests)
+
+    # Le moteur 2D est éprouvé contre ses banques et sa palette, sans processeur
+    # au-dessus : ce qu'il dessine ne dépend que de ses registres.
+    add_executable(nds_raven_engine2d_tests tests/engine2d_test.cpp)
+    target_include_directories(nds_raven_engine2d_tests PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/src
+        ${CMAKE_CURRENT_LIST_DIR}/../common/tests/support
+    )
+    target_link_libraries(nds_raven_engine2d_tests PRIVATE nds_raven_core)
+    add_test(NAME nds_raven_engine2d COMMAND nds_raven_engine2d_tests)
 
     # La communication entre processeurs n'a de sens qu'avec les deux cartes et
     # les deux contrôleurs montés ensemble : sa suite les assemble.
