@@ -33,8 +33,8 @@ aujourd'hui :
 - le décodage et le contrôle de l'en-tête de cartouche;
 - le contrat vidéo, deux écrans de 256 sur 192 empilés dans un tampon unique;
 - le contrat audio annoncé par le matériel;
-- le processeur principal ARM946E-S, ses deux jeux d'instructions — ARM 32 bits
-  (`CLZ`, `BLX` et arithmétique saturante comprises) et Thumb 16 bits — et le
+- le processeur principal ARM946E-S, ses deux jeux d'instructions (ARM 32 bits,
+  `CLZ`, `BLX` et arithmétique saturante comprises, et Thumb 16 bits) et le
   passage de l'un à l'autre, éprouvés contre une mémoire de test.
 
 Toute demande d'exécution reste refusée par une erreur nommée, volontairement :
