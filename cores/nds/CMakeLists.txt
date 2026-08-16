@@ -1,7 +1,7 @@
 add_library(nds_raven_core STATIC
     src/cartridge_header.cpp
     src/core.cpp
-    src/cpu/arm9.cpp
+    src/cpu/arm_core.cpp
     src/cpu/cp15.cpp
     src/cpu/thumb.cpp
     src/memory/memory_map.cpp
@@ -65,4 +65,14 @@ if(RAVENEMU_BUILD_TESTS)
     )
     target_link_libraries(nds_raven_memory_tests PRIVATE nds_raven_core)
     add_test(NAME nds_raven_memory COMMAND nds_raven_memory_tests)
+
+    # Le processeur secondaire partage son implémentation avec le principal :
+    # sa suite n'éprouve donc que ce qui les sépare.
+    add_executable(nds_raven_arm7_tests tests/arm7_test.cpp)
+    target_include_directories(nds_raven_arm7_tests PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/src
+        ${CMAKE_CURRENT_LIST_DIR}/../common/tests/support
+    )
+    target_link_libraries(nds_raven_arm7_tests PRIVATE nds_raven_core)
+    add_test(NAME nds_raven_arm7 COMMAND nds_raven_arm7_tests)
 endif()

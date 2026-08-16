@@ -1,4 +1,4 @@
-#include "cpu/arm9.hpp"
+#include "cpu/arm_core.hpp"
 
 #include "check.hpp"
 
@@ -273,7 +273,7 @@ void les_instructions_de_coprocesseur_sont_filtrees() {
         Machine machine;
         machine.run({coprocessor_transfer(true, 0U, 0U, 0U, 0U, 0U, 14U)});
         check(machine.cpu.unimplemented_count() == 1U, "un autre coprocesseur est refusé");
-        check(machine.reg(15) == Arm9::undefined_vector, "par l'exception prévue à cet effet");
+        check(machine.reg(15) == ArmCore::undefined_vector, "par l'exception prévue à cet effet");
     }
     {   // Une opération de coprocesseur sans transfert n'a pas d'emploi ici.
         Machine machine;
@@ -370,7 +370,7 @@ void la_base_des_vecteurs_deplace_les_exceptions() {
     {
         Machine machine;
         machine.run({software_interrupt});
-        check(machine.reg(15) == Arm9::software_interrupt_vector, "en position basse, le vecteur est à son adresse nue");
+        check(machine.reg(15) == ArmCore::software_interrupt_vector, "en position basse, le vecteur est à son adresse nue");
     }
     {   // La position haute déplace toute la table, pas seulement un vecteur.
         Machine machine;
@@ -389,7 +389,7 @@ void la_base_des_vecteurs_deplace_les_exceptions() {
         machine.cpu.set_irq_line(true);
         machine.cpu.step();
         check(
-            machine.reg(15) == Cp15::high_vector_base + Arm9::irq_vector,
+            machine.reg(15) == Cp15::high_vector_base + ArmCore::irq_vector,
             "l'interruption se déplace aussi"
         );
     }
@@ -398,7 +398,7 @@ void la_base_des_vecteurs_deplace_les_exceptions() {
         machine.cp15().write(0U, 1U, 0U, 0U, Cp15::high_vectors);
         machine.run({coprocessor_data_operation});
         check(
-            machine.reg(15) == Cp15::high_vector_base + Arm9::undefined_vector,
+            machine.reg(15) == Cp15::high_vector_base + ArmCore::undefined_vector,
             "l'instruction inconnue aussi"
         );
     }
@@ -407,7 +407,7 @@ void la_base_des_vecteurs_deplace_les_exceptions() {
         machine.cp15().write(0U, 1U, 0U, 0U, Cp15::high_vectors);
         machine.cp15().write(0U, 1U, 0U, 0U, 0U);
         machine.run({software_interrupt});
-        check(machine.reg(15) == Arm9::software_interrupt_vector, "la table revient en position basse");
+        check(machine.reg(15) == ArmCore::software_interrupt_vector, "la table revient en position basse");
     }
 }
 
@@ -651,7 +651,7 @@ void l_attente_d_interruption_arrete_le_coeur() {
         machine.cpu.set_irq_line(true);
         machine.cpu.step();
         check(!machine.cp15().halted(), "l'attente est levée");
-        check(machine.reg(15) == Arm9::irq_vector, "et l'interruption est prise");
+        check(machine.reg(15) == ArmCore::irq_vector, "et l'interruption est prise");
     }
     {   // Une ligne masquée réveille quand même : c'est l'attente qui s'achève,
         // pas l'interruption qui s'impose.

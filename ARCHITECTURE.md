@@ -106,23 +106,43 @@ demande de faire tourner une image est en revanche refusée par une erreur
 nommée : un écran noir laisserait croire à une émulation muette, là où il manque
 encore le second processeur et l'affichage.
 
-`cores/nds/src/cpu` tient ce processeur. Il ne connaît pas la carte mémoire de
-la console : il passe par une frontière `Bus` abstraite, ce qui permet de
-l'éprouver contre une simple mémoire de test — sans cartouche, sans banques
-vidéo, sans ARM7 — et donc de distinguer une faute du processeur d'une faute de
-la machine autour.
+`cores/nds/src/cpu` tient les deux processeurs. Ils ne connaissent pas la carte
+mémoire de la console : ils passent par une frontière `Bus` abstraite, ce qui
+permet de les éprouver contre une simple mémoire de test — sans cartouche, sans
+banques vidéo — et donc de distinguer une faute du processeur d'une faute de la
+machine autour.
 
-Les deux jeux d'instructions y sont complets : ARM 32 bits, avec `CLZ`, `BLX` et
-l'arithmétique saturante, et Thumb 16 bits, avec le passage d'un jeu à l'autre
-dans les deux sens. Un jeu de la console alterne sans cesse entre eux — le code
-compact en Thumb, les gestionnaires d'interruption en ARM — si bien qu'un cœur
-qui n'en connaîtrait qu'un ne ferait rien tourner. Les deux jeux partagent le
-décaleur, les indicateurs et le banc de registres ; ils diffèrent surtout sur un
-point, que le code isole : Thumb écrit ses indicateurs d'office, là où ARM
-demande un bit `S` explicite.
+**Une seule implémentation les sert.** Ce n'est pas une économie de lignes :
+deux copies dériveraient l'une de l'autre, et une correction apportée à l'une
+laisserait l'autre avec l'ancienne faute. Ce qui les sépare tient dans une
+révision d'architecture, `Architecture`, nommée et consultée aux quelques
+endroits où elle compte — ces endroits sont ainsi énumérables, ce qu'une
+duplication interdirait. `Arm9` et `Arm7` ne sont que ce cœur commun instancié
+avec l'une ou l'autre.
 
-Le coprocesseur système CP15 les accompagne, et c'est par lui que le cœur cesse
-d'être un simple exécuteur d'instructions. Trois choses y sont observables
+Le processeur principal est un ARM946E-S, jeu ARMv5TE. Le secondaire est un
+ARM7TDMI, jeu ARMv4T : il tient l'amorçage, le son, l'écran tactile et la
+liaison sans fil, et son jeu est plus étroit — ni `BLX`, ni `CLZ`, ni
+arithmétique saturante, ni doubles mots, ni coprocesseur. Ces absences sont
+celles du matériel, et les instructions correspondantes lèvent l'exception
+d'instruction indéfinie comme sur console. Une différence est plus insidieuse
+que les autres : **charger le compteur de programme entrelace sur ARMv5 et pas
+sur ARMv4T**, si bien qu'un même `LDR PC` change de jeu d'instructions sur l'un
+et reste où il est sur l'autre.
+
+Les deux jeux d'instructions sont complets de part et d'autre : ARM 32 bits et
+Thumb 16 bits, avec le passage de l'un à l'autre dans les deux sens. Un jeu de
+la console alterne sans cesse entre eux — le code compact en Thumb, les
+gestionnaires d'interruption en ARM — si bien qu'un cœur qui n'en connaîtrait
+qu'un ne ferait rien tourner. Ils partagent le décaleur, les indicateurs et le
+banc de registres ; ils diffèrent surtout sur un point, que le code isole :
+Thumb écrit ses indicateurs d'office, là où ARM demande un bit `S` explicite.
+
+Le coprocesseur système CP15 accompagne le seul processeur principal, et c'est
+par lui que celui-ci cesse d'être un simple exécuteur d'instructions. Le
+processeur secondaire n'en a aucun, et la distinction est portée par un pointeur
+nul plutôt que par un objet inerte : un coprocesseur qui répond « rien » n'est
+pas la même chose qu'un coprocesseur absent. Trois choses y sont observables
 depuis le processeur : les mémoires locales, qui ne sont pas sur le bus mais
 dans le cœur et répondent avant lui ; la base de la table des vecteurs, que le
 logiciel déplace ; et l'attente d'interruption, qui arrête le cœur au lieu de le

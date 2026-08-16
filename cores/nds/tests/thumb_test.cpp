@@ -1,4 +1,4 @@
-#include "cpu/arm9.hpp"
+#include "cpu/arm_core.hpp"
 
 #include "check.hpp"
 
@@ -954,7 +954,7 @@ void les_exceptions_depuis_l_etat_thumb() {
         machine.cpu.state().cpsr =
             static_cast<std::uint32_t>(CpuMode::user) | psr::thumb | psr::carry;
         machine.run({software_interrupt(0x42U)});
-        check(machine.reg(15) == Arm9::software_interrupt_vector, "SWI saute au vecteur");
+        check(machine.reg(15) == ArmCore::software_interrupt_vector, "SWI saute au vecteur");
         check(machine.cpu.state().mode() == CpuMode::supervisor, "et passe superviseur");
         check(machine.reg(14) == program_base + 2U, "le retour tient compte de la largeur Thumb");
         check(!machine.cpu.state().thumb(), "le gestionnaire s'exécute en ARM");
@@ -969,7 +969,7 @@ void les_exceptions_depuis_l_etat_thumb() {
         machine.cpu.state().cpsr = static_cast<std::uint32_t>(CpuMode::user) | psr::thumb;
         machine.load(program_base, {software_interrupt(0U), immediate_operation(0x0, 0U, 0x55U)});
         // `MOVS pc, lr` en ARM.
-        machine.load_arm(Arm9::software_interrupt_vector, {0xe1b0'f00eU});
+        machine.load_arm(ArmCore::software_interrupt_vector, {0xe1b0'f00eU});
         machine.reg(15) = program_base;
         machine.cpu.step();                                  // l'appel
         machine.cpu.step();                                  // le retour
@@ -986,7 +986,7 @@ void les_exceptions_depuis_l_etat_thumb() {
         machine.load(program_base, {0xbe00U, 0x1234U});
         machine.reg(15) = program_base;
         machine.cpu.step();
-        check(machine.reg(15) == Arm9::undefined_vector, "le point d'arrêt saute au vecteur indéfini");
+        check(machine.reg(15) == ArmCore::undefined_vector, "le point d'arrêt saute au vecteur indéfini");
         check(machine.reg(14) == program_base + 2U, "le retour tient compte de la largeur Thumb");
         check(machine.cpu.unimplemented_count() == 1U, "et il est compté");
         check(machine.cpu.first_unimplemented() == 0xbe00U, "et retenu");
@@ -996,7 +996,7 @@ void les_exceptions_depuis_l_etat_thumb() {
         machine.reg(15) = program_base;
         machine.cpu.set_irq_line(true);
         machine.cpu.step();
-        check(machine.reg(15) == Arm9::irq_vector, "l'interruption saute à son vecteur");
+        check(machine.reg(15) == ArmCore::irq_vector, "l'interruption saute à son vecteur");
         check(!machine.cpu.state().thumb(), "le gestionnaire s'exécute en ARM");
         check(machine.reg(14) == program_base + 4U, "le retour se compte comme en ARM");
         check(machine.cpu.state().irq_spsr & psr::thumb, "et l'état Thumb est sauvegardé");
@@ -1005,7 +1005,7 @@ void les_exceptions_depuis_l_etat_thumb() {
         Machine machine;
         machine.load(program_base, {immediate_operation(0x0, 1U, 7U)});
         // `SUBS pc, lr, #4` en ARM.
-        machine.load_arm(Arm9::irq_vector, {0xe25e'f004U});
+        machine.load_arm(ArmCore::irq_vector, {0xe25e'f004U});
         machine.reg(15) = program_base;
         machine.cpu.set_irq_line(true);
         machine.cpu.step();

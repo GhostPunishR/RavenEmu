@@ -1,4 +1,4 @@
-#include "cpu/arm9.hpp"
+#include "cpu/arm_core.hpp"
 #include "memory/memory_map.hpp"
 
 #include "check.hpp"

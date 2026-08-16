@@ -1,4 +1,4 @@
-#include "cpu/arm9.hpp"
+#include "cpu/arm_core.hpp"
 
 #include "cpu/bits.hpp"
 
@@ -23,9 +23,14 @@ constexpr std::uint32_t saturate(std::int64_t value, bool& saturated) noexcept {
 
 } // namespace
 
-void Arm9::reset() noexcept {
+ArmCore::ArmCore(Bus& bus, Architecture architecture)
+    : bus_(bus),
+      architecture_(architecture),
+      coprocessor_(architecture == Architecture::v5te ? std::make_unique<Cp15>() : nullptr) {}
+
+void ArmCore::reset() noexcept {
     state_ = CpuState{};
-    cp15_.reset();
+    if (coprocessor_) coprocessor_->reset();
     branched_ = false;
     irq_line_ = false;
     fiq_line_ = false;
@@ -34,52 +39,52 @@ void Arm9::reset() noexcept {
     state_.registers[15] = reset_vector;
 }
 
-std::uint32_t Arm9::fetch32(std::uint32_t address) {
+std::uint32_t ArmCore::fetch32(std::uint32_t address) {
     std::uint32_t value = 0;
-    if (cp15_.fetch(address, 4U, value)) return value;
+    if (coprocessor_ && coprocessor_->fetch(address, 4U, value)) return value;
     return bus_.read32(address);
 }
 
-std::uint32_t Arm9::fetch16(std::uint32_t address) {
+std::uint32_t ArmCore::fetch16(std::uint32_t address) {
     std::uint32_t value = 0;
-    if (cp15_.fetch(address, 2U, value)) return value;
+    if (coprocessor_ && coprocessor_->fetch(address, 2U, value)) return value;
     return bus_.read16(address);
 }
 
-std::uint32_t Arm9::load32(std::uint32_t address) {
+std::uint32_t ArmCore::load32(std::uint32_t address) {
     std::uint32_t value = 0;
-    if (cp15_.load(address, 4U, value)) return value;
+    if (coprocessor_ && coprocessor_->load(address, 4U, value)) return value;
     return bus_.read32(address);
 }
 
-std::uint32_t Arm9::load16(std::uint32_t address) {
+std::uint32_t ArmCore::load16(std::uint32_t address) {
     std::uint32_t value = 0;
-    if (cp15_.load(address, 2U, value)) return value;
+    if (coprocessor_ && coprocessor_->load(address, 2U, value)) return value;
     return bus_.read16(address);
 }
 
-std::uint32_t Arm9::load8(std::uint32_t address) {
+std::uint32_t ArmCore::load8(std::uint32_t address) {
     std::uint32_t value = 0;
-    if (cp15_.load(address, 1U, value)) return value;
+    if (coprocessor_ && coprocessor_->load(address, 1U, value)) return value;
     return bus_.read8(address);
 }
 
-void Arm9::store32(std::uint32_t address, std::uint32_t value) {
-    if (cp15_.store(address, 4U, value)) return;
+void ArmCore::store32(std::uint32_t address, std::uint32_t value) {
+    if (coprocessor_ && coprocessor_->store(address, 4U, value)) return;
     bus_.write32(address, value);
 }
 
-void Arm9::store16(std::uint32_t address, std::uint32_t value) {
-    if (cp15_.store(address, 2U, value)) return;
+void ArmCore::store16(std::uint32_t address, std::uint32_t value) {
+    if (coprocessor_ && coprocessor_->store(address, 2U, value)) return;
     bus_.write16(address, static_cast<std::uint16_t>(value));
 }
 
-void Arm9::store8(std::uint32_t address, std::uint32_t value) {
-    if (cp15_.store(address, 1U, value)) return;
+void ArmCore::store8(std::uint32_t address, std::uint32_t value) {
+    if (coprocessor_ && coprocessor_->store(address, 1U, value)) return;
     bus_.write8(address, static_cast<std::uint8_t>(value));
 }
 
-bool Arm9::condition_met(std::uint32_t opcode) const noexcept {
+bool ArmCore::condition_met(std::uint32_t opcode) const noexcept {
     const auto n = state_.flag(psr::negative);
     const auto z = state_.flag(psr::zero);
     const auto c = state_.flag(psr::carry);
@@ -106,7 +111,7 @@ bool Arm9::condition_met(std::uint32_t opcode) const noexcept {
     }
 }
 
-Arm9::ShifterResult Arm9::apply_shift(
+ArmCore::ShifterResult ArmCore::apply_shift(
     std::uint32_t value,
     std::uint32_t type,
     std::uint32_t amount,
@@ -156,7 +161,7 @@ Arm9::ShifterResult Arm9::apply_shift(
     }
 }
 
-Arm9::ShifterResult Arm9::shift_operand(std::uint32_t opcode, bool immediate) {
+ArmCore::ShifterResult ArmCore::shift_operand(std::uint32_t opcode, bool immediate) {
     const auto carry_in = state_.flag(psr::carry);
     if (immediate) {
         const auto rotation = bits(opcode, 8, 4) * 2U;
@@ -181,18 +186,38 @@ Arm9::ShifterResult Arm9::shift_operand(std::uint32_t opcode, bool immediate) {
     return apply_shift(value, type, amount, false, carry_in);
 }
 
-void Arm9::write_register(std::uint32_t index, std::uint32_t value) noexcept {
+void ArmCore::write_loaded_pc(std::uint32_t value) noexcept {
+    if (has_v5_extensions()) {
+        // ARMv5 entrelace : le bit bas de la valeur chargée choisit le jeu
+        // d'instructions, exactement comme pour un branchement par registre.
+        state_.set_flag(psr::thumb, bit(value, 0));
+        write_register(15, value & ~1U);
+        return;
+    }
+    // ARMv4T ne change jamais d'état de cette façon : les deux bits bas sont
+    // écartés et le cœur reste où il était.
+    write_register(15, value & ~3U);
+}
+
+void ArmCore::write_popped_pc(std::uint32_t value) noexcept {
+    // Dépilé depuis l'état Thumb, le compteur reste aligné sur un demi-mot dans
+    // les deux architectures ; seule ARMv5 y lit un changement d'état.
+    if (has_v5_extensions()) state_.set_flag(psr::thumb, bit(value, 0));
+    write_register(15, value & ~1U);
+}
+
+void ArmCore::write_register(std::uint32_t index, std::uint32_t value) noexcept {
     state_.registers[index] = value;
     if (index == 15U) branched_ = true;
 }
 
-void Arm9::set_logical_flags(std::uint32_t result, bool carry) noexcept {
+void ArmCore::set_logical_flags(std::uint32_t result, bool carry) noexcept {
     state_.set_flag(psr::negative, bit(result, 31));
     state_.set_flag(psr::zero, result == 0U);
     state_.set_flag(psr::carry, carry);
 }
 
-void Arm9::set_arithmetic_flags(
+void ArmCore::set_arithmetic_flags(
     std::uint32_t result,
     std::uint32_t left,
     std::uint32_t right,
@@ -207,7 +232,7 @@ void Arm9::set_arithmetic_flags(
     state_.set_flag(psr::overflow, bit(overflow, 31));
 }
 
-void Arm9::enter_exception(
+void ArmCore::enter_exception(
     CpuMode mode,
     std::uint32_t vector,
     std::uint32_t return_address,
@@ -220,11 +245,14 @@ void Arm9::enter_exception(
     state_.cpsr &= ~psr::thumb;
     state_.cpsr |= psr::irq_disable;
     if (mask_fiq) state_.cpsr |= psr::fiq_disable;
-    state_.registers[15] = cp15_.exception_base() + vector;
+    // Sans coprocesseur, aucun registre ne peut déplacer la table : elle reste
+    // où le matériel l'a mise.
+    const auto base = coprocessor_ != nullptr ? coprocessor_->exception_base() : 0U;
+    state_.registers[15] = base + vector;
     branched_ = true;
 }
 
-void Arm9::restore_cpsr_from_spsr() noexcept {
+void ArmCore::restore_cpsr_from_spsr() noexcept {
     const auto current = state_.mode();
     if (!CpuState::has_spsr(current)) return;
     const auto restored = state_.spsr_for(current);
@@ -232,7 +260,7 @@ void Arm9::restore_cpsr_from_spsr() noexcept {
     state_.cpsr = restored;
 }
 
-void Arm9::raise_undefined(std::uint32_t opcode) {
+void ArmCore::raise_undefined(std::uint32_t opcode) {
     if (unimplemented_ == 0U) first_unimplemented_ = opcode;
     ++unimplemented_;
     // L'adresse de reprise se compte depuis l'instruction fautive, dont la
@@ -241,13 +269,13 @@ void Arm9::raise_undefined(std::uint32_t opcode) {
     enter_exception(CpuMode::undefined, undefined_vector, state_.registers[15] - width, false);
 }
 
-void Arm9::step() {
+void ArmCore::step() {
     // L'attente d'interruption arrête le cœur sans le faire tourner à vide. Une
     // ligne posée le réveille même si le masque l'empêche d'être prise : c'est
     // l'attente qui s'achève, pas l'interruption qui s'impose.
-    if (cp15_.halted()) {
+    if (coprocessor_ != nullptr && coprocessor_->halted()) {
         if (!irq_line_ && !fiq_line_) return;
-        cp15_.wake();
+        coprocessor_->wake();
     }
 
     // Les lignes d'interruption sont échantillonnées entre deux instructions :
@@ -282,11 +310,11 @@ void Arm9::step() {
     if (!branched_) state_.registers[15] = pc + 4U;
 }
 
-void Arm9::execute(std::uint32_t opcode) {
+void ArmCore::execute(std::uint32_t opcode) {
     // L'espace de condition 0xF n'est pas conditionnel : ARMv5 y range BLX
     // immédiat et des préchargements sans effet observable ici.
     if (bits(opcode, 28, 4) == 0xfU) {
-        if (bits(opcode, 25, 3) == 0x5U) {                     // BLX immédiat
+        if (has_v5_extensions() && bits(opcode, 25, 3) == 0x5U) {   // BLX immédiat
             const auto offset = sign_extend(bits(opcode, 0, 24), 24) << 2U;
             const auto half = bit(opcode, 24) ? 2U : 0U;
             write_register(14, state_.registers[15] - 4U);
@@ -320,14 +348,20 @@ void Arm9::execute(std::uint32_t opcode) {
                 return;
             }
             if (bits(opcode, 4, 4) == 0x3U && bits(opcode, 8, 12) == 0xfffU) {
+                if (!has_v5_extensions()) { raise_undefined(opcode); return; }
                 execute_branch_exchange(opcode, true);
                 return;
             }
             if (bits(opcode, 4, 4) == 0x1U && bits(opcode, 16, 4) == 0xfU && bit(opcode, 22)) {
+                if (!has_v5_extensions()) { raise_undefined(opcode); return; }
                 execute_clz(opcode);
                 return;
             }
-            if (bits(opcode, 4, 4) == 0x5U) { execute_saturating(opcode); return; }
+            if (bits(opcode, 4, 4) == 0x5U) {
+                if (!has_v5_extensions()) { raise_undefined(opcode); return; }
+                execute_saturating(opcode);
+                return;
+            }
             if (bits(opcode, 4, 1) == 0U && bit(opcode, 7)) {
                 // Multiplications signées de la variante DSP : décodées, non
                 // implémentées, et signalées comme telles.
@@ -378,10 +412,10 @@ void Arm9::execute(std::uint32_t opcode) {
     }
 }
 
-void Arm9::execute_coprocessor(std::uint32_t opcode) {
+void ArmCore::execute_coprocessor(std::uint32_t opcode) {
     // Le 946E-S n'a que le coprocesseur quinze. En désigner un autre n'est pas
     // une lacune de l'émulateur mais une instruction fautive.
-    if (bits(opcode, 8, 4) != 15U) {
+    if (coprocessor_ == nullptr || bits(opcode, 8, 4) != 15U) {
         raise_undefined(opcode);
         return;
     }
@@ -393,7 +427,7 @@ void Arm9::execute_coprocessor(std::uint32_t opcode) {
     const auto rd = bits(opcode, 12, 4);
 
     if (bit(opcode, 20)) {
-        const auto value = cp15_.read(operation, primary, secondary, sub_operation);
+        const auto value = coprocessor_->read(operation, primary, secondary, sub_operation);
         // Lire vers R15 ne branche pas : ce sont les indicateurs qui reçoivent
         // les quatre bits hauts, le reste étant perdu.
         if (rd == 15U) {
@@ -404,10 +438,10 @@ void Arm9::execute_coprocessor(std::uint32_t opcode) {
         return;
     }
 
-    cp15_.write(operation, primary, secondary, sub_operation, read_register(rd));
+    coprocessor_->write(operation, primary, secondary, sub_operation, read_register(rd));
 }
 
-void Arm9::execute_data_processing(std::uint32_t opcode) {
+void ArmCore::execute_data_processing(std::uint32_t opcode) {
     const auto operation = bits(opcode, 21, 4);
     const bool set_flags = bit(opcode, 20);
     const auto rn = bits(opcode, 16, 4);
@@ -515,7 +549,7 @@ void Arm9::execute_data_processing(std::uint32_t opcode) {
     else set_logical_flags(result, carry_out);
 }
 
-void Arm9::execute_multiply(std::uint32_t opcode) {
+void ArmCore::execute_multiply(std::uint32_t opcode) {
     const auto rd = bits(opcode, 16, 4);
     const auto rn = bits(opcode, 12, 4);
     const auto rs = bits(opcode, 8, 4);
@@ -529,7 +563,7 @@ void Arm9::execute_multiply(std::uint32_t opcode) {
     }
 }
 
-void Arm9::execute_multiply_long(std::uint32_t opcode) {
+void ArmCore::execute_multiply_long(std::uint32_t opcode) {
     const auto rd_high = bits(opcode, 16, 4);
     const auto rd_low = bits(opcode, 12, 4);
     const auto rs = read_register(bits(opcode, 8, 4));
@@ -556,7 +590,7 @@ void Arm9::execute_multiply_long(std::uint32_t opcode) {
     }
 }
 
-void Arm9::execute_swap(std::uint32_t opcode) {
+void ArmCore::execute_swap(std::uint32_t opcode) {
     const auto address = read_register(bits(opcode, 16, 4));
     const auto rd = bits(opcode, 12, 4);
     const auto source = read_register(bits(opcode, 0, 4));
@@ -571,7 +605,7 @@ void Arm9::execute_swap(std::uint32_t opcode) {
     }
 }
 
-void Arm9::execute_halfword_transfer(std::uint32_t opcode) {
+void ArmCore::execute_halfword_transfer(std::uint32_t opcode) {
     const auto rn = bits(opcode, 16, 4);
     const auto rd = bits(opcode, 12, 4);
     const bool pre = bit(opcode, 24);
@@ -593,7 +627,7 @@ void Arm9::execute_halfword_transfer(std::uint32_t opcode) {
         // n'accepte qu'un registre pair et jamais le compteur de programme. Un
         // encodage hors de ces clous n'a pas de comportement défini ; le laisser
         // passer ferait lire `registers[16]`, donc on le refuse au décodage.
-        if ((rd & 1U) != 0U || rd == 14U) {
+        if (!has_v5_extensions() || (rd & 1U) != 0U || rd == 14U) {
             raise_undefined(opcode);
             return;
         }
@@ -622,7 +656,7 @@ void Arm9::execute_halfword_transfer(std::uint32_t opcode) {
     if ((!pre || writeback) && rn != rd) write_register(rn, moved);
 }
 
-void Arm9::execute_single_transfer(std::uint32_t opcode) {
+void ArmCore::execute_single_transfer(std::uint32_t opcode) {
     const auto rn = bits(opcode, 16, 4);
     const auto rd = bits(opcode, 12, 4);
     const bool pre = bit(opcode, 24);
@@ -654,8 +688,9 @@ void Arm9::execute_single_transfer(std::uint32_t opcode) {
             // Une lecture de mot non alignée ne fait pas d'erreur : la donnée
             // est ramenée alignée puis tournée, comportement dont des jeux
             // dépendent.
-            const auto value = load32(address & ~3U);
-            write_register(rd, rotate_right(value, (address & 3U) * 8U));
+            const auto value = rotate_right(load32(address & ~3U), (address & 3U) * 8U);
+            if (rd == 15U) write_loaded_pc(value);
+            else write_register(rd, value);
         }
     } else {
         const auto value = rd == 15U ? read_register(15) + 4U : read_register(rd);
@@ -666,7 +701,7 @@ void Arm9::execute_single_transfer(std::uint32_t opcode) {
     if ((!pre || writeback) && !(load && rn == rd)) write_register(rn, moved);
 }
 
-void Arm9::execute_block_transfer(std::uint32_t opcode) {
+void ArmCore::execute_block_transfer(std::uint32_t opcode) {
     const auto rn = bits(opcode, 16, 4);
     const bool pre = bit(opcode, 24);
     const bool up = bit(opcode, 23);
@@ -701,8 +736,15 @@ void Arm9::execute_block_transfer(std::uint32_t opcode) {
         if (load) {
             const auto value = load32(address & ~3U);
             if (index == 15U) {
-                write_register(15, value & ~1U);
-                if (restores_cpsr) restore_cpsr_from_spsr();
+                // Le retour d'exception restaure l'état depuis le CPSR
+                // sauvegardé : lire le bit bas de l'adresse en plus le
+                // contredirait.
+                if (restores_cpsr) {
+                    write_register(15, value & ~1U);
+                    restore_cpsr_from_spsr();
+                } else {
+                    write_loaded_pc(value);
+                }
             } else {
                 state_.registers[index] = value;
             }
@@ -717,20 +759,20 @@ void Arm9::execute_block_transfer(std::uint32_t opcode) {
     if (writeback && !(load && bit(list, rn))) write_register(rn, moved);
 }
 
-void Arm9::execute_branch(std::uint32_t opcode) {
+void ArmCore::execute_branch(std::uint32_t opcode) {
     const auto offset = sign_extend(bits(opcode, 0, 24), 24) << 2U;
     if (bit(opcode, 24)) write_register(14, state_.registers[15] - 4U);
     write_register(15, state_.registers[15] + offset);
 }
 
-void Arm9::execute_branch_exchange(std::uint32_t opcode, bool link) {
+void ArmCore::execute_branch_exchange(std::uint32_t opcode, bool link) {
     const auto target = read_register(bits(opcode, 0, 4));
     if (link) write_register(14, state_.registers[15] - 4U);
     state_.set_flag(psr::thumb, bit(target, 0));
     write_register(15, target & ~1U);
 }
 
-void Arm9::execute_psr_transfer(std::uint32_t opcode) {
+void ArmCore::execute_psr_transfer(std::uint32_t opcode) {
     const bool use_spsr = bit(opcode, 22);
     const auto current = state_.mode();
 
@@ -770,12 +812,12 @@ void Arm9::execute_psr_transfer(std::uint32_t opcode) {
     state_.cpsr = (state_.cpsr & ~mask) | (source & mask);
 }
 
-void Arm9::execute_clz(std::uint32_t opcode) {
+void ArmCore::execute_clz(std::uint32_t opcode) {
     const auto value = read_register(bits(opcode, 0, 4));
     write_register(bits(opcode, 12, 4), static_cast<std::uint32_t>(std::countl_zero(value)));
 }
 
-void Arm9::execute_saturating(std::uint32_t opcode) {
+void ArmCore::execute_saturating(std::uint32_t opcode) {
     const auto rn = static_cast<std::int64_t>(static_cast<std::int32_t>(read_register(bits(opcode, 16, 4))));
     const auto rm = static_cast<std::int64_t>(static_cast<std::int32_t>(read_register(bits(opcode, 0, 4))));
     const auto rd = bits(opcode, 12, 4);

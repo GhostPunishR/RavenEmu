@@ -1,4 +1,4 @@
-#include "cpu/arm9.hpp"
+#include "cpu/arm_core.hpp"
 
 #include "check.hpp"
 
@@ -809,6 +809,24 @@ void les_transferts_simples_couvrent_mot_et_octet() {
         machine.run({single_transfer(0U, 0U, 4U, true, false, false, true, false)});
         check(machine.reg(0) == 0x55U, "la donnée lue l'emporte sur la réécriture de base");
     }
+    {   // Charger le compteur de programme entrelace : le bit bas de la valeur
+        // chargée choisit le jeu d'instructions, comme pour un branchement par
+        // registre. C'est ce qui distingue ce cœur de son cadet.
+        Machine machine;
+        machine.bus.write32(data_base, data_base + 0x41U);
+        machine.reg(0) = data_base;
+        machine.run({single_transfer(0U, 15U, 0U, true, false, true, true, false)});
+        check(machine.reg(15) == data_base + 0x40U, "LDR vers R15 aligne l'adresse chargée");
+        check(machine.cpu.state().thumb(), "et bascule en Thumb sur un bit bas posé");
+    }
+    {
+        Machine machine;
+        machine.bus.write32(data_base, data_base + 0x40U);
+        machine.reg(0) = data_base;
+        machine.run({single_transfer(0U, 15U, 0U, true, false, true, true, false)});
+        check(machine.reg(15) == data_base + 0x40U, "une cible paire branche aussi");
+        check(!machine.cpu.state().thumb(), "et reste en ARM");
+    }
     {   // Rangé, R15 vaut l'instruction plus douze.
         Machine machine;
         machine.reg(0) = data_base;
@@ -975,12 +993,20 @@ void les_transferts_par_blocs_parcourent_les_registres() {
             check(machine.reg(0) == data_base + 0x40U, std::string{mode.label} + " : base inchangée");
         }
     }
-    {   // Charger R15 branche, et le bit bas est écarté.
+    {   // Charger R15 branche, et entrelace comme un chargement simple.
         Machine machine;
         machine.reg(0) = data_base;
         machine.bus.write32(data_base, data_base + 0x21U);
         machine.run({block_transfer(0U, 0x8000U, true, false, true, false)});
         check(machine.reg(15) == data_base + 0x20U, "LDM vers R15 branche à l'adresse chargée");
+        check(machine.cpu.state().thumb(), "et bascule en Thumb sur un bit bas posé");
+    }
+    {
+        Machine machine;
+        machine.reg(0) = data_base;
+        machine.bus.write32(data_base, data_base + 0x20U);
+        machine.run({block_transfer(0U, 0x8000U, true, false, true, false)});
+        check(!machine.cpu.state().thumb(), "une cible paire laisse le cœur en ARM");
     }
     {   // Rangé, R15 vaut encore l'instruction plus douze.
         Machine machine;
@@ -1020,11 +1046,15 @@ void les_transferts_par_blocs_parcourent_les_registres() {
         machine.cpu.state().irq_spsr =
             static_cast<std::uint32_t>(CpuMode::user) | psr::carry;
         machine.reg(13) = data_base;
-        machine.bus.write32(data_base, data_base + 0x40U);
+        // L'adresse porte un bit bas posé, que le retour d'exception doit
+        // ignorer : c'est le CPSR sauvegardé qui décide de l'état, et le lire
+        // deux fois le contredirait.
+        machine.bus.write32(data_base, data_base + 0x41U);
         machine.run({block_transfer(13U, 0x8000U, true, false, true, false, true)});
         check(machine.reg(15) == data_base + 0x40U, "le retour se fait à l'adresse chargée");
         check(machine.cpu.state().mode() == CpuMode::user, "le mode sauvegardé est restauré");
         check(machine.flag(psr::carry), "les indicateurs sauvegardés reviennent aussi");
+        check(!machine.cpu.state().thumb(), "et l'état vient du registre sauvegardé, pas de l'adresse");
     }
 }
 
@@ -1311,7 +1341,7 @@ void les_exceptions_basculent_de_mode_et_de_vecteur() {
         Machine machine;
         machine.cpu.state().cpsr = static_cast<std::uint32_t>(CpuMode::user) | psr::carry;
         machine.run({software_interrupt(0x123456U)});
-        check(machine.reg(15) == Arm9::software_interrupt_vector, "SWI saute au vecteur superviseur");
+        check(machine.reg(15) == ArmCore::software_interrupt_vector, "SWI saute au vecteur superviseur");
         check(machine.cpu.state().mode() == CpuMode::supervisor, "SWI passe en mode superviseur");
         check(machine.reg(14) == program_base + 4U, "SWI retient l'instruction suivante");
         check(
@@ -1360,7 +1390,7 @@ void les_exceptions_basculent_de_mode_et_de_vecteur() {
     {   // Instruction inconnue.
         Machine machine;
         machine.run({coprocessor_data_operation});
-        check(machine.reg(15) == Arm9::undefined_vector, "une instruction inconnue saute au vecteur prévu");
+        check(machine.reg(15) == ArmCore::undefined_vector, "une instruction inconnue saute au vecteur prévu");
         check(machine.cpu.state().mode() == CpuMode::undefined, "et bascule en mode indéfini");
         check(machine.reg(14) == program_base + 4U, "le retour pointe après l'instruction fautive");
         check(machine.cpu.unimplemented_count() == 1U, "elle est comptée");
@@ -1368,7 +1398,7 @@ void les_exceptions_basculent_de_mode_et_de_vecteur() {
     }
     {   // Seule la première est retenue, toutes sont comptées.
         Machine machine;
-        machine.load(Arm9::undefined_vector, {branch(-3, false)});
+        machine.load(ArmCore::undefined_vector, {branch(-3, false)});
         machine.load(program_base, {coprocessor_data_operation | 0x11U});
         machine.reg(15) = program_base;
         machine.cpu.step();
@@ -1400,7 +1430,7 @@ void les_exceptions_basculent_de_mode_et_de_vecteur() {
         machine.reg(15) = program_base;
         machine.cpu.set_irq_line(true);
         machine.cpu.step();
-        check(machine.reg(15) == Arm9::irq_vector, "l'interruption saute à son vecteur");
+        check(machine.reg(15) == ArmCore::irq_vector, "l'interruption saute à son vecteur");
         check(machine.cpu.state().mode() == CpuMode::irq, "et bascule en mode interruption");
         check(machine.reg(14) == program_base + 4U, "le retour pointe l'instruction non exécutée, plus quatre");
         check(machine.flag(psr::irq_disable), "l'entrée masque les interruptions");
@@ -1410,7 +1440,7 @@ void les_exceptions_basculent_de_mode_et_de_vecteur() {
         // l'instruction interrompue n'a pas été exécutée.
         Machine machine;
         machine.cpu.state().cpsr = static_cast<std::uint32_t>(CpuMode::user) | psr::overflow;
-        machine.load(Arm9::irq_vector, {data_op(op_sub, true, 14U, 15U, immediate_operand(4U, 0U), true)});
+        machine.load(ArmCore::irq_vector, {data_op(op_sub, true, 14U, 15U, immediate_operand(4U, 0U), true)});
         machine.load(program_base, {mov_immediate(1U, 7U)});
         machine.reg(15) = program_base;
         machine.cpu.set_irq_line(true);
@@ -1440,7 +1470,7 @@ void les_exceptions_basculent_de_mode_et_de_vecteur() {
         machine.cpu.set_irq_line(true);
         machine.cpu.set_fiq_line(true);
         machine.cpu.step();
-        check(machine.reg(15) == Arm9::fiq_vector, "la ligne rapide l'emporte");
+        check(machine.reg(15) == ArmCore::fiq_vector, "la ligne rapide l'emporte");
         check(machine.cpu.state().mode() == CpuMode::fiq, "et bascule en mode rapide");
         check(machine.flag(psr::fiq_disable), "elle masque les interruptions rapides");
         check(machine.flag(psr::irq_disable), "et les ordinaires");
@@ -1461,7 +1491,7 @@ void les_exceptions_basculent_de_mode_et_de_vecteur() {
         machine.cpu.reset();
         check(machine.cpu.unimplemented_count() == 0U, "la remise à zéro l'efface");
         check(machine.cpu.first_unimplemented() == 0U, "et oublie la première instruction");
-        check(machine.cpu.state().registers[15] == Arm9::reset_vector, "le compteur repart du vecteur de remise à zéro");
+        check(machine.cpu.state().registers[15] == ArmCore::reset_vector, "le compteur repart du vecteur de remise à zéro");
         check(machine.cpu.state().mode() == CpuMode::supervisor, "en mode superviseur");
         check(machine.cpu.state().flag(psr::irq_disable), "avec les interruptions masquées");
         check(machine.cpu.state().flag(psr::fiq_disable), "les deux");

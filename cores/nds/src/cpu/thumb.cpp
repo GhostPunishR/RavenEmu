@@ -1,4 +1,4 @@
-#include "cpu/arm9.hpp"
+#include "cpu/arm_core.hpp"
 
 #include "cpu/bits.hpp"
 
@@ -29,7 +29,7 @@ using detail::sign_extend;
  * instructions plus loin.
  */
 
-void Arm9::execute_thumb(std::uint32_t opcode) {
+void ArmCore::execute_thumb(std::uint32_t opcode) {
     switch (bits(opcode, 13, 3)) {
     case 0x0:
         // Le décalage immédiat occupe l'espace, sauf une entaille où ARM a rangé
@@ -85,7 +85,7 @@ void Arm9::execute_thumb(std::uint32_t opcode) {
     }
 }
 
-void Arm9::thumb_shift_immediate(std::uint32_t opcode) {
+void ArmCore::thumb_shift_immediate(std::uint32_t opcode) {
     const auto rd = bits(opcode, 0, 3);
     const auto rs = bits(opcode, 3, 3);
     const auto amount = bits(opcode, 6, 5);
@@ -98,7 +98,7 @@ void Arm9::thumb_shift_immediate(std::uint32_t opcode) {
     set_logical_flags(shifted.value, shifted.carry);
 }
 
-void Arm9::thumb_add_subtract(std::uint32_t opcode) {
+void ArmCore::thumb_add_subtract(std::uint32_t opcode) {
     const auto rd = bits(opcode, 0, 3);
     const auto rs = bits(opcode, 3, 3);
     const auto operand = bit(opcode, 10) ? bits(opcode, 6, 3) : read_register(bits(opcode, 6, 3));
@@ -116,7 +116,7 @@ void Arm9::thumb_add_subtract(std::uint32_t opcode) {
     }
 }
 
-void Arm9::thumb_immediate_operation(std::uint32_t opcode) {
+void ArmCore::thumb_immediate_operation(std::uint32_t opcode) {
     const auto rd = bits(opcode, 8, 3);
     const auto value = bits(opcode, 0, 8);
     const auto left = read_register(rd);
@@ -149,7 +149,7 @@ void Arm9::thumb_immediate_operation(std::uint32_t opcode) {
     }
 }
 
-void Arm9::thumb_alu_operation(std::uint32_t opcode) {
+void ArmCore::thumb_alu_operation(std::uint32_t opcode) {
     const auto rd = bits(opcode, 0, 3);
     const auto rs = bits(opcode, 3, 3);
     const auto left = read_register(rd);
@@ -252,7 +252,7 @@ void Arm9::thumb_alu_operation(std::uint32_t opcode) {
     }
 }
 
-void Arm9::thumb_high_register(std::uint32_t opcode) {
+void ArmCore::thumb_high_register(std::uint32_t opcode) {
     // Seule forme du jeu qui atteigne R8 à R15 : le quatrième bit de chaque
     // numéro de registre est rangé à part.
     const auto rd = bits(opcode, 0, 3) | (bit(opcode, 7) ? 8U : 0U);
@@ -280,6 +280,9 @@ void Arm9::thumb_high_register(std::uint32_t opcode) {
         return;
     }
     default: {
+        // Le bit de lien fait de ce branchement un appel, et cette forme
+        // n'existe qu'à partir d'ARMv5.
+        if (bit(opcode, 7) && !has_v5_extensions()) { raise_undefined(opcode); return; }
         const auto target = read_register(rs);
         if (bit(opcode, 7)) write_register(14, (state_.registers[15] - 2U) | 1U);
         state_.set_flag(psr::thumb, bit(target, 0));
@@ -289,7 +292,7 @@ void Arm9::thumb_high_register(std::uint32_t opcode) {
     }
 }
 
-void Arm9::thumb_load_pc_relative(std::uint32_t opcode) {
+void ArmCore::thumb_load_pc_relative(std::uint32_t opcode) {
     // Le compteur de programme est aligné sur le mot avant l'addition : une
     // instruction Thumb peut se trouver au milieu d'un mot, pas la table de
     // constantes qu'elle vise. C'est ici la seule mise en forme de l'adresse —
@@ -299,7 +302,7 @@ void Arm9::thumb_load_pc_relative(std::uint32_t opcode) {
     write_register(bits(opcode, 8, 3), load32(base + (bits(opcode, 0, 8) << 2U)));
 }
 
-void Arm9::thumb_transfer_register_offset(std::uint32_t opcode) {
+void ArmCore::thumb_transfer_register_offset(std::uint32_t opcode) {
     const auto rd = bits(opcode, 0, 3);
     const auto address = read_register(bits(opcode, 3, 3)) + read_register(bits(opcode, 6, 3));
 
@@ -323,7 +326,7 @@ void Arm9::thumb_transfer_register_offset(std::uint32_t opcode) {
     }
 }
 
-void Arm9::thumb_transfer_immediate_offset(std::uint32_t opcode) {
+void ArmCore::thumb_transfer_immediate_offset(std::uint32_t opcode) {
     const auto rd = bits(opcode, 0, 3);
     const auto base = read_register(bits(opcode, 3, 3));
     const bool byte_access = bit(opcode, 12);
@@ -341,14 +344,14 @@ void Arm9::thumb_transfer_immediate_offset(std::uint32_t opcode) {
     }
 }
 
-void Arm9::thumb_transfer_halfword(std::uint32_t opcode) {
+void ArmCore::thumb_transfer_halfword(std::uint32_t opcode) {
     const auto rd = bits(opcode, 0, 3);
     const auto address = read_register(bits(opcode, 3, 3)) + (bits(opcode, 6, 5) << 1U);
     if (bit(opcode, 11)) write_register(rd, load16(address & ~1U));
     else store16(address & ~1U, static_cast<std::uint16_t>(read_register(rd)));
 }
 
-void Arm9::thumb_transfer_stack(std::uint32_t opcode) {
+void ArmCore::thumb_transfer_stack(std::uint32_t opcode) {
     const auto rd = bits(opcode, 8, 3);
     const auto address = read_register(13) + (bits(opcode, 0, 8) << 2U);
     if (bit(opcode, 11)) {
@@ -358,7 +361,7 @@ void Arm9::thumb_transfer_stack(std::uint32_t opcode) {
     }
 }
 
-void Arm9::thumb_load_address(std::uint32_t opcode) {
+void ArmCore::thumb_load_address(std::uint32_t opcode) {
     const auto rd = bits(opcode, 8, 3);
     const auto offset = bits(opcode, 0, 8) << 2U;
     // Calcul d'adresse, pas arithmétique : aucun indicateur n'est écrit.
@@ -366,13 +369,13 @@ void Arm9::thumb_load_address(std::uint32_t opcode) {
     write_register(rd, base + offset);
 }
 
-void Arm9::thumb_adjust_stack(std::uint32_t opcode) {
+void ArmCore::thumb_adjust_stack(std::uint32_t opcode) {
     const auto offset = bits(opcode, 0, 7) << 2U;
     const auto stack = read_register(13);
     write_register(13, bit(opcode, 7) ? stack - offset : stack + offset);
 }
 
-void Arm9::thumb_push_pop(std::uint32_t opcode) {
+void ArmCore::thumb_push_pop(std::uint32_t opcode) {
     const bool load = bit(opcode, 11);
     const bool extra = bit(opcode, 8);
     auto list = bits(opcode, 0, 8);
@@ -394,10 +397,10 @@ void Arm9::thumb_push_pop(std::uint32_t opcode) {
             if (!bit(list, index)) continue;
             const auto value = load32(address & ~3U);
             if (index == 15U) {
-                // Le retour d'un appel peut ramener en ARM : le bit bas de
-                // l'adresse dépilée décide de l'état.
-                state_.set_flag(psr::thumb, bit(value, 0));
-                write_register(15, value & ~1U);
+                // Sur ARMv5, le retour d'un appel peut ramener en ARM : le bit
+                // bas de l'adresse dépilée décide de l'état. ARMv4T reste en
+                // Thumb quoi qu'il arrive.
+                write_popped_pc(value);
             } else {
                 state_.registers[index] = value;
             }
@@ -419,7 +422,7 @@ void Arm9::thumb_push_pop(std::uint32_t opcode) {
     write_register(13, base);
 }
 
-void Arm9::thumb_block_transfer(std::uint32_t opcode) {
+void ArmCore::thumb_block_transfer(std::uint32_t opcode) {
     const auto rb = bits(opcode, 8, 3);
     const auto list = bits(opcode, 0, 8);
     const bool load = bit(opcode, 11);
@@ -445,7 +448,7 @@ void Arm9::thumb_block_transfer(std::uint32_t opcode) {
     if (!(load && bit(list, rb))) write_register(rb, base + count * 4U);
 }
 
-void Arm9::thumb_conditional_branch(std::uint32_t opcode) {
+void ArmCore::thumb_conditional_branch(std::uint32_t opcode) {
     // Le champ de condition est celui d'ARM, décalé : la table est la même, et
     // `condition_met` la lit au rang 28.
     if (!condition_met(bits(opcode, 8, 4) << 28U)) return;
@@ -453,12 +456,12 @@ void Arm9::thumb_conditional_branch(std::uint32_t opcode) {
     write_register(15, state_.registers[15] + offset);
 }
 
-void Arm9::thumb_branch(std::uint32_t opcode) {
+void ArmCore::thumb_branch(std::uint32_t opcode) {
     const auto offset = sign_extend(bits(opcode, 0, 11), 11) << 1U;
     write_register(15, state_.registers[15] + offset);
 }
 
-void Arm9::thumb_long_branch(std::uint32_t opcode) {
+void ArmCore::thumb_long_branch(std::uint32_t opcode) {
     const auto offset = bits(opcode, 0, 11);
 
     if (!bit(opcode, 11)) {
@@ -476,7 +479,8 @@ void Arm9::thumb_long_branch(std::uint32_t opcode) {
 
     if (bits(opcode, 11, 5) == 0x1dU) {
         // Le suffixe d'échange bascule en ARM, où la cible doit être alignée
-        // sur un mot.
+        // sur un mot. Il n'existe pas avant ARMv5.
+        if (!has_v5_extensions()) { raise_undefined(opcode); return; }
         state_.set_flag(psr::thumb, false);
         write_register(15, target & ~3U);
         return;

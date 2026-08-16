@@ -4,10 +4,27 @@
 #include "cpu/cp15.hpp"
 #include "cpu/cpu_state.hpp"
 
+#include <memory>
+
 namespace ravenemu::nds {
 
+/** Révision d'architecture, qui décide de ce que le cœur sait faire. */
+enum class Architecture {
+    /** ARM7TDMI : jeu ARMv4T, sans coprocesseur ni entrelacement au chargement. */
+    v4t,
+    /** ARM946E-S : jeu ARMv5TE, avec coprocesseur système. */
+    v5te,
+};
+
 /**
- * Cœur ARM946E-S de la Nintendo DS, jeux d'instructions ARM et Thumb.
+ * Cœur ARM de la Nintendo DS, jeux d'instructions ARM et Thumb.
+ *
+ * La console porte deux processeurs de la même famille, et une seule
+ * implémentation les sert. Ce n'est pas une économie de lignes : deux copies
+ * dériveraient l'une de l'autre, et une correction apportée à l'une laisserait
+ * l'autre avec l'ancienne faute. Ce qui les sépare tient dans une révision
+ * d'architecture, nommée et consultée aux quelques endroits où elle compte —
+ * ces endroits sont ainsi énumérables, ce qu'une duplication interdirait.
  *
  * ### Ce qui est couvert
  *
@@ -50,9 +67,11 @@ namespace ravenemu::nds {
  * une commodité de mise en œuvre : des programmes s'en servent pour calculer
  * des adresses relatives, et la retirer casserait leur arithmétique.
  */
-class Arm9 {
+class ArmCore {
 public:
-    explicit Arm9(Bus& bus) noexcept : bus_(bus) {}
+    ArmCore(Bus& bus, Architecture architecture);
+
+    [[nodiscard]] Architecture architecture() const noexcept { return architecture_; }
 
     /** Remet le cœur dans l'état qui suit une mise sous tension. */
     void reset() noexcept;
@@ -64,16 +83,17 @@ public:
     [[nodiscard]] const CpuState& state() const noexcept { return state_; }
 
     /**
-     * Coprocesseur système, indissociable du cœur.
+     * Coprocesseur système, ou rien du tout.
      *
-     * Il n'est pas facultatif : l'ARM946E-S n'existe pas sans lui, et c'est par
-     * lui que passent les mémoires locales, la base des vecteurs et l'attente
-     * d'interruption. À la remise à zéro il est transparent — mémoires locales
-     * éteintes, vecteurs en position basse — si bien qu'un cœur qu'on n'a pas
-     * configuré se comporte comme s'il n'y en avait pas.
+     * L'ARM946E-S ne va pas sans lui : c'est par lui que passent les mémoires
+     * locales, la base des vecteurs et l'attente d'interruption. L'ARM7TDMI n'en
+     * a aucun, et ses instructions de coprocesseur lèvent l'exception prévue à
+     * cet effet plutôt que d'être ignorées. La distinction est portée par un
+     * pointeur nul plutôt que par un objet inerte : un coprocesseur qui répond
+     * « rien » n'est pas la même chose qu'un coprocesseur absent.
      */
-    [[nodiscard]] Cp15& cp15() noexcept { return cp15_; }
-    [[nodiscard]] const Cp15& cp15() const noexcept { return cp15_; }
+    [[nodiscard]] Cp15* coprocessor() noexcept { return coprocessor_.get(); }
+    [[nodiscard]] const Cp15* coprocessor() const noexcept { return coprocessor_.get(); }
 
     /** Niveau de la ligne d'interruption, échantillonné entre deux instructions. */
     void set_irq_line(bool asserted) noexcept { irq_line_ = asserted; }
@@ -122,6 +142,21 @@ private:
     void execute_branch_exchange(std::uint32_t opcode, bool link);
     void execute_coprocessor(std::uint32_t opcode);
 
+    /**
+     * Écrit le compteur de programme depuis une valeur chargée en mémoire.
+     *
+     * C'est ici que les deux architectures divergent le plus visiblement :
+     * ARMv5 y lit le bit bas comme un changement d'état, ARMv4T l'ignore et
+     * reste où elle est. Un jeu écrit pour l'une part à la dérive sur l'autre.
+     */
+    void write_loaded_pc(std::uint32_t value) noexcept;
+    /** Même règle, pour une adresse dépilée depuis l'état Thumb. */
+    void write_popped_pc(std::uint32_t value) noexcept;
+
+    [[nodiscard]] bool has_v5_extensions() const noexcept {
+        return architecture_ == Architecture::v5te;
+    }
+
     void execute_thumb(std::uint32_t opcode);
     void thumb_shift_immediate(std::uint32_t opcode);
     void thumb_add_subtract(std::uint32_t opcode);
@@ -166,13 +201,40 @@ private:
     void set_arithmetic_flags(std::uint32_t result, std::uint32_t left, std::uint32_t right, bool carry, bool subtract) noexcept;
 
     Bus& bus_;
-    Cp15 cp15_{};
+    Architecture architecture_;
+    std::unique_ptr<Cp15> coprocessor_;
     CpuState state_{};
     bool branched_{};
     bool irq_line_{};
     bool fiq_line_{};
     std::uint32_t unimplemented_{};
     std::uint32_t first_unimplemented_{};
+};
+
+/** Processeur principal : ARM946E-S, jeu ARMv5TE, coprocesseur système. */
+class Arm9 final : public ArmCore {
+public:
+    explicit Arm9(Bus& bus) : ArmCore(bus, Architecture::v5te) {}
+
+    /** Le coprocesseur existe toujours sur ce processeur. */
+    [[nodiscard]] Cp15& cp15() noexcept { return *coprocessor(); }
+    [[nodiscard]] const Cp15& cp15() const noexcept { return *coprocessor(); }
+};
+
+/**
+ * Processeur secondaire : ARM7TDMI, jeu ARMv4T.
+ *
+ * Il tient l'amorçage de la console, le son, l'écran tactile et la liaison sans
+ * fil. Son jeu d'instructions est plus étroit que celui du processeur
+ * principal — ni `BLX`, ni `CLZ`, ni arithmétique saturante, ni doubles mots, ni
+ * coprocesseur — et il ne change pas d'état sur un chargement du compteur de
+ * programme. Ces absences ne sont pas des lacunes de l'émulateur : ce sont
+ * celles du matériel, et les instructions correspondantes lèvent l'exception
+ * d'instruction indéfinie comme sur console.
+ */
+class Arm7 final : public ArmCore {
+public:
+    explicit Arm7(Bus& bus) : ArmCore(bus, Architecture::v4t) {}
 };
 
 } // namespace ravenemu::nds
