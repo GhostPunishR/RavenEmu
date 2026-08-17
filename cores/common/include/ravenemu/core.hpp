@@ -15,6 +15,10 @@ namespace ravenemu {
 enum class Console : std::uint8_t {
     game_boy = 0,
     game_boy_advance = 2,
+    // 1 a désigné une seconde entrée Game Boy Color et reste retiré : un état
+    // enregistré avec cette valeur ne doit jamais être relu comme une autre
+    // console. La Nintendo DS prend donc 3, la première valeur libre.
+    nintendo_ds = 3,
 };
 
 enum class Button : std::uint8_t {
@@ -187,5 +191,6 @@ public:
 
 [[nodiscard]] std::unique_ptr<Core> make_game_boy_core();
 [[nodiscard]] std::unique_ptr<Core> make_gba_core(std::optional<GbaSaveType> forced_save_type);
+[[nodiscard]] std::unique_ptr<Core> make_nds_core();
 
 } // namespace ravenemu
