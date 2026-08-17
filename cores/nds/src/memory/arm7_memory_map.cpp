@@ -9,10 +9,11 @@ namespace ravenemu::nds {
 
 Arm7MemoryMap::Arm7MemoryMap(
     SystemMemory& system,
+    VideoSystem& video,
     InterProcessor& link,
     InterruptController& interrupts
 )
-    : system_(system), link_(link), interrupts_(interrupts),
+    : system_(system), video_(video), link_(link), interrupts_(interrupts),
       private_wram_(private_wram_bytes, 0) {}
 
 void Arm7MemoryMap::reset() noexcept {
@@ -119,6 +120,15 @@ void Arm7MemoryMap::write_io(std::uint32_t address, std::uint32_t value, std::ui
 std::uint8_t Arm7MemoryMap::read_io_byte(std::uint32_t address) noexcept {
     if (address == shared_wram_status) return system_.shared_control();
 
+    if (address >= display_status && address < display_status + 2U) {
+        return registers::byte_of(
+            video_.display().status(Processor::secondary), address - display_status);
+    }
+    if (address >= line_counter && address < line_counter + 2U) {
+        // Le compteur est le même des deux côtés : c'est un seul faisceau.
+        return registers::byte_of(video_.display().line(), address - line_counter);
+    }
+
     if (address == registers::interrupt_master) return registers::byte_of(interrupts_.master_enable(), 0U);
     if (address >= registers::interrupt_enable && address < registers::interrupt_enable + 4U) {
         return registers::byte_of(interrupts_.enabled(), address - registers::interrupt_enable);
@@ -131,6 +141,21 @@ std::uint8_t Arm7MemoryMap::read_io_byte(std::uint32_t address) noexcept {
 }
 
 void Arm7MemoryMap::write_io_byte(std::uint32_t address, std::uint8_t value) noexcept {
+    if (address >= display_status && address < display_status + 2U) {
+        // Ce processeur règle ses propres réveils sur le balayage, sans toucher
+        // à ceux de l'autre.
+        video_.display().set_status(
+            Processor::secondary,
+            static_cast<std::uint16_t>(registers::with_byte(
+                video_.display().status(Processor::secondary), address - display_status, value))
+        );
+        return;
+    }
+    if (address >= line_counter && address < line_counter + 2U) {
+        note_unimplemented_io(address);
+        return;
+    }
+
     if (address == shared_wram_status) {
         // Vue en lecture seule : ce processeur constate le partage, il ne le
         // décide pas. L'écriture est ignorée par le matériel, et ce silence est

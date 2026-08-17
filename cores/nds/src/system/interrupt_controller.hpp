@@ -28,13 +28,19 @@ namespace ravenemu::nds {
  *
  * ### Ce qui n'est pas là
  *
- * Les sources autres que la communication entre processeurs. Le registre les
- * accepte toutes — il n'a aucune raison de trier, et sa sémantique est complète
- * telle quelle — mais aucune ne les pose encore : ni retour de balayage, ni
- * minuteries, ni transferts autonomes, faute des organes correspondants.
+ * Le registre accepte toutes les sources — il n'a aucune raison de trier, et sa
+ * sémantique est complète telle quelle — mais seules celles du balayage et de la
+ * communication entre processeurs sont posées par un organe. Ni minuteries, ni
+ * transferts autonomes, ni cartouche, faute des organes correspondants.
  */
 class InterruptController {
 public:
+    // Sources liées au balayage de l'écran. Ce sont les trois plus utilisées
+    // d'une console : c'est sur elles qu'un jeu accroche son rythme.
+    static constexpr std::uint32_t vertical_blank = 1U << 0U;
+    static constexpr std::uint32_t horizontal_blank = 1U << 1U;
+    static constexpr std::uint32_t line_match = 1U << 2U;
+
     // Sources liées à la communication entre les deux processeurs.
     static constexpr std::uint32_t ipc_sync = 1U << 16U;
     static constexpr std::uint32_t ipc_send_queue_empty = 1U << 17U;

@@ -52,14 +52,16 @@ struct Console {
     InterruptController main_interrupts{};
     InterruptController secondary_interrupts{};
     InterProcessor link{main_interrupts, secondary_interrupts};
-    Arm9MemoryMap main_map{system, link, main_interrupts};
-    Arm7MemoryMap secondary_map{system, link, secondary_interrupts};
+    VideoSystem video{main_interrupts, secondary_interrupts};
+    Arm9MemoryMap main_map{system, video, link, main_interrupts};
+    Arm7MemoryMap secondary_map{system, video, link, secondary_interrupts};
 
     Console() {
         system.reset();
         main_interrupts.reset();
         secondary_interrupts.reset();
         link.reset();
+        video.reset();
         main_map.reset();
         secondary_map.reset();
     }

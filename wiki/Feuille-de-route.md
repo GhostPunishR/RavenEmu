@@ -59,16 +59,22 @@ aujourd'hui :
 - leurs sprites ordinaires : cent vingt-huit objets, douze formats, les deux
   profondeurs de palette, les deux retournements, les deux rangements de tuiles,
   le repli sur les bords, et leur composition avec les décors, un sprite passant
-  devant un décor de même priorité.
+  devant un décor de même priorité;
+- le contrôleur d'affichage : le compteur de 263 lignes dont 192 affichées, un
+  registre d'état par processeur avec ses propres autorisations et sa propre
+  ligne guettée sur neuf bits, les trois interruptions du balayage, le rendu
+  d'une trame entière dans le tampon empilé, et l'échange des deux écrans
+  commandé par le registre d'alimentation.
 
 Toute demande d'exécution reste refusée par une erreur nommée, volontairement :
-un écran noir laisserait croire à une émulation silencieuse. Le moteur 2D sait
-dessiner une ligne, mais rien ne la lui demande encore, faute d'ordonnanceur et
-de compteur de lignes. Restent à écrire les décors tournants et les modes
-étendus, les sprites tournants et semi-transparents, le moteur 3D, les fenêtres
-et les mélanges, les palettes étendues, la cartouche, les minuteries, les
-transferts autonomes, l'écran tactile et le son. La console n'apparaît pas encore
-dans la bibliothèque de l'application.
+un écran noir laisserait croire à une émulation silencieuse. Le contrôleur sait
+dessiner une trame et le balayage sait avancer, mais rien ne fait encore alterner
+les deux processeurs et le faisceau, faute de modèle de durée. Restent à écrire
+cet ordonnanceur, les décors tournants et les modes étendus, les sprites
+tournants et semi-transparents, le moteur 3D, les fenêtres et les mélanges, les
+palettes étendues, la cartouche, les minuteries, les transferts autonomes,
+l'écran tactile et le son. La console n'apparaît pas encore dans la bibliothèque
+de l'application.
 
 ## Pistes futures
 

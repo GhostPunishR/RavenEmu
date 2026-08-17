@@ -8,8 +8,10 @@ add_library(nds_raven_core STATIC
     src/memory/arm9_memory_map.cpp
     src/memory/system_memory.cpp
     src/system/inter_processor.cpp
+    src/video/display_controller.cpp
     src/video/engine2d.cpp
     src/video/video_memory.cpp
+    src/video/video_system.cpp
 )
 target_include_directories(nds_raven_core
     PUBLIC include
@@ -111,6 +113,16 @@ if(RAVENEMU_BUILD_TESTS)
     )
     target_link_libraries(nds_raven_engine2d_tests PRIVATE nds_raven_core)
     add_test(NAME nds_raven_engine2d COMMAND nds_raven_engine2d_tests)
+
+    # Le balayage donne son rythme à la console : sa suite éprouve le compteur,
+    # les deux registres d'état, et les trois interruptions qu'il pose.
+    add_executable(nds_raven_display_tests tests/display_controller_test.cpp)
+    target_include_directories(nds_raven_display_tests PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/src
+        ${CMAKE_CURRENT_LIST_DIR}/../common/tests/support
+    )
+    target_link_libraries(nds_raven_display_tests PRIVATE nds_raven_core)
+    add_test(NAME nds_raven_display COMMAND nds_raven_display_tests)
 
     # La communication entre processeurs n'a de sens qu'avec les deux cartes et
     # les deux contrôleurs montés ensemble : sa suite les assemble.

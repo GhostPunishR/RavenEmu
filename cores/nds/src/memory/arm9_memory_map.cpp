@@ -18,24 +18,17 @@ constexpr std::uint32_t scroll_offset = 0x10;
 
 Arm9MemoryMap::Arm9MemoryMap(
     SystemMemory& system,
+    VideoSystem& video,
     InterProcessor& link,
     InterruptController& interrupts
 )
-    : system_(system), link_(link), interrupts_(interrupts),
-      palette_(palette_bytes, 0),
-      oam_(oam_bytes, 0),
-      main_engine_(Engine::main, video_, palette_, oam_),
-      secondary_engine_(Engine::secondary, video_, palette_, oam_) {}
+    : system_(system), video_(video), link_(link), interrupts_(interrupts) {}
 
 void Arm9MemoryMap::reset() noexcept {
-    // La mémoire partagée est remise à zéro par son propriétaire, non par
-    // chacune des deux vues : la vider deux fois n'aurait pas de sens, et la
-    // vider depuis l'une effacerait le travail de l'autre.
-    std::fill(palette_.begin(), palette_.end(), std::uint8_t{0});
-    std::fill(oam_.begin(), oam_.end(), std::uint8_t{0});
-    video_.reset();
-    main_engine_.reset();
-    secondary_engine_.reset();
+    // La mémoire partagée et le matériel vidéo sont remis à zéro par leurs
+    // propriétaires, non par cette vue : les vider ici effacerait le travail de
+    // l'autre processeur.
+    power_ = 0;
     unmapped_ = 0;
     first_unmapped_ = 0;
     unimplemented_io_ = 0;
@@ -43,7 +36,7 @@ void Arm9MemoryMap::reset() noexcept {
 }
 
 std::span<std::uint8_t> Arm9MemoryMap::vram_bank(std::size_t index) noexcept {
-    return video_.bank(index);
+    return video_.memory().bank(index);
 }
 
 void Arm9MemoryMap::note_unmapped(std::uint32_t address) noexcept {
@@ -60,7 +53,7 @@ Arm9MemoryMap::Location Arm9MemoryMap::locate_video(std::uint32_t address) noexc
     // Les fenêtres des moteurs se lisent par les moteurs, non par le bus : le
     // processeur n'y écrit pas des pixels, il écrit dans une banque, et c'est
     // l'aiguillage qui décide où cette banque se montre.
-    return {Region::video, video_.transfer(address)};
+    return {Region::video, video_.memory().transfer(address)};
 }
 
 Arm9MemoryMap::Location Arm9MemoryMap::locate(std::uint32_t address) noexcept {
@@ -75,11 +68,11 @@ Arm9MemoryMap::Location Arm9MemoryMap::locate(std::uint32_t address) noexcept {
     case 0x04:
         return {Region::input_output, nullptr};
     case 0x05:
-        return {Region::palette, &palette_[address % palette_bytes]};
+        return {Region::palette, &video_.palette()[address % palette_bytes]};
     case 0x06:
         return locate_video(address);
     case 0x07:
-        return {Region::object_attributes, &oam_[address % oam_bytes]};
+        return {Region::object_attributes, &video_.object_attributes()[address % oam_bytes]};
     default:
         // Tout le reste n'est pas décodé, et pour trois raisons différentes que
         // rien ne distingue encore : les adresses basses appartiennent à la
@@ -112,13 +105,13 @@ bool Arm9MemoryMap::bank_control_index(std::uint32_t address, std::size_t& index
 Engine2d* Arm9MemoryMap::engine_register(std::uint32_t address, std::uint32_t& offset) noexcept {
     Engine2d* engine = nullptr;
     if (address >= main_engine_base && address < main_engine_base + engine_register_bytes) {
-        engine = &main_engine_;
+        engine = &video_.engine(Engine::main);
         offset = address - main_engine_base;
     } else if (
         address >= secondary_engine_base &&
         address < secondary_engine_base + engine_register_bytes
     ) {
-        engine = &secondary_engine_;
+        engine = &video_.engine(Engine::secondary);
         offset = address - secondary_engine_base;
     } else {
         return nullptr;
@@ -238,11 +231,21 @@ void Arm9MemoryMap::write_io(std::uint32_t address, std::uint32_t value, std::ui
 std::uint8_t Arm9MemoryMap::read_io_byte(std::uint32_t address) noexcept {
     if (address == shared_wram_control) return system_.shared_control();
     std::size_t index = 0;
-    if (bank_control_index(address, index)) return video_.control(index);
+    if (bank_control_index(address, index)) return video_.memory().control(index);
 
     std::uint32_t offset = 0;
     if (auto* engine = engine_register(address, offset); engine != nullptr) {
         return read_engine_byte(*engine, offset);
+    }
+
+    if (address >= display_status && address < display_status + 2U) {
+        return registers::byte_of(display().status(Processor::main), address - display_status);
+    }
+    if (address >= line_counter && address < line_counter + 2U) {
+        return registers::byte_of(display().line(), address - line_counter);
+    }
+    if (address >= power_control && address < power_control + 2U) {
+        return registers::byte_of(power_, address - power_control);
     }
 
     if (address == registers::interrupt_master) return registers::byte_of(interrupts_.master_enable(), 0U);
@@ -264,11 +267,31 @@ void Arm9MemoryMap::write_io_byte(std::uint32_t address, std::uint8_t value) noe
         return;
     }
     std::size_t index = 0;
-    if (bank_control_index(address, index)) { video_.set_control(index, value); return; }
+    if (bank_control_index(address, index)) { video_.memory().set_control(index, value); return; }
 
     std::uint32_t offset = 0;
     if (auto* engine = engine_register(address, offset); engine != nullptr) {
         write_engine_byte(*engine, offset, value);
+        return;
+    }
+
+    if (address >= display_status && address < display_status + 2U) {
+        // Les trois indicateurs du balayage sont en lecture seule : le tampon
+        // les rend, et l'écriture les écarte.
+        display().set_status(
+            Processor::main,
+            static_cast<std::uint16_t>(registers::with_byte(
+                display().status(Processor::main), address - display_status, value))
+        );
+        return;
+    }
+    if (address >= power_control && address < power_control + 2U) {
+        power_ = static_cast<std::uint16_t>(
+            registers::with_byte(power_, address - power_control, value));
+        // Un seul bit agit : celui qui échange les deux écrans. Les autres
+        // coupent l'alimentation d'organes qui n'existent pas encore, et se
+        // relisent tels qu'écrits.
+        display().set_swapped((power_ & power_swaps_screens) != 0U);
         return;
     }
 

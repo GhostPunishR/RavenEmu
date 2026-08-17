@@ -89,7 +89,8 @@ void les_quantites_sont_celles_du_materiel() {
     InterruptController main_interrupts;
     InterruptController secondary_interrupts;
     InterProcessor link{main_interrupts, secondary_interrupts};
-    Arm9MemoryMap map{system, link, main_interrupts};
+    VideoSystem video{main_interrupts, secondary_interrupts};
+    Arm9MemoryMap map{system, video, link, main_interrupts};
     std::size_t total = 0;
     for (std::size_t index = 0; index < Arm9MemoryMap::vram_bank_count; ++index) {
         total += map.vram_bank(index).size();
@@ -116,8 +117,10 @@ void chaque_region_repond_a_sa_place() {
         InterruptController main_interrupts;
         InterruptController secondary_interrupts;
         InterProcessor link{main_interrupts, secondary_interrupts};
-        Arm9MemoryMap map{system, link, main_interrupts};
+        VideoSystem video{main_interrupts, secondary_interrupts};
+        Arm9MemoryMap map{system, video, link, main_interrupts};
         system.reset();
+        video.reset();
         map.reset();
         write_word(map, scenario.base, 0x1234'5678U);
         check(map.read32(scenario.base) == 0x1234'5678U, std::string{scenario.label} + " : aller-retour");
@@ -150,8 +153,10 @@ void les_regions_ne_se_recouvrent_pas() {
     InterruptController main_interrupts;
     InterruptController secondary_interrupts;
     InterProcessor link{main_interrupts, secondary_interrupts};
-    Arm9MemoryMap map{system, link, main_interrupts};
+    VideoSystem video{main_interrupts, secondary_interrupts};
+    Arm9MemoryMap map{system, video, link, main_interrupts};
     system.reset();
+    video.reset();
     map.reset();
     write_word(map, main_ram_base, 0x1111'1111U);
     write_word(map, shared_wram_base, 0x2222'2222U);
@@ -170,8 +175,10 @@ void les_trois_largeurs_d_acces() {
     InterruptController main_interrupts;
     InterruptController secondary_interrupts;
     InterProcessor link{main_interrupts, secondary_interrupts};
-    Arm9MemoryMap map{system, link, main_interrupts};
+    VideoSystem video{main_interrupts, secondary_interrupts};
+    Arm9MemoryMap map{system, video, link, main_interrupts};
     system.reset();
+    video.reset();
     map.reset();
     write_word(map, main_ram_base, 0x1234'5678U);
     check(map.read8(main_ram_base) == 0x78U, "octet bas");
@@ -203,8 +210,10 @@ void un_octet_seul_n_entre_pas_partout() {
     InterruptController main_interrupts;
     InterruptController secondary_interrupts;
     InterProcessor link{main_interrupts, secondary_interrupts};
-    Arm9MemoryMap map{system, link, main_interrupts};
+    VideoSystem video{main_interrupts, secondary_interrupts};
+    Arm9MemoryMap map{system, video, link, main_interrupts};
     system.reset();
+    video.reset();
     map.reset();
 
     // La palette, les banques vidéo et la mémoire d'objets ignorent l'écriture
@@ -239,8 +248,10 @@ void le_partage_de_la_memoire_commune() {
         InterruptController main_interrupts;
         InterruptController secondary_interrupts;
         InterProcessor link{main_interrupts, secondary_interrupts};
-        Arm9MemoryMap map{system, link, main_interrupts};
+        VideoSystem video{main_interrupts, secondary_interrupts};
+        Arm9MemoryMap map{system, video, link, main_interrupts};
         system.reset();
+        video.reset();
         map.reset();
         const auto window = map.shared_window();
         check(window.offset == 0U, "la fenêtre commence au début");
@@ -264,7 +275,8 @@ void le_partage_de_la_memoire_commune() {
             InterruptController main_interrupts;
             InterruptController secondary_interrupts;
             InterProcessor link{main_interrupts, secondary_interrupts};
-            Arm9MemoryMap map{system, link, main_interrupts};
+            VideoSystem video{main_interrupts, secondary_interrupts};
+            Arm9MemoryMap map{system, video, link, main_interrupts};
             system.reset();
             map.reset();
             map.write8(Arm9MemoryMap::shared_wram_control, scenario.control);
@@ -282,8 +294,10 @@ void le_partage_de_la_memoire_commune() {
         InterruptController main_interrupts;
         InterruptController secondary_interrupts;
         InterProcessor link{main_interrupts, secondary_interrupts};
-        Arm9MemoryMap map{system, link, main_interrupts};
+        VideoSystem video{main_interrupts, secondary_interrupts};
+        Arm9MemoryMap map{system, video, link, main_interrupts};
         system.reset();
+        video.reset();
         map.reset();
         map.write8(Arm9MemoryMap::shared_wram_control, 2U);          // moitié basse
         write_word(map, shared_wram_base, 0x1111'1111U);
@@ -307,8 +321,10 @@ void le_partage_de_la_memoire_commune() {
         InterruptController main_interrupts;
         InterruptController secondary_interrupts;
         InterProcessor link{main_interrupts, secondary_interrupts};
-        Arm9MemoryMap map{system, link, main_interrupts};
+        VideoSystem video{main_interrupts, secondary_interrupts};
+        Arm9MemoryMap map{system, video, link, main_interrupts};
         system.reset();
+        video.reset();
         map.reset();
         map.write8(Arm9MemoryMap::shared_wram_control, 2U);          // moitié basse
         write_word(map, shared_wram_base, 0x1234'5678U);
@@ -325,8 +341,10 @@ void le_partage_de_la_memoire_commune() {
         InterruptController main_interrupts;
         InterruptController secondary_interrupts;
         InterProcessor link{main_interrupts, secondary_interrupts};
-        Arm9MemoryMap map{system, link, main_interrupts};
+        VideoSystem video{main_interrupts, secondary_interrupts};
+        Arm9MemoryMap map{system, video, link, main_interrupts};
         system.reset();
+        video.reset();
         map.reset();
         map.write8(Arm9MemoryMap::shared_wram_control, 3U);
         static_cast<void>(map.read32(shared_wram_base));
@@ -338,8 +356,10 @@ void le_partage_de_la_memoire_commune() {
         InterruptController main_interrupts;
         InterruptController secondary_interrupts;
         InterProcessor link{main_interrupts, secondary_interrupts};
-        Arm9MemoryMap map{system, link, main_interrupts};
+        VideoSystem video{main_interrupts, secondary_interrupts};
+        Arm9MemoryMap map{system, video, link, main_interrupts};
         system.reset();
+        video.reset();
         map.reset();
         map.write8(Arm9MemoryMap::shared_wram_control, 0xfeU);
         check(map.read8(Arm9MemoryMap::shared_wram_control) == 2U, "le registre ne garde que deux bits");
@@ -352,8 +372,10 @@ void les_banques_video_repondent_par_leur_fenetre() {
         InterruptController main_interrupts;
         InterruptController secondary_interrupts;
         InterProcessor link{main_interrupts, secondary_interrupts};
-        Arm9MemoryMap map{system, link, main_interrupts};
+        VideoSystem video{main_interrupts, secondary_interrupts};
+        Arm9MemoryMap map{system, video, link, main_interrupts};
         system.reset();
+        video.reset();
         map.reset();
         static_cast<void>(map.read32(Arm9MemoryMap::vram_transfer_base));
         check(map.unmapped_count() == 4U, "une banque éteinte ne décode rien");
@@ -363,8 +385,10 @@ void les_banques_video_repondent_par_leur_fenetre() {
         InterruptController main_interrupts;
         InterruptController secondary_interrupts;
         InterProcessor link{main_interrupts, secondary_interrupts};
-        Arm9MemoryMap map{system, link, main_interrupts};
+        VideoSystem video{main_interrupts, secondary_interrupts};
+        Arm9MemoryMap map{system, video, link, main_interrupts};
         system.reset();
+        video.reset();
         map.reset();
         map.write8(Arm9MemoryMap::vram_control_base, bank_to_transfer_window);
         write_word(map, Arm9MemoryMap::vram_transfer_base, 0x1234'5678U);
@@ -376,8 +400,10 @@ void les_banques_video_repondent_par_leur_fenetre() {
         InterruptController main_interrupts;
         InterruptController secondary_interrupts;
         InterProcessor link{main_interrupts, secondary_interrupts};
-        Arm9MemoryMap map{system, link, main_interrupts};
+        VideoSystem video{main_interrupts, secondary_interrupts};
+        Arm9MemoryMap map{system, video, link, main_interrupts};
         system.reset();
+        video.reset();
         map.reset();
         map.write8(Arm9MemoryMap::vram_control_base, bank_to_transfer_window | 1U);
         static_cast<void>(map.read32(Arm9MemoryMap::vram_transfer_base));
@@ -405,8 +431,10 @@ void les_banques_video_repondent_par_leur_fenetre() {
         InterruptController main_interrupts;
         InterruptController secondary_interrupts;
         InterProcessor link{main_interrupts, secondary_interrupts};
-        Arm9MemoryMap map{system, link, main_interrupts};
+        VideoSystem video{main_interrupts, secondary_interrupts};
+        Arm9MemoryMap map{system, video, link, main_interrupts};
         system.reset();
+        video.reset();
         map.reset();
         // Le registre du partage de la mémoire commune s'est glissé au milieu
         // des commandes de banques : les deux dernières sont décalées d'un cran.
@@ -453,8 +481,10 @@ void les_banques_video_repondent_par_leur_fenetre() {
         InterruptController main_interrupts;
         InterruptController secondary_interrupts;
         InterProcessor link{main_interrupts, secondary_interrupts};
-        Arm9MemoryMap map{system, link, main_interrupts};
+        VideoSystem video{main_interrupts, secondary_interrupts};
+        Arm9MemoryMap map{system, video, link, main_interrupts};
         system.reset();
+        video.reset();
         map.reset();
         map.write8(Arm9MemoryMap::vram_control_base + 9U, bank_to_transfer_window);
         constexpr std::uint32_t last = Arm9MemoryMap::vram_transfer_base + 0xa'0000U;
@@ -468,8 +498,10 @@ void les_banques_video_repondent_par_leur_fenetre() {
         InterruptController main_interrupts;
         InterruptController secondary_interrupts;
         InterProcessor link{main_interrupts, secondary_interrupts};
-        Arm9MemoryMap map{system, link, main_interrupts};
+        VideoSystem video{main_interrupts, secondary_interrupts};
+        Arm9MemoryMap map{system, video, link, main_interrupts};
         system.reset();
+        video.reset();
         map.reset();
         map.write8(Arm9MemoryMap::vram_control_base, bank_to_transfer_window);
         static_cast<void>(map.read32(0x0600'0000U));
@@ -482,8 +514,10 @@ void les_registres_de_la_carte_se_relisent() {
     InterruptController main_interrupts;
     InterruptController secondary_interrupts;
     InterProcessor link{main_interrupts, secondary_interrupts};
-    Arm9MemoryMap map{system, link, main_interrupts};
+    VideoSystem video{main_interrupts, secondary_interrupts};
+    Arm9MemoryMap map{system, video, link, main_interrupts};
     system.reset();
+    video.reset();
     map.reset();
     // Une écriture de mot couvre quatre commandes de banques d'un coup, comme le
     // ferait un programme d'initialisation.
@@ -514,8 +548,10 @@ void les_registres_des_moteurs_repondent_a_leurs_adresses() {
     InterruptController main_interrupts;
     InterruptController secondary_interrupts;
     InterProcessor link{main_interrupts, secondary_interrupts};
-    Arm9MemoryMap map{system, link, main_interrupts};
+    VideoSystem video{main_interrupts, secondary_interrupts};
+    Arm9MemoryMap map{system, video, link, main_interrupts};
     system.reset();
+    video.reset();
     map.reset();
 
     // Adresses écrites littéralement, telles qu'un programme de la console les
@@ -556,12 +592,23 @@ void les_registres_des_moteurs_repondent_a_leurs_adresses() {
     check(map.engine(Engine::main).display_control() == 0x0001'0303U, "sans toucher au principal");
 
     // Entre la commande d'affichage et les commandes de plans, quatre octets
-    // appartiennent à l'écran et non au moteur : ils ne se dédoublent pas.
+    // appartiennent à l'écran et non au moteur. Les confondre ferait écrire une
+    // commande de plan en croyant régler le balayage, et compter le rang du plan
+    // à partir d'un octet trop bas.
+    map.write16(0x0400'0008U, 0x1234U);
     const auto before_status = map.unimplemented_io_count();
-    static_cast<void>(map.read16(0x0400'0004U));
+    map.write16(0x0400'0004U, 0x2000U);   // ligne guettée : 32
     check(
-        map.unimplemented_io_count() > before_status,
-        "l'état du balayage n'est pas un registre de moteur"
+        map.display().watched_line(Processor::main) == 32U,
+        "l'état du balayage va au balayage"
+    );
+    check(
+        map.engine(Engine::main).background_control(0) == 0x1234U,
+        "et non à la commande du premier plan"
+    );
+    check(
+        map.unimplemented_io_count() == before_status,
+        "et l'état du balayage est modélisé"
     );
 }
 
@@ -570,8 +617,10 @@ void une_banque_se_remplit_par_le_transfert_puis_se_montre_au_moteur() {
     InterruptController main_interrupts;
     InterruptController secondary_interrupts;
     InterProcessor link{main_interrupts, secondary_interrupts};
-    Arm9MemoryMap map{system, link, main_interrupts};
+    VideoSystem video{main_interrupts, secondary_interrupts};
+    Arm9MemoryMap map{system, video, link, main_interrupts};
     system.reset();
+    video.reset();
     map.reset();
 
     // C'est la marche à suivre sur console : on remplit par la fenêtre de
@@ -596,12 +645,21 @@ void une_banque_se_remplit_par_le_transfert_puis_se_montre_au_moteur() {
         "une écriture par la fenêtre quittée n'atteint rien"
     );
 
-    // La remise à zéro de la carte emporte les moteurs et les banques : les
-    // oublier laisserait un décor de la partie précédente à la suivante.
+    // Le matériel vidéo appartient aux deux processeurs, non à cette carte : sa
+    // remise à zéro ne l'emporte donc pas, sans quoi réinitialiser une carte
+    // effacerait le décor que l'autre processeur vient de préparer.
     map.write32(0x0400'0000U, 0x0001'0303U);
     map.reset();
-    check(map.engine(Engine::main).display_control() == 0U, "les moteurs sont remis à zéro");
-    check(map.video().control(0) == 0U, "les branchements de banques aussi");
+    check(
+        map.engine(Engine::main).display_control() == 0x0001'0303U,
+        "la carte ne remet pas les moteurs à zéro"
+    );
+    check(map.video().control(0) == 0x81U, "ni les branchements de banques");
+
+    // C'est leur propriétaire qui le fait, et alors tout est effacé.
+    video.reset();
+    check(map.engine(Engine::main).display_control() == 0U, "leur propriétaire, lui, les efface");
+    check(map.video().control(0) == 0U, "les branchements avec");
 }
 
 void ce_qui_n_existe_pas_encore_est_signale() {
@@ -610,8 +668,10 @@ void ce_qui_n_existe_pas_encore_est_signale() {
         InterruptController main_interrupts;
         InterruptController secondary_interrupts;
         InterProcessor link{main_interrupts, secondary_interrupts};
-        Arm9MemoryMap map{system, link, main_interrupts};
+        VideoSystem video{main_interrupts, secondary_interrupts};
+        Arm9MemoryMap map{system, video, link, main_interrupts};
         system.reset();
+        video.reset();
         map.reset();
         static_cast<void>(map.read32(0xffff'0000U));
         check(map.unmapped_count() == 4U, "le BIOS est signalé");
@@ -622,8 +682,10 @@ void ce_qui_n_existe_pas_encore_est_signale() {
         InterruptController main_interrupts;
         InterruptController secondary_interrupts;
         InterProcessor link{main_interrupts, secondary_interrupts};
-        Arm9MemoryMap map{system, link, main_interrupts};
+        VideoSystem video{main_interrupts, secondary_interrupts};
+        Arm9MemoryMap map{system, video, link, main_interrupts};
         system.reset();
+        video.reset();
         map.reset();
         static_cast<void>(map.read32(0x0800'0000U));
         static_cast<void>(map.read32(0x0a00'0000U));
@@ -636,8 +698,10 @@ void ce_qui_n_existe_pas_encore_est_signale() {
         InterruptController main_interrupts;
         InterruptController secondary_interrupts;
         InterProcessor link{main_interrupts, secondary_interrupts};
-        Arm9MemoryMap map{system, link, main_interrupts};
+        VideoSystem video{main_interrupts, secondary_interrupts};
+        Arm9MemoryMap map{system, video, link, main_interrupts};
         system.reset();
+        video.reset();
         map.reset();
         static_cast<void>(map.read32(0x0000'0100U));
         check(map.unmapped_count() == 4U, "les adresses basses ne sont pas décodées ici");
@@ -647,33 +711,39 @@ void ce_qui_n_existe_pas_encore_est_signale() {
         InterruptController main_interrupts;
         InterruptController secondary_interrupts;
         InterProcessor link{main_interrupts, secondary_interrupts};
-        Arm9MemoryMap map{system, link, main_interrupts};
+        VideoSystem video{main_interrupts, secondary_interrupts};
+        Arm9MemoryMap map{system, video, link, main_interrupts};
         system.reset();
+        video.reset();
         map.reset();
-        static_cast<void>(map.read16(0x0400'0004U));
+        // Les minuteries n'ont pas d'organe : deux octets, deux comptes.
+        static_cast<void>(map.read16(0x0400'0100U));
         check(map.unimplemented_io_count() == 2U, "un registre inconnu est compté");
-        check(map.first_unimplemented_io() == 0x0400'0004U, "et son adresse retenue");
+        check(map.first_unimplemented_io() == 0x0400'0100U, "et son adresse retenue");
         check(map.unmapped_count() == 0U, "sans compter comme adresse inconnue");
 
         map.write16(0x0400'0006U, 0xffffU);
         check(map.unimplemented_io_count() == 4U, "une écriture aussi");
-        check(map.first_unimplemented_io() == 0x0400'0004U, "sans effacer la première");
+        check(map.first_unimplemented_io() == 0x0400'0100U, "sans effacer la première");
     }
     {   // La remise à zéro efface l'ardoise et le contenu.
         SystemMemory system;
         InterruptController main_interrupts;
         InterruptController secondary_interrupts;
         InterProcessor link{main_interrupts, secondary_interrupts};
-        Arm9MemoryMap map{system, link, main_interrupts};
+        VideoSystem video{main_interrupts, secondary_interrupts};
+        Arm9MemoryMap map{system, video, link, main_interrupts};
         system.reset();
+        video.reset();
         map.reset();
         write_word(map, main_ram_base, 0xdead'beefU);
         map.write8(Arm9MemoryMap::shared_wram_control, 3U);
         map.write8(Arm9MemoryMap::vram_control_base, 0x81U);
         static_cast<void>(map.read32(0xffff'0000U));
-        static_cast<void>(map.read16(0x0400'0004U));
+        static_cast<void>(map.read16(0x0400'0100U));
 
         system.reset();
+        video.reset();
         map.reset();
         check(map.read32(main_ram_base) == 0U, "la mémoire principale est effacée");
         check(map.shared_window().size == Arm9MemoryMap::shared_wram_bytes, "le partage revient à son état initial");
@@ -700,8 +770,10 @@ void le_processeur_tourne_sur_la_carte() {
     InterruptController main_interrupts;
     InterruptController secondary_interrupts;
     InterProcessor link{main_interrupts, secondary_interrupts};
-    Arm9MemoryMap map{system, link, main_interrupts};
+    VideoSystem video{main_interrupts, secondary_interrupts};
+    Arm9MemoryMap map{system, video, link, main_interrupts};
     system.reset();
+    video.reset();
     map.reset();
     Arm9 cpu{map};
     cpu.reset();
@@ -759,8 +831,10 @@ void la_memoire_locale_passe_devant_la_carte() {
     InterruptController main_interrupts;
     InterruptController secondary_interrupts;
     InterProcessor link{main_interrupts, secondary_interrupts};
-    Arm9MemoryMap map{system, link, main_interrupts};
+    VideoSystem video{main_interrupts, secondary_interrupts};
+    Arm9MemoryMap map{system, video, link, main_interrupts};
     system.reset();
+    video.reset();
     map.reset();
     Arm9 cpu{map};
     cpu.reset();

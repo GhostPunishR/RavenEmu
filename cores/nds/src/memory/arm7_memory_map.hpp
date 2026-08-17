@@ -3,6 +3,7 @@
 #include "cpu/bus.hpp"
 #include "memory/system_memory.hpp"
 #include "system/inter_processor.hpp"
+#include "video/video_system.hpp"
 
 #include <cstdint>
 #include <span>
@@ -42,7 +43,12 @@ namespace ravenemu::nds {
  */
 class Arm7MemoryMap final : public Bus {
 public:
-    Arm7MemoryMap(SystemMemory& system, InterProcessor& link, InterruptController& interrupts);
+    Arm7MemoryMap(
+        SystemMemory& system,
+        VideoSystem& video,
+        InterProcessor& link,
+        InterruptController& interrupts
+    );
 
     /** Mémoire de travail que ce processeur ne partage avec personne. */
     static constexpr std::uint32_t private_wram_bytes = 64U * 1024U;
@@ -51,6 +57,15 @@ public:
     static constexpr std::uint32_t private_wram_base = 0x0380'0000;
     /** Vue en lecture seule du partage de la mémoire commune. */
     static constexpr std::uint32_t shared_wram_status = 0x0400'0241;
+
+    /**
+     * Registres du balayage, aux mêmes adresses que chez l'autre processeur.
+     *
+     * L'état est propre à ce processeur, avec ses propres autorisations
+     * d'interruption ; le compteur de lignes est le même faisceau pour les deux.
+     */
+    static constexpr std::uint32_t display_status = 0x0400'0004;
+    static constexpr std::uint32_t line_counter = 0x0400'0006;
 
     void reset() noexcept;
 
@@ -106,6 +121,7 @@ private:
     void note_unimplemented_io(std::uint32_t address) noexcept;
 
     SystemMemory& system_;
+    VideoSystem& video_;
     InterProcessor& link_;
     InterruptController& interrupts_;
     std::vector<std::uint8_t> private_wram_;

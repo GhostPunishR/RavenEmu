@@ -102,10 +102,11 @@ extraits ne sont que des en-têtes, et devient STATIC dès que l'un d'eux gagne 
 la console, décode et contrôle l'en-tête de cartouche, publie le contrat vidéo
 et audio, exécute les deux processeurs de la console avec leurs jeux
 d'instructions et le coprocesseur système du principal, décode les cartes
-mémoire que chacun voit, les fait dialoguer, et dessine les décors en mode texte
-de ses deux moteurs graphiques. Toute demande de faire tourner une image est en
-revanche refusée par une erreur nommée : un écran noir laisserait croire à une
-émulation muette, là où il manque encore de quoi enchaîner les trames.
+mémoire que chacun voit, les fait dialoguer, dessine les décors et les sprites de
+ses deux moteurs graphiques, et balaie ses deux écrans. Toute demande de faire
+tourner une image est en revanche refusée par une erreur nommée : un écran noir
+laisserait croire à une émulation muette, là où il manque encore un ordonnanceur
+pour enchaîner les trames.
 
 `cores/nds/src/cpu` tient les deux processeurs. Ils ne connaissent pas la carte
 mémoire de la console : ils passent par une frontière `Bus` abstraite, ce qui
@@ -234,8 +235,16 @@ l'accès qu'on leur demande, là où elles décomposaient jusqu'ici en octets. L
 une file est **indivisible** : la décomposer en quatre lectures d'octet la
 viderait quatre fois.
 
-`cores/nds/src/video` porte les neuf banques, leur aiguillage, et les deux
-moteurs graphiques 2D.
+`cores/nds/src/video` porte les neuf banques, leur aiguillage, les deux moteurs
+graphiques 2D et le contrôleur d'affichage.
+
+Ce matériel est **partagé par les deux processeurs**, et non possédé par l'un
+d'eux. Il vivait d'abord dans la carte du processeur principal, ce qui suffisait
+tant que lui seul y touchait ; le contrôleur d'affichage a changé cela, le
+processeur secondaire lisant l'état du balayage et se faisant réveiller par lui.
+Laisser ce matériel chez l'autre aurait obligé une carte à dépendre de sa
+jumelle, alors qu'elles sont paires. C'est la même décision que pour
+`SystemMemory`, et pour la même raison.
 
 **Une banque vidéo n'est pas une mémoire à une adresse fixe** : c'est un bloc
 qu'on branche quelque part. Le même bloc peut servir de décor au moteur
@@ -312,13 +321,44 @@ sont pas comptés comme manquants, parce que le matériel n'en affiche pas non
 plus ; en revanche un plan demandé dans un mode que ce lot ne dessine pas encore
 est compté, un plan absent qui ne dit rien se confondant avec un plan vide.
 
+**Le contrôleur d'affichage donne son rythme à la console.** Un jeu n'attend pas
+le temps qui passe : il attend le retour du balayage. Sans lui, un moteur
+graphique est une fonction que personne n'appelle.
+
+L'écran fait 192 lignes, le balayage en compte 263. Les 71 lignes de différence ne
+s'affichent pas, et c'est pendant elles qu'un jeu prépare la trame suivante :
+d'où l'importance de l'interruption de retour vertical, la plus utilisée de la
+console. **La toute dernière ligne n'est pas comptée comme retour vertical**, ce
+qui surprend et compte, un logiciel qui scrute cet indicateur le voyant retomber
+une ligne avant la fin.
+
+Le compteur de lignes est unique, puisque c'est un seul faisceau, mais **chaque
+processeur a son propre registre d'état**, avec ses propres autorisations : l'un
+peut demander à être réveillé au retour vertical sans que l'autre le soit, et
+chacun guette la ligne qu'il veut. Le neuvième bit de cette ligne est rangé loin
+des huit autres, et les recoller à l'envers ferait guetter une ligne pour une
+autre. Les trois indicateurs, eux, se lisent pareil des deux côtés, et ne
+s'écrivent pas : les laisser écrire donnerait à un jeu le pouvoir de se mentir
+sur la position du faisceau.
+
+Quel moteur alimente quel écran est décidé par un bit du registre
+d'alimentation, non par une convention de ce code.
+
+Le balayage avance ici **ligne par ligne**, non point par point. Le retour
+horizontal est donc posé une fois par ligne, et l'indicateur correspondant
+n'existe pas : à cette granularité toute lecture se fait à une frontière de
+ligne, où le faisceau n'est pas en retour horizontal, et prétendre le contraire
+serait inventer une position dans la ligne. C'est suffisant pour tout ce qui
+s'accroche au retour vertical ou à une ligne donnée ; ce ne le serait pas pour un
+effet qui change un registre au milieu d'une ligne.
+
 Ne sont pas rendus : les décors tournants, les modes étendus, la grande image, le
 plan 3D, les sprites tournants, la semi-transparence, la fenêtre par sprite, les
 sprites en image directe, les fenêtres, les mélanges, la mosaïque et les palettes
-étendues. Rien ne fait non plus tourner ce moteur trame par trame : il n'y a ni
-ordonnanceur, ni compteur de lignes, ni interruption de balayage, et
-`run_frame` refuse donc toujours. Le moteur sait dessiner une ligne ; personne ne
-la lui demande encore.
+étendues. Et **rien n'enchaîne encore les trames** : le contrôleur sait dessiner
+une trame entière et le balayage sait avancer, mais aucun ordonnanceur ne fait
+alterner les deux processeurs et le faisceau, faute d'un modèle de durée.
+`run_frame` refuse donc toujours.
 
 La distinction entre « pas dessiné » et « dessiné sans son effet » est tenue au
 cas par cas plutôt que par une règle générale. Un sprite tournant ou

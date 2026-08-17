@@ -54,8 +54,9 @@ struct Console {
     InterruptController main_interrupts{};
     InterruptController secondary_interrupts{};
     InterProcessor link{main_interrupts, secondary_interrupts};
-    Arm9MemoryMap main_map{system, link, main_interrupts};
-    Arm7MemoryMap secondary_map{system, link, secondary_interrupts};
+    VideoSystem video{main_interrupts, secondary_interrupts};
+    Arm9MemoryMap main_map{system, video, link, main_interrupts};
+    Arm7MemoryMap secondary_map{system, video, link, secondary_interrupts};
 
     Console() {
         system.reset();
@@ -338,14 +339,15 @@ void ce_qui_n_existe_pas_encore_est_signale() {
     }
     {   // Un registre d'entrée-sortie sans effet est compté à part.
         Console console;
-        static_cast<void>(console.secondary_map.read16(0x0400'0004U));
+        // Les minuteries n'ont pas d'organe : deux octets, deux comptes.
+        static_cast<void>(console.secondary_map.read16(0x0400'0100U));
         check(console.secondary_map.unimplemented_io_count() == 2U, "un registre inconnu est compté");
-        check(console.secondary_map.first_unimplemented_io() == 0x0400'0004U, "et son adresse retenue");
+        check(console.secondary_map.first_unimplemented_io() == 0x0400'0100U, "et son adresse retenue");
         check(console.secondary_map.unmapped_count() == 0U, "sans compter comme adresse inconnue");
 
         console.secondary_map.write16(0x0400'0006U, 0xffffU);
         check(console.secondary_map.unimplemented_io_count() == 4U, "une écriture aussi");
-        check(console.secondary_map.first_unimplemented_io() == 0x0400'0004U, "sans effacer la première");
+        check(console.secondary_map.first_unimplemented_io() == 0x0400'0100U, "sans effacer la première");
     }
     {   // La remise à zéro efface l'ardoise et la mémoire propre, mais pas la
         // mémoire partagée, qui appartient à son propriétaire.
@@ -353,7 +355,10 @@ void ce_qui_n_existe_pas_encore_est_signale() {
         console.secondary_map.write32(Arm7MemoryMap::private_wram_base, 0xdead'beefU);
         console.secondary_map.write32(main_ram_base, 0x0bad'cafeU);
         static_cast<void>(console.secondary_map.read32(0x0000'0000U));
-        static_cast<void>(console.secondary_map.read16(0x0400'0004U));
+        // Un registre réellement sans organe : l'état du balayage est modélisé
+        // depuis que le contrôleur d'affichage existe, et ne remplirait plus
+        // l'ardoise qu'on veut voir effacée.
+        static_cast<void>(console.secondary_map.read16(0x0400'0100U));
 
         console.secondary_map.reset();
         check(console.secondary_map.read32(Arm7MemoryMap::private_wram_base) == 0U, "la mémoire propre est effacée");

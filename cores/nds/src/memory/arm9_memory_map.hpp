@@ -3,8 +3,7 @@
 #include "cpu/bus.hpp"
 #include "memory/system_memory.hpp"
 #include "system/inter_processor.hpp"
-#include "video/engine2d.hpp"
-#include "video/video_memory.hpp"
+#include "video/video_system.hpp"
 
 #include <array>
 #include <cstdint>
@@ -58,12 +57,17 @@ namespace ravenemu::nds {
  */
 class Arm9MemoryMap final : public Bus {
 public:
-    Arm9MemoryMap(SystemMemory& system, InterProcessor& link, InterruptController& interrupts);
+    Arm9MemoryMap(
+        SystemMemory& system,
+        VideoSystem& video,
+        InterProcessor& link,
+        InterruptController& interrupts
+    );
 
     static constexpr std::uint32_t main_ram_bytes = SystemMemory::main_ram_bytes;
     static constexpr std::uint32_t shared_wram_bytes = SystemMemory::shared_wram_bytes;
-    static constexpr std::uint32_t palette_bytes = 2U * 1024U;
-    static constexpr std::uint32_t oam_bytes = 2U * 1024U;
+    static constexpr std::uint32_t palette_bytes = VideoSystem::palette_bytes;
+    static constexpr std::uint32_t oam_bytes = VideoSystem::object_attribute_bytes;
 
     /** Nombre de banques vidéo, nommées de A à I sur le matériel. */
     static constexpr std::size_t vram_bank_count = VideoMemory::bank_count;
@@ -79,6 +83,21 @@ public:
     static constexpr std::uint32_t secondary_engine_base = 0x0400'1000;
     static constexpr std::uint32_t engine_register_bytes = 0x20;
 
+    /** Registres du balayage, communs aux deux processeurs. */
+    static constexpr std::uint32_t display_status = 0x0400'0004;
+    /**
+     * Compteur de lignes, en lecture seule ici.
+     *
+     * Le matériel accepte qu'on l'écrive, ce qui déplace le faisceau. Aucun
+     * logiciel n'en a l'usage dans ce dépôt, et le modéliser sans rien pour
+     * l'exercer serait une affirmation que rien ne vérifie : l'écriture tombe
+     * donc dans le comptage des registres sans effet, comme n'importe quel autre.
+     */
+    static constexpr std::uint32_t line_counter = 0x0400'0006;
+    /** Registre d'alimentation, dont un bit échange les deux écrans. */
+    static constexpr std::uint32_t power_control = 0x0400'0304;
+    static constexpr std::uint16_t power_swaps_screens = 1U << 15U;
+
     void reset() noexcept;
 
     [[nodiscard]] std::uint8_t read8(std::uint32_t address) override;
@@ -93,16 +112,18 @@ public:
     // passer par des milliers d'écritures.
     [[nodiscard]] std::span<std::uint8_t> main_ram() noexcept { return system_.main_ram(); }
     [[nodiscard]] std::span<std::uint8_t> shared_wram() noexcept { return system_.shared_wram(); }
-    [[nodiscard]] std::span<std::uint8_t> palette() noexcept { return palette_; }
-    [[nodiscard]] std::span<std::uint8_t> object_attributes() noexcept { return oam_; }
+    [[nodiscard]] std::span<std::uint8_t> palette() noexcept { return video_.palette(); }
+    [[nodiscard]] std::span<std::uint8_t> object_attributes() noexcept {
+        return video_.object_attributes();
+    }
     [[nodiscard]] std::span<std::uint8_t> vram_bank(std::size_t index) noexcept;
 
     /** Les banques et leur aiguillage, que les deux moteurs se partagent. */
-    [[nodiscard]] VideoMemory& video() noexcept { return video_; }
+    [[nodiscard]] VideoMemory& video() noexcept { return video_.memory(); }
     /** L'un des deux moteurs graphiques. */
-    [[nodiscard]] Engine2d& engine(Engine which) noexcept {
-        return which == Engine::main ? main_engine_ : secondary_engine_;
-    }
+    [[nodiscard]] Engine2d& engine(Engine which) noexcept { return video_.engine(which); }
+    /** Le balayage, que les deux processeurs consultent. */
+    [[nodiscard]] DisplayController& display() noexcept { return video_.display(); }
 
     /** Part de la mémoire commune revenant à ce processeur. */
     [[nodiscard]] SystemMemory::Window shared_window() const noexcept {
@@ -173,16 +194,12 @@ private:
     }
 
     SystemMemory& system_;
+    VideoSystem& video_;
     InterProcessor& link_;
     InterruptController& interrupts_;
-    std::vector<std::uint8_t> palette_;
-    std::vector<std::uint8_t> oam_;
 
-    // Les banques précèdent les moteurs, qui s'y adossent ; la palette précède
-    // les deux, pour la même raison.
-    VideoMemory video_{};
-    Engine2d main_engine_;
-    Engine2d secondary_engine_;
+    /** Registre d'alimentation, dont seul le bit d'échange agit. */
+    std::uint16_t power_{};
 
     std::uint32_t unmapped_{};
     std::uint32_t first_unmapped_{};
