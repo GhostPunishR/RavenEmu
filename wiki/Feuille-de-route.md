@@ -55,16 +55,20 @@ aujourd'hui :
   ce que chaque moteur trouve à une place donnée;
 - les décors en mode texte des deux moteurs 2D : tuiles de huit sur huit, seize
   ou deux cent cinquante-six couleurs, retournements, quatre tailles de carte,
-  défilement, et la résolution des priorités entre les quatre plans et le fond.
+  défilement, et la résolution des priorités entre les quatre plans et le fond;
+- leurs sprites ordinaires : cent vingt-huit objets, douze formats, les deux
+  profondeurs de palette, les deux retournements, les deux rangements de tuiles,
+  le repli sur les bords, et leur composition avec les décors, un sprite passant
+  devant un décor de même priorité.
 
 Toute demande d'exécution reste refusée par une erreur nommée, volontairement :
 un écran noir laisserait croire à une émulation silencieuse. Le moteur 2D sait
 dessiner une ligne, mais rien ne la lui demande encore, faute d'ordonnanceur et
-de compteur de lignes. Restent à écrire les sprites, les décors tournants et les
-modes étendus, le moteur 3D, les fenêtres et les mélanges, les palettes
-étendues, la cartouche, les minuteries, les transferts autonomes, l'écran
-tactile et le son. La console n'apparaît pas encore dans la bibliothèque de
-l'application.
+de compteur de lignes. Restent à écrire les décors tournants et les modes
+étendus, les sprites tournants et semi-transparents, le moteur 3D, les fenêtres
+et les mélanges, les palettes étendues, la cartouche, les minuteries, les
+transferts autonomes, l'écran tactile et le son. La console n'apparaît pas encore
+dans la bibliothèque de l'application.
 
 ## Pistes futures
 

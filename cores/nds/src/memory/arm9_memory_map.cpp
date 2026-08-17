@@ -24,8 +24,8 @@ Arm9MemoryMap::Arm9MemoryMap(
     : system_(system), link_(link), interrupts_(interrupts),
       palette_(palette_bytes, 0),
       oam_(oam_bytes, 0),
-      main_engine_(Engine::main, video_, palette_),
-      secondary_engine_(Engine::secondary, video_, palette_) {}
+      main_engine_(Engine::main, video_, palette_, oam_),
+      secondary_engine_(Engine::secondary, video_, palette_, oam_) {}
 
 void Arm9MemoryMap::reset() noexcept {
     // La mémoire partagée est remise à zéro par son propriétaire, non par

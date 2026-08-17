@@ -39,7 +39,7 @@ enum class LayerKind : std::uint8_t {
  * la même raison que les deux processeurs partagent une implémentation : deux
  * copies dériveraient l'une de l'autre.
  *
- * ### Ce que ce lot rend
+ * ### Ce que ce moteur rend
  *
  * Les décors en mode texte : tuiles de huit sur huit, seize ou deux cent
  * cinquante-six couleurs, retournement dans les deux sens, quatre tailles de
@@ -47,13 +47,20 @@ enum class LayerKind : std::uint8_t {
  * fond. C'est le socle : tous les autres modes de décor s'appuient sur les mêmes
  * palettes, les mêmes priorités et la même composition.
  *
+ * Les sprites ordinaires : cent vingt-huit objets, douze formats, les deux
+ * profondeurs de palette, les deux retournements, les deux rangements de tuiles,
+ * et leur composition avec les décors. **Un sprite passe devant un décor de même
+ * priorité**, ce qui n'est pas la règle qui vaut entre décors, et c'est ce qui
+ * met un personnage devant son sol plutôt que dedans.
+ *
  * ### Ce qu'il ne rend pas encore
  *
- * Les sprites, les décors tournants, les modes étendus, la grande image, le plan
- * 3D, les fenêtres, les mélanges, la mosaïque et les palettes étendues. Un plan
- * demandé dans un de ces modes n'est pas dessiné en silence : il est **compté**,
- * parce qu'un plan absent qui ne dit rien se confond avec un plan vide, et que
- * les deux ne veulent pas dire la même chose.
+ * Les décors tournants, les modes étendus, la grande image, le plan 3D, les
+ * sprites tournants, la semi-transparence, la fenêtre par sprite, les sprites en
+ * image directe, les fenêtres, les mélanges et les palettes étendues. Rien de
+ * cela n'est passé sous silence : un plan ou un sprite décrit sous une de ces
+ * formes est **compté**, parce qu'un élément absent qui ne dit rien se confond
+ * avec un élément vide, et que les deux ne veulent pas dire la même chose.
  *
  * ### Sur la couleur zéro
  *
@@ -68,13 +75,23 @@ public:
      * @param engine    lequel des deux moteurs, ce qui fixe ce qu'il sait faire
      * @param video     les banques et leur aiguillage, partagés par les deux
      * @param palette   les deux kilooctets de palette, partagés par les deux
+     * @param objects   les deux kilooctets d'attributs d'objets, partagés aussi
      */
-    Engine2d(Engine engine, VideoMemory& video, std::span<const std::uint8_t> palette) noexcept;
+    Engine2d(
+        Engine engine,
+        VideoMemory& video,
+        std::span<const std::uint8_t> palette,
+        std::span<const std::uint8_t> objects
+    ) noexcept;
 
     /** Nombre de plans de décor. */
     static constexpr std::size_t background_count = 4;
+    /** Nombre de sprites décrits par la mémoire d'objets. */
+    static constexpr std::size_t object_count = 128;
     /** Étendue d'une table de palette, en octets. */
     static constexpr std::uint32_t palette_table_bytes = 512;
+    /** Étendue de la table d'attributs d'un moteur, en octets. */
+    static constexpr std::uint32_t object_table_bytes = 1024;
 
     [[nodiscard]] Engine engine() const noexcept { return engine_; }
 
@@ -102,6 +119,8 @@ public:
     [[nodiscard]] std::uint32_t unimplemented_layer_count() const noexcept { return unimplemented_layers_; }
     /** Modes d'affichage que ce lot ne sert pas encore. */
     [[nodiscard]] std::uint32_t unimplemented_display_count() const noexcept { return unimplemented_display_; }
+    /** Sprites décrits sous une forme que ce lot ne dessine pas encore. */
+    [[nodiscard]] std::uint32_t unimplemented_object_count() const noexcept { return unimplemented_objects_; }
 
 private:
     /** Ce qu'un plan a déposé sur un pixel. */
@@ -110,9 +129,14 @@ private:
         std::uint8_t priority;
     };
 
-    [[nodiscard]] std::uint32_t palette_colour(std::uint32_t index) const noexcept;
+    /** Laquelle des deux tables de palette d'un moteur. */
+    enum class PaletteTable : std::uint8_t { background, object };
+
+    [[nodiscard]] std::uint32_t palette_colour(std::uint32_t index, PaletteTable table) const noexcept;
     /** Couleur de fond : là où aucun plan ne couvre. */
-    [[nodiscard]] std::uint32_t backdrop_colour() const noexcept { return palette_colour(0); }
+    [[nodiscard]] std::uint32_t backdrop_colour() const noexcept {
+        return palette_colour(0, PaletteTable::background);
+    }
 
     void render_text_row(
         std::size_t index,
@@ -120,11 +144,16 @@ private:
         std::span<Pixel> line
     ) noexcept;
 
+    void render_object_row(std::uint32_t row, std::span<Pixel> line) noexcept;
+    /** Dépose un sprite sur la ligne, s'il la traverse. */
+    void render_object(std::size_t index, std::uint32_t row, std::span<Pixel> line) noexcept;
+
     [[nodiscard]] bool has_main_extensions() const noexcept { return engine_ == Engine::main; }
 
     Engine engine_;
     VideoMemory& video_;
     std::span<const std::uint8_t> palette_;
+    std::span<const std::uint8_t> objects_;
 
     std::uint32_t display_control_{};
     std::array<std::uint16_t, background_count> background_control_{};
@@ -133,6 +162,7 @@ private:
 
     std::uint32_t unimplemented_layers_{};
     std::uint32_t unimplemented_display_{};
+    std::uint32_t unimplemented_objects_{};
 };
 
 } // namespace ravenemu::nds

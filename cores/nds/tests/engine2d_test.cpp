@@ -28,14 +28,25 @@ namespace {
 struct Screen {
     VideoMemory video{};
     std::array<std::uint8_t, 2048> palette{};
-    Engine2d main{Engine::main, video, palette};
-    Engine2d secondary{Engine::secondary, video, palette};
+    std::array<std::uint8_t, 2048> objects{};
+    Engine2d main{Engine::main, video, palette, objects};
+    Engine2d secondary{Engine::secondary, video, palette, objects};
     std::array<std::int32_t, 256> row{};
 
     Screen() {
         video.reset();
         main.reset();
         secondary.reset();
+
+        // Une entrée d'attributs à zéro ne décrit pas l'absence de sprite : elle
+        // décrit un sprite de huit sur huit, allumé, posé en (0,0) et pointant
+        // sur la tuile 0. Une table vierge dessine donc cent vingt-huit sprites
+        // superposés, et tout logiciel de console commence par les éteindre.
+        // Ne pas le faire ici rendrait chaque vérification complaisante, les
+        // doublons dessinant la même chose que le sprite qu'on éprouve.
+        for (std::size_t index = 0; index < 2U * Engine2d::object_count; ++index) {
+            objects[index * 8U + 1U] = 0x02;
+        }
     }
 
     [[nodiscard]] Engine2d& engine(Engine which) {
@@ -49,12 +60,66 @@ struct Screen {
         return video.bank(bank);
     }
 
+    /** Branche une banque sur les sprites du moteur voulu. */
+    [[nodiscard]] std::span<std::uint8_t> attach_objects(Engine which) {
+        const std::size_t bank = which == Engine::main ? 1U : 3U;
+        video.set_control(bank, which == Engine::main ? 0x82U : 0x84U);
+        return video.bank(bank);
+    }
+
     void set_colour(Engine which, std::uint32_t index, std::uint16_t colour) {
         const std::size_t base = which == Engine::main ? 0U : 1024U;
         palette[base + index * 2U] = static_cast<std::uint8_t>(colour & 0xffU);
         palette[base + index * 2U + 1U] = static_cast<std::uint8_t>(colour >> 8U);
     }
+
+    void set_object_colour(Engine which, std::uint32_t index, std::uint16_t colour) {
+        const std::size_t base = (which == Engine::main ? 0U : 1024U) + 512U;
+        palette[base + index * 2U] = static_cast<std::uint8_t>(colour & 0xffU);
+        palette[base + index * 2U + 1U] = static_cast<std::uint8_t>(colour >> 8U);
+    }
 };
+
+/** Les trois mots qui décrivent un sprite, champ par champ. */
+struct ObjectAttributes {
+    std::uint32_t y{};
+    std::uint32_t x{};
+    std::uint32_t shape{};
+    std::uint32_t size{};
+    std::uint32_t tile{};
+    std::uint32_t priority{};
+    std::uint32_t sub_palette{};
+    std::uint32_t mode{};
+    bool full_palette{};
+    bool flip_x{};
+    bool flip_y{};
+    bool rotated{};
+    bool disabled{};
+    bool mosaic{};
+};
+
+void write_object(Screen& screen, Engine which, std::size_t index, const ObjectAttributes& object) {
+    const std::uint32_t first = object.y | (object.rotated ? 1U << 8U : 0U) |
+        (object.disabled ? 1U << 9U : 0U) | (object.mode << 10U) |
+        (object.mosaic ? 1U << 12U : 0U) | (object.full_palette ? 1U << 13U : 0U) |
+        (object.shape << 14U);
+    const std::uint32_t second = object.x | (object.flip_x ? 1U << 12U : 0U) |
+        (object.flip_y ? 1U << 13U : 0U) | (object.size << 14U);
+    const std::uint32_t third = object.tile | (object.priority << 10U) |
+        (object.sub_palette << 12U);
+
+    const std::size_t base = (which == Engine::main ? 0U : 1024U) + index * 8U;
+    const std::array<std::uint32_t, 3> words{first, second, third};
+    for (std::size_t at = 0; at < words.size(); ++at) {
+        screen.objects[base + at * 2U] = static_cast<std::uint8_t>(words[at] & 0xffU);
+        screen.objects[base + at * 2U + 1U] = static_cast<std::uint8_t>((words[at] >> 8U) & 0xffU);
+    }
+}
+
+/** Affichage en mode graphique, sprites allumés. */
+[[nodiscard]] constexpr std::uint32_t object_display_command(std::uint32_t layers = 0) {
+    return layers << 8U | (1U << 12U) | (1U << 16U);
+}
 
 /** Une entrée de carte : tuile, retournements, sous-palette. */
 [[nodiscard]] constexpr std::uint16_t map_entry(
@@ -718,6 +783,477 @@ void les_priorites_decident_de_ce_qui_couvre() {
     }
 }
 
+void un_sprite_ordinaire_se_dessine() {
+    Screen screen;
+    auto vram = screen.attach_objects(Engine::main);
+    write_pixel4(vram, 0, 0, 0, 0, 1);
+    write_pixel4(vram, 0, 0, 1, 0, 0);   // transparent
+
+    screen.set_colour(Engine::main, 0, 0x0000U);          // fond noir
+    screen.set_object_colour(Engine::main, 1, 0x7fffU);   // blanc
+
+    write_object(screen, Engine::main, 0, {.y = 0, .x = 0});
+    screen.main.set_display_control(object_display_command());
+    screen.main.render_row(0, screen.row);
+
+    check(static_cast<std::uint32_t>(screen.row[0]) == 0xffff'ffffU, "le premier pixel du sprite");
+    check(static_cast<std::uint32_t>(screen.row[1]) == 0xff00'0000U, "sa couleur zéro se traverse");
+    check(static_cast<std::uint32_t>(screen.row[8]) == 0xff00'0000U, "et il fait huit pixels de large");
+}
+
+void les_sprites_ont_douze_formats() {
+    // Deux champs séparés donnent le format, et le couple ne se déduit ni de
+    // l'un ni de l'autre. Les douze sont écrits d'après le manuel.
+    struct Case {
+        std::uint32_t shape;
+        std::uint32_t size;
+        std::uint32_t width;
+        std::uint32_t height;
+    };
+    const std::array<Case, 12> cases{{
+        {0, 0, 8, 8},   {0, 1, 16, 16}, {0, 2, 32, 32}, {0, 3, 64, 64},
+        {1, 0, 16, 8},  {1, 1, 32, 8},  {1, 2, 32, 16}, {1, 3, 64, 32},
+        {2, 0, 8, 16},  {2, 1, 8, 32},  {2, 2, 16, 32}, {2, 3, 32, 64},
+    }};
+
+    for (const auto& entry : cases) {
+        Screen screen;
+        auto vram = screen.attach_objects(Engine::main);
+        // Toutes les tuiles pleines : c'est l'étendue du sprite qu'on mesure. Un
+        // sprite de soixante-quatre sur soixante-quatre rangé en grille va
+        // chercher jusqu'à la tuile 231, sept lignes de trente-deux plus loin.
+        for (std::uint32_t tile = 0; tile < 256U; ++tile) {
+            for (std::uint32_t y = 0; y < 8U; ++y) {
+                for (std::uint32_t x = 0; x < 8U; ++x) write_pixel4(vram, 0, tile, x, y, 1);
+            }
+        }
+
+        screen.set_colour(Engine::main, 0, 0x0000U);
+        screen.set_object_colour(Engine::main, 1, 0x7fffU);
+        write_object(screen, Engine::main, 0, {.shape = entry.shape, .size = entry.size});
+        screen.main.set_display_control(object_display_command());
+
+        const std::string label =
+            std::to_string(entry.width) + " sur " + std::to_string(entry.height);
+
+        screen.main.render_row(entry.height - 1U, screen.row);
+        check(
+            static_cast<std::uint32_t>(screen.row[entry.width - 1U]) == 0xffff'ffffU,
+            label + " : le dernier pixel est dedans"
+        );
+        check(
+            static_cast<std::uint32_t>(screen.row[entry.width]) == 0xff00'0000U,
+            label + " : et le suivant est dehors"
+        );
+
+        screen.main.render_row(entry.height, screen.row);
+        check(
+            static_cast<std::uint32_t>(screen.row[0]) == 0xff00'0000U,
+            label + " : la ligne d'après est dehors"
+        );
+    }
+
+    {   // La quatrième forme n'existe pas : rien n'est dessiné.
+        Screen screen;
+        auto vram = screen.attach_objects(Engine::main);
+        write_pixel4(vram, 0, 0, 0, 0, 1);
+        screen.set_colour(Engine::main, 0, 0x0000U);
+        screen.set_object_colour(Engine::main, 1, 0x7fffU);
+        write_object(screen, Engine::main, 0, {.shape = 3});
+        screen.main.set_display_control(object_display_command());
+        screen.main.render_row(0, screen.row);
+        check(static_cast<std::uint32_t>(screen.row[0]) == 0xff00'0000U, "la forme interdite ne dessine rien");
+    }
+}
+
+void un_sprite_se_lit_dans_les_deux_profondeurs_et_se_retourne() {
+    {   // Deux cent cinquante-six couleurs : la tuile fait soixante-quatre
+        // octets, et l'indice se lit directement.
+        Screen screen;
+        auto vram = screen.attach_objects(Engine::main);
+        write_pixel8(vram, 0, 0, 0, 0, 200);
+
+        screen.set_colour(Engine::main, 0, 0x0000U);
+        screen.set_object_colour(Engine::main, 200U, 0x7c00U);
+        write_object(screen, Engine::main, 0, {.full_palette = true});
+        screen.main.set_display_control(object_display_command());
+        screen.main.render_row(0, screen.row);
+        check(static_cast<std::uint32_t>(screen.row[0]) == 0xff00'00ffU, "couleur 200 lue directement");
+    }
+    {   // La sous-palette déplace les seize couleurs d'un sprite.
+        Screen screen;
+        auto vram = screen.attach_objects(Engine::main);
+        write_pixel4(vram, 0, 0, 0, 0, 4);
+
+        screen.set_colour(Engine::main, 0, 0x0000U);
+        screen.set_object_colour(Engine::main, 36U, 0x03e0U);   // 2 * 16 + 4
+        write_object(screen, Engine::main, 0, {.sub_palette = 2});
+        screen.main.set_display_control(object_display_command());
+        screen.main.render_row(0, screen.row);
+        check(static_cast<std::uint32_t>(screen.row[0]) == 0xff00'ff00U, "la sous-palette décale de seize");
+    }
+    {   // Les retournements portent sur le sprite entier, non sur chaque tuile :
+        // c'est ce qui les distingue de ceux d'un décor.
+        const std::array<std::pair<bool, bool>, 3> flips{{{true, false}, {false, true}, {true, true}}};
+        for (const auto& [flip_x, flip_y] : flips) {
+            Screen screen;
+            auto vram = screen.attach_objects(Engine::main);
+            // Un seul pixel allumé, au coin de la première tuile d'un sprite de
+            // seize sur seize : après retournement il passe au coin opposé, à
+            // quinze pixels de là, et non à sept.
+            write_pixel4(vram, 0, 0, 0, 0, 1);
+
+            screen.set_colour(Engine::main, 0, 0x0000U);
+            screen.set_object_colour(Engine::main, 1, 0x7fffU);
+            write_object(screen, Engine::main, 0, {
+                .shape = 0, .size = 1, .flip_x = flip_x, .flip_y = flip_y,
+            });
+            screen.main.set_display_control(object_display_command());
+
+            const std::uint32_t expected_x = flip_x ? 15U : 0U;
+            const std::uint32_t expected_row = flip_y ? 15U : 0U;
+            screen.main.render_row(expected_row, screen.row);
+            check(
+                static_cast<std::uint32_t>(screen.row[expected_x]) == 0xffff'ffffU,
+                "le pixel passe au coin opposé du sprite entier"
+            );
+        }
+    }
+}
+
+void les_tuiles_d_un_sprite_se_rangent_de_deux_facons() {
+    // Un sprite de seize sur seize occupe quatre tuiles. Rangées à la suite,
+    // celle du dessous suit les deux du dessus ; rangées en grille, elle est une
+    // ligne plus bas dans une zone large de trente-deux. Se tromper affiche la
+    // mauvaise moitié du sprite.
+    {   // En grille, la tuile du dessous est à trente-deux emplacements.
+        Screen screen;
+        auto vram = screen.attach_objects(Engine::main);
+        write_pixel4(vram, 32U * 32U, 0, 0, 0, 1);
+
+        screen.set_colour(Engine::main, 0, 0x0000U);
+        screen.set_object_colour(Engine::main, 1, 0x7fffU);
+        write_object(screen, Engine::main, 0, {.shape = 0, .size = 1});
+        screen.main.set_display_control(object_display_command());
+        screen.main.render_row(8, screen.row);
+        check(static_cast<std::uint32_t>(screen.row[0]) == 0xffff'ffffU, "en grille, trente-deux plus loin");
+    }
+    {   // À la suite, elle est à deux emplacements, la largeur du sprite.
+        Screen screen;
+        auto vram = screen.attach_objects(Engine::main);
+        write_pixel4(vram, 2U * 32U, 0, 0, 0, 1);
+
+        screen.set_colour(Engine::main, 0, 0x0000U);
+        screen.set_object_colour(Engine::main, 1, 0x7fffU);
+        write_object(screen, Engine::main, 0, {.shape = 0, .size = 1});
+        screen.main.set_display_control(object_display_command() | (1U << 4U));
+        screen.main.render_row(8, screen.row);
+        check(static_cast<std::uint32_t>(screen.row[0]) == 0xffff'ffffU, "à la suite, deux plus loin");
+    }
+    {   // À la suite, le pas de départ se règle, et c'est propre au principal.
+        Screen screen;
+        auto vram = screen.attach_objects(Engine::main);
+        write_pixel4(vram, 64U, 0, 0, 0, 1);
+
+        screen.set_colour(Engine::main, 0, 0x0000U);
+        screen.set_object_colour(Engine::main, 1, 0x7fffU);
+        write_object(screen, Engine::main, 0, {.tile = 1});
+        screen.main.set_display_control(object_display_command() | (1U << 4U) | (1U << 20U));
+        screen.main.render_row(0, screen.row);
+        check(static_cast<std::uint32_t>(screen.row[0]) == 0xffff'ffffU, "le pas double avec son champ");
+    }
+    {   // Le moteur secondaire n'a pas ce champ : sa tuile 1 reste à
+        // trente-deux octets quoi qu'on écrive.
+        Screen screen;
+        auto vram = screen.attach_objects(Engine::secondary);
+        write_pixel4(vram, 32U, 0, 0, 0, 1);
+
+        screen.set_colour(Engine::secondary, 0, 0x0000U);
+        screen.set_object_colour(Engine::secondary, 1, 0x7fffU);
+        write_object(screen, Engine::secondary, 0, {.tile = 1});
+        screen.secondary.set_display_control(object_display_command() | (1U << 4U) | (1U << 20U));
+        screen.secondary.render_row(0, screen.row);
+        check(
+            static_cast<std::uint32_t>(screen.row[0]) == 0xffff'ffffU,
+            "le secondaire ignore le champ de pas"
+        );
+    }
+}
+
+void les_champs_d_un_sprite_vont_jusqu_a_leur_dernier_bit() {
+    {   // Le numéro de tuile tient sur dix bits, comme celui d'un décor.
+        Screen screen;
+        auto vram = screen.attach_objects(Engine::main);
+        write_pixel4(vram, 512U * 32U, 0, 0, 0, 1);
+
+        screen.set_colour(Engine::main, 0, 0x0000U);
+        screen.set_object_colour(Engine::main, 1, 0x7fffU);
+        write_object(screen, Engine::main, 0, {.tile = 512});
+        screen.main.set_display_control(object_display_command());
+        screen.main.render_row(0, screen.row);
+        check(
+            static_cast<std::uint32_t>(screen.row[0]) == 0xffff'ffffU,
+            "la tuile 512 se distingue de la tuile 0"
+        );
+    }
+    {   // Une ligne d'une tuile de sprite fait huit octets en deux cent
+        // cinquante-six couleurs, comme pour un décor.
+        Screen screen;
+        auto vram = screen.attach_objects(Engine::main);
+        write_pixel8(vram, 0, 0, 0, 3, 1);
+
+        screen.set_colour(Engine::main, 0, 0x0000U);
+        screen.set_object_colour(Engine::main, 1, 0x7fffU);
+        write_object(screen, Engine::main, 0, {.full_palette = true});
+        screen.main.set_display_control(object_display_command());
+
+        screen.main.render_row(3, screen.row);
+        check(static_cast<std::uint32_t>(screen.row[0]) == 0xffff'ffffU, "la ligne 3 du sprite");
+        screen.main.render_row(0, screen.row);
+        check(static_cast<std::uint32_t>(screen.row[0]) == 0xff00'0000U, "et pas la ligne 0");
+    }
+    {   // En grille, une tuile de deux cent cinquante-six couleurs occupe deux
+        // emplacements : la tuile voisine est donc deux crans plus loin, non un.
+        Screen screen;
+        auto vram = screen.attach_objects(Engine::main);
+        write_pixel8(vram, 2U * 32U, 0, 0, 0, 1);
+
+        screen.set_colour(Engine::main, 0, 0x0000U);
+        screen.set_object_colour(Engine::main, 1, 0x7fffU);
+        write_object(screen, Engine::main, 0, {.shape = 1, .size = 0, .full_palette = true});
+        screen.main.set_display_control(object_display_command());
+        screen.main.render_row(0, screen.row);
+        check(
+            static_cast<std::uint32_t>(screen.row[8]) == 0xffff'ffffU,
+            "en grille, une tuile large occupe deux emplacements"
+        );
+    }
+    {   // À la suite, c'est la taille de la tuile qui règle le pas, et elle
+        // double avec la profondeur de palette.
+        Screen screen;
+        auto vram = screen.attach_objects(Engine::main);
+        write_pixel8(vram, 2U * 64U, 0, 0, 0, 1);
+
+        screen.set_colour(Engine::main, 0, 0x0000U);
+        screen.set_object_colour(Engine::main, 1, 0x7fffU);
+        write_object(screen, Engine::main, 0, {.shape = 0, .size = 1, .full_palette = true});
+        screen.main.set_display_control(object_display_command() | (1U << 4U));
+        screen.main.render_row(8, screen.row);
+        check(
+            static_cast<std::uint32_t>(screen.row[0]) == 0xffff'ffffU,
+            "à la suite, une tuile large fait soixante-quatre octets"
+        );
+    }
+}
+
+void un_sprite_devant_ne_couvre_pas_avec_sa_transparence() {
+    // Le sprite de devant est transparent à cet endroit : c'est celui de
+    // derrière qu'on doit voir. Sans quoi un sprite masquerait tout ce qui est
+    // derrière lui dès qu'il est allumé, y compris ses propres voisins.
+    Screen screen;
+    auto vram = screen.attach_objects(Engine::main);
+    write_pixel4(vram, 0, 0, 0, 0, 0);   // devant, transparent
+    write_pixel4(vram, 0, 1, 0, 0, 2);   // derrière, visible
+
+    screen.set_colour(Engine::main, 0, 0x0000U);
+    screen.set_object_colour(Engine::main, 0, 0x001fU);   // rouge, si l'on dessinait la couleur zéro
+    screen.set_object_colour(Engine::main, 2, 0x03e0U);   // vert
+
+    write_object(screen, Engine::main, 0, {.tile = 0, .priority = 0});
+    write_object(screen, Engine::main, 1, {.tile = 1, .priority = 1});
+    screen.main.set_display_control(object_display_command());
+    screen.main.render_row(0, screen.row);
+    check(
+        static_cast<std::uint32_t>(screen.row[0]) == 0xff00'ff00U,
+        "le sprite de derrière se voit à travers celui de devant"
+    );
+}
+
+void la_remise_a_zero_efface_le_compte_des_sprites() {
+    Screen screen;
+    write_object(screen, Engine::main, 0, {.rotated = true});
+    screen.main.set_display_control(object_display_command());
+    screen.main.render_row(0, screen.row);
+    check(screen.main.unimplemented_object_count() == 1U, "le sprite tournant est compté");
+
+    screen.main.reset();
+    check(screen.main.unimplemented_object_count() == 0U, "et la remise à zéro l'efface");
+}
+
+void un_sprite_passe_devant_un_decor_de_meme_priorite() {
+    // C'est l'inverse de la règle entre décors, et c'est ce qui met un
+    // personnage devant son sol plutôt que dedans.
+    Screen screen;
+    auto background = screen.attach_background(Engine::main);
+    auto sprites = screen.attach_objects(Engine::main);
+
+    write_map(background, 0x800U, 0, map_entry(1));
+    write_pixel4(background, 0, 1, 0, 0, 1);
+    write_pixel4(sprites, 0, 0, 0, 0, 2);
+
+    screen.set_colour(Engine::main, 0, 0x0000U);
+    screen.set_colour(Engine::main, 1, 0x001fU);          // décor rouge
+    screen.set_object_colour(Engine::main, 2, 0x03e0U);   // sprite vert
+
+    screen.main.set_background_control(0, background_command(1, 0, 1));
+    write_object(screen, Engine::main, 0, {.priority = 1});
+    screen.main.set_display_control(object_display_command(0x1U));
+    screen.main.render_row(0, screen.row);
+    check(
+        static_cast<std::uint32_t>(screen.row[0]) == 0xff00'ff00U,
+        "à priorité égale, le sprite couvre le décor"
+    );
+
+    // Une priorité plus grande le fait bien repasser derrière.
+    write_object(screen, Engine::main, 0, {.priority = 2});
+    screen.main.render_row(0, screen.row);
+    check(
+        static_cast<std::uint32_t>(screen.row[0]) == 0xffff'0000U,
+        "mais une priorité plus grande le met derrière"
+    );
+}
+
+void entre_sprites_le_premier_de_la_table_l_emporte() {
+    struct Case {
+        std::uint32_t priority0;
+        std::uint32_t priority1;
+        std::uint32_t expected;
+        const char* label;
+    };
+    const std::array<Case, 3> cases{{
+        {0, 1, 0xffff'0000U, "la priorité la plus basse couvre"},
+        {1, 0, 0xff00'ff00U, "dans l'autre sens aussi"},
+        {1, 1, 0xffff'0000U, "à égalité, le premier de la table l'emporte"},
+    }};
+
+    for (const auto& entry : cases) {
+        Screen screen;
+        auto vram = screen.attach_objects(Engine::main);
+        write_pixel4(vram, 0, 0, 0, 0, 1);
+        write_pixel4(vram, 0, 1, 0, 0, 2);
+
+        screen.set_colour(Engine::main, 0, 0x0000U);
+        screen.set_object_colour(Engine::main, 1, 0x001fU);
+        screen.set_object_colour(Engine::main, 2, 0x03e0U);
+
+        write_object(screen, Engine::main, 0, {.tile = 0, .priority = entry.priority0});
+        write_object(screen, Engine::main, 1, {.tile = 1, .priority = entry.priority1});
+        screen.main.set_display_control(object_display_command());
+        screen.main.render_row(0, screen.row);
+        check(static_cast<std::uint32_t>(screen.row[0]) == entry.expected, entry.label);
+    }
+}
+
+void un_sprite_se_replie_sur_les_bords() {
+    {   // L'ordonnée se compte sur huit bits : posé bas, le sprite reparaît en
+        // haut, et c'est ainsi qu'on le fait entrer par le bord.
+        Screen screen;
+        auto vram = screen.attach_objects(Engine::main);
+        write_pixel4(vram, 0, 0, 0, 7, 1);
+
+        screen.set_colour(Engine::main, 0, 0x0000U);
+        screen.set_object_colour(Engine::main, 1, 0x7fffU);
+        write_object(screen, Engine::main, 0, {.y = 250});
+        screen.main.set_display_control(object_display_command());
+        screen.main.render_row(1, screen.row);
+        check(static_cast<std::uint32_t>(screen.row[0]) == 0xffff'ffffU, "posé à 250, sa ligne 7 est en 1");
+    }
+    {   // L'abscisse tient sur neuf bits : ce qui dépasse à droite n'est pas
+        // dessiné, et un sprite posé au-delà revient par la gauche.
+        Screen screen;
+        auto vram = screen.attach_objects(Engine::main);
+        for (std::uint32_t x = 0; x < 8U; ++x) write_pixel4(vram, 0, 0, x, 0, 1);
+
+        screen.set_colour(Engine::main, 0, 0x0000U);
+        screen.set_object_colour(Engine::main, 1, 0x7fffU);
+        write_object(screen, Engine::main, 0, {.x = 508});
+        screen.main.set_display_control(object_display_command());
+        screen.main.render_row(0, screen.row);
+        check(
+            static_cast<std::uint32_t>(screen.row[0]) == 0xffff'ffffU,
+            "posé à 508, sa fin revient par la gauche"
+        );
+        check(
+            static_cast<std::uint32_t>(screen.row[255]) == 0xff00'0000U,
+            "et rien ne s'écrit au bord droit"
+        );
+    }
+}
+
+void ce_qui_n_est_pas_un_sprite_ordinaire_est_compte() {
+    struct Case {
+        ObjectAttributes attributes;
+        std::uint32_t counted;
+        bool drawn;
+        const char* label;
+    };
+    const std::array<Case, 6> cases{{
+        {{.rotated = true}, 1, false, "un sprite tournant"},
+        {{.mode = 1}, 1, false, "la semi-transparence"},
+        {{.mode = 2}, 1, false, "la fenêtre par sprite"},
+        {{.mode = 3}, 1, false, "l'image directe"},
+        {{.mosaic = true}, 1, true, "la mosaïque, dessinée sans son effet"},
+        {{.disabled = true}, 0, false, "un sprite éteint, qui n'est pas un manque"},
+    }};
+
+    for (const auto& entry : cases) {
+        Screen screen;
+        auto vram = screen.attach_objects(Engine::main);
+        write_pixel4(vram, 0, 0, 0, 0, 1);
+
+        screen.set_colour(Engine::main, 0, 0x0000U);
+        screen.set_object_colour(Engine::main, 1, 0x7fffU);
+        write_object(screen, Engine::main, 0, entry.attributes);
+        screen.main.set_display_control(object_display_command());
+        screen.main.render_row(0, screen.row);
+
+        check(
+            screen.main.unimplemented_object_count() == entry.counted,
+            std::string{entry.label} + " : compté " + std::to_string(entry.counted) + " fois"
+        );
+        check(
+            (static_cast<std::uint32_t>(screen.row[0]) == 0xffff'ffffU) == entry.drawn,
+            std::string{entry.label} + " : dessiné ou non, comme il se doit"
+        );
+    }
+}
+
+void les_sprites_s_eteignent_et_chaque_moteur_a_les_siens() {
+    {   // Sans leur bit d'allumage, aucun sprite n'est consulté.
+        Screen screen;
+        auto vram = screen.attach_objects(Engine::main);
+        write_pixel4(vram, 0, 0, 0, 0, 1);
+        screen.set_colour(Engine::main, 0, 0x0000U);
+        screen.set_object_colour(Engine::main, 1, 0x7fffU);
+        write_object(screen, Engine::main, 0, {.rotated = true});
+
+        screen.main.set_display_control(1U << 16U);
+        screen.main.render_row(0, screen.row);
+        check(static_cast<std::uint32_t>(screen.row[0]) == 0xff00'0000U, "rien n'est dessiné");
+        check(screen.main.unimplemented_object_count() == 0U, "et rien n'est même consulté");
+    }
+    {   // Chaque moteur a sa table d'attributs et sa palette de sprites.
+        Screen screen;
+        auto vram = screen.attach_objects(Engine::secondary);
+        write_pixel4(vram, 0, 0, 0, 0, 1);
+
+        // Les mêmes places dans les tables du principal ne doivent rien changer.
+        screen.set_object_colour(Engine::main, 1, 0x001fU);
+        write_object(screen, Engine::main, 0, {.disabled = true});
+
+        screen.set_colour(Engine::secondary, 0, 0x0000U);
+        screen.set_object_colour(Engine::secondary, 1, 0x03e0U);
+        write_object(screen, Engine::secondary, 0, {.y = 0});
+
+        screen.secondary.set_display_control(object_display_command());
+        screen.secondary.render_row(0, screen.row);
+        check(
+            static_cast<std::uint32_t>(screen.row[0]) == 0xff00'ff00U,
+            "le secondaire lit ses propres attributs et sa propre palette"
+        );
+    }
+}
+
 void un_plan_eteint_ne_se_dessine_pas() {
     Screen screen;
     auto vram = screen.attach_background(Engine::main);
@@ -849,6 +1385,18 @@ int main() {
     la_carte_se_replie_au_dela_de_ses_bords();
     un_plan_devant_ne_couvre_pas_avec_sa_transparence();
     un_plan_qui_n_est_pas_en_mode_texte_ne_dessine_rien();
+    un_sprite_ordinaire_se_dessine();
+    les_sprites_ont_douze_formats();
+    un_sprite_se_lit_dans_les_deux_profondeurs_et_se_retourne();
+    les_tuiles_d_un_sprite_se_rangent_de_deux_facons();
+    les_champs_d_un_sprite_vont_jusqu_a_leur_dernier_bit();
+    un_sprite_devant_ne_couvre_pas_avec_sa_transparence();
+    la_remise_a_zero_efface_le_compte_des_sprites();
+    un_sprite_passe_devant_un_decor_de_meme_priorite();
+    entre_sprites_le_premier_de_la_table_l_emporte();
+    un_sprite_se_replie_sur_les_bords();
+    ce_qui_n_est_pas_un_sprite_ordinaire_est_compte();
+    les_sprites_s_eteignent_et_chaque_moteur_a_les_siens();
     les_priorites_decident_de_ce_qui_couvre();
     un_plan_eteint_ne_se_dessine_pas();
     ce_qui_n_est_pas_encore_dessine_est_compte();

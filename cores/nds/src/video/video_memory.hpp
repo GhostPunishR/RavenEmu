@@ -97,6 +97,14 @@ public:
 
     void reset() noexcept;
 
+    /**
+     * Commande d'une banque. Le rang doit être valide.
+     *
+     * Une garde ici ne serait jamais exercée : le seul appelant borne déjà le
+     * rang en décodant l'adresse du registre. Elle ne serait pas non plus
+     * vérifiable, zéro étant une commande parfaitement légitime — rien ne
+     * distinguerait le refus d'une banque éteinte.
+     */
     [[nodiscard]] std::uint8_t control(std::size_t bank) const noexcept;
     void set_control(std::size_t bank, std::uint8_t value) noexcept;
 

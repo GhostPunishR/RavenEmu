@@ -67,7 +67,6 @@ void VideoMemory::reset() noexcept {
 }
 
 std::uint8_t VideoMemory::control(std::size_t bank) const noexcept {
-    if (bank >= bank_count) return 0;
     return control_[bank];
 }
 

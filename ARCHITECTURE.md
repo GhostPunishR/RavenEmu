@@ -267,11 +267,36 @@ quatre fois plus grande et décale ses bases par deux champs supplémentaires ; 
 reçoit le rendu 3D comme un plan, sait afficher une banque telle quelle et lire
 son image depuis la mémoire principale. Le secondaire n'a rien de tout cela.
 
-Ce lot rend les **décors en mode texte** : tuiles de huit sur huit, seize ou deux
+Sont rendus les **décors en mode texte** : tuiles de huit sur huit, seize ou deux
 cent cinquante-six couleurs, retournement dans les deux sens, quatre tailles de
 carte, défilement, et la résolution des priorités entre les quatre plans et le
 fond. C'est le socle, parce que tous les autres modes s'appuient sur les mêmes
 palettes, les mêmes priorités et la même composition.
+
+Et les **sprites ordinaires** : cent vingt-huit objets, douze formats donnés par
+deux champs séparés dont le couple ne se déduit ni de l'un ni de l'autre, les
+deux profondeurs de palette, les deux retournements, et les deux rangements de
+tuiles. Les retournements portent sur le sprite entier et non sur chacune de ses
+tuiles, ce qui les distingue de ceux d'un décor. Les deux replis comptent : une
+ordonnée sur huit bits fait reparaître en haut un sprite posé bas, une abscisse
+sur neuf bits fait revenir par la gauche un sprite posé au-delà du bord droit,
+et c'est ainsi qu'un jeu fait entrer ses personnages par les côtés.
+
+**Un sprite passe devant un décor de même priorité.** C'est l'inverse de la règle
+entre décors, où le plus petit numéro l'emporte : la comparaison est large d'un
+côté, stricte de l'autre, et c'est ce qui met un personnage devant son sol
+plutôt que dedans.
+
+Le tampon des sprites couvre les cinq cent douze positions de l'abscisse, non les
+deux cent cinquante-six de l'écran. Ce n'est pas du gaspillage : un sprite posé
+au bord y dépose ce qui dépasse, la composition ne relit que l'écran, et le
+découpage vient donc de la forme du tampon plutôt que d'une condition qu'aucune
+image ne permettrait de vérifier.
+
+Une entrée d'attributs à zéro ne décrit pas l'absence de sprite : elle décrit un
+sprite de huit sur huit, allumé, posé en haut à gauche. Une table vierge en
+dessine donc cent vingt-huit superposés, et tout logiciel de console commence par
+les éteindre.
 
 Deux détails y comptent plus qu'ils n'en ont l'air. **La première couleur d'une
 palette n'est pas une couleur** : c'est l'absence de pixel, et c'est ce qui
@@ -287,12 +312,20 @@ sont pas comptés comme manquants, parce que le matériel n'en affiche pas non
 plus ; en revanche un plan demandé dans un mode que ce lot ne dessine pas encore
 est compté, un plan absent qui ne dit rien se confondant avec un plan vide.
 
-Ne sont pas rendus : les sprites, les décors tournants, les modes étendus, la
-grande image, le plan 3D, les fenêtres, les mélanges, la mosaïque et les palettes
+Ne sont pas rendus : les décors tournants, les modes étendus, la grande image, le
+plan 3D, les sprites tournants, la semi-transparence, la fenêtre par sprite, les
+sprites en image directe, les fenêtres, les mélanges, la mosaïque et les palettes
 étendues. Rien ne fait non plus tourner ce moteur trame par trame : il n'y a ni
 ordonnanceur, ni compteur de lignes, ni interruption de balayage, et
 `run_frame` refuse donc toujours. Le moteur sait dessiner une ligne ; personne ne
 la lui demande encore.
+
+La distinction entre « pas dessiné » et « dessiné sans son effet » est tenue au
+cas par cas plutôt que par une règle générale. Un sprite tournant ou
+semi-transparent n'est pas dessiné, parce que le dessiner comme un sprite
+ordinaire donnerait une image plausible et fausse ; un sprite mosaïqué l'est,
+parce que l'omettre serait plus faux que de le rendre sans son effet. Les deux
+sont comptés.
 
 Deux décisions y sont prises, parce qu'elles engagent le reste du projet et
 qu'il vaut mieux les arrêter avant d'écrire un moteur autour :

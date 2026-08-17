@@ -305,7 +305,6 @@ void le_branchement_se_relit_tel_qu_il_a_ete_ecrit() {
     video.reset();
     video.set_control(3, 0x8bU);
     check(video.control(3) == 0x8bU, "la commande se relit entière");
-    check(video.control(9) == 0U, "et il n'y a pas de dixième commande");
 
     // Une banque éteinte garde sa destination : c'est le bit d'allumage qui la
     // coupe, et lui seul. Le reste de la commande continue de dire où elle irait.
