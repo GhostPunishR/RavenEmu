@@ -20,6 +20,7 @@ void Arm7MemoryMap::reset() noexcept {
     // La mémoire partagée est remise à zéro par son propriétaire : la vider
     // depuis l'une des deux vues effacerait le travail de l'autre.
     std::fill(private_wram_.begin(), private_wram_.end(), std::uint8_t{0});
+    halt_requested_ = false;
     unmapped_ = 0;
     first_unmapped_ = 0;
     unimplemented_io_ = 0;
@@ -152,6 +153,19 @@ void Arm7MemoryMap::write_io_byte(std::uint32_t address, std::uint8_t value) noe
         return;
     }
     if (address >= line_counter && address < line_counter + 2U) {
+        note_unimplemented_io(address);
+        return;
+    }
+
+    if (address == halt_control) {
+        // Deux bits de poids fort décident. Une écriture qui n'en pose aucun ne
+        // fait rien : c'est une valeur légitime, pas un registre méconnu.
+        const auto mode = static_cast<std::uint8_t>(value >> 6U);
+        if (mode == halt_mode) {
+            halt_requested_ = true;
+            return;
+        }
+        if (mode == 0U) return;
         note_unimplemented_io(address);
         return;
     }

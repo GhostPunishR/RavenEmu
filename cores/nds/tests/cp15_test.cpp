@@ -633,46 +633,60 @@ void le_mode_chargement_ouvre_la_memoire_locale_en_ecriture_seule() {
 }
 
 void l_attente_d_interruption_arrete_le_coeur() {
-    {   // Le cœur s'arrête, et n'avance plus.
+    // L'opération est celle du manuel : écrire c7, c0, opération secondaire 4.
+    constexpr std::uint32_t wait_for_interrupt = coprocessor_transfer(false, 0U, 0U, 7U, 0U, 4U);
+
+    {   // Le coprocesseur ne fait que retenir la demande, et elle ne vaut qu'une
+        // fois : l'arrêt appartient au cœur, qui la lui prend.
         Machine machine;
-        machine.load(program_base, {mov_immediate(0U, 0x42U)});
         machine.cp15().write(0U, 7U, 0U, 4U, 0U);
-        check(machine.cp15().halted(), "l'attente est enregistrée");
+        check(machine.cp15().take_halt_request(), "l'attente est enregistrée");
+        check(!machine.cp15().take_halt_request(), "et elle ne se prend qu'une fois");
+    }
+    {   // L'instruction exécutée arrête le cœur, qui n'avance plus.
+        Machine machine;
+        machine.load(program_base, {wait_for_interrupt, mov_immediate(0U, 0x42U)});
         machine.reg(15) = program_base;
         machine.cpu.step();
+        check(machine.cpu.halted(), "le cœur est arrêté");
+        const auto stopped_at = machine.reg(15);
         machine.cpu.step();
-        check(machine.reg(15) == program_base, "le compteur n'avance pas");
+        machine.cpu.step();
+        check(machine.reg(15) == stopped_at, "le compteur n'avance pas");
         check(machine.reg(0) == 0U, "et rien ne s'exécute");
     }
-    {   // Une ligne posée le réveille et l'interruption est prise.
+    {   // Réveillé, il reprend là où il s'était arrêté. Ce n'est pas le cœur qui
+        // décide de repartir : rien de ce qu'il voit ne porte la condition.
         Machine machine;
-        machine.cp15().write(0U, 7U, 0U, 4U, 0U);
+        machine.load(program_base, {wait_for_interrupt, mov_immediate(0U, 0x42U)});
         machine.reg(15) = program_base;
+        machine.cpu.step();
         machine.cpu.set_irq_line(true);
         machine.cpu.step();
-        check(!machine.cp15().halted(), "l'attente est levée");
+        check(machine.cpu.halted(), "une ligne posée ne suffit pas à le relancer");
+        machine.cpu.wake();
+        machine.cpu.step();
+        check(!machine.cpu.halted(), "l'attente est levée");
         check(machine.reg(15) == ArmCore::irq_vector, "et l'interruption est prise");
     }
-    {   // Une ligne masquée réveille quand même : c'est l'attente qui s'achève,
-        // pas l'interruption qui s'impose.
+    {   // Réveillé sans interruption à prendre, il exécute simplement la suite.
         Machine machine;
-        machine.cpu.state().cpsr =
-            static_cast<std::uint32_t>(CpuMode::system) | psr::irq_disable;
-        machine.load(program_base, {mov_immediate(0U, 0x42U)});
-        machine.cp15().write(0U, 7U, 0U, 4U, 0U);
+        machine.load(program_base, {wait_for_interrupt, mov_immediate(0U, 0x42U)});
         machine.reg(15) = program_base;
-        machine.cpu.set_irq_line(true);
         machine.cpu.step();
-        check(!machine.cp15().halted(), "l'attente est levée malgré le masque");
-        check(machine.reg(0) == 0x42U, "et l'instruction suivante s'exécute");
+        machine.cpu.wake();
+        machine.cpu.step();
+        check(machine.reg(0) == 0x42U, "l'instruction suivante s'exécute");
     }
-    {   // La ligne rapide réveille aussi.
+    {   // Une remise à zéro lève l'arrêt : un cœur remis sous tension qui
+        // resterait endormi ne repartirait jamais.
         Machine machine;
-        machine.cp15().write(0U, 7U, 0U, 4U, 0U);
+        machine.load(program_base, {wait_for_interrupt, mov_immediate(0U, 0x42U)});
         machine.reg(15) = program_base;
-        machine.cpu.set_fiq_line(true);
         machine.cpu.step();
-        check(!machine.cp15().halted(), "la ligne rapide réveille");
+        check(machine.cpu.halted(), "le cœur est arrêté");
+        machine.cpu.reset();
+        check(!machine.cpu.halted(), "et la remise à zéro l'a relevé");
     }
     {   // Les autres opérations de cache ne font rien, et surtout ne comptent
         // pas comme des registres inconnus : vider un cache absent n'est pas
@@ -683,7 +697,7 @@ void l_attente_d_interruption_arrete_le_coeur() {
             machine.cp15().write(0U, 7U, 0U, sub, 0U);
             machine.cp15().write(0U, 7U, 5U, sub, 0U);
         }
-        check(!machine.cp15().halted(), "aucune autre opération n'arrête le cœur");
+        check(!machine.cp15().take_halt_request(), "aucune autre opération n'arrête le cœur");
         check(machine.cp15().unknown_access_count() == 0U, "et aucune n'est comptée comme inconnue");
     }
 }
@@ -726,10 +740,10 @@ void la_remise_a_zero_efface_la_configuration() {
     static_cast<void>(machine.cp15().read(0U, 13U, 0U, 0U));
 
     machine.cpu.reset();
+    check(!machine.cp15().take_halt_request(), "l'attente en instance est oubliée");
 
     check(machine.cp15().control() == Cp15::control_read_as_one, "le contrôle repart de sa valeur de mise sous tension");
     check(machine.cp15().exception_base() == 0U, "les vecteurs reviennent en position basse");
-    check(!machine.cp15().halted(), "l'attente est levée");
     check(machine.cp15().unknown_access_count() == 0U, "le compte des registres inconnus repart de zéro");
     check(machine.cp15().first_unknown_access() == 0U, "et le premier est oublié");
     check(machine.cp15().read(0U, 6U, 0U, 0U) == 0U, "les régions sont vierges");

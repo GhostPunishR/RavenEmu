@@ -65,10 +65,19 @@ public:
     /** Acquitte : chaque bit à un dans [mask] efface la demande correspondante. */
     void acknowledge(std::uint32_t mask) noexcept { requested_ &= ~mask; }
 
+    /**
+     * Vrai quand une source autorisée a une demande en attente.
+     *
+     * L'autorisation générale n'entre pas dans ce calcul, et c'est ce qui le
+     * distingue de `line`. Un processeur arrêté repart là-dessus : le logiciel
+     * de console coupe couramment l'autorisation générale avant de s'arrêter,
+     * pour traiter la demande à la main plutôt que par le vecteur, et le lier à
+     * cette autorisation l'endormirait pour de bon.
+     */
+    [[nodiscard]] bool pending() const noexcept { return (enabled_ & requested_) != 0U; }
+
     /** Vrai quand le processeur doit prendre une interruption. */
-    [[nodiscard]] bool line() const noexcept {
-        return master_enable_ != 0U && (enabled_ & requested_) != 0U;
-    }
+    [[nodiscard]] bool line() const noexcept { return master_enable_ != 0U && pending(); }
 
 private:
     std::uint32_t master_enable_{};

@@ -67,6 +67,25 @@ public:
     static constexpr std::uint32_t display_status = 0x0400'0004;
     static constexpr std::uint32_t line_counter = 0x0400'0006;
 
+    /**
+     * Registre d'arrêt du processeur.
+     *
+     * C'est par lui que ce processeur attend une interruption, là où l'autre
+     * passe par son coprocesseur. Ses deux bits de poids fort portent le mode :
+     * seul l'arrêt est modélisé. La mise en veille coupe l'horloge de la console
+     * entière et ne se lève que par une touche ou la charnière, dont rien
+     * n'existe ici ; l'approcher par un arrêt donnerait une console qui repart
+     * au retour vertical alors qu'elle devrait rester éteinte. Elle est donc
+     * comptée, comme le mode Game Boy Advance qui partage ce champ.
+     *
+     * En lecture, ce registre est compté lui aussi : ce qu'il rend n'est
+     * affirmé nulle part, et l'inventer serait une affirmation que rien ne
+     * vérifie.
+     */
+    static constexpr std::uint32_t halt_control = 0x0400'0301;
+    /** Valeur du champ de mode qui arrête le processeur. */
+    static constexpr std::uint8_t halt_mode = 2;
+
     void reset() noexcept;
 
     [[nodiscard]] std::uint8_t read8(std::uint32_t address) override;
@@ -78,6 +97,20 @@ public:
     void write32(std::uint32_t address, std::uint32_t value) override;
 
     [[nodiscard]] std::span<std::uint8_t> private_wram() noexcept { return private_wram_; }
+
+    /**
+     * Retire la demande d'arrêt, s'il y en a une.
+     *
+     * La carte ne connaît pas le processeur et ne peut pas l'arrêter elle-même :
+     * elle ne fait que retenir ce que le registre a reçu. C'est l'organe qui
+     * monte les deux ensemble qui transporte la demande, comme il transporte la
+     * ligne d'interruption.
+     */
+    [[nodiscard]] bool take_halt_request() noexcept {
+        const bool requested = halt_requested_;
+        halt_requested_ = false;
+        return requested;
+    }
 
     /** Part de la mémoire commune revenant à ce processeur. */
     [[nodiscard]] SystemMemory::Window shared_window() const noexcept {
@@ -125,6 +158,8 @@ private:
     InterProcessor& link_;
     InterruptController& interrupts_;
     std::vector<std::uint8_t> private_wram_;
+
+    bool halt_requested_{};
 
     std::uint32_t unmapped_{};
     std::uint32_t first_unmapped_{};

@@ -85,7 +85,7 @@ void Cp15::reset() noexcept {
     instruction_lockdown_ = 0;
     dtcm_region_ = 0;
     itcm_region_ = 0;
-    halted_ = false;
+    halt_requested_ = false;
     unknown_accesses_ = 0;
     first_unknown_ = 0;
     // Le contenu des mémoires locales est indéfini à la mise sous tension. Le
@@ -216,7 +216,7 @@ void Cp15::write(
         // Opérations de cache. Aucun cache n'est modélisé, donc les vider ou
         // les nettoyer ne fait rien ; seule l'attente d'interruption a un effet
         // observable.
-        if (secondary == 0U && sub_operation == 4U) { halted_ = true; return; }
+        if (secondary == 0U && sub_operation == 4U) { halt_requested_ = true; return; }
         return;
     case 9:
         if (secondary == 0U && sub_operation == 0U) { data_lockdown_ = value; return; }

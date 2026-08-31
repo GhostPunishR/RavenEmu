@@ -32,6 +32,7 @@ void ArmCore::reset() noexcept {
     state_ = CpuState{};
     if (coprocessor_) coprocessor_->reset();
     branched_ = false;
+    halted_ = false;
     irq_line_ = false;
     fiq_line_ = false;
     unimplemented_ = 0;
@@ -270,13 +271,11 @@ void ArmCore::raise_undefined(std::uint32_t opcode) {
 }
 
 void ArmCore::step() {
-    // L'attente d'interruption arrête le cœur sans le faire tourner à vide. Une
-    // ligne posée le réveille même si le masque l'empêche d'être prise : c'est
-    // l'attente qui s'achève, pas l'interruption qui s'impose.
-    if (coprocessor_ != nullptr && coprocessor_->halted()) {
-        if (!irq_line_ && !fiq_line_) return;
-        coprocessor_->wake();
-    }
+    // L'attente d'interruption arrête le cœur sans le faire tourner à vide. Ce
+    // n'est pas ici qu'elle s'achève : la condition de reprise n'est pas celle
+    // qui fait prendre l'interruption, et seul l'organe qui tient le contrôleur
+    // la connaît. Le cœur ne fait donc que ne rien faire.
+    if (halted_) return;
 
     // Les lignes d'interruption sont échantillonnées entre deux instructions :
     // le matériel ne coupe pas une instruction en cours.
@@ -439,6 +438,10 @@ void ArmCore::execute_coprocessor(std::uint32_t opcode) {
     }
 
     coprocessor_->write(operation, primary, secondary, sub_operation, read_register(rd));
+
+    // Une seule opération du coprocesseur agit sur le cœur plutôt que sur ses
+    // registres : celle qui l'arrête. Elle est décodée là-bas et portée ici.
+    if (coprocessor_->take_halt_request()) halt();
 }
 
 void ArmCore::execute_data_processing(std::uint32_t opcode) {

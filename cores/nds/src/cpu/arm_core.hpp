@@ -99,6 +99,24 @@ public:
     void set_irq_line(bool asserted) noexcept { irq_line_ = asserted; }
     void set_fiq_line(bool asserted) noexcept { fiq_line_ = asserted; }
 
+    /**
+     * Arrête le processeur jusqu'à ce qu'on le réveille.
+     *
+     * Les deux processeurs de la console s'arrêtent, et pas par le même chemin :
+     * le principal par une opération de son coprocesseur, le secondaire par un
+     * registre d'entrée-sortie. L'état d'arrêt est donc porté ici, où il est
+     * commun, plutôt que dans un coprocesseur que l'un des deux n'a pas.
+     *
+     * **Ce qui réveille n'est pas décidé ici.** Le cœur ne voit qu'une ligne
+     * d'interruption déjà filtrée par l'autorisation générale, et cette
+     * autorisation ne conditionne pas la reprise : un programme qui la coupe
+     * avant de s'arrêter doit repartir tout de même. Seul l'organe qui tient le
+     * contrôleur d'interruptions sait cela, et c'est lui qui appelle `wake`.
+     */
+    void halt() noexcept { halted_ = true; }
+    void wake() noexcept { halted_ = false; }
+    [[nodiscard]] bool halted() const noexcept { return halted_; }
+
     /** Nombre d'instructions non implémentées rencontrées depuis la remise à zéro. */
     [[nodiscard]] std::uint32_t unimplemented_count() const noexcept { return unimplemented_; }
     /** Première instruction non implémentée rencontrée, ou zéro. */
@@ -205,6 +223,7 @@ private:
     std::unique_ptr<Cp15> coprocessor_;
     CpuState state_{};
     bool branched_{};
+    bool halted_{};
     bool irq_line_{};
     bool fiq_line_{};
     std::uint32_t unimplemented_{};

@@ -349,6 +349,42 @@ void les_registres_du_balayage_repondent_par_les_deux_cartes() {
     check(console.display().line() == 150U, "et le faisceau n'a pas bougé");
 }
 
+/**
+ * Le faisceau ne dessine que la ligne qu'il traverse.
+ *
+ * C'est ce qui sépare un balayage d'une capture : dessiner toute la trame d'un
+ * coup effacerait tout changement survenu en cours de route, sans rien dire.
+ */
+void le_faisceau_ne_dessine_que_sa_ligne() {
+    constexpr std::int32_t untouched = 0x0123'4567;
+
+    Console console;
+    std::vector<std::int32_t> framebuffer(
+        static_cast<std::size_t>(256) * static_cast<std::size_t>(384), untouched);
+
+    console.video.palette()[0] = 0x1fU;                  // rouge, pour le moteur principal
+    console.video.engine(Engine::main).set_display_control(1U << 16U);
+    console.video.engine(Engine::secondary).set_display_control(1U << 16U);
+
+    console.advance_to(50U);
+    console.display().render_current_line(framebuffer);
+
+    check(static_cast<std::uint32_t>(framebuffer[50U * 256U]) == 0xffff'0000U, "la ligne balayée est dessinée");
+    check(framebuffer[49U * 256U] == untouched, "celle d'avant est laissée telle quelle");
+    check(framebuffer[51U * 256U] == untouched, "celle d'après aussi");
+    // L'écran du bas reçoit la même ligne, du second moteur : c'est un seul
+    // faisceau pour les deux écrans.
+    check(framebuffer[(192U + 50U) * 256U] != untouched, "l'écran du bas reçoit la sienne au même instant");
+    check(framebuffer[(192U + 49U) * 256U] == untouched, "et pas celle d'avant");
+
+    // Les lignes qui ne s'affichent pas se balaient tout de même, mais ne se
+    // dessinent nulle part.
+    console.advance_to(200U);
+    const auto before = framebuffer;
+    console.display().render_current_line(framebuffer);
+    check(framebuffer == before, "une ligne hors écran ne dessine rien");
+}
+
 void une_trame_remplit_les_deux_ecrans() {
     Console console;
     std::vector<std::int32_t> framebuffer(
@@ -475,6 +511,7 @@ int main() {
     les_indicateurs_ne_s_ecrivent_pas();
     chaque_interruption_va_au_processeur_qui_l_a_demandee();
     les_registres_du_balayage_repondent_par_les_deux_cartes();
+    le_faisceau_ne_dessine_que_sa_ligne();
     une_trame_remplit_les_deux_ecrans();
     une_trame_trop_courte_n_est_pas_ecrite();
     la_remise_a_zero_ramene_le_faisceau();

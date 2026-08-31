@@ -64,17 +64,27 @@ aujourd'hui :
   registre d'état par processeur avec ses propres autorisations et sa propre
   ligne guettée sur neuf bits, les trois interruptions du balayage, le rendu
   d'une trame entière dans le tampon empilé, et l'échange des deux écrans
-  commandé par le registre d'alimentation.
+  commandé par le registre d'alimentation;
+- l'ordonnanceur qui fait tourner tout cela ensemble : les deux processeurs
+  avancent entrelacés instruction par instruction, le principal deux fois pour
+  une du secondaire comme le veut le rapport de leurs horloges, le faisceau
+  avance entre les lignes, et chaque ligne se dessine à son passage plutôt que
+  la trame entière à la fin. Les deux processeurs savent s'arrêter, chacun par
+  le chemin que lui donne le matériel, et une source autorisée en attente les
+  relance sans que l'autorisation générale ait à être donnée.
+
+Le budget d'instructions accordé à une ligne repose sur une convention dite en
+toutes lettres : une instruction par cycle de l'horloge maître, faute d'un modèle
+de durée. Les 2130 cycles d'une ligne, eux, sont ceux du matériel.
 
 Toute demande d'exécution reste refusée par une erreur nommée, volontairement :
-un écran noir laisserait croire à une émulation silencieuse. Le contrôleur sait
-dessiner une trame et le balayage sait avancer, mais rien ne fait encore alterner
-les deux processeurs et le faisceau, faute de modèle de durée. Restent à écrire
-cet ordonnanceur, les décors tournants et les modes étendus, les sprites
-tournants et semi-transparents, le moteur 3D, les fenêtres et les mélanges, les
-palettes étendues, la cartouche, les minuteries, les transferts autonomes,
-l'écran tactile et le son. La console n'apparaît pas encore dans la bibliothèque
-de l'application.
+un écran noir laisserait croire à une émulation silencieuse. La console sait
+désormais tourner, mais elle ne sait pas démarrer : rien ne charge de programme
+en mémoire depuis la cartouche. Restent à écrire cet amorçage, les décors
+tournants et les modes étendus, les sprites tournants et semi-transparents, le
+moteur 3D, les fenêtres et les mélanges, les palettes étendues, la cartouche, les
+minuteries, les transferts autonomes, l'écran tactile et le son. La console
+n'apparaît pas encore dans la bibliothèque de l'application.
 
 ## Pistes futures
 

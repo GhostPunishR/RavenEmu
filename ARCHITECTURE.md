@@ -103,10 +103,13 @@ la console, décode et contrôle l'en-tête de cartouche, publie le contrat vid�
 et audio, exécute les deux processeurs de la console avec leurs jeux
 d'instructions et le coprocesseur système du principal, décode les cartes
 mémoire que chacun voit, les fait dialoguer, dessine les décors et les sprites de
-ses deux moteurs graphiques, et balaie ses deux écrans. Toute demande de faire
-tourner une image est en revanche refusée par une erreur nommée : un écran noir
-laisserait croire à une émulation muette, là où il manque encore un ordonnanceur
-pour enchaîner les trames.
+ses deux moteurs graphiques, balaie ses deux écrans, et **fait tourner tout cela
+ensemble** : les deux processeurs alternent au rythme de leurs horloges, le
+faisceau avance entre eux, et une trame se dessine ligne par ligne. Toute demande
+de faire tourner une image est en revanche encore refusée par une erreur nommée,
+et pour une autre raison qu'avant : la console sait tourner, elle ne sait pas
+démarrer. Rien ne charge un programme en mémoire, faute d'amorçage depuis la
+cartouche, et un écran noir laisserait croire à une émulation muette.
 
 `cores/nds/src/cpu` tient les deux processeurs. Ils ne connaissent pas la carte
 mémoire de la console : ils passent par une frontière `Bus` abstraite, ce qui
@@ -235,6 +238,38 @@ l'accès qu'on leur demande, là où elles décomposaient jusqu'ici en octets. L
 une file est **indivisible** : la décomposer en quatre lectures d'octet la
 viderait quatre fois.
 
+**L'ordonnanceur** monte enfin tout cela et le fait avancer. Il n'apporte aucun
+organe nouveau : deux processeurs, deux cartes, la mémoire partagée, les files,
+les deux moteurs et le balayage existaient déjà, mais chacun attendait qu'on
+l'appelle.
+
+Faire tourner un processeur pendant toute une trame puis l'autre donnerait
+exactement les mêmes registres à la fin et une console qui ne marche pas, parce
+que les deux se parlent en cours de route : celui qui dépose un mot dans une file
+et attend la réponse attendrait une trame entière. Les deux avancent donc par
+petits pas **alternés**, au plus fin que ce cœur sache faire — une instruction —
+et le processeur principal joue deux fois pour une du secondaire, comme le veut
+le rapport de leurs horloges. Ce rapport est réel et s'observe ; le nombre
+d'instructions accordées à une ligne ne l'est pas.
+
+Aucune instruction ne dure ici : rien ne compte les cycles, ni les attentes de
+bus. Le budget d'une ligne repose donc sur une **convention explicite, une
+instruction par cycle de l'horloge maître**. Les 2130 cycles d'une ligne sont,
+eux, ceux du matériel — 355 points à six cycles — et le jour où les instructions
+auront une durée, c'est la convention qui disparaîtra, pas les constantes. La
+console tourne ainsi plus vite qu'une vraie ; ce qui est préservé, et qui compte
+davantage, c'est le rapport entre les deux processeurs et la place du balayage.
+
+Les deux processeurs savent s'arrêter, et par deux chemins différents que le
+matériel impose : le principal par une opération de son coprocesseur, le
+secondaire par un registre d'entrée-sortie. L'état d'arrêt appartient donc au
+cœur, et non au coprocesseur que l'un des deux n'a pas. Ce qui les relance est en
+revanche le même des deux côtés, et **ce n'est pas la condition qui fait prendre
+l'interruption** : une source autorisée en attente suffit, sans l'autorisation
+générale. Un programme de console coupe couramment cette autorisation avant de
+s'arrêter, pour traiter la demande à la main plutôt que par le vecteur ; la lui
+imposer pour repartir l'endormirait définitivement.
+
 `cores/nds/src/video` porte les neuf banques, leur aiguillage, les deux moteurs
 graphiques 2D et le contrôleur d'affichage.
 
@@ -352,12 +387,20 @@ serait inventer une position dans la ligne. C'est suffisant pour tout ce qui
 s'accroche au retour vertical ou à une ligne donnée ; ce ne le serait pas pour un
 effet qui change un registre au milieu d'une ligne.
 
+Une ligne se dessine **au passage du faisceau**, et non toute la trame d'un coup
+à la fin. C'est ce qui distingue un balayage d'une capture : un programme qui
+change un décor en cours de trame n'agit que sur les lignes qui suivent, et
+dessiner à la fin effacerait cette distinction sans rien dire. L'ordre à
+l'intérieur d'une ligne compte pour la même raison — les processeurs ont leur
+temps **avant** que la ligne se dessine, parce que le gestionnaire réveillé par
+le retour horizontal de la ligne précédente s'exécute pendant celle-ci et prépare
+ce qu'elle doit montrer.
+
 Ne sont pas rendus : les décors tournants, les modes étendus, la grande image, le
 plan 3D, les sprites tournants, la semi-transparence, la fenêtre par sprite, les
 sprites en image directe, les fenêtres, les mélanges, la mosaïque et les palettes
-étendues. Et **rien n'enchaîne encore les trames** : le contrôleur sait dessiner
-une trame entière et le balayage sait avancer, mais aucun ordonnanceur ne fait
-alterner les deux processeurs et le faisceau, faute d'un modèle de durée.
+étendues. Et si les trames s'enchaînent désormais, **rien ne les démarre** :
+aucun amorçage ne charge de programme en mémoire depuis la cartouche.
 `run_frame` refuse donc toujours.
 
 La distinction entre « pas dessiné » et « dessiné sans son effet » est tenue au

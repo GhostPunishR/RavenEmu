@@ -122,7 +122,10 @@ void DisplayController::advance_line() noexcept {
     }
 }
 
-void DisplayController::render_frame(std::span<std::int32_t> framebuffer) noexcept {
+void DisplayController::render_row_into(
+    std::uint32_t row,
+    std::span<std::int32_t> framebuffer
+) noexcept {
     if (framebuffer.size() < framebuffer_pixels) return;
 
     // Quel moteur alimente quel écran est décidé par le matériel, non par une
@@ -130,10 +133,19 @@ void DisplayController::render_frame(std::span<std::int32_t> framebuffer) noexce
     auto& top = swapped_ ? secondary_engine_ : main_engine_;
     auto& bottom = swapped_ ? main_engine_ : secondary_engine_;
 
-    for (std::uint32_t row = 0; row < visible_lines; ++row) {
-        top.render_row(row, framebuffer.subspan(row * row_pixels, row_pixels));
-        bottom.render_row(row, framebuffer.subspan((bottom_row + row) * row_pixels, row_pixels));
-    }
+    top.render_row(row, framebuffer.subspan(row * row_pixels, row_pixels));
+    bottom.render_row(row, framebuffer.subspan((bottom_row + row) * row_pixels, row_pixels));
+}
+
+void DisplayController::render_current_line(std::span<std::int32_t> framebuffer) noexcept {
+    // Les lignes qui ne s'affichent pas se balaient tout de même : elles ne se
+    // dessinent simplement nulle part.
+    if (line_ >= visible_lines) return;
+    render_row_into(line_, framebuffer);
+}
+
+void DisplayController::render_frame(std::span<std::int32_t> framebuffer) noexcept {
+    for (std::uint32_t row = 0; row < visible_lines; ++row) render_row_into(row, framebuffer);
 }
 
 } // namespace ravenemu::nds

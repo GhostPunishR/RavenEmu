@@ -23,7 +23,9 @@ namespace ravenemu::nds {
  *   basse et bascule ; un gestionnaire cherché au mauvais endroit exécute des
  *   octets au hasard.
  * - **L'attente d'interruption.** Elle arrête le processeur jusqu'à ce qu'une
- *   ligne se lève. Sans elle, une boucle d'inactivité tourne indéfiniment.
+ *   source se lève. Sans elle, une boucle d'inactivité tourne indéfiniment. Elle
+ *   est seulement décodée ici : l'arrêt appartient au cœur, qui s'arrête aussi
+ *   sans coprocesseur.
  *
  * ### Ce qu'il ne gouverne pas
  *
@@ -112,9 +114,19 @@ public:
         return (control_ & high_vectors) != 0U ? high_vector_base : 0U;
     }
 
-    /** Vrai tant que le processeur attend une interruption. */
-    [[nodiscard]] bool halted() const noexcept { return halted_; }
-    void wake() noexcept { halted_ = false; }
+    /**
+     * Retire la demande d'attente d'interruption, s'il y en a une.
+     *
+     * L'arrêt lui-même n'appartient pas au coprocesseur : le processeur
+     * secondaire n'en a aucun et s'arrête tout de même, par un registre
+     * d'entrée-sortie. Ce coprocesseur ne fait que **décoder** la demande ; c'est
+     * le cœur qui la porte, et une seule attente vaut pour les deux processeurs.
+     */
+    [[nodiscard]] bool take_halt_request() noexcept {
+        const bool requested = halt_requested_;
+        halt_requested_ = false;
+        return requested;
+    }
 
     // Accès aux mémoires locales. Chacun rend vrai si une mémoire a répondu,
     // auquel cas le bus ne doit pas être sollicité.
@@ -174,7 +186,7 @@ private:
     std::uint32_t dtcm_region_{};
     std::uint32_t itcm_region_{};
 
-    bool halted_{};
+    bool halt_requested_{};
 
     std::uint32_t unknown_accesses_{};
     std::uint32_t first_unknown_{};

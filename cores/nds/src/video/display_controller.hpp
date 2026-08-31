@@ -95,7 +95,24 @@ public:
      */
     void advance_line() noexcept;
 
-    /** Dessine une trame entière dans le tampon empilé des deux écrans. */
+    /**
+     * Dessine la ligne que le faisceau balaie, si elle est visible.
+     *
+     * C'est la forme qui compte dès qu'un processeur tourne : une ligne se
+     * dessine avec les registres en vigueur au moment où le faisceau la
+     * traverse, et un programme qui change un décor en cours de trame n'agit que
+     * sur les lignes qui suivent. Dessiner la trame entière à la fin
+     * effacerait cette distinction sans rien dire.
+     */
+    void render_current_line(std::span<std::int32_t> framebuffer) noexcept;
+
+    /**
+     * Dessine une trame entière, registres figés.
+     *
+     * Cette forme ne décrit une trame juste que si rien ne bouge pendant
+     * qu'elle se dessine. Elle reste parce qu'elle dit exactement cela : ce que
+     * montrerait l'écran si les registres restaient tels quels.
+     */
     void render_frame(std::span<std::int32_t> framebuffer) noexcept;
 
     /**
@@ -120,6 +137,14 @@ private:
     [[nodiscard]] InterruptController& interrupts_of(Processor side) noexcept;
 
     void raise_for_both(std::uint16_t enable, std::uint32_t source) noexcept;
+
+    /**
+     * Dessine une ligne visible dans les deux écrans.
+     *
+     * La ligne est supposée visible : les deux appelants s'en assurent, et un
+     * refus ici doublerait un contrôle déjà fait.
+     */
+    void render_row_into(std::uint32_t row, std::span<std::int32_t> framebuffer) noexcept;
 
     Engine2d& main_engine_;
     Engine2d& secondary_engine_;
