@@ -76,7 +76,7 @@ if(RAVENEMU_BUILD_TESTS)
         ${CMAKE_CURRENT_LIST_DIR}/src
         ${CMAKE_CURRENT_LIST_DIR}/../common/tests/support
     )
-    target_link_libraries(gb_cartridge_huc1_tests PRIVATE gb_raven_core)
+    target_link_libraries(gb_cartridge_huc1_tests PRIVATE gb_raven_core gbc_hardware)
     add_test(NAME gb_cartridge_huc1 COMMAND gb_cartridge_huc1_tests)
 
     add_executable(gb_cartridge_huc3_tests tests/cartridge_huc3_test.cpp)
@@ -84,7 +84,7 @@ if(RAVENEMU_BUILD_TESTS)
         ${CMAKE_CURRENT_LIST_DIR}/src
         ${CMAKE_CURRENT_LIST_DIR}/../common/tests/support
     )
-    target_link_libraries(gb_cartridge_huc3_tests PRIVATE gb_raven_core)
+    target_link_libraries(gb_cartridge_huc3_tests PRIVATE gb_raven_core gbc_hardware)
     add_test(NAME gb_cartridge_huc3 COMMAND gb_cartridge_huc3_tests)
 
     add_executable(gb_apu_hardware_tests tests/apu_hardware_test.cpp)
