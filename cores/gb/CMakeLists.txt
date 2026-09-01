@@ -55,6 +55,38 @@ if(RAVENEMU_BUILD_TESTS)
     target_link_libraries(gb_cartridge_mbc_tests PRIVATE gb_raven_core)
     add_test(NAME gb_cartridge_mbc COMMAND gb_cartridge_mbc_tests)
 
+    add_executable(gb_cartridge_mbc6_tests tests/cartridge_mbc6_test.cpp)
+    target_include_directories(gb_cartridge_mbc6_tests PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/src
+        ${CMAKE_CURRENT_LIST_DIR}/../common/tests/support
+    )
+    target_link_libraries(gb_cartridge_mbc6_tests PRIVATE gb_raven_core)
+    add_test(NAME gb_cartridge_mbc6 COMMAND gb_cartridge_mbc6_tests)
+
+    add_executable(gb_cartridge_mbc7_tests tests/cartridge_mbc7_test.cpp)
+    target_include_directories(gb_cartridge_mbc7_tests PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/src
+        ${CMAKE_CURRENT_LIST_DIR}/../common/tests/support
+    )
+    target_link_libraries(gb_cartridge_mbc7_tests PRIVATE gb_raven_core)
+    add_test(NAME gb_cartridge_mbc7 COMMAND gb_cartridge_mbc7_tests)
+
+    add_executable(gb_cartridge_huc1_tests tests/cartridge_huc1_test.cpp)
+    target_include_directories(gb_cartridge_huc1_tests PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/src
+        ${CMAKE_CURRENT_LIST_DIR}/../common/tests/support
+    )
+    target_link_libraries(gb_cartridge_huc1_tests PRIVATE gb_raven_core)
+    add_test(NAME gb_cartridge_huc1 COMMAND gb_cartridge_huc1_tests)
+
+    add_executable(gb_cartridge_huc3_tests tests/cartridge_huc3_test.cpp)
+    target_include_directories(gb_cartridge_huc3_tests PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/src
+        ${CMAKE_CURRENT_LIST_DIR}/../common/tests/support
+    )
+    target_link_libraries(gb_cartridge_huc3_tests PRIVATE gb_raven_core)
+    add_test(NAME gb_cartridge_huc3 COMMAND gb_cartridge_huc3_tests)
+
     add_executable(gb_apu_hardware_tests tests/apu_hardware_test.cpp)
     target_include_directories(gb_apu_hardware_tests PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/src
@@ -73,5 +105,21 @@ if(RAVENEMU_BUILD_TESTS)
     target_link_libraries(gb_conformance_runner PRIVATE gb_raven_core gbc_hardware)
     add_test(NAME gb_conformance_harness COMMAND gb_conformance_runner --self-test)
     add_test(NAME gb_conformance_harness_memory COMMAND gb_conformance_runner --self-test
-        --serial-pass __disabled__ --no-mooneye-signature --expect-memory 0xC000=0x42)
+        --serial-pass __disabled__ --no-mooneye-signature
+        --expect-memory 0xC000=0x42
+        --memory-require-mismatch --memory-stability-samples 8)
+
+    # L'orchestrateur de manifests reste un outil de développement : le cœur
+    # et le runner natif ne dépendent pas de Python. Quand l'interpréteur est
+    # disponible, CTest vérifie néanmoins tout le chemin manifeste -> SHA-256
+    # -> exécution -> rapport avec une ROM synthétique créée à la volée.
+    find_package(Python3 3.10 COMPONENTS Interpreter QUIET)
+    if(Python3_Interpreter_FOUND)
+        add_test(NAME gb_conformance_manifest_harness
+            COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_CURRENT_LIST_DIR}/tests/conformance_manifest.py
+                --self-test
+                --runner $<TARGET_FILE:gb_conformance_runner>
+        )
+    endif()
 endif()

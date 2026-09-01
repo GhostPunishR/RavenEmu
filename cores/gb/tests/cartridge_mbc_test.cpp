@@ -321,11 +321,11 @@ void mmm01_save_state_validation_and_unsupported_test() {
         },
         "masque ROM MMM01 impossible accepté dans un save state");
 
-    std::vector<std::uint8_t> mbc6(CartridgeHeader::min_rom_size);
-    mbc6[0x147] = 0x20;
+    std::vector<std::uint8_t> tama5(CartridgeHeader::min_rom_size);
+    tama5[0x147] = 0xfd;
     expect_failure<ravenemu::RomLoadError>(
-        [&] { static_cast<void>(create(std::move(mbc6))); },
-        "MBC6 annoncé comme supporté avant son implémentation réelle");
+        [&] { static_cast<void>(create(std::move(tama5))); },
+        "TAMA5 annoncé comme supporté avant son implémentation réelle");
 }
 
 void mbc3_rtc_progress_halt_and_carry_test() {

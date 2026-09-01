@@ -168,13 +168,14 @@ cas zombie portable) sont modélisés. Le profil
 matériel ne distingue pas encore le CGB-02 du CGB-04/05 ; sa variante du clock
 de longueur et les autres variantes zombie DMG restent explicitement ouvertes.
 
-Le format d'état GB/GBC est en version 9. Il sérialise la phase du séquenceur
+Le format d'état GB/GBC est en version 10. Il sérialise la phase du séquenceur
 APU dérivée de `DIV`, le pixel `WX` éventuellement armé, le FIFO OBJ et chaque
-phase intermédiaire de son fetch, ainsi que la porte vidéo figée par `KEY1`.
+phase intermédiaire de son fetch, y compris les dots où le fetch OBJ et la
+sortie du FIFO BG progressent simultanément, ainsi que la porte vidéo figée par `KEY1`.
 Les portes ordinaires du bus vidéo et la contention OAM DMA sont dérivées des
-phases déjà sérialisées et ne constituent pas un état redondant. Les versions 8
+phases déjà sérialisées et ne constituent pas un état redondant. Les versions 9
 et antérieures sont refusées au lieu d'être chargées partiellement ; les phases
-PPU, DMA ou KEY1 incohérentes d'un état version 9 sont également rejetées
+PPU, DMA ou KEY1 incohérentes d'un état version 10 sont également rejetées
 explicitement.
 
 Une boot ROM DMG ou CGB peut être injectée par les fabriques C++ publiques. Son
@@ -205,12 +206,112 @@ change simultanément le masque RAM et arme le mapping : RavenEmu conserve le
 chemin RAM décodé et applique le masque avant le verrou, choix isolés et
 documentés en attente d'une mesure matérielle publique.
 
+Le MBC6 possède lui aussi un contrôleur dédié. `Mbc6` décode ses deux fenêtres
+ROM/flash de 8 Kio, ses deux fenêtres SRAM de 4 Kio et les signaux `/CE` et
+`/WP`, tandis que `Mbc6Flash` modélise séparément le composant MX29F008TC :
+séquences de déverrouillage, identifiants JEDEC, tampon de programmation de
+128 octets, huit secteurs, région cachée et protection non volatile du secteur
+0. Aucune table par jeu n'intervient dans ce chemin.
+
+La persistance MBC6 est un conteneur versionné `RVM6` qui réunit les 32 Kio de
+SRAM, le Mio de flash, les 256 octets cachés et le bit de protection. Son état
+instantané conserve en plus les registres, le mode de lecture, l'automate de
+commande et un tampon de programmation partiellement rempli. La garde de taille
+GB/GBC est donc portée à 2 Mio. Le contrôleur n'impose pas de changement de
+version supplémentaire : les anciens formats refusaient le type `$20` et ne
+pouvaient pas produire un état MBC6 ambigu. Les durées internes de
+programmation/effacement ne sont pas encore cadencées ; l'opération est
+appliquée immédiatement et le statut expose
+directement `ready`. Les bits de statut publiquement non déterminés sont
+normalisés à zéro, sans prétendre reproduire leur niveau électrique.
+
+Le MBC7 sépare de la même façon le décodage cartouche et son EEPROM 93LC56.
+`Mbc7Eeprom` reçoit les quatre broches logiques `CS/CLK/DI/DO`, décode les
+commandes série MSB-first (lecture, écriture, effacement, opérations globales et
+verrou EWEN/EWDS), conserve le signal `RDY` pendant un cycle d'écriture nominal
+de 5 ms et avance en dots indépendamment de la double vitesse CPU. Les 256
+octets EEPROM constituent directement la sauvegarde batterie.
+
+L'accéléromètre est alimenté par une entrée abstraite
+`Core::set_game_boy_acceleration`, exprimée en unités brutes autour du repos.
+Le contrôleur applique le centre matériel `$81D0`, puis ne rend la mesure
+visible qu'après la séquence de latch `$55/$AA`; aucun code Android n'entre dans
+le cœur. L'API Kotlin `EmulatorCore::setGameBoyAcceleration` et son transport
+JNI exposent la même entrée sans imposer de backend de capteur à la plateforme.
+L'hôte conserve cette valeur à travers chargements et resets, tandis qu'un
+save state restaure bien l'entrée émulée capturée. L'entrée courante, le latch,
+les broches, la commande EEPROM partielle,
+le verrou d'écriture et la période occupée figurent dans l'état instantané. Ce
+layout n'impose pas de changement supplémentaire à la version globale 10,
+puisque le type `$22` était auparavant refusé.
+
+Le libellé d'en-tête historique du type `$22` mentionne un rumble, mais les
+cartes MBC7 connues documentées ne montrent ni moteur ni commande publique
+établie. RavenEmu n'invente donc pas de bit de contrôle : cette partie reste
+explicitement ouverte jusqu'à une mesure matérielle reproductible.
+
+Le HuC1 n'est pas traité comme un alias du MBC1. Son contrôleur dédié conserve
+une banque ROM directe de six bits, une banque RAM de deux bits et une SRAM
+toujours accessible. Une écriture exacte de `$0E` dans `$0000–$1FFF` remplace
+temporairement la fenêtre SRAM par le registre IR miroir ; toute autre valeur
+revient à la SRAM et `$6000–$7FFF` reste sans effet observable. La sauvegarde
+batterie demeure une image SRAM brute. Le layout d'état HuC1 conserve les
+banques, le mode RAM/IR, les deux niveaux logiques du transceiver et la SRAM.
+Ce layout n'impose pas de changement supplémentaire à la version globale 10,
+car les versions précédentes refusaient le type `$FF`.
+
+Une machine CGB munie d'un HuC1 contient deux transceivers distincts : `RP`
+dans la console et celui de la cartouche. `MachineInfraredPort` les agrège
+derrière une unique extrémité externe. La lumière distante est distribuée aux
+deux récepteurs et leurs LED sont combinées, sans permettre à une machine de
+s'éclairer elle-même. Les valeurs d'écriture IR autres que `$00/$01` sont
+actuellement normalisées sur leur bit 0, les lignes de banque ROM au-delà des
+six publiquement établies sont ignorées et la propagation est logique et
+instantanée. Ces trois points restent explicitement à caractériser sur matériel.
+
+Le HuC3 possède également un contrôleur propre au lieu d'être assimilé au
+MBC3. `Huc3` décode la banque ROM directe sur sept bits, les quatre banques de
+SRAM et les modes `$0/$A-$E`; `Huc3Mcu` porte séparément la boîte aux lettres
+B/C, le sémaphore D, l'index et les 256 nibbles internes. Les commandes de
+lecture/écriture fixes ou auto-incrémentées, le réglage de l'index, la commande
+de présence et les copies entre l'horloge et les nibbles `$00-$05` sont
+exécutées après une phase occupée sauvegardable. Le compteur minute/jour
+12 bits avance depuis une horloge injectable, reboucle après 4 096 jours et
+reste donc déterministe dans les tests comme pendant un arrêt de l'émulateur.
+
+La sauvegarde HuC3 conserve d'abord les 32 Kio de SRAM bruts, puis un pied de
+page versionné `RVH3` contenant les nibbles empaquetés, le reliquat de secondes,
+l'index et l'époque de synchronisation. Une ancienne image limitée exactement
+à 32 Kio reste importable ; toute extension de taille, signature ou version
+incorrecte est refusée en entier. Le layout d'état ajoute les registres du
+mapper, le transceiver, une commande MCU éventuellement en cours et toute la
+mémoire interne. Ce layout n'impose pas de changement supplémentaire à la
+version globale 10 puisque RavenEmu refusait jusque-là le type `$FE`.
+
+`CartridgeInfraredPort` factorise désormais l'attachement transactionnel, la
+LED et le phototransistor des HuC1/HuC3. La durée exacte des commandes du MCU
+HuC3 n'étant pas mesurée publiquement, elle est isolée et normalisée à quatre
+dots (un M-cycle à vitesse normale). Le synthétiseur de tonalité, les alarmes
+autonomes et les valeurs électriques initiales non documentées restent
+explicitement ouverts ;
+les nibbles concernés sont conservés, mais aucun son ou événement fictif n'est
+produit. Au démarrage sans sauvegarde, la mémoire interne et la réponse C sont
+normalisées à zéro ; une minute de réglage hors de `$000-$59F` est repliée
+modulo 1 440, faute de mesure publiée pour ces entrées invalides.
+
 `cores/gba` porte le moteur Game Boy Advance indépendant.
 
 Les suites natives (`common`, GB/GBC par sous-système, `gbc`, `gba`) doivent
 pouvoir être construites directement avec `cmake -S cores`. Le runner
 `gb_conformance_runner` reçoit uniquement des ROMs de test externes fournies par
 le développeur ou la CI ; aucune ROM de conformité n'est intégrée implicitement.
+L'orchestrateur `conformance_manifest.py` valide un manifeste versionné, confine
+les chemins sous une racine explicite, contrôle les SHA-256 et produit un
+rapport JSON distinguant réussite, échec matériel, timeout, erreur, crash et
+artefact optionnel absent. Les URL, licences et politiques de redistribution
+sont obligatoires comme garde de provenance, mais aucun téléchargement ou avis
+juridique n'est effectué. Son auto-test génère uniquement une ROM RavenEmu
+synthétique dans un répertoire temporaire.
 
 ## Frontières plateforme
 
@@ -223,8 +324,10 @@ Le même principe s'applique au port série et au port infrarouge : le modèle
 matériel reste dans le cœur. Des implémentations locales déterministes des deux
 endpoints relient déjà deux machines dans un même processus ; un futur transport
 Android, réseau ou Bluetooth devra implémenter ces contrats sans entrer dans le
-cœur. L'endpoint doit vivre au moins aussi longtemps que les cœurs connectés et
-la topologie externe n'est pas sérialisée dans les états instantanés.
+cœur. L'agrégateur interne IR présente toujours une seule console au transport,
+même si un HuC1 ou un HuC3 ajoute un second transceiver matériel. L'endpoint
+doit vivre au moins aussi longtemps que les cœurs connectés et la topologie
+externe n'est pas sérialisée dans les états instantanés.
 
 ## Bibliothèque ROM
 

@@ -3,6 +3,7 @@
 #include "cpu/cpu.hpp"
 #include "memory/memory_bus.hpp"
 #include "cartridge/cartridge_factory.hpp"
+#include "infrared/machine_infrared_port.hpp"
 #include <ravenemu/gb/hardware_mode.hpp>
 #include <ravenemu/gbc/infrared_port.hpp>
 
@@ -12,7 +13,7 @@ class Machine {
 public:
     Machine(RomImage rom, Cartridge::Clock clock, gb::HardwareMode mode,
             std::span<const std::uint8_t> boot_rom_image = {})
-        : cartridge(Cartridge::create(rom, std::move(clock))), hardware_mode(mode),
+        : infrared_router(), cartridge(Cartridge::create(rom, std::move(clock))), hardware_mode(mode),
           boot_rom(mode, boot_rom_image),
           timer(interrupts, mode), joypad(interrupts), speed(gb::cgb_features_enabled(
               gb::boot_execution_mode(mode, !boot_rom_image.empty()))),
@@ -25,6 +26,10 @@ public:
               gb::boot_execution_mode(mode, !boot_rom_image.empty()), mode,
               speed, infrared, boot_rom),
           cpu(bus, interrupts, gb::is_cgb_hardware(mode)) {
+        if (!infrared.connect(&infrared_router) ||
+            !cartridge->connect_infrared_endpoint(&infrared_router)) {
+            throw std::logic_error("Routage infrarouge interne GB/GBC impossible");
+        }
         if (boot_rom.supplied()) {
             // Le firmware fourni doit observer l'état de mise sous tension,
             // pas les valeurs HLE laissées normalement à l'entrée 0100.
@@ -63,6 +68,9 @@ public:
         return bus.take_elapsed_dots();
     }
 
+    // Construit avant les ports internes et détruit après eux : leurs
+    // destructeurs peuvent ainsi se détacher sans conserver de pointeur mort.
+    MachineInfraredPort infrared_router;
     std::unique_ptr<Cartridge> cartridge;
     gb::HardwareMode hardware_mode{gb::HardwareMode::dmg};
     BootRom boot_rom;

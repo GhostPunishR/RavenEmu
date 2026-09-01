@@ -57,12 +57,17 @@ public:
         return true;
     }
     [[nodiscard]] bool connect_infrared_endpoint(InfraredEndpoint* endpoint) noexcept override {
-        if (machine_ != nullptr && !machine_->infrared.connect(endpoint)) return false;
+        if (machine_ != nullptr && !machine_->infrared_router.connect(endpoint)) return false;
         infrared_endpoint_ = endpoint;
         return true;
     }
     [[nodiscard]] bool rumble_active() const noexcept override {
         return machine_ != nullptr && machine_->cartridge->rumble_active();
+    }
+    void set_game_boy_acceleration(int x, int y) noexcept override {
+        host_acceleration_x_ = x;
+        host_acceleration_y_ = y;
+        if (machine_) machine_->cartridge->set_acceleration(x, y);
     }
     [[nodiscard]] bool has_battery_ram() const noexcept override {
         return machine_ != nullptr && machine_->cartridge->has_persistent_data();
@@ -82,7 +87,7 @@ public:
 
     [[nodiscard]] std::vector<std::uint8_t> save_state() const override {
         require_loaded(); BinaryWriter out(64 * 1024);
-        out.u32(0x52564e53U); out.u16(9); out.u8(static_cast<std::uint8_t>(Console::game_boy)); out.raw(rom_hash_);
+        out.u32(0x52564e53U); out.u16(10); out.u8(static_cast<std::uint8_t>(Console::game_boy)); out.raw(rom_hash_);
         out.u8(static_cast<std::uint8_t>(machine_->hardware_mode));
         machine_->cpu.save(out);
         out.i32(machine_->interrupts.flags); out.i32(machine_->interrupts.enable);
@@ -93,10 +98,12 @@ public:
     }
     void load_state(std::span<const std::uint8_t> state) override {
         require_loaded();
-        if (state.size() > (1U << 20U)) throw SaveStateError("État instantané trop volumineux");
+        // Un MBC6 contient 1 Mio de flash en plus de la machine et de sa SRAM.
+        // Deux Mio conservent un garde-fou strict tout en couvrant son état.
+        if (state.size() > (2U << 20U)) throw SaveStateError("État instantané trop volumineux");
         BinaryReader in(state);
         if (in.u32() != 0x52564e53U) throw SaveStateError("Ce fichier n'est pas un état RavenEmu");
-        const auto version = in.u16(); if (version != 9) throw SaveStateError("Version d'état non prise en charge");
+        const auto version = in.u16(); if (version != 10) throw SaveStateError("Version d'état non prise en charge");
         if (in.u8() != static_cast<std::uint8_t>(Console::game_boy)) throw SaveStateError("État issu d'une autre console");
         std::array<std::uint8_t, 32> hash{}; in.raw(hash);
         if (hash != rom_hash_) throw SaveStateError("État issu d'une autre ROM");
@@ -135,18 +142,25 @@ private:
             mode = header.uses_color ? gb::HardwareMode::cgb_native : gb::HardwareMode::cgb_compatibility;
             break;
         }
-        return std::make_unique<Machine>(rom, [this] { return current_epoch(); }, mode, boot_rom_);
+        auto machine = std::make_unique<Machine>(
+            rom,
+            [this] { return current_epoch(); },
+            mode,
+            boot_rom_
+        );
+        machine->cartridge->set_acceleration(host_acceleration_x_, host_acceleration_y_);
+        return machine;
     }
     void install_machine(std::unique_ptr<Machine> replacement) {
         if (machine_) {
             machine_->serial.disconnect();
-            machine_->infrared.disconnect();
+            machine_->infrared_router.disconnect();
         }
         if (!replacement->serial.connect(link_endpoint_)) {
             reconnect_current_endpoints();
             throw std::logic_error("LinkEndpoint refuse une nouvelle extrémité série");
         }
-        if (!replacement->infrared.connect(infrared_endpoint_)) {
+        if (!replacement->infrared_router.connect(infrared_endpoint_)) {
             replacement->serial.disconnect();
             reconnect_current_endpoints();
             throw std::logic_error("InfraredEndpoint refuse une nouvelle extrémité");
@@ -156,7 +170,7 @@ private:
     void reconnect_current_endpoints() noexcept {
         if (!machine_) return;
         static_cast<void>(machine_->serial.connect(link_endpoint_));
-        static_cast<void>(machine_->infrared.connect(infrared_endpoint_));
+        static_cast<void>(machine_->infrared_router.connect(infrared_endpoint_));
     }
     void require_loaded() const {
         if (!machine_) throw std::logic_error("Aucune ROM chargée");
@@ -170,6 +184,8 @@ private:
     std::vector<std::uint8_t> boot_rom_;
     LinkEndpoint* link_endpoint_{};
     InfraredEndpoint* infrared_endpoint_{};
+    int host_acceleration_x_{};
+    int host_acceleration_y_{};
 };
 
 } // namespace cgb

@@ -4,7 +4,9 @@
 
 namespace ravenemu::cgb {
 
-enum class MbcType : std::uint8_t { none, mbc1, mmm01, mbc2, mbc3, mbc5, unsupported };
+enum class MbcType : std::uint8_t {
+    none, mbc1, mmm01, mbc2, mbc3, mbc5, mbc6, mbc7, huc1, huc3, unsupported
+};
 
 struct CartridgeHeader {
     int cartridge_type{};
@@ -12,6 +14,7 @@ struct CartridgeHeader {
     bool has_ram{};
     bool has_battery{};
     bool has_rtc{};
+    bool has_flash{};
     int ram_size{};
     bool uses_color{};
     bool requires_color{};
@@ -39,6 +42,10 @@ struct CartridgeHeader {
         case 0x0f: case 0x10: case 0x11: case 0x12: case 0x13: header.mbc = MbcType::mbc3; break;
         case 0x19: case 0x1a: case 0x1b: case 0x1c: case 0x1d: case 0x1e:
             header.mbc = MbcType::mbc5; break;
+        case 0x20: header.mbc = MbcType::mbc6; break;
+        case 0x22: header.mbc = MbcType::mbc7; break;
+        case 0xfe: header.mbc = MbcType::huc3; break;
+        case 0xff: header.mbc = MbcType::huc1; break;
         default: header.mbc = MbcType::unsupported; break;
         }
 
@@ -46,16 +53,35 @@ struct CartridgeHeader {
         case 0x02: case 0x03: case 0x05: case 0x06: case 0x08: case 0x09:
         case 0x0c: case 0x0d:
         case 0x10: case 0x12: case 0x13: case 0x1a: case 0x1b: case 0x1d: case 0x1e:
+        case 0xfe: case 0xff:
             header.has_ram = true; break;
         default: break;
         }
         switch (header.cartridge_type) {
         case 0x03: case 0x06: case 0x09: case 0x0d: case 0x0f: case 0x10: case 0x13:
-        case 0x1b: case 0x1e: header.has_battery = true; break;
+        case 0x1b: case 0x1e: case 0xfe: case 0xff: header.has_battery = true; break;
         default: break;
         }
-        header.has_rtc = header.cartridge_type == 0x0f || header.cartridge_type == 0x10;
-        if (header.mbc == MbcType::mbc2) {
+        header.has_rtc = header.cartridge_type == 0x0f || header.cartridge_type == 0x10 ||
+            header.mbc == MbcType::huc3;
+        header.has_flash = header.mbc == MbcType::mbc6;
+        if (header.mbc == MbcType::huc3) {
+            // Les cartes HuC3 documentées portent toujours quatre banques de
+            // SRAM (32 Kio), en plus de l'état du MCU alimenté par la pile.
+            header.has_ram = true;
+            header.has_battery = true;
+            header.ram_size = 32 * 1024;
+        } else if (header.mbc == MbcType::mbc7) {
+            header.has_ram = true;
+            header.has_battery = true;
+            header.ram_size = 256;
+        } else if (header.mbc == MbcType::mbc6) {
+            // Le type $20 n'a pas de variantes d'en-tête +RAM/+BATTERY : le
+            // matériel MBC6 porte toujours 32 Kio de SRAM et 1 Mio de flash.
+            header.has_ram = true;
+            header.has_battery = true;
+            header.ram_size = 32 * 1024;
+        } else if (header.mbc == MbcType::mbc2) {
             header.has_ram = true;
             header.ram_size = 512;
         } else if (header.has_ram) {

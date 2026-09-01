@@ -14,10 +14,19 @@ Le moteur Game Boy comprend notamment:
 - audio à quatre canaux;
 - timer à détection de front et fenêtre de rechargement TIMA;
 - interruptions et DMA OAM progressif;
-- cartouches ROM seule, MBC1/MBC1M, MMM01, MBC2, MBC3 avec horloge et MBC5;
+- cartouches ROM seule, MBC1/MBC1M, MMM01, MBC2, MBC3 avec horloge, MBC5 et
+  MBC6 avec SRAM/flash persistantes, MBC7 avec EEPROM/accéléromètre, HuC1 avec
+  SRAM/IR et HuC3 avec SRAM, protocole MCU/RTC et IR;
 - boot ROM utilisateur optionnelle via la fabrique C++ et démarrage HLE sans
   firmware;
 - liaison série locale déterministe entre deux instances du cœur.
+
+Le harness externe accepte des suites classées par CPU, timing, interruptions,
+timer, DMA, PPU, palettes, vitesse, série, APU et MBC. Le manifeste versionné
+vérifie le SHA-256 et la provenance déclarée de chaque artefact avant exécution,
+puis produit un rapport distinguant réussite, échec, timeout, erreur, crash et
+test explicitement ignoré. Aucune ROM de conformité n'est distribuée avec
+RavenEmu.
 
 ### Limites connues
 
@@ -25,8 +34,29 @@ Le moteur Game Boy comprend notamment:
 - certains comportements matériels rares de l'APU restent à reproduire;
 - le timing résiduel d'une annulation OBJ par écriture `LCDC.1` et certaines
   courses d'activation LCD propres aux révisions restent à valider sur matériel;
-- les contrôleurs MBC6, MBC7, HuC1, HuC3, TAMA5 et Camera restent refusés
+- les contrôleurs TAMA5 et Camera restent refusés
   explicitement;
+- les commandes MBC6, leur tampon, leurs protections et leur région cachée sont
+  modélisés, mais la durée physique de programmation/effacement est condensée
+  et les bits de statut électriquement indéterminés sont normalisés;
+- MBC7 couvre les registres, le latch des deux axes et les commandes EEPROM ;
+  la variabilité analogique du capteur et du temps d'écriture n'est pas simulée,
+  le mapping explicite de la banque ROM 0 reste à confirmer sur matériel et
+  aucun contrôle rumble non documenté n'est inventé; l'entrée d'inclinaison est
+  exposée par l'API moteur, mais aucun backend de capteur Android ne l'alimente
+  encore;
+- HuC1 couvre le banking, la SRAM toujours accessible et le transceiver IR ;
+  les valeurs IR autres que `$00/$01` sont ramenées à leur bit 0, les lignes
+  ROM au-delà des six bits documentés sont ignorées et la propagation analogique
+  reste à mesurer;
+- HuC3 couvre le banking, les modes SRAM, la boîte B/C, le sémaphore D, les
+  commandes à nibbles, le RTC minute/jour persistant et le transceiver IR. La
+  durée de commande est provisoirement normalisée à quatre dots ; le circuit
+  sonore, les alarmes autonomes, les valeurs initiales non documentées et les
+  détails des zones internes dépendant de la révision restent à mesurer. Les
+  registres concernés sont persistés, sans simuler un son ou une alarme faux;
+  les valeurs initiales inconnues sont mises à zéro et une minute de réglage
+  invalide est ramenée modulo 1 440;
 - deux comportements MMM01 non mesurés publiquement restent documentés : accès
   RAM avant le mapping et écriture simultanée du masque RAM/bit de mapping;
 - l'injection d'une boot ROM n'est pas encore exposée dans l'interface Android;
@@ -65,7 +95,8 @@ Une cartouche déclarant des fonctions couleur bénéficie notamment de:
   normale, horloge rapide CGB et horloge externe;
 - registre `OPRI` (`FF6C`) et priorité objet DMG/CGB;
 - registres PCM `FF76`/`FF77`;
-- registre infrarouge `RP` (`FF56`) modélisé et connectable entre deux instances;
+- registre infrarouge `RP` (`FF56`) et transceiver HuC1/HuC3 agrégés derrière une
+  seule extrémité, connectable entre deux instances;
 - MBC5 rumble relié à la vibration Android;
 - sortie couleur ARGB.
 

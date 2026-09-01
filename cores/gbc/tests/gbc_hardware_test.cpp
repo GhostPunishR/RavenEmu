@@ -208,6 +208,42 @@ void speed_switch_save_state_test() {
     );
 }
 
+void mbc7_eeprom_speed_switch_clock_test() {
+    auto rom = minimal_game_boy_rom();
+    rom[0x0143] = 0xc0;
+    rom[0x0147] = 0x22;
+    auto image = std::make_shared<const std::vector<std::uint8_t>>(std::move(rom));
+    Machine machine(image, [] { return std::int64_t{}; }, gb::HardwareMode::cgb_native);
+    machine.bus.write(0x0000, 0x0a);
+    machine.bus.write(0x4000, 0x40);
+
+    const auto pins = [&machine](int value) { machine.bus.write(0xa080, value); };
+    const auto clock_bit = [&pins](bool bit) {
+        const int base = 0x80 | (bit ? 0x02 : 0);
+        pins(base); pins(base | 0x40); pins(base);
+    };
+    const auto command = [&pins, &clock_bit](int value) {
+        pins(0x00); pins(0x80); clock_bit(true);
+        for (int bit = 9; bit >= 0; --bit) clock_bit(((value >> bit) & 1) != 0);
+    };
+
+    command(0x0c0); pins(0x00); // EWEN
+    command(0x100); // WRITE mot 0
+    for (int bit = 15; bit >= 0; --bit) clock_bit(((0x1234 >> bit) & 1) != 0);
+    check((machine.bus.read(0xa080) & 1) == 0,
+          "précondition EEPROM MBC7 occupée absente");
+
+    machine.bus.write(0xff4d, 1);
+    check(machine.bus.on_stop(), "transition KEY1 non lancée pour le test MBC7");
+    machine.bus.tick_speed_switch(8'200);
+    machine.cartridge->tick(Mbc7Eeprom::write_busy_dots - 8'201);
+    check((machine.bus.read(0xa080) & 1) == 0,
+          "transition KEY1 a avancé trop vite l'EEPROM MBC7");
+    machine.cartridge->tick(1);
+    check((machine.bus.read(0xa080) & 1) == 1,
+          "transition KEY1 n'a pas avancé le temps physique de l'EEPROM MBC7");
+}
+
 void div_apu_bus_clock_test() {
     const auto arm_one_tick_length = [](Apu& apu) {
         apu.write(0xff11, 0x3f);
@@ -877,6 +913,30 @@ void vram_dma_timing_test() {
     check(f.ppu.vram[0x3f] == 0x5f, "second bloc HDMA incomplet");
     check(f.bus.read(0xff55) == 0xff, "HDMA terminé doit lire FF55=FF");
 
+    Fixture halted_hdma;
+    for (int index = 0; index < 16; ++index) {
+        halted_hdma.bus.write(0xc000 + index, 0xc0 + index);
+    }
+    halted_hdma.ppu.write_lcdc(0x91);
+    halted_hdma.bus.write(0xff51, 0xc0);
+    halted_hdma.bus.write(0xff52, 0x00);
+    halted_hdma.bus.write(0xff53, 0x00);
+    halted_hdma.bus.write(0xff54, 0x00);
+    halted_hdma.bus.write(0xff55, 0x80);
+    halted_hdma.bus.notify_hblank();
+    check(halted_hdma.bus.cpu_blocked() && halted_hdma.bus.read(0xff55) == 0x00,
+          "précondition bloc HDMA au début de HALT absente");
+    for (int mcycle = 0; mcycle < 4; ++mcycle) {
+        halted_hdma.bus.tick_halted_mcycle();
+    }
+    check(halted_hdma.ppu.vram[0] == 0x00 && halted_hdma.ppu.vram[15] == 0x00 &&
+          halted_hdma.bus.read(0xff55) == 0x00,
+          "HDMA a avancé alors que HALT doit suspendre le transfert");
+    halted_hdma.bus.tick_mcycle();
+    check(halted_hdma.ppu.vram[0] == 0xc0 && halted_hdma.ppu.vram[15] == 0xcf &&
+          halted_hdma.bus.read(0xff55) == 0xff,
+          "bloc HDMA suspendu par HALT non repris avant le prochain accès CPU");
+
     Fixture lcd_off;
     lcd_off.bus.write(0xff51, 0xc0);
     lcd_off.bus.write(0xff52, 0x00);
@@ -989,6 +1049,7 @@ int main() {
     speed_switch_test();
     speed_switch_video_lock_test();
     speed_switch_save_state_test();
+    mbc7_eeprom_speed_switch_clock_test();
     div_apu_bus_clock_test();
     infrared_test();
     serial_fast_clock_test();
@@ -1029,6 +1090,53 @@ int main() {
     expect_failure<ravenemu::SaveStateError>(
         [&] { automatic_dmg->load_state(state); },
         "un save state CGB compatibilité a été accepté par une machine DMG"
+    );
+
+    std::vector<std::uint8_t> huc1_rom(1U * 1024U * 1024U);
+    huc1_rom[0x0147] = 0xff;
+    huc1_rom[0x0148] = 0x05;
+    huc1_rom[0x0149] = 0x03;
+    ravenemu::LocalInfraredEndpoint huc1_infrared;
+    auto huc1_cgb = ravenemu::gbc::make_core();
+    check(huc1_cgb->connect_infrared_endpoint(&huc1_infrared),
+          "endpoint HuC1 refusé par la façade CGB");
+    huc1_cgb->load_rom(huc1_rom, std::vector<std::uint8_t>(32U * 1024U, 0x5a));
+    check(huc1_cgb->framebuffer_format() == ravenemu::FramebufferFormat::argb_8888 &&
+          huc1_cgb->has_battery_ram(),
+          "cartouche DMG HuC1 non exécutée en compatibilité CGB");
+    const auto huc1_cgb_state = huc1_cgb->save_state();
+    huc1_cgb->load_state(huc1_cgb_state);
+
+    auto huc1_dmg = ravenemu::make_game_boy_core();
+    huc1_dmg->load_rom(huc1_rom, {});
+    expect_failure<ravenemu::SaveStateError>(
+        [&] { huc1_dmg->load_state(huc1_cgb_state); },
+        "un save state HuC1 CGB compatibilité a été accepté sur DMG"
+    );
+
+    std::vector<std::uint8_t> huc3_rom(2U * 1024U * 1024U);
+    huc3_rom[0x0147] = 0xfe;
+    huc3_rom[0x0148] = 0x06;
+    ravenemu::LocalInfraredEndpoint huc3_infrared;
+    auto huc3_cgb = ravenemu::gbc::make_core();
+    huc3_cgb->set_clock_epoch(60'000);
+    check(huc3_cgb->connect_infrared_endpoint(&huc3_infrared),
+          "endpoint HuC3 refusé par la façade CGB");
+    huc3_cgb->load_rom(huc3_rom, std::vector<std::uint8_t>(32U * 1024U, 0x6b));
+    const auto huc3_battery = huc3_cgb->snapshot_battery_ram();
+    check(huc3_cgb->framebuffer_format() == ravenemu::FramebufferFormat::argb_8888 &&
+          huc3_cgb->has_battery_ram() && huc3_battery &&
+          huc3_battery->data.size() == 32U * 1024U + 143U,
+          "cartouche DMG HuC3 non exécutée en compatibilité CGB");
+    const auto huc3_cgb_state = huc3_cgb->save_state();
+    huc3_cgb->load_state(huc3_cgb_state);
+
+    auto huc3_dmg = ravenemu::make_game_boy_core();
+    huc3_dmg->set_clock_epoch(60'000);
+    huc3_dmg->load_rom(huc3_rom, {});
+    expect_failure<ravenemu::SaveStateError>(
+        [&] { huc3_dmg->load_state(huc3_cgb_state); },
+        "un save state HuC3 CGB compatibilité a été accepté sur DMG"
     );
     return 0;
 }

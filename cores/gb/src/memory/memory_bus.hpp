@@ -98,6 +98,9 @@ public:
             const bool switching_before = speed_.switching();
             speed_.tick_peripheral(1);
             if (switching_before && !speed_.switching()) ppu_.end_speed_switch();
+            // La transition KEY1 arrête le CPU, pas le temps physique propre
+            // aux composants de cartouche (cycle de programmation EEPROM).
+            cartridge_.tick(1);
             ++elapsed_dots_;
         }
         return take_elapsed_dots();
@@ -222,7 +225,9 @@ private:
             apu_.tick(1);
             tick_oam_dma(cpu_cycles_per_dot);
             if (!pause_hblank_hdma || !hdma_hblank_) tick_hdma(1);
-            cartridge_.tick(cpu_cycles_per_dot);
+            // Les périphériques autonomes de cartouche suivent le temps
+            // physique : un dot reste un dot même en double vitesse CGB.
+            cartridge_.tick(1);
             ++elapsed_dots_;
         }
     }

@@ -9,6 +9,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <iterator>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -29,9 +30,13 @@ struct Options {
     std::string serial_pass{"Passed"};
     std::string serial_fail{"Failed"};
     std::string framebuffer_sha256;
+    std::string framebuffer_path;
     std::vector<MemoryExpectation> memory;
     int timeout_frames{600};
+    int minimum_pass_frames{};
+    int memory_stability_samples{1};
     bool mooneye_signature{true};
+    bool memory_require_mismatch{};
     bool self_test{};
 };
 
@@ -73,8 +78,12 @@ private:
         << "  --boot-rom FICHIER\n"
         << "  --category NOM\n"
         << "  --timeout-frames N\n"
+        << "  --minimum-pass-frames N\n"
+        << "  --memory-stability-samples N\n"
+        << "  --memory-require-mismatch\n"
         << "  --serial-pass TEXTE | --serial-fail TEXTE\n"
         << "  --expect-memory ADRESSE=VALEUR (répétable)\n"
+        << "  --expect-frame-argb8888 FICHIER\n"
         << "  --expect-frame-sha256 HEX\n"
         << "  --no-mooneye-signature\n";
     throw std::invalid_argument("arguments invalides");
@@ -119,8 +128,11 @@ Options parse_options(int argc, char** argv) {
         else if (argument == "--boot-rom") result.boot_rom_path = value();
         else if (argument == "--category") result.category = value();
         else if (argument == "--timeout-frames") result.timeout_frames = parse_number(value());
+        else if (argument == "--minimum-pass-frames") result.minimum_pass_frames = parse_number(value());
+        else if (argument == "--memory-stability-samples") result.memory_stability_samples = parse_number(value());
         else if (argument == "--serial-pass") result.serial_pass = value();
         else if (argument == "--serial-fail") result.serial_fail = value();
+        else if (argument == "--expect-frame-argb8888") result.framebuffer_path = value();
         else if (argument == "--expect-frame-sha256") result.framebuffer_sha256 = value();
         else if (argument == "--expect-memory") {
             const auto specification = value();
@@ -129,9 +141,14 @@ Options parse_options(int argc, char** argv) {
             result.memory.push_back({parse_number(std::string_view{specification}.substr(0, separator)),
                                      parse_number(std::string_view{specification}.substr(separator + 1))});
         } else if (argument == "--no-mooneye-signature") result.mooneye_signature = false;
+        else if (argument == "--memory-require-mismatch") result.memory_require_mismatch = true;
         else usage("option inconnue");
     }
     if (result.timeout_frames <= 0) usage("timeout nul ou négatif");
+    if (result.memory_stability_samples <= 0) usage("stabilité mémoire nulle");
+    if (result.minimum_pass_frames >= result.timeout_frames) {
+        usage("le délai minimum de réussite doit être inférieur au timeout");
+    }
     if (result.hardware != "auto" && result.hardware != "dmg" && result.hardware != "cgb") {
         usage("modèle matériel inconnu");
     }
@@ -196,7 +213,7 @@ gb::HardwareMode resolve_mode(const Options& options, const CartridgeHeader& hea
     return header.uses_color ? gb::HardwareMode::cgb_native : gb::HardwareMode::dmg;
 }
 
-std::string frame_hash(const Ppu& ppu) {
+std::vector<std::uint8_t> serialize_frame(const Ppu& ppu) {
     std::vector<std::uint8_t> bytes;
     bytes.reserve(ppu.completed_frame.size() * 4U);
     for (const auto pixel : ppu.completed_frame) {
@@ -206,6 +223,10 @@ std::string frame_hash(const Ppu& ppu) {
         bytes.push_back(static_cast<std::uint8_t>(value >> 8U));
         bytes.push_back(static_cast<std::uint8_t>(value));
     }
+    return bytes;
+}
+
+std::string frame_hash(const std::vector<std::uint8_t>& bytes) {
     const auto digest = detail::sha256(bytes);
     std::ostringstream hex;
     for (const auto byte : digest) hex << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(byte);
@@ -230,6 +251,16 @@ int run(const Options& options) {
     const auto header = CartridgeHeader::parse(*rom);
     const auto boot = options.boot_rom_path.empty()
         ? std::vector<std::uint8_t>{} : read_file(options.boot_rom_path);
+    const bool expected_frame_file = !options.framebuffer_path.empty();
+    const auto expected_frame = !expected_frame_file
+        ? std::vector<std::uint8_t>{} : read_file(options.framebuffer_path);
+    constexpr auto expected_frame_bytes =
+        static_cast<std::size_t>(Ppu::frame_pixels) * sizeof(std::uint32_t);
+    if (expected_frame_file && expected_frame.size() != expected_frame_bytes) {
+        throw std::invalid_argument(
+            "framebuffer ARGB8888 attendu de taille " +
+            std::to_string(expected_frame_bytes) + " octets");
+    }
     // Le transport doit vivre plus longtemps que le port qui s'y détache dans
     // son destructeur.
     SerialCapture serial;
@@ -238,10 +269,18 @@ int run(const Options& options) {
 
     constexpr std::int64_t dots_per_frame = 70'224;
     const auto timeout = static_cast<std::int64_t>(options.timeout_frames) * dots_per_frame;
+    const auto minimum_pass_dots =
+        static_cast<std::int64_t>(options.minimum_pass_frames) * dots_per_frame;
     std::int64_t dots{};
     std::int64_t next_frame = dots_per_frame;
     int signature_stability{};
+    int memory_stability{};
+    bool memory_mismatch_observed =
+        !options.memory.empty() && !memory_passed(machine, options.memory);
     std::string last_hash;
+    std::optional<std::size_t> last_frame_mismatch;
+    std::uint8_t last_frame_expected{};
+    std::uint8_t last_frame_actual{};
 
     while (dots < timeout) {
         const int advanced = machine.step();
@@ -253,13 +292,16 @@ int run(const Options& options) {
                       << " output=" << std::quoted(text) << "\n";
             return 1;
         }
-        if (!options.serial_pass.empty() && text.find(options.serial_pass) != std::string::npos) {
+        const bool pass_window_open = dots >= minimum_pass_dots;
+        if (pass_window_open && !options.serial_pass.empty() &&
+            text.find(options.serial_pass) != std::string::npos) {
             std::cout << "PASS category=" << options.category << " mechanism=serial dots=" << dots
                       << " output=" << std::quoted(text) << "\n";
             return 0;
         }
 
-        signature_stability = options.mooneye_signature && mooneye_passed(machine.cpu)
+        signature_stability = pass_window_open && options.mooneye_signature &&
+            mooneye_passed(machine.cpu)
             ? signature_stability + 1 : 0;
         if (signature_stability >= 8) {
             std::cout << "PASS category=" << options.category
@@ -267,14 +309,42 @@ int run(const Options& options) {
             return 0;
         }
 
-        if (memory_passed(machine, options.memory)) {
+        const bool memory_matches = memory_passed(machine, options.memory);
+        if (!options.memory.empty() && !memory_matches) {
+            memory_mismatch_observed = true;
+            memory_stability = 0;
+        } else if (memory_matches &&
+                   (!options.memory_require_mismatch || memory_mismatch_observed)) {
+            ++memory_stability;
+        } else {
+            memory_stability = 0;
+        }
+        if (pass_window_open && memory_stability >= options.memory_stability_samples) {
             std::cout << "PASS category=" << options.category
                       << " mechanism=memory dots=" << dots << "\n";
             return 0;
         }
 
-        if (!options.framebuffer_sha256.empty() && dots >= next_frame) {
-            last_hash = frame_hash(machine.ppu);
+        const bool frame_expected =
+            expected_frame_file || !options.framebuffer_sha256.empty();
+        if (pass_window_open && frame_expected && dots >= next_frame) {
+            const auto current_frame = serialize_frame(machine.ppu);
+            last_hash = frame_hash(current_frame);
+            if (expected_frame_file && current_frame == expected_frame) {
+                std::cout << "PASS category=" << options.category
+                          << " mechanism=framebuffer-argb8888 dots=" << dots << "\n";
+                return 0;
+            }
+            if (expected_frame_file) {
+                const auto mismatch = std::mismatch(
+                    expected_frame.begin(), expected_frame.end(), current_frame.begin());
+                if (mismatch.first != expected_frame.end()) {
+                    last_frame_mismatch = static_cast<std::size_t>(
+                        std::distance(expected_frame.begin(), mismatch.first));
+                    last_frame_expected = *mismatch.first;
+                    last_frame_actual = *mismatch.second;
+                }
+            }
             if (last_hash == options.framebuffer_sha256) {
                 std::cout << "PASS category=" << options.category
                           << " mechanism=framebuffer-sha256 dots=" << dots << "\n";
@@ -294,6 +364,13 @@ int run(const Options& options) {
 
     std::cout << "TIMEOUT category=" << options.category << " frames=" << options.timeout_frames;
     if (!last_hash.empty()) std::cout << " last-frame-sha256=" << last_hash;
+    if (last_frame_mismatch) {
+        std::cout << " frame-mismatch-byte=" << *last_frame_mismatch
+                  << " expected=" << std::hex << std::setw(2) << std::setfill('0')
+                  << static_cast<int>(last_frame_expected)
+                  << " actual=" << std::setw(2) << static_cast<int>(last_frame_actual)
+                  << std::dec;
+    }
     if (!serial.text().empty()) std::cout << " serial=" << std::quoted(serial.text());
     std::cout << " registers=" << std::hex << std::setfill('0')
               << "AF:" << std::setw(4) << machine.cpu.af()

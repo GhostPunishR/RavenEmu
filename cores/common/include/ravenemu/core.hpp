@@ -164,6 +164,8 @@ public:
     [[nodiscard]] virtual bool connect_link_endpoint(LinkEndpoint*) noexcept { return false; }
     [[nodiscard]] virtual bool connect_infrared_endpoint(InfraredEndpoint*) noexcept { return false; }
     [[nodiscard]] virtual bool rumble_active() const noexcept { return false; }
+    /** Inclinaison cartouche en unités brutes autour du repos (0, 0). */
+    virtual void set_game_boy_acceleration(int, int) noexcept {}
 
     [[nodiscard]] virtual bool has_battery_ram() const noexcept = 0;
     [[nodiscard]] virtual bool battery_ram_dirty() const noexcept = 0;

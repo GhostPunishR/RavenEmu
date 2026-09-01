@@ -84,6 +84,17 @@ interface EmulatorCore {
     /** État instantané du moteur de vibration matériel de la cartouche. */
     val rumbleActive: Boolean get() = false
 
+    /**
+     * Fournit l'inclinaison d'une cartouche Game Boy à capteur, en unités
+     * brutes signées autour du repos. Le MBC7 centre ensuite chaque axe sur
+     * sa valeur matérielle `0x81D0` (`+/-0x70` représente environ 1 g).
+     *
+     * Les moteurs sans accéléromètre ignorent cette entrée. Une valeur reste
+     * active jusqu'à l'appel suivant ; l'hôte n'a donc pas à la republier à
+     * chaque trame.
+     */
+    fun setGameBoyAcceleration(x: Int, y: Int) = Unit
+
     /** `true` si la cartouche chargée possède une RAM sauvegardée par pile. */
     val hasBatteryRam: Boolean
 

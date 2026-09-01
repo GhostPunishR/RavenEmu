@@ -49,8 +49,10 @@ le bus progressivement et la pause `KEY1` fige les portes vidéo selon le mode
 PPU où `STOP` est exécuté. Le séquenceur audio suit les fronts du diviseur
 matériel en vitesse normale ou double. RavenEmu ne revendique toutefois pas
 encore une émulation cycle-perfect.
-Les ROMs de test de conformité restent externes au dépôt ; le runner et son
-usage sont documentés dans [`cores/gb/tests/README.md`](cores/gb/tests/README.md).
+Les ROMs de test de conformité restent externes au dépôt. Un manifeste
+versionné contrôle leur SHA-256 et leur provenance déclarée, orchestre le runner
+natif et produit un rapport JSON ; son usage est documenté dans
+[`cores/gb/tests/README.md`](cores/gb/tests/README.md).
 
 ## Architecture
 

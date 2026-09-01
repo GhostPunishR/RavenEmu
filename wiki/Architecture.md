@@ -67,8 +67,9 @@ Chaque moteur avance selon un budget de cycles et produit un framebuffer, des é
 Dans le cœur GB/GBC, chaque accès CPU et chaque cycle interne est ordonnancé à
 une frontière de M-cycle. Le bus avance les périphériques par dots et laisse les
 DMA prendre le bus entre deux micro-opérations. Le PPU possède un fetcher, un
-FIFO BG et un FIFO OBJ. Les phases de lecture OAM/VRAM, la fusion des priorités
-et l'état intermédiaire des deux FIFO font partie des états instantanés. Les
+FIFO BG et un FIFO OBJ. Les phases de lecture OAM/VRAM, les premiers dots OBJ
+qui recouvrent la sortie BG, la fusion des priorités et l'état intermédiaire
+des deux FIFO font partie des états instantanés. Les
 portes CPU de VRAM, OAM et CRAM suivent la phase interne, indépendamment des
 bits de mode publiés par `STAT`; leurs fronts particuliers après l'activation
 LCD du DMG sont conservés. Le bus les échantillonne après le M-cycle courant,
@@ -80,9 +81,18 @@ raster tout en figeant ses droits VRAM/OAM/CRAM selon le mode PPU de départ.
 Ces états sont restaurés et recroisés au chargement pour refuser toute phase
 DMA ou vitesse contradictoire.
 
+La conformité externe est pilotée par un manifeste JSON versionné. Les ROMs
+restent hors dépôt et sous une racine fournie par le développeur ; leur
+SHA-256, provenance et licence déclarée sont contrôlés avant le lancement du
+runner natif. Un rapport machine distingue réussite, échec, timeout, erreur,
+crash et test explicitement ignoré faute d'artefact.
+
 Le port série et le port infrarouge dépendent uniquement des interfaces communes
 `LinkEndpoint` et `InfraredEndpoint`. Le transport local, Android, réseau ou
-Bluetooth appartient à l'hôte, jamais au cœur.
+Bluetooth appartient à l'hôte, jamais au cœur. Une machine agrège son port
+`RP` CGB et l'éventuel transceiver de cartouche HuC1/HuC3 derrière une seule
+extrémité : le backend ne peut pas les confondre avec deux consoles ni créer
+une auto-réception.
 
 ## Ajouter une console
 

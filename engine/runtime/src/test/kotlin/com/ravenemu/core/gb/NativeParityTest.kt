@@ -278,4 +278,21 @@ class NativeParityTest {
             )
         }
     }
+
+    @Test
+    fun `l entree accelerometre MBC7 traverse Kotlin et JNI`() {
+        val rom = boucleStable(TestRoms.build(type = 0x22, cgbFlag = 0xC0))
+        GameBoyCore(HORLOGE).use { core ->
+            core.loadRom(rom)
+            val auRepos = core.saveState()
+            core.setGameBoyAcceleration(0x70, -0x70)
+            val incline = core.saveState()
+            assertTrue(
+                !auRepos.contentEquals(incline),
+                "l'entrée MBC7 n'atteint pas le cœur natif",
+            )
+            core.loadState(auRepos)
+            assertContentEquals(auRepos, core.saveState())
+        }
+    }
 }

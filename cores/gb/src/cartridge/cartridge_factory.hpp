@@ -5,7 +5,11 @@
 #include "cartridge/mbc2.hpp"
 #include "cartridge/mbc3.hpp"
 #include "cartridge/mbc5.hpp"
+#include "cartridge/mbc6.hpp"
+#include "cartridge/mbc7.hpp"
 #include "cartridge/mmm01.hpp"
+#include "cartridge/huc1.hpp"
+#include "cartridge/huc3.hpp"
 
 namespace ravenemu::cgb {
 
@@ -21,6 +25,10 @@ std::unique_ptr<Cartridge> Cartridge::create(RomImage rom, Clock clock) {
     case MbcType::mbc2: return std::make_unique<Mbc2>(std::move(rom), header);
     case MbcType::mbc3: return std::make_unique<Mbc3>(std::move(rom), header, std::move(clock));
     case MbcType::mbc5: return std::make_unique<Mbc5>(std::move(rom), header);
+    case MbcType::mbc6: return std::make_unique<Mbc6>(std::move(rom), header);
+    case MbcType::mbc7: return std::make_unique<Mbc7>(std::move(rom), header);
+    case MbcType::huc1: return std::make_unique<Huc1>(std::move(rom), header);
+    case MbcType::huc3: return std::make_unique<Huc3>(std::move(rom), header, std::move(clock));
     case MbcType::unsupported:
         throw RomLoadError("Type de cartouche non pris en charge");
     }

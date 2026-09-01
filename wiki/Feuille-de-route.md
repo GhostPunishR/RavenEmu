@@ -10,10 +10,11 @@ Cette page présente les priorités générales. Les issues et pull requests res
 - portes CPU VRAM/OAM/CRAM liées aux phases PPU, y compris les frontières
   d'activation LCD et l'échantillonnage en double vitesse;
 - modes DMG, CGB natif et compatibilité CGB explicites;
-- audio, vidéo, timers et principaux contrôleurs de cartouche, dont MBC1M et
-  MMM01;
+- audio, vidéo, timers et principaux contrôleurs de cartouche, dont MBC1M,
+  MMM01, MBC6, MBC7, HuC1 et HuC3;
 - endpoints locaux déterministes pour série et infrarouge;
-- boot ROM GB/GBC optionnelle dans l'API C++ et harness de conformité externe;
+- boot ROM GB/GBC optionnelle dans l'API C++ et harness de conformité externe
+  piloté par manifeste, avec contrôle SHA-256 et rapport JSON;
 - bibliothèque locale avec empreintes et pochettes;
 - contrôles tactiles configurables et manettes physiques;
 - profils d'écran monochrome;
@@ -30,8 +31,8 @@ Cette page présente les priorités générales. Les issues et pull requests res
   matérielle à l'aide de suites librement utilisables;
 - exposer la sélection du modèle et la boot ROM utilisateur dans l'hôte Android;
 - fournir des backends link/IR hors du cœur;
-- ajouter progressivement les contrôleurs de cartouche exotiques sans faux
-  support;
+- ajouter progressivement les contrôleurs de cartouche restants, en commençant
+  par TAMA5, sans faux support;
 - compléter les fonctions vidéo et audio GBA;
 - renforcer les outils de diagnostic;
 - documenter les résultats de compatibilité.
