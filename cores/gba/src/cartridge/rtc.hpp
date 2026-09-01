@@ -149,6 +149,12 @@ private:
         target.tm_hour = from_bcd(transfer_[static_cast<std::size_t>(at)] & 0x7f);
         target.tm_min = from_bcd(transfer_[static_cast<std::size_t>(at + 1)]);
         target.tm_sec = from_bcd(transfer_[static_cast<std::size_t>(at + 2)]);
+        // `target` part de l'heure hôte courante et porte donc son ancien
+        // indicateur heure d'été. Après une écriture de date, cet indicateur
+        // peut ne plus correspondre à la nouvelle saison : mktime décalerait
+        // alors silencieusement l'heure demandée d'une heure. Laisser la
+        // bibliothèque déterminer le régime de la nouvelle date.
+        target.tm_isdst = -1;
         const auto epoch = std::mktime(&target);
         if (epoch != static_cast<std::time_t>(-1)) offset_seconds_ = epoch - clock_();
     }
