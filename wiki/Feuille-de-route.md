@@ -71,20 +71,29 @@ aujourd'hui :
   avance entre les lignes, et chaque ligne se dessine à son passage plutôt que
   la trame entière à la fin. Les deux processeurs savent s'arrêter, chacun par
   le chemin que lui donne le matériel, et une source autorisée en attente les
-  relance sans que l'autorisation générale ait à être donnée.
+  relance sans que l'autorisation générale ait à être donnée;
+- l'amorçage d'une cartouche : les deux binaires copiés à leurs adresses de
+  chargement, les deux processeurs pointés sur leurs points d'entrée. Une
+  cartouche synthétique démarre, ses deux processeurs se relaient, et l'écran
+  montre le résultat.
 
 Le budget d'instructions accordé à une ligne repose sur une convention dite en
 toutes lettres : une instruction par cycle de l'horloge maître, faute d'un modèle
 de durée. Les 2130 cycles d'une ligne, eux, sont ceux du matériel.
 
-Toute demande d'exécution reste refusée par une erreur nommée, volontairement :
-un écran noir laisserait croire à une émulation silencieuse. La console sait
-désormais tourner, mais elle ne sait pas démarrer : rien ne charge de programme
-en mémoire depuis la cartouche. Restent à écrire cet amorçage, les décors
-tournants et les modes étendus, les sprites tournants et semi-transparents, le
-moteur 3D, les fenêtres et les mélanges, les palettes étendues, la cartouche, les
-minuteries, les transferts autonomes, l'écran tactile et le son. La console
-n'apparaît pas encore dans la bibliothèque de l'application.
+L'amorçage ne pose que ce que l'en-tête décrit. L'état qu'un vrai programme
+d'amorçage laisse derrière lui, piles et mémoires locales comprises, n'est pas
+modélisé : ses valeurs ne sont affirmées nulle part dans ce dépôt, et les
+inventer serait une affirmation que rien ne vérifie. Une cartouche qui monte sa
+propre pile démarre ; une cartouche qui compte sur l'amorceur ne démarre pas.
+
+Une image est donc produite, mais aucun jeu ne tourne encore. Restent à écrire
+les minuteries, les transferts autonomes, les entrées et l'écran tactile, les
+appels du programme d'amorçage, le bus de cartouche, les décors tournants et les
+modes étendus, les sprites tournants et semi-transparents, le moteur 3D, les
+fenêtres et les mélanges, les palettes étendues, la sauvegarde et le son.
+L'enregistrement d'un état reste refusé par une erreur nommée, faute de format.
+La console n'apparaît pas encore dans la bibliothèque de l'application.
 
 ## Pistes futures
 

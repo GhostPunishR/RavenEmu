@@ -125,6 +125,16 @@ if(RAVENEMU_BUILD_TESTS)
     target_link_libraries(nds_raven_display_tests PRIVATE nds_raven_core)
     add_test(NAME nds_raven_display COMMAND nds_raven_display_tests)
 
+    # L'amorçage est éprouvé de bout en bout : une cartouche synthétique passe
+    # par l'interface publique du cœur et doit produire une image.
+    add_executable(nds_raven_boot_tests tests/boot_test.cpp)
+    target_include_directories(nds_raven_boot_tests PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/src
+        ${CMAKE_CURRENT_LIST_DIR}/../common/tests/support
+    )
+    target_link_libraries(nds_raven_boot_tests PRIVATE nds_raven_core)
+    add_test(NAME nds_raven_boot COMMAND nds_raven_boot_tests)
+
     # L'ordonnanceur monte la console entière : sa suite est la seule qui fasse
     # tourner les deux processeurs et le faisceau ensemble.
     add_executable(nds_raven_machine_tests tests/machine_test.cpp)

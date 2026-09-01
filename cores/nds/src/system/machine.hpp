@@ -8,6 +8,8 @@
 #include "system/interrupt_controller.hpp"
 #include "video/video_system.hpp"
 
+#include <ravenemu/nds/cartridge_header.hpp>
+
 #include <cstdint>
 #include <span>
 
@@ -64,16 +66,36 @@ namespace ravenemu::nds {
  * autorisation avant de s'arrêter, pour traiter la demande à la main plutôt que
  * par le vecteur ; la lui imposer pour repartir l'endormirait définitivement.
  *
+ * ### L'amorçage, et ce qu'il ne fait pas
+ *
+ * `boot` fait ce que l'en-tête de cartouche décrit, et rien de plus : les deux
+ * binaires sont copiés à leurs adresses de chargement et les deux processeurs
+ * pointés sur leurs points d'entrée. C'est assez pour qu'une cartouche tourne.
+ *
+ * **Ce n'est pas tout ce que le matériel fait.** Sur console, un programme
+ * d'amorçage tourne avant la cartouche et laisse derrière lui un état que
+ * l'en-tête ne décrit pas : piles des différents modes, mémoires locales du
+ * processeur principal configurées, registres d'entrée-sortie initialisés. Cet
+ * état n'est pas modélisé, parce que ses valeurs ne sont affirmées nulle part
+ * dans ce dépôt et que les inventer serait une affirmation que rien ne vérifie.
+ * Les deux processeurs partent donc de leur état de mise sous tension : mode
+ * superviseur, interruptions masquées, piles à zéro. Un programme qui monte sa
+ * propre pile et démasque lui-même ses interruptions démarre ; un programme qui
+ * compte sur l'amorceur ne démarre pas, et c'est une limite connue plutôt qu'un
+ * comportement approché.
+ *
+ * Une conséquence en découle, qui compte pour la suite. Le chargement passe par
+ * la carte mémoire et non par le chemin d'écriture du processeur. Les deux
+ * coïncident tant que les mémoires locales sont éteintes, ce qui est le cas
+ * faute d'un amorceur pour les allumer ; le jour où cet état sera modélisé, le
+ * chargement devra passer par le processeur, sinon un binaire destiné à une
+ * mémoire locale atterrirait à côté.
+ *
  * ### Ce qui n'est pas là
  *
- * Rien ne charge de programme. Cet organe fait tourner ce qui se trouve en
- * mémoire, et ce qui l'y met — l'amorçage depuis la cartouche — n'existe pas
- * encore. C'est pourquoi `run_frame` du cœur public refuse toujours : la console
- * sait tourner, elle ne sait pas encore démarrer.
- *
- * Ni minuteries, ni transferts autonomes, ni son, ni entrées : les organes qui
- * poseraient les autres interruptions n'existent pas, et le balayage reste la
- * seule horloge de la console.
+ * Ni minuteries, ni transferts autonomes, ni son, ni entrées, ni bus de
+ * cartouche : les organes qui poseraient les autres interruptions n'existent
+ * pas, et le balayage reste la seule horloge de la console.
  */
 class Machine {
 public:
@@ -96,6 +118,18 @@ public:
     static constexpr std::uint32_t main_steps_per_line = cycles_per_line * main_clock_multiplier;
 
     void reset();
+
+    /**
+     * Charge une cartouche et pointe les deux processeurs sur leurs points
+     * d'entrée.
+     *
+     * Remet d'abord la console à zéro : amorcer par-dessus une partie en cours
+     * mêlerait deux exécutions.
+     *
+     * @param header en-tête déjà décodé, qui dit où sont les deux binaires
+     * @param rom    l'image dont cet en-tête a été décodé
+     */
+    void boot(const CartridgeHeader& header, std::span<const std::uint8_t> rom);
 
     /**
      * Fait avancer les deux processeurs d'une ligne, dessine cette ligne, puis
@@ -135,6 +169,25 @@ public:
 private:
     /** Fait avancer un processeur d'une instruction, réveils compris. */
     void step(Processor side);
+
+    /**
+     * Copie un bloc de la cartouche vers la mémoire, mot par mot.
+     *
+     * Le transfert de cartouche se fait par mots sur console, et une taille qui
+     * n'est pas un multiple de quatre écrit donc jusqu'à trois octets de plus
+     * que le bloc annoncé.
+     *
+     * La borne sur le tampon n'est pas une seconde validation : l'en-tête refuse
+     * déjà les blocs qui sortent du fichier. Elle protège du cas où l'image
+     * fournie n'est pas celle dont l'en-tête a été décodé.
+     */
+    static void load_block(
+        Bus& memory,
+        std::span<const std::uint8_t> rom,
+        std::uint32_t offset,
+        std::uint32_t address,
+        std::uint32_t size
+    );
 
     // L'ordre de déclaration est celui des dépendances : ce que les deux
     // processeurs partagent d'abord, les cartes ensuite, les cœurs en dernier.

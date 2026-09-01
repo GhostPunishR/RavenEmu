@@ -103,13 +103,17 @@ la console, décode et contrôle l'en-tête de cartouche, publie le contrat vid�
 et audio, exécute les deux processeurs de la console avec leurs jeux
 d'instructions et le coprocesseur système du principal, décode les cartes
 mémoire que chacun voit, les fait dialoguer, dessine les décors et les sprites de
-ses deux moteurs graphiques, balaie ses deux écrans, et **fait tourner tout cela
-ensemble** : les deux processeurs alternent au rythme de leurs horloges, le
-faisceau avance entre eux, et une trame se dessine ligne par ligne. Toute demande
-de faire tourner une image est en revanche encore refusée par une erreur nommée,
-et pour une autre raison qu'avant : la console sait tourner, elle ne sait pas
-démarrer. Rien ne charge un programme en mémoire, faute d'amorçage depuis la
-cartouche, et un écran noir laisserait croire à une émulation muette.
+ses deux moteurs graphiques, balaie ses deux écrans, fait tourner tout cela
+ensemble, et **démarre une cartouche** : les deux binaires sont chargés à leurs
+adresses, les deux processeurs partent de leurs points d'entrée, ils alternent au
+rythme de leurs horloges, le faisceau avance entre eux, et une trame se dessine
+ligne par ligne. `run_frame` produit donc une image.
+
+Ce que cette image vaut est une autre question : il manque encore les minuteries,
+les transferts autonomes, les entrées, les appels du programme d'amorçage, le bus
+de cartouche et le moteur 3D. La plupart des cartouches réelles s'arrêteront donc
+tôt. Ce qui refuse encore franchement, c'est l'enregistrement d'un état, faute de
+format.
 
 `cores/nds/src/cpu` tient les deux processeurs. Ils ne connaissent pas la carte
 mémoire de la console : ils passent par une frontière `Bus` abstraite, ce qui
@@ -270,6 +274,28 @@ générale. Un programme de console coupe couramment cette autorisation avant de
 s'arrêter, pour traiter la demande à la main plutôt que par le vecteur ; la lui
 imposer pour repartir l'endormirait définitivement.
 
+**L'amorçage** fait ce que l'en-tête de cartouche décrit, et rien de plus : les
+deux binaires sont copiés à leurs adresses de chargement, par mots comme le fait
+le transfert de cartouche, et les deux processeurs pointés sur leurs points
+d'entrée. Amorcer remet d'abord la console à zéro, sans quoi deux exécutions se
+mêleraient.
+
+**Ce n'est pas tout ce que le matériel fait**, et l'écart est dit plutôt que
+comblé au jugé. Sur console, un programme d'amorçage tourne avant la cartouche et
+laisse un état que l'en-tête ne décrit pas : piles des différents modes, mémoires
+locales du processeur principal configurées, registres initialisés. Cet état
+n'est pas modélisé, faute d'une source qui en fixe les valeurs dans ce dépôt ;
+les inventer serait une affirmation que rien ne vérifie. Les deux processeurs
+partent donc de leur état de mise sous tension. Un programme qui monte sa propre
+pile et démasque lui-même ses interruptions démarre ; un programme qui compte sur
+l'amorceur ne démarre pas.
+
+Une conséquence en découle pour la suite : le chargement passe par la carte
+mémoire et non par le chemin d'écriture du processeur. Les deux coïncident tant
+que les mémoires locales sont éteintes, ce qui est le cas faute d'amorceur pour
+les allumer ; le jour où cet état sera modélisé, le chargement devra passer par
+le processeur, sinon un binaire destiné à une mémoire locale atterrirait à côté.
+
 `cores/nds/src/video` porte les neuf banques, leur aiguillage, les deux moteurs
 graphiques 2D et le contrôleur d'affichage.
 
@@ -399,9 +425,7 @@ ce qu'elle doit montrer.
 Ne sont pas rendus : les décors tournants, les modes étendus, la grande image, le
 plan 3D, les sprites tournants, la semi-transparence, la fenêtre par sprite, les
 sprites en image directe, les fenêtres, les mélanges, la mosaïque et les palettes
-étendues. Et si les trames s'enchaînent désormais, **rien ne les démarre** :
-aucun amorçage ne charge de programme en mémoire depuis la cartouche.
-`run_frame` refuse donc toujours.
+étendues.
 
 La distinction entre « pas dessiné » et « dessiné sans son effet » est tenue au
 cas par cas plutôt que par une règle générale. Un sprite tournant ou

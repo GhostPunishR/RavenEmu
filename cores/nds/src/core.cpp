@@ -1,5 +1,8 @@
 #include <ravenemu/nds/core.hpp>
 
+#include "system/machine.hpp"
+
+#include <cstdint>
 #include <optional>
 #include <vector>
 
@@ -9,15 +12,15 @@ namespace nds {
 namespace {
 
 /**
- * Message unique du refus d'exécution.
+ * Message unique du refus d'enregistrer un état.
  *
  * Nommé une fois : le cœur, ses tests et la documentation doivent dire
  * exactement la même chose, et un écart entre eux se lirait comme un doute sur
  * ce qui est réellement implémenté.
  */
-constexpr const char* not_implemented =
-    "Le moteur Nintendo DS n'est pas encore implémenté : "
-    "aucune trame ne peut être produite";
+constexpr const char* no_state_format =
+    "Le moteur Nintendo DS n'a pas encore de format d'état : "
+    "aucun instantané ne peut être enregistré ni relu";
 
 class NintendoDsCore final : public Core {
 public:
@@ -39,18 +42,32 @@ public:
     }
 
     void load_rom(std::span<const std::uint8_t> rom, std::span<const std::uint8_t>) override {
-        // L'en-tête est décodé et contrôlé pour de bon : c'est la seule partie
-        // du cœur qui fonctionne, et elle doit refuser franchement ce qu'elle
-        // ne sait pas décrire.
+        // L'en-tête est décodé et contrôlé pour de bon : il doit refuser
+        // franchement ce qu'il ne sait pas décrire.
         header_ = CartridgeHeader::parse(rom);
-        rom_size_ = rom.size();
+        // L'image est recopiée : l'amorçage la relit, et rien ne garantit que
+        // l'appelant la garde en vie au-delà de cet appel.
+        rom_.assign(rom.begin(), rom.end());
+        reset();
     }
 
-    void reset() override { require_loaded(); }
-
-    void run_frame(std::span<std::int32_t>, bool) override {
+    void reset() override {
         require_loaded();
-        throw std::logic_error(not_implemented);
+        machine_.boot(*header_, rom_);
+    }
+
+    /**
+     * Balaie une trame.
+     *
+     * Le saut d'image n'est pas honoré : la console est balayée de la même façon
+     * dans les deux cas, et seul le dessin serait à éviter. L'économie serait
+     * réelle, mais la sauter demanderait de dire au contrôleur d'affichage de ne
+     * pas dessiner, ce qu'aucun appelant ne demande encore — et le cœur annonce
+     * `supports_video_frame_skipping` faux, si bien que personne ne s'y attend.
+     */
+    void run_frame(std::span<std::int32_t> framebuffer, bool) override {
+        require_loaded();
+        machine_.run_frame(framebuffer);
     }
 
     void set_button(Button, bool) override {}
@@ -63,16 +80,16 @@ public:
     void acknowledge_battery_ram_saved(std::uint64_t) noexcept override {}
 
     /**
-     * Aucun format d'état n'est publié tant qu'il n'y a pas de machine à
-     * décrire. En figer un maintenant reviendrait à promettre une compatibilité
-     * sur un contenu encore inconnu.
+     * Aucun format d'état n'est publié tant que la console n'est pas complète.
+     * En figer un maintenant reviendrait à promettre une compatibilité sur un
+     * contenu qui va encore changer à chaque organe ajouté.
      */
     [[nodiscard]] std::vector<std::uint8_t> save_state() const override {
-        throw std::logic_error(not_implemented);
+        throw std::logic_error(no_state_format);
     }
 
     void load_state(std::span<const std::uint8_t>) override {
-        throw std::logic_error(not_implemented);
+        throw std::logic_error(no_state_format);
     }
 
     /** En-tête de la cartouche chargée, pour les tests et l'outillage. */
@@ -87,7 +104,8 @@ private:
     }
 
     std::optional<CartridgeHeader> header_;
-    std::size_t rom_size_{};
+    std::vector<std::uint8_t> rom_;
+    Machine machine_{};
 };
 
 } // namespace

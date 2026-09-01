@@ -13,10 +13,11 @@
 /**
  * En-tête de cartouche Nintendo DS et identité du cœur.
  *
- * Le cœur n'émule rien ; ce qui est éprouvé ici est donc tout ce qu'il prétend
- * faire — décoder un en-tête, refuser ce qu'il ne sait pas décrire, publier ses
- * caractéristiques — plus le refus explicite d'exécuter, qui est un
- * comportement à part entière et non un manque.
+ * Sont éprouvés ici le décodage de l'en-tête, le refus franc de ce qu'il ne sait
+ * pas décrire, les caractéristiques publiées, et ce que le cœur accepte ou
+ * refuse de faire. Le partage a changé : **balayer une trame n'est plus refusé**,
+ * puisqu'il y a une console pour la produire ; enregistrer un état l'est
+ * toujours, faute de format.
  */
 namespace ravenemu::nds::testing {
 
@@ -267,12 +268,14 @@ void le_chargement_valide_la_cartouche() {
 }
 
 /**
- * Le refus d'exécuter est un comportement voulu, éprouvé comme tel.
+ * Ce que le cœur accepte, et ce qu'il refuse encore.
  *
- * Rendre un écran noir laisserait croire à une émulation silencieuse ; une
- * erreur nommée dit ce qui manque.
+ * Sans cartouche, rien ne peut tourner : le refus est nommé plutôt que silencieux.
+ * Avec une cartouche, la console tourne — et une cartouche dont le programme ne
+ * fait rien montre un écran noir, non parce que l'émulation se tait mais parce
+ * qu'un moteur graphique qu'on n'allume pas n'affiche rien.
  */
-void l_execution_est_refusee_explicitement() {
+void ce_que_le_coeur_accepte_et_refuse() {
     auto core = make_core();
     std::vector<std::int32_t> framebuffer(static_cast<std::size_t>(screen_width * framebuffer_height));
 
@@ -282,21 +285,27 @@ void l_execution_est_refusee_explicitement() {
     );
 
     core->load_rom(synthetic_rom(), {});
-    expect_failure<std::logic_error>(
-        [&] { core->run_frame(framebuffer, true); },
-        "l'exécution devrait être refusée tant que le moteur n'existe pas"
+    core->run_frame(framebuffer, true);
+    check(
+        static_cast<std::uint32_t>(framebuffer[0]) == 0xff00'0000U,
+        "un programme qui n'allume aucun moteur laisse l'écran du haut noir"
     );
+    check(
+        static_cast<std::uint32_t>(framebuffer.back()) == 0xff00'0000U,
+        "et celui du bas également"
+    );
+
     expect_failure<std::logic_error>(
         [&] { static_cast<void>(core->save_state()); },
-        "aucun format d'état ne doit être publié tant qu'il n'y a pas de machine"
+        "aucun format d'état ne doit être publié tant qu'il n'y en a pas"
     );
     expect_failure<std::logic_error>(
         [&] { core->load_state(std::vector<std::uint8_t>(16, 0)); },
-        "aucun état ne doit être accepté tant qu'il n'y a pas de machine"
+        "aucun état ne doit être accepté tant qu'il n'y en a pas"
     );
 
-    // Les accessoires sans machine restent muets plutôt que d'échouer : ils
-    // décrivent une absence, pas une erreur.
+    // Les accessoires encore sans organe restent muets plutôt que d'échouer :
+    // ils décrivent une absence, pas une erreur.
     check(!core->has_battery_ram(), "aucune sauvegarde de cartouche n'est encore décrite");
     check(!core->battery_ram_dirty(), "aucune sauvegarde ne peut être modifiée");
     check(core->read_audio(std::span<std::int16_t>{}) == 0, "aucun échantillon ne doit être produit");
@@ -316,6 +325,6 @@ int main() {
     le_contrat_video_decrit_deux_ecrans();
     l_identite_persistee_est_distincte();
     le_chargement_valide_la_cartouche();
-    l_execution_est_refusee_explicitement();
+    ce_que_le_coeur_accepte_et_refuse();
     return 0;
 }

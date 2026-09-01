@@ -32,6 +32,35 @@ InterruptController& Machine::interrupts(Processor side) noexcept {
     return secondary_interrupts_;
 }
 
+void Machine::load_block(
+    Bus& memory,
+    std::span<const std::uint8_t> rom,
+    std::uint32_t offset,
+    std::uint32_t address,
+    std::uint32_t size
+) {
+    for (std::uint32_t written = 0; written < size; written += 4U) {
+        std::uint32_t word = 0;
+        for (std::uint32_t byte = 0; byte < 4U; ++byte) {
+            const auto source = static_cast<std::size_t>(offset) + written + byte;
+            if (source >= rom.size()) break;
+            word |= static_cast<std::uint32_t>(rom[source]) << (byte * 8U);
+        }
+        memory.write32(address + written, word);
+    }
+}
+
+void Machine::boot(const CartridgeHeader& header, std::span<const std::uint8_t> rom) {
+    reset();
+
+    load_block(main_map_, rom, header.arm9_rom_offset, header.arm9_ram_address, header.arm9_size);
+    load_block(
+        secondary_map_, rom, header.arm7_rom_offset, header.arm7_ram_address, header.arm7_size);
+
+    main_core_.state().registers[15] = header.arm9_entry_address;
+    secondary_core_.state().registers[15] = header.arm7_entry_address;
+}
+
 void Machine::step(Processor side) {
     auto& processor = core(side);
     auto& controller = interrupts(side);
