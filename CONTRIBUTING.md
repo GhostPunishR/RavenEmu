@@ -81,7 +81,7 @@ En changeant de version de Gradle, il faut mettre cette empreinte à jour :
 
 La CI confronte ensuite la valeur inscrite à celle que Gradle publie à côté de l'archive : épingler une empreinte ne protège que si c'est la bonne, et une valeur recopiée depuis une archive déjà substituée épinglerait la substitution.
 
-**Actions GitHub.** Elles sont épinglées par SHA de commit, jamais par étiquette de version : une étiquette peut être redéplacée, un SHA non. Dependabot surveille les deux écosystèmes (`gradle` et `github-actions`) et propose les mises à jour, ce qui évite que l'épinglage fige indéfiniment une version vulnérable.
+**Actions GitHub.** Elles sont épinglées par SHA de commit, jamais par étiquette de version : une étiquette peut être redéplacée, un SHA non. Leurs versions doivent être vérifiées et mises à jour manuellement afin que l'épinglage ne fige pas indéfiniment une version vulnérable.
 
 **Dépendances.** La vérification d'intégrité de Gradle (`gradle/verification-metadata.xml`) n'est pas encore activée. Elle exige des métadonnées couvrant **toutes** les configurations résolues, donc une machine disposant du SDK Android — sans lui, les modules Android sont exclus du build et les métadonnées produites seraient incomplètes, ce qui ferait échouer la CI à la première dépendance manquante. Pour la mettre en place :
 
