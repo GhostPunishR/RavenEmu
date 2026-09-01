@@ -28,6 +28,7 @@ void Arm9MemoryMap::reset() noexcept {
     // La mémoire partagée et le matériel vidéo sont remis à zéro par leurs
     // propriétaires, non par cette vue : les vider ici effacerait le travail de
     // l'autre processeur.
+    dma_.reset();
     timers_.reset();
     power_ = 0;
     unmapped_ = 0;
@@ -249,6 +250,15 @@ std::uint8_t Arm9MemoryMap::read_io_byte(std::uint32_t address) noexcept {
         return registers::byte_of(power_, address - power_control);
     }
 
+    if (address >= dma_base && address < dma_base + DmaController::channel_bytes * DmaController::count) {
+        const auto offset = address - dma_base;
+        const auto channel = offset / DmaController::channel_bytes;
+        const auto part = offset % DmaController::channel_bytes;
+        if (part < 4U) return registers::byte_of(dma_.source(channel), part);
+        if (part < 8U) return registers::byte_of(dma_.destination(channel), part - 4U);
+        return registers::byte_of(dma_.control(channel), part - 8U);
+    }
+
     if (address >= timer_base && address < timer_base + timer_stride * Timers::count) {
         const auto slot = (address - timer_base) / timer_stride;
         const auto part = (address - timer_base) % timer_stride;
@@ -302,6 +312,23 @@ void Arm9MemoryMap::write_io_byte(std::uint32_t address, std::uint8_t value) noe
         // coupent l'alimentation d'organes qui n'existent pas encore, et se
         // relisent tels qu'écrits.
         display().set_swapped((power_ & power_swaps_screens) != 0U);
+        return;
+    }
+
+    if (address >= dma_base && address < dma_base + DmaController::channel_bytes * DmaController::count) {
+        const auto offset = address - dma_base;
+        const auto channel = offset / DmaController::channel_bytes;
+        const auto part = offset % DmaController::channel_bytes;
+        if (part < 4U) {
+            dma_.set_source(channel, registers::with_byte(dma_.source(channel), part, value));
+            return;
+        }
+        if (part < 8U) {
+            dma_.set_destination(
+                channel, registers::with_byte(dma_.destination(channel), part - 4U, value));
+            return;
+        }
+        dma_.set_control(channel, registers::with_byte(dma_.control(channel), part - 8U, value));
         return;
     }
 

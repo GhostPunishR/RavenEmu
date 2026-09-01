@@ -76,6 +76,15 @@ void Machine::step(Processor side) {
     processor.set_irq_line(controller.line());
     processor.step();
 
+    // Un transfert armé a lieu entre deux instructions : le programme qui vient
+    // de l'allumer trouve la copie faite dès l'instruction suivante, et non une
+    // ligne plus tard.
+    if (side == Processor::main) {
+        if (main_map_.dma().pending()) main_map_.dma().run(main_map_);
+    } else {
+        if (secondary_map_.dma().pending()) secondary_map_.dma().run(secondary_map_);
+    }
+
     // Le processeur secondaire s'arrête par un registre de sa carte, qui ne le
     // connaît pas et ne peut donc pas l'arrêter elle-même. Le principal n'a pas
     // besoin de ce transport : son coprocesseur est dans le cœur.
@@ -100,7 +109,18 @@ void Machine::run_line(std::span<std::int32_t> framebuffer) {
     main_map_.timers().advance(cycles_per_line);
     secondary_map_.timers().advance(cycles_per_line);
 
+    // Le retour horizontal appartient à la ligne qui s'achève, le retour
+    // vertical à celle qui commence : les canaux qui les attendent s'arment donc
+    // de part et d'autre du changement de ligne, comme les interruptions.
+    main_map_.dma().trigger(DmaController::Timing::horizontal_blank);
+    secondary_map_.dma().trigger(DmaController::Timing::horizontal_blank);
+
     display().advance_line();
+
+    if (display().line() == DisplayController::visible_lines) {
+        main_map_.dma().trigger(DmaController::Timing::vertical_blank);
+        secondary_map_.dma().trigger(DmaController::Timing::vertical_blank);
+    }
 }
 
 void Machine::run_frame(std::span<std::int32_t> framebuffer) {

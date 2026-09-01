@@ -3,6 +3,7 @@
 #include "cpu/bus.hpp"
 #include "memory/system_memory.hpp"
 #include "system/inter_processor.hpp"
+#include "system/dma.hpp"
 #include "system/timers.hpp"
 #include "video/video_system.hpp"
 
@@ -104,6 +105,15 @@ public:
      * l'autre.
      */
     static constexpr std::uint32_t timer_base = 0x0400'0100;
+
+    /**
+     * Les quatre canaux de transfert autonome de ce processeur.
+     *
+     * Comme les minuteries, ils appartiennent à sa carte : leurs registres sont
+     * les siens, et ce qu'ils copient passe par sa vue de la mémoire.
+     */
+    static constexpr std::uint32_t dma_base = 0x0400'00b0;
+
     /** Écart entre deux minuteries : deux registres de seize bits. */
     static constexpr std::uint32_t timer_stride = 4;
 
@@ -140,6 +150,10 @@ public:
 
     /** Les minuteries de ce processeur. */
     [[nodiscard]] Timers& timers() noexcept { return timers_; }
+
+    /** Les canaux de transfert autonome de ce processeur. */
+    [[nodiscard]] DmaController& dma() noexcept { return dma_; }
+
 
     /** Part de la mémoire commune revenant à ce processeur. */
     [[nodiscard]] SystemMemory::Window shared_window() const noexcept {
@@ -215,6 +229,7 @@ private:
     InterruptController& interrupts_;
 
     Timers timers_{interrupts_};
+    DmaController dma_{Processor::main, interrupts_};
 
     /** Registre d'alimentation, dont seul le bit d'échange agit. */
     std::uint16_t power_{};

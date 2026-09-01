@@ -322,6 +322,35 @@ reste : une interruption tombe à une frontière de ligne plutôt qu'à l'instan
 exact du débordement. L'allumage ne remet pas la phase du diviseur à zéro, faute
 d'une source qui le dise ; l'écart possible vaut moins d'un pas.
 
+**Les quatre canaux de transfert autonome** de chaque processeur copient la
+mémoire sans que le processeur y revienne. C'est par là que passent la palette,
+la table des sprites et les tuiles à chaque trame : un émulateur qui n'a pas ces
+canaux ne montre pas un écran fautif, il montre un écran qui ne se met jamais à
+jour.
+
+**Le point délicat est le moment où un canal part.** À l'allumage pour un départ
+immédiat, ou au moment demandé : retour vertical, retour horizontal. Les autres
+moments désignent des organes qui n'existent pas encore, et un canal qui les
+demande est **compté** plutôt que parti au mauvais instant — un transfert
+déclenché trop tôt est plus difficile à diagnostiquer qu'un transfert qui n'a pas
+lieu. Le champ qui porte ce moment n'a pas la même largeur des deux côtés, si
+bien que les mêmes bits disent « retour vertical » au processeur principal et
+« départ immédiat » au secondaire.
+
+Un canal peut se réarmer après chaque transfert, et c'est ainsi qu'un jeu obtient
+une copie à chaque trame sans y revenir. La répétition n'a de sens qu'avec un
+moment : un départ immédiat qui se répéterait tournerait sans fin. Des deux
+façons dont une arrivée évolue, l'une revient à son point de départ à chaque
+tour et l'autre poursuit son chemin.
+
+Un transfert a lieu **d'un coup, entre deux instructions**, là où le matériel
+l'entrelace avec le processeur en lui volant des cycles. La différence
+s'observerait sur un programme qui lit la zone d'arrivée pendant qu'elle se
+remplit ; elle ne s'observe pas sur un programme qui attend la fin, ce que fait
+le logiciel ordinaire. Un canal armé par un moment de fin de ligne est servi au
+premier pas de la ligne suivante, exactement comme l'interruption posée au même
+instant.
+
 `cores/nds/src/video` porte les neuf banques, leur aiguillage, les deux moteurs
 graphiques 2D et le contrôleur d'affichage.
 

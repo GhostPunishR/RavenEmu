@@ -7,6 +7,7 @@ add_library(nds_raven_core STATIC
     src/memory/arm7_memory_map.cpp
     src/memory/arm9_memory_map.cpp
     src/memory/system_memory.cpp
+    src/system/dma.cpp
     src/system/inter_processor.cpp
     src/system/machine.cpp
     src/system/timers.cpp
@@ -125,6 +126,16 @@ if(RAVENEMU_BUILD_TESTS)
     )
     target_link_libraries(nds_raven_display_tests PRIVATE nds_raven_core)
     add_test(NAME nds_raven_display COMMAND nds_raven_display_tests)
+
+    # Les transferts autonomes sont éprouvés seuls, puis sous l'ordonnanceur :
+    # ce qui compte est le moment où un canal part.
+    add_executable(nds_raven_dma_tests tests/dma_test.cpp)
+    target_include_directories(nds_raven_dma_tests PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/src
+        ${CMAKE_CURRENT_LIST_DIR}/../common/tests/support
+    )
+    target_link_libraries(nds_raven_dma_tests PRIVATE nds_raven_core)
+    add_test(NAME nds_raven_dma COMMAND nds_raven_dma_tests)
 
     # Les minuteries sont éprouvées seules, puis sous les cartes et sous
     # l'ordonnanceur : ce qui compte est que chaque processeur ait les siennes.
