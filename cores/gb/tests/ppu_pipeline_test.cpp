@@ -178,8 +178,12 @@ void sprite_penalty_test() {
 
     check(measure(gb::HardwareMode::dmg, {8}) == 179,
           "premier OBJ au bord gauche ne recouvre pas le fetch BG initial");
-    check(measure(gb::HardwareMode::dmg, {0}) == 183,
-          "OBJ entièrement hors écran avec OAM X=0 n'applique pas onze dots");
+    check(measure(gb::HardwareMode::dmg, {0}) == 179,
+          "premier OBJ OAM X=0 ne recouvre pas quatre dots du fetch BG initial");
+    check(measure(gb::HardwareMode::dmg, {0, 0, 0}) == 191,
+          "OBJ OAM X=0 superposés ne coûtent pas sept puis six dots chacun");
+    check(measure(gb::HardwareMode::dmg, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}) == 233,
+          "dix OBJ OAM X=0 n'appliquent pas le timing matériel cumulé");
     check(measure(gb::HardwareMode::dmg, {8, 8}) == 185,
           "deux OBJ sur le même X ne coûtent pas sept puis six dots");
     check(measure(gb::HardwareMode::dmg, {8}, false) == 172,
@@ -870,6 +874,34 @@ void mid_object_fetch_save_state_test() {
                          "restauration en plein fetch OBJ non déterministe");
 }
 
+void overlapping_object_fetch_save_state_test() {
+    InterruptController source_interrupts;
+    Ppu source(source_interrupts, gb::HardwareMode::dmg);
+    source.write_oam_direct(0, 16);
+    source.write_oam_direct(1, 69); // X écran 61, trois dots de recouvrement
+    source.write_oam_direct(2, 1);
+    source.vram[16] = 0xff;
+    source.write_lcdc(0x93);
+    while (source.mode() != Ppu::mode_transfer || source.transfer_x() < 58) source.tick(1);
+    source.tick(1);
+    check(source.transfer_x() == 59 && source.mode() == Ppu::mode_transfer,
+          "fetch OBJ n'a pas avancé la sortie BG pendant son premier dot recouvert");
+
+    const auto saved = snapshot(source);
+    InterruptController restored_interrupts;
+    Ppu restored(restored_interrupts, gb::HardwareMode::dmg);
+    detail::BinaryReader reader(saved);
+    restored.load(reader);
+    check(reader.exhausted(), "état PPU au milieu du recouvrement OBJ laisse des données");
+    check_snapshot_equal(saved, snapshot(restored),
+                         "recouvrement OBJ/BG différent immédiatement après restauration");
+
+    source.tick(1000);
+    restored.tick(1000);
+    check_snapshot_equal(snapshot(source), snapshot(restored),
+                         "recouvrement OBJ/BG divergent après restauration");
+}
+
 void mid_object_fifo_save_state_test() {
     InterruptController source_interrupts;
     Ppu source(source_interrupts, gb::HardwareMode::dmg);
@@ -901,7 +933,7 @@ void object_fifo_state_validation_test() {
     InterruptController interrupts;
     Ppu source(interrupts, gb::HardwareMode::dmg);
     auto corrupted = snapshot(source);
-    constexpr std::size_t object_fifo_offset = 4 + 71 * 4 + 16 * 3;
+    constexpr std::size_t object_fifo_offset = 4 + 72 * 4 + 16 * 3;
     check(corrupted.size() > object_fifo_offset, "état PPU trop court pour contenir le FIFO OBJ");
     corrupted[object_fifo_offset] = 4; // couleur OBJ hors de l'intervalle matériel 0..3
     expect_failure<SaveStateError>(
@@ -912,6 +944,20 @@ void object_fifo_state_validation_test() {
             restored.load(reader);
         },
         "couleur invalide du FIFO OBJ acceptée par le chargeur d'état");
+
+    auto invalid_overlap = snapshot(source);
+    constexpr std::size_t overlap_offset = 4 + 56 * 4;
+    check(invalid_overlap.size() > overlap_offset + 3,
+          "état PPU trop court pour la phase de recouvrement OBJ");
+    invalid_overlap[overlap_offset] = 4;
+    expect_failure<SaveStateError>(
+        [&] {
+            InterruptController restored_interrupts;
+            Ppu restored(restored_interrupts, gb::HardwareMode::dmg);
+            detail::BinaryReader reader(invalid_overlap);
+            restored.load(reader);
+        },
+        "phase de recouvrement OBJ invalide acceptée par le chargeur d'état");
 }
 
 void ppu_timing_state_validation_test() {
@@ -983,6 +1029,7 @@ int main() {
     opri_render_priority_test();
     mid_transfer_save_state_test();
     mid_object_fetch_save_state_test();
+    overlapping_object_fetch_save_state_test();
     mid_object_fifo_save_state_test();
     object_fifo_state_validation_test();
     ppu_timing_state_validation_test();

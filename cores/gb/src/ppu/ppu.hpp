@@ -293,7 +293,7 @@ public:
     [[nodiscard]] bool take_hblank_entry() noexcept { const bool value = entered_hblank_; entered_hblank_ = false; return value; }
 
     void save(BinaryWriter& out) const {
-        constexpr int field_count = 71;
+        constexpr int field_count = 72;
         out.i32(field_count);
         const std::array fields{
             lcdc_, stat_enable_, scy_, scx_, ly_, lyc_, bgp_, obp0_, obp1_, wy_, wx_,
@@ -311,6 +311,7 @@ public:
             fetcher_phase_, fetcher_phase_dots_, fetcher_tile_, fetcher_attributes_,
             fetcher_row_, fetcher_tile_data_address_, fetcher_data_low_, fetcher_data_high_,
             obj_fifo_head_, obj_fifo_size_, obj_fetch_phase_, obj_fetch_phase_dots_remaining_,
+            obj_fetch_output_overlap_remaining_,
             obj_fetch_slot_, obj_fetch_sprite_, obj_fetch_screen_x_, obj_fetch_raw_x_,
             obj_fetch_tile_, obj_fetch_attributes_, obj_fetch_row_, obj_fetch_address_,
             obj_fetch_data_low_, obj_fetch_data_high_,
@@ -336,7 +337,7 @@ public:
         out.raw(vram); out.raw(oam); out.raw(bg_cram); out.raw(obj_cram);
     }
     void load(BinaryReader& in) {
-        if (in.i32() != 71) throw SaveStateError("État instantané corrompu (PPU)");
+        if (in.i32() != 72) throw SaveStateError("État instantané corrompu (PPU)");
         lcdc_ = in.i32(); stat_enable_ = in.i32(); scy_ = in.i32(); scx_ = in.i32();
         ly_ = in.i32(); lyc_ = in.i32(); bgp_ = in.i32(); obp0_ = in.i32(); obp1_ = in.i32();
         wy_ = in.i32(); wx_ = in.i32(); mode_ = in.i32(); reported_mode_ = in.i32();
@@ -361,7 +362,8 @@ public:
         fetcher_row_ = in.i32(); fetcher_tile_data_address_ = in.i32(); fetcher_data_low_ = in.i32();
         fetcher_data_high_ = in.i32();
         obj_fifo_head_ = in.i32(); obj_fifo_size_ = in.i32(); obj_fetch_phase_ = in.i32();
-        obj_fetch_phase_dots_remaining_ = in.i32(); obj_fetch_slot_ = in.i32();
+        obj_fetch_phase_dots_remaining_ = in.i32();
+        obj_fetch_output_overlap_remaining_ = in.i32(); obj_fetch_slot_ = in.i32();
         obj_fetch_sprite_ = in.i32(); obj_fetch_screen_x_ = in.i32(); obj_fetch_raw_x_ = in.i32();
         obj_fetch_tile_ = in.i32(); obj_fetch_attributes_ = in.i32(); obj_fetch_row_ = in.i32();
         obj_fetch_address_ = in.i32(); obj_fetch_data_low_ = in.i32(); obj_fetch_data_high_ = in.i32();
@@ -596,7 +598,10 @@ private:
             if (object_fetch_may_be_canceled() && (lcdc_ & 2) == 0) {
                 cancel_object_fetch();
             } else {
+                const bool output_continues = obj_fetch_output_overlap_remaining_ > 0;
+                if (output_continues) --obj_fetch_output_overlap_remaining_;
                 advance_object_fetch();
+                if (output_continues) advance_background_output();
                 return;
             }
         }
@@ -614,10 +619,17 @@ private:
             // à zéro est simplement consommé par le séquenceur.
             if (object_fetch_may_be_canceled() && (lcdc_ & 2) == 0) continue;
             begin_object_fetch(sprite_slot);
+            const bool output_continues = obj_fetch_output_overlap_remaining_ > 0;
+            if (output_continues) --obj_fetch_output_overlap_remaining_;
             advance_object_fetch();
+            if (output_continues) advance_background_output();
             return;
         }
 
+        advance_background_output();
+    }
+
+    void advance_background_output() {
         tick_bg_fetcher();
         if (startup_dots_remaining_ > 0) {
             --startup_dots_remaining_;
@@ -780,6 +792,7 @@ private:
         obj_fetch_address_ = 0;
         obj_fetch_data_low_ = 0;
         obj_fetch_data_high_ = 0;
+        obj_fetch_output_overlap_remaining_ = 0;
     }
 
     void reset_object_pipeline() noexcept {
@@ -800,7 +813,19 @@ private:
         for (int slot = 0; slot < line_sprite_count_; ++slot) {
             if (sprite_fetch_consumed_[static_cast<std::size_t>(slot)]) continue;
             const int raw_x = sprite_x_[static_cast<std::size_t>(slot)];
-            if (std::max(0, raw_x - 8) != transfer_x_) continue;
+            const int screen_x = raw_x - 8;
+            // Un fetch ne peut recouvrir que ses trois premiers dots. Éviter
+            // le calcul de priorité de tuile tant que l'OBJ est hors de cette
+            // petite fenêtre garde le chemin par pixel borné et sans travail
+            // quadratique inutile.
+            if (transfer_x_ < std::max(0, screen_x - 3) ||
+                transfer_x_ > std::max(0, screen_x)) {
+                continue;
+            }
+            const auto timing = object_timing(slot, screen_x);
+            const int overlapped_dots = std::max(0, 6 - timing.penalty_dots);
+            const int trigger_x = std::max(0, screen_x - overlapped_dots);
+            if (trigger_x != transfer_x_) continue;
             const int oam_index = sprite_indices_[static_cast<std::size_t>(slot)];
             if (raw_x < best_raw_x || (raw_x == best_raw_x && oam_index < best_oam_index)) {
                 best_slot = slot;
@@ -823,7 +848,14 @@ private:
         obj_fetch_data_low_ = 0;
         obj_fetch_data_high_ = 0;
 
-        const int wait_dots = std::max(0, sprite_penalty(sprite_slot, obj_fetch_screen_x_) - 6);
+        const auto timing = object_timing(sprite_slot, obj_fetch_screen_x_);
+        if (timing.first_for_tile &&
+            considered_sprite_tile_count_ < static_cast<int>(considered_sprite_tiles_.size())) {
+            considered_sprite_tiles_[static_cast<std::size_t>(considered_sprite_tile_count_++)] =
+                timing.tile_key;
+        }
+        const int wait_dots = std::max(0, timing.penalty_dots - 6);
+        obj_fetch_output_overlap_remaining_ = std::max(0, 6 - timing.penalty_dots);
         obj_fetch_phase_ = wait_dots > 0 ? obj_fetch_wait_bg : obj_fetch_oam;
         obj_fetch_phase_dots_remaining_ = wait_dots > 0 ? wait_dots : 2;
     }
@@ -959,12 +991,15 @@ private:
         }
         if (obj_fetch_phase_ == obj_fetch_idle) {
             if (obj_fetch_phase_dots_remaining_ != 0 || obj_fetch_slot_ != -1 ||
-                obj_fetch_sprite_ != -1) {
+                obj_fetch_sprite_ != -1 || obj_fetch_output_overlap_remaining_ != 0) {
                 throw SaveStateError("État instantané corrompu (fetch OBJ PPU inactif)");
             }
             return;
         }
         if (obj_fetch_phase_dots_remaining_ <= 0 || obj_fetch_phase_dots_remaining_ > 11 ||
+            obj_fetch_output_overlap_remaining_ < 0 || obj_fetch_output_overlap_remaining_ > 3 ||
+            (obj_fetch_output_overlap_remaining_ > 0 &&
+             obj_fetch_phase_ != obj_fetch_oam && obj_fetch_phase_ != obj_fetch_low) ||
             obj_fetch_slot_ < 0 || obj_fetch_slot_ >= line_sprite_count_ ||
             obj_fetch_sprite_ < 0 || obj_fetch_sprite_ >= 40 ||
             obj_fetch_screen_x_ < -8 || obj_fetch_screen_x_ > 247 ||
@@ -979,7 +1014,13 @@ private:
         }
     }
 
-    int sprite_penalty(int sprite_slot, int sprite_x) noexcept {
+    struct ObjectTiming {
+        int penalty_dots{};
+        int tile_key{};
+        bool first_for_tile{};
+    };
+
+    [[nodiscard]] ObjectTiming object_timing(int sprite_slot, int sprite_x) const noexcept {
         const int raw_x = sprite_x_[static_cast<std::size_t>(sprite_slot)];
         const int coordinate = fetcher_window_ ? sprite_x - (wx_ - 7) : sprite_x + scx_latched_;
         const int wrapped = coordinate & 0xff;
@@ -991,18 +1032,24 @@ private:
                 break;
             }
         }
-        if (first_for_tile && considered_sprite_tile_count_ < static_cast<int>(considered_sprite_tiles_.size())) {
-            considered_sprite_tiles_[static_cast<std::size_t>(considered_sprite_tile_count_++)] = tile_key;
+        if (raw_x == 0) {
+            // Un OBJ à X=0 est rencontré pendant l'amorçage du pipeline :
+            // le premier fetch recouvre quatre dots du fetch BG initial.
+            // Les OBJ suivants sur la même tuile ne paient ensuite que les
+            // six dots propres au fetch OBJ. Cette superposition est visible
+            // dans le timing mode 2 -> mode 0, même si l'OBJ est entièrement
+            // hors écran.
+            if (!first_for_tile) return {6, tile_key, false};
+            return {considered_sprite_tile_count_ > 0 ? 11 : 7, tile_key, true};
         }
-        if (raw_x == 0) return 11;
-        if (!first_for_tile) return 6;
+        if (!first_for_tile) return {6, tile_key, false};
         const int fine = wrapped & 7;
         const int fetch_wait = std::max(0, 7 - fine - 2);
-        if (considered_sprite_tile_count_ > 1) return 6 + fetch_wait;
+        if (considered_sprite_tile_count_ > 0) return {6 + fetch_wait, tile_key, true};
         // Au moment où le premier OBJ d'une tuile atteint le bord du FIFO,
         // trois dots de son attente (quatre exactement à la frontière de
         // tuile) recouvrent le fetch BG déjà en cours.
-        return 6 + fetch_wait - (fine == 0 ? 4 : 3);
+        return {6 + fetch_wait - (fine == 0 ? 4 : 3), tile_key, true};
     }
 
     void render_fifo_pixel(int x, const BgPixel& pixel, const ObjPixel& object) {
@@ -1222,6 +1269,7 @@ private:
     int obj_fetch_address_{};
     int obj_fetch_data_low_{};
     int obj_fetch_data_high_{};
+    int obj_fetch_output_overlap_remaining_{};
     bool oam_dma_active_{};
     int oam_dma_bus_low_{0xff};
     int oam_dma_bus_high_{0xff};
