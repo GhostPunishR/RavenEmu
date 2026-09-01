@@ -296,6 +296,32 @@ que les mémoires locales sont éteintes, ce qui est le cas faute d'amorceur pou
 les allumer ; le jour où cet état sera modélisé, le chargement devra passer par
 le processeur, sinon un binaire destiné à une mémoire locale atterrirait à côté.
 
+**Les quatre minuteries** de chaque processeur donnent enfin à un programme une
+horloge plus fine que la trame. Le balayage ne mesurait que des seizièmes de
+seconde ; un son se cadence à des dizaines de milliers de fois par seconde, une
+attente se compte en microsecondes. Un jeu privé de minuteries ne va pas plus
+lentement : il s'arrête, parce qu'il attend un compteur qui ne bouge jamais.
+
+Elles appartiennent à la carte de leur processeur, comme le registre
+d'alimentation, et non à un organe partagé : rien de ce qu'elles comptent ne
+traverse d'un processeur à l'autre.
+
+Trois choses y comptent plus qu'elles n'en ont l'air. **Le reste de la division
+est conservé** d'un pas à l'autre : le jeter ferait dériver une minuterie lente
+d'autant plus vite qu'on l'interroge souvent, et la dérive resterait invisible
+jusqu'au jour où un jeu compte dessus. **Le registre bas ne dit pas la même
+chose dans les deux sens** : on y lit le compteur, on y écrit le rechargement, et
+confondre les deux donne soit un temps immobile, soit un jeu qui replace le temps
+où il veut. Et **une minuterie peut compter les débordements de celle qui la
+précède** plutôt que le temps, ce qui est la seule façon d'obtenir un compteur
+plus large que seize bits ; une minuterie éteinte au milieu d'une chaîne la rompt
+plutôt que de se laisser enjamber.
+
+Les minuteries avancent à la granularité d'une ligne de balayage, comme tout le
+reste : une interruption tombe à une frontière de ligne plutôt qu'à l'instant
+exact du débordement. L'allumage ne remet pas la phase du diviseur à zéro, faute
+d'une source qui le dise ; l'écart possible vaut moins d'un pas.
+
 `cores/nds/src/video` porte les neuf banques, leur aiguillage, les deux moteurs
 graphiques 2D et le contrôleur d'affichage.
 

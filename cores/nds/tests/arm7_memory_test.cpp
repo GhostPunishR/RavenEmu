@@ -26,6 +26,16 @@ using ravenemu::testing::check;
 
 namespace {
 
+/**
+ * Adresse d'entrée-sortie qu'aucun organe ne décodera jamais ici.
+ *
+ * Elle appartient au modèle DSi, hors du périmètre de ce cœur. Les exemples de
+ * « registre inconnu » ont déjà dû être déplacés deux fois, parce que l'adresse
+ * choisie finissait par être modélisée et désarmait silencieusement les
+ * vérifications qui s'en servaient. Celle-ci ne le sera pas.
+ */
+constexpr std::uint32_t never_decoded_io = 0x0400'4000;
+
 constexpr std::uint32_t main_ram_base = 0x0200'0000;
 constexpr std::uint32_t shared_window_base = 0x0300'0000;
 constexpr std::uint32_t always = 0xeU;
@@ -340,14 +350,14 @@ void ce_qui_n_existe_pas_encore_est_signale() {
     {   // Un registre d'entrée-sortie sans effet est compté à part.
         Console console;
         // Les minuteries n'ont pas d'organe : deux octets, deux comptes.
-        static_cast<void>(console.secondary_map.read16(0x0400'0100U));
+        static_cast<void>(console.secondary_map.read16(never_decoded_io));
         check(console.secondary_map.unimplemented_io_count() == 2U, "un registre inconnu est compté");
-        check(console.secondary_map.first_unimplemented_io() == 0x0400'0100U, "et son adresse retenue");
+        check(console.secondary_map.first_unimplemented_io() == never_decoded_io, "et son adresse retenue");
         check(console.secondary_map.unmapped_count() == 0U, "sans compter comme adresse inconnue");
 
         console.secondary_map.write16(0x0400'0006U, 0xffffU);
         check(console.secondary_map.unimplemented_io_count() == 4U, "une écriture aussi");
-        check(console.secondary_map.first_unimplemented_io() == 0x0400'0100U, "sans effacer la première");
+        check(console.secondary_map.first_unimplemented_io() == never_decoded_io, "sans effacer la première");
     }
     {   // La remise à zéro efface l'ardoise et la mémoire propre, mais pas la
         // mémoire partagée, qui appartient à son propriétaire.
@@ -358,7 +368,7 @@ void ce_qui_n_existe_pas_encore_est_signale() {
         // Un registre réellement sans organe : l'état du balayage est modélisé
         // depuis que le contrôleur d'affichage existe, et ne remplirait plus
         // l'ardoise qu'on veut voir effacée.
-        static_cast<void>(console.secondary_map.read16(0x0400'0100U));
+        static_cast<void>(console.secondary_map.read16(never_decoded_io));
 
         console.secondary_map.reset();
         check(console.secondary_map.read32(Arm7MemoryMap::private_wram_base) == 0U, "la mémoire propre est effacée");

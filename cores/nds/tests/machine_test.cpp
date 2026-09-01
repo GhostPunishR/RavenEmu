@@ -32,6 +32,16 @@ using ravenemu::testing::check;
 
 namespace {
 
+/**
+ * Adresse d'entrée-sortie qu'aucun organe ne décodera jamais ici.
+ *
+ * Elle appartient au modèle DSi, hors du périmètre de ce cœur. Les exemples de
+ * « registre inconnu » ont déjà dû être déplacés deux fois, parce que l'adresse
+ * choisie finissait par être modélisée et désarmait silencieusement les
+ * vérifications qui s'en servaient. Celle-ci ne le sera pas.
+ */
+constexpr std::uint32_t never_decoded_io = 0x0400'4000;
+
 constexpr std::uint32_t main_ram_base = 0x0200'0000;
 constexpr std::uint32_t private_wram_base = 0x0380'0000;
 constexpr std::uint32_t io_base = 0x0400'0000;
@@ -560,7 +570,7 @@ void la_remise_a_zero_rend_la_console_neuve() {
         map->write8(registers::interrupt_master, 1U);
         map->write16(registers::sync, InterProcessor::sync_output_mask);
         static_cast<void>(map->read32(0x0f00'0000U));
-        static_cast<void>(map->read8(0x0400'0100U));
+        static_cast<void>(map->read8(never_decoded_io));
     }
     console.run_line();
     main_map.write16(Arm9MemoryMap::power_control, 0x8000U);

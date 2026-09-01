@@ -93,6 +93,13 @@ void Machine::run_line(std::span<std::int32_t> framebuffer) {
     }
 
     display().render_current_line(framebuffer);
+
+    // Le temps d'une ligne passe aussi pour les minuteries, à la même frontière
+    // que le faisceau : une demande née là est prise au premier pas de la ligne
+    // suivante, exactement comme celle du retour vertical.
+    main_map_.timers().advance(cycles_per_line);
+    secondary_map_.timers().advance(cycles_per_line);
+
     display().advance_line();
 }
 

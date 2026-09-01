@@ -76,6 +76,10 @@ aujourd'hui :
   chargement, les deux processeurs pointés sur leurs points d'entrée. Une
   cartouche synthétique démarre, ses deux processeurs se relaient, et l'écran
   montre le résultat.
+- les quatre minuteries de chaque processeur : quatre diviseurs d'horloge, le
+  reste de division conservé pour ne pas dériver, le rechargement repris à
+  l'allumage et à chaque débordement, l'enchaînement d'une minuterie sur les
+  débordements de la précédente, et le réveil du seul processeur qui l'a demandé.
 
 Le budget d'instructions accordé à une ligne repose sur une convention dite en
 toutes lettres : une instruction par cycle de l'horloge maître, faute d'un modèle
@@ -88,7 +92,7 @@ inventer serait une affirmation que rien ne vérifie. Une cartouche qui monte sa
 propre pile démarre ; une cartouche qui compte sur l'amorceur ne démarre pas.
 
 Une image est donc produite, mais aucun jeu ne tourne encore. Restent à écrire
-les minuteries, les transferts autonomes, les entrées et l'écran tactile, les
+les transferts autonomes, les entrées et l'écran tactile, les
 appels du programme d'amorçage, le bus de cartouche, les décors tournants et les
 modes étendus, les sprites tournants et semi-transparents, le moteur 3D, les
 fenêtres et les mélanges, les palettes étendues, la sauvegarde et le son.

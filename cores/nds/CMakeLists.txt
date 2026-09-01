@@ -9,6 +9,7 @@ add_library(nds_raven_core STATIC
     src/memory/system_memory.cpp
     src/system/inter_processor.cpp
     src/system/machine.cpp
+    src/system/timers.cpp
     src/video/display_controller.cpp
     src/video/engine2d.cpp
     src/video/video_memory.cpp
@@ -124,6 +125,16 @@ if(RAVENEMU_BUILD_TESTS)
     )
     target_link_libraries(nds_raven_display_tests PRIVATE nds_raven_core)
     add_test(NAME nds_raven_display COMMAND nds_raven_display_tests)
+
+    # Les minuteries sont éprouvées seules, puis sous les cartes et sous
+    # l'ordonnanceur : ce qui compte est que chaque processeur ait les siennes.
+    add_executable(nds_raven_timers_tests tests/timers_test.cpp)
+    target_include_directories(nds_raven_timers_tests PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/src
+        ${CMAKE_CURRENT_LIST_DIR}/../common/tests/support
+    )
+    target_link_libraries(nds_raven_timers_tests PRIVATE nds_raven_core)
+    add_test(NAME nds_raven_timers COMMAND nds_raven_timers_tests)
 
     # L'amorçage est éprouvé de bout en bout : une cartouche synthétique passe
     # par l'interface publique du cœur et doit produire une image.

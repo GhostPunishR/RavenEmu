@@ -29,9 +29,9 @@ namespace ravenemu::nds {
  * ### Ce qui n'est pas là
  *
  * Le registre accepte toutes les sources — il n'a aucune raison de trier, et sa
- * sémantique est complète telle quelle — mais seules celles du balayage et de la
- * communication entre processeurs sont posées par un organe. Ni minuteries, ni
- * transferts autonomes, ni cartouche, faute des organes correspondants.
+ * sémantique est complète telle quelle — mais seules celles du balayage, des
+ * minuteries et de la communication entre processeurs sont posées par un organe.
+ * Ni transferts autonomes, ni cartouche, faute des organes correspondants.
  */
 class InterruptController {
 public:
@@ -40,6 +40,13 @@ public:
     static constexpr std::uint32_t vertical_blank = 1U << 0U;
     static constexpr std::uint32_t horizontal_blank = 1U << 1U;
     static constexpr std::uint32_t line_match = 1U << 2U;
+
+    // Sources liées aux minuteries, une par minuterie. Elles se suivent, et le
+    // code qui les désigne compte dessus.
+    static constexpr std::uint32_t timer_0 = 1U << 3U;
+    static constexpr std::uint32_t timer_1 = 1U << 4U;
+    static constexpr std::uint32_t timer_2 = 1U << 5U;
+    static constexpr std::uint32_t timer_3 = 1U << 6U;
 
     // Sources liées à la communication entre les deux processeurs.
     static constexpr std::uint32_t ipc_sync = 1U << 16U;

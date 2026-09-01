@@ -3,6 +3,7 @@
 #include "cpu/bus.hpp"
 #include "memory/system_memory.hpp"
 #include "system/inter_processor.hpp"
+#include "system/timers.hpp"
 #include "video/video_system.hpp"
 
 #include <array>
@@ -94,6 +95,18 @@ public:
      * donc dans le comptage des registres sans effet, comme n'importe quel autre.
      */
     static constexpr std::uint32_t line_counter = 0x0400'0006;
+    /**
+     * Les quatre minuteries de ce processeur.
+     *
+     * Chaque processeur a les siennes, aux mêmes adresses. Elles appartiennent
+     * donc à sa carte, comme le registre d'alimentation, et non à un organe
+     * partagé : rien de ce qu'elles comptent ne traverse d'un processeur à
+     * l'autre.
+     */
+    static constexpr std::uint32_t timer_base = 0x0400'0100;
+    /** Écart entre deux minuteries : deux registres de seize bits. */
+    static constexpr std::uint32_t timer_stride = 4;
+
     /** Registre d'alimentation, dont un bit échange les deux écrans. */
     static constexpr std::uint32_t power_control = 0x0400'0304;
     static constexpr std::uint16_t power_swaps_screens = 1U << 15U;
@@ -124,6 +137,9 @@ public:
     [[nodiscard]] Engine2d& engine(Engine which) noexcept { return video_.engine(which); }
     /** Le balayage, que les deux processeurs consultent. */
     [[nodiscard]] DisplayController& display() noexcept { return video_.display(); }
+
+    /** Les minuteries de ce processeur. */
+    [[nodiscard]] Timers& timers() noexcept { return timers_; }
 
     /** Part de la mémoire commune revenant à ce processeur. */
     [[nodiscard]] SystemMemory::Window shared_window() const noexcept {
@@ -197,6 +213,8 @@ private:
     VideoSystem& video_;
     InterProcessor& link_;
     InterruptController& interrupts_;
+
+    Timers timers_{interrupts_};
 
     /** Registre d'alimentation, dont seul le bit d'échange agit. */
     std::uint16_t power_{};

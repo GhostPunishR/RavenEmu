@@ -20,6 +20,7 @@ void Arm7MemoryMap::reset() noexcept {
     // La mémoire partagée est remise à zéro par son propriétaire : la vider
     // depuis l'une des deux vues effacerait le travail de l'autre.
     std::fill(private_wram_.begin(), private_wram_.end(), std::uint8_t{0});
+    timers_.reset();
     halt_requested_ = false;
     unmapped_ = 0;
     first_unmapped_ = 0;
@@ -130,6 +131,15 @@ std::uint8_t Arm7MemoryMap::read_io_byte(std::uint32_t address) noexcept {
         return registers::byte_of(video_.display().line(), address - line_counter);
     }
 
+    if (address >= timer_base && address < timer_base + timer_stride * Timers::count) {
+        const auto slot = (address - timer_base) / timer_stride;
+        const auto part = (address - timer_base) % timer_stride;
+        // Le registre bas rend le compteur, non le rechargement : montrer le
+        // rechargement donnerait à un jeu un temps immobile.
+        if (part < 2U) return registers::byte_of(timers_.counter(slot), part);
+        return registers::byte_of(timers_.control(slot), part - 2U);
+    }
+
     if (address == registers::interrupt_master) return registers::byte_of(interrupts_.master_enable(), 0U);
     if (address >= registers::interrupt_enable && address < registers::interrupt_enable + 4U) {
         return registers::byte_of(interrupts_.enabled(), address - registers::interrupt_enable);
@@ -175,6 +185,21 @@ void Arm7MemoryMap::write_io_byte(std::uint32_t address, std::uint8_t value) noe
         // décide pas. L'écriture est ignorée par le matériel, et ce silence est
         // le comportement juste.
         static_cast<void>(value);
+        return;
+    }
+
+    if (address >= timer_base && address < timer_base + timer_stride * Timers::count) {
+        const auto slot = (address - timer_base) / timer_stride;
+        const auto part = (address - timer_base) % timer_stride;
+        // Le registre bas écrit le rechargement, non le compteur : écrire le
+        // compteur laisserait un jeu replacer le temps où il veut.
+        if (part < 2U) {
+            timers_.set_reload(slot, static_cast<std::uint16_t>(
+                registers::with_byte(timers_.reload(slot), part, value)));
+            return;
+        }
+        timers_.set_control(slot, static_cast<std::uint16_t>(
+            registers::with_byte(timers_.control(slot), part - 2U, value)));
         return;
     }
 
