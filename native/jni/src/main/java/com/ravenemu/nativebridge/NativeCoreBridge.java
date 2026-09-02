@@ -26,6 +26,7 @@ public final class NativeCoreBridge {
     public static native void reset(long handle);
     public static native void runFrame(long handle, int[] framebuffer, boolean renderVideo);
     public static native void setButton(long handle, int buttonOrdinal, boolean pressed);
+    public static native void setTouch(long handle, boolean down, int x, int y);
     public static native int readAudio(long handle, short[] destination);
     public static native boolean rumbleActive(long handle);
     public static native int framebufferFormat(long handle);

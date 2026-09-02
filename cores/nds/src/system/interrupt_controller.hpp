@@ -31,8 +31,8 @@ namespace ravenemu::nds {
  * Le registre accepte toutes les sources — il n'a aucune raison de trier, et sa
  * sémantique est complète telle quelle — mais seules celles du balayage, des
  * minuteries, des transferts autonomes, des touches et de la communication entre
- * processeurs sont posées par un organe. Ni cartouche, ni son, faute des organes
- * correspondants.
+ * processeurs, de la cartouche et du port série sont posées par un organe. Ni
+ * son, ni liaison sans fil, faute des organes correspondants.
  */
 class InterruptController {
 public:
@@ -66,6 +66,15 @@ public:
 
     /** Fin d'un transfert du bus de cartouche, pour le processeur qui le tient. */
     static constexpr std::uint32_t cartridge = 1U << 19U;
+
+    /**
+     * Fin d'un échange du port série, que seul le processeur secondaire a.
+     *
+     * Elle est loin des autres dans le registre, et cet écart est celui du
+     * matériel : les bits intermédiaires appartiennent à des organes qui
+     * n'existent pas ici.
+     */
+    static constexpr std::uint32_t serial = 1U << 23U;
 
     void reset() noexcept;
 

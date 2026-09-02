@@ -10,9 +10,11 @@ add_library(nds_raven_core STATIC
     src/system/bios.cpp
     src/system/cartridge.cpp
     src/system/dma.cpp
+    src/system/firmware.cpp
     src/system/input.cpp
     src/system/inter_processor.cpp
     src/system/machine.cpp
+    src/system/serial_port.cpp
     src/system/timers.cpp
     src/video/display_controller.cpp
     src/video/engine2d.cpp
@@ -168,6 +170,17 @@ if(RAVENEMU_BUILD_TESTS)
 
     # Les minuteries sont éprouvées seules, puis sous les cartes et sous
     # l'ordonnanceur : ce qui compte est que chaque processeur ait les siennes.
+    # Le port série a sa propre suite : trois puces très différentes pendent au
+    # même fil, et ce qui compte est autant leur protocole que la cohérence entre
+    # l'étalonnage inscrit dans les réglages et ce que le convertisseur rend.
+    add_executable(nds_raven_serial_tests tests/serial_port_test.cpp)
+    target_include_directories(nds_raven_serial_tests PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/src
+        ${CMAKE_CURRENT_LIST_DIR}/../common/tests/support
+    )
+    target_link_libraries(nds_raven_serial_tests PRIVATE nds_raven_core)
+    add_test(NAME nds_raven_serial COMMAND nds_raven_serial_tests)
+
     add_executable(nds_raven_timers_tests tests/timers_test.cpp)
     target_include_directories(nds_raven_timers_tests PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/src

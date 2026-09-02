@@ -31,6 +31,15 @@ enum class ConsoleType(
      * `ordinal` historiques, les états déjà enregistrés restent lisibles.
      */
     val storageId: Int,
+    /**
+     * Résolution de l'écran tactile, ou `null` pour une console qui n'en a pas.
+     *
+     * Elle est ici et non dans le cœur parce que c'est l'interface qui en a
+     * besoin : elle reçoit un doigt quelque part sur une dalle d'appareil et
+     * doit le ramener en pixels de la console avant de le confier au moteur.
+     * Le cœur, lui, ne reçoit que le résultat.
+     */
+    val touchScreen: TouchScreenSize? = null,
 ) {
     // Cœur Game Boy (module gameboy-core) : cartouches DMG et Game Boy Color,
     // `.gb` comme `.gbc`. Le mode exact vient de l'en-tête, pas de l'extension.
@@ -41,8 +50,30 @@ enum class ConsoleType(
 
     // Nintendo DS : deux processeurs, deux écrans (module nds-core). La valeur
     // 3 est la première libre, 1 restant retiré.
-    NINTENDO_DS("Nintendo DS", setOf("nds"), storageId = 3),
+    NINTENDO_DS(
+        "Nintendo DS",
+        setOf("nds"),
+        storageId = 3,
+        // L'écran du bas, seul tactile des deux.
+        touchScreen = TouchScreenSize(width = 256, height = 192),
+    ),
     ;
+
+    /** Taille en pixels d'un écran tactile de console. */
+    data class TouchScreenSize(val width: Int, val height: Int) {
+        /**
+         * Ramène une position donnée en fractions de la dalle vers un pixel.
+         *
+         * Les deux fractions sont bornées : un doigt qui déborde est retenu sur
+         * le bord, comme un stylet qui sort de l'écran d'une console. Le pixel
+         * rendu reste donc toujours dans l'écran, quelle que soit la façon dont
+         * l'appelant a mesuré.
+         */
+        fun pixelAt(fractionX: Double, fractionY: Double): Pair<Int, Int> = Pair(
+            (fractionX * width).toInt().coerceIn(0, width - 1),
+            (fractionY * height).toInt().coerceIn(0, height - 1),
+        )
+    }
 
     companion object {
         /**

@@ -6,8 +6,10 @@ Machine::Machine()
     : link_(main_interrupts_, secondary_interrupts_),
       video_(main_interrupts_, secondary_interrupts_),
       cartridge_(main_interrupts_, secondary_interrupts_),
+      serial_(secondary_interrupts_, input_),
       main_map_(system_, video_, link_, main_interrupts_, input_, cartridge_),
-      secondary_map_(system_, video_, link_, secondary_interrupts_, input_, cartridge_),
+      secondary_map_(
+          system_, video_, link_, secondary_interrupts_, input_, cartridge_, serial_),
       main_core_(main_map_),
       secondary_core_(secondary_map_),
       main_bios_(Processor::main, main_core_, main_map_, main_interrupts_, &main_core_.cp15()),
@@ -29,6 +31,7 @@ void Machine::reset() {
     link_.reset();
     video_.reset();
     cartridge_.reset();
+    serial_.reset();
     main_map_.reset();
     secondary_map_.reset();
     main_core_.reset();

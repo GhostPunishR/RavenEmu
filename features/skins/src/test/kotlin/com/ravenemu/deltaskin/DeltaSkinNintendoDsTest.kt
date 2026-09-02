@@ -5,6 +5,8 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -40,10 +42,9 @@ class DeltaSkinNintendoDsTest {
         )
         val validation = DeltaSkinValidator.validate(manifest)
         assertEquals(DeltaSkinConsole.DS, validation.console)
-        // La zone tactile est déclarée par le skin mais n'est encore reliée à
-        // rien : elle est signalée à l'utilisateur au lieu d'être acceptée en
-        // silence, sans quoi il croirait toucher l'écran du bas.
-        assertEquals(setOf("touchScreenX", "touchScreenY"), validation.ignoredInputs)
+        // La zone tactile est reliée à la dalle de la console : plus rien n'est
+        // signalé, parce que plus rien n'est laissé de côté.
+        assertEquals(emptySet(), validation.ignoredInputs)
     }
 
     @Test
@@ -65,8 +66,53 @@ class DeltaSkinNintendoDsTest {
     }
 
     @Test
-    fun `la zone tactile ne presse rien et nallume rien`() {
-        assertEquals(DeltaSkinMappedInput(), mapper.inputAt(200.0, 5.0))
+    fun `la zone tactile ne presse rien mais rend une position`() {
+        val input = mapper.inputAt(200.0, 5.0)
+        assertTrue(input.buttons.isEmpty(), "une zone tactile ne presse aucune direction")
+        assertFalse(input.menu)
+        assertTrue(input.visuals.isEmpty(), "et elle ne s'allume pas")
+        // La zone couvre (0,0)-(320,60) du panneau : la position s'y lit en
+        // fractions, jamais en pixels d'une console que ce module ne connaît pas.
+        val touch = assertNotNull(input.touch)
+        assertEquals(200.0 / 320.0, touch.fractionX, 1e-9)
+        assertEquals(5.0 / 60.0, touch.fractionY, 1e-9)
+    }
+
+    @Test
+    fun `un doigt qui deborde de la zone est retenu sur son bord`() {
+        // L'extension tactile porte le doigt au-delà de la dalle dessinée. Il y
+        // reste reçu, mais à son bord : un stylet qui sort de l'écran d'une
+        // console ne saute pas de l'autre côté.
+        val touch = assertNotNull(mapper.inputAt(319.0, 64.0).touch)
+        assertEquals(1.0, touch.fractionY, 1e-9)
+        assertTrue(touch.fractionX in 0.0..1.0)
+    }
+
+    @Test
+    fun `une zone tactile declaree pour une console sans dalle reste signalee`() {
+        // Le même item, sous l'identifiant d'une console qui n'a pas d'écran
+        // tactile : le skin est accepté, mais l'utilisateur est prévenu que
+        // cette zone ne fera rien.
+        val manifest = DeltaSkinParser.parse(
+            DeltaSkinParser.encode(
+                DeltaSkinTestFixtures.manifest(DeltaSkinConsole.DS)
+                    .copy(gameTypeIdentifier = DeltaSkinConsole.GBA.gameTypeIdentifier)
+            )
+        )
+        val validation = DeltaSkinValidator.validate(manifest)
+        assertEquals(DeltaSkinConsole.GBA, validation.console)
+        assertTrue("touchScreenX" in validation.ignoredInputs)
+        assertTrue("touchScreenY" in validation.ignoredInputs)
+    }
+
+    @Test
+    fun `la zone tactile reste inerte sur une console sans ecran tactile`() {
+        val gbaMapper = DeltaSkinInputMapper(DeltaSkinConsole.GBA, representation, panel)
+        assertNull(gbaMapper.inputAt(200.0, 5.0).touch)
+        assertTrue(DeltaSkinConsole.DS.hasTouchScreen)
+        for (console in DeltaSkinConsole.entries - DeltaSkinConsole.DS) {
+            assertFalse(console.hasTouchScreen, console.name)
+        }
     }
 
     @Test

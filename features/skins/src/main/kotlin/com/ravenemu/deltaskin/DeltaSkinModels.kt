@@ -31,6 +31,15 @@ enum class DeltaSkinConsole(
     val screenHeight: Double,
     /** Touches que cette console possède réellement. */
     val buttons: Set<EmulatorButton>,
+    /**
+     * Vrai pour une console dont un des écrans se touche.
+     *
+     * Un skin peut déclarer une zone tactile pour n'importe quelle console : ce
+     * qui décide n'est pas ce que le skin dit, mais ce que le matériel a. Sans
+     * cette distinction, un doigt posé sur l'image d'une Game Boy Advance
+     * enverrait un contact à une console qui n'a rien pour le recevoir.
+     */
+    val hasTouchScreen: Boolean = false,
 ) {
     GB_GBC("com.rileytestut.delta.game.gbc", 160.0, 144.0, DeltaSkinInputNames.FACE_BUTTONS),
     GBA(
@@ -46,17 +55,23 @@ enum class DeltaSkinConsole(
         DeltaSkinInputNames.FACE_BUTTONS +
             DeltaSkinInputNames.SHOULDER_BUTTONS +
             DeltaSkinInputNames.EXTRA_BUTTONS,
+        hasTouchScreen = true,
     ),
     ;
 
     /** Dimensions de l'image que ce skin encadre. */
     val screenSize: DeltaSkinSize get() = DeltaSkinSize(screenWidth, screenHeight)
 
-    /** Noms Delta que cette console sait honorer, menu compris. */
+    /** Noms Delta que cette console sait honorer, menu et dalle compris. */
     val supportedInputNames: Set<String>
         get() = DeltaSkinInputNames.BUTTONS
             .filterValues { it in buttons }
-            .keys + DeltaSkinInputNames.MENU
+            .keys + DeltaSkinInputNames.MENU +
+            // Les deux axes de la dalle ne sont honorés que là où il y en a une.
+            // Ailleurs ils restent signalés à l'utilisateur : un skin peut en
+            // déclarer pour n'importe quelle console, et le laisser croire que
+            // sa Game Boy Advance a un écran tactile serait pire que muet.
+            if (hasTouchScreen) DeltaSkinInputNames.TOUCH_SCREEN_VALUES else emptySet()
 
     companion object {
         fun fromGameTypeIdentifier(identifier: String): DeltaSkinConsole? =

@@ -68,8 +68,10 @@ struct Console {
     InputState input{};
     VideoSystem video{main_interrupts, secondary_interrupts};
     Cartridge cartridge{main_interrupts, secondary_interrupts};
+    SerialPort serial{secondary_interrupts, input};
     Arm9MemoryMap main_map{system, video, link, main_interrupts, input, cartridge};
-    Arm7MemoryMap secondary_map{system, video, link, secondary_interrupts, input, cartridge};
+    Arm7MemoryMap secondary_map{
+        system, video, link, secondary_interrupts, input, cartridge, serial};
 
     Console() {
         system.reset();

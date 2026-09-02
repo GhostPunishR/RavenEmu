@@ -6,6 +6,7 @@
 #include "system/dma.hpp"
 #include "system/cartridge.hpp"
 #include "system/input.hpp"
+#include "system/serial_port.hpp"
 #include "system/timers.hpp"
 #include "video/video_system.hpp"
 
@@ -40,10 +41,9 @@ namespace ravenemu::nds {
  *
  * ### Ce qui n'est pas décodé
  *
- * Son propre programme d'amorçage, la cartouche, le port Game Boy Advance, et
- * les banques vidéo qui peuvent lui être confiées. Aucun de ces contenus
- * n'existe encore : les accès rendent zéro et sont comptés, plutôt qu'absorbés
- * en silence.
+ * Le port Game Boy Advance et les banques vidéo qui peuvent lui être confiées.
+ * Aucun de ces contenus n'existe encore : les accès rendent zéro et sont
+ * comptés, plutôt qu'absorbés en silence.
  */
 class Arm7MemoryMap final : public Bus {
 public:
@@ -53,7 +53,8 @@ public:
         InterProcessor& link,
         InterruptController& interrupts,
         InputState& input,
-        Cartridge& cartridge
+        Cartridge& cartridge,
+        SerialPort& serial
     );
 
     /** Mémoire de travail que ce processeur ne partage avec personne. */
@@ -172,6 +173,15 @@ public:
         return requested;
     }
 
+    /**
+     * Le port série, que seul ce processeur voit.
+     *
+     * Il n'est pas construit ici bien qu'une seule carte le route : la couche
+     * qui pilote la console a besoin d'y poser un contact d'écran tactile et
+     * d'y relever une demande d'extinction, sans passer par la carte mémoire.
+     */
+    [[nodiscard]] SerialPort& serial() noexcept { return serial_; }
+
     /** Le réglage du réveil par les touches, propre à ce processeur. */
     [[nodiscard]] KeyInterrupt& key_interrupt() noexcept { return key_interrupt_; }
 
@@ -230,6 +240,7 @@ private:
     InterruptController& interrupts_;
     InputState& input_;
     Cartridge& cartridge_;
+    SerialPort& serial_;
 
     KeyInterrupt key_interrupt_{};
 

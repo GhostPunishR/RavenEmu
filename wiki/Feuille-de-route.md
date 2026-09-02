@@ -91,7 +91,7 @@ aujourd'hui :
   règle pour lui-même, avec ses deux conditions;
 - les skins Delta de Nintendo DS : la console reconnue à son identifiant, les
   deux touches supplémentaires, le cadre des deux écrans empilés, et la zone
-  tactile reconnue puis laissée inerte au lieu d'être prise pour une croix
+  tactile qui rend une position au lieu d'être prise pour une croix
   directionnelle;
 - la place de la console dans l'application : un fichier `.nds` est reconnu à
   son extension puis à son en-tête, indexé dans la bibliothèque avec son titre,
@@ -110,7 +110,18 @@ aujourd'hui :
   valeurs particulières, la cadence mot par mot que le jeu observe, le partage du
   port entre les deux processeurs, l'interruption de fin, et le moment de
   transfert autonome sur lequel un jeu arme un canal pour ne pas avoir à scruter
-  le port entre chaque mot.
+  le port entre chaque mot;
+- le port série et les trois puces qui y pendent : l'alimentation, la mémoire de
+  réglages et le convertisseur de l'écran tactile. L'échange d'un octet à la
+  fois, l'avance d'un octet propre à un bus série, le maintien de la sélection
+  qui porte une commande de plusieurs octets, et l'interruption de fin;
+- les réglages enregistrés dans la console, écrits par RavenEmu dans la structure
+  décrite publiquement, somme de contrôle comprise : aucun octet n'en est copié
+  d'une console, et le programme d'amorçage graphique n'y est pas;
+- l'écran tactile de bout en bout : un doigt posé sur la zone d'un skin devient
+  une position en pixels, puis une mesure brute que le jeu retraduit avec
+  l'étalonnage inscrit dans les réglages. Les deux moitiés sont construites l'une
+  pour l'autre et retombent au pixel près, ce qu'une vérification éprouve.
 
 Le budget d'instructions accordé à une ligne repose sur une convention dite en
 toutes lettres : une instruction par cycle de l'horloge maître, faute d'un modèle
@@ -123,12 +134,11 @@ inventer serait une affirmation que rien ne vérifie. Une cartouche qui monte sa
 propre pile démarre ; une cartouche qui compte sur l'amorceur ne démarre pas.
 
 Un programme qui n'a besoin que de ces organes démarre désormais, produit une
-image et lit sa cartouche. Un jeu du commerce, non : il s'adresse tôt au port
-série, par lequel passent l'écran tactile, les réglages enregistrés dans la
-console et la commande d'alimentation. C'est ce qui manque le plus à présent.
-Restent ensuite les décors tournants et les modes étendus, les sprites tournants
-et semi-transparents, le moteur 3D, les fenêtres et les mélanges, les palettes
-étendues, la sauvegarde et le son.
+image, lit sa cartouche et répond au doigt. Ce qui manque à un jeu du commerce
+n'est plus un organe par lequel il s'arrête, mais ce qu'il montre et ce qu'il
+garde : les décors tournants et les modes étendus, les sprites tournants et
+semi-transparents, le moteur 3D, les fenêtres et les mélanges, les palettes
+étendues, la sauvegarde de cartouche et le son.
 L'enregistrement d'un état reste refusé par une erreur nommée, faute de format ;
 l'application ne le propose donc pas pour cette console, plutôt que de l'offrir
 et d'échouer. La console est en revanche entrée dans la bibliothèque : un jeu s'y

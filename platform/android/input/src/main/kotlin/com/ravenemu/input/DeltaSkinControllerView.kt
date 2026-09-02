@@ -29,6 +29,7 @@ import com.ravenemu.deltaskin.DeltaSkinRepresentationKind
 import com.ravenemu.deltaskin.DeltaSkinRepresentationPreference
 import com.ravenemu.deltaskin.DeltaSkinRepresentationSelector
 import com.ravenemu.deltaskin.DeltaSkinSize
+import com.ravenemu.deltaskin.DeltaSkinTouchPoint
 import com.ravenemu.deltaskin.DeltaSkinVisualTarget
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
@@ -67,6 +68,18 @@ class DeltaSkinControllerView @JvmOverloads constructor(
         fun onSkinReady(gameArea: Rect)
         fun onSkinLayoutChanged(gameArea: Rect)
         fun onSkinError(code: DeltaSkinErrorCode)
+
+        /**
+         * Le stylet est posé sur la dalle, à cet endroit de la zone tactile.
+         *
+         * Rappelé à chaque déplacement tant que le doigt y reste : une console
+         * n'a pas de notion de glissement, elle a un point de contact qui
+         * change.
+         */
+        fun onTouchScreen(point: DeltaSkinTouchPoint)
+
+        /** Le stylet est levé. */
+        fun onTouchScreenReleased()
     }
 
     var listener: Listener? = null
@@ -86,6 +99,16 @@ class DeltaSkinControllerView @JvmOverloads constructor(
     private var fadingVisuals: Set<DeltaSkinVisualTarget> = emptySet()
     private var fadeStartedAtMillis = 0L
     private val pointerInputs = mutableMapOf<Int, DeltaSkinMappedInput>()
+
+    /**
+     * Le doigt qui tient la dalle, s'il y en a un.
+     *
+     * Une console n'a qu'un stylet : le premier doigt posé sur la zone la garde
+     * jusqu'à ce qu'il la quitte, et un second doigt posé à côté ne la lui
+     * prend pas. Sans cette règle, deux doigts feraient sauter le point de
+     * contact de l'un à l'autre à chaque déplacement.
+     */
+    private var touchPointerId: Int? = null
 
     private val inputState = DeltaSkinInputState(
         onButtonsChanged = { changes -> listener?.onButtonChanges(changes) },
@@ -231,16 +254,36 @@ class DeltaSkinControllerView @JvmOverloads constructor(
             pointerInputs[pointerId] = input
         }
         inputState.updatePointer(pointerId, input)
+        updateTouchScreen(pointerId, input.touch)
+    }
+
+    /** Confie la dalle à ce doigt, la lui retire, ou laisse l'autre la tenir. */
+    private fun updateTouchScreen(pointerId: Int, point: DeltaSkinTouchPoint?) {
+        if (point == null) {
+            if (touchPointerId == pointerId) releaseTouchScreen()
+            return
+        }
+        if (touchPointerId != null && touchPointerId != pointerId) return
+        touchPointerId = pointerId
+        listener?.onTouchScreen(point)
+    }
+
+    private fun releaseTouchScreen() {
+        if (touchPointerId == null) return
+        touchPointerId = null
+        listener?.onTouchScreenReleased()
     }
 
     private fun releasePointer(pointerId: Int) {
         pointerInputs.remove(pointerId)
         inputState.releasePointer(pointerId)
+        if (touchPointerId == pointerId) releaseTouchScreen()
     }
 
     private fun releaseAll() {
         pointerInputs.clear()
         inputState.releaseAll()
+        releaseTouchScreen()
         activeVisuals = emptySet()
         fadingVisuals = emptySet()
         invalidate()

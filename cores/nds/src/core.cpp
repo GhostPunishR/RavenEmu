@@ -74,6 +74,20 @@ public:
         machine_.input().press(button, pressed);
     }
 
+    /**
+     * Ramène le contact dans l'écran, puis le confie à l'état partagé.
+     *
+     * Le convertisseur du port série le relira de là, sous la forme du
+     * matériel : des mesures brutes, non des pixels.
+     */
+    void set_touch(bool down, int x, int y) noexcept override {
+        machine_.input().set_touch(
+            down,
+            clamp_to_screen(x, screen_width),
+            clamp_to_screen(y, screen_height)
+        );
+    }
+
     std::size_t read_audio(std::span<std::int16_t>) override { return 0; }
 
     [[nodiscard]] bool has_battery_ram() const noexcept override { return false; }
@@ -101,6 +115,13 @@ public:
     }
 
 private:
+    /** Ramène une coordonnée sur le bord le plus proche de l'écran. */
+    [[nodiscard]] static std::uint8_t clamp_to_screen(int value, int size) noexcept {
+        if (value < 0) return 0;
+        if (value >= size) return static_cast<std::uint8_t>(size - 1);
+        return static_cast<std::uint8_t>(value);
+    }
+
     void require_loaded() const {
         if (!header_) throw std::logic_error("Aucune ROM Nintendo DS chargée");
     }

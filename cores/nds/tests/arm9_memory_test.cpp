@@ -823,8 +823,12 @@ void ce_qui_n_existe_pas_encore_est_signale() {
         write_word(map, main_ram_base, 0xdead'beefU);
         map.write8(Arm9MemoryMap::shared_wram_control, 3U);
         map.write8(Arm9MemoryMap::vram_control_base, 0x81U);
-        static_cast<void>(map.read32(0xffff'0000U));
+        // Une adresse qu'aucune région ne décode. Le programme d'amorçage n'en
+        // est plus une depuis qu'il a son contenu : salir l'ardoise avec lui ne
+        // la salirait plus, et la vérification suivante comparerait zéro à zéro.
+        static_cast<void>(map.read32(0x0800'0000U));
         static_cast<void>(map.read16(never_decoded_io));
+        check(map.unmapped_count() != 0U, "l'ardoise est bien sale avant la remise à zéro");
 
         system.reset();
         video.reset();

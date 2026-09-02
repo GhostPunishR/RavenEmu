@@ -336,6 +336,23 @@ Java_com_ravenemu_nativebridge_NativeCoreBridge_setButton(
     });
 }
 
+extern "C" JNIEXPORT void JNICALL
+Java_com_ravenemu_nativebridge_NativeCoreBridge_setTouch(
+    JNIEnv* env,
+    jclass,
+    jlong handle,
+    jboolean down,
+    jint x,
+    jint y
+) {
+    guarded_void(env, [&] {
+        // Les coordonnées ne sont pas contrôlées ici : le cœur ramène lui-même
+        // un contact hors de l'écran sur son bord, et refuser ce que le cœur
+        // accepte ferait disparaître un doigt qui glisse au-delà d'une lisière.
+        core_from(handle).set_touch(down != JNI_FALSE, x, y);
+    });
+}
+
 extern "C" JNIEXPORT jint JNICALL
 Java_com_ravenemu_nativebridge_NativeCoreBridge_readAudio(
     JNIEnv* env,

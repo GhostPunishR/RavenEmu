@@ -74,8 +74,12 @@ class NativeContractTest {
             ouverture = "enum class Console : std::uint8_t {",
             fermeture = "};",
         )
+        // La déclaration ne se referme pas forcément sur l'identifiant : une
+        // console peut porter d'autres champs après lui, et sur d'autres
+        // lignes. Ce qui est lu est le nom et l'identifiant, pas la forme de
+        // l'entrée.
         val kotlin = Regex(
-            """^\s*([A-Z_]+)\(".*?",\s*setOf\([^)]*\),\s*storageId\s*=\s*(\d+)\)""",
+            """^\s*([A-Z_]+)\(\s*".*?",\s*setOf\([^)]*\),\s*storageId\s*=\s*(\d+)""",
             RegexOption.MULTILINE,
         )
             .findAll(File(racine, CONSOLE_TYPE).readText())

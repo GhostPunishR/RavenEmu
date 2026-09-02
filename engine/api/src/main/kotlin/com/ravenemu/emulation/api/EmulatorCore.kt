@@ -74,6 +74,22 @@ interface EmulatorCore {
     fun setButton(button: EmulatorButton, pressed: Boolean)
 
     /**
+     * Pose ou lève un contact sur l'écran tactile de la console.
+     *
+     * Les coordonnées sont **en pixels de l'écran tactile**, l'origine en haut
+     * à gauche : c'est à l'appelant de les y ramener depuis l'écran de
+     * l'appareil, lui seul sachant comment il a disposé les écrans. Un contact
+     * hors de l'écran est ramené sur son bord plutôt qu'ignoré, un doigt qui
+     * glisse au-delà d'une lisière étant un geste ordinaire.
+     *
+     * Sans écran tactile, l'appel ne fait rien : la plupart des consoles n'en
+     * ont pas, et leur imposer une implémentation vide n'apprendrait rien.
+     */
+    fun setTouch(down: Boolean, x: Int, y: Int) {
+        // Volontairement sans effet.
+    }
+
+    /**
      * Copie au plus `buffer.size` échantillons audio disponibles vers
      * [buffer] et retourne le nombre d'échantillons copiés. Retourne 0 tant
      * que le moteur ne produit pas d'audio (phase audio non livrée ou son

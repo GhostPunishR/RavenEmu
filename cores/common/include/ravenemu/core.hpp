@@ -168,6 +168,28 @@ public:
     virtual void reset() = 0;
     virtual void run_frame(std::span<std::int32_t> framebuffer, bool render_video) = 0;
     virtual void set_button(Button button, bool pressed) = 0;
+
+    /**
+     * Pose ou lève un contact sur l'écran tactile de la console.
+     *
+     * Les coordonnées sont **en pixels de l'écran tactile**, l'origine en haut
+     * à gauche. C'est à l'appelant de les y ramener depuis l'écran de
+     * l'appareil : lui seul sait comment il a disposé les deux écrans, et un
+     * cœur qui devinerait cette disposition se tromperait dès qu'elle change.
+     *
+     * Un contact hors de l'écran est ramené sur son bord plutôt que refusé : un
+     * doigt qui glisse au-delà d'une lisière est un geste ordinaire, et l'ignorer
+     * ferait disparaître le contact au lieu de le retenir au bord.
+     *
+     * Sans écran tactile, l'appel ne fait rien. Les consoles qui n'en ont pas
+     * sont la majorité, et leur imposer une redéfinition vide n'apprendrait rien
+     * à personne.
+     */
+    virtual void set_touch(bool down, int x, int y) noexcept {
+        static_cast<void>(down);
+        static_cast<void>(x);
+        static_cast<void>(y);
+    }
     virtual std::size_t read_audio(std::span<std::int16_t> destination) = 0;
     [[nodiscard]] virtual bool rumble_active() const noexcept { return false; }
 

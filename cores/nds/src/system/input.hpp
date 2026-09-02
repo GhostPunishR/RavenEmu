@@ -31,12 +31,17 @@ namespace ravenemu::nds {
  * puisque rien ne les tire. Ce n'est pas une affirmation de plus, c'est la
  * conséquence de la convention.
  *
- * ### Ce qui n'est pas là
+ * ### Le contact et les coordonnées, séparés par le matériel
  *
- * Les coordonnées de l'écran tactile. Elles ne passent pas par un registre mais
- * par un convertisseur que le processeur secondaire interroge en série, et cet
- * organe n'existe pas encore. Le contact lui-même est modélisé, parce qu'il est
- * porté par le registre des touches supplémentaires et non par le convertisseur.
+ * Le **contact** de l'écran tactile est un bit du registre des touches
+ * supplémentaires. Les **coordonnées**, elles, ne sont dans aucun registre :
+ * elles se demandent à un convertisseur que le processeur secondaire interroge
+ * en série. Les deux moitiés vivent pourtant ici, parce qu'elles viennent du
+ * même geste et qu'un contact posé sans coordonnées, ou l'inverse, n'existe pas.
+ * Ce que le convertisseur y prend, il le rend sous la forme du matériel : des
+ * mesures brutes, non des pixels.
+ *
+ * ### Ce qui n'est pas là
  *
  * Le microphone, qui passe par le même convertisseur.
  */
@@ -59,7 +64,7 @@ public:
     // Bits du registre que seul le processeur secondaire lit.
     static constexpr std::uint16_t extra_x = 1U << 0U;
     static constexpr std::uint16_t extra_y = 1U << 1U;
-    /** Contact de l'écran tactile, sans ses coordonnées. */
+    /** Contact de l'écran tactile ; ses coordonnées passent par le convertisseur. */
     static constexpr std::uint16_t extra_pen = 1U << 6U;
     static constexpr std::uint16_t extra_lid = 1U << 7U;
     static constexpr std::uint16_t extra_mask = extra_x | extra_y | extra_pen | extra_lid;
@@ -108,7 +113,34 @@ public:
         set_extra_pressed(extra_for(button), pressed);
     }
 
-    void reset() noexcept { held_ = 0; extra_held_ = 0; }
+    void reset() noexcept {
+        held_ = 0;
+        extra_held_ = 0;
+        touch_x_ = 0;
+        touch_y_ = 0;
+    }
+
+    /**
+     * Pose ou lève le stylet, avec l'endroit touché.
+     *
+     * Les coordonnées ne sont retenues que sous contact : un stylet levé n'en a
+     * pas, et garder les dernières donnerait un point qui reste sous le doigt
+     * après qu'il est parti.
+     */
+    void set_touch(bool down, std::uint8_t x, std::uint8_t y) noexcept {
+        set_extra_pressed(extra_pen, down);
+        touch_x_ = down ? x : 0;
+        touch_y_ = down ? y : 0;
+    }
+
+    /** Vrai tant que le stylet est posé. */
+    [[nodiscard]] bool touching() const noexcept {
+        return (extra_held_ & extra_pen) != 0U;
+    }
+
+    /** Pixel touché, dans le repère de l'écran du bas. */
+    [[nodiscard]] std::uint8_t touch_x() const noexcept { return touch_x_; }
+    [[nodiscard]] std::uint8_t touch_y() const noexcept { return touch_y_; }
 
     /** Enfonce ou relâche une ou plusieurs des dix touches. */
     void set_pressed(std::uint16_t keys, bool pressed) noexcept;
@@ -131,6 +163,8 @@ public:
 private:
     std::uint16_t held_{};
     std::uint16_t extra_held_{};
+    std::uint8_t touch_x_{};
+    std::uint8_t touch_y_{};
 };
 
 /**

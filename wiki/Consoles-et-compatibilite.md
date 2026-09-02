@@ -83,7 +83,8 @@ La Nintendo DS apparaît dans la bibliothèque : un fichier `.nds` est reconnu, 
 - balayage des deux écrans, empilés dans un tampon unique de 256 sur 384;
 - amorçage d'une cartouche depuis son en-tête, minuteries, transferts autonomes, touches;
 - les services du programme d'amorçage : attente d'interruption, division, racine, somme de contrôle, recopies, et les cinq formats de décompression;
-- le bus de cartouche, par lequel un jeu lit la suite de sa ROM.
+- le bus de cartouche, par lequel un jeu lit la suite de sa ROM;
+- le port série : l'écran tactile, les réglages enregistrés dans la console et la commande d'alimentation.
 
 ### Les services du programme d'amorçage
 
@@ -101,19 +102,36 @@ Deux commandes sont servies : lire à une adresse, et demander l'identifiant de 
 
 Un seul processeur tient le port à la fois, et c'est un registre du processeur principal qui en décide. L'autre lit alors une cartouche absente.
 
+### Le port série, et les trois puces qui y pendent
+
+Trois choses passent par un seul fil : l'**alimentation**, qui allume les écrans et dit où en est la batterie ; la **mémoire de réglages**, où le jeu lit le nom du joueur, sa langue et l'étalonnage de la dalle ; et le **convertisseur de l'écran tactile**. Un jeu du commerce a besoin des trois au démarrage, et son code du processeur secondaire s'y adresse avant d'afficher quoi que ce soit.
+
+Un bus série n'a pas de lecture ni d'écriture, il a des **échanges** : chaque octet écrit en fait entrer un autre au même instant. Ce qu'un programme lit est donc la réponse à l'octet qu'il vient d'envoyer, jamais à celui qu'il s'apprête à envoyer, et c'est cette avance d'un octet qui donne au protocole sa forme.
+
+### Les réglages de la console
+
+**Le programme d'amorçage graphique de la console n'est pas fourni et ne peut pas l'être** : c'est du code de la console. RavenEmu n'en a pas besoin, puisqu'il amorce une cartouche directement d'après son en-tête.
+
+Le bloc de réglages, lui, n'est pas du code : c'est une structure décrite publiquement, que RavenEmu **remplit avec ses propres valeurs**, somme de contrôle comprise. Aucun octet n'en est relevé sur une console.
+
+### L'écran tactile, d'un bout à l'autre
+
+La dalle ne rend pas des pixels mais des mesures brutes sur douze bits, et c'est le jeu qui les traduit avec l'étalonnage enregistré dans les réglages. Les deux moitiés sont donc construites l'une pour l'autre : la mesure rendue, passée dans la formule d'un jeu avec les valeurs que RavenEmu inscrit, retombe au pixel près sur l'endroit touché. Une vérification l'éprouve sur toute la largeur de l'écran.
+
+Un doigt posé sur la zone tactile d'un skin arrive jusque-là : la zone rend une position, la console la convertit en pixels, et le convertisseur la rend au jeu sous la forme du matériel.
+
 ### Ce qui reste entre un programme et un jeu
 
-Un programme qui n'a besoin que des organes ci-dessus démarre, produit une image et lit sa cartouche. **Un jeu du commerce en demande encore d'autres au démarrage**, et le plus manquant est maintenant le **port série** : l'écran tactile, les réglages enregistrés dans la console et la commande d'alimentation y passent tous. Le processeur secondaire s'y adresse tôt, et il s'y arrête ; le principal, qui attend son signal, ne va pas plus loin.
-
-Viennent ensuite le son, le moteur 3D, et les modes vidéo qui manquent encore.
+Un programme qui n'a besoin que des organes ci-dessus démarre, produit une image, lit sa cartouche et répond au doigt. Ce qui manque encore à un jeu du commerce n'est plus un organe par lequel il s'arrête, mais ce qu'il montre et ce qu'il garde : le son, le moteur 3D, les modes vidéo restants et la sauvegarde de cartouche.
 
 ### Limites connues
 
-- pas de port série : ni écran tactile, ni réglages de la console, ni commande d'alimentation;
 - l'état qu'un vrai programme d'amorçage laisse derrière lui n'est pas reproduit : un programme qui monte sa propre pile démarre, un programme qui compte sur l'amorceur ne démarre pas;
 - aucun chiffrement de cartouche : les commandes des phases d'amorçage de la console ne sont pas servies;
 - pas de puce de sauvegarde : son registre existe mais n'est relié à rien, et son accès est signalé;
-- la zone tactile d'un skin est reconnue mais reste inerte, faute de ce port;
+- les réglages de la console ne se modifient pas depuis un jeu : aucune écriture de la mémoire de réglages n'est servie, faute de fichier derrière elle;
+- le microphone passe par le convertisseur de l'écran tactile mais n'est relié à aucune entrée : son canal est signalé;
+- aucune durée sur le port série : le bit d'occupation ne se lève jamais, un échange étant fini dès qu'il est demandé;
 - pas de moteur 3D, pas de son, pas de sauvegarde de cartouche;
 - aucun format d'état instantané : l'enregistrement n'est pas proposé pour cette console;
 - les ROM de plus de 128 Mio ne sont pas indexées, la bibliothèque lisant un fichier entier pour en calculer les empreintes.

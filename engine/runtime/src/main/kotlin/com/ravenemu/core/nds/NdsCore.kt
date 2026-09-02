@@ -69,6 +69,15 @@ class NdsCore : EmulatorCore, AutoCloseable {
         NativeCoreBridge.setButton(handle(), button.ordinal, pressed)
     }
 
+    /**
+     * Le contact arrive en pixels de l'écran du bas ; le cœur natif le confie au
+     * convertisseur du port série, qui le rendra au jeu sous la forme du
+     * matériel : des mesures brutes, non des pixels.
+     */
+    override fun setTouch(down: Boolean, x: Int, y: Int) {
+        NativeCoreBridge.setTouch(handle(), down, x, y)
+    }
+
     /** Aucun échantillon : le son de la console n'est pas encore émulé. */
     override fun readAudio(buffer: ShortArray): Int = 0
 

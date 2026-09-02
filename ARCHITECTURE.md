@@ -533,9 +533,14 @@ déclare un écran de 256 sur 384, non de 256 sur 192. La taille est portée par
 `DeltaSkinConsole`, aux côtés des touches que la console possède réellement, de
 sorte qu'une touche dessinée par un skin mais absente de la console ne soit
 jamais pressée. La zone tactile qu'un tel skin décrit emprunte la forme d'un
-D-pad sans en être un : elle est reconnue à ses deux axes et laissée inerte tant
-que l'écran tactile n'est pas relié au cœur, plutôt que découpée en neuf cases
-de direction.
+D-pad sans en être un : elle est reconnue à ses deux axes et rend une
+**position**, jamais une direction, plutôt que d'être découpée en neuf cases.
+Cette position est donnée en fractions de la zone, non en pixels : `features/skins`
+ne connaît la résolution d'aucune console, et c'est `ConsoleType` qui porte la
+taille de l'écran tactile et fait la conversion. Un skin qui déclare une telle
+zone pour une console qui n'a pas de dalle la voit rester inerte et signalée dans
+les entrées ignorées : ce qui décide est ce que le matériel possède, non ce que
+le skin déclare.
 
 La console est déclarée à l'application comme les deux autres : un
 `ConsoleProvider` publié par son module de moteur, ajouté à la racine de
@@ -602,6 +607,33 @@ copies du décodage dériveraient ; les cartes ne gardent que le routage. C'est
 aussi ce qui permet au partage du port, qui décide lequel des deux y accède,
 d'être appliqué en un seul endroit.
 
+### Le port série
+
+Trois puces très différentes pendent au même fil, et le partage retenu suit cette
+différence : `SerialPort` tient le **protocole du bus**, chaque puce tient le
+**sien**, et `Firmware` tient à part le **contenu** de la mémoire de réglages.
+Contenu et protocole sont séparés parce qu'ils se trompent différemment : un
+contenu faux donne un jeu qui affiche le mauvais nom, un protocole faux donne un
+jeu qui n'obtient rien du tout.
+
+Ces registres ne vivent pas dans le fichier des registres partagés, contrairement
+à ceux du bus de cartouche : le processeur principal ne les voit pas, et une
+seule carte les route. Ce qui est partagé y vit ; ce qui ne l'est pas vit chez
+son organe.
+
+La décision qui engage le plus est celle de l'**étalonnage de l'écran tactile**.
+La dalle rend des mesures brutes, jamais des pixels, et c'est le jeu qui traduit
+avec les deux points enregistrés dans les réglages de la console. RavenEmu écrit
+ces deux points lui-même, et fait rendre au convertisseur des mesures construites
+pour eux : la conversion d'un jeu retombe alors au pixel près sur l'endroit
+touché. Les deux moitiés ne sont donc justes qu'ensemble, et une vérification les
+éprouve l'une contre l'autre plutôt que chacune contre une constante.
+
+Le contact traverse ensuite quatre couches sans qu'aucune ne devine ce que fait
+la suivante : la zone d'un skin rend une fraction, `ConsoleType` la convertit en
+pixels, `EmulationSession` la fait passer par la file du thread d'émulation, et
+le cœur la ramène dans l'écran avant de la confier au convertisseur.
+
 Les suites natives (`common`, `gb`, `gbc`, `gba`, `nds`) doivent pouvoir être
 construites directement avec `cmake -S cores`.
 
@@ -612,9 +644,11 @@ cartouche MBC5 rumble expose uniquement son état de vibration dans le contrat
 moteur. `engine/session` transforme cet état en sortie abstraite et
 `platform/android/vibration` est seul responsable du `Vibrator` Android.
 
-Le même principe s'applique au port série et au port infrarouge : le modèle
-matériel reste dans le cœur, tandis qu'une future connexion entre appareils doit
-passer par une couche plateforme séparée.
+Le même principe s'applique aux ports série des consoles et au port infrarouge :
+le modèle matériel reste dans le cœur, tandis qu'une future connexion entre
+appareils doit passer par une couche plateforme séparée. L'écran tactile de la
+Nintendo DS en est l'exemple achevé : le cœur ne connaît qu'un pixel, et c'est
+`platform/android/input` qui sait d'où vient le doigt.
 
 ## Bibliothèque ROM
 

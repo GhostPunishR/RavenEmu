@@ -13,9 +13,10 @@ Arm7MemoryMap::Arm7MemoryMap(
     InterProcessor& link,
     InterruptController& interrupts,
     InputState& input,
-    Cartridge& cartridge
+    Cartridge& cartridge,
+    SerialPort& serial
 ): system_(system), video_(video), link_(link), interrupts_(interrupts),
-      input_(input), cartridge_(cartridge),
+      input_(input), cartridge_(cartridge), serial_(serial),
       private_wram_(private_wram_bytes, 0) {}
 
 void Arm7MemoryMap::reset() noexcept {
@@ -68,8 +69,8 @@ Arm7MemoryMap::Location Arm7MemoryMap::locate(std::uint32_t address) noexcept {
     case 0x04:
         return {Region::input_output, nullptr};
     default:
-        // La cartouche, le port Game Boy Advance et les banques vidéo qui
-        // peuvent lui être confiées. Aucun de ces contenus n'existe encore.
+        // Le port Game Boy Advance et les banques vidéo qui peuvent lui être
+        // confiées. Aucun de ces contenus n'existe encore.
         return {Region::unmapped, nullptr};
     }
 }
@@ -82,6 +83,11 @@ std::uint32_t Arm7MemoryMap::read_io(std::uint32_t address, std::uint32_t width)
     if (cartridge_.read_register(Processor::secondary, address, width, from_cartridge)) {
         return from_cartridge;
     }
+    // Le port série fait de même, et pour une autre raison : ses registres sont
+    // les siens de bout en bout, et le protocole qui les anime n'a rien à faire
+    // dans une carte mémoire.
+    std::uint32_t from_serial = 0;
+    if (serial_.read_register(address, width, from_serial)) return from_serial;
     // Les deux files et les deux registres de seize bits sont indivisibles :
     // les lire par morceaux les ferait avancer plusieurs fois, ou ne rendrait
     // qu'une moitié de leur état.
@@ -109,6 +115,7 @@ std::uint32_t Arm7MemoryMap::read_io(std::uint32_t address, std::uint32_t width)
 
 void Arm7MemoryMap::write_io(std::uint32_t address, std::uint32_t value, std::uint32_t width) noexcept {
     if (cartridge_.write_register(Processor::secondary, address, width, value)) return;
+    if (serial_.write_register(address, width, value)) return;
     if (address == registers::queue_send && width == 4U) {
         link_.send(Processor::secondary, value);
         return;

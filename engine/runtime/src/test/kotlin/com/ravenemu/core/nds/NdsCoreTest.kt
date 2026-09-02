@@ -54,6 +54,45 @@ class NdsCoreTest {
         }
     }
 
+    /**
+     * Le contact traverse le pont.
+     *
+     * Ce que cette vérification attrape est propre à la frontière : un nom de
+     * symbole ou une signature qui ne coïncident pas ne se voient ni à la
+     * compilation de Kotlin ni à celle du C++, seulement au premier appel, sous
+     * la forme d'un `UnsatisfiedLinkError`. Ce que le contact devient ensuite
+     * est éprouvé côté C++, où il s'observe.
+     */
+    @Test
+    fun `un contact d'ecran tactile traverse le pont`() {
+        core().use { c ->
+            c.loadRom(NdsCartridge.image())
+            c.setTouch(down = true, x = 128, y = 96)
+            c.setTouch(down = false, x = 0, y = 0)
+            // Hors de l'écran : le cœur ramène sur le bord plutôt que de refuser,
+            // et le pont ne doit rien contrôler de son côté.
+            c.setTouch(down = true, x = -5, y = 4096)
+            val pixels = IntArray(c.video.pixelCount)
+            c.runFrame(pixels)
+        }
+    }
+
+    @Test
+    fun `la console declare la taille de son ecran tactile`() {
+        // La conversion d'un doigt en pixel appartient à l'interface, et elle la
+        // fait avec ces deux nombres : les écrire faux enverrait chaque contact
+        // à côté sans qu'aucun cœur ne s'en aperçoive.
+        val screen = requireNotNull(ConsoleType.NINTENDO_DS.touchScreen)
+        assertEquals(256, screen.width)
+        assertEquals(192, screen.height)
+        assertEquals(Pair(0, 0), screen.pixelAt(0.0, 0.0))
+        assertEquals(Pair(255, 191), screen.pixelAt(1.0, 1.0))
+        assertEquals(Pair(128, 96), screen.pixelAt(0.5, 0.5))
+        // Les consoles sans dalle ne déclarent rien plutôt qu'une taille nulle.
+        assertNull(ConsoleType.GAME_BOY.touchScreen)
+        assertNull(ConsoleType.GAME_BOY_ADVANCE.touchScreen)
+    }
+
     @Test
     fun `une image que l'en-tete ne decrit pas est refusee`() {
         core().use { c ->

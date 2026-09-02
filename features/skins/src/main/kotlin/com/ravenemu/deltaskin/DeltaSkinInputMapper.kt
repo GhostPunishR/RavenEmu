@@ -11,10 +11,25 @@ data class DeltaSkinVisualTarget(
     val rect: DeltaSkinRect,
 )
 
+/**
+ * Point touché dans la zone tactile d'un skin, en fractions de cette zone.
+ *
+ * Des fractions plutôt que des pixels : ce module ne connaît la résolution
+ * d'aucune console, et l'y faire entrer pour un seul cas rendrait le calcul faux
+ * le jour où une console à écran tactile aurait une autre taille. La couche qui
+ * pilote le moteur, elle, la connaît.
+ */
+data class DeltaSkinTouchPoint(
+    val fractionX: Double,
+    val fractionY: Double,
+)
+
 data class DeltaSkinMappedInput(
     val buttons: Set<EmulatorButton> = emptySet(),
     val menu: Boolean = false,
     val visuals: Set<DeltaSkinVisualTarget> = emptySet(),
+    /** Position dans la zone tactile, ou `null` si le doigt est ailleurs. */
+    val touch: DeltaSkinTouchPoint? = null,
 )
 
 /**
@@ -32,6 +47,7 @@ class DeltaSkinInputMapper(
         val buttons = linkedSetOf<EmulatorButton>()
         val visuals = linkedSetOf<DeltaSkinVisualTarget>()
         var menu = false
+        var touch: DeltaSkinTouchPoint? = null
 
         val hitItems = representation.items.mapIndexedNotNull { index, item ->
             val visualFrame = DeltaSkinLayoutCalculator.mapFrame(
@@ -80,9 +96,16 @@ class DeltaSkinInputMapper(
                 is DeltaSkinInputs.Directional -> {
                     // La zone tactile a la forme d'une croix sans en être une :
                     // la découper en neuf cases presserait des directions au
-                    // toucher. Elle est laissée de côté tant que la console n'a
-                    // pas d'écran tactile à alimenter.
-                    if (inputs.isTouchScreen) return@forEach
+                    // toucher. Elle rend une position, jamais une direction.
+                    if (inputs.isTouchScreen) {
+                        // Une console sans écran tactile n'a rien pour recevoir
+                        // ce contact : la zone reste inerte chez elle, comme les
+                        // touches qu'elle n'a pas.
+                        if (console.hasTouchScreen) {
+                            touch = touchPointIn(x, y, hit.visualFrame)
+                        }
+                        return@forEach
+                    }
                     val cell = dpadCell(x, y, hit.visualFrame)
                     val directions = directionsForCell(cell)
                     for (direction in directions) {
@@ -101,7 +124,29 @@ class DeltaSkinInputMapper(
                 }
             }
         }
-        return DeltaSkinMappedInput(buttons = buttons, menu = menu, visuals = visuals)
+        return DeltaSkinMappedInput(
+            buttons = buttons,
+            menu = menu,
+            visuals = visuals,
+            touch = touch,
+        )
+    }
+
+    /**
+     * Position du doigt dans la zone, ramenée entre 0 et 1 sur chaque axe.
+     *
+     * La frame **dessinée** sert de repère, non son extension tactile : un doigt
+     * qui déborde de la dalle est retenu sur son bord, comme un stylet qui sort
+     * de l'écran d'une console. Une zone de largeur ou de hauteur nulle est
+     * refusée plutôt que divisée par zéro : un skin peut en déclarer une, et
+     * elle ne désigne aucun point.
+     */
+    private fun touchPointIn(x: Double, y: Double, frame: DeltaSkinRect): DeltaSkinTouchPoint? {
+        if (frame.width <= 0.0 || frame.height <= 0.0) return null
+        return DeltaSkinTouchPoint(
+            fractionX = ((x - frame.left) / frame.width).coerceIn(0.0, 1.0),
+            fractionY = ((y - frame.top) / frame.height).coerceIn(0.0, 1.0),
+        )
     }
 
     private data class HitItem(

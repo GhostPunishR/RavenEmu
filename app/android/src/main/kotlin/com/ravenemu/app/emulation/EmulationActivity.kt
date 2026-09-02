@@ -266,6 +266,24 @@ class EmulationActivity : RavenActivity(), EmulationSession.Callbacks {
             override fun onSkinError(code: DeltaSkinErrorCode) {
                 handleDeltaSkinFailure(code)
             }
+
+            /**
+             * Le skin donne une position en fractions de sa zone tactile ; la
+             * console la veut en pixels de son écran. La conversion appartient
+             * à la console, qui seule connaît sa résolution.
+             */
+            override fun onTouchScreen(point: com.ravenemu.deltaskin.DeltaSkinTouchPoint) {
+                val screen = console.touchScreen ?: return
+                val (x, y) = screen.pixelAt(point.fractionX, point.fractionY)
+                session?.setTouch(down = true, x = x, y = y)
+            }
+
+            override fun onTouchScreenReleased() {
+                if (console.touchScreen == null) return
+                // Un stylet levé n'a pas de position : les coordonnées sont
+                // ignorées par le moteur, qui n'en retient aucune.
+                session?.setTouch(down = false, x = 0, y = 0)
+            }
         }
     }
 

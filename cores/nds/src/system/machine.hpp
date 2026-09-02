@@ -9,6 +9,7 @@
 #include "system/input.hpp"
 #include "system/inter_processor.hpp"
 #include "system/interrupt_controller.hpp"
+#include "system/serial_port.hpp"
 #include "video/video_system.hpp"
 
 #include <ravenemu/nds/cartridge_header.hpp>
@@ -96,9 +97,8 @@ namespace ravenemu::nds {
  *
  * ### Ce qui n'est pas là
  *
- * Ni minuteries, ni transferts autonomes, ni son, ni entrées, ni bus de
- * cartouche : les organes qui poseraient les autres interruptions n'existent
- * pas, et le balayage reste la seule horloge de la console.
+ * Ni son, ni moteur 3D, ni liaison sans fil : les organes qui poseraient les
+ * interruptions restantes n'existent pas.
  */
 class Machine {
 public:
@@ -171,6 +171,8 @@ public:
     [[nodiscard]] InputState& input() noexcept { return input_; }
     /** Le bus de cartouche, dont il n'y a qu'un : un seul port, un seul lecteur. */
     [[nodiscard]] Cartridge& cartridge() noexcept { return cartridge_; }
+    /** Le port série, que seul le processeur secondaire voit. */
+    [[nodiscard]] SerialPort& serial() noexcept { return serial_; }
     [[nodiscard]] InterruptController& interrupts(Processor side) noexcept;
 
     /** Le coprocesseur système, que seul le processeur principal possède. */
@@ -222,6 +224,7 @@ private:
     InterProcessor link_;
     VideoSystem video_;
     Cartridge cartridge_;
+    SerialPort serial_;
     Arm9MemoryMap main_map_;
     Arm7MemoryMap secondary_map_;
     Arm9 main_core_;
