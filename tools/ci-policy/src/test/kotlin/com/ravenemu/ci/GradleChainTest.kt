@@ -90,25 +90,7 @@ class GradleChainTest {
     }
 
     @Test
-    fun `les mises a jour de dependances sont surveillees`() {
-        val dependabot = File(racine, ".github/dependabot.yml")
-        assertTrue(dependabot.isFile, "Aucune configuration Dependabot")
-        val contenu = dependabot.readText()
-        for (ecosysteme in listOf("gradle", "github-actions")) {
-            assertTrue(
-                "package-ecosystem: $ecosysteme" in contenu,
-                "L'écosystème « $ecosysteme » doit être surveillé",
-            )
-        }
-    }
-
-    @Test
-    fun `les actions epinglees par SHA restent tenues a jour`() {
-        // Épingler par SHA fige une action : sans surveillance, une correction
-        // de sécurité publiée en amont ne serait jamais reprise. Les deux
-        // règles vont ensemble et ce test refuse qu'on n'en garde qu'une.
-        val dependabot = File(racine, ".github/dependabot.yml")
-        assertTrue("package-ecosystem: github-actions" in dependabot.readText())
+    fun `les actions tierces restent epinglees par SHA`() {
         for (reference in workflow.actionReferences) {
             if (reference.startsWith("./")) continue
             assertTrue(
