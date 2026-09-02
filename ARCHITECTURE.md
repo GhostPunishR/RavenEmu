@@ -351,6 +351,34 @@ le logiciel ordinaire. Un canal armé par un moment de fin de ligne est servi au
 premier pas de la ligne suivante, exactement comme l'interruption posée au même
 instant.
 
+**Les touches** sont enfin lisibles. Les dix de la face avant se lisent des deux
+côtés, à la même adresse ; les deux supplémentaires, le contact de l'écran
+tactile et celui du couvercle **ne se lisent que du côté du processeur
+secondaire**, et un jeu qui veut les connaître doit les lui demander par la file.
+Cette asymétrie est celle du matériel, et elle explique pourquoi l'état vit dans
+un organe partagé plutôt que dans l'une des deux cartes.
+
+Les deux registres sont **actifs à zéro** : une touche tire une ligne vers la
+masse, et une ligne que rien ne tire se lit à un. Inverser la convention ne donne
+pas une console en panne mais un jeu qui part tout seul, toutes touches enfoncées.
+La même raison décide de ce que rendent les bits sans emploi, et c'est une
+conséquence plutôt qu'une affirmation de plus.
+
+Chaque processeur règle son propre réveil par les touches, avec deux conditions
+qui ne se ressemblent pas : dès qu'une des touches choisies est enfoncée, ou
+seulement quand **toutes** le sont. La seconde sert aux combinaisons. Une
+sélection vide ne réveille jamais, dans les deux cas : en mode combinaison,
+l'ensemble vide serait sinon satisfait par n'importe quel état. Le réveil tient
+sur un niveau et non sur un front, si bien qu'une touche gardée enfoncée le
+redemande après chaque acquittement.
+
+Les coordonnées de l'écran tactile ne sont pas là : elles ne passent pas par un
+registre mais par un convertisseur que le processeur secondaire interroge en
+série, et cet organe n'existe pas encore. Le contact lui-même l'est, puisqu'il
+est porté par un registre. Les deux touches supplémentaires sont modélisées dans
+le matériel mais **hors de portée de l'interface publique**, dont l'énumération
+décrit une manette à dix touches commune à tous les cœurs.
+
 `cores/nds/src/video` porte les neuf banques, leur aiguillage, les deux moteurs
 graphiques 2D et le contrôleur d'affichage.
 

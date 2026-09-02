@@ -11,15 +11,18 @@ Arm7MemoryMap::Arm7MemoryMap(
     SystemMemory& system,
     VideoSystem& video,
     InterProcessor& link,
-    InterruptController& interrupts
+    InterruptController& interrupts,
+    InputState& input
 )
     : system_(system), video_(video), link_(link), interrupts_(interrupts),
+      input_(input),
       private_wram_(private_wram_bytes, 0) {}
 
 void Arm7MemoryMap::reset() noexcept {
     // La mémoire partagée est remise à zéro par son propriétaire : la vider
     // depuis l'une des deux vues effacerait le travail de l'autre.
     std::fill(private_wram_.begin(), private_wram_.end(), std::uint8_t{0});
+    key_interrupt_.reset();
     dma_.reset();
     timers_.reset();
     halt_requested_ = false;
@@ -132,6 +135,17 @@ std::uint8_t Arm7MemoryMap::read_io_byte(std::uint32_t address) noexcept {
         return registers::byte_of(video_.display().line(), address - line_counter);
     }
 
+    if (address >= key_input && address < key_input + 2U) {
+        // Actif à zéro : un bit effacé veut dire touche enfoncée.
+        return registers::byte_of(input_.key_register(), address - key_input);
+    }
+    if (address >= key_control && address < key_control + 2U) {
+        return registers::byte_of(key_interrupt_.control(), address - key_control);
+    }
+    if (address >= extra_key_input && address < extra_key_input + 2U) {
+        return registers::byte_of(input_.extra_register(), address - extra_key_input);
+    }
+
     if (address >= dma_base && address < dma_base + DmaController::channel_bytes * DmaController::count) {
         const auto offset = address - dma_base;
         const auto channel = offset / DmaController::channel_bytes;
@@ -194,6 +208,22 @@ void Arm7MemoryMap::write_io_byte(std::uint32_t address, std::uint8_t value) noe
         // Vue en lecture seule : ce processeur constate le partage, il ne le
         // décide pas. L'écriture est ignorée par le matériel, et ce silence est
         // le comportement juste.
+        static_cast<void>(value);
+        return;
+    }
+
+    if (address >= key_input && address < key_input + 2U) {
+        // Les touches ne s'écrivent pas : le matériel ignore, et le silence est
+        // ici le comportement juste plutôt qu'un manque.
+        static_cast<void>(value);
+        return;
+    }
+    if (address >= key_control && address < key_control + 2U) {
+        key_interrupt_.set_control(static_cast<std::uint16_t>(
+            registers::with_byte(key_interrupt_.control(), address - key_control, value)));
+        return;
+    }
+    if (address >= extra_key_input && address < extra_key_input + 2U) {
         static_cast<void>(value);
         return;
     }

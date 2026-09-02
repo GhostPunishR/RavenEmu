@@ -85,6 +85,10 @@ aujourd'hui :
   s'entend en unités et dont l'étendue diffère des deux côtés, la répétition, et
   surtout le moment du départ, les moments dont l'organe manque étant comptés
   plutôt que déclenchés au hasard.
+- les touches : les dix de la face avant lisibles des deux côtés, les deux
+  supplémentaires et le contact de l'écran tactile du seul côté du processeur
+  secondaire, la convention active à zéro, et le réveil que chaque processeur
+  règle pour lui-même, avec ses deux conditions.
 
 Le budget d'instructions accordé à une ligne repose sur une convention dite en
 toutes lettres : une instruction par cycle de l'horloge maître, faute d'un modèle
@@ -97,7 +101,7 @@ inventer serait une affirmation que rien ne vérifie. Une cartouche qui monte sa
 propre pile démarre ; une cartouche qui compte sur l'amorceur ne démarre pas.
 
 Une image est donc produite, mais aucun jeu ne tourne encore. Restent à écrire
-les entrées et l'écran tactile, les
+les coordonnées de l'écran tactile, les
 appels du programme d'amorçage, le bus de cartouche, les décors tournants et les
 modes étendus, les sprites tournants et semi-transparents, le moteur 3D, les
 fenêtres et les mélanges, les palettes étendues, la sauvegarde et le son.

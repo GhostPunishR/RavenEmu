@@ -296,8 +296,9 @@ void les_registres_repondent_aux_bonnes_adresses() {
     InterruptController main_interrupts;
     InterruptController secondary_interrupts;
     InterProcessor link{main_interrupts, secondary_interrupts};
+    InputState input{};
     VideoSystem video{main_interrupts, secondary_interrupts};
-    Arm9MemoryMap map{system, video, link, main_interrupts};
+    Arm9MemoryMap map{system, video, link, main_interrupts, input};
     system.reset();
     video.reset();
     map.reset();

@@ -20,14 +20,16 @@ Arm9MemoryMap::Arm9MemoryMap(
     SystemMemory& system,
     VideoSystem& video,
     InterProcessor& link,
-    InterruptController& interrupts
+    InterruptController& interrupts,
+    InputState& input
 )
-    : system_(system), video_(video), link_(link), interrupts_(interrupts) {}
+    : system_(system), video_(video), link_(link), interrupts_(interrupts), input_(input) {}
 
 void Arm9MemoryMap::reset() noexcept {
     // La mémoire partagée et le matériel vidéo sont remis à zéro par leurs
     // propriétaires, non par cette vue : les vider ici effacerait le travail de
     // l'autre processeur.
+    key_interrupt_.reset();
     dma_.reset();
     timers_.reset();
     power_ = 0;
@@ -250,6 +252,14 @@ std::uint8_t Arm9MemoryMap::read_io_byte(std::uint32_t address) noexcept {
         return registers::byte_of(power_, address - power_control);
     }
 
+    if (address >= key_input && address < key_input + 2U) {
+        // Actif à zéro : un bit effacé veut dire touche enfoncée.
+        return registers::byte_of(input_.key_register(), address - key_input);
+    }
+    if (address >= key_control && address < key_control + 2U) {
+        return registers::byte_of(key_interrupt_.control(), address - key_control);
+    }
+
     if (address >= dma_base && address < dma_base + DmaController::channel_bytes * DmaController::count) {
         const auto offset = address - dma_base;
         const auto channel = offset / DmaController::channel_bytes;
@@ -312,6 +322,18 @@ void Arm9MemoryMap::write_io_byte(std::uint32_t address, std::uint8_t value) noe
         // coupent l'alimentation d'organes qui n'existent pas encore, et se
         // relisent tels qu'écrits.
         display().set_swapped((power_ & power_swaps_screens) != 0U);
+        return;
+    }
+
+    if (address >= key_input && address < key_input + 2U) {
+        // Les touches ne s'écrivent pas : le matériel ignore, et le silence est
+        // ici le comportement juste plutôt qu'un manque.
+        static_cast<void>(value);
+        return;
+    }
+    if (address >= key_control && address < key_control + 2U) {
+        key_interrupt_.set_control(static_cast<std::uint16_t>(
+            registers::with_byte(key_interrupt_.control(), address - key_control, value)));
         return;
     }
 

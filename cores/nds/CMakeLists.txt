@@ -8,6 +8,7 @@ add_library(nds_raven_core STATIC
     src/memory/arm9_memory_map.cpp
     src/memory/system_memory.cpp
     src/system/dma.cpp
+    src/system/input.cpp
     src/system/inter_processor.cpp
     src/system/machine.cpp
     src/system/timers.cpp
@@ -126,6 +127,16 @@ if(RAVENEMU_BUILD_TESTS)
     )
     target_link_libraries(nds_raven_display_tests PRIVATE nds_raven_core)
     add_test(NAME nds_raven_display COMMAND nds_raven_display_tests)
+
+    # Les touches sont éprouvées seules, sous les cartes, et de bout en bout :
+    # une cartouche synthétique lit le registre et en fait une couleur.
+    add_executable(nds_raven_input_tests tests/input_test.cpp)
+    target_include_directories(nds_raven_input_tests PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/src
+        ${CMAKE_CURRENT_LIST_DIR}/../common/tests/support
+    )
+    target_link_libraries(nds_raven_input_tests PRIVATE nds_raven_core)
+    add_test(NAME nds_raven_input COMMAND nds_raven_input_tests)
 
     # Les transferts autonomes sont éprouvés seuls, puis sous l'ordonnanceur :
     # ce qui compte est le moment où un canal part.

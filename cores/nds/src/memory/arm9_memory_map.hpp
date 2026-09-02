@@ -4,6 +4,7 @@
 #include "memory/system_memory.hpp"
 #include "system/inter_processor.hpp"
 #include "system/dma.hpp"
+#include "system/input.hpp"
 #include "system/timers.hpp"
 #include "video/video_system.hpp"
 
@@ -63,7 +64,8 @@ public:
         SystemMemory& system,
         VideoSystem& video,
         InterProcessor& link,
-        InterruptController& interrupts
+        InterruptController& interrupts,
+        InputState& input
     );
 
     static constexpr std::uint32_t main_ram_bytes = SystemMemory::main_ram_bytes;
@@ -114,6 +116,16 @@ public:
      */
     static constexpr std::uint32_t dma_base = 0x0400'00b0;
 
+    /**
+     * Registre des dix touches, et réglage du réveil qu'elles peuvent poser.
+     *
+     * L'état des touches est partagé ; le réglage du réveil ne l'est pas, chaque
+     * processeur choisissant les siennes.
+     */
+    static constexpr std::uint32_t key_input = 0x0400'0130;
+    static constexpr std::uint32_t key_control = 0x0400'0132;
+
+
     /** Écart entre deux minuteries : deux registres de seize bits. */
     static constexpr std::uint32_t timer_stride = 4;
 
@@ -147,6 +159,9 @@ public:
     [[nodiscard]] Engine2d& engine(Engine which) noexcept { return video_.engine(which); }
     /** Le balayage, que les deux processeurs consultent. */
     [[nodiscard]] DisplayController& display() noexcept { return video_.display(); }
+
+    /** Le réglage du réveil par les touches, propre à ce processeur. */
+    [[nodiscard]] KeyInterrupt& key_interrupt() noexcept { return key_interrupt_; }
 
     /** Les minuteries de ce processeur. */
     [[nodiscard]] Timers& timers() noexcept { return timers_; }
@@ -227,6 +242,9 @@ private:
     VideoSystem& video_;
     InterProcessor& link_;
     InterruptController& interrupts_;
+    InputState& input_;
+
+    KeyInterrupt key_interrupt_{};
 
     Timers timers_{interrupts_};
     DmaController dma_{Processor::main, interrupts_};

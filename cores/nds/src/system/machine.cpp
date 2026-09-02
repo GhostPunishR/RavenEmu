@@ -5,13 +5,14 @@ namespace ravenemu::nds {
 Machine::Machine()
     : link_(main_interrupts_, secondary_interrupts_),
       video_(main_interrupts_, secondary_interrupts_),
-      main_map_(system_, video_, link_, main_interrupts_),
-      secondary_map_(system_, video_, link_, secondary_interrupts_),
+      main_map_(system_, video_, link_, main_interrupts_, input_),
+      secondary_map_(system_, video_, link_, secondary_interrupts_, input_),
       main_core_(main_map_),
       secondary_core_(secondary_map_) {}
 
 void Machine::reset() {
     system_.reset();
+    input_.reset();
     main_interrupts_.reset();
     secondary_interrupts_.reset();
     link_.reset();
@@ -93,6 +94,15 @@ void Machine::step(Processor side) {
     }
 }
 
+void Machine::raise_key_interrupts() noexcept {
+    if (main_map_.key_interrupt().satisfied(input_.held())) {
+        main_interrupts_.request(InterruptController::keys);
+    }
+    if (secondary_map_.key_interrupt().satisfied(input_.held())) {
+        secondary_interrupts_.request(InterruptController::keys);
+    }
+}
+
 void Machine::run_line(std::span<std::int32_t> framebuffer) {
     for (std::uint32_t tick = 0; tick < secondary_steps_per_line; ++tick) {
         for (std::uint32_t beat = 0; beat < main_clock_multiplier; ++beat) {
@@ -108,6 +118,8 @@ void Machine::run_line(std::span<std::int32_t> framebuffer) {
     // suivante, exactement comme celle du retour vertical.
     main_map_.timers().advance(cycles_per_line);
     secondary_map_.timers().advance(cycles_per_line);
+
+    raise_key_interrupts();
 
     // Le retour horizontal appartient à la ligne qui s'achève, le retour
     // vertical à celle qui commence : les canaux qui les attendent s'arment donc

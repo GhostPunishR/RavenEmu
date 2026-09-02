@@ -70,7 +70,9 @@ public:
         machine_.run_frame(framebuffer);
     }
 
-    void set_button(Button, bool) override {}
+    void set_button(Button button, bool pressed) override {
+        machine_.input().set_pressed(InputState::key_for(button), pressed);
+    }
 
     std::size_t read_audio(std::span<std::int16_t>) override { return 0; }
 

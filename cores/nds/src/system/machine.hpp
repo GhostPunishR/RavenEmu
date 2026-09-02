@@ -4,6 +4,7 @@
 #include "memory/arm7_memory_map.hpp"
 #include "memory/arm9_memory_map.hpp"
 #include "memory/system_memory.hpp"
+#include "system/input.hpp"
 #include "system/inter_processor.hpp"
 #include "system/interrupt_controller.hpp"
 #include "video/video_system.hpp"
@@ -159,6 +160,8 @@ public:
     [[nodiscard]] SystemMemory& system_memory() noexcept { return system_; }
     [[nodiscard]] VideoSystem& video() noexcept { return video_; }
     [[nodiscard]] InterProcessor& link() noexcept { return link_; }
+    /** L'état des touches, que les deux processeurs consultent. */
+    [[nodiscard]] InputState& input() noexcept { return input_; }
     [[nodiscard]] InterruptController& interrupts(Processor side) noexcept;
 
     /** Le coprocesseur système, que seul le processeur principal possède. */
@@ -169,6 +172,15 @@ public:
 private:
     /** Fait avancer un processeur d'une instruction, réveils compris. */
     void step(Processor side);
+
+    /**
+     * Pose le réveil par les touches, pour chaque processeur qui l'a réglé.
+     *
+     * La condition se relit à chaque ligne plutôt qu'au changement d'état : le
+     * matériel la tient sur un niveau et non sur un front, si bien qu'une touche
+     * gardée enfoncée redemande le réveil après chaque acquittement.
+     */
+    void raise_key_interrupts() noexcept;
 
     /**
      * Copie un bloc de la cartouche vers la mémoire, mot par mot.
@@ -192,6 +204,7 @@ private:
     // L'ordre de déclaration est celui des dépendances : ce que les deux
     // processeurs partagent d'abord, les cartes ensuite, les cœurs en dernier.
     SystemMemory system_{};
+    InputState input_{};
     InterruptController main_interrupts_{};
     InterruptController secondary_interrupts_{};
     InterProcessor link_;

@@ -37,9 +37,10 @@ struct Console {
     InterruptController main_interrupts{};
     InterruptController secondary_interrupts{};
     InterProcessor link{main_interrupts, secondary_interrupts};
+    InputState input{};
     VideoSystem video{main_interrupts, secondary_interrupts};
-    Arm9MemoryMap main_map{system, video, link, main_interrupts};
-    Arm7MemoryMap secondary_map{system, video, link, secondary_interrupts};
+    Arm9MemoryMap main_map{system, video, link, main_interrupts, input};
+    Arm7MemoryMap secondary_map{system, video, link, secondary_interrupts, input};
 
     Console() {
         system.reset();
