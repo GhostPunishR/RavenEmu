@@ -4,6 +4,7 @@
 #include "memory/arm7_memory_map.hpp"
 #include "memory/arm9_memory_map.hpp"
 #include "memory/system_memory.hpp"
+#include "system/bios.hpp"
 #include "system/input.hpp"
 #include "system/inter_processor.hpp"
 #include "system/interrupt_controller.hpp"
@@ -166,6 +167,9 @@ public:
 
     /** Le coprocesseur système, que seul le processeur principal possède. */
     [[nodiscard]] Cp15& cp15() noexcept { return main_core_.cp15(); }
+
+    /** Les services du programme d'amorçage, pour le processeur demandé. */
+    [[nodiscard]] Bios& bios(Processor side) noexcept;
     /** Le balayage, que les deux processeurs consultent. */
     [[nodiscard]] DisplayController& display() noexcept { return video_.display(); }
 
@@ -213,6 +217,12 @@ private:
     Arm7MemoryMap secondary_map_;
     Arm9 main_core_;
     Arm7 secondary_core_;
+
+    // Les services du programme d'amorçage viennent après les cœurs : ils s'y
+    // rattachent, et leur gestionnaire d'interruption a besoin du coprocesseur
+    // du principal pour savoir où le jeu range le sien.
+    Bios main_bios_;
+    Bios secondary_bios_;
 };
 
 } // namespace ravenemu::nds

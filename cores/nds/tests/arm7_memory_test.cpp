@@ -330,13 +330,28 @@ void le_partage_se_constate_mais_ne_se_decide_pas() {
     );
 }
 
+/** La région du programme d'amorçage existe, en bas de l'espace, et ne s'écrit pas. */
+void le_programme_d_amorcage_se_lit_et_ne_s_ecrit_pas() {
+    Console console;
+    auto& map = console.secondary_map;
+
+    // L'adresse est écrite en toutes lettres, pour la même raison que du côté
+    // du processeur principal.
+    check(Arm7MemoryMap::bios_base == 0U, "la région est en bas de l'espace");
+    check(Arm7MemoryMap::bios_bytes == 0x4000U, "et fait seize kilooctets");
+
+    static_cast<void>(map.read32(Arm7MemoryMap::bios_base));
+    check(map.unmapped_count() == 0U, "la région est décodée");
+
+    map.bios()[0] = 0x5aU;
+    check(map.read8(Arm7MemoryMap::bios_base) == 0x5aU, "ce qu'on y met s'y lit");
+
+    map.write8(Arm7MemoryMap::bios_base, 0xffU);
+    check(map.read8(Arm7MemoryMap::bios_base) == 0x5aU, "mais le processeur ne l'écrit pas");
+    check(map.unmapped_count() == 0U, "et ce refus n'est pas une adresse inconnue");
+}
+
 void ce_qui_n_existe_pas_encore_est_signale() {
-    {   // Le programme d'amorçage n'est pas fourni.
-        Console console;
-        static_cast<void>(console.secondary_map.read32(0x0000'0000U));
-        check(console.secondary_map.unmapped_count() == 4U, "l'amorçage est signalé");
-        check(console.secondary_map.first_unmapped() == 0U, "et son adresse retenue");
-    }
     {   // Les banques vidéo qui peuvent lui être confiées non plus.
         Console console;
         static_cast<void>(console.secondary_map.read32(0x0600'0000U));
@@ -449,6 +464,7 @@ int main() {
     chacun_ecrit_dans_sa_part_sans_toucher_a_l_autre();
     sans_part_le_secondaire_retombe_sur_sa_memoire_propre();
     le_partage_se_constate_mais_ne_se_decide_pas();
+    le_programme_d_amorcage_se_lit_et_ne_s_ecrit_pas();
     ce_qui_n_existe_pas_encore_est_signale();
     le_processeur_secondaire_tourne_sur_sa_carte();
     return 0;

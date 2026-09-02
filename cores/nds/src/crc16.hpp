@@ -17,9 +17,16 @@ namespace ravenemu::nds::detail {
  * La table n'est pas précalculée : le calcul ne porte que sur quelques centaines
  * d'octets, une seule fois par chargement de ROM. Une table de 512 octets
  * résidente coûterait plus qu'elle ne rapporte.
+ *
+ * La valeur initiale est un paramètre parce que le service rendu au jeu par le
+ * programme d'amorçage la reçoit de lui : c'est ainsi qu'une somme se calcule
+ * sur un contenu découpé en plusieurs morceaux.
  */
-[[nodiscard]] constexpr std::uint16_t crc16(std::span<const std::uint8_t> data) noexcept {
-    std::uint16_t crc = 0xffffU;
+[[nodiscard]] constexpr std::uint16_t crc16(
+    std::span<const std::uint8_t> data,
+    std::uint16_t initial = 0xffffU
+) noexcept {
+    std::uint16_t crc = initial;
     for (const auto byte : data) {
         crc = static_cast<std::uint16_t>(crc ^ byte);
         for (int bit = 0; bit < 8; ++bit) {

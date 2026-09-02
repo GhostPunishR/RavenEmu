@@ -559,6 +559,34 @@ répondre sans construire de moteur), et l'application ne propose pas ce que le
 moteur ne tient pas, au lieu de l'offrir et d'échouer au moment où le joueur
 enregistre.
 
+### Les services du programme d'amorçage
+
+Un jeu de la console appelle son programme d'amorçage : attendre le retour
+vertical, diviser, décompresser. Ce programme est du code de la console, que
+RavenEmu ne fournit pas et ne peut pas fournir. Deux chemins sont pris, et la
+distinction est délibérée.
+
+**L'appel logiciel est intercepté avant son vecteur.** Le service est rendu hors
+du processeur, à partir de la description publique de son comportement, et
+l'exécution reprend à l'instruction suivante. Un appel non couvert redescend au
+vecteur du matériel plutôt que d'être inventé.
+
+**L'interruption, elle, ne l'est pas.** Le vecteur porte six instructions ARM
+écrites pour RavenEmu, que le processeur émulé exécute vraiment : le changement
+de mode, l'empilement et le retour restent ceux du matériel, là où les simuler
+aurait demandé de refaire à la main ce que le cœur sait déjà. C'est aussi ce qui
+rend la région du programme d'amorçage nécessaire dans les deux cartes mémoire,
+en haut de l'espace pour le processeur principal et en bas pour le secondaire.
+
+L'attente d'interruption mérite d'être signalée, parce qu'elle explique une
+indirection qui semblerait gratuite. Elle ne se termine pas sur l'interruption
+mais sur un **mot d'indicateurs que le gestionnaire du jeu tient à jour**. Sans
+cette indirection, une attente du retour vertical se terminerait sur un
+débordement de minuterie. La boucle est tenue par le compteur de programme, que
+l'appel rembobine sur lui-même avant d'arrêter le processeur : au réveil, le
+gestionnaire du jeu s'exécute, rend la main sur l'appel, et l'appel se repose la
+question.
+
 Les suites natives (`common`, `gb`, `gbc`, `gba`, `nds`) doivent pouvoir être
 construites directement avec `cmake -S cores`.
 

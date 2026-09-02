@@ -44,6 +44,9 @@ void Arm7MemoryMap::note_unimplemented_io(std::uint32_t address) noexcept {
 
 Arm7MemoryMap::Location Arm7MemoryMap::locate(std::uint32_t address) noexcept {
     switch (address >> 24U) {
+    case 0x00:
+        // Le programme d'amorçage de ce processeur, et sa table des vecteurs.
+        return {Region::boot_program, &bios_[address % bios_bytes]};
     case 0x02:
         return {Region::main_ram, &system_.main_ram()[address % SystemMemory::main_ram_bytes]};
     case 0x03: {
@@ -65,9 +68,8 @@ Arm7MemoryMap::Location Arm7MemoryMap::locate(std::uint32_t address) noexcept {
     case 0x04:
         return {Region::input_output, nullptr};
     default:
-        // Le programme d'amorçage de ce processeur, la cartouche, le port Game
-        // Boy Advance et les banques vidéo qui peuvent lui être confiées. Aucun
-        // de ces contenus n'existe encore.
+        // La cartouche, le port Game Boy Advance et les banques vidéo qui
+        // peuvent lui être confiées. Aucun de ces contenus n'existe encore.
         return {Region::unmapped, nullptr};
     }
 }
@@ -311,6 +313,10 @@ void Arm7MemoryMap::write(std::uint32_t address, std::uint32_t value, std::uint3
         const auto byte_address = address + index;
         const auto byte = static_cast<std::uint8_t>((value >> (index * 8U)) & 0xffU);
         const auto location = locate(byte_address);
+        // Le programme d'amorçage ne s'écrit pas : le matériel ignore, et le
+        // compter comme une adresse non décodée serait faux, l'adresse étant
+        // bel et bien décodée.
+        if (location.region == Region::boot_program) continue;
         if (location.data != nullptr) {
             *location.data = byte;
         } else {

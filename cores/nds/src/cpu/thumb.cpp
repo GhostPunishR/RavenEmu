@@ -64,12 +64,9 @@ void ArmCore::execute_thumb(std::uint32_t opcode) {
     case 0x6:
         if (!bit(opcode, 12)) { thumb_block_transfer(opcode); return; }
         if (bits(opcode, 8, 4) == 0xfU) {
-            enter_exception(
-                CpuMode::supervisor,
-                software_interrupt_vector,
-                state_.registers[15] - 2U,
-                false
-            );
+            // En Thumb le numéro tient sur les huit bits bas de l'instruction,
+            // et non sur les huit bits hauts d'un champ de vingt-quatre.
+            take_software_interrupt(bits(opcode, 0, 8), 2U);
             return;
         }
         if (bits(opcode, 8, 4) == 0xeU) { raise_undefined(opcode); return; }

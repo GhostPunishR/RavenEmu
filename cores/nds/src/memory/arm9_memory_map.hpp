@@ -45,11 +45,19 @@ namespace ravenemu::nds {
  * mégaoctets qui leur sont réservés, et deux kilooctets de palette huit mille
  * fois.
  *
+ * ### Le programme d'amorçage
+ *
+ * La région du programme d'amorçage existe, en haut de l'espace d'adressage, et
+ * elle est **en lecture seule**. Elle ne contient pas celui de la console, que
+ * ce dépôt ne fournit pas : elle contient le peu de code que RavenEmu y écrit
+ * lui-même pour que la table des vecteurs mène quelque part. Le reste des
+ * services du programme d'amorçage est rendu hors du processeur, l'appel
+ * logiciel étant intercepté avant d'atteindre son vecteur.
+ *
  * ### Ce qu'elle ne décide pas encore
  *
- * Le BIOS, la cartouche et le port Game Boy Advance. Aucun de ces contenus
- * n'existe dans le dépôt, et aucun n'est fourni : les lectures rendent zéro et
- * sont comptées.
+ * La cartouche et le port Game Boy Advance. Aucun de ces contenus n'existe dans
+ * le dépôt, et aucun n'est fourni : les lectures rendent zéro et sont comptées.
  *
  * ### Sur les écritures d'un seul octet
  *
@@ -79,6 +87,20 @@ public:
     static constexpr std::uint32_t vram_transfer_base = VideoMemory::transfer_base;
 
     /** Registres qui gouvernent la carte elle-même. */
+    /**
+     * Étendue de la région du programme d'amorçage, celle du matériel.
+     *
+     * Seuls les premiers octets portent quelque chose ; le reste est nul. La
+     * taille est celle de la console plutôt que celle du contenu, parce qu'un
+     * programme qui lit au-delà de ce que RavenEmu y écrit doit trouver la même
+     * étendue que sur console, et non un bord au premier octet inutilisé.
+     */
+    static constexpr std::uint32_t bios_base = 0xffff'0000;
+    static constexpr std::uint32_t bios_bytes = 0x8000;
+
+    /** La région du programme d'amorçage, que le seul organe qui l'écrit remplit. */
+    [[nodiscard]] std::span<std::uint8_t> bios() noexcept { return bios_; }
+
     static constexpr std::uint32_t vram_control_base = 0x0400'0240;
     static constexpr std::uint32_t shared_wram_control = 0x0400'0247;
 
@@ -193,6 +215,7 @@ private:
         palette,
         video,
         object_attributes,
+        boot_program,
     };
 
     /** Où mène une adresse : une région, et le cas échéant l'octet visé. */
@@ -232,6 +255,18 @@ private:
     void note_unmapped(std::uint32_t address) noexcept;
     void note_unimplemented_io(std::uint32_t address) noexcept;
 
+    /**
+     * Vrai pour une région que le matériel ne laisse pas écrire du tout.
+     *
+     * Le refus est silencieux, comme pour l'octet seul : un programme qui écrit
+     * dans le programme d'amorçage ne change rien, sur console comme ici. Le
+     * compter comme une adresse non décodée serait faux, l'adresse étant bel et
+     * bien décodée.
+     */
+    [[nodiscard]] static bool is_read_only(Region region) noexcept {
+        return region == Region::boot_program;
+    }
+
     /** Vrai pour les régions que le matériel refuse d'écrire octet par octet. */
     [[nodiscard]] static bool ignores_byte_writes(Region region) noexcept {
         return region == Region::palette || region == Region::video ||
@@ -251,6 +286,15 @@ private:
 
     /** Registre d'alimentation, dont seul le bit d'échange agit. */
     std::uint16_t power_{};
+
+    /**
+     * Le programme d'amorçage, en lecture seule.
+     *
+     * Vecteurs d'exception et gestionnaire d'interruption y sont écrits par
+     * l'organe qui rend les services du programme d'amorçage ; cette carte ne
+     * fait que porter les octets et refuser qu'on les change, comme le matériel.
+     */
+    std::vector<std::uint8_t> bios_ = std::vector<std::uint8_t>(bios_bytes, 0);
 
     std::uint32_t unmapped_{};
     std::uint32_t first_unmapped_{};

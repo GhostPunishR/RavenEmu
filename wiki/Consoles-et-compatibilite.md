@@ -75,18 +75,27 @@ Le moteur Game Boy Advance est expérimental. Il comprend:
 
 ## Nintendo DS
 
-La Nintendo DS apparaît dans la bibliothèque : un fichier `.nds` est reconnu, son en-tête est lu, la console a sa page et son skin. **Aucun jeu du commerce ne démarre encore.** Ce qui est en place :
+La Nintendo DS apparaît dans la bibliothèque : un fichier `.nds` est reconnu, son en-tête est lu, la console a sa page et son skin. Ce qui est en place :
 
 - deux processeurs, ARM946E-S et ARM7TDMI, entrelacés par un ordonnanceur;
 - leurs cartes mémoire, la mémoire partagée et la communication entre les deux;
 - décors en mode texte et sprites ordinaires des deux moteurs 2D;
 - balayage des deux écrans, empilés dans un tampon unique de 256 sur 384;
-- amorçage d'une cartouche depuis son en-tête, minuteries, transferts autonomes, touches.
+- amorçage d'une cartouche depuis son en-tête, minuteries, transferts autonomes, touches;
+- les services du programme d'amorçage : attente d'interruption, division, racine, somme de contrôle, recopies, et les cinq formats de décompression.
+
+### Les services du programme d'amorçage
+
+Un jeu ne se contente pas de son propre code : il demande au programme d'amorçage d'attendre le retour vertical, de diviser, de décompresser ses données. Sans personne pour répondre, il ne plante pas, il attend une réponse qui ne vient jamais.
+
+**Ce programme n'est pas fourni avec RavenEmu et ne peut pas l'être** : c'est du code de la console. Les services sont réécrits d'après la description publique de leur comportement, et aucun octet n'en est copié. Le vecteur d'interruption, lui, porte six instructions écrites pour RavenEmu, que le processeur émulé exécute vraiment.
+
+Un programme qui tient dans les deux blocs que son en-tête décrit et qui n'a besoin que de ces services démarre donc maintenant. **Ce n'est pas le cas d'un jeu du commerce**, qui lit la suite de sa cartouche au fur et à mesure.
 
 ### Limites connues
 
-- les appels du programme d'amorçage manquent : une cartouche qui compte sur l'amorceur s'arrête sans rien afficher, ce qui est le cas de la quasi-totalité des jeux du commerce;
-- pas de bus de cartouche, donc pas de lecture de données au-delà de ce que l'amorçage recopie;
+- pas de bus de cartouche : un jeu ne peut pas lire sa ROM au-delà des deux blocs que l'amorçage recopie, et c'est ce qui manque le plus pour qu'un jeu du commerce démarre;
+- l'état qu'un vrai programme d'amorçage laisse derrière lui n'est pas reproduit : un programme qui monte sa propre pile démarre, un programme qui compte sur l'amorceur ne démarre pas;
 - pas d'écran tactile : la zone tactile d'un skin est reconnue mais reste inerte;
 - pas de moteur 3D, pas de son, pas de sauvegarde de cartouche;
 - aucun format d'état instantané : l'enregistrement n'est pas proposé pour cette console;

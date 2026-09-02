@@ -692,23 +692,46 @@ void une_banque_se_remplit_par_le_transfert_puis_se_montre_au_moteur() {
     check(map.video().control(0) == 0U, "les branchements avec");
 }
 
+/** La région du programme d'amorçage existe, et ne s'écrit pas. */
+void le_programme_d_amorcage_se_lit_et_ne_s_ecrit_pas() {
+    SystemMemory system;
+    InterruptController main_interrupts;
+    InterruptController secondary_interrupts;
+    InterProcessor link{main_interrupts, secondary_interrupts};
+    InputState input{};
+    VideoSystem video{main_interrupts, secondary_interrupts};
+    Arm9MemoryMap map{system, video, link, main_interrupts, input};
+    system.reset();
+    video.reset();
+    map.reset();
+
+    // L'adresse est écrite en toutes lettres : la reprendre de la constante qui
+    // la définit ne prouverait rien, les deux bougeant ensemble.
+    check(Arm9MemoryMap::bios_base == 0xffff'0000U, "la région est en haut de l'espace");
+    check(Arm9MemoryMap::bios_bytes == 0x8000U, "et fait trente-deux kilooctets");
+
+    // Montée seule, cette carte ne porte pas de contenu : c'est l'organe des
+    // services d'amorçage qui l'écrit, et il n'est pas là. Ce qui compte ici est
+    // que l'adresse soit **décodée**, et non ce qu'elle rend.
+    static_cast<void>(map.read32(Arm9MemoryMap::bios_base));
+    check(map.unmapped_count() == 0U, "la région est décodée");
+
+    map.bios()[0] = 0x5aU;
+    check(map.read8(Arm9MemoryMap::bios_base) == 0x5aU, "ce qu'on y met s'y lit");
+
+    map.write8(Arm9MemoryMap::bios_base, 0xffU);
+    check(map.read8(Arm9MemoryMap::bios_base) == 0x5aU, "mais le processeur ne l'écrit pas");
+    check(map.unmapped_count() == 0U, "et ce refus n'est pas une adresse inconnue");
+
+    // Elle se répète sur toute son étendue d'adressage, comme les autres.
+    check(
+        map.read8(Arm9MemoryMap::bios_base + Arm9MemoryMap::bios_bytes) == 0x5aU,
+        "la région se répète"
+    );
+}
+
 void ce_qui_n_existe_pas_encore_est_signale() {
-    {   // Le BIOS n'est pas fourni.
-        SystemMemory system;
-        InterruptController main_interrupts;
-        InterruptController secondary_interrupts;
-        InterProcessor link{main_interrupts, secondary_interrupts};
-        InputState input{};
-        VideoSystem video{main_interrupts, secondary_interrupts};
-        Arm9MemoryMap map{system, video, link, main_interrupts, input};
-        system.reset();
-        video.reset();
-        map.reset();
-        static_cast<void>(map.read32(0xffff'0000U));
-        check(map.unmapped_count() == 4U, "le BIOS est signalé");
-        check(map.first_unmapped() == 0xffff'0000U, "et son adresse retenue");
-    }
-    {   // Le port cartouche non plus.
+    {   // Le port cartouche n'est pas fourni.
         SystemMemory system;
         InterruptController main_interrupts;
         InterruptController secondary_interrupts;
@@ -921,6 +944,7 @@ int main() {
     les_registres_de_la_carte_se_relisent();
     les_registres_des_moteurs_repondent_a_leurs_adresses();
     une_banque_se_remplit_par_le_transfert_puis_se_montre_au_moteur();
+    le_programme_d_amorcage_se_lit_et_ne_s_ecrit_pas();
     ce_qui_n_existe_pas_encore_est_signale();
     le_processeur_tourne_sur_la_carte();
     la_memoire_locale_passe_devant_la_carte();

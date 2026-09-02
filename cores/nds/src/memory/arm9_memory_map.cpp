@@ -78,10 +78,12 @@ Arm9MemoryMap::Location Arm9MemoryMap::locate(std::uint32_t address) noexcept {
     case 0x07:
         return {Region::object_attributes, &video_.object_attributes()[address % oam_bytes]};
     default:
-        // Tout le reste n'est pas décodé, et pour trois raisons différentes que
-        // rien ne distingue encore : les adresses basses appartiennent à la
-        // mémoire locale du cœur, que le processeur consulte avant le bus ; le
-        // haut de l'espace revient au BIOS, qui n'est pas fourni ; et les deux
+        if (address >= bios_base) {
+            return {Region::boot_program, &bios_[(address - bios_base) % bios_bytes]};
+        }
+        // Le reste n'est pas décodé, et pour deux raisons différentes que rien
+        // ne distingue encore : les adresses basses appartiennent à la mémoire
+        // locale du cœur, que le processeur consulte avant le bus, et les deux
         // fenêtres de cartouche attendent leur contrôleur. Les nommer sans les
         // traiter serait une affirmation que rien ne vérifie.
         return {Region::unmapped, nullptr};
@@ -424,6 +426,7 @@ void Arm9MemoryMap::write(std::uint32_t address, std::uint32_t value, std::uint3
         const auto byte_address = address + index;
         const auto byte = static_cast<std::uint8_t>((value >> (index * 8U)) & 0xffU);
         const auto location = locate(byte_address);
+        if (is_read_only(location.region)) continue;
         if (location.data != nullptr) {
             *location.data = byte;
         } else {

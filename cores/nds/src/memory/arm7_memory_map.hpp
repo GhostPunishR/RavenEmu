@@ -59,6 +59,20 @@ public:
 
     /** Première adresse de la mémoire propre, au-delà de la fenêtre partagée. */
     static constexpr std::uint32_t private_wram_base = 0x0380'0000;
+
+    /**
+     * Étendue de la région du programme d'amorçage de ce processeur.
+     *
+     * Elle est en bas de l'espace, là où le matériel la place, et non en haut
+     * comme celle du processeur principal : c'est aussi là que se trouve sa
+     * table des vecteurs d'exception, ce processeur n'ayant pas de coprocesseur
+     * pour la déplacer.
+     */
+    static constexpr std::uint32_t bios_base = 0x0000'0000;
+    static constexpr std::uint32_t bios_bytes = 0x4000;
+
+    /** La région du programme d'amorçage, que le seul organe qui l'écrit remplit. */
+    [[nodiscard]] std::span<std::uint8_t> bios() noexcept { return bios_; }
     /** Vue en lecture seule du partage de la mémoire commune. */
     static constexpr std::uint32_t shared_wram_status = 0x0400'0241;
 
@@ -184,6 +198,7 @@ private:
         shared_wram,
         private_wram,
         input_output,
+        boot_program,
     };
 
     struct Location {
@@ -218,6 +233,15 @@ private:
     Timers timers_{interrupts_};
     DmaController dma_{Processor::secondary, interrupts_};
     std::vector<std::uint8_t> private_wram_;
+
+    /**
+     * Le programme d'amorçage, en lecture seule.
+     *
+     * Il ne contient pas celui de la console, que ce dépôt ne fournit pas, mais
+     * le peu de code que RavenEmu y écrit pour que la table des vecteurs mène
+     * quelque part.
+     */
+    std::vector<std::uint8_t> bios_ = std::vector<std::uint8_t>(bios_bytes, 0);
 
     bool halt_requested_{};
 

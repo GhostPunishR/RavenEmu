@@ -261,6 +261,23 @@ void ArmCore::restore_cpsr_from_spsr() noexcept {
     state_.cpsr = restored;
 }
 
+void ArmCore::take_software_interrupt(std::uint32_t number, std::uint32_t width) {
+    // Servi hors du processeur quand un organe s'en charge : l'appel rend alors
+    // la main à l'instruction suivante, comme le fait le programme d'amorçage en
+    // revenant par `movs pc, lr`. Le compteur de programme ayant déjà avancé de
+    // deux instructions, c'est de là qu'on retranche la largeur.
+    if (software_interrupts_ != nullptr &&
+        software_interrupts_->handle_software_interrupt(number)) {
+        return;
+    }
+    enter_exception(
+        CpuMode::supervisor,
+        software_interrupt_vector,
+        state_.registers[15] - width,
+        false
+    );
+}
+
 void ArmCore::raise_undefined(std::uint32_t opcode) {
     if (unimplemented_ == 0U) first_unimplemented_ = opcode;
     ++unimplemented_;
@@ -390,12 +407,10 @@ void ArmCore::execute(std::uint32_t opcode) {
         return;
     case 0x7:
         if (bit(opcode, 24)) {                                   // SWI
-            enter_exception(
-                CpuMode::supervisor,
-                software_interrupt_vector,
-                state_.registers[15] - 4U,
-                false
-            );
+            // Le numéro occupe les huit bits hauts du champ de commentaire :
+            // c'est là que le programme d'amorçage le lit, et les seize bits
+            // bas ne lui servent pas.
+            take_software_interrupt(bits(opcode, 16, 8), 4U);
             return;
         }
         // `MCR` et `MRC` portent le bit 4 ; `CDP`, qui ne l'a pas, n'a aucun

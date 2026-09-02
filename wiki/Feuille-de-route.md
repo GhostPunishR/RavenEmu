@@ -99,7 +99,13 @@ aujourd'hui :
   cœur que le pont natif construit pour lui. L'en-tête est relu côté Kotlin pour
   que la bibliothèque n'ait pas à démarrer un moteur par fichier parcouru, et une
   vérification du dépôt compare les deux lectures ainsi que les identifiants de
-  console de part et d'autre du pont.
+  console de part et d'autre du pont;
+- les services du programme d'amorçage, rendus sans ce programme : attente
+  d'interruption, division, racine entière, somme de contrôle, les deux recopies,
+  le dépaquetage de bits et les cinq formats de décompression. L'appel logiciel
+  est intercepté avant son vecteur ; l'interruption, elle, passe par six
+  instructions écrites pour RavenEmu et placées dans la région du programme
+  d'amorçage, que le processeur émulé exécute vraiment.
 
 Le budget d'instructions accordé à une ligne repose sur une convention dite en
 toutes lettres : une instruction par cycle de l'horloge maître, faute d'un modèle
@@ -111,11 +117,13 @@ modélisé : ses valeurs ne sont affirmées nulle part dans ce dépôt, et les
 inventer serait une affirmation que rien ne vérifie. Une cartouche qui monte sa
 propre pile démarre ; une cartouche qui compte sur l'amorceur ne démarre pas.
 
-Une image est donc produite, mais aucun jeu ne tourne encore. Restent à écrire
-les coordonnées de l'écran tactile, les
-appels du programme d'amorçage, le bus de cartouche, les décors tournants et les
-modes étendus, les sprites tournants et semi-transparents, le moteur 3D, les
-fenêtres et les mélanges, les palettes étendues, la sauvegarde et le son.
+Un programme qui tient dans les deux blocs que son en-tête décrit et qui n'a
+besoin que des services d'amorçage démarre désormais. Un jeu du commerce, non :
+il lit la suite de sa cartouche au fur et à mesure, et le bus qui le permet
+n'existe pas. Restent donc à écrire ce bus, les coordonnées de l'écran tactile,
+les décors tournants et les modes étendus, les sprites tournants et
+semi-transparents, le moteur 3D, les fenêtres et les mélanges, les palettes
+étendues, la sauvegarde et le son.
 L'enregistrement d'un état reste refusé par une erreur nommée, faute de format ;
 l'application ne le propose donc pas pour cette console, plutôt que de l'offrir
 et d'échouer. La console est en revanche entrée dans la bibliothèque : un jeu s'y

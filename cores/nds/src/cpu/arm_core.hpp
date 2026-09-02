@@ -17,6 +17,34 @@ enum class Architecture {
 };
 
 /**
+ * Ce qui sert un appel logiciel à la place du programme d'amorçage.
+ *
+ * Sur console, `SWI` mène au vecteur d'appel superviseur, où le programme
+ * d'amorçage décode le numéro et rend le service demandé. Ce programme n'est pas
+ * fourni avec RavenEmu, et ne peut pas l'être : c'est du code de la console. Les
+ * services sont donc rendus **hors du processeur**, par un organe qui reçoit le
+ * numéro et agit sur les registres et la mémoire, puis rend la main à
+ * l'instruction suivante — exactement comme le programme d'amorçage le fait en
+ * revenant par `movs pc, lr`.
+ *
+ * Un appel que cet organe ne couvre pas n'est pas inventé : il redescend au
+ * chemin du matériel, celui du vecteur, où le programme trouvera ce que la
+ * mémoire contient.
+ */
+class SoftwareInterruptHandler {
+public:
+    SoftwareInterruptHandler() = default;
+    SoftwareInterruptHandler(const SoftwareInterruptHandler&) = delete;
+    SoftwareInterruptHandler& operator=(const SoftwareInterruptHandler&) = delete;
+    SoftwareInterruptHandler(SoftwareInterruptHandler&&) = delete;
+    SoftwareInterruptHandler& operator=(SoftwareInterruptHandler&&) = delete;
+    virtual ~SoftwareInterruptHandler() = default;
+
+    /** Rend faux pour un appel non couvert, que le cœur traite alors par le vecteur. */
+    [[nodiscard]] virtual bool handle_software_interrupt(std::uint32_t number) = 0;
+};
+
+/**
  * Cœur ARM de la Nintendo DS, jeux d'instructions ARM et Thumb.
  *
  * La console porte deux processeurs de la même famille, et une seule
@@ -113,6 +141,29 @@ public:
      * avant de s'arrêter doit repartir tout de même. Seul l'organe qui tient le
      * contrôleur d'interruptions sait cela, et c'est lui qui appelle `wake`.
      */
+    /**
+     * Installe l'organe qui sert les appels logiciels, ou en retire un.
+     *
+     * Sans organe, `SWI` prend le chemin du matériel : le vecteur d'appel
+     * superviseur. C'est ce que fait un cœur monté seul, pour les vérifications
+     * qui portent sur le processeur et non sur la console.
+     */
+    void set_software_interrupt_handler(SoftwareInterruptHandler* handler) noexcept {
+        software_interrupts_ = handler;
+    }
+
+    /**
+     * Fait reprendre l'exécution à [address], comme le ferait un branchement.
+     *
+     * Le compteur de programme ne suffit pas à lui seul : sans marquer le
+     * branchement, le cœur le remplacerait par l'adresse suivante en fin de pas,
+     * et le saut n'aurait pas lieu.
+     */
+    void branch_to(std::uint32_t address) noexcept {
+        state_.registers[15] = address;
+        branched_ = true;
+    }
+
     void halt() noexcept { halted_ = true; }
     void wake() noexcept { halted_ = false; }
     [[nodiscard]] bool halted() const noexcept { return halted_; }
@@ -212,6 +263,14 @@ private:
     }
 
     void enter_exception(CpuMode mode, std::uint32_t vector, std::uint32_t return_address, bool mask_fiq) noexcept;
+
+    /**
+     * Prend un appel logiciel, servi hors du processeur si quelqu'un s'en charge.
+     *
+     * @param number numéro de l'appel, tel que l'instruction le porte
+     * @param width  largeur de l'instruction, qui donne l'adresse de reprise
+     */
+    void take_software_interrupt(std::uint32_t number, std::uint32_t width);
     void raise_undefined(std::uint32_t opcode);
     void restore_cpsr_from_spsr() noexcept;
 
@@ -224,6 +283,9 @@ private:
     CpuState state_{};
     bool branched_{};
     bool halted_{};
+
+    /** Qui sert les appels logiciels, ou rien : le vecteur s'en charge alors. */
+    SoftwareInterruptHandler* software_interrupts_{};
     bool irq_line_{};
     bool fiq_line_{};
     std::uint32_t unimplemented_{};

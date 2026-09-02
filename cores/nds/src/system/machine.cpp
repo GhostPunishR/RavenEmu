@@ -8,7 +8,17 @@ Machine::Machine()
       main_map_(system_, video_, link_, main_interrupts_, input_),
       secondary_map_(system_, video_, link_, secondary_interrupts_, input_),
       main_core_(main_map_),
-      secondary_core_(secondary_map_) {}
+      secondary_core_(secondary_map_),
+      main_bios_(Processor::main, main_core_, main_map_, main_interrupts_, &main_core_.cp15()),
+      secondary_bios_(
+          Processor::secondary, secondary_core_, secondary_map_, secondary_interrupts_, nullptr) {
+    // Les appels logiciels sont servis hors du processeur, faute d'un programme
+    // d'amorçage à faire tourner. Un cœur monté seul, sans console autour, garde
+    // le chemin du matériel : c'est ce que les vérifications du processeur
+    // éprouvent.
+    main_core_.set_software_interrupt_handler(&main_bios_);
+    secondary_core_.set_software_interrupt_handler(&secondary_bios_);
+}
 
 void Machine::reset() {
     system_.reset();
@@ -21,6 +31,15 @@ void Machine::reset() {
     secondary_map_.reset();
     main_core_.reset();
     secondary_core_.reset();
+    // La table des vecteurs se réécrit après la remise à zéro des cœurs : celle
+    // du principal dépend de son coprocesseur, qui vient d'y revenir.
+    main_bios_.install(main_map_.bios());
+    secondary_bios_.install(secondary_map_.bios());
+}
+
+Bios& Machine::bios(Processor side) noexcept {
+    if (side == Processor::main) return main_bios_;
+    return secondary_bios_;
 }
 
 ArmCore& Machine::core(Processor side) noexcept {
