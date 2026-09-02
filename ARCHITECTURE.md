@@ -537,6 +537,28 @@ D-pad sans en être un : elle est reconnue à ses deux axes et laissée inerte t
 que l'écran tactile n'est pas relié au cœur, plutôt que découpée en neuf cases
 de direction.
 
+La console est déclarée à l'application comme les deux autres : un
+`ConsoleProvider` publié par son module de moteur, ajouté à la racine de
+composition, et rien d'autre à retrouver ailleurs. Deux points lui sont propres.
+
+Le premier est que l'en-tête de cartouche est **lu deux fois** : une fois en C++
+pour amorcer, une fois en Kotlin pour indexer. Ce n'est pas un oubli. La
+bibliothèque parcourt des fichiers sans jamais construire de moteur, et démarrer
+un cœur natif pour lire un titre coûterait une allocation par ROM rencontrée. Le
+prix de cette seconde lecture est qu'elle peut diverger de la première ; les deux
+sont donc tenues aux mêmes refus, et une vérification de `tools/ci-policy`
+compare les identifiants de console de part et d'autre du pont natif — un
+identifiant qui différerait ferait construire le moteur d'une autre console, ou
+relire un état enregistré pour elle.
+
+Le second est qu'un moteur peut n'avoir **pas encore** de format d'état. C'est le
+cas de celui-ci : en figer un avant que la console soit complète promettrait une
+compatibilité que le prochain organe ajouté briserait. Le contrat le dit
+(`EmulatorCore.supportsSaveState`, et son pendant sur `ConsoleProvider` pour
+répondre sans construire de moteur), et l'application ne propose pas ce que le
+moteur ne tient pas, au lieu de l'offrir et d'échouer au moment où le joueur
+enregistre.
+
 Les suites natives (`common`, `gb`, `gbc`, `gba`, `nds`) doivent pouvoir être
 construites directement avec `cmake -S cores`.
 

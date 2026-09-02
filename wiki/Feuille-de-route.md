@@ -92,7 +92,14 @@ aujourd'hui :
 - les skins Delta de Nintendo DS : la console reconnue à son identifiant, les
   deux touches supplémentaires, le cadre des deux écrans empilés, et la zone
   tactile reconnue puis laissée inerte au lieu d'être prise pour une croix
-  directionnelle.
+  directionnelle;
+- la place de la console dans l'application : un fichier `.nds` est reconnu à
+  son extension puis à son en-tête, indexé dans la bibliothèque avec son titre,
+  son code jeu et ses empreintes, rangé dans sa propre page, et lancé sur le
+  cœur que le pont natif construit pour lui. L'en-tête est relu côté Kotlin pour
+  que la bibliothèque n'ait pas à démarrer un moteur par fichier parcouru, et une
+  vérification du dépôt compare les deux lectures ainsi que les identifiants de
+  console de part et d'autre du pont.
 
 Le budget d'instructions accordé à une ligne repose sur une convention dite en
 toutes lettres : une instruction par cycle de l'horloge maître, faute d'un modèle
@@ -109,10 +116,10 @@ les coordonnées de l'écran tactile, les
 appels du programme d'amorçage, le bus de cartouche, les décors tournants et les
 modes étendus, les sprites tournants et semi-transparents, le moteur 3D, les
 fenêtres et les mélanges, les palettes étendues, la sauvegarde et le son.
-L'enregistrement d'un état reste refusé par une erreur nommée, faute de format.
-La console n'apparaît pas encore dans la bibliothèque de l'application : un skin
-de Nintendo DS s'importe et se sélectionne, mais aucune partie ne le porte
-encore.
+L'enregistrement d'un état reste refusé par une erreur nommée, faute de format ;
+l'application ne le propose donc pas pour cette console, plutôt que de l'offrir
+et d'échouer. La console est en revanche entrée dans la bibliothèque : un jeu s'y
+range et se lance, et c'est ce qui rend le manque visible plutôt que théorique.
 
 ## Pistes futures
 

@@ -352,12 +352,11 @@ class EmulationActivity : RavenActivity(), EmulationSession.Callbacks {
         ).show()
     }
 
-    private fun deltaSkinConsole(): DeltaSkinConsole =
-        if (console == ConsoleType.GAME_BOY_ADVANCE) {
-            DeltaSkinConsole.GBA
-        } else {
-            DeltaSkinConsole.GB_GBC
-        }
+    private fun deltaSkinConsole(): DeltaSkinConsole = when (console) {
+        ConsoleType.GAME_BOY_ADVANCE -> DeltaSkinConsole.GBA
+        ConsoleType.NINTENDO_DS -> DeltaSkinConsole.DS
+        ConsoleType.GAME_BOY -> DeltaSkinConsole.GB_GBC
+    }
 
     // ---- Chargement ----
 
@@ -503,34 +502,48 @@ class EmulationActivity : RavenActivity(), EmulationSession.Callbacks {
             if (hasPerGameProfile()) R.string.emulation_per_game_profile_off
             else R.string.emulation_per_game_profile_on
         )
-        val items = arrayOf(
-            getString(R.string.emulation_resume),
-            getString(R.string.emulation_save_state),
-            getString(R.string.emulation_load_state),
-            getString(R.string.emulation_reset),
-            getString(R.string.emulation_edit_controls),
-            perGameLabel,
-            getString(R.string.emulation_quit),
-        )
+        // Libellé et action vont ensemble. Ils étaient auparavant un tableau de
+        // textes et un « when » sur l'indice : retirer une entrée décalait
+        // silencieusement toutes les suivantes, et le joueur qui demandait la
+        // remise à zéro obtenait l'édition des commandes.
+        val actions = mutableListOf<Pair<String, () -> Unit>>()
+        fun entree(label: String, action: () -> Unit) {
+            actions += label to action
+        }
+
+        entree(getString(R.string.emulation_resume)) { currentSession.resume() }
+        // Un moteur sans format d'état ne se voit pas proposer d'en écrire un :
+        // l'entrée est absente plutôt que présente et fautive.
+        if (supportsSaveState) {
+            entree(getString(R.string.emulation_save_state)) { saveSnapshot() }
+            entree(getString(R.string.emulation_load_state)) { loadSnapshot() }
+        }
+        entree(getString(R.string.emulation_reset)) {
+            currentSession.post { it.reset() }
+            currentSession.resume()
+        }
+        entree(getString(R.string.emulation_edit_controls)) { enterEditMode() }
+        entree(perGameLabel) { togglePerGameProfile() }
+        entree(getString(R.string.emulation_quit)) { finish() }
         AlertDialog.Builder(this)
             .setTitle(romTitle.ifBlank { romFileName })
-            .setItems(items) { _, which ->
-                when (which) {
-                    0 -> currentSession.resume()
-                    1 -> saveSnapshot()
-                    2 -> loadSnapshot()
-                    3 -> {
-                        currentSession.post { it.reset() }
-                        currentSession.resume()
-                    }
-                    4 -> enterEditMode()
-                    5 -> togglePerGameProfile()
-                    6 -> finish()
-                }
+            .setItems(actions.map { it.first }.toTypedArray()) { _, which ->
+                actions[which].second()
             }
             .setOnCancelListener { currentSession.resume() }
             .show()
     }
+
+    /**
+     * Vrai quand le moteur chargé sait enregistrer un instantané.
+     *
+     * C'est le moteur qui répond, jamais la console : redire ici quelle console
+     * a un format d'état en ferait une seconde source, et l'écran continuerait
+     * d'offrir des emplacements le jour où un moteur cesserait de les tenir.
+     * Sans moteur il n'y a pas de partie, donc rien à enregistrer non plus.
+     */
+    private val supportsSaveState: Boolean
+        get() = core?.supportsSaveState == true
 
     /**
      * Sauvegarde dans un emplacement choisi.
@@ -770,11 +783,16 @@ class EmulationActivity : RavenActivity(), EmulationSession.Callbacks {
         val currentSession = session ?: return
         currentSession.flushBattery()
         // Sauvegarde de secours avant une éventuelle interruption du processus.
-        currentSession.post { c ->
-            try {
-                snapshotStore.write(romSha256, SnapshotStore.AUTO_SLOT, c.saveState())
-            } catch (_: Exception) {
-                // La sauvegarde de secours ne doit jamais faire échouer la pause.
+        // Un moteur sans format d'état ne la tente pas : elle échouerait à
+        // chaque mise en pause, et le rattrapage silencieux ci-dessous cacherait
+        // une erreur attendue au milieu de celles qui ne le sont pas.
+        if (supportsSaveState) {
+            currentSession.post { c ->
+                try {
+                    snapshotStore.write(romSha256, SnapshotStore.AUTO_SLOT, c.saveState())
+                } catch (_: Exception) {
+                    // La sauvegarde de secours ne doit jamais faire échouer la pause.
+                }
             }
         }
         if (settings.pauseInBackground) currentSession.pause()

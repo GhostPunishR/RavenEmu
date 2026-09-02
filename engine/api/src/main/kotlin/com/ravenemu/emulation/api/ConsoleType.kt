@@ -38,6 +38,10 @@ enum class ConsoleType(
 
     // Game Boy Advance : moteur ARM7TDMI dédié (module gba-core).
     GAME_BOY_ADVANCE("Game Boy Advance", setOf("gba"), storageId = 2),
+
+    // Nintendo DS : deux processeurs, deux écrans (module nds-core). La valeur
+    // 3 est la première libre, 1 restant retiré.
+    NINTENDO_DS("Nintendo DS", setOf("nds"), storageId = 3),
     ;
 
     companion object {

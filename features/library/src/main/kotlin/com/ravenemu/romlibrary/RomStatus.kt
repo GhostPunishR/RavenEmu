@@ -2,6 +2,7 @@ package com.ravenemu.romlibrary
 
 import com.ravenemu.core.gb.cartridge.CartridgeHeader
 import com.ravenemu.core.gba.cartridge.GbaHeader
+import com.ravenemu.core.nds.cartridge.NdsHeader
 
 /**
  * État d'une ROM, **déduit de la cartouche elle-même**.
@@ -66,4 +67,16 @@ fun CartridgeHeader.romStatus(): RomStatus = when {
  * ne justifierait.
  */
 fun GbaHeader.romStatus(): RomStatus =
+    if (headerChecksumValid) RomStatus.HEADER_ONLY else RomStatus.INVALID_HEADER
+
+/**
+ * État d'une cartouche Nintendo DS.
+ *
+ * Sa somme de contrôle de seize bits ne couvre que les 0x15E premiers octets de
+ * l'en-tête. Rien n'y couvre le contenu, qui reste donc invérifiable, d'où
+ * [RomStatus.HEADER_ONLY] comme pour le Game Boy Advance. La cartouche porte
+ * bien une seconde somme, celle du logo, mais elle ne couvre que le logo : elle
+ * ne dirait rien du jeu, et RavenEmu n'embarque aucun logo auquel la comparer.
+ */
+fun NdsHeader.romStatus(): RomStatus =
     if (headerChecksumValid) RomStatus.HEADER_ONLY else RomStatus.INVALID_HEADER

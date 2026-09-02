@@ -114,9 +114,22 @@ interface EmulatorCore {
     fun acknowledgeBatteryRamSaved(generation: Long)
 
     /**
+     * `true` si ce moteur sait enregistrer et relire un instantané.
+     *
+     * Un moteur encore en construction n'a pas de format d'état : en figer un
+     * avant que la console soit complète promettrait une compatibilité que le
+     * prochain organe ajouté briserait. L'appelant consulte cette propriété
+     * pour ne pas proposer ce qu'il ne peut pas tenir ; appeler quand même
+     * [saveState] reste une erreur signalée, non un instantané vide.
+     */
+    val supportsSaveState: Boolean get() = true
+
+    /**
      * Sérialise l'état complet du moteur en un instantané versionné propre à
      * RavenEmu. Le format n'est pas garanti compatible entre consoles ni avec
      * d'autres émulateurs.
+     *
+     * @throws IllegalStateException si [supportsSaveState] est faux.
      */
     fun saveState(): ByteArray
 

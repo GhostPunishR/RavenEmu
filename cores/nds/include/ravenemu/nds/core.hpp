@@ -38,10 +38,16 @@ inline constexpr double refresh_rate_hz = 33'513'982.0 / 560'190.0;
 /**
  * Cœur Nintendo DS.
  *
- * **Ce cœur n'émule encore rien.** Il porte l'identité de la console, décode et
- * contrôle l'en-tête de cartouche, et publie les caractéristiques vidéo et
- * audio. Toute demande d'exécution est refusée par une erreur explicite plutôt
- * que servie par un écran noir, qui laisserait croire à une émulation muette.
+ * **Ce cœur ne fait pas encore tourner de jeu.** Il porte l'identité de la
+ * console, décode et contrôle l'en-tête de cartouche, amorce les deux blocs de
+ * code aux adresses que cet en-tête indique, et fait avancer les deux
+ * processeurs, les minuteries, les transferts autonomes et le balayage des deux
+ * écrans. Une cartouche qui monte sa propre pile démarre et produit une image.
+ *
+ * Ce qui manque est nommé plutôt que simulé : les appels du programme
+ * d'amorçage, le bus de cartouche, l'écran tactile, le moteur 3D et le son. Une
+ * cartouche qui compte sur l'amorceur ne démarre donc pas, et l'enregistrement
+ * d'un état est refusé par une erreur explicite faute de format publié.
  */
 [[nodiscard]] std::unique_ptr<Core> make_core();
 

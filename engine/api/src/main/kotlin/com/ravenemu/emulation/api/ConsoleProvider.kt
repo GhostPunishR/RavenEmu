@@ -35,6 +35,16 @@ interface ConsoleProvider {
      */
     val maxRomSizeBytes: Int
 
+    /**
+     * `true` si les moteurs de cette console savent enregistrer un instantané.
+     *
+     * La même réponse que [EmulatorCore.supportsSaveState], mais donnée **sans
+     * construire de moteur** : la bibliothèque décide d'offrir ou non les états
+     * d'un jeu qu'elle n'a pas lancé, et allouer un cœur natif pour poser la
+     * question coûterait plus que la question elle-même.
+     */
+    val supportsSaveState: Boolean get() = true
+
     /** `true` si l'extension de [fileName] est reconnue par cette console. */
     fun handles(fileName: String): Boolean =
         fileName.substringAfterLast('.', "").lowercase() in romExtensions

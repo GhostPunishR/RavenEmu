@@ -250,6 +250,12 @@ Java_com_ravenemu_nativebridge_NativeCoreBridge_create(
             core = ravenemu::make_game_boy_core();
         } else if (console_storage_id == static_cast<jint>(ravenemu::Console::game_boy_advance)) {
             core = ravenemu::make_gba_core(gba_save_type_from(forced_save_type));
+        } else if (console_storage_id == static_cast<jint>(ravenemu::Console::nintendo_ds)) {
+            // Le type de sauvegarde imposé ne concerne que le Game Boy Advance :
+            // la Nintendo DS n'a pas encore de mémoire de cartouche, et le
+            // paramètre est ignoré plutôt que refusé, l'appelant le passant
+            // uniformément pour toutes les consoles.
+            core = ravenemu::make_nds_core();
         } else {
             throw std::invalid_argument("Console RavenEmu inconnue");
         }
