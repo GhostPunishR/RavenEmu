@@ -279,18 +279,17 @@ void les_reglages_se_lisent_et_leur_somme_tient() {
 
     const auto pointer_bytes = read_firmware(fixture.port, Firmware::settings_pointer_address, 2);
     const auto pointer = read16(pointer_bytes, 0);
+    // Le pointeur est comparé à sa valeur en toutes lettres : le déduire des
+    // constantes qui le fabriquent ferait suivre la vérification si le bloc
+    // déménageait, et un jeu, lui, ne suivrait pas.
+    check(pointer == 0x7fc0U, "le pointeur désigne le bloc, par groupes de huit octets");
+
     const std::uint32_t settings_address =
         static_cast<std::uint32_t>(pointer) * Firmware::settings_pointer_unit;
-    check(
-        settings_address == Firmware::first_settings_address,
-        "le pointeur mène au premier exemplaire des réglages"
-    );
+    check(settings_address == 0x0003'fe00U, "soit l'adresse du premier exemplaire");
 
     const auto settings = read_firmware(fixture.port, settings_address, Firmware::settings_bytes);
-    check(
-        settings[Firmware::version_offset] == Firmware::settings_version,
-        "le bloc annonce sa version"
-    );
+    check(settings[Firmware::version_offset] == 5U, "le bloc annonce sa version");
 
     // La somme porte sur tout ce qui précède le compteur de mise à jour. Elle est
     // recalculée ici plutôt que reprise : c'est le seul contrôle qu'un programme
@@ -320,11 +319,12 @@ void les_reglages_se_lisent_et_leur_somme_tient() {
 /** Les deux exemplaires portent le même contenu : le choix n'a pas d'importance. */
 void les_deux_exemplaires_sont_identiques() {
     Port fixture;
-    const auto first = read_firmware(
-        fixture.port, Firmware::first_settings_address, Firmware::settings_bytes);
-    const auto second = read_firmware(
-        fixture.port, Firmware::second_settings_address, Firmware::settings_bytes);
+    // Les deux adresses sont écrites, non reprises : un exemplaire déplacé
+    // ailleurs se lirait encore comme identique à lui-même.
+    const auto first = read_firmware(fixture.port, 0x0003'fe00U, Firmware::settings_bytes);
+    const auto second = read_firmware(fixture.port, 0x0003'ff00U, Firmware::settings_bytes);
     check(first == second, "les deux exemplaires des réglages se valent");
+    check(first[Firmware::version_offset] == 5U, "et les deux portent bien le bloc");
 }
 
 /**
@@ -350,6 +350,15 @@ void l_etalonnage_ramene_la_mesure_au_pixel() {
     const auto screen_y2 = settings[Firmware::calibration_offset + 11U];
 
     check(adc_x2 > adc_x1 && adc_y2 > adc_y1, "les deux points d'étalonnage sont distincts");
+
+    // Les huit valeurs, écrites en toutes lettres. La fermeture éprouvée plus
+    // bas se referme sur elle-même : déplacer un point déplace la mesure qui va
+    // avec, et l'aller-retour retombe juste sans rien prouver du contenu
+    // réellement inscrit. C'est ce que ces huit lignes disent, et elles seules.
+    check(screen_x1 == 0x20U && screen_y1 == 0x20U, "le premier point est à 32, 32");
+    check(adc_x1 == 0x0200U && adc_y1 == 0x0200U, "et sa mesure vaut seize fois ce pixel");
+    check(screen_x2 == 0xe0U && screen_y2 == 0xb0U, "le second point est à 224, 176");
+    check(adc_x2 == 0x0e00U && adc_y2 == 0x0b00U, "et sa mesure suit la même échelle");
 
     // La formule d'un jeu, telle qu'elle s'écrit : une interpolation entre les
     // deux points enregistrés.
@@ -404,6 +413,43 @@ void sans_contact_le_convertisseur_ne_rend_rien() {
     );
     check(!fixture.input.touching(), "le contact est bien levé");
     check(fixture.input.touch_x() == 0U, "et les coordonnées ne survivent pas au stylet");
+}
+
+/**
+ * La remise à zéro de l'état efface la position, donc la mesure.
+ *
+ * Le convertisseur lit les coordonnées sans les reconditionner au contact :
+ * c'est l'état partagé qui garantit qu'un stylet levé n'en a pas. Si cette
+ * garantie tombait, une console remise à zéro rendrait encore la position du
+ * dernier doigt posé avant elle.
+ */
+void la_remise_a_zero_de_l_etat_efface_la_position() {
+    Port fixture;
+    fixture.input.set_touch(true, 0x6d, 0x30);
+    check(convert(fixture.port, Touchscreen::channel_x) != 0U, "une mesure vient sous contact");
+
+    fixture.input.reset();
+    check(convert(fixture.port, Touchscreen::channel_x) == 0U, "la remise à zéro l'efface");
+    check(convert(fixture.port, Touchscreen::channel_y) == 0U, "sur les deux axes");
+}
+
+/**
+ * Le contact se lit sur son propre bit, non sur le registre entier.
+ *
+ * Ce registre porte aussi les deux touches supplémentaires et le couvercle :
+ * les confondre ferait croire à un contact dès qu'on presse X.
+ */
+void le_contact_ne_se_confond_pas_avec_les_touches() {
+    Port fixture;
+    fixture.input.set_extra_pressed(InputState::extra_x, true);
+    check(!fixture.input.touching(), "presser X ne pose pas le stylet");
+    check(
+        convert(fixture.port, Touchscreen::channel_first_pressure) == 0U,
+        "et la dalle ne mesure aucune pression"
+    );
+
+    fixture.input.set_touch(true, 0x10, 0x10);
+    check(fixture.input.touching(), "le stylet posé, lui, se voit");
 }
 
 /** Le convertisseur porte d'autres canaux, dont rien ici n'a la mesure. */
@@ -494,7 +540,9 @@ void la_flash_se_lit_effacee_hors_du_contenu() {
     Port fixture;
     const auto bytes = read_firmware(fixture.port, 0x0001'0000, 4);
     for (const auto byte : bytes) {
-        check(byte == Firmware::erased_byte, "hors du contenu, la flash rend des octets à un");
+        // Des octets à un, écrits en toutes lettres : zéro serait un contenu
+        // plausible qu'un programme prendrait pour une donnée.
+        check(byte == 0xffU, "hors du contenu, la flash rend des octets à un");
     }
 }
 
@@ -509,25 +557,22 @@ void l_armement_de_l_ecriture_se_lit_dans_l_etat() {
         return value;
     };
 
-    check((status_of() & FirmwareFlash::status_busy) == 0U, "rien ne s'écrit jamais");
-    check(
-        (status_of() & FirmwareFlash::status_write_enabled) == 0U,
-        "et l'écriture n'est pas armée au départ"
-    );
+    // Les deux bits sont désignés par leur rang plutôt que par leur constante :
+    // l'occupation est le premier, l'armement le second, et les échanger ferait
+    // croire à un programme que la puce écrit quand elle est prête.
+    constexpr std::uint8_t first_bit = 0x01;
+    constexpr std::uint8_t second_bit = 0x02;
+
+    check(status_of() == 0U, "au départ, rien ne s'écrit et rien n'est armé");
 
     fixture.port.set_control(control_for(SerialPort::Device::firmware, false));
     static_cast<void>(exchange(fixture.port, FirmwareFlash::command_write_enable));
-    check(
-        (status_of() & FirmwareFlash::status_write_enabled) != 0U,
-        "la commande d'armement se voit dans l'état"
-    );
+    check(status_of() == second_bit, "l'armement pose le second bit, et lui seul");
+    check((status_of() & first_bit) == 0U, "l'occupation reste éteinte");
 
     fixture.port.set_control(control_for(SerialPort::Device::firmware, false));
     static_cast<void>(exchange(fixture.port, FirmwareFlash::command_write_disable));
-    check(
-        (status_of() & FirmwareFlash::status_write_enabled) == 0U,
-        "et la commande inverse l'y retire"
-    );
+    check(status_of() == 0U, "et la commande inverse l'y retire");
 }
 
 /** Une commande que la puce ne sert pas est comptée, non devinée. */
@@ -541,6 +586,18 @@ void une_commande_de_flash_non_servie_est_comptee() {
     check(
         fixture.port.firmware().first_unsupported() == page_write,
         "et la première rencontrée est retenue"
+    );
+
+    // Une seconde commande non servie compte, mais ne remplace pas la première :
+    // c'est celle-là qui situe l'origine du dérapage.
+    constexpr std::uint8_t chip_erase = 0xc7;
+    fixture.port.set_control(0);
+    fixture.port.set_control(control_for(SerialPort::Device::firmware, true));
+    static_cast<void>(exchange(fixture.port, chip_erase));
+    check(fixture.port.firmware().unsupported_count() == 2U, "la seconde est comptée aussi");
+    check(
+        fixture.port.firmware().first_unsupported() == page_write,
+        "sans effacer la première"
     );
 }
 
@@ -568,6 +625,35 @@ void l_alimentation_retient_ses_reglages() {
     check(!fixture.port.power().powered_off(), "rien n'a demandé l'extinction");
 }
 
+/**
+ * L'octet qui désigne un registre ne rapporte rien, même quand il y a à dire.
+ *
+ * La puce n'a pas encore entendu la demande au moment où elle renvoie cet
+ * octet-là. Une puce qui rendrait déjà le contenu du registre visé décalerait
+ * toute la suite d'un rang, et un programme lirait la réponse d'avant.
+ */
+void l_octet_qui_designe_ne_rapporte_rien() {
+    Port fixture;
+    constexpr std::uint8_t lights = 0x0d;
+
+    fixture.port.set_control(control_for(SerialPort::Device::power, true));
+    static_cast<void>(exchange(fixture.port, PowerManagement::register_control));
+    static_cast<void>(exchange(fixture.port, lights));
+    fixture.port.set_control(0);
+    check(fixture.port.power().control() == lights, "le registre porte bien quelque chose");
+
+    // Une commande neuve : l'octet de désignation ne doit pas rendre ce contenu.
+    fixture.port.set_control(control_for(SerialPort::Device::power, true));
+    check(
+        exchange(
+            fixture.port,
+            static_cast<std::uint8_t>(
+                PowerManagement::read_flag | PowerManagement::register_control)) == 0U,
+        "l'octet de désignation ne rapporte rien"
+    );
+    check(exchange(fixture.port, 0) == lights, "et le suivant rapporte le registre");
+}
+
 /** La batterie se mesure et n'annonce pas une charge faible sans raison. */
 void la_batterie_ne_s_annonce_pas_faible() {
     Port fixture;
@@ -582,10 +668,14 @@ void la_batterie_ne_s_annonce_pas_faible() {
         "la batterie ne s'annonce pas faible"
     );
 
-    // Elle ne s'écrit pas non plus : c'est une mesure, pas un réglage.
+    // Elle ne s'écrit pas non plus : c'est une mesure, pas un réglage. Le bus
+    // est coupé entre les deux commandes, sans quoi la seconde serait lue comme
+    // la suite de la première et n'éprouverait rien.
     fixture.port.set_control(control_for(SerialPort::Device::power, true));
     static_cast<void>(exchange(fixture.port, PowerManagement::register_battery));
     static_cast<void>(exchange(fixture.port, PowerManagement::low_battery));
+    fixture.port.set_control(0);
+
     fixture.port.set_control(control_for(SerialPort::Device::power, true));
     static_cast<void>(exchange(
         fixture.port,
@@ -594,28 +684,93 @@ void la_batterie_ne_s_annonce_pas_faible() {
         (exchange(fixture.port, 0) & PowerManagement::low_battery) == 0U,
         "et l'écrire ne la change pas"
     );
+    fixture.port.set_control(0);
+
+    // Le registre voisin, lui, s'écrit : sans quoi la vérification ci-dessus
+    // passerait aussi pour une puce qui n'écrit jamais rien.
+    fixture.port.set_control(control_for(SerialPort::Device::power, true));
+    static_cast<void>(exchange(fixture.port, PowerManagement::register_microphone_gain));
+    static_cast<void>(exchange(fixture.port, 0x2a));
+    fixture.port.set_control(0);
+    fixture.port.set_control(control_for(SerialPort::Device::power, true));
+    static_cast<void>(exchange(
+        fixture.port,
+        static_cast<std::uint8_t>(
+            PowerManagement::read_flag | PowerManagement::register_microphone_gain)));
+    check(exchange(fixture.port, 0) == 0x2a, "un registre ordinaire garde ce qu'on y écrit");
 }
 
 /** L'extinction demandée est retenue, non exécutée. */
 void l_extinction_demandee_se_releve() {
-    Port fixture;
-    fixture.port.set_control(control_for(SerialPort::Device::power, true));
-    static_cast<void>(exchange(fixture.port, PowerManagement::register_control));
-    static_cast<void>(exchange(fixture.port, PowerManagement::power_off));
-    fixture.port.set_control(0);
-    check(fixture.port.power().powered_off(), "la demande d'extinction se relève");
+    // Le bit est écrit en toutes lettres : le reprendre de la constante qui le
+    // définit ferait suivre la vérification si le bit déménageait.
+    constexpr std::uint8_t seventh_bit = 0x40;
+    {
+        Port fixture;
+        fixture.port.set_control(control_for(SerialPort::Device::power, true));
+        static_cast<void>(exchange(fixture.port, PowerManagement::register_control));
+        static_cast<void>(exchange(fixture.port, seventh_bit));
+        fixture.port.set_control(0);
+        check(fixture.port.power().powered_off(), "la demande d'extinction se relève");
+    }
+    {
+        // Les bits voisins ne l'éteignent pas : ils règlent le son et la
+        // lumière, et confondre l'un d'eux avec l'extinction sortirait d'une
+        // partie au moment où le jeu allume ses écrans.
+        Port fixture;
+        fixture.port.set_control(control_for(SerialPort::Device::power, true));
+        static_cast<void>(exchange(fixture.port, PowerManagement::register_control));
+        static_cast<void>(exchange(fixture.port, static_cast<std::uint8_t>(~seventh_bit)));
+        fixture.port.set_control(0);
+        check(!fixture.port.power().powered_off(), "aucun autre bit ne l'éteint");
+    }
 }
 
 /** La puce n'a que quatre registres, et un cinquième n'existe pas. */
 void un_registre_d_alimentation_inconnu_est_compte() {
+    // Quatre registres, numérotés de zéro à trois. Le nombre est écrit ici
+    // plutôt que repris de la constante : sinon un cinquième registre déclaré
+    // par erreur serait éprouvé comme s'il avait toujours existé.
     Port fixture;
     fixture.port.set_control(control_for(SerialPort::Device::power, true));
-    static_cast<void>(exchange(fixture.port, PowerManagement::register_count));
+    static_cast<void>(exchange(fixture.port, 4));
     check(exchange(fixture.port, 0) == 0U, "un registre absent ne rend rien");
     check(
         fixture.port.power().unknown_register_count() == 1U,
         "et il est compté plutôt qu'inventé"
     );
+    fixture.port.set_control(0);
+
+    // Le dernier registre qui existe, lui, n'est pas compté.
+    fixture.port.set_control(control_for(SerialPort::Device::power, true));
+    static_cast<void>(exchange(fixture.port, 3));
+    static_cast<void>(exchange(fixture.port, 0x11));
+    check(
+        fixture.port.power().unknown_register_count() == 1U,
+        "le dernier registre qui existe n'est pas compté"
+    );
+}
+
+/**
+ * Une conversion entamée ne survit pas à la désélection.
+ *
+ * Sans cet oubli, la moitié d'une mesure abandonnée reviendrait au premier
+ * octet creux de la commande suivante, et le programme la prendrait pour le
+ * début d'une conversion neuve.
+ */
+void une_conversion_abandonnee_ne_revient_pas() {
+    Port fixture;
+    fixture.input.set_touch(true, 0x6d, 0x30);
+
+    fixture.port.set_control(control_for(SerialPort::Device::touchscreen, true));
+    static_cast<void>(exchange(fixture.port, static_cast<std::uint8_t>(
+        Touchscreen::start_flag | (Touchscreen::channel_x << Touchscreen::channel_shift))));
+    // Le programme coupe le bus avant d'avoir recueilli les deux octets.
+    fixture.port.set_control(0);
+
+    fixture.port.set_control(control_for(SerialPort::Device::touchscreen, true));
+    check(exchange(fixture.port, 0) == 0U, "la conversion abandonnée ne revient pas");
+    check(exchange(fixture.port, 0) == 0U, "ni sa seconde moitié");
 }
 
 /** Changer de puce met fin à la commande en cours partout. */
@@ -738,6 +893,18 @@ void les_registres_du_port_sont_decodes() {
         console.secondary().read8(SerialPort::data_address) == 0x32U,
         "une relecture rend le même octet"
     );
+
+    // Le matériel réserve deux octets au port de données, mais un seul porte
+    // quelque chose. Rendre l'octet reçu dans les deux ferait lire à un
+    // programme deux fois la même réponse pour deux échanges différents.
+    check(
+        console.secondary().read8(SerialPort::data_address + 1U) == 0U,
+        "la moitié haute du port de données ne porte rien"
+    );
+    check(
+        console.secondary().read16(SerialPort::data_address) == 0x0032U,
+        "et le mot entier ne porte que l'octet reçu"
+    );
 }
 
 /** Le processeur principal ne voit pas ce port : il n'est pas à lui. */
@@ -760,12 +927,27 @@ void la_remise_a_zero_efface_le_port() {
     static_cast<void>(exchange(console.port(), PowerManagement::power_off));
     static_cast<void>(exchange(console.port(), 0));
 
+    // La flash aussi est salie : son écriture est armée et une commande qu'elle
+    // ne sert pas est comptée. Sans quoi la vérification ci-dessous comparerait
+    // zéro à zéro et ne prouverait rien de sa remise à zéro.
+    console.port().set_control(control_for(SerialPort::Device::firmware, false));
+    static_cast<void>(exchange(console.port(), FirmwareFlash::command_write_enable));
+    static_cast<void>(exchange(console.port(), 0x0a));
+    check(console.port().firmware().status() != 0U, "l'écriture de la flash est armée");
+    check(console.port().firmware().unsupported_count() != 0U, "et une commande est comptée");
+
     console.machine.reset();
 
     check(console.port().control() == 0U, "le registre de commande repart de zéro");
     check(console.port().data() == 0U, "le registre de données aussi");
     check(!console.port().power().powered_off(), "et l'extinction demandée est oubliée");
     check(console.port().unsupported_count() == 0U, "les comptes repartent de zéro");
+    check(console.port().firmware().status() == 0U, "l'état de la flash aussi");
+    check(
+        console.port().firmware().unsupported_count() == 0U,
+        "et son compte de commandes non servies"
+    );
+    check(console.port().firmware().first_unsupported() == 0U, "ainsi que la première retenue");
 }
 
 /**
@@ -833,6 +1015,8 @@ int main() {
     les_deux_exemplaires_sont_identiques();
     l_etalonnage_ramene_la_mesure_au_pixel();
     sans_contact_le_convertisseur_ne_rend_rien();
+    la_remise_a_zero_de_l_etat_efface_la_position();
+    le_contact_ne_se_confond_pas_avec_les_touches();
     un_canal_non_servi_est_compte();
     l_octet_de_commande_ne_rend_rien();
     le_maintien_de_la_selection_porte_la_commande();
@@ -841,9 +1025,11 @@ int main() {
     l_armement_de_l_ecriture_se_lit_dans_l_etat();
     une_commande_de_flash_non_servie_est_comptee();
     l_alimentation_retient_ses_reglages();
+    l_octet_qui_designe_ne_rapporte_rien();
     la_batterie_ne_s_annonce_pas_faible();
     l_extinction_demandee_se_releve();
     un_registre_d_alimentation_inconnu_est_compte();
+    une_conversion_abandonnee_ne_revient_pas();
     changer_de_puce_referme_la_commande();
     le_bus_eteint_n_echange_rien();
     une_place_vide_est_comptee();

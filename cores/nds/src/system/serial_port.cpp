@@ -57,10 +57,13 @@ void FirmwareFlash::reset() noexcept {
 }
 
 void FirmwareFlash::deselect() noexcept {
+    // L'adresse de lecture n'est pas remise à zéro ici, et ce n'est pas un
+    // oubli : toute commande qui s'en sert l'établit elle-même avant de la
+    // lire, si bien qu'une valeur restée là ne peut jamais être employée. La
+    // remettre à zéro serait du code qu'aucune vérification ne pourrait
+    // départager d'une absence.
     has_command_ = false;
     command_ = 0;
-    address_ = 0;
-    address_remaining_ = 0;
 }
 
 std::uint8_t FirmwareFlash::begin_command(std::uint8_t command) noexcept {
@@ -118,14 +121,18 @@ void Touchscreen::reset() noexcept {
 }
 
 std::uint16_t Touchscreen::convert(std::uint8_t channel) noexcept {
-    // Sans contact, aucune tension à mesurer : les quatre canaux rendent zéro,
-    // et c'est là-dessus qu'un programme reconnaît un stylet levé.
-    const bool touching = input_.touching();
+    // Les deux axes se lisent sans condition : un stylet levé n'a **pas** de
+    // coordonnées, l'état partagé les effaçant en même temps qu'il lève le
+    // contact. Les reconditionner ici ferait deux gardes pour une seule règle,
+    // dont l'une ne pourrait jamais être prise en défaut.
+    //
+    // Les deux canaux de pression, eux, rendent une valeur qui ne vient pas de
+    // l'état : c'est le contact qui décide s'ils ont quelque chose à mesurer.
     switch (channel) {
-    case channel_x: return touching ? measure(input_.touch_x()) : 0;
-    case channel_y: return touching ? measure(input_.touch_y()) : 0;
-    case channel_first_pressure: return touching ? first_pressure_value : 0;
-    case channel_second_pressure: return touching ? second_pressure_value : 0;
+    case channel_x: return measure(input_.touch_x());
+    case channel_y: return measure(input_.touch_y());
+    case channel_first_pressure: return input_.touching() ? first_pressure_value : 0;
+    case channel_second_pressure: return input_.touching() ? second_pressure_value : 0;
     default:
         // Température, tension de la batterie, microphone : le convertisseur en
         // porte d'autres, dont rien ici n'a la mesure.
@@ -137,8 +144,10 @@ std::uint16_t Touchscreen::convert(std::uint8_t channel) noexcept {
 std::uint8_t Touchscreen::exchange(std::uint8_t byte) noexcept {
     if ((byte & start_flag) != 0U) {
         const auto channel = static_cast<std::uint8_t>((byte >> channel_shift) & channel_mask);
-        pending_ = static_cast<std::uint16_t>(
-            (convert(channel) & value_mask) << presentation_shift);
+        // Aucun masque : les sources de mesure tiennent sur douze bits par
+        // construction, ce qu'une assertion de compilation garantit. Un masque
+        // ici serait un filet que rien ne pourrait faire jouer.
+        pending_ = static_cast<std::uint16_t>(convert(channel) << presentation_shift);
         remaining_ = 2;
         return 0;
     }

@@ -195,7 +195,14 @@ public:
     static constexpr std::uint8_t channel_second_pressure = 4;
     static constexpr std::uint8_t channel_x = 5;
 
-    /** Les mesures tiennent sur douze bits. */
+    /**
+     * Les mesures tiennent sur douze bits.
+     *
+     * Ce n'est pas un masque appliqué à la sortie : c'est une propriété que la
+     * construction des mesures garantit, et qu'une assertion de compilation
+     * vérifie sous cette classe. Un masque au moment de la conversion serait un
+     * filet que rien ne pourrait faire jouer.
+     */
     static constexpr std::uint16_t value_mask = 0x0fff;
     /** Décalage que la puce applique en présentant ses douze bits sur seize. */
     static constexpr std::uint8_t presentation_shift = 3;
@@ -233,6 +240,19 @@ private:
     std::uint8_t remaining_{};
     std::uint32_t unknown_{};
 };
+
+/**
+ * La plus grande mesure possible tient dans les douze bits annoncés.
+ *
+ * Elle est vérifiée ici plutôt que masquée à l'exécution : le pixel le plus
+ * éloigné de l'écran donne la mesure la plus haute, et si un jour l'échelle
+ * changeait, c'est la compilation qui s'arrêterait, non une image qui
+ * deviendrait fausse en silence.
+ */
+static_assert(
+    Touchscreen::measure(0xffU) <= Touchscreen::value_mask,
+    "l'étalonnage ferait déborder les douze bits du convertisseur"
+);
 
 /**
  * Le port série du processeur secondaire, et les trois puces qui y pendent.
