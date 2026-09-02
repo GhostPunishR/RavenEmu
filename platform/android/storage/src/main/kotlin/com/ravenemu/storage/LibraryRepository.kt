@@ -60,30 +60,25 @@ class LibraryRepository(
             // L'extension du fichier a mené jusqu'ici, donc un analyseur existe.
             // S'il manque, c'est un défaut de câblage et non un fichier fautif.
             val analyzer = analyzers.firstOrNull { it.canAnalyze(file.name) } ?: continue
-            if (file.sizeBytes > analyzer.maxRomSizeBytes) {
+            if (file.sizeBytes > analyzer.maxIndexableBytes) {
                 rejected += RejectedRom(
                     file.name,
                     "trop volumineuse pour être indexée : " +
                         "${file.sizeBytes / (1024L * 1024L)} Mio, " +
-                        "maximum ${analyzer.maxRomSizeBytes / (1024 * 1024)} Mio",
+                        "maximum ${analyzer.maxIndexableBytes / (1024L * 1024L)} Mio",
                 )
                 continue
             }
-            val data = try {
-                scanner.readAll(file.uri, analyzer.maxRomSizeBytes)
+            val analysis = try {
+                analyse(analyzer, file, uriString)
             } catch (_: Exception) {
                 null
             }
-            if (data == null) {
+            if (analysis == null) {
                 rejected += RejectedRom(file.name, "fichier illisible")
                 continue
             }
-            when (val result = analyzer.analyze(
-                uri = uriString,
-                fileName = file.name,
-                lastModified = file.lastModified,
-                data = data,
-            )) {
+            when (val result = analysis) {
                 is AnalysisResult.Success -> {
                     // Conserve les choix utilisateur d'une version précédente.
                     val previous = index.byUri(uriString)
@@ -98,6 +93,45 @@ class LibraryRepository(
         }
         indexStore.save(index)
         LibraryRefresh(index, rejected)
+    }
+
+    /**
+     * Analyse un fichier par le chemin que son analyseur réclame.
+     *
+     * Un analyseur qui se contente de l'en-tête fait défiler le fichier sans
+     * jamais le tenir entier en mémoire ; les autres reçoivent l'image, parce
+     * qu'ils y cherchent des choses qui peuvent être n'importe où — la
+     * signature de sauvegarde d'une cartouche Game Boy Advance, par exemple.
+     *
+     * Rend `null` quand le document est illisible ou déborde son plafond.
+     */
+    private fun analyse(
+        analyzer: RomAnalyzer,
+        file: ScannedFile,
+        uriString: String,
+    ): AnalysisResult? {
+        if (analyzer.headerBytes > 0) {
+            val streamed = scanner.readStreamed(
+                file.uri,
+                analyzer.headerBytes,
+                analyzer.maxIndexableBytes,
+            ) ?: return null
+            return analyzer.analyzeHeader(
+                uri = uriString,
+                fileName = file.name,
+                lastModified = file.lastModified,
+                header = streamed.header,
+                sizeBytes = streamed.sizeBytes,
+                fingerprints = streamed.fingerprints,
+            )
+        }
+        val data = scanner.readAll(file.uri, analyzer.maxRomSizeBytes) ?: return null
+        return analyzer.analyze(
+            uri = uriString,
+            fileName = file.name,
+            lastModified = file.lastModified,
+            data = data,
+        )
     }
 
     /** Met à jour une entrée (pochette choisie, statut forcé…). */

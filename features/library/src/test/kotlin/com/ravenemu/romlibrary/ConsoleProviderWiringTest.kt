@@ -61,6 +61,56 @@ class ConsoleProviderWiringTest {
         assertFalse(analyseur.canAnalyze("tetris.gb"))
     }
 
+    /**
+     * Les deux membres du chemin par l'en-tête vont par paire.
+     *
+     * Un analyseur qui annonce un nombre d'octets sans savoir s'en contenter
+     * ferait rendre `null` au balayage, et le fichier serait écarté comme
+     * illisible alors qu'il ne l'est pas. L'inverse laisserait dormir un chemin
+     * que personne n'emprunterait.
+     */
+    @Test
+    fun `le chemin par l'en-tete est annonce et servi ensemble`() {
+        val analyseurs = listOf(
+            GameBoyRomAnalyzer(GameBoyConsoleProvider()),
+            GbaRomAnalyzer(GbaConsoleProvider()),
+            NdsRomAnalyzer(NdsConsoleProvider()),
+        )
+        for (analyseur in analyseurs) {
+            val annonce = analyseur.headerBytes > 0
+            val sert = analyseur.analyzeHeader(
+                uri = "u",
+                fileName = "x",
+                lastModified = 0L,
+                header = ByteArray(maxOf(analyseur.headerBytes, 1)),
+                sizeBytes = 0L,
+                fingerprints = Fingerprints.of(ByteArray(0)),
+            ) != null
+            assertEquals(annonce, sert, "désaccord sur ${analyseur.console}")
+        }
+    }
+
+    /**
+     * Ce qu'on indexe n'est pas toujours ce qu'on sait charger.
+     *
+     * Le plafond d'indexation ne descend jamais sous celui du moteur : une
+     * cartouche que la console sait faire tourner doit toujours pouvoir entrer
+     * dans la bibliothèque.
+     */
+    @Test
+    fun `le plafond d'indexation couvre au moins celui du moteur`() {
+        for (analyseur in listOf(
+            GameBoyRomAnalyzer(GameBoyConsoleProvider()),
+            GbaRomAnalyzer(GbaConsoleProvider()),
+            NdsRomAnalyzer(NdsConsoleProvider()),
+        )) {
+            assertTrue(
+                analyseur.maxIndexableBytes >= analyseur.maxRomSizeBytes.toLong(),
+                "${analyseur.console} indexe moins qu'elle ne charge",
+            )
+        }
+    }
+
     @Test
     fun `analyseur et registre rattachent un fichier a la meme console`() {
         // La duplication d'antan permettait aux deux de diverger sans bruit.

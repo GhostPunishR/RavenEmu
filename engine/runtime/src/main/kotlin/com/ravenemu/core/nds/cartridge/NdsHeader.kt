@@ -150,16 +150,24 @@ data class NdsHeader(
          * du fichier ou recouvrent l'en-tête. Tout le reste est décodé et
          * rapporté, la somme de contrôle comprise.
          *
+         * @param rom début de l'image, au moins [HEADER_SIZE] octets.
+         * @param totalSizeBytes longueur du fichier entier. Elle est distincte
+         *   de celle de [rom] parce que la bibliothèque décode l'en-tête sans
+         *   charger l'image : une cartouche pèse jusqu'à un demi-gigaoctet, et
+         *   contrôler que ses blocs de code tiennent dans le fichier ne doit pas
+         *   demander de le tenir en mémoire. Les confondre ferait refuser toute
+         *   cartouche lue par sa seule tête, ses blocs paraissant tous en sortir.
+         *
          * @throws RomLoadException si l'image ne peut pas décrire une cartouche.
          */
-        fun parse(rom: ByteArray): NdsHeader {
+        fun parse(rom: ByteArray, totalSizeBytes: Long = rom.size.toLong()): NdsHeader {
             if (rom.size < HEADER_SIZE) {
                 throw RomLoadException(
                     "ROM Nintendo DS trop courte pour porter un en-tête : " +
                         "${rom.size} octets (< $HEADER_SIZE)"
                 )
             }
-            if (rom.size.toLong() > MAX_ROM_SIZE) {
+            if (totalSizeBytes > MAX_ROM_SIZE) {
                 throw RomLoadException("ROM Nintendo DS trop volumineuse")
             }
 
@@ -170,8 +178,8 @@ data class NdsHeader(
             val unitCode = NdsUnitCode.fromCode(unit)
                 ?: throw RomLoadException("Code unité Nintendo DS inconnu : $unit")
 
-            requireCodeBlock(rom, offsetAt = 0x020, sizeAt = 0x02C, name = "ARM9")
-            requireCodeBlock(rom, offsetAt = 0x030, sizeAt = 0x03C, name = "ARM7")
+            requireCodeBlock(rom, totalSizeBytes, offsetAt = 0x020, sizeAt = 0x02C, name = "ARM9")
+            requireCodeBlock(rom, totalSizeBytes, offsetAt = 0x030, sizeAt = 0x03C, name = "ARM7")
 
             return NdsHeader(
                 title = text(rom, 0x000, 12),
@@ -196,11 +204,20 @@ data class NdsHeader(
          * comparaison signée prendrait un déplacement énorme pour un déplacement
          * négatif — c'est-à-dire pour un bloc qui tient.
          */
-        private fun requireCodeBlock(rom: ByteArray, offsetAt: Int, sizeAt: Int, name: String) {
+        private fun requireCodeBlock(
+            rom: ByteArray,
+            totalSizeBytes: Long,
+            offsetAt: Int,
+            sizeAt: Int,
+            name: String,
+        ) {
             val offset = readU32(rom, offsetAt).toLong() and 0xFFFF_FFFFL
             val size = readU32(rom, sizeAt).toLong() and 0xFFFF_FFFFL
             if (size == 0L) throw RomLoadException("Bloc de code $name vide")
-            if (offset + size > rom.size.toLong()) {
+            // La borne est la longueur du fichier, non celle du tampon reçu :
+            // l'en-tête peut être décodé seul, et un bloc qui commence après lui
+            // n'est pas pour autant hors du fichier.
+            if (offset + size > totalSizeBytes) {
                 throw RomLoadException("Bloc de code $name hors de la ROM")
             }
             if (offset < HEADER_SIZE) {

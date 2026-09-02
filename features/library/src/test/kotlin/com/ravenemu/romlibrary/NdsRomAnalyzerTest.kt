@@ -56,6 +56,81 @@ class NdsRomAnalyzerTest {
         return rom
     }
 
+    /**
+     * Les deux chemins décrivent la même cartouche.
+     *
+     * Celui qui a l'image entière et celui qui n'a que sa tête doivent rendre
+     * exactement la même entrée : la bibliothèque range les jeux d'après ces
+     * valeurs, et deux descriptions distinctes feraient apparaître une même
+     * cartouche différemment selon la façon dont elle a été lue.
+     */
+    @Test
+    fun `l'analyse par l'en-tete decrit la meme cartouche que l'image entiere`() {
+        val image = ndsRom()
+        val parImage = assertIs<AnalysisResult.Success>(
+            analyzer.analyze("u", "jeu.nds", 7L, image)
+        ).entry
+        val parEnTete = assertIs<AnalysisResult.Success>(
+            analyzer.analyzeHeader(
+                uri = "u",
+                fileName = "jeu.nds",
+                lastModified = 7L,
+                header = image.copyOf(analyzer.headerBytes),
+                sizeBytes = image.size.toLong(),
+                fingerprints = Fingerprints.of(image),
+            )
+        ).entry
+        assertEquals(parImage, parEnTete)
+    }
+
+    /**
+     * Une cartouche plus grosse que la mémoire disponible s'indexe quand même.
+     *
+     * C'est tout l'objet du chemin par l'en-tête : les blocs de code d'une
+     * cartouche commencent bien après sa tête, et les contrôler contre la
+     * longueur du tampon reçu plutôt que contre celle du fichier ferait refuser
+     * toute cartouche lue de cette façon.
+     */
+    @Test
+    fun `une cartouche de deux cent cinquante-six Mio s'indexe par son en-tete`() {
+        val taille = 256L * 1024L * 1024L
+        val entree = assertIs<AnalysisResult.Success>(
+            analyzer.analyzeHeader(
+                uri = "u",
+                fileName = "grosse.nds",
+                lastModified = 0L,
+                header = ndsRom(sizeBytes = 0x8000).copyOf(analyzer.headerBytes),
+                sizeBytes = taille,
+                fingerprints = Fingerprints.of(ByteArray(4)),
+            )
+        ).entry
+        assertEquals(taille, entree.sizeBytes)
+        assertEquals("RAVENEMU", entree.title)
+        assertTrue(taille <= analyzer.maxIndexableBytes, "et elle tient sous le plafond d'index")
+        assertTrue(
+            taille > analyzer.maxRomSizeBytes.toLong(),
+            "tout en dépassant ce que le moteur sait charger",
+        )
+    }
+
+    /** L'en-tête reste contrôlé : un bloc hors du fichier est toujours refusé. */
+    @Test
+    fun `l'analyse par l'en-tete refuse encore un bloc hors du fichier`() {
+        val refus = assertIs<AnalysisResult.Invalid>(
+            analyzer.analyzeHeader(
+                uri = "u",
+                fileName = "jeu.nds",
+                lastModified = 0L,
+                header = ndsRom().copyOf(analyzer.headerBytes),
+                // Le bloc ARM9 commence à 0x4000 : un fichier plus court ne peut
+                // pas le contenir.
+                sizeBytes = 0x1000L,
+                fingerprints = Fingerprints.of(ByteArray(4)),
+            )
+        )
+        assertTrue("ARM9" in refus.reason, refus.reason)
+    }
+
     @Test
     fun `reconnait l'extension nds`() {
         assertTrue(analyzer.canAnalyze("jeu.nds"))

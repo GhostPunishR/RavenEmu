@@ -29,7 +29,53 @@ interface RomAnalyzer {
     /** Taille maximale acceptée par le moteur de cette console. */
     val maxRomSizeBytes: Int get() = provider.maxRomSizeBytes
 
+    /**
+     * Taille maximale que la bibliothèque sait **indexer**.
+     *
+     * Elle est distincte de celle que le moteur sait charger, et plus grande dès
+     * qu'un analyseur se contente de l'en-tête : ranger un titre dans une liste
+     * ne demande pas de tenir la cartouche en mémoire, alors que la faire
+     * tourner, si. Les confondre rendait une cartouche invisible pour une raison
+     * qui n'appartenait qu'au moteur.
+     *
+     * Par défaut les deux coïncident : sans lecture en flux, indexer c'est
+     * charger.
+     */
+    val maxIndexableBytes: Long get() = maxRomSizeBytes.toLong()
+
     fun canAnalyze(fileName: String): Boolean = provider.handles(fileName)
+
+    /**
+     * Octets de tête qui suffisent à [analyzeHeader], ou zéro quand cet
+     * analyseur a besoin de voir l'image entière.
+     *
+     * Les deux membres vont par paire : un nombre non nul promet que
+     * [analyzeHeader] se prononcera. Une vérification du dépôt les compare pour
+     * chaque analyseur livré, sinon une console pourrait annoncer un chemin
+     * qu'elle ne sait pas suivre.
+     */
+    val headerBytes: Int get() = 0
+
+    /**
+     * Analyse à partir du **seul début** du fichier.
+     *
+     * Rend `null` pour un analyseur qui a besoin de l'image entière : la
+     * détection de sauvegarde Game Boy Advance en cherche la signature d'un
+     * bout à l'autre, et se prononcer sans l'avoir vue donnerait un index faux.
+     *
+     * Ce chemin existe pour les cartouches que leur taille rend coûteuses à
+     * charger : une Nintendo DS pèse jusqu'à un demi-gigaoctet, et lire un
+     * titre ne doit pas demander de la tenir en mémoire. La taille et les
+     * empreintes sont donc calculées par l'appelant, au fil de sa lecture.
+     */
+    fun analyzeHeader(
+        uri: String,
+        fileName: String,
+        lastModified: Long,
+        header: ByteArray,
+        sizeBytes: Long,
+        fingerprints: Fingerprints,
+    ): AnalysisResult? = null
 
     /**
      * Analyse le contenu complet d'un fichier ROM : validation de taille et
