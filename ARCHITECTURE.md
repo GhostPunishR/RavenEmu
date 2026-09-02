@@ -528,6 +528,15 @@ qu'il vaut mieux les arrêter avant d'écrire un moteur autour :
   192 suivantes. L'agencement réel — côte à côte, un seul écran, proportions
   libres — reste à la couche qui affiche, seule à connaître l'appareil.
 
+C'est cette pile que `features/skins` encadre : un skin Delta de Nintendo DS
+déclare un écran de 256 sur 384, non de 256 sur 192. La taille est portée par
+`DeltaSkinConsole`, aux côtés des touches que la console possède réellement, de
+sorte qu'une touche dessinée par un skin mais absente de la console ne soit
+jamais pressée. La zone tactile qu'un tel skin décrit emprunte la forme d'un
+D-pad sans en être un : elle est reconnue à ses deux axes et laissée inerte tant
+que l'écran tactile n'est pas relié au cœur, plutôt que découpée en neuf cases
+de direction.
+
 Les suites natives (`common`, `gb`, `gbc`, `gba`, `nds`) doivent pouvoir être
 construites directement avec `cmake -S cores`.
 

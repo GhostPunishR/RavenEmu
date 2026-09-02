@@ -320,7 +320,7 @@ Java_com_ravenemu_nativebridge_NativeCoreBridge_setButton(
     jboolean pressed
 ) {
     guarded_void(env, [&] {
-        if (button < 0 || button > static_cast<jint>(ravenemu::Button::r)) {
+        if (button < 0 || button > static_cast<jint>(ravenemu::Button::y)) {
             throw std::invalid_argument("Bouton RavenEmu inconnu");
         }
         core_from(handle).set_button(

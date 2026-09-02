@@ -65,13 +65,10 @@ public:
     static constexpr std::uint16_t extra_mask = extra_x | extra_y | extra_pen | extra_lid;
 
     /**
-     * Touche du matériel correspondant à une touche de l'interface partagée.
+     * Touche des dix, correspondant à une touche de l'interface partagée.
      *
-     * Les deux touches supplémentaires de la console n'y ont pas d'équivalent :
-     * l'énumération partagée décrit une manette à dix touches. Elles sont donc
-     * modélisées dans le matériel mais hors de portée de cette interface, et les
-     * rendre atteignables demandera de l'élargir, ce qui touche les autres cœurs
-     * et la couche Android.
+     * Rend zéro pour les deux touches que seul le processeur secondaire lit :
+     * elles ne sont pas dans ce registre, et `extra_for` les donne.
      */
     [[nodiscard]] static constexpr std::uint16_t key_for(Button button) noexcept {
         switch (button) {
@@ -85,8 +82,30 @@ public:
         case Button::select: return key_select;
         case Button::l: return key_l;
         case Button::r: return key_r;
+        case Button::x: case Button::y: return 0;
         }
         return 0;
+    }
+
+    /**
+     * Touche du registre que seul le processeur secondaire lit.
+     *
+     * Les deux registres ne sont pas au même endroit et ne se lisent pas des
+     * deux côtés : une touche ne peut donc pas être posée sans savoir dans
+     * lequel elle vit, et c'est ce que cette paire de tables tranche.
+     */
+    [[nodiscard]] static constexpr std::uint16_t extra_for(Button button) noexcept {
+        switch (button) {
+        case Button::x: return extra_x;
+        case Button::y: return extra_y;
+        default: return 0;
+        }
+    }
+
+    /** Enfonce ou relâche une touche de l'interface partagée, où qu'elle vive. */
+    void press(Button button, bool pressed) noexcept {
+        set_pressed(key_for(button), pressed);
+        set_extra_pressed(extra_for(button), pressed);
     }
 
     void reset() noexcept { held_ = 0; extra_held_ = 0; }

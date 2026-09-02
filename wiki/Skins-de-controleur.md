@@ -15,17 +15,37 @@ Sont pris en charge :
 
 - Game Boy et Game Boy Color en portrait ;
 - Game Boy Advance en portrait ;
+- Nintendo DS en portrait ;
 - représentations iPhone `standard` et `edgeToEdge` ;
 - assets PDF déclarés par `assets.resizable` ;
 - D-pad, A, B, Start, Select et Menu ;
-- L et R pour la Game Boy Advance ;
+- L et R pour la Game Boy Advance et la Nintendo DS ;
+- X et Y pour la Nintendo DS ;
 - boutons combinés et multitouch.
 
 Le paysage continue d'utiliser les commandes RavenEmu actuelles. Les
 métadonnées paysage du manifeste sont conservées pour une évolution future,
-mais l'asset n'est pas proposé ni rendu. Les skins DS, NES, SNES et N64, les
-thumbsticks, les écrans tactiles et les filtres CoreImage ne sont pas pris en
-charge.
+mais l'asset n'est pas proposé ni rendu : un skin qui déclare une
+représentation paysage sans joindre son PDF s'importe donc normalement. Les
+skins NES, SNES et N64, les thumbsticks et les filtres CoreImage ne sont pas
+pris en charge.
+
+### La zone tactile de la Nintendo DS
+
+Un skin DS encadre les **deux écrans empilés** : le cadre attendu fait 256 sur
+384, soit deux fois la hauteur d'un écran. Le manifeste y décrit aussi une zone
+tactile, écrite comme un D-pad mais nommant deux axes au lieu de quatre
+directions.
+
+RavenEmu la reconnaît et la laisse volontairement inerte : la traiter comme une
+croix presserait des directions dès qu'un doigt touche l'écran du bas. La zone
+apparaît donc dans les entrées ignorées de la fiche du skin, jusqu'à ce que
+l'écran tactile soit relié au cœur. Les boutons dessinés par-dessus la zone
+restent atteignables.
+
+Un skin DS s'importe, se vérifie et se sélectionne dès aujourd'hui. Il ne
+s'affichera toutefois pendant une partie qu'une fois la Nintendo DS ouverte au
+jeu : le cœur DS ne fait pas encore tourner de cartouche.
 
 ## Importer un skin
 
@@ -60,9 +80,9 @@ console.
 
 ## Gérer et supprimer les skins
 
-La page groupe les skins en **GB/GBC** et **GBA**. Les sélections portrait sont
-indépendantes : un skin GBA ne peut pas être utilisé pour une session GB/GBC,
-et inversement.
+La page groupe les skins en **GB/GBC**, **GBA** et **Nintendo DS**. Les
+sélections portrait sont indépendantes : un skin GBA ne peut pas être utilisé
+pour une session GB/GBC, et inversement.
 
 Touchez **Commandes classiques** pour désactiver le skin personnalisé. La
 suppression retire l'archive et ses assets du stockage privé. Si le skin

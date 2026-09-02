@@ -27,7 +27,6 @@ import com.ravenemu.deltaskin.DeltaSkinErrorCode
 import com.ravenemu.deltaskin.DeltaSkinInsets
 import com.ravenemu.deltaskin.DeltaSkinRepresentationKind
 import com.ravenemu.deltaskin.DeltaSkinRepository
-import com.ravenemu.deltaskin.DeltaSkinSize
 import com.ravenemu.emulation.api.ConsoleType
 import com.ravenemu.emulation.api.audio.AudioTransportStats
 import com.ravenemu.emulation.api.EmulatorCore
@@ -319,11 +318,10 @@ class EmulationActivity : RavenActivity(), EmulationSession.Callbacks {
                     console = skinConsole,
                     assets = assets,
                     preference = settings.deltaSkinRepresentationPreference,
-                    nativeScreenSize = if (skinConsole == DeltaSkinConsole.GBA) {
-                        DeltaSkinSize(240.0, 160.0)
-                    } else {
-                        DeltaSkinSize(160.0, 144.0)
-                    },
+                    // Les dimensions viennent de la console elle-même : les
+                    // redire ici en aurait fait une seconde source, et une
+                    // console ajoutée aurait pris l'écran d'une autre.
+                    nativeScreenSize = skinConsole.screenSize,
                     hapticFeedback = settings.hapticFeedback,
                     visualFeedback = settings.deltaSkinVisualFeedback,
                 )

@@ -31,8 +31,9 @@ class Joypad(private val interrupts: InterruptController) {
             EmulatorButton.LEFT -> false to 0x02
             EmulatorButton.UP -> false to 0x04
             EmulatorButton.DOWN -> false to 0x08
-            // La Game Boy n'a pas de gâchettes L/R : sans effet.
-            EmulatorButton.L, EmulatorButton.R -> return
+            // La Game Boy n'a ni gâchettes L/R ni les deux touches de la
+            // Nintendo DS : sans effet.
+            EmulatorButton.L, EmulatorButton.R, EmulatorButton.X, EmulatorButton.Y -> return
         }
         val wasPressed: Boolean
         if (isAction) {

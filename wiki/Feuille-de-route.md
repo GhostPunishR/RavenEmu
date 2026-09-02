@@ -88,7 +88,11 @@ aujourd'hui :
 - les touches : les dix de la face avant lisibles des deux côtés, les deux
   supplémentaires et le contact de l'écran tactile du seul côté du processeur
   secondaire, la convention active à zéro, et le réveil que chaque processeur
-  règle pour lui-même, avec ses deux conditions.
+  règle pour lui-même, avec ses deux conditions;
+- les skins Delta de Nintendo DS : la console reconnue à son identifiant, les
+  deux touches supplémentaires, le cadre des deux écrans empilés, et la zone
+  tactile reconnue puis laissée inerte au lieu d'être prise pour une croix
+  directionnelle.
 
 Le budget d'instructions accordé à une ligne repose sur une convention dite en
 toutes lettres : une instruction par cycle de l'horloge maître, faute d'un modèle
@@ -106,7 +110,9 @@ appels du programme d'amorçage, le bus de cartouche, les décors tournants et l
 modes étendus, les sprites tournants et semi-transparents, le moteur 3D, les
 fenêtres et les mélanges, les palettes étendues, la sauvegarde et le son.
 L'enregistrement d'un état reste refusé par une erreur nommée, faute de format.
-La console n'apparaît pas encore dans la bibliothèque de l'application.
+La console n'apparaît pas encore dans la bibliothèque de l'application : un skin
+de Nintendo DS s'importe et se sélectionne, mais aucune partie ne le porte
+encore.
 
 ## Pistes futures
 

@@ -38,7 +38,7 @@ Les détails d'installation et de signature sont dans le [wiki](https://github.c
 | Game Boy | Avancé |
 | Game Boy Color | Intégré au moteur GB, extraction dédiée en cours |
 | Game Boy Advance | Expérimental |
-| Nintendo DS | Fondations : identité, en-tête de cartouche, contrat d'écran, les deux processeurs (ARM946E-S et ARM7TDMI), leurs cartes mémoire, la communication entre eux, les décors et sprites des deux moteurs 2D, le balayage des deux écrans, l'ordonnanceur qui les fait tourner ensemble, l'amorçage d'une cartouche, les minuteries, les transferts autonomes et les touches. **Produit une image, mais ne fait pas encore tourner de jeu** : ni appels du programme d'amorçage, ni bus de cartouche, ni écran tactile, ni moteur 3D. |
+| Nintendo DS | Fondations : identité, en-tête de cartouche, contrat d'écran, les deux processeurs (ARM946E-S et ARM7TDMI), leurs cartes mémoire, la communication entre eux, les décors et sprites des deux moteurs 2D, le balayage des deux écrans, l'ordonnanceur qui les fait tourner ensemble, l'amorçage d'une cartouche, les minuteries, les transferts autonomes et les touches. **Produit une image, mais ne fait pas encore tourner de jeu** : ni appels du programme d'amorçage, ni bus de cartouche, ni écran tactile, ni moteur 3D. Les skins Delta de DS s'importent et se sélectionnent déjà. |
 
 La compatibilité varie selon les jeux. Consultez la [matrice de compatibilité](https://github.com/GhostPunishR/RavenEmu/wiki/Compatibilite-des-jeux).
 

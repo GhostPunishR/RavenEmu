@@ -18,7 +18,9 @@ class GbaKeypad {
     var pressedBits: Int = 0
 
     fun setButton(button: EmulatorButton, pressed: Boolean) {
-        val bit = 1 shl bitIndex(button)
+        // Une touche que cette console n'a pas n'a pas de rang : la traduire en
+        // nombre puis décaler poserait un bit au hasard.
+        val bit = 1 shl (bitIndex(button) ?: return)
         pressedBits = if (pressed) pressedBits or bit else pressedBits and bit.inv()
     }
 
@@ -29,7 +31,7 @@ class GbaKeypad {
         pressedBits = 0
     }
 
-    private fun bitIndex(button: EmulatorButton): Int = when (button) {
+    private fun bitIndex(button: EmulatorButton): Int? = when (button) {
         EmulatorButton.A -> 0
         EmulatorButton.B -> 1
         EmulatorButton.SELECT -> 2
@@ -40,6 +42,8 @@ class GbaKeypad {
         EmulatorButton.DOWN -> 7
         EmulatorButton.R -> 8
         EmulatorButton.L -> 9
+        // La Game Boy Advance n'a pas les deux touches de la Nintendo DS.
+        EmulatorButton.X, EmulatorButton.Y -> null
     }
 
     companion object {

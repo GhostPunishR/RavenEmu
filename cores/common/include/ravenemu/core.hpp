@@ -32,6 +32,13 @@ enum class Button : std::uint8_t {
     select,
     l,
     r,
+
+    // Touches de la Nintendo DS. Les consoles qui n'en ont pas les ignorent,
+    // comme elles ignorent déjà les gâchettes d'épaule. L'ordre de cette
+    // énumération est celui que le pont natif transporte : une valeur ajoutée
+    // se met à la fin, jamais au milieu.
+    x,
+    y,
 };
 
 enum class FramebufferFormat : std::uint8_t {

@@ -78,6 +78,11 @@ class DeltaSkinInputMapper(
                     }
                 }
                 is DeltaSkinInputs.Directional -> {
+                    // La zone tactile a la forme d'une croix sans en être une :
+                    // la découper en neuf cases presserait des directions au
+                    // toucher. Elle est laissée de côté tant que la console n'a
+                    // pas d'écran tactile à alimenter.
+                    if (inputs.isTouchScreen) return@forEach
                     val cell = dpadCell(x, y, hit.visualFrame)
                     val directions = directionsForCell(cell)
                     for (direction in directions) {
@@ -144,18 +149,16 @@ class DeltaSkinInputMapper(
         )
     }
 
-    private fun mapButton(raw: String): EmulatorButton? = when (raw.trim().lowercase(Locale.ROOT)) {
-        "up" -> EmulatorButton.UP
-        "down" -> EmulatorButton.DOWN
-        "left" -> EmulatorButton.LEFT
-        "right" -> EmulatorButton.RIGHT
-        "a" -> EmulatorButton.A
-        "b" -> EmulatorButton.B
-        "start" -> EmulatorButton.START
-        "select" -> EmulatorButton.SELECT
-        "l" -> EmulatorButton.L.takeIf { console == DeltaSkinConsole.GBA }
-        "r" -> EmulatorButton.R.takeIf { console == DeltaSkinConsole.GBA }
-        else -> null
+    /**
+     * Touche désignée par un nom Delta, ou rien.
+     *
+     * Une touche que la console ne possède pas n'est pas pressée, même si le
+     * skin la dessine : c'est le cas d'une gâchette sur Game Boy, ou des deux
+     * touches supplémentaires ailleurs que sur Nintendo DS.
+     */
+    private fun mapButton(raw: String): EmulatorButton? {
+        val button = DeltaSkinInputNames.BUTTONS[raw.trim().lowercase(Locale.ROOT)] ?: return null
+        return button.takeIf { it in console.buttons }
     }
 }
 

@@ -292,6 +292,42 @@ void chaque_touche_partagee_atteint_la_sienne() {
 }
 
 /**
+ * Les deux touches que seul le processeur secondaire lit.
+ *
+ * Elles ne sont pas dans le registre des dix. Les y poser presserait une touche
+ * voisine, et le programme lirait une manette qu'aucun doigt ne touche : c'est
+ * pourquoi la correspondance est faite par deux tables plutôt qu'une, et qu'une
+ * touche demandée par l'interface partagée passe par les deux.
+ */
+void les_deux_touches_du_secondaire_ont_leur_registre() {
+    check(InputState::key_for(Button::x) == 0U, "X n'est pas une des dix");
+    check(InputState::key_for(Button::y) == 0U, "Y non plus");
+    check(
+        InputState::extra_for(Button::x) == 1U << 0U,
+        "X occupe le premier bit du registre du secondaire"
+    );
+    check(InputState::extra_for(Button::y) == 1U << 1U, "Y le deuxième");
+    check(InputState::extra_for(Button::a) == 0U, "et une des dix n'y a pas de place");
+
+    InputState input;
+
+    input.press(Button::a, true);
+    check(input.key_register() == 0xfffeU, "A passe par le registre des dix");
+    check(input.extra_register() == 0xffffU, "sans toucher à l'autre");
+
+    input.press(Button::x, true);
+    check(input.extra_register() == 0xfffeU, "X passe par l'autre registre");
+    check(input.key_register() == 0xfffeU, "sans toucher à celui des dix");
+
+    input.press(Button::y, true);
+    check(input.extra_register() == 0xfffcU, "Y s'y ajoute");
+
+    input.press(Button::x, false);
+    check(input.extra_register() == 0xfffdU, "et se relâche seule");
+    check(input.key_register() == 0xfffeU, "sans relâcher A");
+}
+
+/**
  * Une touche enfoncée par l'interface publique arrive jusqu'au registre.
  *
  * C'est la seule vérification qui traverse tout : elle fait démarrer une
@@ -386,6 +422,7 @@ int main() {
     chaque_processeur_regle_son_reveil();
     le_reveil_tient_sur_un_niveau();
     chaque_touche_partagee_atteint_la_sienne();
+    les_deux_touches_du_secondaire_ont_leur_registre();
     une_touche_enfoncee_arrive_jusqu_au_programme();
     la_remise_a_zero_relache_tout();
     return 0;
