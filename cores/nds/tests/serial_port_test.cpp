@@ -265,6 +265,11 @@ void les_valeurs_sont_celles_du_materiel() {
     check(Touchscreen::channel_x == 5U, "le canal de l'abscisse");
     check(Touchscreen::channel_y == 1U, "et celui de l'ordonnée");
     check(Touchscreen::presentation_shift == 3U, "les douze bits sont calés à gauche");
+    // La largeur du convertisseur est un fait du matériel, et rien à l'exécution
+    // ne peut la démentir : elle borne des mesures qui tiennent déjà dedans, et
+    // seule sa réduction arrêterait la compilation. C'est donc ici, parmi les
+    // valeurs écrites en toutes lettres, qu'elle est tenue.
+    check(Touchscreen::value_mask == 0x0fffU, "et le convertisseur en annonce douze");
 
     check(Firmware::settings_pointer_address == 0x20U, "l'adresse du pointeur de réglages");
     check(Firmware::settings_pointer_unit == 8U, "qui compte par groupes de huit octets");
