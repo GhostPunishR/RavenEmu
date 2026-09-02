@@ -3,6 +3,8 @@ package com.ravenemu.storage
 import android.content.Context
 import android.net.Uri
 import com.ravenemu.romlibrary.AnalysisResult
+import com.ravenemu.romlibrary.LibraryRefresh
+import com.ravenemu.romlibrary.RejectedRom
 import com.ravenemu.romlibrary.RomAnalyzer
 import com.ravenemu.romlibrary.RomIndex
 import kotlinx.coroutines.Dispatchers
@@ -34,14 +36,19 @@ class LibraryRepository(
     fun loadIndex(): RomIndex = indexStore.load()
 
     /**
-     * Actualise l'index à partir des dossiers [romDirUris] et retourne le
-     * nouvel index persisté. Les fichiers illisibles ou invalides sont
-     * ignorés proprement.
+     * Actualise l'index à partir des dossiers [romDirUris].
+     *
+     * Rapporte l'index persisté **et** les fichiers écartés en chemin. Ces
+     * refus étaient auparavant silencieux : un fichier rangé au bon endroit,
+     * avec la bonne extension, disparaissait de la bibliothèque sans que rien
+     * ne dise lequel ni pourquoi. Trois chemins l'écartaient, et chacun a
+     * maintenant sa raison.
      */
-    suspend fun refresh(romDirUris: List<Uri>): RomIndex = withContext(Dispatchers.IO) {
+    suspend fun refresh(romDirUris: List<Uri>): LibraryRefresh = withContext(Dispatchers.IO) {
         var index = indexStore.load()
         val extensions = analyzers.flatMap { it.console.romExtensions }.toSet()
         val scanned = scanner.scan(romDirUris, extensions)
+        val rejected = mutableListOf<RejectedRom>()
 
         index = index.retainAll(scanned.map { it.uri.toString() }.toSet())
 
@@ -50,13 +57,27 @@ class LibraryRepository(
             if (!index.needsRefresh(uriString, file.sizeBytes, file.lastModified)) {
                 continue
             }
+            // L'extension du fichier a mené jusqu'ici, donc un analyseur existe.
+            // S'il manque, c'est un défaut de câblage et non un fichier fautif.
             val analyzer = analyzers.firstOrNull { it.canAnalyze(file.name) } ?: continue
-            if (file.sizeBytes > analyzer.maxRomSizeBytes) continue
+            if (file.sizeBytes > analyzer.maxRomSizeBytes) {
+                rejected += RejectedRom(
+                    file.name,
+                    "trop volumineuse pour être indexée : " +
+                        "${file.sizeBytes / (1024L * 1024L)} Mio, " +
+                        "maximum ${analyzer.maxRomSizeBytes / (1024 * 1024)} Mio",
+                )
+                continue
+            }
             val data = try {
                 scanner.readAll(file.uri, analyzer.maxRomSizeBytes)
             } catch (_: Exception) {
                 null
-            } ?: continue
+            }
+            if (data == null) {
+                rejected += RejectedRom(file.name, "fichier illisible")
+                continue
+            }
             when (val result = analyzer.analyze(
                 uri = uriString,
                 fileName = file.name,
@@ -72,11 +93,11 @@ class LibraryRepository(
                         )
                     )
                 }
-                is AnalysisResult.Invalid -> Unit // fichier ignoré
+                is AnalysisResult.Invalid -> rejected += RejectedRom(file.name, result.reason)
             }
         }
         indexStore.save(index)
-        index
+        LibraryRefresh(index, rejected)
     }
 
     /** Met à jour une entrée (pochette choisie, statut forcé…). */

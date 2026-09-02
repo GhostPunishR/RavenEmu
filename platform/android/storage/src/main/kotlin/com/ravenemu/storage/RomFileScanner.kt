@@ -48,18 +48,24 @@ class RomFileScanner(private val context: Context) {
         for (child in directory.listFiles()) {
             if (child.isDirectory) {
                 scanDirectory(child, extensions, results)
-            } else if (child.isFile) {
-                val name = child.name ?: continue
-                val extension = name.substringAfterLast('.', "").lowercase()
-                if (extension in extensions) {
-                    results += ScannedFile(
-                        uri = child.uri,
-                        name = name,
-                        sizeBytes = child.length(),
-                        lastModified = child.lastModified(),
-                        parentUri = directory.uri,
-                    )
-                }
+                continue
+            }
+            // Ce qui n'est pas un dossier est un document, et c'est l'extension
+            // qui décide de la suite. `isFile` n'est volontairement pas
+            // consulté : il rend faux dès que le fournisseur de documents
+            // n'annonce **aucun** type pour le fichier, ce qui arrive pour les
+            // extensions qu'Android ne connaît pas. Une ROM devenait alors
+            // invisible sans être ni dossier ni fichier, et rien ne le signalait.
+            val name = child.name ?: continue
+            val extension = name.substringAfterLast('.', "").lowercase()
+            if (extension in extensions) {
+                results += ScannedFile(
+                    uri = child.uri,
+                    name = name,
+                    sizeBytes = child.length(),
+                    lastModified = child.lastModified(),
+                    parentUri = directory.uri,
+                )
             }
         }
     }

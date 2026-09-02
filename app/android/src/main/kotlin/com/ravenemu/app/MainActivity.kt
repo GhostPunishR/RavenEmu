@@ -32,6 +32,7 @@ import com.ravenemu.core.gba.save.GbaSaveType
 import com.ravenemu.emulation.api.ConsoleType
 import com.ravenemu.romlibrary.LibraryFilter
 import com.ravenemu.romlibrary.LibraryPages
+import com.ravenemu.romlibrary.RejectedRom
 import com.ravenemu.romlibrary.RomEntry
 import com.ravenemu.romlibrary.RomIndex
 import com.ravenemu.settings.AppSettings
@@ -270,7 +271,8 @@ class MainActivity : RavenActivity() {
         }
         progress.visibility = View.VISIBLE
         lifecycleScope.launch {
-            index = repository.refresh(dirs)
+            val balayage = repository.refresh(dirs)
+            index = balayage.index
             progress.visibility = View.GONE
             render()
             Toast.makeText(
@@ -278,7 +280,26 @@ class MainActivity : RavenActivity() {
                 getString(R.string.library_refresh_done, index.entries.size),
                 Toast.LENGTH_SHORT,
             ).show()
+            if (balayage.rejected.isNotEmpty()) showRejectedRoms(balayage.rejected)
         }
+    }
+
+    /**
+     * Nomme les fichiers que le balayage a écartés, et pourquoi.
+     *
+     * Sans cette boîte, un fichier rangé au bon endroit et portant la bonne
+     * extension disparaissait sans un mot : l'utilisateur comptait ses jeux,
+     * en trouvait un de moins, et n'avait aucun moyen de savoir lequel. Un
+     * refus motivé vaut mieux qu'une absence, et il n'y a que l'application
+     * pour connaître le motif.
+     */
+    private fun showRejectedRoms(rejected: List<RejectedRom>) {
+        val details = rejected.joinToString("\n\n") { "${it.fileName}\n${it.reason}" }
+        AlertDialog.Builder(this)
+            .setTitle("Fichiers écartés : ${rejected.size}")
+            .setMessage(details)
+            .setPositiveButton(R.string.ok, null)
+            .show()
     }
 
     /** Contenu d'une page : les entrées de sa console, cherchées et triées. */
