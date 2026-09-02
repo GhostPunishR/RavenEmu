@@ -25,11 +25,11 @@ namespace ravenemu::nds {
  * ### Quand un canal part
  *
  * À l'allumage pour un départ immédiat, ou au moment demandé : retour vertical,
- * retour horizontal. Les autres moments — la cartouche, la file géométrique, le
- * port Game Boy Advance, la liaison sans fil — désignent des organes qui
- * n'existent pas encore ; un canal qui les demande est **compté** plutôt que
- * parti au mauvais moment, un transfert déclenché trop tôt étant plus difficile
- * à diagnostiquer qu'un transfert qui n'a pas lieu.
+ * retour horizontal, mot prêt sur le bus de cartouche. Les autres moments — la
+ * file géométrique, le port Game Boy Advance, la liaison sans fil — désignent
+ * des organes qui n'existent pas encore ; un canal qui les demande est
+ * **compté** plutôt que parti au mauvais moment, un transfert déclenché trop tôt
+ * étant plus difficile à diagnostiquer qu'un transfert qui n'a pas lieu.
  *
  * Les deux processeurs n'ont pas le même choix de moments ni la même largeur de
  * compteur, et ces différences sont portées par le champ qui dit lequel des deux
@@ -79,6 +79,14 @@ public:
         immediate,
         vertical_blank,
         horizontal_blank,
+        /**
+         * Un mot du bus de cartouche est prêt.
+         *
+         * C'est ainsi qu'un jeu copie ses données : il arme un canal sur ce
+         * moment plutôt que de scruter l'indicateur, et le matériel vide le port
+         * mot par mot pendant qu'il fait autre chose.
+         */
+        cartridge,
         /** Un moment dont l'organe n'existe pas encore. */
         unsupported,
     };

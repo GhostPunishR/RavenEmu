@@ -587,6 +587,21 @@ l'appel rembobine sur lui-même avant d'arrêter le processeur : au réveil, le
 gestionnaire du jeu s'exécute, rend la main sur l'appel, et l'appel se repose la
 question.
 
+### Le bus de cartouche
+
+Une décision y mérite d'être écrite : **l'image de la cartouche n'est pas
+recopiée**. Le bus la relit à la demande, par une vue sans propriété. Une
+cartouche fait jusqu'à cent vingt-huit mégaoctets, et en doubler la présence en
+mémoire pour un téléphone n'aurait pas de sens. La contrepartie est une
+contrainte de durée de vie, portée par la documentation de `Machine::boot` : la
+fabrique du cœur garde l'image, et c'est elle qui la tient vivante.
+
+Le décodage des registres du bus vit sur l'organe, non dans les deux cartes
+mémoire. Les deux processeurs voient ces registres aux mêmes adresses, et deux
+copies du décodage dériveraient ; les cartes ne gardent que le routage. C'est
+aussi ce qui permet au partage du port, qui décide lequel des deux y accède,
+d'être appliqué en un seul endroit.
+
 Les suites natives (`common`, `gb`, `gbc`, `gba`, `nds`) doivent pouvoir être
 construites directement avec `cmake -S cores`.
 

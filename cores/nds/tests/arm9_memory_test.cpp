@@ -1,5 +1,6 @@
 #include "cpu/arm_core.hpp"
 #include "memory/arm9_memory_map.hpp"
+#include "system/cartridge.hpp"
 #include "memory/system_memory.hpp"
 #include "system/inter_processor.hpp"
 
@@ -101,7 +102,8 @@ void les_quantites_sont_celles_du_materiel() {
     InterProcessor link{main_interrupts, secondary_interrupts};
     InputState input{};
     VideoSystem video{main_interrupts, secondary_interrupts};
-    Arm9MemoryMap map{system, video, link, main_interrupts, input};
+    Cartridge cartridge{main_interrupts, secondary_interrupts};
+    Arm9MemoryMap map{system, video, link, main_interrupts, input, cartridge};
     std::size_t total = 0;
     for (std::size_t index = 0; index < Arm9MemoryMap::vram_bank_count; ++index) {
         total += map.vram_bank(index).size();
@@ -130,7 +132,8 @@ void chaque_region_repond_a_sa_place() {
         InterProcessor link{main_interrupts, secondary_interrupts};
         InputState input{};
         VideoSystem video{main_interrupts, secondary_interrupts};
-        Arm9MemoryMap map{system, video, link, main_interrupts, input};
+        Cartridge cartridge{main_interrupts, secondary_interrupts};
+        Arm9MemoryMap map{system, video, link, main_interrupts, input, cartridge};
         system.reset();
         video.reset();
         map.reset();
@@ -167,7 +170,8 @@ void les_regions_ne_se_recouvrent_pas() {
     InterProcessor link{main_interrupts, secondary_interrupts};
     InputState input{};
     VideoSystem video{main_interrupts, secondary_interrupts};
-    Arm9MemoryMap map{system, video, link, main_interrupts, input};
+    Cartridge cartridge{main_interrupts, secondary_interrupts};
+    Arm9MemoryMap map{system, video, link, main_interrupts, input, cartridge};
     system.reset();
     video.reset();
     map.reset();
@@ -190,7 +194,8 @@ void les_trois_largeurs_d_acces() {
     InterProcessor link{main_interrupts, secondary_interrupts};
     InputState input{};
     VideoSystem video{main_interrupts, secondary_interrupts};
-    Arm9MemoryMap map{system, video, link, main_interrupts, input};
+    Cartridge cartridge{main_interrupts, secondary_interrupts};
+    Arm9MemoryMap map{system, video, link, main_interrupts, input, cartridge};
     system.reset();
     video.reset();
     map.reset();
@@ -226,7 +231,8 @@ void un_octet_seul_n_entre_pas_partout() {
     InterProcessor link{main_interrupts, secondary_interrupts};
     InputState input{};
     VideoSystem video{main_interrupts, secondary_interrupts};
-    Arm9MemoryMap map{system, video, link, main_interrupts, input};
+    Cartridge cartridge{main_interrupts, secondary_interrupts};
+    Arm9MemoryMap map{system, video, link, main_interrupts, input, cartridge};
     system.reset();
     video.reset();
     map.reset();
@@ -265,7 +271,8 @@ void le_partage_de_la_memoire_commune() {
         InterProcessor link{main_interrupts, secondary_interrupts};
         InputState input{};
         VideoSystem video{main_interrupts, secondary_interrupts};
-        Arm9MemoryMap map{system, video, link, main_interrupts, input};
+        Cartridge cartridge{main_interrupts, secondary_interrupts};
+        Arm9MemoryMap map{system, video, link, main_interrupts, input, cartridge};
         system.reset();
         video.reset();
         map.reset();
@@ -293,7 +300,8 @@ void le_partage_de_la_memoire_commune() {
             InterProcessor link{main_interrupts, secondary_interrupts};
             InputState input{};
             VideoSystem video{main_interrupts, secondary_interrupts};
-            Arm9MemoryMap map{system, video, link, main_interrupts, input};
+            Cartridge cartridge{main_interrupts, secondary_interrupts};
+            Arm9MemoryMap map{system, video, link, main_interrupts, input, cartridge};
             system.reset();
             map.reset();
             map.write8(Arm9MemoryMap::shared_wram_control, scenario.control);
@@ -313,7 +321,8 @@ void le_partage_de_la_memoire_commune() {
         InterProcessor link{main_interrupts, secondary_interrupts};
         InputState input{};
         VideoSystem video{main_interrupts, secondary_interrupts};
-        Arm9MemoryMap map{system, video, link, main_interrupts, input};
+        Cartridge cartridge{main_interrupts, secondary_interrupts};
+        Arm9MemoryMap map{system, video, link, main_interrupts, input, cartridge};
         system.reset();
         video.reset();
         map.reset();
@@ -341,7 +350,8 @@ void le_partage_de_la_memoire_commune() {
         InterProcessor link{main_interrupts, secondary_interrupts};
         InputState input{};
         VideoSystem video{main_interrupts, secondary_interrupts};
-        Arm9MemoryMap map{system, video, link, main_interrupts, input};
+        Cartridge cartridge{main_interrupts, secondary_interrupts};
+        Arm9MemoryMap map{system, video, link, main_interrupts, input, cartridge};
         system.reset();
         video.reset();
         map.reset();
@@ -362,7 +372,8 @@ void le_partage_de_la_memoire_commune() {
         InterProcessor link{main_interrupts, secondary_interrupts};
         InputState input{};
         VideoSystem video{main_interrupts, secondary_interrupts};
-        Arm9MemoryMap map{system, video, link, main_interrupts, input};
+        Cartridge cartridge{main_interrupts, secondary_interrupts};
+        Arm9MemoryMap map{system, video, link, main_interrupts, input, cartridge};
         system.reset();
         video.reset();
         map.reset();
@@ -378,7 +389,8 @@ void le_partage_de_la_memoire_commune() {
         InterProcessor link{main_interrupts, secondary_interrupts};
         InputState input{};
         VideoSystem video{main_interrupts, secondary_interrupts};
-        Arm9MemoryMap map{system, video, link, main_interrupts, input};
+        Cartridge cartridge{main_interrupts, secondary_interrupts};
+        Arm9MemoryMap map{system, video, link, main_interrupts, input, cartridge};
         system.reset();
         video.reset();
         map.reset();
@@ -395,7 +407,8 @@ void les_banques_video_repondent_par_leur_fenetre() {
         InterProcessor link{main_interrupts, secondary_interrupts};
         InputState input{};
         VideoSystem video{main_interrupts, secondary_interrupts};
-        Arm9MemoryMap map{system, video, link, main_interrupts, input};
+        Cartridge cartridge{main_interrupts, secondary_interrupts};
+        Arm9MemoryMap map{system, video, link, main_interrupts, input, cartridge};
         system.reset();
         video.reset();
         map.reset();
@@ -409,7 +422,8 @@ void les_banques_video_repondent_par_leur_fenetre() {
         InterProcessor link{main_interrupts, secondary_interrupts};
         InputState input{};
         VideoSystem video{main_interrupts, secondary_interrupts};
-        Arm9MemoryMap map{system, video, link, main_interrupts, input};
+        Cartridge cartridge{main_interrupts, secondary_interrupts};
+        Arm9MemoryMap map{system, video, link, main_interrupts, input, cartridge};
         system.reset();
         video.reset();
         map.reset();
@@ -425,7 +439,8 @@ void les_banques_video_repondent_par_leur_fenetre() {
         InterProcessor link{main_interrupts, secondary_interrupts};
         InputState input{};
         VideoSystem video{main_interrupts, secondary_interrupts};
-        Arm9MemoryMap map{system, video, link, main_interrupts, input};
+        Cartridge cartridge{main_interrupts, secondary_interrupts};
+        Arm9MemoryMap map{system, video, link, main_interrupts, input, cartridge};
         system.reset();
         video.reset();
         map.reset();
@@ -457,7 +472,8 @@ void les_banques_video_repondent_par_leur_fenetre() {
         InterProcessor link{main_interrupts, secondary_interrupts};
         InputState input{};
         VideoSystem video{main_interrupts, secondary_interrupts};
-        Arm9MemoryMap map{system, video, link, main_interrupts, input};
+        Cartridge cartridge{main_interrupts, secondary_interrupts};
+        Arm9MemoryMap map{system, video, link, main_interrupts, input, cartridge};
         system.reset();
         video.reset();
         map.reset();
@@ -508,7 +524,8 @@ void les_banques_video_repondent_par_leur_fenetre() {
         InterProcessor link{main_interrupts, secondary_interrupts};
         InputState input{};
         VideoSystem video{main_interrupts, secondary_interrupts};
-        Arm9MemoryMap map{system, video, link, main_interrupts, input};
+        Cartridge cartridge{main_interrupts, secondary_interrupts};
+        Arm9MemoryMap map{system, video, link, main_interrupts, input, cartridge};
         system.reset();
         video.reset();
         map.reset();
@@ -526,7 +543,8 @@ void les_banques_video_repondent_par_leur_fenetre() {
         InterProcessor link{main_interrupts, secondary_interrupts};
         InputState input{};
         VideoSystem video{main_interrupts, secondary_interrupts};
-        Arm9MemoryMap map{system, video, link, main_interrupts, input};
+        Cartridge cartridge{main_interrupts, secondary_interrupts};
+        Arm9MemoryMap map{system, video, link, main_interrupts, input, cartridge};
         system.reset();
         video.reset();
         map.reset();
@@ -543,7 +561,8 @@ void les_registres_de_la_carte_se_relisent() {
     InterProcessor link{main_interrupts, secondary_interrupts};
     InputState input{};
     VideoSystem video{main_interrupts, secondary_interrupts};
-    Arm9MemoryMap map{system, video, link, main_interrupts, input};
+    Cartridge cartridge{main_interrupts, secondary_interrupts};
+    Arm9MemoryMap map{system, video, link, main_interrupts, input, cartridge};
     system.reset();
     video.reset();
     map.reset();
@@ -578,7 +597,8 @@ void les_registres_des_moteurs_repondent_a_leurs_adresses() {
     InterProcessor link{main_interrupts, secondary_interrupts};
     InputState input{};
     VideoSystem video{main_interrupts, secondary_interrupts};
-    Arm9MemoryMap map{system, video, link, main_interrupts, input};
+    Cartridge cartridge{main_interrupts, secondary_interrupts};
+    Arm9MemoryMap map{system, video, link, main_interrupts, input, cartridge};
     system.reset();
     video.reset();
     map.reset();
@@ -648,7 +668,8 @@ void une_banque_se_remplit_par_le_transfert_puis_se_montre_au_moteur() {
     InterProcessor link{main_interrupts, secondary_interrupts};
     InputState input{};
     VideoSystem video{main_interrupts, secondary_interrupts};
-    Arm9MemoryMap map{system, video, link, main_interrupts, input};
+    Cartridge cartridge{main_interrupts, secondary_interrupts};
+    Arm9MemoryMap map{system, video, link, main_interrupts, input, cartridge};
     system.reset();
     video.reset();
     map.reset();
@@ -700,7 +721,8 @@ void le_programme_d_amorcage_se_lit_et_ne_s_ecrit_pas() {
     InterProcessor link{main_interrupts, secondary_interrupts};
     InputState input{};
     VideoSystem video{main_interrupts, secondary_interrupts};
-    Arm9MemoryMap map{system, video, link, main_interrupts, input};
+    Cartridge cartridge{main_interrupts, secondary_interrupts};
+    Arm9MemoryMap map{system, video, link, main_interrupts, input, cartridge};
     system.reset();
     video.reset();
     map.reset();
@@ -738,7 +760,8 @@ void ce_qui_n_existe_pas_encore_est_signale() {
         InterProcessor link{main_interrupts, secondary_interrupts};
         InputState input{};
         VideoSystem video{main_interrupts, secondary_interrupts};
-        Arm9MemoryMap map{system, video, link, main_interrupts, input};
+        Cartridge cartridge{main_interrupts, secondary_interrupts};
+        Arm9MemoryMap map{system, video, link, main_interrupts, input, cartridge};
         system.reset();
         video.reset();
         map.reset();
@@ -755,7 +778,8 @@ void ce_qui_n_existe_pas_encore_est_signale() {
         InterProcessor link{main_interrupts, secondary_interrupts};
         InputState input{};
         VideoSystem video{main_interrupts, secondary_interrupts};
-        Arm9MemoryMap map{system, video, link, main_interrupts, input};
+        Cartridge cartridge{main_interrupts, secondary_interrupts};
+        Arm9MemoryMap map{system, video, link, main_interrupts, input, cartridge};
         system.reset();
         video.reset();
         map.reset();
@@ -769,7 +793,8 @@ void ce_qui_n_existe_pas_encore_est_signale() {
         InterProcessor link{main_interrupts, secondary_interrupts};
         InputState input{};
         VideoSystem video{main_interrupts, secondary_interrupts};
-        Arm9MemoryMap map{system, video, link, main_interrupts, input};
+        Cartridge cartridge{main_interrupts, secondary_interrupts};
+        Arm9MemoryMap map{system, video, link, main_interrupts, input, cartridge};
         system.reset();
         video.reset();
         map.reset();
@@ -790,7 +815,8 @@ void ce_qui_n_existe_pas_encore_est_signale() {
         InterProcessor link{main_interrupts, secondary_interrupts};
         InputState input{};
         VideoSystem video{main_interrupts, secondary_interrupts};
-        Arm9MemoryMap map{system, video, link, main_interrupts, input};
+        Cartridge cartridge{main_interrupts, secondary_interrupts};
+        Arm9MemoryMap map{system, video, link, main_interrupts, input, cartridge};
         system.reset();
         video.reset();
         map.reset();
@@ -830,7 +856,8 @@ void le_processeur_tourne_sur_la_carte() {
     InterProcessor link{main_interrupts, secondary_interrupts};
     InputState input{};
     VideoSystem video{main_interrupts, secondary_interrupts};
-    Arm9MemoryMap map{system, video, link, main_interrupts, input};
+    Cartridge cartridge{main_interrupts, secondary_interrupts};
+    Arm9MemoryMap map{system, video, link, main_interrupts, input, cartridge};
     system.reset();
     video.reset();
     map.reset();
@@ -892,7 +919,8 @@ void la_memoire_locale_passe_devant_la_carte() {
     InterProcessor link{main_interrupts, secondary_interrupts};
     InputState input{};
     VideoSystem video{main_interrupts, secondary_interrupts};
-    Arm9MemoryMap map{system, video, link, main_interrupts, input};
+    Cartridge cartridge{main_interrupts, secondary_interrupts};
+    Arm9MemoryMap map{system, video, link, main_interrupts, input, cartridge};
     system.reset();
     video.reset();
     map.reset();

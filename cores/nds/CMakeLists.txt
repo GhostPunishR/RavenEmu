@@ -8,6 +8,7 @@ add_library(nds_raven_core STATIC
     src/memory/arm9_memory_map.cpp
     src/memory/system_memory.cpp
     src/system/bios.cpp
+    src/system/cartridge.cpp
     src/system/dma.cpp
     src/system/input.cpp
     src/system/inter_processor.cpp
@@ -156,6 +157,14 @@ if(RAVENEMU_BUILD_TESTS)
     )
     target_link_libraries(nds_raven_bios_tests PRIVATE nds_raven_core)
     add_test(NAME nds_raven_bios COMMAND nds_raven_bios_tests)
+
+    add_executable(nds_raven_cartridge_tests tests/cartridge_test.cpp)
+    target_include_directories(nds_raven_cartridge_tests PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/src
+        ${CMAKE_CURRENT_LIST_DIR}/../common/tests/support
+    )
+    target_link_libraries(nds_raven_cartridge_tests PRIVATE nds_raven_core)
+    add_test(NAME nds_raven_cartridge COMMAND nds_raven_cartridge_tests)
 
     # Les minuteries sont éprouvées seules, puis sous les cartes et sous
     # l'ordonnanceur : ce qui compte est que chaque processeur ait les siennes.

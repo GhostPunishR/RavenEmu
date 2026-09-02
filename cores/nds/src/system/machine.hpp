@@ -5,6 +5,7 @@
 #include "memory/arm9_memory_map.hpp"
 #include "memory/system_memory.hpp"
 #include "system/bios.hpp"
+#include "system/cartridge.hpp"
 #include "system/input.hpp"
 #include "system/inter_processor.hpp"
 #include "system/interrupt_controller.hpp"
@@ -128,6 +129,11 @@ public:
      * Remet d'abord la console à zéro : amorcer par-dessus une partie en cours
      * mêlerait deux exécutions.
      *
+     * L'image n'est **pas recopiée** : le bus de cartouche la relit à la
+     * demande. Elle doit donc rester vivante aussi longtemps que la console
+     * tourne, faute de quoi le premier chargement d'un jeu lirait de la mémoire
+     * libérée. La fabrique du cœur s'en charge en la possédant.
+     *
      * @param header en-tête déjà décodé, qui dit où sont les deux binaires
      * @param rom    l'image dont cet en-tête a été décodé
      */
@@ -163,6 +169,8 @@ public:
     [[nodiscard]] InterProcessor& link() noexcept { return link_; }
     /** L'état des touches, que les deux processeurs consultent. */
     [[nodiscard]] InputState& input() noexcept { return input_; }
+    /** Le bus de cartouche, dont il n'y a qu'un : un seul port, un seul lecteur. */
+    [[nodiscard]] Cartridge& cartridge() noexcept { return cartridge_; }
     [[nodiscard]] InterruptController& interrupts(Processor side) noexcept;
 
     /** Le coprocesseur système, que seul le processeur principal possède. */
@@ -213,6 +221,7 @@ private:
     InterruptController secondary_interrupts_{};
     InterProcessor link_;
     VideoSystem video_;
+    Cartridge cartridge_;
     Arm9MemoryMap main_map_;
     Arm7MemoryMap secondary_map_;
     Arm9 main_core_;

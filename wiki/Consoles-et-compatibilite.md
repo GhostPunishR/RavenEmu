@@ -82,7 +82,8 @@ La Nintendo DS apparaît dans la bibliothèque : un fichier `.nds` est reconnu, 
 - décors en mode texte et sprites ordinaires des deux moteurs 2D;
 - balayage des deux écrans, empilés dans un tampon unique de 256 sur 384;
 - amorçage d'une cartouche depuis son en-tête, minuteries, transferts autonomes, touches;
-- les services du programme d'amorçage : attente d'interruption, division, racine, somme de contrôle, recopies, et les cinq formats de décompression.
+- les services du programme d'amorçage : attente d'interruption, division, racine, somme de contrôle, recopies, et les cinq formats de décompression;
+- le bus de cartouche, par lequel un jeu lit la suite de sa ROM.
 
 ### Les services du programme d'amorçage
 
@@ -90,13 +91,29 @@ Un jeu ne se contente pas de son propre code : il demande au programme d'amorça
 
 **Ce programme n'est pas fourni avec RavenEmu et ne peut pas l'être** : c'est du code de la console. Les services sont réécrits d'après la description publique de leur comportement, et aucun octet n'en est copié. Le vecteur d'interruption, lui, porte six instructions écrites pour RavenEmu, que le processeur émulé exécute vraiment.
 
-Un programme qui tient dans les deux blocs que son en-tête décrit et qui n'a besoin que de ces services démarre donc maintenant. **Ce n'est pas le cas d'un jeu du commerce**, qui lit la suite de sa cartouche au fur et à mesure.
+### Le bus de cartouche
+
+L'amorçage ne recopie que les deux blocs de code que l'en-tête décrit. Tout le reste d'un jeu, décors, sprites, musiques, niveaux, et le code chargé en cours de route, se lit par ce bus, à la demande.
+
+Un transfert se fait mot par mot : le jeu écrit une commande de huit octets, indique la taille du bloc voulu, puis vide le port autant de fois qu'il y a de mots, ou arme un canal de transfert autonome sur ce moment précis et laisse le matériel le faire pendant qu'il travaille. Les deux chemins sont en place.
+
+Deux commandes sont servies : lire à une adresse, et demander l'identifiant de la puce. Les autres appartiennent aux phases d'amorçage de la console, qui chiffrent leurs échanges avec des clés que RavenEmu ne contient pas et ne peut pas contenir. Une commande non servie rend un bus au repos et est signalée, plutôt que de rendre un contenu inventé.
+
+Un seul processeur tient le port à la fois, et c'est un registre du processeur principal qui en décide. L'autre lit alors une cartouche absente.
+
+### Ce qui reste entre un programme et un jeu
+
+Un programme qui n'a besoin que des organes ci-dessus démarre, produit une image et lit sa cartouche. **Un jeu du commerce en demande encore d'autres au démarrage**, et le plus manquant est maintenant le **port série** : l'écran tactile, les réglages enregistrés dans la console et la commande d'alimentation y passent tous. Le processeur secondaire s'y adresse tôt, et il s'y arrête ; le principal, qui attend son signal, ne va pas plus loin.
+
+Viennent ensuite le son, le moteur 3D, et les modes vidéo qui manquent encore.
 
 ### Limites connues
 
-- pas de bus de cartouche : un jeu ne peut pas lire sa ROM au-delà des deux blocs que l'amorçage recopie, et c'est ce qui manque le plus pour qu'un jeu du commerce démarre;
+- pas de port série : ni écran tactile, ni réglages de la console, ni commande d'alimentation;
 - l'état qu'un vrai programme d'amorçage laisse derrière lui n'est pas reproduit : un programme qui monte sa propre pile démarre, un programme qui compte sur l'amorceur ne démarre pas;
-- pas d'écran tactile : la zone tactile d'un skin est reconnue mais reste inerte;
+- aucun chiffrement de cartouche : les commandes des phases d'amorçage de la console ne sont pas servies;
+- pas de puce de sauvegarde : son registre existe mais n'est relié à rien, et son accès est signalé;
+- la zone tactile d'un skin est reconnue mais reste inerte, faute de ce port;
 - pas de moteur 3D, pas de son, pas de sauvegarde de cartouche;
 - aucun format d'état instantané : l'enregistrement n'est pas proposé pour cette console;
 - les ROM de plus de 128 Mio ne sont pas indexées, la bibliothèque lisant un fichier entier pour en calculer les empreintes.

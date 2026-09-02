@@ -5,8 +5,9 @@ namespace ravenemu::nds {
 Machine::Machine()
     : link_(main_interrupts_, secondary_interrupts_),
       video_(main_interrupts_, secondary_interrupts_),
-      main_map_(system_, video_, link_, main_interrupts_, input_),
-      secondary_map_(system_, video_, link_, secondary_interrupts_, input_),
+      cartridge_(main_interrupts_, secondary_interrupts_),
+      main_map_(system_, video_, link_, main_interrupts_, input_, cartridge_),
+      secondary_map_(system_, video_, link_, secondary_interrupts_, input_, cartridge_),
       main_core_(main_map_),
       secondary_core_(secondary_map_),
       main_bios_(Processor::main, main_core_, main_map_, main_interrupts_, &main_core_.cp15()),
@@ -27,6 +28,7 @@ void Machine::reset() {
     secondary_interrupts_.reset();
     link_.reset();
     video_.reset();
+    cartridge_.reset();
     main_map_.reset();
     secondary_map_.reset();
     main_core_.reset();
@@ -73,6 +75,12 @@ void Machine::load_block(
 void Machine::boot(const CartridgeHeader& header, std::span<const std::uint8_t> rom) {
     reset();
 
+    // Le bus relit l'image à la demande et n'en garde pas de copie : une
+    // cartouche fait jusqu'à cent vingt-huit mégaoctets, et la doubler en
+    // mémoire pour un téléphone n'aurait pas de sens. L'appelant la garde donc
+    // vivante aussi longtemps que la console tourne.
+    cartridge_.insert(rom);
+
     load_block(main_map_, rom, header.arm9_rom_offset, header.arm9_ram_address, header.arm9_size);
     load_block(
         secondary_map_, rom, header.arm7_rom_offset, header.arm7_ram_address, header.arm7_size);
@@ -99,9 +107,15 @@ void Machine::step(Processor side) {
     // Un transfert armé a lieu entre deux instructions : le programme qui vient
     // de l'allumer trouve la copie faite dès l'instruction suivante, et non une
     // ligne plus tard.
+    // Un mot prêt sur le bus de cartouche arme les canaux qui l'attendent, du
+    // seul côté qui tient le port : c'est ainsi qu'un jeu copie ses données sans
+    // avoir à scruter l'indicateur entre chaque mot.
+    const bool card_ready = side == cartridge_.owner() && cartridge_.transferring();
     if (side == Processor::main) {
+        if (card_ready) main_map_.dma().trigger(DmaController::Timing::cartridge);
         if (main_map_.dma().pending()) main_map_.dma().run(main_map_);
     } else {
+        if (card_ready) secondary_map_.dma().trigger(DmaController::Timing::cartridge);
         if (secondary_map_.dma().pending()) secondary_map_.dma().run(secondary_map_);
     }
 

@@ -21,9 +21,9 @@ Arm9MemoryMap::Arm9MemoryMap(
     VideoSystem& video,
     InterProcessor& link,
     InterruptController& interrupts,
-    InputState& input
-)
-    : system_(system), video_(video), link_(link), interrupts_(interrupts), input_(input) {}
+    InputState& input,
+    Cartridge& cartridge
+): system_(system), video_(video), link_(link), interrupts_(interrupts), input_(input), cartridge_(cartridge) {}
 
 void Arm9MemoryMap::reset() noexcept {
     // La mémoire partagée et le matériel vidéo sont remis à zéro par leurs
@@ -33,6 +33,7 @@ void Arm9MemoryMap::reset() noexcept {
     dma_.reset();
     timers_.reset();
     power_ = 0;
+    external_memory_ = 0;
     unmapped_ = 0;
     first_unmapped_ = 0;
     unimplemented_io_ = 0;
@@ -185,6 +186,12 @@ void Arm9MemoryMap::write_engine_byte(
 
 
 std::uint32_t Arm9MemoryMap::read_io(std::uint32_t address, std::uint32_t width) noexcept {
+    // Le bus de cartouche décode lui-même ses registres : les deux processeurs
+    // les voient aux mêmes adresses, et deux copies de ce décodage dériveraient.
+    std::uint32_t from_cartridge = 0;
+    if (cartridge_.read_register(Processor::main, address, width, from_cartridge)) {
+        return from_cartridge;
+    }
     // Les deux files et les deux registres de seize bits sont indivisibles :
     // les lire par morceaux les ferait avancer plusieurs fois, ou ne rendrait
     // qu'une moitié de leur état.
@@ -211,6 +218,7 @@ std::uint32_t Arm9MemoryMap::read_io(std::uint32_t address, std::uint32_t width)
 }
 
 void Arm9MemoryMap::write_io(std::uint32_t address, std::uint32_t value, std::uint32_t width) noexcept {
+    if (cartridge_.write_register(Processor::main, address, width, value)) return;
     if (address == registers::queue_send && width == 4U) {
         link_.send(Processor::main, value);
         return;
@@ -249,6 +257,10 @@ std::uint8_t Arm9MemoryMap::read_io_byte(std::uint32_t address) noexcept {
     }
     if (address >= line_counter && address < line_counter + 2U) {
         return registers::byte_of(display().line(), address - line_counter);
+    }
+    if (address >= registers::external_memory_control &&
+        address < registers::external_memory_control + 2U) {
+        return registers::byte_of(external_memory_, address - registers::external_memory_control);
     }
     if (address >= power_control && address < power_control + 2U) {
         return registers::byte_of(power_, address - power_control);
@@ -314,6 +326,20 @@ void Arm9MemoryMap::write_io_byte(std::uint32_t address, std::uint8_t value) noe
             Processor::main,
             static_cast<std::uint16_t>(registers::with_byte(
                 display().status(Processor::main), address - display_status, value))
+        );
+        return;
+    }
+    if (address >= registers::external_memory_control &&
+        address < registers::external_memory_control + 2U) {
+        external_memory_ = static_cast<std::uint16_t>(registers::with_byte(
+            external_memory_, address - registers::external_memory_control, value));
+        // Un seul bit agit : celui qui confie le port cartouche à l'un ou à
+        // l'autre. Les autres décrivent des temps d'attente de bus, que ce cœur
+        // ne compte pas ; ils sont donc conservés et relus, sans effet.
+        cartridge_.set_owner(
+            (external_memory_ & registers::cartridge_to_secondary) != 0U
+                ? Processor::secondary
+                : Processor::main
         );
         return;
     }

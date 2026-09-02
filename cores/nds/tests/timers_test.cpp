@@ -1,5 +1,6 @@
 #include "memory/arm7_memory_map.hpp"
 #include "memory/arm9_memory_map.hpp"
+#include "system/cartridge.hpp"
 #include "system/machine.hpp"
 #include "system/registers.hpp"
 #include "system/timers.hpp"
@@ -298,7 +299,8 @@ void les_registres_repondent_aux_bonnes_adresses() {
     InterProcessor link{main_interrupts, secondary_interrupts};
     InputState input{};
     VideoSystem video{main_interrupts, secondary_interrupts};
-    Arm9MemoryMap map{system, video, link, main_interrupts, input};
+    Cartridge cartridge{main_interrupts, secondary_interrupts};
+    Arm9MemoryMap map{system, video, link, main_interrupts, input, cartridge};
     system.reset();
     video.reset();
     map.reset();

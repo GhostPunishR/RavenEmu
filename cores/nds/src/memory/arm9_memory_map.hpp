@@ -4,6 +4,7 @@
 #include "memory/system_memory.hpp"
 #include "system/inter_processor.hpp"
 #include "system/dma.hpp"
+#include "system/cartridge.hpp"
 #include "system/input.hpp"
 #include "system/timers.hpp"
 #include "video/video_system.hpp"
@@ -73,7 +74,8 @@ public:
         VideoSystem& video,
         InterProcessor& link,
         InterruptController& interrupts,
-        InputState& input
+        InputState& input,
+        Cartridge& cartridge
     );
 
     static constexpr std::uint32_t main_ram_bytes = SystemMemory::main_ram_bytes;
@@ -278,6 +280,7 @@ private:
     InterProcessor& link_;
     InterruptController& interrupts_;
     InputState& input_;
+    Cartridge& cartridge_;
 
     KeyInterrupt key_interrupt_{};
 
@@ -286,6 +289,14 @@ private:
 
     /** Registre d'alimentation, dont seul le bit d'échange agit. */
     std::uint16_t power_{};
+
+    /**
+     * Registre du partage des ports externes.
+     *
+     * Il est chez le processeur principal parce que c'est lui qui en décide :
+     * le secondaire n'en voit qu'un reflet en lecture, qui n'est pas modélisé.
+     */
+    std::uint16_t external_memory_{};
 
     /**
      * Le programme d'amorçage, en lecture seule.

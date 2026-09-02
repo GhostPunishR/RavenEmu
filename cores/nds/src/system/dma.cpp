@@ -82,9 +82,13 @@ DmaController::Timing DmaController::timing(std::size_t channel) const noexcept 
 
     if (field == 0U) return Timing::immediate;
     if (field == 1U) return Timing::vertical_blank;
-    // Le retour horizontal n'est un moment que pour le processeur principal :
-    // chez le secondaire, la même valeur désigne la cartouche.
-    if (field == 2U && serves_main()) return Timing::horizontal_blank;
+    // La valeur 2 ne dit pas la même chose des deux côtés : le retour horizontal
+    // chez le principal, la cartouche chez le secondaire. C'est le décalage le
+    // plus facile à manquer de tout ce champ.
+    if (field == 2U) return serves_main() ? Timing::horizontal_blank : Timing::cartridge;
+    // Le principal désigne la cartouche par la valeur suivante, celle que le
+    // secondaire n'a pas.
+    if (field == 5U && serves_main()) return Timing::cartridge;
     return Timing::unsupported;
 }
 

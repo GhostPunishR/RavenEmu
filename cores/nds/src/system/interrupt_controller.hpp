@@ -64,6 +64,9 @@ public:
     static constexpr std::uint32_t ipc_send_queue_empty = 1U << 17U;
     static constexpr std::uint32_t ipc_receive_queue_filled = 1U << 18U;
 
+    /** Fin d'un transfert du bus de cartouche, pour le processeur qui le tient. */
+    static constexpr std::uint32_t cartridge = 1U << 19U;
+
     void reset() noexcept;
 
     /** Autorisation générale ; sans elle, aucune interruption n'est prise. */

@@ -4,6 +4,7 @@
 #include "memory/system_memory.hpp"
 #include "system/inter_processor.hpp"
 #include "system/dma.hpp"
+#include "system/cartridge.hpp"
 #include "system/input.hpp"
 #include "system/timers.hpp"
 #include "video/video_system.hpp"
@@ -51,7 +52,8 @@ public:
         VideoSystem& video,
         InterProcessor& link,
         InterruptController& interrupts,
-        InputState& input
+        InputState& input,
+        Cartridge& cartridge
     );
 
     /** Mémoire de travail que ce processeur ne partage avec personne. */
@@ -227,6 +229,7 @@ private:
     InterProcessor& link_;
     InterruptController& interrupts_;
     InputState& input_;
+    Cartridge& cartridge_;
 
     KeyInterrupt key_interrupt_{};
 

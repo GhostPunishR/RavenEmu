@@ -105,7 +105,12 @@ aujourd'hui :
   le dépaquetage de bits et les cinq formats de décompression. L'appel logiciel
   est intercepté avant son vecteur ; l'interruption, elle, passe par six
   instructions écrites pour RavenEmu et placées dans la région du programme
-  d'amorçage, que le processeur émulé exécute vraiment.
+  d'amorçage, que le processeur émulé exécute vraiment;
+- le bus de cartouche : la commande de huit octets, la taille du bloc et ses deux
+  valeurs particulières, la cadence mot par mot que le jeu observe, le partage du
+  port entre les deux processeurs, l'interruption de fin, et le moment de
+  transfert autonome sur lequel un jeu arme un canal pour ne pas avoir à scruter
+  le port entre chaque mot.
 
 Le budget d'instructions accordé à une ligne repose sur une convention dite en
 toutes lettres : une instruction par cycle de l'horloge maître, faute d'un modèle
@@ -117,12 +122,12 @@ modélisé : ses valeurs ne sont affirmées nulle part dans ce dépôt, et les
 inventer serait une affirmation que rien ne vérifie. Une cartouche qui monte sa
 propre pile démarre ; une cartouche qui compte sur l'amorceur ne démarre pas.
 
-Un programme qui tient dans les deux blocs que son en-tête décrit et qui n'a
-besoin que des services d'amorçage démarre désormais. Un jeu du commerce, non :
-il lit la suite de sa cartouche au fur et à mesure, et le bus qui le permet
-n'existe pas. Restent donc à écrire ce bus, les coordonnées de l'écran tactile,
-les décors tournants et les modes étendus, les sprites tournants et
-semi-transparents, le moteur 3D, les fenêtres et les mélanges, les palettes
+Un programme qui n'a besoin que de ces organes démarre désormais, produit une
+image et lit sa cartouche. Un jeu du commerce, non : il s'adresse tôt au port
+série, par lequel passent l'écran tactile, les réglages enregistrés dans la
+console et la commande d'alimentation. C'est ce qui manque le plus à présent.
+Restent ensuite les décors tournants et les modes étendus, les sprites tournants
+et semi-transparents, le moteur 3D, les fenêtres et les mélanges, les palettes
 étendues, la sauvegarde et le son.
 L'enregistrement d'un état reste refusé par une erreur nommée, faute de format ;
 l'application ne le propose donc pas pour cette console, plutôt que de l'offrir

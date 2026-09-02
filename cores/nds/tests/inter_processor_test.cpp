@@ -1,5 +1,6 @@
 #include "cpu/arm_core.hpp"
 #include "memory/arm7_memory_map.hpp"
+#include "system/cartridge.hpp"
 #include "memory/arm9_memory_map.hpp"
 #include "memory/system_memory.hpp"
 #include "system/inter_processor.hpp"
@@ -54,8 +55,9 @@ struct Console {
     InterProcessor link{main_interrupts, secondary_interrupts};
     InputState input{};
     VideoSystem video{main_interrupts, secondary_interrupts};
-    Arm9MemoryMap main_map{system, video, link, main_interrupts, input};
-    Arm7MemoryMap secondary_map{system, video, link, secondary_interrupts, input};
+    Cartridge cartridge{main_interrupts, secondary_interrupts};
+    Arm9MemoryMap main_map{system, video, link, main_interrupts, input, cartridge};
+    Arm7MemoryMap secondary_map{system, video, link, secondary_interrupts, input, cartridge};
 
     Console() {
         system.reset();

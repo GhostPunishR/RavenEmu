@@ -12,10 +12,10 @@ Arm7MemoryMap::Arm7MemoryMap(
     VideoSystem& video,
     InterProcessor& link,
     InterruptController& interrupts,
-    InputState& input
-)
-    : system_(system), video_(video), link_(link), interrupts_(interrupts),
-      input_(input),
+    InputState& input,
+    Cartridge& cartridge
+): system_(system), video_(video), link_(link), interrupts_(interrupts),
+      input_(input), cartridge_(cartridge),
       private_wram_(private_wram_bytes, 0) {}
 
 void Arm7MemoryMap::reset() noexcept {
@@ -76,6 +76,12 @@ Arm7MemoryMap::Location Arm7MemoryMap::locate(std::uint32_t address) noexcept {
 
 
 std::uint32_t Arm7MemoryMap::read_io(std::uint32_t address, std::uint32_t width) noexcept {
+    // Le bus de cartouche décode lui-même ses registres : les deux processeurs
+    // les voient aux mêmes adresses, et deux copies de ce décodage dériveraient.
+    std::uint32_t from_cartridge = 0;
+    if (cartridge_.read_register(Processor::secondary, address, width, from_cartridge)) {
+        return from_cartridge;
+    }
     // Les deux files et les deux registres de seize bits sont indivisibles :
     // les lire par morceaux les ferait avancer plusieurs fois, ou ne rendrait
     // qu'une moitié de leur état.
@@ -102,6 +108,7 @@ std::uint32_t Arm7MemoryMap::read_io(std::uint32_t address, std::uint32_t width)
 }
 
 void Arm7MemoryMap::write_io(std::uint32_t address, std::uint32_t value, std::uint32_t width) noexcept {
+    if (cartridge_.write_register(Processor::secondary, address, width, value)) return;
     if (address == registers::queue_send && width == 4U) {
         link_.send(Processor::secondary, value);
         return;

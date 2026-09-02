@@ -393,12 +393,30 @@ void le_moment_decide_du_depart() {
             "son retour vertical à lui est un bit plus haut"
         );
 
+        // Et le décalage joue jusqu'au bout : ce que le principal lit comme un
+        // retour horizontal, le secondaire le lit comme la cartouche. Les deux
+        // organes existent, et confondre les deux ferait copier une trame au
+        // rythme du bus, ou l'inverse.
         DmaController third{Processor::secondary, interrupts};
         third.set_control(0, control_word(1U, command(0, 0, false, false, 4)));
         check(
-            third.timing(0) == DmaController::Timing::unsupported,
-            "et la cartouche, dont l'organe n'existe pas, est comptée"
+            third.timing(0) == DmaController::Timing::cartridge,
+            "et le moment deux du secondaire est la cartouche"
         );
+    }
+    {
+        // Chez le principal, la cartouche est un moment plus loin.
+        DmaController channels{Processor::main, interrupts};
+        channels.set_control(0, control_word(1U, command(0, 0, false, false, 5)));
+        check(
+            channels.timing(0) == DmaController::Timing::cartridge,
+            "le moment cinq est la cartouche chez le principal"
+        );
+        check(channels.unsupported_timing_count() == 0U, "et il n'est pas compté comme absent");
+        channels.trigger(DmaController::Timing::vertical_blank);
+        check(!channels.pending(), "un autre moment ne l'arme pas");
+        channels.trigger(DmaController::Timing::cartridge);
+        check(channels.pending(), "le sien, oui");
     }
 }
 
@@ -407,7 +425,7 @@ void un_moment_sans_organe_est_compte() {
     InterruptController interrupts;
     DmaController channels{Processor::main, interrupts};
 
-    channels.set_control(0, control_word(1U, command(0, 0, false, false, 5)));  // cartouche
+    channels.set_control(0, control_word(1U, command(0, 0, false, false, 6)));  // port GBA
     check(channels.unsupported_timing_count() == 1U, "le moment inconnu est compté");
     check(!channels.pending(), "et le canal n'est pas armé");
 
@@ -646,7 +664,8 @@ void chaque_processeur_a_ses_canaux() {
 void la_remise_a_zero_efface_les_canaux() {
     Console console;
     console.program(0, main_ram_base, main_ram_base + 0x100U, control_word(4U, command(0, 0, false, false, 1)));
-    console.main().write32(dma_base + 12U + 8U, control_word(1U, command(0, 0, false, false, 5)));
+    // Le moment six désigne le port Game Boy Advance, dont l'organe n'existe pas.
+    console.main().write32(dma_base + 12U + 8U, control_word(1U, command(0, 0, false, false, 6)));
     check(console.main().dma().unsupported_timing_count() == 1U, "un moment inconnu a été compté");
 
     console.main().reset();
