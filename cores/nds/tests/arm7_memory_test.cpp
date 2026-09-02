@@ -380,7 +380,17 @@ void ce_qui_n_existe_pas_encore_est_signale() {
         Console console;
         console.secondary_map.write32(Arm7MemoryMap::private_wram_base, 0xdead'beefU);
         console.secondary_map.write32(main_ram_base, 0x0bad'cafeU);
-        static_cast<void>(console.secondary_map.read32(0x0000'0000U));
+        // Une adresse réellement sans organe : celle du programme d'amorçage est
+        // décodée depuis que sa région existe, et ne remplirait plus l'ardoise
+        // qu'on veut voir effacée.
+        static_cast<void>(console.secondary_map.read32(0x0600'0000U));
+        check(console.secondary_map.unmapped_count() == 4U, "l'ardoise est bien remplie");
+        // La première retenue est celle du premier octet, non celle du dernier :
+        // un mot en compte quatre, et seul le premier doit rester.
+        check(
+            console.secondary_map.first_unmapped() == 0x0600'0000U,
+            "et c'est la première adresse qui est retenue"
+        );
         // Un registre réellement sans organe : l'état du balayage est modélisé
         // depuis que le contrôleur d'affichage existe, et ne remplirait plus
         // l'ardoise qu'on veut voir effacée.
