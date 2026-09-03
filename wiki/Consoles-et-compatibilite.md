@@ -134,7 +134,7 @@ Un programme qui n'a besoin que des organes ci-dessus démarre, produit une imag
 - aucune durée sur le port série : le bit d'occupation ne se lève jamais, un échange étant fini dès qu'il est demandé;
 - pas de moteur 3D, pas de son, pas de sauvegarde de cartouche;
 - aucun format d'état instantané : l'enregistrement n'est pas proposé pour cette console;
-- les ROM de plus de 128 Mio ne sont pas indexées, la bibliothèque lisant un fichier entier pour en calculer les empreintes.
+- les ROM de plus de 512 Mio ne sont pas prises en charge, ce qui dépasse la plus grosse cartouche produite.
 
 ## Signaler une incompatibilité
 

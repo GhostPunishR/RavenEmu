@@ -55,6 +55,22 @@ class NdsCore : EmulatorCore, AutoCloseable {
         NativeCoreBridge.loadRom(handle(), rom, batteryRam)
     }
 
+    /**
+     * La console dont les cartouches sont assez grosses pour que cela compte.
+     *
+     * L'image ne touche jamais le tas Java : le pont la lit depuis le
+     * descripteur et le cœur la prend au lieu de la recopier. Un seul
+     * exemplaire existe, en mémoire native.
+     */
+    override fun loadRomFromDescriptor(
+        descriptor: java.io.FileDescriptor,
+        sizeBytes: Long,
+        batteryRam: ByteArray?,
+    ): Boolean {
+        NativeCoreBridge.loadRomFromDescriptor(handle(), descriptor, sizeBytes, batteryRam)
+        return true
+    }
+
     override fun reset() {
         NativeCoreBridge.reset(handle())
     }

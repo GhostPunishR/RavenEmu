@@ -93,6 +93,69 @@ class NdsCoreTest {
         assertNull(ConsoleType.GAME_BOY_ADVANCE.touchScreen)
     }
 
+    /**
+     * Le chargement par descripteur traverse réellement le pont.
+     *
+     * C'est le chemin par lequel une grosse cartouche entre : l'image ne touche
+     * jamais le tas Java, et le cœur la prend au lieu de la recopier. Ce que
+     * cette vérification attrape est propre à la frontière — un symbole ou une
+     * signature qui ne coïncident pas ne se voient qu'au premier appel — et le
+     * fait qu'une image lue ainsi décrive la même cartouche qu'une image passée
+     * en mémoire.
+     */
+    @Test
+    fun `une ROM se charge depuis un descripteur de fichier`() {
+        val image = NdsCartridge.image()
+        val fichier = java.io.File.createTempFile("ravenemu", ".nds")
+        try {
+            fichier.writeBytes(image)
+            java.io.RandomAccessFile(fichier, "r").use { ouvert ->
+                core().use { c ->
+                    assertTrue(
+                        c.loadRomFromDescriptor(ouvert.fd, image.size.toLong()),
+                        "le cœur Nintendo DS sait charger par descripteur",
+                    )
+                    val pixels = IntArray(c.video.pixelCount)
+                    c.runFrame(pixels)
+                    assertEquals(256 * 384, pixels.size)
+                }
+            }
+        } finally {
+            fichier.delete()
+        }
+    }
+
+    /** Un fichier plus court que sa taille annoncée est refusé, non complété. */
+    @Test
+    fun `une ROM plus courte que sa taille annoncee est refusee`() {
+        val image = NdsCartridge.image()
+        val fichier = java.io.File.createTempFile("ravenemu", ".nds")
+        try {
+            fichier.writeBytes(image)
+            java.io.RandomAccessFile(fichier, "r").use { ouvert ->
+                core().use { c ->
+                    assertFailsWith<Exception> {
+                        c.loadRomFromDescriptor(ouvert.fd, image.size.toLong() * 2L)
+                    }
+                }
+            }
+        } finally {
+            fichier.delete()
+        }
+    }
+
+    /**
+     * Les consoles dont les cartouches sont petites n'ont pas ce chemin.
+     *
+     * Elles rendent `false` plutôt que d'échouer : l'appelant retombe alors sur
+     * le chargement en mémoire, qui leur convient.
+     */
+    @Test
+    fun `une console sans ce chemin le dit au lieu d'echouer`() {
+        val gb = com.ravenemu.core.gb.GameBoyCore()
+        assertFalse(gb.loadRomFromDescriptor(java.io.FileDescriptor(), sizeBytes = 0L))
+    }
+
     @Test
     fun `une image que l'en-tete ne decrit pas est refusee`() {
         core().use { c ->

@@ -42,6 +42,29 @@ interface EmulatorCore {
      */
     fun loadRom(rom: ByteArray, batteryRam: ByteArray? = null)
 
+    /**
+     * Charge une ROM depuis un descripteur de fichier **déjà ouvert**, sans la
+     * faire passer par la mémoire Java.
+     *
+     * Une cartouche Nintendo DS pèse jusqu'à un demi-gigaoctet. Lue par
+     * [loadRom], elle doit tenir entière dans le tas Java, plafonné bien en
+     * dessous de ce que l'appareil permettrait : c'est ce plafond, et non le
+     * matériel, qui refusait les grosses cartouches.
+     *
+     * Le descripteur reste la propriété de l'appelant : ce chemin ne le ferme
+     * pas, et l'appelant doit le rendre lui-même.
+     *
+     * @return `false` si ce moteur ne sait pas charger ainsi. L'appelant
+     *   retombe alors sur [loadRom], qui reste le chemin de toutes les
+     *   consoles dont les cartouches sont petites.
+     * @throws RomLoadException si la ROM est invalide ou non prise en charge.
+     */
+    fun loadRomFromDescriptor(
+        descriptor: java.io.FileDescriptor,
+        sizeBytes: Long,
+        batteryRam: ByteArray? = null,
+    ): Boolean = false
+
     /** Réinitialise la console (équivalent power-cycle), ROM conservée. */
     fun reset()
 

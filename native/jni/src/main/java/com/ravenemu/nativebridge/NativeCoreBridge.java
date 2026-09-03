@@ -23,6 +23,8 @@ public final class NativeCoreBridge {
     public static native long create(int consoleStorageId, int forcedSaveType);
     public static native void destroy(long handle);
     public static native void loadRom(long handle, byte[] rom, byte[] batteryRam);
+    public static native void loadRomFromDescriptor(
+        long handle, java.io.FileDescriptor descriptor, long sizeBytes, byte[] batteryRam);
     public static native void reset(long handle);
     public static native void runFrame(long handle, int[] framebuffer, boolean renderVideo);
     public static native void setButton(long handle, int buttonOrdinal, boolean pressed);

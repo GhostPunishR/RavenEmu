@@ -108,8 +108,8 @@ class NdsRomAnalyzerTest {
         assertEquals("RAVENEMU", entree.title)
         assertTrue(taille <= analyzer.maxIndexableBytes, "et elle tient sous le plafond d'index")
         assertTrue(
-            taille > analyzer.maxRomSizeBytes.toLong(),
-            "tout en dépassant ce que le moteur sait charger",
+            taille <= analyzer.maxRomSizeBytes.toLong(),
+            "et le moteur sait la charger, depuis qu'elle ne passe plus par la mémoire Java",
         )
     }
 

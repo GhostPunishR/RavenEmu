@@ -161,6 +161,26 @@ public:
     [[nodiscard]] virtual FramebufferFormat framebuffer_format() const noexcept = 0;
     [[nodiscard]] virtual bool supports_video_frame_skipping() const noexcept { return false; }
 
+    /**
+     * Charge une image dont l'appelant cède la propriété.
+     *
+     * Une cartouche Nintendo DS pèse jusqu'à un demi-gigaoctet, et le chemin
+     * ordinaire la recopie : l'appelant en tient une, le cœur en garde une
+     * autre, et le sommet de mémoire vaut le double du fichier. Un cœur qui
+     * garde l'image peut la **prendre** au lieu de la copier, et c'est ce que
+     * cette surcharge permet.
+     *
+     * Le comportement par défaut recopie, comme avant : un cœur qui ne garde
+     * rien, ou qui garde autre chose que l'image telle quelle, n'a rien à
+     * gagner à la reprendre et n'a donc rien à redéfinir.
+     */
+    virtual void load_rom_owned(
+        std::vector<std::uint8_t>&& rom,
+        std::span<const std::uint8_t> battery_ram
+    ) {
+        load_rom(rom, battery_ram);
+    }
+
     virtual void load_rom(
         std::span<const std::uint8_t> rom,
         std::span<const std::uint8_t> battery_ram

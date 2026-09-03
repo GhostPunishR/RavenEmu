@@ -51,6 +51,27 @@ public:
         reset();
     }
 
+    /**
+     * Prend l'image au lieu de la recopier.
+     *
+     * Ce cœur garde l'image telle quelle, et le chemin ordinaire en fait donc
+     * exister deux exemplaires le temps de la copie. Une cartouche de deux cent
+     * cinquante-six mégaoctets en demande alors un demi-gigaoctet pour rien.
+     *
+     * L'en-tête est contrôlé **avant** la prise : une image refusée doit
+     * l'être sans que le cœur ait touché à son état, et un appelant qui reprend
+     * la main après un refus doit retrouver son image intacte. Elle n'est donc
+     * déplacée qu'une fois la cartouche acceptée.
+     */
+    void load_rom_owned(
+        std::vector<std::uint8_t>&& rom,
+        std::span<const std::uint8_t>
+    ) override {
+        header_ = CartridgeHeader::parse(rom);
+        rom_ = std::move(rom);
+        reset();
+    }
+
     void reset() override {
         require_loaded();
         machine_.boot(*header_, rom_);

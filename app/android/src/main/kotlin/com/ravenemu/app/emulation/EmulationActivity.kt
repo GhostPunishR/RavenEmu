@@ -379,25 +379,29 @@ class EmulationActivity : RavenActivity(), EmulationSession.Callbacks {
     // ---- Chargement ----
 
     private fun loadRomAndStart() {
-        // Seule la lecture de la ROM est nécessaire ici : base de références
-        // par défaut (l'identification est faite par la bibliothèque).
-        val repository = LibraryRepository(this, RavenConsoles.romAnalyzers())
-        lifecycleScope.launch {
-            val data = repository.readRom(romUri)
-            if (data == null) {
-                Toast.makeText(
-                    this@EmulationActivity,
-                    R.string.emulation_rom_error,
-                    Toast.LENGTH_LONG,
-                ).show()
-                finish()
-                return@launch
-            }
-            startEmulation(data)
-        }
+        lifecycleScope.launch { startEmulation() }
     }
 
-    private fun startEmulation(rom: ByteArray) {
+    /**
+     * Charge la cartouche dans [core] sans la faire passer par la mémoire Java.
+     *
+     * Une cartouche Nintendo DS pèse jusqu'à un demi-gigaoctet, et le tas Java
+     * d'une application Android est plafonné bien en dessous de ce que
+     * l'appareil permettrait : c'est ce plafond, et non le matériel, qui
+     * refusait les grosses cartouches. Le descripteur est ouvert ici et rendu
+     * ici ; le pont natif ne le ferme pas.
+     *
+     * Rend `false` quand ce chemin n'est pas disponible — moteur qui ne le sait
+     * pas, ou document dont la taille n'est pas connue d'avance. L'appelant
+     * retombe alors sur la lecture en mémoire.
+     */
+    private fun loadFromDescriptor(core: EmulatorCore, battery: ByteArray?): Boolean =
+        contentResolver.openFileDescriptor(romUri, "r")?.use { opened ->
+            val size = opened.statSize
+            if (size < 0L) false else core.loadRomFromDescriptor(opened.fileDescriptor, size, battery)
+        } ?: false
+
+    private suspend fun startEmulation() {
         // Le registre reçoit les réglages propres à ce jeu : mémoire de
         // sauvegarde et présence de l'horloge de cartouche.
         val newCore = RavenConsoles.registry(
@@ -406,7 +410,13 @@ class EmulationActivity : RavenActivity(), EmulationSession.Callbacks {
         ).create(console)
         try {
             val battery = saveStore.read(romSha256, romFileName, settings.saveDirectory)
-            newCore.loadRom(rom, battery)
+            if (!withContext(Dispatchers.IO) { loadFromDescriptor(newCore, battery) }) {
+                // Base de références par défaut : l'identification a été faite
+                // par la bibliothèque, seule la lecture est nécessaire ici.
+                val repository = LibraryRepository(this, RavenConsoles.romAnalyzers())
+                val data = repository.readRom(romUri) ?: error("ROM illisible")
+                newCore.loadRom(data, battery)
+            }
         } catch (e: Exception) {
             runCatching { (newCore as? AutoCloseable)?.close() }
             Toast.makeText(this, R.string.emulation_rom_error, Toast.LENGTH_LONG).show()

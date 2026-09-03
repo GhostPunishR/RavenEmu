@@ -105,6 +105,18 @@ class LibraryRepository(
      *
      * Rend `null` quand le document est illisible ou déborde son plafond.
      */
+    private companion object {
+        /**
+         * Ce qu'une lecture en mémoire Java s'autorise, 128 Mio.
+         *
+         * Le tas d'une application Android est plafonné bien en dessous de la
+         * mémoire de l'appareil, et un tableau plus grand ne rend pas une
+         * erreur : il lève une `OutOfMemoryError`, qui n'est pas une exception
+         * et traverse les rattrapages ordinaires.
+         */
+        const val JAVA_HEAP_CEILING = 0x0800_0000
+    }
+
     private fun analyse(
         analyzer: RomAnalyzer,
         file: ScannedFile,
@@ -166,9 +178,14 @@ class LibraryRepository(
     /** Lit le contenu d'une ROM indexée pour lancement en émulation. */
     suspend fun readRom(uri: Uri): ByteArray? = withContext(Dispatchers.IO) {
         try {
-            // Le fichier indexé a déjà été validé par son analyseur. Le
-            // plafond global couvre néanmoins la taille maximale GBA.
-            scanner.readAll(uri, analyzers.maxOf { it.maxRomSizeBytes })
+            // Le fichier indexé a déjà été validé par son analyseur. Le plafond
+            // appliqué ici n'est pas celui des moteurs : c'est ce que le tas
+            // Java peut tenir. Les cartouches qui le dépassent passent par
+            // `loadRomFromDescriptor`, qui ne l'emprunte pas ; ce chemin-ci
+            // reste celui des consoles dont les cartouches sont petites, et
+            // lui laisser un demi-gigaoctet ne ferait qu'échanger un refus
+            // clair contre un manque de mémoire.
+            scanner.readAll(uri, minOf(analyzers.maxOf { it.maxRomSizeBytes }, JAVA_HEAP_CEILING))
         } catch (_: Exception) {
             null
         }

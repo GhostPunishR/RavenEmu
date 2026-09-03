@@ -227,6 +227,46 @@ void une_cartouche_demarre_et_dessine() {
     check(pixels[0] == blue, "après remise à zéro la cartouche redémarre");
 }
 
+/**
+ * Une image cédée démarre comme une image prêtée, et n'est prise qu'acceptée.
+ *
+ * Ce chemin existe pour les grosses cartouches : le cœur garde l'image, et la
+ * recopier en fait exister deux exemplaires le temps de la copie. Deux choses
+ * doivent tenir. La cartouche doit démarrer exactement pareil — sinon le
+ * chemin économe serait un chemin différent. Et une image **refusée** doit
+ * rester intacte chez l'appelant : la prendre avant de la contrôler laisserait
+ * celui qui reprend la main devant un tableau vide, sans rien pour dire
+ * pourquoi.
+ */
+void une_image_cedee_demarre_comme_une_image_pretee() {
+    auto cartridge = relay_cartridge();
+    auto pixels = framebuffer();
+
+    {
+        auto core = make_core();
+        const auto& sealed = cartridge.sealed();
+        std::vector<std::uint8_t> owned(sealed.begin(), sealed.end());
+        core->load_rom_owned(std::move(owned), {});
+        core->run_frame(pixels, true);
+        check(pixels[0] == blue, "la cartouche cédée démarre et dessine");
+        check(pixels[192U * 256U] == black, "et l'écran du bas reste noir, comme avant");
+    }
+
+    {
+        // Une image qu'aucun en-tête ne décrit : le refus doit précéder la prise.
+        auto core = make_core();
+        std::vector<std::uint8_t> broken(0x200, 0);
+        bool refused = false;
+        try {
+            core->load_rom_owned(std::move(broken), {});
+        } catch (const RomLoadError&) {
+            refused = true;
+        }
+        check(refused, "une image indescriptible est refusée");
+        check(!broken.empty(), "et elle reste intacte chez l'appelant");
+    }
+}
+
 /** Chaque bloc va où l'en-tête le dit, et l'exécution commence où il le dit. */
 void les_blocs_vont_ou_l_en_tete_les_envoie() {
     auto cartridge = relay_cartridge();
@@ -382,6 +422,7 @@ void chaque_bloc_passe_par_la_carte_de_son_processeur() {
 int main() {
     using namespace ravenemu::nds::testing;
     une_cartouche_demarre_et_dessine();
+    une_image_cedee_demarre_comme_une_image_pretee();
     les_blocs_vont_ou_l_en_tete_les_envoie();
     amorcer_efface_la_partie_precedente();
     un_bloc_de_taille_impaire_passe_par_mots();

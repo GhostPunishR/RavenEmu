@@ -15,7 +15,9 @@ Pour chaque fichier reconnu, RavenEmu utilise:
 
 Les extensions reconnues sont `.gb` et `.gbc` pour la Game Boy, `.gba` pour la Game Boy Advance, `.nds` pour la Nintendo DS. L'extension n'est qu'une indication : c'est l'en-tête du fichier qui décide, et un fichier dont l'en-tête ne décrit pas une cartouche est écarté avec sa raison.
 
-Une ROM est lue entièrement pour en calculer les empreintes. Les fichiers dépassant ce que le moteur de leur console accepte sont ignorés : 8 Mio en Game Boy, 32 Mio en Game Boy Advance, 128 Mio en Nintendo DS.
+Une ROM est lue entièrement pour en calculer les empreintes. Pour la Nintendo DS, dont les cartouches vont jusqu'à un demi-gigaoctet, elle est **lue au fil de l'eau** : seuls son en-tête et un tampon de quelques kilooctets tiennent en mémoire, quelle que soit sa taille.
+
+Les fichiers plus gros que ce que leur console accepte sont écartés, et l'écran le dit : 8 Mio en Game Boy, 32 Mio en Game Boy Advance, 512 Mio en Nintendo DS. Un fichier écarté n'est jamais écarté en silence, la raison étant nommée avec lui.
 
 Rien n'est téléchargé et aucune base extérieure n'est nécessaire.
 
