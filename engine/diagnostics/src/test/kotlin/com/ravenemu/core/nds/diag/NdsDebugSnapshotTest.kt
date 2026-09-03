@@ -67,23 +67,29 @@ class NdsDebugSnapshotTest {
         assertEquals(132, snapshot.mainVectorBase)
         assertEquals(133, snapshot.mainDtcmBase)
         assertEquals(134, snapshot.mainDtcmSize)
+        assertEquals(135, snapshot.mainInterruptEnable)
+        assertEquals(136, snapshot.mainInterruptFlags)
+        assertEquals(137, snapshot.secondaryInterruptEnable)
+        assertEquals(138, snapshot.secondaryInterruptFlags)
+        assertEquals(139, snapshot.mainSync)
+        assertEquals(140, snapshot.secondarySync)
     }
 
     /**
      * Une suite d'une autre longueur est refusée plutôt que lue en partie.
      *
      * Un relevé décalé est pire que pas de relevé : il désigne un coupable, et
-     * ce n'est pas le bon. Trente-cinq est écrit en toutes lettres, parce que
+     * ce n'est pas le bon. Quarante et un est écrit en toutes lettres, parce que
      * c'est la promesse du pont et non une conséquence de la classe.
      */
     @Test
     fun `une suite mal dimensionnee est refusee`() {
-        assertEquals(35, NdsDebugSnapshot.VALUE_COUNT)
+        assertEquals(41, NdsDebugSnapshot.VALUE_COUNT)
         assertNull(NdsDebugSnapshot.of(null))
         assertNull(NdsDebugSnapshot.of(IntArray(0)))
-        assertNull(NdsDebugSnapshot.of(IntArray(34)))
-        assertNull(NdsDebugSnapshot.of(IntArray(36)))
-        assertNotNull(NdsDebugSnapshot.of(IntArray(35)))
+        assertNull(NdsDebugSnapshot.of(IntArray(40)))
+        assertNull(NdsDebugSnapshot.of(IntArray(42)))
+        assertNotNull(NdsDebugSnapshot.of(IntArray(41)))
     }
 
     /**
@@ -107,17 +113,19 @@ class NdsDebugSnapshotTest {
      * manque-t-il. Une console qui va bien ne dit que les trois premières.
      */
     @Test
-    fun `un releve sans manque tient en sept lignes`() {
+    fun `un releve sans manque tient en neuf lignes`() {
         val texte = sain().toDiagnosticText(fps = 60.0, frameTimeMs = 4.0)
         val lignes = texte.lines()
-        assertEquals(7, lignes.size, texte)
+        assertEquals(9, lignes.size, texte)
         assertTrue(lignes[0].startsWith("NDS "), lignes[0])
         assertTrue(lignes[1].startsWith("ARM9 actif"), lignes[1])
         assertTrue(lignes[2].contains("syst"), lignes[2])
         assertTrue(lignes[3].startsWith("ARM7 actif"), lignes[3])
         assertTrue(lignes[4].contains("syst"), lignes[4])
         assertTrue(lignes[5].startsWith("cp15 "), lignes[5])
-        assertTrue(lignes[6].startsWith("image "), lignes[6])
+        assertTrue(lignes[6].startsWith("irq9 "), lignes[6])
+        assertTrue(lignes[7].startsWith("irq7 "), lignes[7])
+        assertTrue(lignes[8].startsWith("image "), lignes[8])
         assertFalse(texte.contains("non dessiné"), texte)
         assertFalse(texte.contains("ignoré"), texte)
         assertFalse(texte.contains("buté"), texte)
@@ -161,6 +169,25 @@ class NdsDebugSnapshotTest {
         assertTrue(texte.contains("lr 02004444"), texte)
         assertTrue(texte.contains("cp15 vect FFFF0000"), texte)
         assertTrue(texte.contains("dtcm 0B000000+4000"), texte)
+    }
+
+    /**
+     * Ce que chaque processeur autorise et ce qui l'attend se lisent séparément :
+     * « personne ne la lève » et « personne ne la ramasse » n'ont pas le même
+     * remède, et un seul nombre les confondrait.
+     */
+    @Test
+    fun `les interruptions et le rendez-vous se lisent`() {
+        val texte = sain().copy(
+            mainInterruptEnable = 0x0000_2001,
+            mainInterruptFlags = 0x0000_0001,
+            secondaryInterruptEnable = 0x0001_0000,
+            secondaryInterruptFlags = 0,
+            mainSync = 0x0503,
+            secondarySync = 0x0305,
+        ).toDiagnosticText(60.0, 4.0)
+        assertTrue(texte.contains("irq9 ie 00002001 if 00000001 sync 0503"), texte)
+        assertTrue(texte.contains("irq7 ie 00010000 if 00000000 sync 0305"), texte)
     }
 
     /** Chaque manque ajoute sa ligne, et seulement quand il y en a un. */
@@ -240,5 +267,11 @@ class NdsDebugSnapshotTest {
         mainVectorBase = 0xFFFF_0000.toInt(),
         mainDtcmBase = 0x0B00_0000,
         mainDtcmSize = 0x4000,
+        mainInterruptEnable = 0x0000_0001,
+        mainInterruptFlags = 0,
+        secondaryInterruptEnable = 0x0000_0001,
+        secondaryInterruptFlags = 0,
+        mainSync = 0,
+        secondarySync = 0,
     )
 }

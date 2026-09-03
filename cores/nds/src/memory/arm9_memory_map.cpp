@@ -295,7 +295,11 @@ std::uint8_t Arm9MemoryMap::read_io_byte(std::uint32_t address) noexcept {
         return registers::byte_of(timers_.control(slot), part - 2U);
     }
 
-    if (address == post_boot_flag) return post_boot_;
+    if (address >= post_boot_flag && address < post_boot_flag + post_boot_bytes) {
+        // Seul le premier octet porte le drapeau ; la garniture se lit nulle,
+        // comme sur le matériel.
+        return address == post_boot_flag ? post_boot_ : std::uint8_t{0};
+    }
 
     if (
         address >= registers::interrupt_master &&
@@ -412,7 +416,8 @@ void Arm9MemoryMap::write_io_byte(std::uint32_t address, std::uint8_t value) noe
         return;
     }
 
-    if (address == post_boot_flag) {
+    if (address >= post_boot_flag && address < post_boot_flag + post_boot_bytes) {
+        if (address != post_boot_flag) return;
         // Le bit d’amorçage ne se retire pas : une écriture ne peut que poser
         // des bits. C’est ce qui permet à un jeu de s’en servir comme d’une
         // marque de passage plutôt que d’un simple registre.

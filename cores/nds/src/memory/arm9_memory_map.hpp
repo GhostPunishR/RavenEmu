@@ -172,6 +172,17 @@ public:
     /** Le bit que l’amorçage pose, et que rien ne retire ensuite. */
     static constexpr std::uint8_t post_boot_done = 0x01;
 
+    /**
+     * Étendue du drapeau de fin d'amorçage sur cette carte.
+     *
+     * Quatre octets, dont seul le premier porte quelque chose. Un programme qui
+     * lit ce drapeau d'un demi-mot ou d'un mot touche les autres, et les tenir
+     * pour inconnus faisait passer une lecture ordinaire pour une anomalie : un
+     * vrai jeu en produisait cinq cents par trame, ce qui masquait la première
+     * adresse vraiment inconnue.
+     */
+    static constexpr std::uint32_t post_boot_bytes = 4;
+
     static constexpr std::uint32_t power_control = 0x0400'0304;
     static constexpr std::uint16_t power_swaps_screens = 1U << 15U;
 

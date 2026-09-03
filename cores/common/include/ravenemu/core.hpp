@@ -178,6 +178,25 @@ struct NdsDebugSnapshot {
     std::int32_t main_vector_base{};
     std::int32_t main_dtcm_base{};
     std::int32_t main_dtcm_size{};
+
+    /**
+     * Ce que chaque processeur attend, et ce qui l'attend.
+     *
+     * Un processeur arrêté attend une interruption : celles qu'il autorise
+     * disent laquelle, celles qui sont en attente disent si elle est arrivée.
+     * Les deux ensemble séparent « personne ne la lève » de « personne ne la
+     * ramasse », qui n'ont pas le même remède.
+     *
+     * Le mot de synchronisation est l'autre moitié : c'est par lui que les deux
+     * processeurs se donnent rendez-vous à l'amorçage, l'un posant une valeur et
+     * attendant que l'autre la lui renvoie.
+     */
+    std::int32_t main_interrupt_enable{};
+    std::int32_t main_interrupt_flags{};
+    std::int32_t secondary_interrupt_enable{};
+    std::int32_t secondary_interrupt_flags{};
+    std::int32_t main_sync{};
+    std::int32_t secondary_sync{};
 };
 
 /** POD mirror of the Kotlin GbaDebugSnapshot contract. */

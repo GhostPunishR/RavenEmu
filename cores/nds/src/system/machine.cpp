@@ -280,6 +280,12 @@ NdsDebugSnapshot Machine::report() const noexcept {
         .main_vector_base = number(main_core_.cp15().exception_base()),
         .main_dtcm_base = number(main_core_.cp15().dtcm_window().base),
         .main_dtcm_size = number(static_cast<std::uint32_t>(main_core_.cp15().dtcm_window().size)),
+        .main_interrupt_enable = number(main_interrupts_.enabled()),
+        .main_interrupt_flags = number(main_interrupts_.requested()),
+        .secondary_interrupt_enable = number(secondary_interrupts_.enabled()),
+        .secondary_interrupt_flags = number(secondary_interrupts_.requested()),
+        .main_sync = number(link_.read_sync(Processor::main)),
+        .secondary_sync = number(link_.read_sync(Processor::secondary)),
     };
 }
 

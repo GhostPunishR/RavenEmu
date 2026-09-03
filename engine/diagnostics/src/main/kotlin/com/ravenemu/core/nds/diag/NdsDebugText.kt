@@ -35,6 +35,19 @@ fun NdsDebugSnapshot.toDiagnosticText(fps: Double, frameTimeMs: Double): String 
         secondaryLinkRegister,
     )
     lignes += "cp15 vect %08X  dtcm %08X+%X".format(mainVectorBase, mainDtcmBase, mainDtcmSize)
+    // Ce que chaque processeur autorise, ce qui l'attend, et le mot par lequel
+    // les deux se donnent rendez-vous. Un processeur arrêté attend une
+    // interruption : ces trois nombres disent laquelle, et si elle vient.
+    lignes += "irq9 ie %08X if %08X sync %04X".format(
+        mainInterruptEnable,
+        mainInterruptFlags,
+        mainSync,
+    )
+    lignes += "irq7 ie %08X if %08X sync %04X".format(
+        secondaryInterruptEnable,
+        secondaryInterruptFlags,
+        secondarySync,
+    )
     lignes += "image %,d px allumés  A %04X  B %04X%s".format(
         nonBlackPixels,
         mainDisplayControl,

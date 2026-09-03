@@ -161,6 +161,16 @@ public:
     /** Le bit que l’amorçage pose, et que rien ne retire ensuite. */
     static constexpr std::uint8_t post_boot_done = 0x01;
 
+    /**
+     * Étendue du drapeau de fin d'amorçage sur cette carte.
+     *
+     * **Deux octets seulement**, et non quatre comme du côté du processeur
+     * principal : le troisième est occupé ici par la commande d'arrêt, qui est
+     * un registre à part entière. Les absorber tous les quatre l'aurait fait
+     * disparaître, et le processeur ne se serait plus jamais arrêté.
+     */
+    static constexpr std::uint32_t post_boot_bytes = 1;
+
     static constexpr std::uint32_t halt_control = 0x0400'0301;
     /** Valeur du champ de mode qui arrête le processeur. */
     static constexpr std::uint8_t halt_mode = 2;
