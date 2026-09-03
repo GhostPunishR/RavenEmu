@@ -138,6 +138,14 @@ struct NdsDebugSnapshot {
     std::int32_t unimplemented_display{};
     std::int32_t unimplemented_objects{};
     /**
+     * Lignes dessinées des mauvaises couleurs, faute de palette étendue.
+     *
+     * À part des trois précédents : ce n'est ni un plan absent ni un plan
+     * rendu, c'est un plan rendu de travers. Une image aux teintes fausses ne
+     * se cherche pas là où on cherche une image absente.
+     */
+    std::int32_t unimplemented_palettes{};
+    /**
      * Pixels de la dernière image qui ne sont pas noirs.
      *
      * C'est la mesure qui tranche : zéro dit que le moteur n'a rien produit,

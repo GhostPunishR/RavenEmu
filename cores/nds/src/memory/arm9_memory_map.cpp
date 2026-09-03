@@ -13,6 +13,12 @@ namespace {
 constexpr std::uint32_t display_control_offset = 0x00;
 constexpr std::uint32_t background_control_offset = 0x08;
 constexpr std::uint32_t scroll_offset = 0x10;
+/** Premier octet des paramètres de transformation, plan 2 puis plan 3. */
+constexpr std::uint32_t affine_offset = 0x20;
+/** Étendue des paramètres d'un plan : quatre coefficients, deux points. */
+constexpr std::uint32_t affine_stride = 0x10;
+/** Rang du premier point de départ dans le bloc d'un plan. */
+constexpr std::uint32_t reference_offset = 0x08;
 
 } // namespace
 
@@ -141,8 +147,9 @@ std::uint8_t Arm9MemoryMap::read_engine_byte(Engine2d& engine, std::uint32_t off
         const auto index = (offset - background_control_offset) / 2U;
         return registers::byte_of(engine.background_control(index), offset & 1U);
     }
-    // Le défilement ne se relit pas : le matériel n'en garde pas de quoi
-    // répondre, et rendre la dernière valeur écrite serait une invention.
+    // Ni le défilement ni les paramètres de transformation ne se relisent : le
+    // matériel n'en garde pas de quoi répondre, et rendre la dernière valeur
+    // écrite serait une invention.
     note_unimplemented_io(offset);
     return 0;
 }
@@ -166,6 +173,38 @@ void Arm9MemoryMap::write_engine_byte(
                 registers::with_byte(engine.background_control(index), offset & 1U, value)
             )
         );
+        return;
+    }
+
+    if (offset >= affine_offset) {
+        // Deux plans tournent, et chacun porte quatre coefficients de seize bits
+        // suivis de deux points de départ de trente-deux.
+        const auto slot = (offset - affine_offset) / affine_stride;
+        const auto within_layer = (offset - affine_offset) % affine_stride;
+        if (within_layer < reference_offset) {
+            const auto which = within_layer / 2U;
+            const auto previous = static_cast<std::uint16_t>(
+                engine.affine_parameter(slot, which));
+            engine.set_affine_parameter(
+                slot,
+                which,
+                static_cast<std::uint16_t>(registers::with_byte(previous, offset & 1U, value))
+            );
+            return;
+        }
+        // Les points de départ sont en écriture seule : la valeur en cours ne
+        // se relit pas au matériel, et c'est le point retenu qui sert de base à
+        // l'octet qu'on remplace.
+        const bool vertical = within_layer >= reference_offset + 4U;
+        const auto part = (within_layer - reference_offset) & 0x3U;
+        const auto previous = static_cast<std::uint32_t>(
+            vertical ? engine.reference_y(slot) : engine.reference_x(slot));
+        const auto updated = registers::with_byte(previous, part, value);
+        if (vertical) {
+            engine.set_reference_y(slot, updated);
+        } else {
+            engine.set_reference_x(slot, updated);
+        }
         return;
     }
 

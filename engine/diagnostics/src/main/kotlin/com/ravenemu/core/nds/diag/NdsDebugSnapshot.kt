@@ -55,6 +55,7 @@ data class NdsDebugSnapshot(
     val secondaryInterruptFlags: Int,
     val mainSync: Int,
     val secondarySync: Int,
+    val unimplementedPalettes: Int,
 ) {
     companion object {
         /**
@@ -64,7 +65,7 @@ data class NdsDebugSnapshot(
          * c'est la longueur que le pont natif promet, et une vérification qui se
          * calculerait sur la classe qu'elle contrôle ne contrôlerait rien.
          */
-        const val VALUE_COUNT = 41
+        const val VALUE_COUNT = 42
 
         /** Renomme la suite du pont, ou rend `null` si elle n'a pas la bonne taille. */
         fun of(values: IntArray?): NdsDebugSnapshot? {
@@ -111,6 +112,7 @@ data class NdsDebugSnapshot(
                 secondaryInterruptFlags = values[38],
                 mainSync = values[39],
                 secondarySync = values[40],
+                unimplementedPalettes = values[41],
             )
         }
     }

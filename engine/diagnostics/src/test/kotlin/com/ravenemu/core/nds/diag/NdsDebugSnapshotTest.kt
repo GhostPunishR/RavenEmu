@@ -73,23 +73,24 @@ class NdsDebugSnapshotTest {
         assertEquals(138, snapshot.secondaryInterruptFlags)
         assertEquals(139, snapshot.mainSync)
         assertEquals(140, snapshot.secondarySync)
+        assertEquals(141, snapshot.unimplementedPalettes)
     }
 
     /**
      * Une suite d'une autre longueur est refusée plutôt que lue en partie.
      *
      * Un relevé décalé est pire que pas de relevé : il désigne un coupable, et
-     * ce n'est pas le bon. Quarante et un est écrit en toutes lettres, parce que
+     * ce n'est pas le bon. Quarante-deux est écrit en toutes lettres, parce que
      * c'est la promesse du pont et non une conséquence de la classe.
      */
     @Test
     fun `une suite mal dimensionnee est refusee`() {
-        assertEquals(41, NdsDebugSnapshot.VALUE_COUNT)
+        assertEquals(42, NdsDebugSnapshot.VALUE_COUNT)
         assertNull(NdsDebugSnapshot.of(null))
         assertNull(NdsDebugSnapshot.of(IntArray(0)))
-        assertNull(NdsDebugSnapshot.of(IntArray(40)))
-        assertNull(NdsDebugSnapshot.of(IntArray(42)))
-        assertNotNull(NdsDebugSnapshot.of(IntArray(41)))
+        assertNull(NdsDebugSnapshot.of(IntArray(41)))
+        assertNull(NdsDebugSnapshot.of(IntArray(43)))
+        assertNotNull(NdsDebugSnapshot.of(IntArray(42)))
     }
 
     /**
@@ -197,6 +198,11 @@ class NdsDebugSnapshotTest {
         assertTrue(avecPlans.contains("non dessiné : plans 3"), avecPlans)
         assertFalse(avecPlans.contains("modes"), avecPlans)
 
+        // Les teintes fausses se disent à part des plans absents.
+        val avecTeintes = sain().copy(unimplementedPalettes = 192).toDiagnosticText(60.0, 4.0)
+        assertTrue(avecTeintes.contains("non dessiné : teintes 192"), avecTeintes)
+        assertFalse(avecTeintes.contains("plans"), avecTeintes)
+
         val avecIo = sain().copy(
             secondaryUnimplementedIo = 12,
             secondaryFirstUnimplementedIo = 0x0400_0138,
@@ -273,5 +279,6 @@ class NdsDebugSnapshotTest {
         secondaryInterruptFlags = 0,
         mainSync = 0,
         secondarySync = 0,
+        unimplementedPalettes = 0,
     )
 }

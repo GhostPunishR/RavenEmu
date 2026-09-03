@@ -53,14 +53,25 @@ enum class LayerKind : std::uint8_t {
  * priorité**, ce qui n'est pas la règle qui vaut entre décors, et c'est ce qui
  * met un personnage devant son sol plutôt que dedans.
  *
+ * Les décors transformés, sous leurs quatre formes : la carte d'un octet par
+ * tuile des plans tournants, la carte de deux octets des plans étendus, et les
+ * deux sortes d'image — un octet par point à travers la palette, ou deux octets
+ * de couleur écrite en toutes lettres. Tous passent par la même matrice, avec
+ * son point de départ saisi à l'écriture et avancé d'une ligne à l'autre, et
+ * par le même choix au bord : se taire ou se répéter.
+ *
  * ### Ce qu'il ne rend pas encore
  *
- * Les décors tournants, les modes étendus, la grande image, le plan 3D, les
- * sprites tournants, la semi-transparence, la fenêtre par sprite, les sprites en
- * image directe, les fenêtres, les mélanges et les palettes étendues. Rien de
- * cela n'est passé sous silence : un plan ou un sprite décrit sous une de ces
- * formes est **compté**, parce qu'un élément absent qui ne dit rien se confond
- * avec un élément vide, et que les deux ne veulent pas dire la même chose.
+ * La grande image du dernier mode, le plan 3D, les sprites tournants, la
+ * semi-transparence, la fenêtre par sprite, les sprites en image directe, les
+ * fenêtres et les mélanges. Rien de cela n'est passé sous silence : un plan ou
+ * un sprite décrit sous une de ces formes est **compté**, parce qu'un élément
+ * absent qui ne dit rien se confond avec un élément vide, et que les deux ne
+ * veulent pas dire la même chose.
+ *
+ * Les palettes étendues sont un cas à part, et ont leur propre compteur : le
+ * plan est bien dessiné, mais des mauvaises couleurs. Une image aux teintes
+ * fausses ne se cherche pas là où on cherche une image absente.
  *
  * ### Sur la couleur zéro
  *
@@ -108,6 +119,43 @@ public:
     [[nodiscard]] std::uint16_t scroll_y(std::size_t index) const noexcept;
     void set_scroll_y(std::size_t index, std::uint16_t value) noexcept;
 
+    /**
+     * Plans capables de tourner : les deux derniers seulement.
+     *
+     * Le matériel ne donne les paramètres de transformation qu'aux plans 2 et 3,
+     * et c'est pourquoi les modes qui font tourner un décor le font toujours
+     * avec ceux-là. Les tableaux de cette classe sont donc indexés par un
+     * **rang de transformation** — 0 pour le plan 2, 1 pour le plan 3 — et non
+     * par le numéro de plan, qui laisserait deux cases toujours vides.
+     */
+    static constexpr std::size_t affine_layers = 2;
+    /** Numéro du premier plan qui tourne. */
+    static constexpr std::size_t first_affine_layer = 2;
+    /** Nombre de coefficients de la matrice : a, b, c, d. */
+    static constexpr std::size_t affine_parameters = 4;
+
+    /**
+     * Un coefficient de la matrice, en virgule fixe à huit bits de fraction.
+     *
+     * [slot] est le rang de transformation, [which] le rang du coefficient dans
+     * l'ordre où le matériel les range : a, b, c, d.
+     */
+    [[nodiscard]] std::int16_t affine_parameter(std::size_t slot, std::size_t which) const noexcept;
+    void set_affine_parameter(std::size_t slot, std::size_t which, std::uint16_t value) noexcept;
+
+    /**
+     * Le point de l'image que le coin haut-gauche de l'écran montre.
+     *
+     * Vingt-huit bits signés, en virgule fixe à huit bits de fraction. Le
+     * matériel le **saisit** à l'écriture et le fait avancer d'une ligne à
+     * l'autre : c'est ce qui permet à une rotation de rester cohérente sur
+     * toute la hauteur de l'écran.
+     */
+    [[nodiscard]] std::int32_t reference_x(std::size_t slot) const noexcept;
+    void set_reference_x(std::size_t slot, std::uint32_t value) noexcept;
+    [[nodiscard]] std::int32_t reference_y(std::size_t slot) const noexcept;
+    void set_reference_y(std::size_t slot, std::uint32_t value) noexcept;
+
     /** Mode de fond en cours, celui qui décide de la nature de chaque plan. */
     [[nodiscard]] std::uint32_t background_mode() const noexcept { return display_control_ & 0x7U; }
     [[nodiscard]] LayerKind layer_kind(std::size_t index) const noexcept;
@@ -121,6 +169,16 @@ public:
     [[nodiscard]] std::uint32_t unimplemented_display_count() const noexcept { return unimplemented_display_; }
     /** Sprites décrits sous une forme que ce lot ne dessine pas encore. */
     [[nodiscard]] std::uint32_t unimplemented_object_count() const noexcept { return unimplemented_objects_; }
+    /**
+     * Lignes dessinées avec la palette ordinaire là où une palette étendue
+     * était demandée.
+     *
+     * Elles sont dessinées, mais **pas des bonnes couleurs**. Un compteur à
+     * part parce que ce n'est ni un plan absent ni un plan rendu : c'est un
+     * plan rendu de travers, et confondre les trois ferait chercher au mauvais
+     * endroit devant une image aux teintes fausses.
+     */
+    [[nodiscard]] std::uint32_t unimplemented_palette_count() const noexcept { return unimplemented_palettes_; }
 
 private:
     /** Ce qu'un plan a déposé sur un pixel. */
@@ -144,6 +202,58 @@ private:
         std::span<Pixel> line
     ) noexcept;
 
+    /** Ce qu'un plan transformé va lire, et comment. */
+    struct TransformedSource {
+        /** Les quatre formes qu'une image transformée peut prendre. */
+        enum class Form : std::uint8_t {
+            /** Carte d'un octet par tuile, tuiles de 256 couleurs. */
+            tile_bytes,
+            /** Carte de deux octets par tuile : retournements et palette. */
+            tile_words,
+            /** Image d'un octet par pixel, indices dans la palette. */
+            bitmap_indexed,
+            /** Image de deux octets par pixel, couleur directe. */
+            bitmap_direct,
+        };
+
+        Form form;
+        std::uint32_t width;
+        std::uint32_t height;
+        /** Base de la carte, ou de l'image quand il n'y a pas de carte. */
+        std::uint32_t base;
+        /** Base des tuiles ; sans objet pour une image. */
+        std::uint32_t tile_base;
+        /** Vrai quand l'image se répète au-delà de ses bords. */
+        bool wrap;
+        std::uint8_t priority;
+    };
+
+    /** Décrit ce qu'un plan transformé doit lire, ou rend faux s'il ne le sait pas. */
+    [[nodiscard]] bool describe_transformed(
+        std::size_t index,
+        LayerKind kind,
+        TransformedSource& source
+    ) noexcept;
+
+    /** Dessine une ligne d'un plan transformé, quelle que soit sa forme. */
+    void render_transformed_row(
+        std::size_t index,
+        const TransformedSource& source,
+        std::span<Pixel> line
+    ) noexcept;
+
+    /** Couleur d'un point de l'image, ou zéro pour un point transparent. */
+    [[nodiscard]] std::uint32_t sample_transformed(
+        const TransformedSource& source,
+        std::uint32_t x,
+        std::uint32_t y
+    ) noexcept;
+
+    /** Saisit les points de départ, au premier trait de l'image. */
+    void latch_references() noexcept;
+    /** Fait avancer les points de départ d'une ligne. */
+    void advance_references() noexcept;
+
     void render_object_row(std::uint32_t row, std::span<Pixel> line) noexcept;
     /** Dépose un sprite sur la ligne, s'il la traverse. */
     void render_object(std::size_t index, std::uint32_t row, std::span<Pixel> line) noexcept;
@@ -160,9 +270,17 @@ private:
     std::array<std::uint16_t, background_count> scroll_x_{};
     std::array<std::uint16_t, background_count> scroll_y_{};
 
+    std::array<std::array<std::int16_t, affine_parameters>, affine_layers> affine_{};
+    std::array<std::int32_t, affine_layers> reference_x_{};
+    std::array<std::int32_t, affine_layers> reference_y_{};
+    /** Où en est chaque plan tournant sur la ligne en cours. */
+    std::array<std::int32_t, affine_layers> current_x_{};
+    std::array<std::int32_t, affine_layers> current_y_{};
+
     std::uint32_t unimplemented_layers_{};
     std::uint32_t unimplemented_display_{};
     std::uint32_t unimplemented_objects_{};
+    std::uint32_t unimplemented_palettes_{};
 };
 
 } // namespace ravenemu::nds

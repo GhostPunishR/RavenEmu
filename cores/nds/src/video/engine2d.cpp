@@ -3,6 +3,7 @@
 #include <ravenemu/nds/core.hpp>
 
 #include <algorithm>
+#include <utility>
 
 namespace ravenemu::nds {
 
@@ -18,6 +19,8 @@ constexpr std::uint32_t forced_blank = 1U << 7U;
 constexpr std::uint32_t first_background_enable = 8U;
 
 constexpr std::uint32_t object_enable = 1U << 12U;
+/** Palettes étendues des décors : d'autres couleurs, pas une autre forme. */
+constexpr std::uint32_t extended_palettes = 1U << 30U;
 constexpr std::uint32_t object_mapping_linear = 1U << 4U;
 
 /** Priorité du fond : derrière tout ce qu'un plan peut poser. */
@@ -88,9 +91,15 @@ void Engine2d::reset() noexcept {
     std::fill(background_control_.begin(), background_control_.end(), std::uint16_t{0});
     std::fill(scroll_x_.begin(), scroll_x_.end(), std::uint16_t{0});
     std::fill(scroll_y_.begin(), scroll_y_.end(), std::uint16_t{0});
+    affine_ = {};
+    reference_x_ = {};
+    reference_y_ = {};
+    current_x_ = {};
+    current_y_ = {};
     unimplemented_layers_ = 0;
     unimplemented_display_ = 0;
     unimplemented_objects_ = 0;
+    unimplemented_palettes_ = 0;
 }
 
 std::uint16_t Engine2d::background_control(std::size_t index) const noexcept {
@@ -153,6 +162,219 @@ std::uint32_t Engine2d::palette_colour(std::uint32_t index, PaletteTable table) 
     const auto packed = static_cast<std::uint32_t>(palette_[offset]) |
         (static_cast<std::uint32_t>(palette_[offset + 1U]) << 8U);
     return to_argb(packed);
+}
+
+std::int16_t Engine2d::affine_parameter(std::size_t slot, std::size_t which) const noexcept {
+    if (slot >= affine_layers || which >= affine_parameters) return 0;
+    return affine_[slot][which];
+}
+
+void Engine2d::set_affine_parameter(
+    std::size_t slot,
+    std::size_t which,
+    std::uint16_t value
+) noexcept {
+    if (slot >= affine_layers || which >= affine_parameters) return;
+    affine_[slot][which] = static_cast<std::int16_t>(value);
+}
+
+/**
+ * Étend un point de départ de vingt-huit bits à trente-deux.
+ *
+ * Le matériel n'en garde que vingt-huit, et le vingt-huitième porte le signe.
+ * Le recopier sur les quatre bits du haut est ce qui fait qu'un décalage
+ * vers la gauche reste un nombre négatif.
+ */
+namespace {
+[[nodiscard]] constexpr std::int32_t sign_extend_reference(std::uint32_t value) noexcept {
+    constexpr std::uint32_t significant = 0x0fff'ffffU;
+    constexpr std::uint32_t sign = 0x0800'0000U;
+    const auto kept = value & significant;
+    return static_cast<std::int32_t>((kept ^ sign) - sign);
+}
+} // namespace
+
+std::int32_t Engine2d::reference_x(std::size_t slot) const noexcept {
+    if (slot >= affine_layers) return 0;
+    return reference_x_[slot];
+}
+
+void Engine2d::set_reference_x(std::size_t slot, std::uint32_t value) noexcept {
+    if (slot >= affine_layers) return;
+    reference_x_[slot] = sign_extend_reference(value);
+    // Le matériel saisit à l'écriture : un jeu qui déplace son décor au milieu
+    // d'une image le voit bouger dès la ligne suivante, non à l'image d'après.
+    current_x_[slot] = reference_x_[slot];
+}
+
+std::int32_t Engine2d::reference_y(std::size_t slot) const noexcept {
+    if (slot >= affine_layers) return 0;
+    return reference_y_[slot];
+}
+
+void Engine2d::set_reference_y(std::size_t slot, std::uint32_t value) noexcept {
+    if (slot >= affine_layers) return;
+    reference_y_[slot] = sign_extend_reference(value);
+    current_y_[slot] = reference_y_[slot];
+}
+
+void Engine2d::latch_references() noexcept {
+    current_x_ = reference_x_;
+    current_y_ = reference_y_;
+}
+
+void Engine2d::advance_references() noexcept {
+    for (std::size_t slot = 0; slot < affine_layers; ++slot) {
+        // Une ligne plus bas, c'est un pas de la deuxième colonne de la matrice.
+        current_x_[slot] += affine_[slot][1];
+        current_y_[slot] += affine_[slot][3];
+    }
+}
+
+bool Engine2d::describe_transformed(
+    std::size_t index,
+    LayerKind kind,
+    TransformedSource& source
+) noexcept {
+    const auto control = static_cast<std::uint32_t>(background_control_[index]);
+    source.priority = static_cast<std::uint8_t>(control & 0x3U);
+    source.wrap = (control & (1U << 13U)) != 0U;
+    const auto size = (control >> 14U) & 0x3U;
+
+    std::uint32_t screen_base = ((control >> 8U) & 0x1fU) * 0x800U;
+    std::uint32_t character_base = ((control >> 2U) & 0xfU) * 0x4000U;
+    if (has_main_extensions()) {
+        character_base += ((display_control_ >> 24U) & 0x7U) * 0x1'0000U;
+        screen_base += ((display_control_ >> 27U) & 0x7U) * 0x1'0000U;
+    }
+    source.tile_base = character_base;
+
+    if (kind == LayerKind::affine) {
+        // Quatre tailles carrées, de cent vingt-huit à mille vingt-quatre
+        // pixels de côté.
+        source.width = 128U << size;
+        source.height = source.width;
+        source.base = screen_base;
+        source.form = TransformedSource::Form::tile_bytes;
+        return true;
+    }
+
+    if (kind != LayerKind::extended) return false;
+
+    // Trois formes se partagent ce plan, et deux bits les séparent. Sans image,
+    // c'est une carte de deux octets par tuile ; avec, la couleur est soit un
+    // indice de palette soit une couleur écrite en toutes lettres.
+    const bool bitmap = (control & (1U << 7U)) != 0U;
+    if (!bitmap) {
+        source.width = 128U << size;
+        source.height = source.width;
+        source.base = screen_base;
+        source.form = TransformedSource::Form::tile_words;
+        return true;
+    }
+
+    // Les quatre tailles d'image ne sont pas carrées, contrairement aux cartes.
+    constexpr std::array<std::pair<std::uint32_t, std::uint32_t>, 4> bitmap_sizes{{
+        {128U, 128U}, {256U, 256U}, {512U, 256U}, {512U, 512U},
+    }};
+    source.width = bitmap_sizes[size].first;
+    source.height = bitmap_sizes[size].second;
+    // Une image se range par blocs de seize kilooctets, non de deux : le champ
+    // est le même, l'unité ne l'est pas, faute de quoi le champ ne pourrait pas
+    // désigner le haut de la fenêtre.
+    source.base = ((control >> 8U) & 0x1fU) * 0x4000U;
+    source.form = (control & (1U << 2U)) != 0U
+        ? TransformedSource::Form::bitmap_direct
+        : TransformedSource::Form::bitmap_indexed;
+    return true;
+}
+
+std::uint32_t Engine2d::sample_transformed(
+    const TransformedSource& source,
+    std::uint32_t x,
+    std::uint32_t y
+) noexcept {
+    switch (source.form) {
+    case TransformedSource::Form::tile_bytes: {
+        const auto columns = source.width / 8U;
+        const auto tile = static_cast<std::uint32_t>(
+            video_.read_background(engine_, source.base + (y / 8U) * columns + x / 8U));
+        const auto colour_index = static_cast<std::uint32_t>(video_.read_background(
+            engine_, source.tile_base + tile * 64U + (y % 8U) * 8U + (x % 8U)));
+        if (colour_index == 0U) return 0;
+        return palette_colour(colour_index, PaletteTable::background);
+    }
+    case TransformedSource::Form::tile_words: {
+        const auto columns = source.width / 8U;
+        const auto entry = static_cast<std::uint32_t>(video_.read_background16(
+            engine_, source.base + ((y / 8U) * columns + x / 8U) * 2U));
+        const auto tile = entry & 0x3ffU;
+        const auto fine_x = (entry & (1U << 10U)) != 0U ? 7U - (x % 8U) : x % 8U;
+        const auto fine_y = (entry & (1U << 11U)) != 0U ? 7U - (y % 8U) : y % 8U;
+        const auto colour_index = static_cast<std::uint32_t>(video_.read_background(
+            engine_, source.tile_base + tile * 64U + fine_y * 8U + fine_x));
+        if (colour_index == 0U) return 0;
+        return palette_colour(colour_index, PaletteTable::background);
+    }
+    case TransformedSource::Form::bitmap_indexed: {
+        const auto colour_index = static_cast<std::uint32_t>(
+            video_.read_background(engine_, source.base + y * source.width + x));
+        if (colour_index == 0U) return 0;
+        return palette_colour(colour_index, PaletteTable::background);
+    }
+    case TransformedSource::Form::bitmap_direct: {
+        const auto packed = static_cast<std::uint32_t>(video_.read_background16(
+            engine_, source.base + (y * source.width + x) * 2U));
+        // Le bit du haut n'est pas une couleur : il dit si le point existe.
+        if ((packed & 0x8000U) == 0U) return 0;
+        return to_argb(packed);
+    }
+    }
+    return 0;
+}
+
+void Engine2d::render_transformed_row(
+    std::size_t index,
+    const TransformedSource& source,
+    std::span<Pixel> line
+) noexcept {
+    const auto slot = index - first_affine_layer;
+    // Un pas vers la droite sur l'écran est un pas de la première colonne de la
+    // matrice ; le point de départ de la ligne porte déjà les lignes passées.
+    const auto step_x = static_cast<std::int32_t>(affine_[slot][0]);
+    const auto step_y = static_cast<std::int32_t>(affine_[slot][2]);
+    auto position_x = current_x_[slot];
+    auto position_y = current_y_[slot];
+
+    for (std::uint32_t screen_x = 0; screen_x < row_pixels; ++screen_x) {
+        // Huit bits de fraction : le point de l'image est ce qui reste une fois
+        // la fraction retirée, et non la valeur arrondie.
+        const auto sample_x = position_x >> 8;
+        const auto sample_y = position_y >> 8;
+        position_x += step_x;
+        position_y += step_y;
+
+        std::uint32_t x = 0;
+        std::uint32_t y = 0;
+        if (source.wrap) {
+            // Les étendues sont des puissances de deux : le reste se prend au
+            // masque, ce qui traite les positions négatives sans les distinguer.
+            x = static_cast<std::uint32_t>(sample_x) & (source.width - 1U);
+            y = static_cast<std::uint32_t>(sample_y) & (source.height - 1U);
+        } else {
+            if (sample_x < 0 || sample_y < 0) continue;
+            x = static_cast<std::uint32_t>(sample_x);
+            y = static_cast<std::uint32_t>(sample_y);
+            if (x >= source.width || y >= source.height) continue;
+        }
+
+        const auto colour = sample_transformed(source, x, y);
+        if (colour == 0U) continue;
+
+        auto& pixel = line[screen_x];
+        if (source.priority >= pixel.priority) continue;
+        pixel = Pixel{colour, source.priority};
+    }
 }
 
 void Engine2d::render_text_row(
@@ -351,6 +573,16 @@ void Engine2d::render_object_row(std::uint32_t row, std::span<Pixel> line) noexc
 void Engine2d::render_row(std::uint32_t row, std::span<std::int32_t> out) noexcept {
     if (out.size() < row_pixels) return;
 
+    // Les points de départ des plans tournants sont saisis au premier trait et
+    // avancent à chaque ligne, **que la ligne soit dessinée ou non** : un écran
+    // éteint ne gèle pas une rotation, il la cache. C'est pourquoi la saisie et
+    // l'avance encadrent tout le reste plutôt que d'accompagner le rendu.
+    if (row == 0) latch_references();
+    struct AdvanceOnExit {
+        Engine2d& engine;
+        ~AdvanceOnExit() { engine.advance_references(); }
+    } advance_on_exit{*this};
+
     const auto write = [&out](std::uint32_t colour) {
         for (std::uint32_t x = 0; x < row_pixels; ++x) out[x] = static_cast<std::int32_t>(colour);
     };
@@ -387,11 +619,25 @@ void Engine2d::render_row(std::uint32_t row, std::span<std::int32_t> out) noexce
         // Un plan que le mode ne donne pas n'est pas un manque : le matériel n'en
         // affiche pas non plus, et le compter donnerait une fausse alerte.
         if (kind == LayerKind::none) continue;
-        if (kind != LayerKind::text) {
+        if (kind == LayerKind::text) {
+            render_text_row(index, row, line);
+            continue;
+        }
+
+        TransformedSource source{};
+        if (!describe_transformed(index, kind, source)) {
             ++unimplemented_layers_;
             continue;
         }
-        render_text_row(index, row, line);
+        // Une palette étendue change les couleurs, pas la forme : le plan est
+        // dessiné, mais avec la palette ordinaire. C'est compté à part, parce
+        // qu'une image aux teintes fausses ne se cherche pas au même endroit
+        // qu'une image absente.
+        if (source.form == TransformedSource::Form::tile_words &&
+            (display_control_ & extended_palettes) != 0U) {
+            ++unimplemented_palettes_;
+        }
+        render_transformed_row(index, source, line);
     }
 
     if ((display_control_ & object_enable) != 0U) {

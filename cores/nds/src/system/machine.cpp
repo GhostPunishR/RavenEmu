@@ -268,6 +268,9 @@ NdsDebugSnapshot Machine::report() const noexcept {
         .unimplemented_objects = number(
             main_engine.unimplemented_object_count()
                 + secondary_engine.unimplemented_object_count()),
+        .unimplemented_palettes = number(
+            main_engine.unimplemented_palette_count()
+                + secondary_engine.unimplemented_palette_count()),
         .non_black_pixels = non_black_pixels_,
         .screens_swapped = video_.display().swapped(),
         .cartridge_unsupported = number(cartridge_.unsupported_count()),

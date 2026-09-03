@@ -109,7 +109,16 @@ public:
     /** Bloc de registres de chaque moteur graphique. */
     static constexpr std::uint32_t main_engine_base = 0x0400'0000;
     static constexpr std::uint32_t secondary_engine_base = 0x0400'1000;
-    static constexpr std::uint32_t engine_register_bytes = 0x20;
+    /**
+     * Étendue du bloc de registres d'un moteur graphique.
+     *
+     * Elle va jusqu'aux paramètres de transformation des deux plans qui
+     * tournent : quatre coefficients et deux points de départ chacun, ce qui
+     * mène le bloc à soixante-quatre octets. Il s'arrêtait à trente-deux, si
+     * bien qu'aucune écriture de matrice n'atteignait le moteur et qu'un décor
+     * tournant restait immobile là où il était dessiné du tout.
+     */
+    static constexpr std::uint32_t engine_register_bytes = 0x40;
 
     /** Registres du balayage, communs aux deux processeurs. */
     static constexpr std::uint32_t display_status = 0x0400'0004;

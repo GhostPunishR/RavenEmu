@@ -59,6 +59,9 @@ fun NdsDebugSnapshot.toDiagnosticText(fps: Double, frameTimeMs: Double): String 
         if (unimplementedLayers > 0) add("plans %,d".format(unimplementedLayers))
         if (unimplementedDisplay > 0) add("modes %,d".format(unimplementedDisplay))
         if (unimplementedObjects > 0) add("sprites %,d".format(unimplementedObjects))
+        // Dessiné, mais des mauvaises couleurs : ce n'est pas la même panne
+        // qu'une image absente, et le mot le dit.
+        if (unimplementedPalettes > 0) add("teintes %,d".format(unimplementedPalettes))
     }
     if (manques.isNotEmpty()) lignes += "non dessiné : " + manques.joinToString("  ")
 

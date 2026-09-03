@@ -8,7 +8,7 @@
 #include <string>
 
 /**
- * Moteur graphique 2D, décors en mode texte.
+ * Moteur graphique 2D : décors en mode texte, et décors transformés.
  *
  * Trois niveaux se succèdent. Le premier éprouve ce qui se lit sans rien
  * dessiner : la nature de chaque plan selon le mode, et la conversion des
@@ -728,23 +728,213 @@ void un_plan_devant_ne_couvre_pas_avec_sa_transparence() {
     );
 }
 
-void un_plan_qui_n_est_pas_en_mode_texte_ne_dessine_rien() {
-    // Le plan est configuré comme un décor en tuiles et ses données sont en
-    // place, mais le mode en fait une surface tournante : le dessiner comme un
-    // décor en tuiles donnerait une image plausible et fausse.
+/**
+ * Un plan tournant se dessine comme tel, et non comme un décor en tuiles.
+ *
+ * Le même plan, décrit de la même façon, ne se lit pas pareil selon le mode :
+ * une carte d'un octet par tuile et des tuiles de deux cent cinquante-six
+ * couleurs, là où le mode texte lit deux octets et peut n'en avoir que seize.
+ * Le dessiner comme un décor en tuiles donnerait une image plausible et fausse.
+ */
+void un_plan_tournant_lit_une_carte_d_un_octet() {
     Screen screen;
     auto vram = screen.attach_background(Engine::main);
-    write_map(vram, 0x800U, 0, map_entry(1));
-    write_pixel4(vram, 0, 1, 0, 0, 1);
+
+    // Carte d'un octet par tuile, au bloc 1 : la première case désigne la tuile 3.
+    vram[0x800U] = 3U;
+    // La tuile 3, en deux cent cinquante-six couleurs, avec son premier point
+    // allumé et le suivant transparent.
+    write_pixel8(vram, 0, 3, 0, 0, 5U);
+    write_pixel8(vram, 0, 3, 1, 0, 0U);
 
     screen.set_colour(Engine::main, 0, 0x0000U);
-    screen.set_colour(Engine::main, 1, 0x7fffU);
+    screen.set_colour(Engine::main, 5, 0x7fffU);
+
+    // Mode 2 : les plans 2 et 3 tournent. Identité, sans déplacement.
     screen.main.set_background_control(2, background_command(0, 0, 1));
+    screen.main.set_affine_parameter(0, 0, 0x0100U);   // un pas de un vers la droite
+    screen.main.set_affine_parameter(0, 3, 0x0100U);   // un pas de un vers le bas
     screen.main.set_display_control(display_command(2, 0x4U));
     screen.main.render_row(0, screen.row);
 
-    check(static_cast<std::uint32_t>(screen.row[0]) == 0xff00'0000U, "rien n'est dessiné");
-    check(screen.main.unimplemented_layer_count() == 1U, "et le plan est compté");
+    check(static_cast<std::uint32_t>(screen.row[0]) == 0xffff'ffffU, "le premier point est dessiné");
+    check(static_cast<std::uint32_t>(screen.row[1]) == 0xff00'0000U, "le suivant est transparent");
+    check(screen.main.unimplemented_layer_count() == 0U, "et le plan n'est plus compté comme absent");
+}
+
+/**
+ * La matrice transforme vraiment : un pas de deux montre un point sur deux.
+ *
+ * L'identité seule ne prouverait rien, un plan immobile ressemblant à un décor
+ * ordinaire. Un agrandissement de moitié, lui, ne peut venir que de la matrice.
+ */
+void la_matrice_agrandit_l_image() {
+    Screen screen;
+    auto vram = screen.attach_background(Engine::main);
+    vram[0x800U] = 0U;
+    // Quatre points de couleurs différentes sur la première ligne de la tuile 0.
+    for (std::uint32_t x = 0; x < 4U; ++x) {
+        write_pixel8(vram, 0, 0, x, 0, static_cast<std::uint8_t>(x + 1U));
+    }
+
+    screen.set_colour(Engine::main, 0, 0x0000U);
+    screen.set_colour(Engine::main, 1, 0x001fU);   // rouge
+    screen.set_colour(Engine::main, 2, 0x03e0U);   // vert
+    screen.set_colour(Engine::main, 3, 0x7c00U);   // bleu
+    screen.set_colour(Engine::main, 4, 0x7fffU);   // blanc
+
+    screen.main.set_background_control(2, background_command(0, 0, 1));
+    // Un demi-pas vers la droite : chaque point de l'image en couvre deux.
+    screen.main.set_affine_parameter(0, 0, 0x0080U);
+    screen.main.set_affine_parameter(0, 3, 0x0100U);
+    screen.main.set_display_control(display_command(2, 0x4U));
+    screen.main.render_row(0, screen.row);
+
+    check(static_cast<std::uint32_t>(screen.row[0]) == 0xffff'0000U, "le rouge couvre deux points");
+    check(static_cast<std::uint32_t>(screen.row[1]) == 0xffff'0000U, "et le second aussi");
+    check(static_cast<std::uint32_t>(screen.row[2]) == 0xff00'ff00U, "puis vient le vert");
+    check(static_cast<std::uint32_t>(screen.row[4]) == 0xff00'00ffU, "puis le bleu");
+    check(static_cast<std::uint32_t>(screen.row[6]) == 0xffff'ffffU, "puis le blanc");
+}
+
+/**
+ * Une image en couleur directe se lit sans palette.
+ *
+ * C'est la forme dont un jeu se sert pour afficher une photographie ou un
+ * dégradé, et la seule où le bit du haut ne porte pas de couleur mais dit si le
+ * point existe. Le confondre avec une couleur rendrait tout l'écran opaque.
+ */
+void une_image_en_couleur_directe_se_lit_sans_palette() {
+    Screen screen;
+    auto vram = screen.attach_background(Engine::main);
+
+    // Image de cent vingt-huit sur cent vingt-huit, au bloc 0 de seize kilooctets.
+    const auto poser = [&vram](std::uint32_t at, std::uint16_t value) {
+        vram[at * 2U] = static_cast<std::uint8_t>(value & 0xffU);
+        vram[at * 2U + 1U] = static_cast<std::uint8_t>(value >> 8U);
+    };
+    poser(0, static_cast<std::uint16_t>(0x8000U | 0x001fU));   // rouge, présent
+    poser(1, 0x001fU);                                          // rouge, absent
+    poser(2, static_cast<std::uint16_t>(0x8000U | 0x7fffU));   // blanc, présent
+
+    screen.set_colour(Engine::main, 0, 0x0000U);
+
+    // Le bit 7 fait une image, le bit 2 la met en couleur directe.
+    screen.main.set_background_control(
+        2, static_cast<std::uint16_t>((1U << 7U) | (1U << 2U)));
+    screen.main.set_affine_parameter(0, 0, 0x0100U);
+    screen.main.set_affine_parameter(0, 3, 0x0100U);
+    // Mode 5 : les deux derniers plans sont étendus.
+    screen.main.set_display_control(display_command(5, 0x4U));
+    screen.main.render_row(0, screen.row);
+
+    check(static_cast<std::uint32_t>(screen.row[0]) == 0xffff'0000U, "le point présent est rouge");
+    check(static_cast<std::uint32_t>(screen.row[1]) == 0xff00'0000U, "le point absent laisse le fond");
+    check(static_cast<std::uint32_t>(screen.row[2]) == 0xffff'ffffU, "et le troisième est blanc");
+}
+
+/** Une image d'un octet par point passe par la palette, et sa couleur zéro est vide. */
+void une_image_indexee_passe_par_la_palette() {
+    Screen screen;
+    auto vram = screen.attach_background(Engine::main);
+    vram[0] = 7U;
+    vram[1] = 0U;
+    vram[2] = 9U;
+
+    screen.set_colour(Engine::main, 0, 0x0000U);
+    screen.set_colour(Engine::main, 7, 0x001fU);
+    screen.set_colour(Engine::main, 9, 0x03e0U);
+
+    screen.main.set_background_control(2, static_cast<std::uint16_t>(1U << 7U));
+    screen.main.set_affine_parameter(0, 0, 0x0100U);
+    screen.main.set_affine_parameter(0, 3, 0x0100U);
+    screen.main.set_display_control(display_command(5, 0x4U));
+    screen.main.render_row(0, screen.row);
+
+    check(static_cast<std::uint32_t>(screen.row[0]) == 0xffff'0000U, "le premier point");
+    check(static_cast<std::uint32_t>(screen.row[1]) == 0xff00'0000U, "la couleur zéro est vide");
+    check(static_cast<std::uint32_t>(screen.row[2]) == 0xff00'ff00U, "le troisième point");
+}
+
+/**
+ * Hors de l'image, un plan est transparent ou se répète, selon un seul bit.
+ *
+ * Les deux se ressemblent au centre et ne se distinguent qu'aux bords : c'est
+ * là qu'un décor qui devait s'arrêter se met à recommencer, ou l'inverse.
+ */
+void le_bord_d_une_image_se_replie_ou_se_tait() {
+    const auto dessiner = [](bool wrap) {
+        Screen screen;
+        auto vram = screen.attach_background(Engine::main);
+        vram[0] = 7U;
+        screen.set_colour(Engine::main, 0, 0x0000U);
+        screen.set_colour(Engine::main, 7, 0x001fU);
+
+        // Image de cent vingt-huit sur cent vingt-huit : l'écran est deux fois
+        // plus large, et sa moitié droite tombe donc hors de l'image.
+        screen.main.set_background_control(
+            2, static_cast<std::uint16_t>((1U << 7U) | (wrap ? 1U << 13U : 0U)));
+        screen.main.set_affine_parameter(0, 0, 0x0100U);
+        screen.main.set_affine_parameter(0, 3, 0x0100U);
+        screen.main.set_display_control(display_command(5, 0x4U));
+        screen.main.render_row(0, screen.row);
+        return static_cast<std::uint32_t>(screen.row[128]);
+    };
+
+    check(dessiner(false) == 0xff00'0000U, "sans repli, le bord laisse le fond");
+    check(dessiner(true) == 0xffff'0000U, "avec repli, l'image recommence");
+}
+
+/**
+ * Le point de départ avance d'une ligne à l'autre, et se saisit à l'écriture.
+ *
+ * C'est ce qui fait qu'une rotation reste cohérente sur toute la hauteur de
+ * l'écran plutôt que de répéter la même ligne. Deux lignes différentes d'une
+ * même image le montrent.
+ */
+void le_point_de_depart_avance_d_une_ligne_a_l_autre() {
+    Screen screen;
+    auto vram = screen.attach_background(Engine::main);
+    // Deux lignes de l'image, de couleurs différentes.
+    vram[0] = 7U;
+    vram[128U] = 9U;
+
+    screen.set_colour(Engine::main, 0, 0x0000U);
+    screen.set_colour(Engine::main, 7, 0x001fU);
+    screen.set_colour(Engine::main, 9, 0x03e0U);
+
+    screen.main.set_background_control(2, static_cast<std::uint16_t>(1U << 7U));
+    screen.main.set_affine_parameter(0, 0, 0x0100U);
+    screen.main.set_affine_parameter(0, 3, 0x0100U);
+    screen.main.set_display_control(display_command(5, 0x4U));
+
+    screen.main.render_row(0, screen.row);
+    check(static_cast<std::uint32_t>(screen.row[0]) == 0xffff'0000U, "la première ligne");
+    screen.main.render_row(1, screen.row);
+    check(static_cast<std::uint32_t>(screen.row[0]) == 0xff00'ff00U, "la seconde a avancé");
+
+    // Une image neuve repart du point retenu, et non de là où la précédente
+    // s'était arrêtée : sans cette saisie, le décor dériverait vers le bas.
+    screen.main.render_row(0, screen.row);
+    check(static_cast<std::uint32_t>(screen.row[0]) == 0xffff'0000U, "l'image suivante repart en haut");
+}
+
+/**
+ * Le point de départ est signé sur vingt-huit bits.
+ *
+ * Le matériel n'en garde pas plus, et le bit du haut porte le signe. Sans
+ * l'étendre, un décalage vers la gauche deviendrait un déplacement énorme vers
+ * la droite, et l'image disparaîtrait.
+ */
+void le_point_de_depart_est_signe_sur_vingt_huit_bits() {
+    Screen screen;
+    // Moins un pixel : 0x0FFFFF00 sur vingt-huit bits.
+    screen.main.set_reference_x(0, 0x0fff'ff00U);
+    check(screen.main.reference_x(0) == -256, "le vingt-huitième bit porte le signe");
+
+    // Les bits au-delà du vingt-huitième sont ignorés par le matériel.
+    screen.main.set_reference_y(0, 0xf000'0100U);
+    check(screen.main.reference_y(0) == 256, "et les bits du haut ne comptent pas");
 }
 
 void les_priorites_decident_de_ce_qui_couvre() {
@@ -1276,11 +1466,36 @@ void un_plan_eteint_ne_se_dessine_pas() {
 }
 
 void ce_qui_n_est_pas_encore_dessine_est_compte() {
-    {   // Un plan tournant est demandé : il n'est pas dessiné, et il le dit.
+    {   // La grande image du dernier mode n'est pas dessinée, et elle le dit.
+        Screen screen;
+        screen.main.set_display_control(display_command(6, 0x4U));
+        screen.main.render_row(0, screen.row);
+        check(screen.main.unimplemented_layer_count() == 1U, "la grande image est comptée");
+    }
+    {   // Un plan tournant, lui, est dessiné : le compter serait une fausse
+        // alerte, et c'est ce que faisait ce lot avant de savoir le dessiner.
         Screen screen;
         screen.main.set_display_control(display_command(2, 0x4U));
         screen.main.render_row(0, screen.row);
-        check(screen.main.unimplemented_layer_count() == 1U, "un plan tournant est compté");
+        check(screen.main.unimplemented_layer_count() == 0U, "un plan tournant n'est plus compté");
+    }
+    {   // Une palette étendue ne change pas la forme du plan : il est dessiné,
+        // mais des mauvaises couleurs. C'est un compteur à part, parce qu'une
+        // image aux teintes fausses ne se cherche pas là où on cherche une
+        // image absente.
+        Screen screen;
+        screen.main.set_display_control(display_command(5, 0x4U) | (1U << 30U));
+        screen.main.render_row(0, screen.row);
+        check(screen.main.unimplemented_palette_count() == 1U, "la palette étendue est comptée");
+        check(screen.main.unimplemented_layer_count() == 0U, "et le plan ne l'est pas");
+
+        // Une image ne passe pas par les palettes étendues : la compter là
+        // aussi ferait remonter une alerte pour un plan parfaitement rendu.
+        Screen image;
+        image.main.set_background_control(2, static_cast<std::uint16_t>(1U << 7U));
+        image.main.set_display_control(display_command(5, 0x4U) | (1U << 30U));
+        image.main.render_row(0, image.row);
+        check(image.main.unimplemented_palette_count() == 0U, "une image n'en dépend pas");
     }
     {   // Un plan que le mode ne donne pas n'est pas un manque : le matériel
         // n'affiche rien non plus, et le compter serait une fausse alerte.
@@ -1288,6 +1503,7 @@ void ce_qui_n_est_pas_encore_dessine_est_compte() {
         screen.main.set_display_control(display_command(6, 0x2U));
         screen.main.render_row(0, screen.row);
         check(screen.main.unimplemented_layer_count() == 0U, "un plan absent du mode n'est pas compté");
+        check(screen.main.unimplemented_palette_count() == 0U, "ni sa palette");
     }
     {   // Les deux modes d'affichage qui n'appartiennent qu'au principal.
         Screen screen;
@@ -1384,7 +1600,13 @@ int main() {
     une_tuile_se_lit_ligne_par_ligne_et_colonne_par_colonne();
     la_carte_se_replie_au_dela_de_ses_bords();
     un_plan_devant_ne_couvre_pas_avec_sa_transparence();
-    un_plan_qui_n_est_pas_en_mode_texte_ne_dessine_rien();
+    un_plan_tournant_lit_une_carte_d_un_octet();
+    la_matrice_agrandit_l_image();
+    une_image_en_couleur_directe_se_lit_sans_palette();
+    une_image_indexee_passe_par_la_palette();
+    le_bord_d_une_image_se_replie_ou_se_tait();
+    le_point_de_depart_avance_d_une_ligne_a_l_autre();
+    le_point_de_depart_est_signe_sur_vingt_huit_bits();
     un_sprite_ordinaire_se_dessine();
     les_sprites_ont_douze_formats();
     un_sprite_se_lit_dans_les_deux_profondeurs_et_se_retourne();
