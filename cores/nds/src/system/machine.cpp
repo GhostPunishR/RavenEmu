@@ -264,6 +264,15 @@ NdsDebugSnapshot Machine::report() const noexcept {
         .non_black_pixels = non_black_pixels_,
         .screens_swapped = video_.display().swapped(),
         .cartridge_unsupported = number(cartridge_.unsupported_count()),
+        .main_mode = number(static_cast<std::uint32_t>(main_core_.state().mode())),
+        .secondary_mode = number(static_cast<std::uint32_t>(secondary_core_.state().mode())),
+        .main_stack_pointer = number(main_core_.state().registers[13]),
+        .secondary_stack_pointer = number(secondary_core_.state().registers[13]),
+        .main_link_register = number(main_core_.state().registers[14]),
+        .secondary_link_register = number(secondary_core_.state().registers[14]),
+        .main_vector_base = number(main_core_.cp15().exception_base()),
+        .main_dtcm_base = number(main_core_.cp15().dtcm_window().base),
+        .main_dtcm_size = number(static_cast<std::uint32_t>(main_core_.cp15().dtcm_window().size)),
     };
 }
 

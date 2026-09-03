@@ -149,6 +149,35 @@ struct NdsDebugSnapshot {
     bool screens_swapped{};
     /** Commandes du port de cartouche qu'aucun code ne sert. */
     std::int32_t cartridge_unsupported{};
+
+    /**
+     * Où chaque processeur se tient, et d'où il vient.
+     *
+     * Un compteur de programme seul dit où l'on est échoué, jamais comment on y
+     * est arrivé. Le mode dit si une exception a été prise, le registre de lien
+     * dit depuis quelle adresse le saut est parti, et la pile dit si le
+     * processeur en a seulement une : une pile nulle fait qu'un premier
+     * empilement écrit n'importe où, et le retour ramène n'importe quoi dans le
+     * compteur de programme.
+     */
+    std::int32_t main_mode{};
+    std::int32_t secondary_mode{};
+    std::int32_t main_stack_pointer{};
+    std::int32_t secondary_stack_pointer{};
+    std::int32_t main_link_register{};
+    std::int32_t secondary_link_register{};
+
+    /**
+     * Ce que le coprocesseur du processeur principal a décidé.
+     *
+     * La base des vecteurs dit où ses exceptions atterrissent, et la mémoire
+     * locale de données dit où le programme d'amorçage de secours va chercher
+     * l'adresse du gestionnaire du jeu : sans elle, il la cherche à l'adresse
+     * zéro et y trouve ce qui s'y trouve.
+     */
+    std::int32_t main_vector_base{};
+    std::int32_t main_dtcm_base{};
+    std::int32_t main_dtcm_size{};
 };
 
 /** POD mirror of the Kotlin GbaDebugSnapshot contract. */

@@ -58,23 +58,32 @@ class NdsDebugSnapshotTest {
         assertEquals(123, snapshot.cartridgeUnsupported)
         assertEquals(124, snapshot.mainFirstUnsupportedSwi)
         assertEquals(125, snapshot.secondaryFirstUnsupportedSwi)
+        assertEquals(126, snapshot.mainMode)
+        assertEquals(127, snapshot.secondaryMode)
+        assertEquals(128, snapshot.mainStackPointer)
+        assertEquals(129, snapshot.secondaryStackPointer)
+        assertEquals(130, snapshot.mainLinkRegister)
+        assertEquals(131, snapshot.secondaryLinkRegister)
+        assertEquals(132, snapshot.mainVectorBase)
+        assertEquals(133, snapshot.mainDtcmBase)
+        assertEquals(134, snapshot.mainDtcmSize)
     }
 
     /**
      * Une suite d'une autre longueur est refusée plutôt que lue en partie.
      *
      * Un relevé décalé est pire que pas de relevé : il désigne un coupable, et
-     * ce n'est pas le bon. Vingt-six est écrit en toutes lettres, parce que
+     * ce n'est pas le bon. Trente-cinq est écrit en toutes lettres, parce que
      * c'est la promesse du pont et non une conséquence de la classe.
      */
     @Test
     fun `une suite mal dimensionnee est refusee`() {
-        assertEquals(26, NdsDebugSnapshot.VALUE_COUNT)
+        assertEquals(35, NdsDebugSnapshot.VALUE_COUNT)
         assertNull(NdsDebugSnapshot.of(null))
         assertNull(NdsDebugSnapshot.of(IntArray(0)))
-        assertNull(NdsDebugSnapshot.of(IntArray(25)))
-        assertNull(NdsDebugSnapshot.of(IntArray(27)))
-        assertNotNull(NdsDebugSnapshot.of(IntArray(26)))
+        assertNull(NdsDebugSnapshot.of(IntArray(34)))
+        assertNull(NdsDebugSnapshot.of(IntArray(36)))
+        assertNotNull(NdsDebugSnapshot.of(IntArray(35)))
     }
 
     /**
@@ -98,17 +107,60 @@ class NdsDebugSnapshotTest {
      * manque-t-il. Une console qui va bien ne dit que les trois premières.
      */
     @Test
-    fun `un releve sans manque tient en quatre lignes`() {
+    fun `un releve sans manque tient en sept lignes`() {
         val texte = sain().toDiagnosticText(fps = 60.0, frameTimeMs = 4.0)
         val lignes = texte.lines()
-        assertEquals(4, lignes.size, texte)
+        assertEquals(7, lignes.size, texte)
         assertTrue(lignes[0].startsWith("NDS "), lignes[0])
         assertTrue(lignes[1].startsWith("ARM9 actif"), lignes[1])
-        assertTrue(lignes[2].startsWith("ARM7 actif"), lignes[2])
-        assertTrue(lignes[3].startsWith("image "), lignes[3])
+        assertTrue(lignes[2].contains("syst"), lignes[2])
+        assertTrue(lignes[3].startsWith("ARM7 actif"), lignes[3])
+        assertTrue(lignes[4].contains("syst"), lignes[4])
+        assertTrue(lignes[5].startsWith("cp15 "), lignes[5])
+        assertTrue(lignes[6].startsWith("image "), lignes[6])
         assertFalse(texte.contains("non dessiné"), texte)
         assertFalse(texte.contains("ignoré"), texte)
         assertFalse(texte.contains("buté"), texte)
+    }
+
+    /**
+     * Le mode se lit en toutes lettres, et une valeur inconnue reste visible
+     * telle quelle : la muer en « inconnu » cacherait ce qu'elle vaut.
+     */
+    @Test
+    fun `chaque mode porte son nom`() {
+        val noms = mapOf(
+            0x10 to "user",
+            0x11 to "fiq",
+            0x12 to "irq",
+            0x13 to "svc",
+            0x17 to "abrt",
+            0x1b to "undf",
+            0x1f to "syst",
+        )
+        for ((valeur, nom) in noms) {
+            val texte = sain().copy(mainMode = valeur).toDiagnosticText(60.0, 4.0)
+            assertTrue(texte.contains(nom), "mode $valeur attendu $nom dans $texte")
+        }
+        val inconnu = sain().copy(mainMode = 0x42).toDiagnosticText(60.0, 4.0)
+        assertTrue(inconnu.contains("0042"), inconnu)
+    }
+
+    /**
+     * Le registre de lien et la pile sont montrés : le compteur de programme dit
+     * où l'on est échoué, eux disent comment on y est arrivé et si le processeur
+     * avait une pile pour en revenir.
+     */
+    @Test
+    fun `la pile et le registre de lien se lisent`() {
+        val texte = sain().copy(
+            mainStackPointer = 0,
+            mainLinkRegister = 0x0200_4444,
+        ).toDiagnosticText(60.0, 4.0)
+        assertTrue(texte.contains("sp 00000000"), texte)
+        assertTrue(texte.contains("lr 02004444"), texte)
+        assertTrue(texte.contains("cp15 vect FFFF0000"), texte)
+        assertTrue(texte.contains("dtcm 0B000000+4000"), texte)
     }
 
     /** Chaque manque ajoute sa ligne, et seulement quand il y en a un. */
@@ -179,5 +231,14 @@ class NdsDebugSnapshotTest {
         cartridgeUnsupported = 0,
         mainFirstUnsupportedSwi = 0,
         secondaryFirstUnsupportedSwi = 0,
+        mainMode = 0x1f,
+        secondaryMode = 0x1f,
+        mainStackPointer = 0x0B00_3FC0,
+        secondaryStackPointer = 0x0380_FF00,
+        mainLinkRegister = 0x0200_0100,
+        secondaryLinkRegister = 0x037F_8100,
+        mainVectorBase = 0xFFFF_0000.toInt(),
+        mainDtcmBase = 0x0B00_0000,
+        mainDtcmSize = 0x4000,
     )
 }

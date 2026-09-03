@@ -16,11 +16,25 @@ fun NdsDebugSnapshot.toDiagnosticText(fps: Double, frameTimeMs: Double): String 
         mainInstructions,
         mainProgramCounter,
     )
+    // Le compteur de programme dit où l'on est échoué, jamais comment on y est
+    // arrivé. Le mode dit si une exception a été prise, le registre de lien
+    // d'où le saut est parti, et la pile si le processeur en a seulement une.
+    lignes += "     %s  sp %08X  lr %08X".format(
+        modeName(mainMode),
+        mainStackPointer,
+        mainLinkRegister,
+    )
     lignes += "ARM7 %s %,d instr  pc %08X".format(
         if (secondaryHalted) "arrêt" else "actif",
         secondaryInstructions,
         secondaryProgramCounter,
     )
+    lignes += "     %s  sp %08X  lr %08X".format(
+        modeName(secondaryMode),
+        secondaryStackPointer,
+        secondaryLinkRegister,
+    )
+    lignes += "cp15 vect %08X  dtcm %08X+%X".format(mainVectorBase, mainDtcmBase, mainDtcmSize)
     lignes += "image %,d px allumés  A %04X  B %04X%s".format(
         nonBlackPixels,
         mainDisplayControl,
@@ -65,4 +79,23 @@ fun NdsDebugSnapshot.toDiagnosticText(fps: Double, frameTimeMs: Double): String 
     if (fautes.isNotEmpty()) lignes += "buté : " + fautes.joinToString("  ")
 
     return lignes.joinToString("\n")
+}
+
+/**
+ * Nom court du mode du processeur.
+ *
+ * Les valeurs sont celles que le registre d'état porte, et non un rang : les
+ * renommer ici les rend lisibles sans que le relevé ait à les traduire en
+ * chiffres. Une valeur inconnue est rendue telle quelle plutôt que muée en
+ * « inconnu », qui cacherait ce qu'elle vaut.
+ */
+private fun modeName(mode: Int): String = when (mode) {
+    0x10 -> "user"
+    0x11 -> "fiq "
+    0x12 -> "irq "
+    0x13 -> "svc "
+    0x17 -> "abrt"
+    0x1b -> "undf"
+    0x1f -> "syst"
+    else -> "%04X".format(mode)
 }
