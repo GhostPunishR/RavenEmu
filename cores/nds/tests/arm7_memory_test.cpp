@@ -319,6 +319,33 @@ void sans_part_le_secondaire_retombe_sur_sa_memoire_propre() {
  * L’adresse est écrite en toutes lettres : la reprendre à la constante qui la
  * définit accepterait n’importe quelle valeur.
  */
+/**
+ * Le drapeau de fin d’amorçage est déjà posé.
+ *
+ * Un jeu le consulte pour savoir si l’amorçage est passé. Ce cœur amorce
+ * sans faire tourner le programme de la console, mais il rend la main au jeu
+ * au même moment : le laisser nul faisait attendre les deux processeurs une
+ * fin qui ne serait jamais venue. Un vrai jeu le consultait cinq cents fois
+ * par trame sans réponse.
+ *
+ * L’adresse et le bit sont écrits en toutes lettres : les reprendre aux
+ * constantes qui les définissent accepteraient n’importe quelle valeur.
+ */
+void le_drapeau_de_fin_d_amorcage_est_pose() {
+    Console console;
+    constexpr std::uint32_t flag = 0x0400'0300;
+
+    check(console.secondary_map.read8(flag) == 1U, "le drapeau est posé dès la remise à zéro");
+    check(console.secondary_map.unimplemented_io_count() == 0U, "et ce n’est pas un registre inconnu");
+
+    // Une écriture ne peut que poser des bits.
+    console.secondary_map.write8(flag, 0U);
+    check(console.secondary_map.read8(flag) == 1U, "le bit d’amorçage ne se retire pas");
+    console.secondary_map.write8(flag, 0x02U);
+    check(console.secondary_map.read8(flag) == 3U, "un autre bit s’ajoute");
+    check(console.secondary_map.unimplemented_io_count() == 0U, "et toujours aucune lacune");
+}
+
 void l_autorisation_generale_occupe_quatre_octets() {
     Console console;
     constexpr std::uint32_t master = 0x0400'0208;
@@ -518,6 +545,7 @@ int main() {
     le_partage_de_la_memoire_commune_est_complementaire();
     chacun_ecrit_dans_sa_part_sans_toucher_a_l_autre();
     sans_part_le_secondaire_retombe_sur_sa_memoire_propre();
+    le_drapeau_de_fin_d_amorcage_est_pose();
     l_autorisation_generale_occupe_quatre_octets();
     le_partage_se_constate_mais_ne_se_decide_pas();
     le_programme_d_amorcage_se_lit_et_ne_s_ecrit_pas();

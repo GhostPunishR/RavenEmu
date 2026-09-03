@@ -27,6 +27,9 @@ void Arm7MemoryMap::reset() noexcept {
     dma_.reset();
     timers_.reset();
     halt_requested_ = false;
+    // L’amorçage est passé dès la remise à zéro : ce cœur rend la main au jeu
+    // au moment où le programme de la console le ferait, drapeau posé.
+    post_boot_ = post_boot_done;
     unmapped_ = 0;
     first_unmapped_ = 0;
     unimplemented_io_ = 0;
@@ -180,6 +183,8 @@ std::uint8_t Arm7MemoryMap::read_io_byte(std::uint32_t address) noexcept {
         return registers::byte_of(timers_.control(slot), part - 2U);
     }
 
+    if (address == post_boot_flag) return post_boot_;
+
     if (
         address >= registers::interrupt_master &&
         address < registers::interrupt_master + registers::interrupt_master_bytes
@@ -283,6 +288,14 @@ void Arm7MemoryMap::write_io_byte(std::uint32_t address, std::uint8_t value) noe
         }
         timers_.set_control(slot, static_cast<std::uint16_t>(
             registers::with_byte(timers_.control(slot), part - 2U, value)));
+        return;
+    }
+
+    if (address == post_boot_flag) {
+        // Le bit d’amorçage ne se retire pas : une écriture ne peut que poser
+        // des bits. C’est ce qui permet à un jeu de s’en servir comme d’une
+        // marque de passage plutôt que d’un simple registre.
+        post_boot_ = static_cast<std::uint8_t>(post_boot_ | value);
         return;
     }
 

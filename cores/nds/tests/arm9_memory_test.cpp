@@ -561,6 +561,36 @@ void les_banques_video_repondent_par_leur_fenetre() {
  * aurait laissé le processeur principal noyer le relevé à lui tout seul.
  * L’adresse est écrite en toutes lettres.
  */
+/**
+ * Le drapeau de fin d’amorçage est déjà posé, ici aussi.
+ *
+ * Les deux processeurs ont chacun le leur, et les deux le consultaient sans
+ * réponse. Le corriger d’un seul côté aurait laissé l’autre attendre.
+ */
+void le_drapeau_de_fin_d_amorcage_est_pose() {
+    SystemMemory system;
+    InterruptController main_interrupts;
+    InterruptController secondary_interrupts;
+    InterProcessor link{main_interrupts, secondary_interrupts};
+    InputState input{};
+    VideoSystem video{main_interrupts, secondary_interrupts};
+    Cartridge cartridge{main_interrupts, secondary_interrupts};
+    Arm9MemoryMap map{system, video, link, main_interrupts, input, cartridge};
+    system.reset();
+    video.reset();
+    map.reset();
+
+    constexpr std::uint32_t flag = 0x0400'0300;
+    check(map.read8(flag) == 1U, "le drapeau est posé dès la remise à zéro");
+    check(map.unimplemented_io_count() == 0U, "et ce n’est pas un registre inconnu");
+
+    map.write8(flag, 0U);
+    check(map.read8(flag) == 1U, "le bit d’amorçage ne se retire pas");
+    map.write8(flag, 0x02U);
+    check(map.read8(flag) == 3U, "un autre bit s’ajoute");
+    check(map.unimplemented_io_count() == 0U, "et toujours aucune lacune");
+}
+
 void l_autorisation_generale_occupe_quatre_octets() {
     SystemMemory system;
     InterruptController main_interrupts;
@@ -1006,6 +1036,7 @@ int main() {
     un_octet_seul_n_entre_pas_partout();
     le_partage_de_la_memoire_commune();
     les_banques_video_repondent_par_leur_fenetre();
+    le_drapeau_de_fin_d_amorcage_est_pose();
     l_autorisation_generale_occupe_quatre_octets();
     les_registres_de_la_carte_se_relisent();
     les_registres_des_moteurs_repondent_a_leurs_adresses();

@@ -143,6 +143,24 @@ public:
      * affirmé nulle part, et l'inventer serait une affirmation que rien ne
      * vérifie.
      */
+    /**
+     * Drapeau de fin d’amorçage.
+     *
+     * Le programme d’amorçage de la console y pose son bit bas juste avant de
+     * rendre la main au jeu, et ce bit ne se retire plus : il dit « l’amorçage
+     * est passé ». Un jeu le consulte pour savoir s’il démarre de la console ou
+     * d’une relance.
+     *
+     * Ce cœur amorce sans faire tourner ce programme, mais il rend la main au
+     * jeu **au même moment** : le drapeau sort donc de la remise à zéro déjà
+     * posé. Le laisser nul faisait attendre les deux processeurs une fin
+     * d’amorçage qui ne serait jamais venue : un vrai jeu le consultait cinq
+     * cents fois par trame sans jamais obtenir sa réponse.
+     */
+    static constexpr std::uint32_t post_boot_flag = 0x0400'0300;
+    /** Le bit que l’amorçage pose, et que rien ne retire ensuite. */
+    static constexpr std::uint8_t post_boot_done = 0x01;
+
     static constexpr std::uint32_t halt_control = 0x0400'0301;
     /** Valeur du champ de mode qui arrête le processeur. */
     static constexpr std::uint8_t halt_mode = 2;
@@ -258,6 +276,7 @@ private:
     std::vector<std::uint8_t> bios_ = std::vector<std::uint8_t>(bios_bytes, 0);
 
     bool halt_requested_{};
+    std::uint8_t post_boot_{};
 
     std::uint32_t unmapped_{};
     std::uint32_t first_unmapped_{};

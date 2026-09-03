@@ -154,6 +154,24 @@ public:
     static constexpr std::uint32_t timer_stride = 4;
 
     /** Registre d'alimentation, dont un bit échange les deux écrans. */
+    /**
+     * Drapeau de fin d’amorçage.
+     *
+     * Le programme d’amorçage de la console y pose son bit bas juste avant de
+     * rendre la main au jeu, et ce bit ne se retire plus : il dit « l’amorçage
+     * est passé ». Un jeu le consulte pour savoir s’il démarre de la console ou
+     * d’une relance.
+     *
+     * Ce cœur amorce sans faire tourner ce programme, mais il rend la main au
+     * jeu **au même moment** : le drapeau sort donc de la remise à zéro déjà
+     * posé. Le laisser nul faisait attendre les deux processeurs une fin
+     * d’amorçage qui ne serait jamais venue : un vrai jeu le consultait cinq
+     * cents fois par trame sans jamais obtenir sa réponse.
+     */
+    static constexpr std::uint32_t post_boot_flag = 0x0400'0300;
+    /** Le bit que l’amorçage pose, et que rien ne retire ensuite. */
+    static constexpr std::uint8_t post_boot_done = 0x01;
+
     static constexpr std::uint32_t power_control = 0x0400'0304;
     static constexpr std::uint16_t power_swaps_screens = 1U << 15U;
 
@@ -309,6 +327,7 @@ private:
 
     std::uint32_t unmapped_{};
     std::uint32_t first_unmapped_{};
+    std::uint8_t post_boot_{};
     std::uint32_t unimplemented_io_{};
     std::uint32_t first_unimplemented_io_{};
 };
