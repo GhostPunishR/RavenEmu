@@ -75,7 +75,16 @@ void Bios::reset() noexcept {
 
 void Bios::install(std::span<std::uint8_t> region) noexcept {
     reset();
+    region_ = region;
     write_interrupt_vector(region);
+}
+
+void Bios::refresh_handler_pointer() noexcept {
+    if (region_.size() < handler_pointer_offset + 4U) return;
+    const auto wanted = interrupt_handler_address();
+    if (wanted == written_handler_pointer_) return;
+    write_word(region_, handler_pointer_offset, wanted);
+    written_handler_pointer_ = wanted;
 }
 
 void Bios::write_interrupt_vector(std::span<std::uint8_t> region) noexcept {
@@ -94,7 +103,8 @@ void Bios::write_interrupt_vector(std::span<std::uint8_t> region) noexcept {
         write_word(region, offset, word);
         offset += 4U;
     }
-    write_word(region, handler_pointer_offset, interrupt_handler_address());
+    written_handler_pointer_ = interrupt_handler_address();
+    write_word(region, handler_pointer_offset, written_handler_pointer_);
 }
 
 std::uint32_t Bios::interrupt_handler_address() const noexcept {

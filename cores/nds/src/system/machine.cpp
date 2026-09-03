@@ -172,6 +172,13 @@ void Machine::raise_key_interrupts() noexcept {
 }
 
 void Machine::run_line(std::span<std::int32_t> framebuffer) {
+    // La place du gestionnaire du jeu suit la mémoire locale du processeur
+    // principal, que son coprocesseur déplace bien après la remise à zéro. Elle
+    // se relit donc à chaque ligne : c'est une comparaison, et une écriture le
+    // jour où elle change. La figer à l'amorçage envoyait chaque interruption
+    // chercher son gestionnaire à l'adresse zéro.
+    main_bios_.refresh_handler_pointer();
+
     for (std::uint32_t tick = 0; tick < secondary_steps_per_line; ++tick) {
         for (std::uint32_t beat = 0; beat < main_clock_multiplier; ++beat) {
             step(Processor::main);

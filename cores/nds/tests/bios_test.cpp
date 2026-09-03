@@ -342,6 +342,62 @@ void chaque_processeur_a_sa_place_de_rendez_vous() {
     );
 }
 
+/**
+ * Le rendez-vous écrit dans la région suit la mémoire locale, et non seulement
+ * celui que l’organe calcule.
+ *
+ * La vérification voisine contrôlait l’accesseur, qui a toujours dit vrai. Le
+ * défaut était ailleurs : le littéral que le gestionnaire lit vraiment était
+ * écrit une seule fois, à l’installation, c’est-à-dire à la remise à zéro. Le
+ * jeu place sa mémoire locale bien après ; le littéral gardait donc l’adresse
+ * d’avant, qui ne désigne rien.
+ *
+ * Le gestionnaire cherchait alors son pointeur à l’adresse zéro et sautait où
+ * ce qui s’y trouve l’envoyait. L’interruption n’étant jamais acquittée, elle
+ * repartait aussitôt, et le processeur principal passait sa trame entière dans
+ * ce tourniquet. Un vrai jeu l’a montré : mode interruption, un million cent
+ * vingt mille instructions, et pas un pixel.
+ *
+ * Les adresses sont écrites en toutes lettres.
+ */
+void le_rendez_vous_ecrit_suit_la_memoire_locale() {
+    Console console;
+    // Le gestionnaire tient six instructions à partir du décalage 0x20 ; le
+    // littéral les suit immédiatement, à 0x38 de la base des vecteurs.
+    constexpr std::uint32_t literal = 0xffff'0038;
+
+    // À la mise sous tension, la mémoire locale fait cinq cents octets à
+    // l'adresse zéro : le rendez-vous tombe donc à 0x1FC, une adresse
+    // plausible et vide de sens. C'est ce qui rendait le défaut si discret —
+    // le gestionnaire ne sautait pas à zéro, il sautait à ce qu'un jeu avait
+    // laissé traîner là.
+    check(console.memory().read32(literal) == 0x0000'01fcU, "le rendez-vous de la mise sous tension");
+
+    // Le jeu pose sa mémoire locale : seize kilooctets à 0x0200'0000.
+    console.machine.cp15().write(0U, 9U, 1U, 0U, 0x0200'000aU);
+    console.run_frame();
+    check(
+        console.memory().read32(literal) == 0x0200'3ffcU,
+        "le littéral suit la mémoire locale dès que la console tourne"
+    );
+
+    // Et il la suit encore quand elle se déplace.
+    console.machine.cp15().write(0U, 9U, 1U, 0U, 0x0b00'000aU);
+    console.run_frame();
+    check(
+        console.memory().read32(literal) == 0x0b00'3ffcU,
+        "et il la suit quand elle se déplace"
+    );
+
+    // Ce que le littéral porte est bien ce que l’organe calcule : les deux
+    // étaient d’accord en théorie et brouillés en pratique.
+    check(
+        console.memory().read32(literal) ==
+            console.bios(Processor::main).interrupt_handler_address(),
+        "les deux disent la même chose"
+    );
+}
+
 /** La division, telle que le programme d'amorçage la rend. */
 void la_division_rend_quotient_reste_et_valeur_absolue() {
     Console console;
@@ -912,6 +968,7 @@ int main() {
     using namespace ravenemu::nds::testing;
     la_table_des_vecteurs_est_ecrite();
     chaque_processeur_a_sa_place_de_rendez_vous();
+    le_rendez_vous_ecrit_suit_la_memoire_locale();
     la_division_rend_quotient_reste_et_valeur_absolue();
     la_racine_est_entiere_et_par_defaut();
     la_somme_de_controle_repart_de_ce_qu_on_lui_donne();

@@ -93,6 +93,25 @@ public:
     /** Réécrit la table des vecteurs et oublie toute attente en cours. */
     void install(std::span<std::uint8_t> region) noexcept;
 
+    /**
+     * Remet à jour l'adresse où le gestionnaire du jeu est cherché.
+     *
+     * Le processeur principal range la sienne en bout de sa mémoire locale de
+     * données, dont la place est décidée par son coprocesseur. Or l'installation
+     * a lieu à la remise à zéro, **avant** que le jeu ne configure ce
+     * coprocesseur : l'adresse écrite alors ne désigne rien, et elle restait
+     * telle quelle pour toujours.
+     *
+     * Le gestionnaire lisait donc son pointeur à l'adresse zéro, et sautait où
+     * ce qui s'y trouve l'envoyait. L'interruption n'étant jamais acquittée par
+     * le jeu, elle repartait aussitôt : le processeur principal passait sa trame
+     * entière dans ce tourniquet, sans jamais revenir à son programme.
+     *
+     * Sans effet quand rien n'a bougé, et sans effet du tout pour le processeur
+     * secondaire, dont l'adresse est fixée par le matériel.
+     */
+    void refresh_handler_pointer() noexcept;
+
     void reset() noexcept;
 
     [[nodiscard]] bool handle_software_interrupt(std::uint32_t number) override;
@@ -166,6 +185,11 @@ private:
     [[nodiscard]] bool serves_main() const noexcept { return side_ == Processor::main; }
 
     void write_interrupt_vector(std::span<std::uint8_t> region) noexcept;
+
+    /** La région du programme d'amorçage, retenue pour pouvoir la corriger. */
+    std::span<std::uint8_t> region_{};
+    /** Dernière adresse écrite dans le littéral, pour n'écrire qu'au besoin. */
+    std::uint32_t written_handler_pointer_{};
 
     /**
      * Fait recommencer l'appel en cours au réveil.
