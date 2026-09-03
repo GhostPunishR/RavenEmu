@@ -3,6 +3,7 @@ package com.ravenemu.romlibrary
 import com.ravenemu.core.gb.GameBoyConsoleProvider
 import com.ravenemu.core.gb.cartridge.CartridgeHeader
 import com.ravenemu.core.gba.GbaConsoleProvider
+import com.ravenemu.core.nds.NdsConsoleProvider
 import com.ravenemu.emulation.api.ConsoleRegistry
 import com.ravenemu.emulation.api.ConsoleType
 import kotlin.test.Test
@@ -22,16 +23,16 @@ import kotlin.test.assertTrue
 class ConsoleProviderWiringTest {
 
     private val registre = ConsoleRegistry(
-        listOf(GameBoyConsoleProvider(), GbaConsoleProvider())
+        listOf(GameBoyConsoleProvider(), GbaConsoleProvider(), NdsConsoleProvider())
     )
 
     @Test
     fun `les consoles livrees sont enregistrees une fois chacune`() {
         assertEquals(
-            setOf(ConsoleType.GAME_BOY, ConsoleType.GAME_BOY_ADVANCE),
+            setOf(ConsoleType.GAME_BOY, ConsoleType.GAME_BOY_ADVANCE, ConsoleType.NINTENDO_DS),
             registre.supportedConsoles,
         )
-        assertEquals(2, registre.providers.size)
+        assertEquals(3, registre.providers.size)
     }
 
     @Test
@@ -60,11 +61,65 @@ class ConsoleProviderWiringTest {
         assertFalse(analyseur.canAnalyze("tetris.gb"))
     }
 
+    /**
+     * Les deux membres du chemin par l'en-tête vont par paire.
+     *
+     * Un analyseur qui annonce un nombre d'octets sans savoir s'en contenter
+     * ferait rendre `null` au balayage, et le fichier serait écarté comme
+     * illisible alors qu'il ne l'est pas. L'inverse laisserait dormir un chemin
+     * que personne n'emprunterait.
+     */
+    @Test
+    fun `le chemin par l'en-tete est annonce et servi ensemble`() {
+        val analyseurs = listOf(
+            GameBoyRomAnalyzer(GameBoyConsoleProvider()),
+            GbaRomAnalyzer(GbaConsoleProvider()),
+            NdsRomAnalyzer(NdsConsoleProvider()),
+        )
+        for (analyseur in analyseurs) {
+            val annonce = analyseur.headerBytes > 0
+            val sert = analyseur.analyzeHeader(
+                uri = "u",
+                fileName = "x",
+                lastModified = 0L,
+                header = ByteArray(maxOf(analyseur.headerBytes, 1)),
+                sizeBytes = 0L,
+                fingerprints = Fingerprints.of(ByteArray(0)),
+            ) != null
+            assertEquals(annonce, sert, "désaccord sur ${analyseur.console}")
+        }
+    }
+
+    /**
+     * Ce qu'on indexe n'est pas toujours ce qu'on sait charger.
+     *
+     * Le plafond d'indexation ne descend jamais sous celui du moteur : une
+     * cartouche que la console sait faire tourner doit toujours pouvoir entrer
+     * dans la bibliothèque.
+     */
+    @Test
+    fun `le plafond d'indexation couvre au moins celui du moteur`() {
+        for (analyseur in listOf(
+            GameBoyRomAnalyzer(GameBoyConsoleProvider()),
+            GbaRomAnalyzer(GbaConsoleProvider()),
+            NdsRomAnalyzer(NdsConsoleProvider()),
+        )) {
+            assertTrue(
+                analyseur.maxIndexableBytes >= analyseur.maxRomSizeBytes.toLong(),
+                "${analyseur.console} indexe moins qu'elle ne charge",
+            )
+        }
+    }
+
     @Test
     fun `analyseur et registre rattachent un fichier a la meme console`() {
         // La duplication d'antan permettait aux deux de diverger sans bruit.
-        val analyseurs = listOf(GameBoyRomAnalyzer(GameBoyConsoleProvider()), GbaRomAnalyzer(GbaConsoleProvider()))
-        for (nom in listOf("tetris.gb", "cristal.gbc", "emeraude.gba")) {
+        val analyseurs = listOf(
+            GameBoyRomAnalyzer(GameBoyConsoleProvider()),
+            GbaRomAnalyzer(GbaConsoleProvider()),
+            NdsRomAnalyzer(NdsConsoleProvider()),
+        )
+        for (nom in listOf("tetris.gb", "cristal.gbc", "emeraude.gba", "donjon.nds")) {
             val parAnalyseur = analyseurs.first { it.canAnalyze(nom) }.console
             val parRegistre = registre.providerForFile(nom)?.console
             assertEquals(parAnalyseur, parRegistre, "Désaccord sur « $nom »")
@@ -82,6 +137,10 @@ class ConsoleProviderWiringTest {
         assertEquals(
             registre.providerFor(ConsoleType.GAME_BOY_ADVANCE)?.console,
             GbaRomAnalyzer(GbaConsoleProvider()).provider.console,
+        )
+        assertEquals(
+            registre.providerFor(ConsoleType.NINTENDO_DS)?.console,
+            NdsRomAnalyzer(NdsConsoleProvider()).provider.console,
         )
     }
 
@@ -116,7 +175,28 @@ class ConsoleProviderWiringTest {
         // rejeter le câblage réel.
         val gb = registre.providerFor(ConsoleType.GAME_BOY)
         val gba = registre.providerFor(ConsoleType.GAME_BOY_ADVANCE)
+        val nds = registre.providerFor(ConsoleType.NINTENDO_DS)
         assertEquals(ConsoleType.GAME_BOY, GameBoyRomAnalyzer(gb!!).console)
         assertEquals(ConsoleType.GAME_BOY_ADVANCE, GbaRomAnalyzer(gba!!).console)
+        assertEquals(ConsoleType.NINTENDO_DS, NdsRomAnalyzer(nds!!).console)
+    }
+
+    @Test
+    fun `l'analyseur Nintendo DS tient ses regles de son fournisseur`() {
+        val analyseur = NdsRomAnalyzer(NdsConsoleProvider())
+        assertEquals(ConsoleType.NINTENDO_DS, analyseur.console)
+        assertEquals(NdsConsoleProvider.MAX_ROM_SIZE, analyseur.maxRomSizeBytes)
+        assertTrue(analyseur.canAnalyze("donjon.nds"))
+        assertFalse(analyseur.canAnalyze("emeraude.gba"))
+    }
+
+    @Test
+    fun `seule la console sans format d'etat se declare telle`() {
+        // La bibliothèque interroge le fournisseur pour décider d'offrir ou non
+        // les états d'un jeu qu'elle n'a pas lancé : la réponse doit être celle
+        // du module de moteur, et non un défaut hérité par tout le monde.
+        assertTrue(registre.providerFor(ConsoleType.GAME_BOY)!!.supportsSaveState)
+        assertTrue(registre.providerFor(ConsoleType.GAME_BOY_ADVANCE)!!.supportsSaveState)
+        assertFalse(registre.providerFor(ConsoleType.NINTENDO_DS)!!.supportsSaveState)
     }
 }

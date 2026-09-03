@@ -151,9 +151,18 @@ class AppSettings(context: Context) {
         }
     }
 
+    /**
+     * Clé de préférence de chaque console.
+     *
+     * Ces chaînes sont **figées** : elles nomment ce que les appareils des
+     * joueurs ont déjà enregistré, et en changer une ferait perdre son choix de
+     * skin. Une console ajoutée reçoit une clé nouvelle, jamais celle d'une
+     * autre.
+     */
     private fun deltaSkinSelectionKey(console: DeltaSkinConsole): String = when (console) {
         DeltaSkinConsole.GB_GBC -> "controls_delta_selected_gb_portrait"
         DeltaSkinConsole.GBA -> "controls_delta_selected_gba_portrait"
+        DeltaSkinConsole.DS -> "controls_delta_selected_ds_portrait"
     }
 
     private fun representationPreferenceFromStorage(

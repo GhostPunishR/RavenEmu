@@ -32,6 +32,7 @@ import com.ravenemu.core.gba.save.GbaSaveType
 import com.ravenemu.emulation.api.ConsoleType
 import com.ravenemu.romlibrary.LibraryFilter
 import com.ravenemu.romlibrary.LibraryPages
+import com.ravenemu.romlibrary.RejectedRom
 import com.ravenemu.romlibrary.RomEntry
 import com.ravenemu.romlibrary.RomIndex
 import com.ravenemu.settings.AppSettings
@@ -270,7 +271,8 @@ class MainActivity : RavenActivity() {
         }
         progress.visibility = View.VISIBLE
         lifecycleScope.launch {
-            index = repository.refresh(dirs)
+            val balayage = repository.refresh(dirs)
+            index = balayage.index
             progress.visibility = View.GONE
             render()
             Toast.makeText(
@@ -278,7 +280,26 @@ class MainActivity : RavenActivity() {
                 getString(R.string.library_refresh_done, index.entries.size),
                 Toast.LENGTH_SHORT,
             ).show()
+            if (balayage.rejected.isNotEmpty()) showRejectedRoms(balayage.rejected)
         }
+    }
+
+    /**
+     * Nomme les fichiers que le balayage a écartés, et pourquoi.
+     *
+     * Sans cette boîte, un fichier rangé au bon endroit et portant la bonne
+     * extension disparaissait sans un mot : l'utilisateur comptait ses jeux,
+     * en trouvait un de moins, et n'avait aucun moyen de savoir lequel. Un
+     * refus motivé vaut mieux qu'une absence, et il n'y a que l'application
+     * pour connaître le motif.
+     */
+    private fun showRejectedRoms(rejected: List<RejectedRom>) {
+        val details = rejected.joinToString("\n\n") { "${it.fileName}\n${it.reason}" }
+        AlertDialog.Builder(this)
+            .setTitle("Fichiers écartés : ${rejected.size}")
+            .setMessage(details)
+            .setPositiveButton(R.string.ok, null)
+            .show()
     }
 
     /** Contenu d'une page : les entrées de sa console, cherchées et triées. */
@@ -339,7 +360,12 @@ class MainActivity : RavenActivity() {
         LibraryFilter.ALL -> getString(R.string.library_page_all)
         LibraryFilter.GAME_BOY_MONOCHROME_CARTRIDGES -> getString(R.string.library_page_gb)
         LibraryFilter.GAME_BOY_COLOR_CARTRIDGES -> getString(R.string.library_page_gbc)
-        else -> getString(R.string.library_page_gba)
+        // Les deux premières sont des filtres sur la cartouche et n'ont pas de
+        // console à elles. Toutes les autres pages portent un nom de console :
+        // le libellé vient donc de la console, et non d'un repli qui donnait à
+        // toute page nouvelle le titre de sa voisine.
+        else -> ConsoleType.entries.firstOrNull { it.name == filter }?.displayName
+            ?: getString(R.string.library_page_all)
     }
 
     private fun launchGame(entry: RomEntry) {
@@ -375,7 +401,12 @@ class MainActivity : RavenActivity() {
         }
 
         action(R.id.actionPlay) { launchGame(entry) }
-        action(R.id.actionStates) { startActivity(SnapshotsActivity.intent(this, entry)) }
+        // Les états d'un moteur qui n'en écrit pas encore : l'entrée est absente
+        // plutôt que présente et menant à une liste toujours vide.
+        action(
+            R.id.actionStates,
+            visible = RavenConsoles.supportsSaveState(entry.console),
+        ) { startActivity(SnapshotsActivity.intent(this, entry)) }
         action(R.id.actionRename) { showRenameDialog(entry) }
         action(R.id.actionCover) {
             coverTarget = entry
@@ -539,24 +570,36 @@ class MainActivity : RavenActivity() {
             .show()
     }
 
+    /** Verdict de la somme de contrôle d'en-tête, dit de la même façon partout. */
+    private fun headerLabel(entry: RomEntry): String =
+        if (entry.headerChecksumValid) "valide" else "somme incorrecte"
+
     private fun showDetails(entry: RomEntry) {
         val details = buildString {
             appendLine(entry.fileName)
             appendLine("Console : ${entry.platformLabel}")
             appendLine("${entry.sizeBytes / 1024} Kio")
-            if (entry.console == ConsoleType.GAME_BOY_ADVANCE) {
-                if (entry.gameCode.isNotBlank()) appendLine("Code jeu : ${entry.gameCode}")
-                appendLine("Sauvegarde : ${saveTypeLabel(entry)}")
-                appendLine("Horloge : ${rtcLabel(entry)}")
-                appendLine(
-                    "En-tête : ${if (entry.headerChecksumValid) "valide" else "somme incorrecte"}"
-                )
-            } else {
-                appendLine("Région : ${entry.region.displayName}")
-                appendLine("MBC : ${entry.mbcType.displayName}")
-                appendLine("Type cartouche : 0x%02X".format(entry.cartridgeTypeCode))
-                appendLine("RAM : ${entry.ramSizeBytes} octets")
-                appendLine("Pile : ${if (entry.hasBattery) "oui" else "non"}")
+            when (entry.console) {
+                ConsoleType.GAME_BOY_ADVANCE -> {
+                    if (entry.gameCode.isNotBlank()) appendLine("Code jeu : ${entry.gameCode}")
+                    appendLine("Sauvegarde : ${saveTypeLabel(entry)}")
+                    appendLine("Horloge : ${rtcLabel(entry)}")
+                    appendLine("En-tête : ${headerLabel(entry)}")
+                }
+                ConsoleType.NINTENDO_DS -> {
+                    // Ni MBC ni région : la cartouche n'a pas ces notions, et le
+                    // type de sauvegarde passe par un bus que le cœur n'a pas
+                    // encore. Ce qui n'est pas connu n'est pas affiché à zéro.
+                    if (entry.gameCode.isNotBlank()) appendLine("Code jeu : ${entry.gameCode}")
+                    appendLine("En-tête : ${headerLabel(entry)}")
+                }
+                ConsoleType.GAME_BOY -> {
+                    appendLine("Région : ${entry.region.displayName}")
+                    appendLine("MBC : ${entry.mbcType.displayName}")
+                    appendLine("Type cartouche : 0x%02X".format(entry.cartridgeTypeCode))
+                    appendLine("RAM : ${entry.ramSizeBytes} octets")
+                    appendLine("Pile : ${if (entry.hasBattery) "oui" else "non"}")
+                }
             }
             appendLine("Statut : ${entry.status.displayName}")
             appendLine("CRC32 : ${entry.fingerprints.crc32}")

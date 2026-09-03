@@ -1,5 +1,7 @@
 #include "ravenemu/native/core_api.hpp"
 
+#include <ravenemu/read_exactly.hpp>
+
 #include <jni.h>
 
 #include <array>
@@ -250,6 +252,12 @@ Java_com_ravenemu_nativebridge_NativeCoreBridge_create(
             core = ravenemu::make_game_boy_core();
         } else if (console_storage_id == static_cast<jint>(ravenemu::Console::game_boy_advance)) {
             core = ravenemu::make_gba_core(gba_save_type_from(forced_save_type));
+        } else if (console_storage_id == static_cast<jint>(ravenemu::Console::nintendo_ds)) {
+            // Le type de sauvegarde imposé ne concerne que le Game Boy Advance :
+            // la Nintendo DS n'a pas encore de mémoire de cartouche, et le
+            // paramètre est ignoré plutôt que refusé, l'appelant le passant
+            // uniformément pour toutes les consoles.
+            core = ravenemu::make_nds_core();
         } else {
             throw std::invalid_argument("Console RavenEmu inconnue");
         }
@@ -274,6 +282,59 @@ Java_com_ravenemu_nativebridge_NativeCoreBridge_loadRom(
         const auto rom_bytes = read_bytes(env, rom, false);
         const auto battery_bytes = read_bytes(env, battery, true);
         core_from(handle).load_rom(rom_bytes, battery_bytes);
+    });
+}
+
+/**
+ * Charge une image depuis un descripteur de fichier ouvert.
+ *
+ * ### Pourquoi ce chemin existe
+ *
+ * Le chemin ordinaire fait traverser l'image par un tableau Java : pour une
+ * cartouche Nintendo DS de deux cent cinquante-six mégaoctets, cela demande au
+ * tas Java de la tenir entière, en plus de l'exemplaire que le cœur garde. Le
+ * tas Java d'une application Android est plafonné bien en dessous de ce que la
+ * mémoire de l'appareil permettrait, et c'est ce plafond, non le matériel, qui
+ * refusait la cartouche.
+ *
+ * Lue ici, l'image ne touche jamais le tas Java, et le cœur la **prend** au
+ * lieu de la recopier : un seul exemplaire existe, en mémoire native.
+ *
+ * ### Pourquoi un numéro et non un `FileDescriptor`
+ *
+ * L'objet `java.io.FileDescriptor` ne publie pas son numéro, et le lire par
+ * JNI revient à toucher un champ interne : Android en restreint l'accès, et un
+ * champ refusé lève une `NoSuchFieldError`. Une erreur n'est pas une exception,
+ * et elle traverse les rattrapages ordinaires jusqu'à tuer l'application. Le
+ * numéro arrive donc tel quel, par l'interface publique qui le donne.
+ *
+ * ### Ce que cette fonction ne fait pas
+ *
+ * Elle ne ferme pas le descripteur : il appartient à l'appelant, qui l'a
+ * ouvert et qui sait quand le rendre. Le fermer ici doublerait une fermeture
+ * que la couche Android fait déjà, ce qui, sur un descripteur recyclé entre
+ * temps, coupe un fichier sans rapport.
+ */
+extern "C" JNIEXPORT void JNICALL
+Java_com_ravenemu_nativebridge_NativeCoreBridge_loadRomFromDescriptor(
+    JNIEnv* env,
+    jclass,
+    jlong handle,
+    jint descriptor,
+    jlong size_bytes,
+    jbyteArray battery
+) {
+    guarded_void(env, [&] {
+        if (descriptor < 0) throw std::invalid_argument("Descripteur de fichier invalide");
+        if (size_bytes < 0) throw std::invalid_argument("Taille de ROM négative");
+        if (static_cast<std::uint64_t>(size_bytes) >
+            static_cast<std::uint64_t>(std::numeric_limits<std::size_t>::max())) {
+            throw std::invalid_argument("ROM trop volumineuse pour cette machine");
+        }
+
+        auto rom = ravenemu::read_exactly(descriptor, static_cast<std::size_t>(size_bytes));
+        const auto battery_bytes = read_bytes(env, battery, true);
+        core_from(handle).load_rom_owned(std::move(rom), battery_bytes);
     });
 }
 
@@ -320,13 +381,30 @@ Java_com_ravenemu_nativebridge_NativeCoreBridge_setButton(
     jboolean pressed
 ) {
     guarded_void(env, [&] {
-        if (button < 0 || button > static_cast<jint>(ravenemu::Button::r)) {
+        if (button < 0 || button > static_cast<jint>(ravenemu::Button::y)) {
             throw std::invalid_argument("Bouton RavenEmu inconnu");
         }
         core_from(handle).set_button(
             static_cast<ravenemu::Button>(button),
             pressed != JNI_FALSE
         );
+    });
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_ravenemu_nativebridge_NativeCoreBridge_setTouch(
+    JNIEnv* env,
+    jclass,
+    jlong handle,
+    jboolean down,
+    jint x,
+    jint y
+) {
+    guarded_void(env, [&] {
+        // Les coordonnées ne sont pas contrôlées ici : le cœur ramène lui-même
+        // un contact hors de l'écran sur son bord, et refuser ce que le cœur
+        // accepte ferait disparaître un doigt qui glisse au-delà d'une lisière.
+        core_from(handle).set_touch(down != JNI_FALSE, x, y);
     });
 }
 
@@ -617,6 +695,51 @@ Java_com_ravenemu_nativebridge_NativeCoreBridge_debugSnapshot(
         env->DeleteLocalRef(timings);
         env->DeleteLocalRef(klass);
         return result;
+    });
+}
+
+/**
+ * Relevé de la Nintendo DS, rendu comme une suite de nombres.
+ *
+ * L'ordre est **le contrat** avec la couche Java, qui les renomme. Il est figé :
+ * une valeur s'ajoute à la fin, jamais au milieu, sinon le relevé se lirait de
+ * travers sans que rien ne s'en plaigne. Une vérification tient les deux
+ * longueurs ensemble.
+ */
+extern "C" JNIEXPORT jintArray JNICALL
+Java_com_ravenemu_nativebridge_NativeCoreBridge_ndsDebugSnapshot(
+    JNIEnv* env,
+    jclass,
+    jlong handle
+) {
+    return guarded<jintArray>(env, nullptr, [&]() -> jintArray {
+        const auto snapshot = core_from(handle).nds_debug_snapshot();
+        if (!snapshot) return nullptr;
+        const auto& value = *snapshot;
+        const std::array<std::int32_t, 42> scalars{
+            value.main_instructions, value.secondary_instructions,
+            value.main_program_counter, value.secondary_program_counter,
+            value.main_halted ? 1 : 0, value.secondary_halted ? 1 : 0,
+            value.main_undefined_count, value.main_first_undefined,
+            value.secondary_undefined_count, value.secondary_first_undefined,
+            value.main_unimplemented_io, value.main_first_unimplemented_io,
+            value.secondary_unimplemented_io, value.secondary_first_unimplemented_io,
+            value.main_unsupported_swi, value.secondary_unsupported_swi,
+            value.main_display_control, value.secondary_display_control,
+            value.unimplemented_layers, value.unimplemented_display,
+            value.unimplemented_objects, value.non_black_pixels,
+            value.screens_swapped ? 1 : 0, value.cartridge_unsupported,
+            value.main_first_unsupported_swi, value.secondary_first_unsupported_swi,
+            value.main_mode, value.secondary_mode,
+            value.main_stack_pointer, value.secondary_stack_pointer,
+            value.main_link_register, value.secondary_link_register,
+            value.main_vector_base, value.main_dtcm_base, value.main_dtcm_size,
+            value.main_interrupt_enable, value.main_interrupt_flags,
+            value.secondary_interrupt_enable, value.secondary_interrupt_flags,
+            value.main_sync, value.secondary_sync,
+            value.unimplemented_palettes,
+        };
+        return make_int_array(env, scalars);
     });
 }
 

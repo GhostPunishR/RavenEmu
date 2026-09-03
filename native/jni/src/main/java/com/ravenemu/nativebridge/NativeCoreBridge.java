@@ -23,9 +23,12 @@ public final class NativeCoreBridge {
     public static native long create(int consoleStorageId, int forcedSaveType);
     public static native void destroy(long handle);
     public static native void loadRom(long handle, byte[] rom, byte[] batteryRam);
+    public static native void loadRomFromDescriptor(
+        long handle, int descriptor, long sizeBytes, byte[] batteryRam);
     public static native void reset(long handle);
     public static native void runFrame(long handle, int[] framebuffer, boolean renderVideo);
     public static native void setButton(long handle, int buttonOrdinal, boolean pressed);
+    public static native void setTouch(long handle, boolean down, int x, int y);
     public static native int readAudio(long handle, short[] destination);
     public static native boolean rumbleActive(long handle);
     public static native int framebufferFormat(long handle);
@@ -51,5 +54,14 @@ public final class NativeCoreBridge {
     public static native void setMeasuringTime(long handle, boolean enabled);
     public static native boolean measuringTime(long handle);
     public static native NativeGbaDebugSnapshot debugSnapshot(long handle);
+    /**
+     * Nintendo DS : ce que la console a rencontre et n a pas su faire.
+     *
+     * Rendu comme une suite de nombres dont l ordre est le contrat, et que
+     * {@code NdsDebugSnapshot} renomme cote Kotlin. Nul quand le coeur charge
+     * n est pas celui d une Nintendo DS.
+     */
+    public static native int[] ndsDebugSnapshot(long handle);
+
     public static native NativeDiagnosticBatch drainDiagnostics(long handle);
 }

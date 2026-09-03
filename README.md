@@ -38,6 +38,7 @@ Les détails d'installation et de signature sont dans le [wiki](https://github.c
 | Game Boy | Avancé |
 | Game Boy Color | Intégré au moteur GB, extraction dédiée en cours |
 | Game Boy Advance | Expérimental |
+| Nintendo DS | Fondations : identité, en-tête de cartouche, contrat d'écran, les deux processeurs (ARM946E-S et ARM7TDMI), leurs cartes mémoire, la communication entre eux, les décors et sprites des deux moteurs 2D, le balayage des deux écrans, l'ordonnanceur qui les fait tourner ensemble, l'amorçage d'une cartouche, les minuteries, les transferts autonomes et les touches. La console est dans la bibliothèque : un `.nds` est reconnu, indexé, et se lance avec son skin. Les services du programme d'amorçage sont rendus sans ce programme, dont aucun octet n'est fourni, le bus de cartouche permet à un jeu de lire sa ROM, et le port série apporte l'écran tactile, les réglages de la console et la commande d'alimentation. Un doigt posé sur la zone tactile d'un skin arrive jusqu'au jeu. Une cartouche de n'importe quelle taille s'indexe et se charge sans passer par la mémoire Java. **Ne fait pas encore tourner de jeu du commerce** : ni moteur 3D, ni son, ni sauvegarde de cartouche, ni état instantané, et il manque encore des modes vidéo. |
 
 La compatibilité varie selon les jeux. Consultez la [matrice de compatibilité](https://github.com/GhostPunishR/RavenEmu/wiki/Compatibilite-des-jeux).
 
@@ -52,7 +53,7 @@ engine
     ↓
 native/api + native/jni
     ↓
-cores/common + cores/gb + cores/gbc + cores/gba
+cores/common + cores/gb + cores/gbc + cores/gba + cores/nds
 ```
 
 Voir [ARCHITECTURE.md](ARCHITECTURE.md) et le [wiki Architecture](https://github.com/GhostPunishR/RavenEmu/wiki/Architecture). Le dossier `docs/` est réservé au site officiel.

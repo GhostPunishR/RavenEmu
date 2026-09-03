@@ -22,7 +22,6 @@
     <string name="library_page_all">Tous les jeux</string>
     <string name="library_page_gb">Game Boy</string>
     <string name="library_page_gbc">Game Boy Color</string>
-    <string name="library_page_gba">Game Boy Advance</string>
     <string name="library_empty_console">Aucun jeu %1$s dans vos dossiers.</string>
     <string name="library_empty_search">Aucun jeu ne correspond à cette recherche.</string>
     <string name="library_save_type">Type de sauvegarde</string>
@@ -143,6 +142,7 @@
     <string name="delta_skins_mode_edge_to_edge">Bord à bord</string>
     <string name="delta_skins_group_gb">GB / GBC</string>
     <string name="delta_skins_group_gba">GBA</string>
+    <string name="delta_skins_group_ds">Nintendo DS</string>
     <string name="delta_skins_classic">Commandes classiques</string>
     <string name="delta_skins_classic_summary">Disposition tactile RavenEmu</string>
     <string name="delta_skins_select">Sélectionner</string>

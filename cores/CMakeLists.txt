@@ -21,6 +21,7 @@ add_subdirectory(common)
 add_subdirectory(gb)
 add_subdirectory(gbc)
 add_subdirectory(gba)
+add_subdirectory(nds)
 
 add_library(ravenemu_cores INTERFACE)
-target_link_libraries(ravenemu_cores INTERFACE gb_raven_core gbc_raven_core gba_raven_core)
+target_link_libraries(ravenemu_cores INTERFACE gb_raven_core gbc_raven_core gba_raven_core nds_raven_core)

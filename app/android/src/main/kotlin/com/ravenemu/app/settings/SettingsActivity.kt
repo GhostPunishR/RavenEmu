@@ -10,6 +10,7 @@ import androidx.preference.PreferenceFragmentCompat
 import com.ravenemu.app.R
 import com.ravenemu.app.RavenActivity
 import com.ravenemu.settings.AppSettings
+import com.ravenemu.emulation.api.ConsoleType
 import com.ravenemu.emulation.api.display.MonochromeDisplayProfiles
 import com.ravenemu.storage.RomIndexStore
 
@@ -79,10 +80,11 @@ class SettingsActivity : RavenActivity() {
 
             findPreference<Preference>("controls_reset_layouts")
                 ?.setOnPreferenceClickListener {
-                    // Une disposition par orientation et par console : la Game
-                    // Boy Advance a ses propres gâchettes L/R.
+                    // Une disposition par orientation et par console. La liste
+                    // des consoles vient de l’énumération : la nommer ici
+                    // laissait la Nintendo DS sans remise à zéro possible.
                     for (orientation in listOf("portrait", "landscape")) {
-                        for (consoleKey in listOf("gb", "gba")) {
+                        for (consoleKey in ConsoleType.entries.map { it.layoutKey }) {
                             settings.resetControlLayout("${orientation}_$consoleKey")
                         }
                     }

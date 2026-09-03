@@ -5,6 +5,8 @@ import com.ravenemu.app.BuildConfig
 import com.ravenemu.core.gba.GbaCore
 import com.ravenemu.core.gba.diag.GbaDiagnostics
 import com.ravenemu.core.gba.diag.toDiagnosticText
+import com.ravenemu.core.nds.NdsCore
+import com.ravenemu.core.nds.diag.toDiagnosticText as toNdsDiagnosticText
 import com.ravenemu.emulation.api.EmulatorCore
 import com.ravenemu.emulation.api.audio.AudioTransportStats
 
@@ -54,6 +56,17 @@ object GbaDebugOverlay {
         audioTrackUnderruns: Int = 0,
     ): String {
         val transport = audioStats?.summary().orEmpty()
+        // La Nintendo DS a son propre relevé, et il ne coûte rien : ses
+        // compteurs tournent de toute façon. Il est donc montré dès que la
+        // surcouche est demandée, sans attendre qu'une mesure soit allumée —
+        // c'est justement quand l'écran reste noir qu'on en a besoin.
+        val nds = (core as? NdsCore)
+            ?.takeIf { BuildConfig.DIAGNOSTICS }
+            ?.debugSnapshot()
+            ?.toNdsDiagnosticText(fps, frameTimeMs)
+        if (nds != null) {
+            return if (transport.isEmpty()) nds else "$nds\n$transport"
+        }
         val mesure = (core as? GbaCore)
             ?.takeIf { BuildConfig.DIAGNOSTICS && it.measuringTime }
             ?.debugSnapshot()

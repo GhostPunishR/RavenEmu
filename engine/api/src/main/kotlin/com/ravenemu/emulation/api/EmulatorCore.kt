@@ -42,6 +42,34 @@ interface EmulatorCore {
      */
     fun loadRom(rom: ByteArray, batteryRam: ByteArray? = null)
 
+    /**
+     * Charge une ROM depuis un descripteur de fichier **déjà ouvert**, sans la
+     * faire passer par la mémoire Java.
+     *
+     * Une cartouche Nintendo DS pèse jusqu'à un demi-gigaoctet. Lue par
+     * [loadRom], elle doit tenir entière dans le tas Java, plafonné bien en
+     * dessous de ce que l'appareil permettrait : c'est ce plafond, et non le
+     * matériel, qui refusait les grosses cartouches.
+     *
+     * Le descripteur est un **numéro**, tel que `ParcelFileDescriptor.getFd`
+     * le donne, et non un `FileDescriptor`. Ce dernier ne publie pas son
+     * numéro : le lire revient à toucher un champ interne, dont Android
+     * restreint l'accès et dont le refus lève une erreur, non une exception.
+     *
+     * Le descripteur reste la propriété de l'appelant : ce chemin ne le ferme
+     * pas, et l'appelant doit le rendre lui-même.
+     *
+     * @return `false` si ce moteur ne sait pas charger ainsi. L'appelant
+     *   retombe alors sur [loadRom], qui reste le chemin de toutes les
+     *   consoles dont les cartouches sont petites.
+     * @throws RomLoadException si la ROM est invalide ou non prise en charge.
+     */
+    fun loadRomFromDescriptor(
+        descriptor: Int,
+        sizeBytes: Long,
+        batteryRam: ByteArray? = null,
+    ): Boolean = false
+
     /** Réinitialise la console (équivalent power-cycle), ROM conservée. */
     fun reset()
 
@@ -72,6 +100,22 @@ interface EmulatorCore {
 
     /** Applique l'état d'un bouton. Prend effet dès le prochain cycle émulé. */
     fun setButton(button: EmulatorButton, pressed: Boolean)
+
+    /**
+     * Pose ou lève un contact sur l'écran tactile de la console.
+     *
+     * Les coordonnées sont **en pixels de l'écran tactile**, l'origine en haut
+     * à gauche : c'est à l'appelant de les y ramener depuis l'écran de
+     * l'appareil, lui seul sachant comment il a disposé les écrans. Un contact
+     * hors de l'écran est ramené sur son bord plutôt qu'ignoré, un doigt qui
+     * glisse au-delà d'une lisière étant un geste ordinaire.
+     *
+     * Sans écran tactile, l'appel ne fait rien : la plupart des consoles n'en
+     * ont pas, et leur imposer une implémentation vide n'apprendrait rien.
+     */
+    fun setTouch(down: Boolean, x: Int, y: Int) {
+        // Volontairement sans effet.
+    }
 
     /**
      * Copie au plus `buffer.size` échantillons audio disponibles vers
@@ -114,9 +158,22 @@ interface EmulatorCore {
     fun acknowledgeBatteryRamSaved(generation: Long)
 
     /**
+     * `true` si ce moteur sait enregistrer et relire un instantané.
+     *
+     * Un moteur encore en construction n'a pas de format d'état : en figer un
+     * avant que la console soit complète promettrait une compatibilité que le
+     * prochain organe ajouté briserait. L'appelant consulte cette propriété
+     * pour ne pas proposer ce qu'il ne peut pas tenir ; appeler quand même
+     * [saveState] reste une erreur signalée, non un instantané vide.
+     */
+    val supportsSaveState: Boolean get() = true
+
+    /**
      * Sérialise l'état complet du moteur en un instantané versionné propre à
      * RavenEmu. Le format n'est pas garanti compatible entre consoles ni avec
      * d'autres émulateurs.
+     *
+     * @throws IllegalStateException si [supportsSaveState] est faux.
      */
     fun saveState(): ByteArray
 

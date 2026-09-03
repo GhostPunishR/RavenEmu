@@ -219,11 +219,10 @@ class ArchiveRealisteTest {
     private fun disposition(console: DeltaSkinConsole): Pair<DeltaSkinLayout, DeltaSkinRepresentation> {
         val rep = importer(console)
             .metadata.manifest.representations.iphone!!.standard!!.portrait!!
-        val natif = if (console == DeltaSkinConsole.GBA) {
-            DeltaSkinSize(240.0, 160.0)
-        } else {
-            DeltaSkinSize(160.0, 144.0)
-        }
+        // La taille native vient de la console : la redire ici en ferait une
+        // seconde source, et un écran ajouté ailleurs ne serait pas vu de ce
+        // côté.
+        val natif = console.screenSize
         val layout = DeltaSkinLayoutCalculator.calculate(
             containerWidth = 1080.0,
             containerHeight = 2340.0,
@@ -239,6 +238,9 @@ class ArchiveRealisteTest {
         for ((console, rapport) in listOf(
             DeltaSkinConsole.GBA to 240.0 / 160.0,
             DeltaSkinConsole.GB_GBC to 160.0 / 144.0,
+            // Les deux écrans de la DS sont empilés dans un seul tampon : le
+            // rapport encadré est celui de la pile, non celui d'un écran.
+            DeltaSkinConsole.DS to 256.0 / 384.0,
         )) {
             val (layout, _) = disposition(console)
             val ecran = layout.gameScreen

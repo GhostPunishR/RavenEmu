@@ -20,7 +20,7 @@ public:
         case Button::left: bit = 2; break;
         case Button::up: bit = 4; break;
         case Button::down: bit = 8; break;
-        case Button::l: case Button::r: return;
+        case Button::l: case Button::r: case Button::x: case Button::y: return;
         }
         auto& state = action ? action_state_ : direction_state_;
         const bool was_pressed = (state & bit) != 0;

@@ -1,5 +1,6 @@
 package com.ravenemu.deltaskin
 
+import com.ravenemu.emulation.api.EmulatorButton
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
@@ -44,13 +45,14 @@ internal object DeltaSkinTestFixtures {
             console = console,
             landscape = true,
         )
+        val suffix = when (console) {
+            DeltaSkinConsole.GB_GBC -> "gbc"
+            DeltaSkinConsole.GBA -> "gba"
+            DeltaSkinConsole.DS -> "ds"
+        }
         return DeltaSkinManifest(
-            name = if (console == DeltaSkinConsole.GBA) "Synthetic GBA" else "Synthetic GBC",
-            identifier = if (console == DeltaSkinConsole.GBA) {
-                "org.ravenemu.synthetic.gba"
-            } else {
-                "org.ravenemu.synthetic.gbc"
-            },
+            name = "Synthetic ${suffix.uppercase(Locale.ROOT)}",
+            identifier = "org.ravenemu.synthetic.$suffix",
             gameTypeIdentifier = console.gameTypeIdentifier,
             debug = false,
             representations = DeltaSkinRepresentations(
@@ -118,7 +120,9 @@ internal object DeltaSkinTestFixtures {
                 DeltaSkinFrame(145.0, 10.0, 30.0, 20.0),
             ),
         )
-        if (console == DeltaSkinConsole.GBA) {
+        // Les gâchettes suivent la console plutôt qu'un nom : deux consoles les
+        // ont, et une troisième s'y ajouterait sans toucher à cette ligne.
+        if (EmulatorButton.L in console.buttons) {
             items += DeltaSkinItem(
                 DeltaSkinInputs.Buttons(listOf("l")),
                 DeltaSkinFrame(10.0, 35.0, 55.0, 20.0),
@@ -126,6 +130,23 @@ internal object DeltaSkinTestFixtures {
             items += DeltaSkinItem(
                 DeltaSkinInputs.Buttons(listOf("r")),
                 DeltaSkinFrame(255.0, 35.0, 55.0, 20.0),
+            )
+        }
+        if (EmulatorButton.X in console.buttons) {
+            items += DeltaSkinItem(
+                DeltaSkinInputs.Buttons(listOf("x")),
+                DeltaSkinFrame(260.0, 40.0, 30.0, 30.0),
+            )
+            items += DeltaSkinItem(
+                DeltaSkinInputs.Buttons(listOf("y")),
+                DeltaSkinFrame(180.0, 75.0, 30.0, 30.0),
+            )
+            // La zone tactile emprunte la forme d'une croix sans en être une.
+            items += DeltaSkinItem(
+                DeltaSkinInputs.Directional(
+                    mapOf("x" to "touchScreenX", "y" to "touchScreenY")
+                ),
+                DeltaSkinFrame(0.0, 0.0, 320.0, 60.0),
             )
         }
         ignoredInput?.let { input ->

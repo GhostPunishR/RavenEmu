@@ -6,6 +6,8 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
 import android.graphics.Rect
 import android.graphics.RectF
 import android.os.SystemClock
@@ -28,7 +30,9 @@ import com.ravenemu.deltaskin.DeltaSkinRepresentation
 import com.ravenemu.deltaskin.DeltaSkinRepresentationKind
 import com.ravenemu.deltaskin.DeltaSkinRepresentationPreference
 import com.ravenemu.deltaskin.DeltaSkinRepresentationSelector
+import com.ravenemu.deltaskin.DeltaSkinScreenPlacement
 import com.ravenemu.deltaskin.DeltaSkinSize
+import com.ravenemu.deltaskin.DeltaSkinTouchPoint
 import com.ravenemu.deltaskin.DeltaSkinVisualTarget
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
@@ -64,9 +68,29 @@ class DeltaSkinControllerView @JvmOverloads constructor(
     interface Listener {
         fun onButtonChanges(changes: DeltaSkinButtonChanges)
         fun onMenu()
-        fun onSkinReady(gameArea: Rect)
-        fun onSkinLayoutChanged(gameArea: Rect)
+        /**
+         * Le skin est prêt : le jeu occupe [gameArea].
+         *
+         * [screens] dit où chaque écran de la console se pose quand le skin le
+         * décide lui-même, et reste vide sinon. Une Nintendo DS en a deux, que
+         * le skin sépare d'une charnière dessinée : les poser d'un bloc dans
+         * [gameArea] étalerait l'image par-dessus.
+         */
+        fun onSkinReady(gameArea: Rect, screens: List<DeltaSkinScreenPlacement>)
+        fun onSkinLayoutChanged(gameArea: Rect, screens: List<DeltaSkinScreenPlacement>)
         fun onSkinError(code: DeltaSkinErrorCode)
+
+        /**
+         * Le stylet est posé sur la dalle, à cet endroit de la zone tactile.
+         *
+         * Rappelé à chaque déplacement tant que le doigt y reste : une console
+         * n'a pas de notion de glissement, elle a un point de contact qui
+         * change.
+         */
+        fun onTouchScreen(point: DeltaSkinTouchPoint)
+
+        /** Le stylet est levé. */
+        fun onTouchScreenReleased()
     }
 
     var listener: Listener? = null
@@ -86,6 +110,16 @@ class DeltaSkinControllerView @JvmOverloads constructor(
     private var fadingVisuals: Set<DeltaSkinVisualTarget> = emptySet()
     private var fadeStartedAtMillis = 0L
     private val pointerInputs = mutableMapOf<Int, DeltaSkinMappedInput>()
+
+    /**
+     * Le doigt qui tient la dalle, s'il y en a un.
+     *
+     * Une console n'a qu'un stylet : le premier doigt posé sur la zone la garde
+     * jusqu'à ce qu'il la quitte, et un second doigt posé à côté ne la lui
+     * prend pas. Sans cette règle, deux doigts feraient sauter le point de
+     * contact de l'un à l'autre à chaque déplacement.
+     */
+    private var touchPointerId: Int? = null
 
     private val inputState = DeltaSkinInputState(
         onButtonsChanged = { changes -> listener?.onButtonChanges(changes) },
@@ -109,6 +143,33 @@ class DeltaSkinControllerView @JvmOverloads constructor(
     )
 
     private val bitmapDestination = RectF()
+
+    /**
+     * Où les écrans de la console se posent, quand le skin le décide lui-même.
+     *
+     * Ces rectangles sont **retirés** du panneau plutôt que dessinés : dans
+     * Delta l’image du skin est un fond, et les écrans du jeu se posent
+     * par-dessus. Ici l’image du jeu vient d’une surface placée **sous** cette
+     * vue, si bien qu’un skin qui couvre tout l’écran la cachait entièrement :
+     * on ne voyait que le fond de page de son PDF, blanc la plupart du temps.
+     *
+     * Percer donne le même résultat que poser le jeu par-dessus, puisque tout
+     * ce que le skin dessinerait sous un écran serait de toute façon recouvert.
+     */
+    private val screenHoles = mutableListOf<RectF>()
+
+    /**
+     * Peinture qui efface au lieu de peindre.
+     *
+     * Elle ne vaut que dans un calque à part, ce que [applyScreenHoles] demande
+     * quand il y a des trous : sans calque, il n’y aurait rien à effacer sous
+     * cette vue.
+     */
+    private val screenHolePaint = Paint().apply {
+        xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
+        isAntiAlias = false
+    }
+
     private val feedbackFill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.BLACK
         style = Paint.Style.FILL
@@ -135,6 +196,11 @@ class DeltaSkinControllerView @JvmOverloads constructor(
         currentLayout = null
         mapper = null
         ready = false
+        // Les trous et leur calque appartiennent à la disposition qui vient de
+        // disparaître : les garder ferait porter à un skin les percements du
+        // précédent, et laisserait une surface hors écran allouée pour rien.
+        screenHoles.clear()
+        if (layerType != LAYER_TYPE_NONE) setLayerType(LAYER_TYPE_NONE, null)
         visibility = if (value == null) GONE else INVISIBLE
         if (value != null) updateLayoutAndRender()
     }
@@ -161,6 +227,9 @@ class DeltaSkinControllerView @JvmOverloads constructor(
             layout.panel.bottom.toFloat(),
         )
         canvas.drawBitmap(bitmap, null, bitmapDestination, null)
+        // Avant les retours de pression : une touche dessinée dans un trou
+        // serait effacée par lui.
+        for (hole in screenHoles) canvas.drawRect(hole, screenHolePaint)
         activeVisuals.forEach { visual -> drawFeedback(canvas, visual, 1f) }
         if (fadingVisuals.isNotEmpty()) {
             val elapsed = SystemClock.uptimeMillis() - fadeStartedAtMillis
@@ -231,16 +300,36 @@ class DeltaSkinControllerView @JvmOverloads constructor(
             pointerInputs[pointerId] = input
         }
         inputState.updatePointer(pointerId, input)
+        updateTouchScreen(pointerId, input.touch)
+    }
+
+    /** Confie la dalle à ce doigt, la lui retire, ou laisse l'autre la tenir. */
+    private fun updateTouchScreen(pointerId: Int, point: DeltaSkinTouchPoint?) {
+        if (point == null) {
+            if (touchPointerId == pointerId) releaseTouchScreen()
+            return
+        }
+        if (touchPointerId != null && touchPointerId != pointerId) return
+        touchPointerId = pointerId
+        listener?.onTouchScreen(point)
+    }
+
+    private fun releaseTouchScreen() {
+        if (touchPointerId == null) return
+        touchPointerId = null
+        listener?.onTouchScreenReleased()
     }
 
     private fun releasePointer(pointerId: Int) {
         pointerInputs.remove(pointerId)
         inputState.releasePointer(pointerId)
+        if (touchPointerId == pointerId) releaseTouchScreen()
     }
 
     private fun releaseAll() {
         pointerInputs.clear()
         inputState.releaseAll()
+        releaseTouchScreen()
         activeVisuals = emptySet()
         fadingVisuals = emptySet()
         invalidate()
@@ -265,13 +354,15 @@ class DeltaSkinControllerView @JvmOverloads constructor(
             insets = safeInsets,
             mappingSize = asset.representation.mappingSize,
             nativeScreenSize = config.nativeScreenSize,
+            declaredScreens = asset.representation.declaredScreens,
         ) ?: return fail(DeltaSkinErrorCode.INVALID_MAPPING_SIZE)
 
         val previousLayout = currentLayout
         currentLayout = layout
+        applyScreenHoles(layout)
         mapper = DeltaSkinInputMapper(config.console, asset.representation, layout.panel)
         if (ready && previousLayout != layout) {
-            listener?.onSkinLayoutChanged(layout.gameArea.toAndroidRect())
+            listener?.onSkinLayoutChanged(layout.gameArea.toAndroidRect(), layout.screens)
         }
 
         val targetWidth = layout.panel.width.toInt().coerceAtLeast(1)
@@ -321,7 +412,28 @@ class DeltaSkinControllerView @JvmOverloads constructor(
         val layout = currentLayout ?: return
         ready = true
         visibility = VISIBLE
-        listener?.onSkinReady(layout.gameArea.toAndroidRect())
+        listener?.onSkinReady(layout.gameArea.toAndroidRect(), layout.screens)
+    }
+
+    /**
+     * Retient les trous à percer, et le calque qu’il faut pour les percer.
+     *
+     * Le calque n’est demandé que s’il y a quelque chose à effacer : un skin
+     * qui ne place pas ses écrans garde exactement le dessin d’avant, sans
+     * surface hors écran à allouer.
+     */
+    private fun applyScreenHoles(layout: DeltaSkinLayout) {
+        screenHoles.clear()
+        for (placement in layout.screens) {
+            screenHoles += RectF(
+                placement.destination.left.toFloat(),
+                placement.destination.top.toFloat(),
+                placement.destination.right.toFloat(),
+                placement.destination.bottom.toFloat(),
+            )
+        }
+        val wanted = if (screenHoles.isEmpty()) LAYER_TYPE_NONE else LAYER_TYPE_HARDWARE
+        if (layerType != wanted) setLayerType(wanted, null)
     }
 
     private fun fail(code: DeltaSkinErrorCode) {

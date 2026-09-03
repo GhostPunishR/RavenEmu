@@ -70,6 +70,44 @@ class DeltaSkinArchiveImporterTest {
     }
 
     @Test
+    fun `un asset paysage absent nempeche pas limport`() = withTempDirectory { temp ->
+        // Cas rencontré sur de vrais skins : les deux représentations paysage
+        // sont déclarées, leurs PDF ne sont pas joints. Le paysage n'étant
+        // jamais rendu, l'archive reste utilisable telle quelle.
+        val archive = DeltaSkinTestFixtures.createArchive(
+            temp,
+            manifest = DeltaSkinTestFixtures.manifest(landscape = true),
+            omitAssets = setOf("iphone_landscape.pdf", "iphone_edgetoedge_landscape.pdf"),
+        )
+        val prepared = importer(temp).prepare(archive, archive.name)
+        assertEquals(
+            DeltaSkinArchiveImporter.STANDARD_PORTRAIT_FILE,
+            prepared.metadata.standardPortraitAsset,
+        )
+        assertEquals(
+            DeltaSkinArchiveImporter.EDGE_TO_EDGE_PORTRAIT_FILE,
+            prepared.metadata.edgeToEdgePortraitAsset,
+        )
+    }
+
+    @Test
+    fun `un asset paysage livre est tout de meme controle`() = withTempDirectory { temp ->
+        val archive = DeltaSkinTestFixtures.createArchive(
+            temp,
+            manifest = DeltaSkinTestFixtures.manifest(landscape = true),
+            extraEntries = mapOf(
+                "iphone_landscape.pdf" to DeltaSkinTestFixtures.syntheticPdf(
+                    width = 10,
+                    height = 500,
+                )
+            ),
+        )
+        assertCode(DeltaSkinErrorCode.PDF_INVALID) {
+            importer(temp).prepare(archive, archive.name)
+        }
+    }
+
+    @Test
     fun `JSON malforme dans archive est refuse`() = withTempDirectory { temp ->
         val archive = DeltaSkinTestFixtures.createArchive(
             temp,

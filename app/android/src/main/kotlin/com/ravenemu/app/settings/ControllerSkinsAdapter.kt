@@ -89,17 +89,18 @@ class ControllerSkinsAdapter(
         super.onViewRecycled(holder)
     }
 
+    /** Libellé d'une console, nommé une seule fois pour les deux endroits qui l'affichent. */
+    private fun groupLabel(console: DeltaSkinConsole): Int = when (console) {
+        DeltaSkinConsole.GB_GBC -> R.string.delta_skins_group_gb
+        DeltaSkinConsole.GBA -> R.string.delta_skins_group_gba
+        DeltaSkinConsole.DS -> R.string.delta_skins_group_ds
+    }
+
     private inner class HeaderHolder(view: View) : RecyclerView.ViewHolder(view) {
         private val title: TextView = view.findViewById(android.R.id.text1)
 
         fun bind(console: DeltaSkinConsole) {
-            title.text = itemView.context.getString(
-                if (console == DeltaSkinConsole.GB_GBC) {
-                    R.string.delta_skins_group_gb
-                } else {
-                    R.string.delta_skins_group_gba
-                }
-            )
+            title.text = itemView.context.getString(groupLabel(console))
             title.setTypeface(title.typeface, Typeface.BOLD)
             val horizontal = (20 * itemView.resources.displayMetrics.density).toInt()
             val vertical = (14 * itemView.resources.displayMetrics.density).toInt()
@@ -123,11 +124,7 @@ class ControllerSkinsAdapter(
             preview.visibility = View.GONE
             preview.setImageDrawable(null)
             name.setText(R.string.delta_skins_classic)
-            identifier.text = if (console == DeltaSkinConsole.GB_GBC) {
-                itemView.context.getString(R.string.delta_skins_group_gb)
-            } else {
-                itemView.context.getString(R.string.delta_skins_group_gba)
-            }
+            identifier.text = itemView.context.getString(groupLabel(console))
             details.setText(R.string.delta_skins_classic_summary)
             delete.visibility = View.GONE
             val selected = selections[console] == null

@@ -61,6 +61,7 @@ class RomAdapter(
         // Étiquettes courtes : le sous-titre d'une ligne reste lisible.
         const val CONSOLE_LABEL_GB = "GB"
         const val CONSOLE_LABEL_GBA = "GBA"
+        const val CONSOLE_LABEL_NDS = "NDS"
 
         /**
          * Taille de décodage visée, en pixels.
@@ -160,15 +161,17 @@ class RomAdapter(
         private fun detailsDe(entry: RomEntry): String {
             val sizeKib = entry.sizeBytes / 1024
             // La console est toujours indiquée ; les champs MBC et région sont
-            // propres à la cartouche Game Boy et n'ont pas d'équivalent GBA.
-            val details = if (entry.console == ConsoleType.GAME_BOY_ADVANCE) {
-                CONSOLE_LABEL_GBA
-            } else {
-                // Monochrome ou couleur : c'est l'en-tête de la cartouche qui
-                // le dit, pas l'extension du fichier.
-                (entry.cartridgeMode?.shortLabel ?: CONSOLE_LABEL_GB) +
-                    " · " + entry.mbcType.displayName +
-                    " · " + entry.region.displayName
+            // propres à la cartouche Game Boy et n'ont d'équivalent ni sur Game
+            // Boy Advance ni sur Nintendo DS.
+            val details = when (entry.console) {
+                ConsoleType.GAME_BOY_ADVANCE -> CONSOLE_LABEL_GBA
+                ConsoleType.NINTENDO_DS -> CONSOLE_LABEL_NDS
+                ConsoleType.GAME_BOY ->
+                    // Monochrome ou couleur : c'est l'en-tête de la cartouche
+                    // qui le dit, pas l'extension du fichier.
+                    (entry.cartridgeMode?.shortLabel ?: CONSOLE_LABEL_GB) +
+                        " · " + entry.mbcType.displayName +
+                        " · " + entry.region.displayName
             }
             return itemView.context.getString(R.string.library_size_kib, sizeKib) + " · " + details
         }

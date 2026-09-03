@@ -15,6 +15,10 @@ namespace ravenemu {
 enum class Console : std::uint8_t {
     game_boy = 0,
     game_boy_advance = 2,
+    // 1 a désigné une seconde entrée Game Boy Color et reste retiré : un état
+    // enregistré avec cette valeur ne doit jamais être relu comme une autre
+    // console. La Nintendo DS prend donc 3, la première valeur libre.
+    nintendo_ds = 3,
 };
 
 enum class Button : std::uint8_t {
@@ -28,6 +32,13 @@ enum class Button : std::uint8_t {
     select,
     l,
     r,
+
+    // Touches de la Nintendo DS. Les consoles qui n'en ont pas les ignorent,
+    // comme elles ignorent déjà les gâchettes d'épaule. L'ordre de cette
+    // énumération est celui que le pont natif transporte : une valeur ajoutée
+    // se met à la fin, jamais au milieu.
+    x,
+    y,
 };
 
 enum class FramebufferFormat : std::uint8_t {
@@ -75,6 +86,125 @@ enum class DiagnosticEvent : std::uint8_t {
 struct DiagnosticMessage {
     DiagnosticEvent event{};
     std::string detail;
+};
+
+/**
+ * Ce que la Nintendo DS rencontre et ne sait pas encore faire.
+ *
+ * Un écran noir a plusieurs causes possibles, et rien à l'écran ne les
+ * distingue : un programme qui n'avance plus, un plan que ce moteur ne dessine
+ * pas, un registre qu'il ignore. Ce relevé les sépare. Il tient en entiers
+ * simples, parce qu'il traverse le pont natif et qu'un nombre y voyage sans
+ * cérémonie ; les nommer est le travail de la couche qui l'affiche.
+ *
+ * Il ne coûte rien : tous ces compteurs existaient déjà dans les organes, où ils
+ * grimpaient sans que personne ne les lise.
+ */
+struct NdsDebugSnapshot {
+    /** Instructions exécutées pendant la trame précédente, par processeur. */
+    std::int32_t main_instructions{};
+    std::int32_t secondary_instructions{};
+    /** Où chaque processeur en est, et s'il attend une interruption. */
+    std::int32_t main_program_counter{};
+    std::int32_t secondary_program_counter{};
+    bool main_halted{};
+    bool secondary_halted{};
+    /** Motifs d'instruction qu'aucun décodeur ne reconnaît. */
+    std::int32_t main_undefined_count{};
+    std::int32_t main_first_undefined{};
+    std::int32_t secondary_undefined_count{};
+    std::int32_t secondary_first_undefined{};
+    /** Registres d'entrée-sortie qu'aucun organe ne sert. */
+    std::int32_t main_unimplemented_io{};
+    std::int32_t main_first_unimplemented_io{};
+    std::int32_t secondary_unimplemented_io{};
+    std::int32_t secondary_first_unimplemented_io{};
+    /**
+     * Appels logiciels que le programme d'amorçage de secours ne connaît pas,
+     * et le **numéro** du premier rencontré de chaque côté.
+     *
+     * Le compte seul ne sert à rien : il dit qu'un service manque sans dire
+     * lequel, et il y en a une trentaine. Le numéro dit lequel écrire.
+     */
+    std::int32_t main_unsupported_swi{};
+    std::int32_t secondary_unsupported_swi{};
+    std::int32_t main_first_unsupported_swi{};
+    std::int32_t secondary_first_unsupported_swi{};
+    /** Registre de composition de chacun des deux moteurs graphiques. */
+    std::int32_t main_display_control{};
+    std::int32_t secondary_display_control{};
+    /** Plans, modes de sortie et sprites rencontrés et non dessinés. */
+    std::int32_t unimplemented_layers{};
+    std::int32_t unimplemented_display{};
+    std::int32_t unimplemented_objects{};
+    /**
+     * Lignes dessinées des mauvaises couleurs, faute de palette étendue.
+     *
+     * À part des trois précédents : ce n'est ni un plan absent ni un plan
+     * rendu, c'est un plan rendu de travers. Une image aux teintes fausses ne
+     * se cherche pas là où on cherche une image absente.
+     */
+    std::int32_t unimplemented_palettes{};
+    /**
+     * Pixels de la dernière image qui ne sont pas noirs.
+     *
+     * C'est la mesure qui tranche : zéro dit que le moteur n'a rien produit,
+     * et tout autre nombre dit qu'il a produit une image que l'écran n'a pas
+     * montrée. Les deux défauts n'ont rien à voir l'un avec l'autre.
+     */
+    std::int32_t non_black_pixels{};
+    /** Vrai quand les deux écrans sont échangés par le registre d'alimentation. */
+    bool screens_swapped{};
+    /** Commandes du port de cartouche qu'aucun code ne sert. */
+    std::int32_t cartridge_unsupported{};
+
+    /**
+     * Où chaque processeur se tient, et d'où il vient.
+     *
+     * Un compteur de programme seul dit où l'on est échoué, jamais comment on y
+     * est arrivé. Le mode dit si une exception a été prise, le registre de lien
+     * dit depuis quelle adresse le saut est parti, et la pile dit si le
+     * processeur en a seulement une : une pile nulle fait qu'un premier
+     * empilement écrit n'importe où, et le retour ramène n'importe quoi dans le
+     * compteur de programme.
+     */
+    std::int32_t main_mode{};
+    std::int32_t secondary_mode{};
+    std::int32_t main_stack_pointer{};
+    std::int32_t secondary_stack_pointer{};
+    std::int32_t main_link_register{};
+    std::int32_t secondary_link_register{};
+
+    /**
+     * Ce que le coprocesseur du processeur principal a décidé.
+     *
+     * La base des vecteurs dit où ses exceptions atterrissent, et la mémoire
+     * locale de données dit où le programme d'amorçage de secours va chercher
+     * l'adresse du gestionnaire du jeu : sans elle, il la cherche à l'adresse
+     * zéro et y trouve ce qui s'y trouve.
+     */
+    std::int32_t main_vector_base{};
+    std::int32_t main_dtcm_base{};
+    std::int32_t main_dtcm_size{};
+
+    /**
+     * Ce que chaque processeur attend, et ce qui l'attend.
+     *
+     * Un processeur arrêté attend une interruption : celles qu'il autorise
+     * disent laquelle, celles qui sont en attente disent si elle est arrivée.
+     * Les deux ensemble séparent « personne ne la lève » de « personne ne la
+     * ramasse », qui n'ont pas le même remède.
+     *
+     * Le mot de synchronisation est l'autre moitié : c'est par lui que les deux
+     * processeurs se donnent rendez-vous à l'amorçage, l'un posant une valeur et
+     * attendant que l'autre la lui renvoie.
+     */
+    std::int32_t main_interrupt_enable{};
+    std::int32_t main_interrupt_flags{};
+    std::int32_t secondary_interrupt_enable{};
+    std::int32_t secondary_interrupt_flags{};
+    std::int32_t main_sync{};
+    std::int32_t secondary_sync{};
 };
 
 /** POD mirror of the Kotlin GbaDebugSnapshot contract. */
@@ -150,6 +280,26 @@ public:
     [[nodiscard]] virtual FramebufferFormat framebuffer_format() const noexcept = 0;
     [[nodiscard]] virtual bool supports_video_frame_skipping() const noexcept { return false; }
 
+    /**
+     * Charge une image dont l'appelant cède la propriété.
+     *
+     * Une cartouche Nintendo DS pèse jusqu'à un demi-gigaoctet, et le chemin
+     * ordinaire la recopie : l'appelant en tient une, le cœur en garde une
+     * autre, et le sommet de mémoire vaut le double du fichier. Un cœur qui
+     * garde l'image peut la **prendre** au lieu de la copier, et c'est ce que
+     * cette surcharge permet.
+     *
+     * Le comportement par défaut recopie, comme avant : un cœur qui ne garde
+     * rien, ou qui garde autre chose que l'image telle quelle, n'a rien à
+     * gagner à la reprendre et n'a donc rien à redéfinir.
+     */
+    virtual void load_rom_owned(
+        std::vector<std::uint8_t>&& rom,
+        std::span<const std::uint8_t> battery_ram
+    ) {
+        load_rom(rom, battery_ram);
+    }
+
     virtual void load_rom(
         std::span<const std::uint8_t> rom,
         std::span<const std::uint8_t> battery_ram
@@ -157,6 +307,28 @@ public:
     virtual void reset() = 0;
     virtual void run_frame(std::span<std::int32_t> framebuffer, bool render_video) = 0;
     virtual void set_button(Button button, bool pressed) = 0;
+
+    /**
+     * Pose ou lève un contact sur l'écran tactile de la console.
+     *
+     * Les coordonnées sont **en pixels de l'écran tactile**, l'origine en haut
+     * à gauche. C'est à l'appelant de les y ramener depuis l'écran de
+     * l'appareil : lui seul sait comment il a disposé les deux écrans, et un
+     * cœur qui devinerait cette disposition se tromperait dès qu'elle change.
+     *
+     * Un contact hors de l'écran est ramené sur son bord plutôt que refusé : un
+     * doigt qui glisse au-delà d'une lisière est un geste ordinaire, et l'ignorer
+     * ferait disparaître le contact au lieu de le retenir au bord.
+     *
+     * Sans écran tactile, l'appel ne fait rien. Les consoles qui n'en ont pas
+     * sont la majorité, et leur imposer une redéfinition vide n'apprendrait rien
+     * à personne.
+     */
+    virtual void set_touch(bool down, int x, int y) noexcept {
+        static_cast<void>(down);
+        static_cast<void>(x);
+        static_cast<void>(y);
+    }
     virtual std::size_t read_audio(std::span<std::int16_t> destination) = 0;
     [[nodiscard]] virtual bool rumble_active() const noexcept { return false; }
 
@@ -172,6 +344,9 @@ public:
     virtual void set_measuring_time(bool) noexcept {}
     [[nodiscard]] virtual bool measuring_time() const noexcept { return false; }
     [[nodiscard]] virtual std::optional<GbaDebugSnapshot> debug_snapshot() const { return std::nullopt; }
+    [[nodiscard]] virtual std::optional<NdsDebugSnapshot> nds_debug_snapshot() const {
+        return std::nullopt;
+    }
     [[nodiscard]] virtual std::vector<DiagnosticMessage> drain_diagnostics() { return {}; }
     [[nodiscard]] virtual GbaSaveType gba_save_type() const noexcept { return GbaSaveType::none; }
     virtual void set_gba_forced_save_type(std::optional<GbaSaveType>) noexcept {}
@@ -187,5 +362,6 @@ public:
 
 [[nodiscard]] std::unique_ptr<Core> make_game_boy_core();
 [[nodiscard]] std::unique_ptr<Core> make_gba_core(std::optional<GbaSaveType> forced_save_type);
+[[nodiscard]] std::unique_ptr<Core> make_nds_core();
 
 } // namespace ravenemu

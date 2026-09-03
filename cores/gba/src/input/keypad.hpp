@@ -19,6 +19,8 @@ public:
         case Button::down: bit = 7; break;
         case Button::r: bit = 8; break;
         case Button::l: bit = 9; break;
+        // La Game Boy Advance n'a pas les deux touches de la Nintendo DS.
+        case Button::x: case Button::y: return;
         }
         if (pressed) pressed_bits |= 1 << bit;
         else pressed_bits &= ~(1 << bit);
