@@ -44,7 +44,13 @@ public:
     [[nodiscard]] Engine2d& engine(Engine which) noexcept {
         return which == Engine::main ? main_engine_ : secondary_engine_;
     }
+    // Les mêmes accès en lecture seule : un relevé consulte la console sans
+    // avoir le droit de la changer, et le type le dit plutôt que la coutume.
+    [[nodiscard]] const Engine2d& engine(Engine which) const noexcept {
+        return which == Engine::main ? main_engine_ : secondary_engine_;
+    }
     [[nodiscard]] DisplayController& display() noexcept { return display_; }
+    [[nodiscard]] const DisplayController& display() const noexcept { return display_; }
 
 private:
     // L'ordre compte : la palette et les attributs précèdent les moteurs, qui

@@ -88,6 +88,61 @@ struct DiagnosticMessage {
     std::string detail;
 };
 
+/**
+ * Ce que la Nintendo DS rencontre et ne sait pas encore faire.
+ *
+ * Un écran noir a plusieurs causes possibles, et rien à l'écran ne les
+ * distingue : un programme qui n'avance plus, un plan que ce moteur ne dessine
+ * pas, un registre qu'il ignore. Ce relevé les sépare. Il tient en entiers
+ * simples, parce qu'il traverse le pont natif et qu'un nombre y voyage sans
+ * cérémonie ; les nommer est le travail de la couche qui l'affiche.
+ *
+ * Il ne coûte rien : tous ces compteurs existaient déjà dans les organes, où ils
+ * grimpaient sans que personne ne les lise.
+ */
+struct NdsDebugSnapshot {
+    /** Instructions exécutées pendant la trame précédente, par processeur. */
+    std::int32_t main_instructions{};
+    std::int32_t secondary_instructions{};
+    /** Où chaque processeur en est, et s'il attend une interruption. */
+    std::int32_t main_program_counter{};
+    std::int32_t secondary_program_counter{};
+    bool main_halted{};
+    bool secondary_halted{};
+    /** Motifs d'instruction qu'aucun décodeur ne reconnaît. */
+    std::int32_t main_undefined_count{};
+    std::int32_t main_first_undefined{};
+    std::int32_t secondary_undefined_count{};
+    std::int32_t secondary_first_undefined{};
+    /** Registres d'entrée-sortie qu'aucun organe ne sert. */
+    std::int32_t main_unimplemented_io{};
+    std::int32_t main_first_unimplemented_io{};
+    std::int32_t secondary_unimplemented_io{};
+    std::int32_t secondary_first_unimplemented_io{};
+    /** Appels logiciels que le programme d'amorçage de secours ne connaît pas. */
+    std::int32_t main_unsupported_swi{};
+    std::int32_t secondary_unsupported_swi{};
+    /** Registre de composition de chacun des deux moteurs graphiques. */
+    std::int32_t main_display_control{};
+    std::int32_t secondary_display_control{};
+    /** Plans, modes de sortie et sprites rencontrés et non dessinés. */
+    std::int32_t unimplemented_layers{};
+    std::int32_t unimplemented_display{};
+    std::int32_t unimplemented_objects{};
+    /**
+     * Pixels de la dernière image qui ne sont pas noirs.
+     *
+     * C'est la mesure qui tranche : zéro dit que le moteur n'a rien produit,
+     * et tout autre nombre dit qu'il a produit une image que l'écran n'a pas
+     * montrée. Les deux défauts n'ont rien à voir l'un avec l'autre.
+     */
+    std::int32_t non_black_pixels{};
+    /** Vrai quand les deux écrans sont échangés par le registre d'alimentation. */
+    bool screens_swapped{};
+    /** Commandes du port de cartouche qu'aucun code ne sert. */
+    std::int32_t cartridge_unsupported{};
+};
+
 /** POD mirror of the Kotlin GbaDebugSnapshot contract. */
 struct GbaDebugSnapshot {
     std::int32_t instructions_per_frame{};
@@ -225,6 +280,9 @@ public:
     virtual void set_measuring_time(bool) noexcept {}
     [[nodiscard]] virtual bool measuring_time() const noexcept { return false; }
     [[nodiscard]] virtual std::optional<GbaDebugSnapshot> debug_snapshot() const { return std::nullopt; }
+    [[nodiscard]] virtual std::optional<NdsDebugSnapshot> nds_debug_snapshot() const {
+        return std::nullopt;
+    }
     [[nodiscard]] virtual std::vector<DiagnosticMessage> drain_diagnostics() { return {}; }
     [[nodiscard]] virtual GbaSaveType gba_save_type() const noexcept { return GbaSaveType::none; }
     virtual void set_gba_forced_save_type(std::optional<GbaSaveType>) noexcept {}

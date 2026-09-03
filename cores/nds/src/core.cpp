@@ -111,6 +111,17 @@ public:
 
     std::size_t read_audio(std::span<std::int16_t>) override { return 0; }
 
+    /**
+     * Ce que la console a rencontré et n'a pas su faire.
+     *
+     * Il n'y a rien à allumer pour l'obtenir : les compteurs tournent de toute
+     * façon dans les organes, et ce relevé les rassemble. Un appelant qui ne le
+     * demande pas ne paie rien.
+     */
+    [[nodiscard]] std::optional<NdsDebugSnapshot> nds_debug_snapshot() const override {
+        return machine_.report();
+    }
+
     [[nodiscard]] bool has_battery_ram() const noexcept override { return false; }
     [[nodiscard]] bool battery_ram_dirty() const noexcept override { return false; }
     std::optional<BatterySnapshot> snapshot_battery_ram() override { return std::nullopt; }

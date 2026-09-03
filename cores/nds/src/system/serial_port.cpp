@@ -157,7 +157,12 @@ std::uint8_t Touchscreen::exchange(std::uint8_t byte) noexcept {
     // conversion, si bien que l'octet haut en porte sept et l'octet bas cinq,
     // calés à gauche.
     --remaining_;
-    return static_cast<std::uint8_t>((pending_ >> (remaining_ * 8U)) & 0xffU);
+    // La valeur passe en non signé avant d'être décalée : sur seize bits elle
+    // serait promue en entier signé, et le compilateur signale à raison qu'un
+    // masque non signé posé dessus change de signe. Le résultat est le même,
+    // l'avertissement disparaît, et il n'y a plus rien à ignorer.
+    const auto value = static_cast<std::uint32_t>(pending_);
+    return static_cast<std::uint8_t>((value >> (remaining_ * 8U)) & 0xffU);
 }
 
 SerialPort::SerialPort(InterruptController& interrupts, const InputState& input) noexcept

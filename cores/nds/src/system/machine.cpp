@@ -122,6 +122,12 @@ void Machine::step(Processor side) {
     // et le balayage en pose sans que personne n'exécute quoi que ce soit.
     processor.set_irq_line(controller.line());
     processor.step();
+    // Un processeur arrêté ne compte pas : sans cette distinction, deux mille
+    // pas d'attente ressembleraient à deux mille instructions exécutées, et un
+    // programme figé passerait pour un programme qui travaille.
+    if (!processor.halted()) {
+        if (side == Processor::main) ++main_steps_; else ++secondary_steps_;
+    }
 
     // Un transfert armé a lieu entre deux instructions : le programme qui vient
     // de l'allumer trouve la copie faite dès l'instruction suivante, et non une
@@ -187,10 +193,66 @@ void Machine::run_line(std::span<std::int32_t> framebuffer) {
     }
 }
 
+std::int32_t Machine::count_non_black(std::span<const std::int32_t> framebuffer) noexcept {
+    std::int32_t lit = 0;
+    for (const auto pixel : framebuffer) {
+        // Seules les trois composantes comptent : une image opaque et noire
+        // reste noire, et la transparence n'est pas une couleur allumée.
+        if ((static_cast<std::uint32_t>(pixel) & 0x00ff'ffffU) != 0U) ++lit;
+    }
+    return lit;
+}
+
 void Machine::run_frame(std::span<std::int32_t> framebuffer) {
+    main_steps_ = 0;
+    secondary_steps_ = 0;
     for (std::uint32_t line = 0; line < DisplayController::total_lines; ++line) {
         run_line(framebuffer);
     }
+    main_steps_last_frame_ = main_steps_;
+    secondary_steps_last_frame_ = secondary_steps_;
+    non_black_pixels_ = count_non_black(framebuffer);
+}
+
+NdsDebugSnapshot Machine::report() const noexcept {
+    const auto number = [](std::uint32_t value) {
+        return static_cast<std::int32_t>(value);
+    };
+    // Les deux moteurs graphiques comptent chacun de son côté ; un écran noir ne
+    // dit pas lequel des deux a buté, et la somme suffit à dire qu'il y a buté.
+    const auto& main_engine = video_.engine(Engine::main);
+    const auto& secondary_engine = video_.engine(Engine::secondary);
+    return NdsDebugSnapshot{
+        .main_instructions = main_steps_last_frame_,
+        .secondary_instructions = secondary_steps_last_frame_,
+        .main_program_counter = number(main_core_.state().registers[15]),
+        .secondary_program_counter = number(secondary_core_.state().registers[15]),
+        .main_halted = main_core_.halted(),
+        .secondary_halted = secondary_core_.halted(),
+        .main_undefined_count = number(main_core_.unimplemented_count()),
+        .main_first_undefined = number(main_core_.first_unimplemented()),
+        .secondary_undefined_count = number(secondary_core_.unimplemented_count()),
+        .secondary_first_undefined = number(secondary_core_.first_unimplemented()),
+        .main_unimplemented_io = number(main_map_.unimplemented_io_count()),
+        .main_first_unimplemented_io = number(main_map_.first_unimplemented_io()),
+        .secondary_unimplemented_io = number(secondary_map_.unimplemented_io_count()),
+        .secondary_first_unimplemented_io = number(secondary_map_.first_unimplemented_io()),
+        .main_unsupported_swi = number(main_bios_.unsupported_count()),
+        .secondary_unsupported_swi = number(secondary_bios_.unsupported_count()),
+        .main_display_control = number(main_engine.display_control()),
+        .secondary_display_control = number(secondary_engine.display_control()),
+        .unimplemented_layers = number(
+            main_engine.unimplemented_layer_count() + secondary_engine.unimplemented_layer_count()),
+        .unimplemented_display = number(
+            main_engine.unimplemented_display_count()
+                + secondary_engine.unimplemented_display_count()),
+        .unimplemented_objects = number(
+            main_engine.unimplemented_object_count()
+                + secondary_engine.unimplemented_object_count()),
+        .non_black_pixels = non_black_pixels_,
+        .screens_swapped = video_.display().swapped(),
+        .cartridge_unsupported = number(cartridge_.unsupported_count()),
+    };
 }
 
 } // namespace ravenemu::nds

@@ -12,6 +12,7 @@
 #include "system/serial_port.hpp"
 #include "video/video_system.hpp"
 
+#include <ravenemu/core.hpp>
 #include <ravenemu/nds/cartridge_header.hpp>
 
 #include <cstdint>
@@ -183,9 +184,26 @@ public:
     /** Le balayage, que les deux processeurs consultent. */
     [[nodiscard]] DisplayController& display() noexcept { return video_.display(); }
 
+    /**
+     * Ce que la console a rencontré et n'a pas su faire, en un seul relevé.
+     *
+     * Rien n'est mesuré pour l'occasion : les compteurs vivent déjà dans les
+     * organes, et ce relevé ne fait que les rassembler. Il est donc sans effet
+     * sur la cadence, et peut être demandé à chaque trame.
+     */
+    [[nodiscard]] NdsDebugSnapshot report() const noexcept;
+
 private:
     /** Fait avancer un processeur d'une instruction, réveils compris. */
     void step(Processor side);
+
+    /**
+     * Compte les pixels de l'image qui ne sont pas noirs.
+     *
+     * Un écran resté noir ne dit pas de qui vient la faute. Ce compte la nomme :
+     * zéro accuse l'émulation, autre chose accuse l'affichage.
+     */
+    static std::int32_t count_non_black(std::span<const std::int32_t> framebuffer) noexcept;
 
     /**
      * Pose le réveil par les touches, pour chaque processeur qui l'a réglé.
@@ -229,6 +247,15 @@ private:
     Arm7MemoryMap secondary_map_;
     Arm9 main_core_;
     Arm7 secondary_core_;
+
+    // Relevé : instructions de la trame en cours, de la précédente, et pixels
+    // allumés de la dernière image. La trame en cours ne se lit pas — elle est
+    // incomplète tant qu'elle n'est pas finie.
+    std::int32_t main_steps_{};
+    std::int32_t secondary_steps_{};
+    std::int32_t main_steps_last_frame_{};
+    std::int32_t secondary_steps_last_frame_{};
+    std::int32_t non_black_pixels_{};
 
     // Les services du programme d'amorçage viennent après les cœurs : ils s'y
     // rattachent, et leur gestionnaire d'interruption a besoin du coprocesseur

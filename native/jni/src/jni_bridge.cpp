@@ -698,6 +698,42 @@ Java_com_ravenemu_nativebridge_NativeCoreBridge_debugSnapshot(
     });
 }
 
+/**
+ * Relevé de la Nintendo DS, rendu comme une suite de nombres.
+ *
+ * L'ordre est **le contrat** avec la couche Java, qui les renomme. Il est figé :
+ * une valeur s'ajoute à la fin, jamais au milieu, sinon le relevé se lirait de
+ * travers sans que rien ne s'en plaigne. Une vérification tient les deux
+ * longueurs ensemble.
+ */
+extern "C" JNIEXPORT jintArray JNICALL
+Java_com_ravenemu_nativebridge_NativeCoreBridge_ndsDebugSnapshot(
+    JNIEnv* env,
+    jclass,
+    jlong handle
+) {
+    return guarded<jintArray>(env, nullptr, [&]() -> jintArray {
+        const auto snapshot = core_from(handle).nds_debug_snapshot();
+        if (!snapshot) return nullptr;
+        const auto& value = *snapshot;
+        const std::array<std::int32_t, 24> scalars{
+            value.main_instructions, value.secondary_instructions,
+            value.main_program_counter, value.secondary_program_counter,
+            value.main_halted ? 1 : 0, value.secondary_halted ? 1 : 0,
+            value.main_undefined_count, value.main_first_undefined,
+            value.secondary_undefined_count, value.secondary_first_undefined,
+            value.main_unimplemented_io, value.main_first_unimplemented_io,
+            value.secondary_unimplemented_io, value.secondary_first_unimplemented_io,
+            value.main_unsupported_swi, value.secondary_unsupported_swi,
+            value.main_display_control, value.secondary_display_control,
+            value.unimplemented_layers, value.unimplemented_display,
+            value.unimplemented_objects, value.non_black_pixels,
+            value.screens_swapped ? 1 : 0, value.cartridge_unsupported,
+        };
+        return make_int_array(env, scalars);
+    });
+}
+
 extern "C" JNIEXPORT jobject JNICALL
 Java_com_ravenemu_nativebridge_NativeCoreBridge_drainDiagnostics(
     JNIEnv* env,

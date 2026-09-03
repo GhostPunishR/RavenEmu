@@ -469,6 +469,87 @@ void chaque_bloc_passe_par_la_carte_de_son_processeur() {
     );
 }
 
+/**
+ * Le relevé dit ce que la console a fait, et non ce qu'on espère.
+ *
+ * Un écran noir a plusieurs causes, et rien à l'écran ne les sépare. Le relevé
+ * les sépare : le compte des instructions dit si les processeurs avancent, le
+ * compte des pixels allumés dit si le moteur a produit une image. Deux pannes
+ * sans rapport, deux mesures distinctes.
+ */
+void le_releve_dit_ce_que_la_console_a_fait() {
+    auto cartridge = relay_cartridge();
+    const auto& image = cartridge.sealed();
+
+    Machine machine;
+    machine.boot(CartridgeHeader::parse(image), image);
+
+    // Avant toute trame, rien n'a tourné et rien n'a été dessiné.
+    const auto avant = machine.report();
+    check(avant.main_instructions == 0, "aucune instruction avant la première trame");
+    check(avant.secondary_instructions == 0, "des deux côtés");
+    check(avant.non_black_pixels == 0, "et aucun pixel allumé");
+
+    auto pixels = framebuffer();
+    machine.run_frame(pixels);
+    const auto apres = machine.report();
+
+    check(apres.main_instructions > 0, "le processeur principal a exécuté des instructions");
+    check(apres.secondary_instructions > 0, "le secondaire aussi");
+    check(!apres.main_halted, "et aucun des deux n'attend");
+    check(!apres.secondary_halted, "le secondaire non plus");
+
+    // L'écran du haut est entièrement bleu, celui du bas entièrement noir : le
+    // compte vaut donc exactement une moitié de tampon, écrite en toutes
+    // lettres plutôt que reprise à la constante qui la définit.
+    check(apres.non_black_pixels == 192 * 256, "un écran plein d'une couleur, l'autre noir");
+
+    // Les compteurs de manques restent muets : cette cartouche ne demande que
+    // ce que le moteur sait faire, et un compteur qui monterait ici accuserait
+    // à tort.
+    check(apres.unimplemented_layers == 0, "aucun plan laissé de côté");
+    check(apres.unimplemented_display == 0, "aucun mode de sortie laissé de côté");
+    check(apres.main_undefined_count == 0, "aucune instruction indéfinie");
+    check(apres.secondary_undefined_count == 0, "des deux côtés");
+
+    // Le relevé du cœur est celui de la machine : c'est par lui que
+    // l'application le lit, et un chemin qui ne rendrait rien laisserait
+    // l'écran noir sans explication.
+    auto core = make_core();
+    core->load_rom(image, {});
+    core->run_frame(pixels, true);
+    const auto par_le_coeur = core->nds_debug_snapshot();
+    check(par_le_coeur.has_value(), "le cœur rend son relevé");
+    check(par_le_coeur->non_black_pixels == 192 * 256, "et il porte les mêmes mesures");
+}
+
+/**
+ * Un processeur à l'arrêt ne compte pas d'instructions.
+ *
+ * Sans cette distinction, deux mille pas d'attente ressembleraient à deux mille
+ * instructions exécutées : un programme figé passerait pour un programme qui
+ * travaille, et le relevé accuserait l'affichage à la place de l'émulation.
+ */
+void un_processeur_arrete_ne_compte_pas() {
+    auto cartridge = relay_cartridge();
+    const auto& image = cartridge.sealed();
+
+    Machine machine;
+    machine.boot(CartridgeHeader::parse(image), image);
+    machine.core(Processor::main).halt();
+
+    auto pixels = framebuffer();
+    machine.run_frame(pixels);
+    const auto releve = machine.report();
+
+    check(releve.main_halted, "le processeur principal est resté à l'arrêt");
+    check(releve.main_instructions == 0, "et n'a compté aucune instruction");
+    check(releve.secondary_instructions > 0, "quand l'autre en a compté");
+    // Et l'écran est noir, faute du programme qui devait le peindre : c'est
+    // exactement la panne que le relevé doit savoir nommer.
+    check(releve.non_black_pixels == 0, "aucun pixel allumé");
+}
+
 } // namespace
 
 } // namespace ravenemu::nds::testing
@@ -483,5 +564,7 @@ int main() {
     un_bloc_de_taille_impaire_passe_par_mots();
     une_image_tronquee_ne_deborde_pas();
     chaque_bloc_passe_par_la_carte_de_son_processeur();
+    le_releve_dit_ce_que_la_console_a_fait();
+    un_processeur_arrete_ne_compte_pas();
     return 0;
 }

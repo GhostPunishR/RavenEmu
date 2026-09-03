@@ -29,6 +29,20 @@ Voir [[Installation]].
 
 Le moteur Game Boy Advance reste expérimental. Un écran noir peut être une incompatibilité du moteur.
 
+### Écran noir sur Nintendo DS
+
+Le moteur Nintendo DS est en construction. Il fait tourner les deux processeurs et dessine les plans de texte et les sprites, mais le moteur 3D, le son, les plans tournants, les fenêtres et les mélanges manquent encore. Beaucoup de jeux du commerce ne montreront donc rien, ou une image incomplète, sans que rien ne soit cassé.
+
+Pour savoir ce qui se passe, activez le compteur de performance dans Paramètres. Sur cette console, il affiche un relevé de quelques lignes:
+
+- `ARM9` et `ARM7`, avec `actif` ou `arrêt`, le nombre d'instructions de la dernière trame et la position dans le programme. Deux compteurs à zéro, ou deux `arrêt`, disent que la console n'avance plus;
+- `image`, avec le nombre de pixels allumés de la dernière trame. Zéro dit que le moteur n'a rien produit; un autre nombre dit qu'il a produit une image que l'écran n'a pas montrée, ce qui est un défaut d'affichage et non d'émulation;
+- `non dessiné`, quand un plan, un mode de sortie ou un sprite a été rencontré sans pouvoir être dessiné;
+- `ignoré`, quand un registre ou une commande de cartouche n'est servi par aucun organe, avec la première adresse en cause;
+- `buté`, quand une instruction n'a pas été reconnue ou qu'un appel du programme d'amorçage manque.
+
+Les trois dernières lignes n'apparaissent que si elles ont quelque chose à dire. Joignez ce relevé à votre rapport: il dit lequel des organes reprendre, et évite de chercher au mauvais endroit.
+
 ## Jeu trop lent
 
 - désactivez l'économie d'énergie;

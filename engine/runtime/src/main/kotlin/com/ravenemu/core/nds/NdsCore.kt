@@ -7,6 +7,7 @@ import com.ravenemu.emulation.api.EmulatorButton
 import com.ravenemu.emulation.api.EmulatorCore
 import com.ravenemu.emulation.api.FramebufferFormat
 import com.ravenemu.emulation.api.VideoSpec
+import com.ravenemu.core.nds.diag.NdsDebugSnapshot
 import com.ravenemu.nativebridge.NativeCoreBridge
 import com.ravenemu.nativebridge.NativeCoreHandle
 
@@ -50,6 +51,17 @@ class NdsCore : EmulatorCore, AutoCloseable {
     override val audio: AudioSpec = AudioSpec(32_768, 2)
 
     override val framebufferFormat: FramebufferFormat = FramebufferFormat.ARGB_8888
+
+    /**
+     * Ce que la console a rencontré et n'a pas su faire, ou `null` avant tout
+     * chargement.
+     *
+     * Rien n'est allumé pour l'obtenir : les compteurs tournent de toute façon
+     * dans le moteur, et le relevé ne fait que les rassembler. Il peut donc être
+     * demandé à chaque trame sans peser sur la cadence.
+     */
+    fun debugSnapshot(): NdsDebugSnapshot? =
+        NdsDebugSnapshot.of(NativeCoreBridge.ndsDebugSnapshot(handle()))
 
     override fun loadRom(rom: ByteArray, batteryRam: ByteArray?) {
         NativeCoreBridge.loadRom(handle(), rom, batteryRam)
