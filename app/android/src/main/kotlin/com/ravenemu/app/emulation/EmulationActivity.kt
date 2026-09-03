@@ -398,7 +398,7 @@ class EmulationActivity : RavenActivity(), EmulationSession.Callbacks {
     private fun loadFromDescriptor(core: EmulatorCore, battery: ByteArray?): Boolean =
         contentResolver.openFileDescriptor(romUri, "r")?.use { opened ->
             val size = opened.statSize
-            if (size < 0L) false else core.loadRomFromDescriptor(opened.fileDescriptor, size, battery)
+            if (size < 0L) false else core.loadRomFromDescriptor(opened.fd, size, battery)
         } ?: false
 
     private suspend fun startEmulation() {
@@ -417,7 +417,15 @@ class EmulationActivity : RavenActivity(), EmulationSession.Callbacks {
                 val data = repository.readRom(romUri) ?: error("ROM illisible")
                 newCore.loadRom(data, battery)
             }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
+            // `Throwable` et non `Exception`, délibérément. Charger une ROM
+            // choisie par le joueur peut échouer de deux façons qui ne sont pas
+            // des exceptions : un fichier trop gros pour le tas Java lève une
+            // `OutOfMemoryError`, et un champ interne refusé par Android une
+            // `NoSuchFieldError`. Ces erreurs traversent un rattrapage
+            // d'exceptions et tuent l'application, là où elles devraient donner
+            // un refus lisible. Aucun fichier ouvert par un joueur ne doit
+            // pouvoir arrêter RavenEmu.
             runCatching { (newCore as? AutoCloseable)?.close() }
             Toast.makeText(this, R.string.emulation_rom_error, Toast.LENGTH_LONG).show()
             finish()

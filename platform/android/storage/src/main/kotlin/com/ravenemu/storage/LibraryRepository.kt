@@ -71,7 +71,12 @@ class LibraryRepository(
             }
             val analysis = try {
                 analyse(analyzer, file, uriString)
-            } catch (_: Exception) {
+            } catch (_: Throwable) {
+                // `Throwable` et non `Exception` : un fichier trop gros pour le
+                // tas Java lève une `OutOfMemoryError`, qui n'est pas une
+                // exception et traverserait ce rattrapage jusqu'à tuer
+                // l'application. Un fichier écarté doit rester un fichier
+                // écarté, jamais un arrêt.
                 null
             }
             if (analysis == null) {
@@ -186,7 +191,7 @@ class LibraryRepository(
             // lui laisser un demi-gigaoctet ne ferait qu'échanger un refus
             // clair contre un manque de mémoire.
             scanner.readAll(uri, minOf(analyzers.maxOf { it.maxRomSizeBytes }, JAVA_HEAP_CEILING))
-        } catch (_: Exception) {
+        } catch (_: Throwable) {
             null
         }
     }

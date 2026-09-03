@@ -1,11 +1,10 @@
 #include "ravenemu/native/core_api.hpp"
 
+#include <ravenemu/read_exactly.hpp>
+
 #include <jni.h>
 
-#include <unistd.h>
-
 #include <array>
-#include <cerrno>
 #include <cstdint>
 #include <limits>
 #include <memory>
@@ -139,26 +138,6 @@ std::optional<ravenemu::GbaSaveType> gba_save_type_from(jint value) {
 std::optional<bool> forced_rtc_from(jint value) {
     if (value < 0) return std::nullopt;
     return value != 0;
-}
-
-/**
- * Numéro de descripteur porté par un `java.io.FileDescriptor`.
- *
- * L'objet ne l'expose pas publiquement, et la réflexion Java ne peut pas y
- * accéder : depuis le système de modules, `java.base` n'ouvre pas `java.io`.
- * L'accès aux champs par JNI, lui, n'est pas soumis à cette règle. C'est le
- * chemin ordinaire pour obtenir ce numéro depuis du code natif, et le seul qui
- * fonctionne aussi bien sous Android que sur une machine virtuelle de bureau.
- *
- * L'appelant garde la propriété du descripteur : rien n'est fermé ici.
- */
-int descriptor_of(JNIEnv* env, jobject file_descriptor) {
-    if (file_descriptor == nullptr) throw std::invalid_argument("Descripteur absent");
-    jclass type = env->FindClass("java/io/FileDescriptor");
-    if (type == nullptr) throw std::runtime_error("Classe FileDescriptor introuvable");
-    const auto field = env->GetFieldID(type, "fd", "I");
-    if (field == nullptr) throw std::runtime_error("Numéro de descripteur introuvable");
-    return static_cast<int>(env->GetIntField(file_descriptor, field));
 }
 
 std::vector<std::uint8_t> read_bytes(JNIEnv* env, jbyteArray source, bool nullable) {
@@ -321,6 +300,14 @@ Java_com_ravenemu_nativebridge_NativeCoreBridge_loadRom(
  * Lue ici, l'image ne touche jamais le tas Java, et le cœur la **prend** au
  * lieu de la recopier : un seul exemplaire existe, en mémoire native.
  *
+ * ### Pourquoi un numéro et non un `FileDescriptor`
+ *
+ * L'objet `java.io.FileDescriptor` ne publie pas son numéro, et le lire par
+ * JNI revient à toucher un champ interne : Android en restreint l'accès, et un
+ * champ refusé lève une `NoSuchFieldError`. Une erreur n'est pas une exception,
+ * et elle traverse les rattrapages ordinaires jusqu'à tuer l'application. Le
+ * numéro arrive donc tel quel, par l'interface publique qui le donne.
+ *
  * ### Ce que cette fonction ne fait pas
  *
  * Elle ne ferme pas le descripteur : il appartient à l'appelant, qui l'a
@@ -333,12 +320,11 @@ Java_com_ravenemu_nativebridge_NativeCoreBridge_loadRomFromDescriptor(
     JNIEnv* env,
     jclass,
     jlong handle,
-    jobject file_descriptor,
+    jint descriptor,
     jlong size_bytes,
     jbyteArray battery
 ) {
     guarded_void(env, [&] {
-        const auto descriptor = descriptor_of(env, file_descriptor);
         if (descriptor < 0) throw std::invalid_argument("Descripteur de fichier invalide");
         if (size_bytes < 0) throw std::invalid_argument("Taille de ROM négative");
         if (static_cast<std::uint64_t>(size_bytes) >
@@ -346,23 +332,7 @@ Java_com_ravenemu_nativebridge_NativeCoreBridge_loadRomFromDescriptor(
             throw std::invalid_argument("ROM trop volumineuse pour cette machine");
         }
 
-        std::vector<std::uint8_t> rom(static_cast<std::size_t>(size_bytes));
-        std::size_t total = 0;
-        while (total < rom.size()) {
-            const auto got = ::read(descriptor, rom.data() + total, rom.size() - total);
-            if (got < 0) {
-                // Une lecture interrompue par un signal n'est pas une erreur :
-                // elle se reprend là où elle s'est arrêtée.
-                if (errno == EINTR) continue;
-                throw std::runtime_error("Lecture de la ROM impossible");
-            }
-            // Zéro octet lu avant la fin annoncée : le fichier est plus court
-            // que sa taille déclarée. Charger le reste à zéro donnerait une
-            // cartouche tronquée qui démarre puis part n'importe où.
-            if (got == 0) throw std::runtime_error("ROM plus courte que sa taille annoncée");
-            total += static_cast<std::size_t>(got);
-        }
-
+        auto rom = ravenemu::read_exactly(descriptor, static_cast<std::size_t>(size_bytes));
         const auto battery_bytes = read_bytes(env, battery, true);
         core_from(handle).load_rom_owned(std::move(rom), battery_bytes);
     });

@@ -51,6 +51,11 @@ interface EmulatorCore {
      * dessous de ce que l'appareil permettrait : c'est ce plafond, et non le
      * matériel, qui refusait les grosses cartouches.
      *
+     * Le descripteur est un **numéro**, tel que `ParcelFileDescriptor.getFd`
+     * le donne, et non un `FileDescriptor`. Ce dernier ne publie pas son
+     * numéro : le lire revient à toucher un champ interne, dont Android
+     * restreint l'accès et dont le refus lève une erreur, non une exception.
+     *
      * Le descripteur reste la propriété de l'appelant : ce chemin ne le ferme
      * pas, et l'appelant doit le rendre lui-même.
      *
@@ -60,7 +65,7 @@ interface EmulatorCore {
      * @throws RomLoadException si la ROM est invalide ou non prise en charge.
      */
     fun loadRomFromDescriptor(
-        descriptor: java.io.FileDescriptor,
+        descriptor: Int,
         sizeBytes: Long,
         batteryRam: ByteArray? = null,
     ): Boolean = false

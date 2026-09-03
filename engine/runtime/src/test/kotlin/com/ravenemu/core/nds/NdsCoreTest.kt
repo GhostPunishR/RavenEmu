@@ -103,44 +103,36 @@ class NdsCoreTest {
      * fait qu'une image lue ainsi décrive la même cartouche qu'une image passée
      * en mémoire.
      */
+    /**
+     * Le chargement par descripteur traverse réellement le pont.
+     *
+     * Le numéro de descripteur ne s'obtient pas portablement depuis une machine
+     * virtuelle de bureau : `FileDescriptor` ne le publie pas, et la réflexion
+     * y est refusée depuis le système de modules. Ce que cette vérification
+     * établit est donc ce qui ne peut l'être qu'ici : que le symbole natif
+     * existe et se lie, et qu'il refuse proprement ce qu'il doit refuser. La
+     * lecture elle-même est éprouvée côté C++, sur un vrai fichier.
+     *
+     * Ce refus doit être une **exception**. Une erreur traverserait les
+     * rattrapages de l'application jusqu'à l'arrêter, ce qui est exactement ce
+     * qu'un fichier choisi par un joueur ne doit jamais pouvoir provoquer.
+     */
     @Test
-    fun `une ROM se charge depuis un descripteur de fichier`() {
-        val image = NdsCartridge.image()
-        val fichier = java.io.File.createTempFile("ravenemu", ".nds")
-        try {
-            fichier.writeBytes(image)
-            java.io.RandomAccessFile(fichier, "r").use { ouvert ->
-                core().use { c ->
-                    assertTrue(
-                        c.loadRomFromDescriptor(ouvert.fd, image.size.toLong()),
-                        "le cœur Nintendo DS sait charger par descripteur",
-                    )
-                    val pixels = IntArray(c.video.pixelCount)
-                    c.runFrame(pixels)
-                    assertEquals(256 * 384, pixels.size)
-                }
+    fun `le chargement par descripteur refuse proprement un descripteur invalide`() {
+        core().use { c ->
+            // Exiger une exception, c'est exiger que ce ne soit pas une erreur :
+            // `Error` ne descend pas d'`Exception`, et une erreur ferait échouer
+            // cette attente au lieu de passer inaperçue.
+            assertFailsWith<Exception> {
+                c.loadRomFromDescriptor(descriptor = -1, sizeBytes = 16L)
             }
-        } finally {
-            fichier.delete()
         }
-    }
-
-    /** Un fichier plus court que sa taille annoncée est refusé, non complété. */
-    @Test
-    fun `une ROM plus courte que sa taille annoncee est refusee`() {
-        val image = NdsCartridge.image()
-        val fichier = java.io.File.createTempFile("ravenemu", ".nds")
-        try {
-            fichier.writeBytes(image)
-            java.io.RandomAccessFile(fichier, "r").use { ouvert ->
-                core().use { c ->
-                    assertFailsWith<Exception> {
-                        c.loadRomFromDescriptor(ouvert.fd, image.size.toLong() * 2L)
-                    }
-                }
+        core().use { c ->
+            // Un numéro qu'aucun fichier n'occupe : la lecture échoue, et le
+            // refus reste une exception.
+            assertFailsWith<Exception> {
+                c.loadRomFromDescriptor(descriptor = 100_000, sizeBytes = 16L)
             }
-        } finally {
-            fichier.delete()
         }
     }
 
@@ -153,7 +145,7 @@ class NdsCoreTest {
     @Test
     fun `une console sans ce chemin le dit au lieu d'echouer`() {
         val gb = com.ravenemu.core.gb.GameBoyCore()
-        assertFalse(gb.loadRomFromDescriptor(java.io.FileDescriptor(), sizeBytes = 0L))
+        assertFalse(gb.loadRomFromDescriptor(descriptor = 0, sizeBytes = 0L))
     }
 
     @Test

@@ -63,7 +63,7 @@ class NdsCore : EmulatorCore, AutoCloseable {
      * exemplaire existe, en mémoire native.
      */
     override fun loadRomFromDescriptor(
-        descriptor: java.io.FileDescriptor,
+        descriptor: Int,
         sizeBytes: Long,
         batteryRam: ByteArray?,
     ): Boolean {
