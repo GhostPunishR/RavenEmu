@@ -27,6 +27,7 @@ import com.ravenemu.deltaskin.DeltaSkinErrorCode
 import com.ravenemu.deltaskin.DeltaSkinInsets
 import com.ravenemu.deltaskin.DeltaSkinRepresentationKind
 import com.ravenemu.deltaskin.DeltaSkinRepository
+import com.ravenemu.deltaskin.DeltaSkinScreenPlacement
 import com.ravenemu.emulation.api.ConsoleType
 import com.ravenemu.emulation.api.audio.AudioTransportStats
 import com.ravenemu.emulation.api.EmulatorCore
@@ -41,6 +42,8 @@ import com.ravenemu.input.DeltaSkinPdfRenderer
 import com.ravenemu.input.GamepadMapper
 import com.ravenemu.input.TouchControlsView
 import com.ravenemu.renderer.EmulatorSurfaceView
+import com.ravenemu.renderer.ScreenPlacement
+import kotlin.math.round
 import com.ravenemu.romlibrary.RomEntry
 import com.ravenemu.settings.AppSettings
 import com.ravenemu.emulation.api.display.DisplayAdjustments
@@ -253,18 +256,27 @@ class EmulationActivity : RavenActivity(), EmulationSession.Callbacks {
                 showEmulatorMenu()
             }
 
-            override fun onSkinReady(gameArea: android.graphics.Rect) {
+            override fun onSkinReady(
+                gameArea: android.graphics.Rect,
+                screens: List<DeltaSkinScreenPlacement>,
+            ) {
                 customSkinActive = true
                 controls.visibility = View.GONE
                 editorPanel.visibility = View.GONE
                 surface.contentBounds = gameArea
+                surface.screenPlacements = screens.map(::toPlacement)
                 surface.keepAspectRatio = true
                 surface.integerScaling = settings.integerScaling
                 surface.topAligned = false
             }
 
-            override fun onSkinLayoutChanged(gameArea: android.graphics.Rect) {
-                if (customSkinActive) surface.contentBounds = gameArea
+            override fun onSkinLayoutChanged(
+                gameArea: android.graphics.Rect,
+                screens: List<DeltaSkinScreenPlacement>,
+            ) {
+                if (!customSkinActive) return
+                surface.contentBounds = gameArea
+                surface.screenPlacements = screens.map(::toPlacement)
             }
 
             override fun onSkinError(code: DeltaSkinErrorCode) {
@@ -351,12 +363,39 @@ class EmulationActivity : RavenActivity(), EmulationSession.Callbacks {
         }
     }
 
+    /**
+     * Passe un emplacement d'écran du vocabulaire des skins à celui du rendu.
+     *
+     * Les deux mondes se rencontrent ici et nulle part ailleurs : le module des
+     * skins raisonne en réels, parce qu'un cadre de manifeste n'est pas un
+     * pixel, et l'affichage en pixels entiers de la vue.
+     */
+    private fun toPlacement(
+        placement: DeltaSkinScreenPlacement,
+    ): ScreenPlacement = ScreenPlacement(
+        source = placement.source?.let { frame ->
+            android.graphics.Rect(
+                round(frame.x).toInt(),
+                round(frame.y).toInt(),
+                round(frame.x + frame.width).toInt(),
+                round(frame.y + frame.height).toInt(),
+            )
+        },
+        destination = android.graphics.Rect(
+            round(placement.destination.left).toInt(),
+            round(placement.destination.top).toInt(),
+            round(placement.destination.right).toInt(),
+            round(placement.destination.bottom).toInt(),
+        ),
+    )
+
     private fun showClassicControls() {
         customSkinActive = false
         activeDeltaSkinSha256 = null
         deltaSkinControls.setConfiguration(null)
         controls.visibility = View.VISIBLE
         surface.contentBounds = null
+        surface.screenPlacements = emptyList()
         applyVideoSettings()
     }
 

@@ -169,7 +169,27 @@ data class DeltaSkinRepresentation(
     val translucent: Boolean = false,
     val gameScreenFrame: DeltaSkinFrame? = null,
     val screens: List<DeltaSkinScreen> = emptyList(),
-)
+) {
+    /**
+     * Les écrans que cette représentation place elle-même, sous une seule
+     * forme.
+     *
+     * Delta a deux écritures pour la même chose : `screens`, qui sait en
+     * décrire plusieurs et découper le tampon, et `gameScreenFrame`, plus
+     * ancienne, qui n'en pose qu'un et prend le tampon entier. Les laisser
+     * toutes deux aux appelants aurait fait deux chemins pour un seul cas, dont
+     * l'un se serait fait oublier.
+     *
+     * Vide quand le skin ne place rien : le jeu prend alors la place laissée
+     * au-dessus du panneau, comme sur les skins des consoles à un seul écran.
+     */
+    val declaredScreens: List<DeltaSkinScreen>
+        get() = when {
+            screens.isNotEmpty() -> screens
+            gameScreenFrame != null -> listOf(DeltaSkinScreen(outputFrame = gameScreenFrame))
+            else -> emptyList()
+        }
+}
 
 @Serializable
 data class DeltaSkinAssets(

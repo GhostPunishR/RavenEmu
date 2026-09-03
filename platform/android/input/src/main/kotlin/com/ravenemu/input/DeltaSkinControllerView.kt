@@ -28,6 +28,7 @@ import com.ravenemu.deltaskin.DeltaSkinRepresentation
 import com.ravenemu.deltaskin.DeltaSkinRepresentationKind
 import com.ravenemu.deltaskin.DeltaSkinRepresentationPreference
 import com.ravenemu.deltaskin.DeltaSkinRepresentationSelector
+import com.ravenemu.deltaskin.DeltaSkinScreenPlacement
 import com.ravenemu.deltaskin.DeltaSkinSize
 import com.ravenemu.deltaskin.DeltaSkinTouchPoint
 import com.ravenemu.deltaskin.DeltaSkinVisualTarget
@@ -65,8 +66,16 @@ class DeltaSkinControllerView @JvmOverloads constructor(
     interface Listener {
         fun onButtonChanges(changes: DeltaSkinButtonChanges)
         fun onMenu()
-        fun onSkinReady(gameArea: Rect)
-        fun onSkinLayoutChanged(gameArea: Rect)
+        /**
+         * Le skin est prêt : le jeu occupe [gameArea].
+         *
+         * [screens] dit où chaque écran de la console se pose quand le skin le
+         * décide lui-même, et reste vide sinon. Une Nintendo DS en a deux, que
+         * le skin sépare d'une charnière dessinée : les poser d'un bloc dans
+         * [gameArea] étalerait l'image par-dessus.
+         */
+        fun onSkinReady(gameArea: Rect, screens: List<DeltaSkinScreenPlacement>)
+        fun onSkinLayoutChanged(gameArea: Rect, screens: List<DeltaSkinScreenPlacement>)
         fun onSkinError(code: DeltaSkinErrorCode)
 
         /**
@@ -308,13 +317,14 @@ class DeltaSkinControllerView @JvmOverloads constructor(
             insets = safeInsets,
             mappingSize = asset.representation.mappingSize,
             nativeScreenSize = config.nativeScreenSize,
+            declaredScreens = asset.representation.declaredScreens,
         ) ?: return fail(DeltaSkinErrorCode.INVALID_MAPPING_SIZE)
 
         val previousLayout = currentLayout
         currentLayout = layout
         mapper = DeltaSkinInputMapper(config.console, asset.representation, layout.panel)
         if (ready && previousLayout != layout) {
-            listener?.onSkinLayoutChanged(layout.gameArea.toAndroidRect())
+            listener?.onSkinLayoutChanged(layout.gameArea.toAndroidRect(), layout.screens)
         }
 
         val targetWidth = layout.panel.width.toInt().coerceAtLeast(1)
@@ -364,7 +374,7 @@ class DeltaSkinControllerView @JvmOverloads constructor(
         val layout = currentLayout ?: return
         ready = true
         visibility = VISIBLE
-        listener?.onSkinReady(layout.gameArea.toAndroidRect())
+        listener?.onSkinReady(layout.gameArea.toAndroidRect(), layout.screens)
     }
 
     private fun fail(code: DeltaSkinErrorCode) {
