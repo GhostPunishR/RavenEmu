@@ -716,7 +716,7 @@ Java_com_ravenemu_nativebridge_NativeCoreBridge_ndsDebugSnapshot(
         const auto snapshot = core_from(handle).nds_debug_snapshot();
         if (!snapshot) return nullptr;
         const auto& value = *snapshot;
-        const std::array<std::int32_t, 24> scalars{
+        const std::array<std::int32_t, 26> scalars{
             value.main_instructions, value.secondary_instructions,
             value.main_program_counter, value.secondary_program_counter,
             value.main_halted ? 1 : 0, value.secondary_halted ? 1 : 0,
@@ -729,6 +729,7 @@ Java_com_ravenemu_nativebridge_NativeCoreBridge_ndsDebugSnapshot(
             value.unimplemented_layers, value.unimplemented_display,
             value.unimplemented_objects, value.non_black_pixels,
             value.screens_swapped ? 1 : 0, value.cartridge_unsupported,
+            value.main_first_unsupported_swi, value.secondary_first_unsupported_swi,
         };
         return make_int_array(env, scalars);
     });

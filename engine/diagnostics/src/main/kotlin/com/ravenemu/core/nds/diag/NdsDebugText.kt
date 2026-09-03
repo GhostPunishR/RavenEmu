@@ -53,8 +53,14 @@ fun NdsDebugSnapshot.toDiagnosticText(fps: Double, frameTimeMs: Double): String 
         if (secondaryUndefined > 0) {
             add("indéf.7 %,d dès %08X".format(secondaryUndefined, secondaryFirstUndefined))
         }
-        if (mainUnsupportedSwi > 0) add("BIOS9 %,d".format(mainUnsupportedSwi))
-        if (secondaryUnsupportedSwi > 0) add("BIOS7 %,d".format(secondaryUnsupportedSwi))
+        // Le numéro de l'appel accompagne le compte : c'est lui qui dit quel
+        // service écrire, quand le compte ne dit que qu'il en manque un.
+        if (mainUnsupportedSwi > 0) {
+            add("BIOS9 %,d dès n° %02X".format(mainUnsupportedSwi, mainFirstUnsupportedSwi))
+        }
+        if (secondaryUnsupportedSwi > 0) {
+            add("BIOS7 %,d dès n° %02X".format(secondaryUnsupportedSwi, secondaryFirstUnsupportedSwi))
+        }
     }
     if (fautes.isNotEmpty()) lignes += "buté : " + fautes.joinToString("  ")
 

@@ -249,6 +249,8 @@ NdsDebugSnapshot Machine::report() const noexcept {
         .secondary_first_unimplemented_io = number(secondary_map_.first_unimplemented_io()),
         .main_unsupported_swi = number(main_bios_.unsupported_count()),
         .secondary_unsupported_swi = number(secondary_bios_.unsupported_count()),
+        .main_first_unsupported_swi = number(main_bios_.first_unsupported()),
+        .secondary_first_unsupported_swi = number(secondary_bios_.first_unsupported()),
         .main_display_control = number(main_engine.display_control()),
         .secondary_display_control = number(secondary_engine.display_control()),
         .unimplemented_layers = number(

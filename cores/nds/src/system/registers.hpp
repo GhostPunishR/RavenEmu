@@ -16,6 +16,14 @@ inline constexpr std::uint32_t queue_control = 0x0400'0184;
 inline constexpr std::uint32_t queue_send = 0x0400'0188;
 inline constexpr std::uint32_t queue_receive = 0x0410'0000;
 inline constexpr std::uint32_t interrupt_master = 0x0400'0208;
+/**
+ * Étendue du registre d'autorisation générale.
+ *
+ * Quatre octets, dont un seul porte quelque chose. Les trois autres existent
+ * bel et bien : un programme qui écrit ce registre d'un mot les touche, et les
+ * tenir pour inconnus faisait passer une écriture ordinaire pour une anomalie.
+ */
+inline constexpr std::uint32_t interrupt_master_bytes = 4;
 inline constexpr std::uint32_t interrupt_enable = 0x0400'0210;
 inline constexpr std::uint32_t interrupt_request = 0x0400'0214;
 

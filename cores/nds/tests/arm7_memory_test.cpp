@@ -307,6 +307,47 @@ void sans_part_le_secondaire_retombe_sur_sa_memoire_propre() {
     );
 }
 
+/**
+ * L’autorisation générale occupe quatre octets, et les quatre sont servis.
+ *
+ * Un programme écrit ce registre d’un mot entier, ce qui touche ses quatre
+ * octets. Un seul était décodé : les trois autres étaient comptés comme des
+ * registres inconnus, à chaque écriture. Un vrai jeu en a produit plus de deux
+ * mille en une trame, et cette avalanche cachait la première adresse vraiment
+ * inconnue, seule utile.
+ *
+ * L’adresse est écrite en toutes lettres : la reprendre à la constante qui la
+ * définit accepterait n’importe quelle valeur.
+ */
+void l_autorisation_generale_occupe_quatre_octets() {
+    Console console;
+    constexpr std::uint32_t master = 0x0400'0208;
+
+    console.secondary_map.write32(master, 0xffff'ffffU);
+    check(console.secondary_map.read32(master) == 1U, "seul le bit bas est retenu");
+    check(
+        console.secondary_map.unimplemented_io_count() == 0U,
+        "et aucun des quatre octets n’est tenu pour inconnu"
+    );
+
+    // Chaque octet pris à part, en lecture comme en écriture : c’est la garniture
+    // qui manquait, et elle se lit nulle.
+    for (std::uint32_t part = 1; part < 4U; ++part) {
+        check(console.secondary_map.read8(master + part) == 0U, "la garniture se lit nulle");
+        console.secondary_map.write8(master + part, 0xffU);
+    }
+    check(console.secondary_map.read32(master) == 1U, "la garniture ne décide de rien");
+    check(
+        console.secondary_map.unimplemented_io_count() == 0U,
+        "et rien de tout cela n’est une lacune"
+    );
+
+    // Le mot remis à zéro passe aussi par les quatre octets.
+    console.secondary_map.write32(master, 0U);
+    check(console.secondary_map.read32(master) == 0U, "l’autorisation se retire");
+    check(console.secondary_map.unimplemented_io_count() == 0U, "toujours sans lacune");
+}
+
 void le_partage_se_constate_mais_ne_se_decide_pas() {
     Console console;
     console.share(2);
@@ -477,6 +518,7 @@ int main() {
     le_partage_de_la_memoire_commune_est_complementaire();
     chacun_ecrit_dans_sa_part_sans_toucher_a_l_autre();
     sans_part_le_secondaire_retombe_sur_sa_memoire_propre();
+    l_autorisation_generale_occupe_quatre_octets();
     le_partage_se_constate_mais_ne_se_decide_pas();
     le_programme_d_amorcage_se_lit_et_ne_s_ecrit_pas();
     ce_qui_n_existe_pas_encore_est_signale();

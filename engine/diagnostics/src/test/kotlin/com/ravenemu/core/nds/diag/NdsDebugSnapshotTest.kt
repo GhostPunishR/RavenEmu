@@ -56,23 +56,25 @@ class NdsDebugSnapshotTest {
         assertEquals(121, snapshot.nonBlackPixels)
         assertTrue(snapshot.screensSwapped)
         assertEquals(123, snapshot.cartridgeUnsupported)
+        assertEquals(124, snapshot.mainFirstUnsupportedSwi)
+        assertEquals(125, snapshot.secondaryFirstUnsupportedSwi)
     }
 
     /**
      * Une suite d'une autre longueur est refusée plutôt que lue en partie.
      *
      * Un relevé décalé est pire que pas de relevé : il désigne un coupable, et
-     * ce n'est pas le bon. Vingt-quatre est écrit en toutes lettres, parce que
+     * ce n'est pas le bon. Vingt-six est écrit en toutes lettres, parce que
      * c'est la promesse du pont et non une conséquence de la classe.
      */
     @Test
     fun `une suite mal dimensionnee est refusee`() {
-        assertEquals(24, NdsDebugSnapshot.VALUE_COUNT)
+        assertEquals(26, NdsDebugSnapshot.VALUE_COUNT)
         assertNull(NdsDebugSnapshot.of(null))
         assertNull(NdsDebugSnapshot.of(IntArray(0)))
-        assertNull(NdsDebugSnapshot.of(IntArray(23)))
         assertNull(NdsDebugSnapshot.of(IntArray(25)))
-        assertNotNull(NdsDebugSnapshot.of(IntArray(24)))
+        assertNull(NdsDebugSnapshot.of(IntArray(27)))
+        assertNotNull(NdsDebugSnapshot.of(IntArray(26)))
     }
 
     /**
@@ -127,6 +129,13 @@ class NdsDebugSnapshotTest {
             mainFirstUndefined = 0x0200_0010,
         ).toDiagnosticText(60.0, 4.0)
         assertTrue(avecFaute.contains("buté : indéf.9 5 dès 02000010"), avecFaute)
+
+        // Le compte seul ne dit pas quel service écrire : le numéro le dit.
+        val avecAppel = sain().copy(
+            secondaryUnsupportedSwi = 2,
+            secondaryFirstUnsupportedSwi = 0x08,
+        ).toDiagnosticText(60.0, 4.0)
+        assertTrue(avecAppel.contains("buté : BIOS7 2 dès n° 08"), avecAppel)
     }
 
     /**
@@ -168,5 +177,7 @@ class NdsDebugSnapshotTest {
         nonBlackPixels = 49_152,
         screensSwapped = false,
         cartridgeUnsupported = 0,
+        mainFirstUnsupportedSwi = 0,
+        secondaryFirstUnsupportedSwi = 0,
     )
 }

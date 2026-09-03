@@ -554,6 +554,39 @@ void les_banques_video_repondent_par_leur_fenetre() {
     }
 }
 
+/**
+ * L’autorisation générale occupe quatre octets ici aussi.
+ *
+ * Le défaut était le même sur les deux cartes, et le corriger d’un seul côté
+ * aurait laissé le processeur principal noyer le relevé à lui tout seul.
+ * L’adresse est écrite en toutes lettres.
+ */
+void l_autorisation_generale_occupe_quatre_octets() {
+    SystemMemory system;
+    InterruptController main_interrupts;
+    InterruptController secondary_interrupts;
+    InterProcessor link{main_interrupts, secondary_interrupts};
+    InputState input{};
+    VideoSystem video{main_interrupts, secondary_interrupts};
+    Cartridge cartridge{main_interrupts, secondary_interrupts};
+    Arm9MemoryMap map{system, video, link, main_interrupts, input, cartridge};
+    system.reset();
+    video.reset();
+    map.reset();
+
+    constexpr std::uint32_t master = 0x0400'0208;
+    map.write32(master, 0xffff'ffffU);
+    check(map.read32(master) == 1U, "seul le bit bas est retenu");
+    check(map.unimplemented_io_count() == 0U, "et les quatre octets sont servis");
+
+    for (std::uint32_t part = 1; part < 4U; ++part) {
+        check(map.read8(master + part) == 0U, "la garniture se lit nulle");
+        map.write8(master + part, 0xffU);
+    }
+    check(map.read32(master) == 1U, "la garniture ne décide de rien");
+    check(map.unimplemented_io_count() == 0U, "et rien de tout cela n’est une lacune");
+}
+
 void les_registres_de_la_carte_se_relisent() {
     SystemMemory system;
     InterruptController main_interrupts;
@@ -973,6 +1006,7 @@ int main() {
     un_octet_seul_n_entre_pas_partout();
     le_partage_de_la_memoire_commune();
     les_banques_video_repondent_par_leur_fenetre();
+    l_autorisation_generale_occupe_quatre_octets();
     les_registres_de_la_carte_se_relisent();
     les_registres_des_moteurs_repondent_a_leurs_adresses();
     une_banque_se_remplit_par_le_transfert_puis_se_montre_au_moteur();

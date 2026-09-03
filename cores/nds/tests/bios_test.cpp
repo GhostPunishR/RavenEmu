@@ -600,13 +600,13 @@ void le_defiltrage_additionne_les_differences() {
     check(console.memory().read16(scratch_output + 4U) == 0x5a5aU, "et deux demi-mots, pas trois");
 }
 
-/** Un appel que cet organe ne couvre pas redescend au vecteur du matériel. */
-void un_appel_inconnu_redescend_au_vecteur() {
+/** Un appel que cet organe ne couvre pas est compté, et rend la main. */
+void un_appel_inconnu_est_compte_et_rend_la_main() {
     Console console;
     constexpr std::uint32_t unknown = 0x7fU;
     check(
-        !console.bios().handle_software_interrupt(unknown),
-        "l'appel inconnu n'est pas servi"
+        console.bios().handle_software_interrupt(unknown),
+        "l’appel inconnu ne redescend pas au vecteur"
     );
     check(console.bios().unsupported_count() == 1U, "il est compté");
     check(console.bios().first_unsupported() == unknown, "et son numéro retenu");
@@ -713,27 +713,39 @@ void le_rejet_des_anciens_indicateurs_se_demande() {
 }
 
 /**
- * Un appel non couvert prend le chemin du matériel, et s'y arrête visiblement.
+ * Un appel non couvert ne coûte que cet appel : le programme continue.
  *
- * Vu depuis le programme, et non depuis l'organe : c'est le cœur qui décide de
- * redescendre au vecteur, et l'appeler directement ne l'éprouverait pas. Le
- * vecteur d'appel superviseur porte un branchement sur lui-même, si bien que le
- * programme s'y arrête au lieu de traverser la région à la dérive.
+ * Vu depuis le programme, et non depuis l’organe : l’appeler directement
+ * n’éprouverait pas le chemin que suit le processeur.
+ *
+ * Cette vérification a d’abord dit le contraire. L’appel redescendait au
+ * vecteur, où la table posée par cet organe porte un branchement sur lui-même :
+ * un seul service manquant arrêtait donc le processeur pour de bon. Un vrai jeu
+ * l’a montré : processeur secondaire figé à l’adresse huit, processeur
+ * principal tournant dans le vide en l’attendant. Un service qui manque doit
+ * coûter ce service, pas la console.
+ *
+ * Le registre écrit après l’appel est la preuve du passage : le lire prouve que
+ * l’instruction suivante a bien été atteinte, ce qu’une adresse de retour ne
+ * dirait qu’à demi.
  */
-void un_appel_non_couvert_s_arrete_sur_son_vecteur() {
+void un_appel_non_couvert_laisse_le_programme_continuer() {
     Console console;
     constexpr std::uint32_t unknown = 0x7fU;
+    constexpr std::uint32_t witness = 0x2aU;
     console.cartridge.set_code(arm7_rom_offset, {
         software_interrupt(unknown),
+        mov_immediate(0U, witness),
         branch(0),
     });
     console.boot();
     console.run_frame();
 
+    const auto& state = console.machine.core(Processor::secondary).state();
+    check(state.registers[0] == witness, "l’instruction suivant l’appel a été exécutée");
     check(
-        console.machine.core(Processor::secondary).state().registers[15] ==
-            ArmCore::software_interrupt_vector,
-        "le programme s'est arrêté sur le vecteur d'appel superviseur"
+        state.registers[15] != ArmCore::software_interrupt_vector,
+        "et le programme ne s’est pas arrêté sur le vecteur"
     );
     check(console.bios(Processor::secondary).unsupported_count() == 1U, "l'appel est compté");
     check(console.bios(Processor::secondary).first_unsupported() == unknown, "et son numéro retenu");
@@ -909,9 +921,9 @@ int main() {
     la_decompression_par_distance();
     le_defiltrage_additionne_les_differences();
     les_numeros_d_appel_sont_ceux_du_materiel();
-    un_appel_inconnu_redescend_au_vecteur();
+    un_appel_inconnu_est_compte_et_rend_la_main();
     le_rejet_des_anciens_indicateurs_se_demande();
-    un_appel_non_couvert_s_arrete_sur_son_vecteur();
+    un_appel_non_couvert_laisse_le_programme_continuer();
     un_appel_ecrit_en_thumb_est_servi_de_meme();
     chaque_processeur_est_servi_par_son_organe();
     une_attente_sans_source_ne_s_endort_pas();

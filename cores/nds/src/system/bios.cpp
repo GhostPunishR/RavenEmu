@@ -206,8 +206,20 @@ bool Bios::handle_software_interrupt(std::uint32_t number) {
     default:
         break;
     }
+    // Un appel non couvert est **compté et passé**, non renvoyé au vecteur.
+    //
+    // Le renvoyer avait l’air prudent : le programme y aurait trouvé ce que la
+    // mémoire contient, et un jeu qui installe son propre gestionnaire y aurait
+    // été servi. Mais la table posée ici ne contient qu’un branchement sur
+    // place, si bien qu’un seul service manquant arrêtait le processeur pour de
+    // bon. On l’a vu : un processeur secondaire figé à l’adresse huit, et un
+    // processeur principal qui tournait dans le vide en l’attendant.
+    //
+    // Passer est moins juste qu’un service rendu, et le relevé le dit en nommant
+    // l’appel. Mais un service qui manque doit coûter ce service, pas la
+    // console entière.
     note_unsupported(number);
-    return false;
+    return true;
 }
 
 void Bios::soft_reset() {

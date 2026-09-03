@@ -119,9 +119,17 @@ struct NdsDebugSnapshot {
     std::int32_t main_first_unimplemented_io{};
     std::int32_t secondary_unimplemented_io{};
     std::int32_t secondary_first_unimplemented_io{};
-    /** Appels logiciels que le programme d'amorçage de secours ne connaît pas. */
+    /**
+     * Appels logiciels que le programme d'amorçage de secours ne connaît pas,
+     * et le **numéro** du premier rencontré de chaque côté.
+     *
+     * Le compte seul ne sert à rien : il dit qu'un service manque sans dire
+     * lequel, et il y en a une trentaine. Le numéro dit lequel écrire.
+     */
     std::int32_t main_unsupported_swi{};
     std::int32_t secondary_unsupported_swi{};
+    std::int32_t main_first_unsupported_swi{};
+    std::int32_t secondary_first_unsupported_swi{};
     /** Registre de composition de chacun des deux moteurs graphiques. */
     std::int32_t main_display_control{};
     std::int32_t secondary_display_control{};

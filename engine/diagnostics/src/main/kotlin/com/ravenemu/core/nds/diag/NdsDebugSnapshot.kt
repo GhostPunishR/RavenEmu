@@ -38,6 +38,8 @@ data class NdsDebugSnapshot(
     val nonBlackPixels: Int,
     val screensSwapped: Boolean,
     val cartridgeUnsupported: Int,
+    val mainFirstUnsupportedSwi: Int,
+    val secondaryFirstUnsupportedSwi: Int,
 ) {
     companion object {
         /**
@@ -47,7 +49,7 @@ data class NdsDebugSnapshot(
          * c'est la longueur que le pont natif promet, et une vérification qui se
          * calculerait sur la classe qu'elle contrôle ne contrôlerait rien.
          */
-        const val VALUE_COUNT = 24
+        const val VALUE_COUNT = 26
 
         /** Renomme la suite du pont, ou rend `null` si elle n'a pas la bonne taille. */
         fun of(values: IntArray?): NdsDebugSnapshot? {
@@ -77,6 +79,8 @@ data class NdsDebugSnapshot(
                 nonBlackPixels = values[21],
                 screensSwapped = values[22] != 0,
                 cartridgeUnsupported = values[23],
+                mainFirstUnsupportedSwi = values[24],
+                secondaryFirstUnsupportedSwi = values[25],
             )
         }
     }

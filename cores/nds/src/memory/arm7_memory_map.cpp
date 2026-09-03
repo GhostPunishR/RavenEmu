@@ -180,7 +180,17 @@ std::uint8_t Arm7MemoryMap::read_io_byte(std::uint32_t address) noexcept {
         return registers::byte_of(timers_.control(slot), part - 2U);
     }
 
-    if (address == registers::interrupt_master) return registers::byte_of(interrupts_.master_enable(), 0U);
+    if (
+        address >= registers::interrupt_master &&
+        address < registers::interrupt_master + registers::interrupt_master_bytes
+    ) {
+        // Le registre occupe quatre octets, dont un seul porte quelque chose :
+        // les trois autres sont de la garniture, et le matériel les rend nuls.
+        // Ne servir que le premier faisait compter les trois autres comme des
+        // registres inconnus à chaque écriture, et cette avalanche cachait la
+        // première adresse vraiment inconnue, seule utile au diagnostic.
+        return registers::byte_of(interrupts_.master_enable(), address - registers::interrupt_master);
+    }
     if (address >= registers::interrupt_enable && address < registers::interrupt_enable + 4U) {
         return registers::byte_of(interrupts_.enabled(), address - registers::interrupt_enable);
     }
@@ -276,8 +286,13 @@ void Arm7MemoryMap::write_io_byte(std::uint32_t address, std::uint8_t value) noe
         return;
     }
 
-    if (address == registers::interrupt_master) {
-        interrupts_.set_master_enable(value);
+    if (
+        address >= registers::interrupt_master &&
+        address < registers::interrupt_master + registers::interrupt_master_bytes
+    ) {
+        // Seul le premier octet décide ; les trois autres sont acceptés et
+        // ignorés, comme le fait le matériel.
+        if (address == registers::interrupt_master) interrupts_.set_master_enable(value);
         return;
     }
     if (address >= registers::interrupt_enable && address < registers::interrupt_enable + 4U) {
