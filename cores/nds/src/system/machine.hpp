@@ -194,6 +194,16 @@ public:
     [[nodiscard]] NdsDebugSnapshot report() const noexcept;
 
 private:
+    /**
+     * Où la console recopie le début de l'en-tête, et sur quelle longueur.
+     *
+     * L'adresse tombe dans le miroir de la mémoire principale : ce sont ses cinq
+     * cents derniers octets, que la console réserve à ce qu'elle laisse au jeu
+     * en partant.
+     */
+    static constexpr std::uint32_t header_copy_address = 0x027f'fe00;
+    static constexpr std::uint32_t header_copy_bytes = 0x170;
+
     /** Fait avancer un processeur d'une instruction, réveils compris. */
     void step(Processor side);
 

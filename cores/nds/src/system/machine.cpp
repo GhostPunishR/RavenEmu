@@ -100,6 +100,16 @@ void Machine::boot(const CartridgeHeader& header, std::span<const std::uint8_t> 
     // l'écrit lui-même, comme sur console.
     system_.set_shared_control(SystemMemory::shared_to_secondary);
 
+    // La console recopie le début de l’en-tête tout en haut de la mémoire
+    // principale avant de rendre la main au jeu, et des jeux du commerce y
+    // relisent leur propre identité plutôt que de la redemander à la cartouche.
+    //
+    // Ce cœur ne fait pas tourner le programme de la console : il pose donc
+    // cette copie lui-même, faute de quoi le jeu lit des zéros. Elle précède le
+    // chargement des deux blocs, comme sur console : un bloc assez gros pour
+    // atteindre cette zone la recouvre, et c’est bien ce qui arriverait.
+    load_block(main_map_, rom, 0, header_copy_address, header_copy_bytes);
+
     load_block(main_map_, rom, header.arm9_rom_offset, header.arm9_ram_address, header.arm9_size);
     load_block(
         secondary_map_, rom, header.arm7_rom_offset, header.arm7_ram_address, header.arm7_size);

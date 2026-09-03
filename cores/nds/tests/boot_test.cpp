@@ -470,6 +470,54 @@ void chaque_bloc_passe_par_la_carte_de_son_processeur() {
 }
 
 /**
+ * L'en-tête se retrouve en haut de la mémoire principale.
+ *
+ * La console y laisse cette copie en rendant la main au jeu, et des jeux du
+ * commerce la relisent au lieu de redemander leur identité à la cartouche. Ce
+ * cœur ne faisant pas tourner le programme de la console, il doit la poser.
+ *
+ * L'adresse et la longueur sont écrites en toutes lettres : les reprendre aux
+ * constantes qui les définissent accepterait n'importe quelle valeur.
+ */
+void l_en_tete_est_recopie_en_haut_de_la_memoire() {
+    auto cartridge = relay_cartridge();
+    const auto& image = cartridge.sealed();
+
+    Machine machine;
+    machine.boot(CartridgeHeader::parse(image), image);
+
+    // 0x027FFE00 tombe dans le miroir : c'est le dernier demi-kilooctet des
+    // quatre mégaoctets de mémoire principale.
+    constexpr std::uint32_t copy_address = 0x027f'fe00;
+    constexpr std::uint32_t copy_bytes = 0x170;
+
+    std::uint32_t wrong = 0;
+    for (std::uint32_t offset = 0; offset < copy_bytes; offset += 4U) {
+        std::uint32_t expected = 0;
+        for (std::uint32_t byte = 0; byte < 4U; ++byte) {
+            expected |= static_cast<std::uint32_t>(image[offset + byte]) << (byte * 8U);
+        }
+        if (machine.main_memory().read32(copy_address + offset) != expected) ++wrong;
+    }
+    check(wrong == 0U, "chaque mot de l'en-tête est recopié");
+
+    // Le processeur secondaire lit la même mémoire : une copie qui n'aurait
+    // atteint qu'une des deux cartes ne servirait qu'à moitié.
+    check(
+        machine.secondary_memory().read32(copy_address) ==
+            machine.main_memory().read32(copy_address),
+        "et les deux processeurs y lisent la même chose"
+    );
+
+    // Rien au-delà : la copie s'arrête où elle doit, sans écraser ce que la
+    // console garde à côté.
+    check(
+        machine.main_memory().read32(copy_address + copy_bytes) == 0U,
+        "et le mot suivant reste intact"
+    );
+}
+
+/**
  * Le relevé dit ce que la console a fait, et non ce qu'on espère.
  *
  * Un écran noir a plusieurs causes, et rien à l'écran ne les sépare. Le relevé
@@ -564,6 +612,7 @@ int main() {
     un_bloc_de_taille_impaire_passe_par_mots();
     une_image_tronquee_ne_deborde_pas();
     chaque_bloc_passe_par_la_carte_de_son_processeur();
+    l_en_tete_est_recopie_en_haut_de_la_memoire();
     le_releve_dit_ce_que_la_console_a_fait();
     un_processeur_arrete_ne_compte_pas();
     return 0;

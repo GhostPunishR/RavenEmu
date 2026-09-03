@@ -41,6 +41,7 @@ import com.ravenemu.input.DeltaSkinControllerView
 import com.ravenemu.input.DeltaSkinPdfRenderer
 import com.ravenemu.input.GamepadMapper
 import com.ravenemu.input.TouchControlsView
+import com.ravenemu.core.nds.NdsCore
 import com.ravenemu.renderer.EmulatorSurfaceView
 import com.ravenemu.renderer.ScreenPlacement
 import kotlin.math.round
@@ -540,8 +541,31 @@ class EmulationActivity : RavenActivity(), EmulationSession.Callbacks {
         surface.presentFrame(framebuffer)
     }
 
+    /**
+     * Une console qui ne produit aucune image se raconte d’elle-même.
+     *
+     * Sans cela, l’application montre un écran vide et n’en dit pas la raison :
+     * le joueur ne peut pas distinguer un jeu qui ne démarre pas d’une image
+     * que ce moteur ne sait pas encore dessiner, et il faudrait qu’il aille
+     * chercher un réglage pour l’apprendre. Le relevé s’affiche donc tout seul
+     * tant que rien n’est dessiné, et s’efface dès que la console produit
+     * quelque chose.
+     *
+     * Il ne concerne que la Nintendo DS, seule console dont le moteur soit
+     * assez incomplet pour ne rien montrer.
+     */
+    private fun mustExplainBlankScreen(): Boolean {
+        if (!BuildConfig.DIAGNOSTICS) return false
+        val snapshot = (core as? NdsCore)?.debugSnapshot() ?: return false
+        return snapshot.nonBlackPixels == 0
+    }
+
     override fun onStats(fps: Double, frameTimeMs: Double) {
-        if (!settings.showPerformanceOverlay) return
+        val explain = mustExplainBlankScreen()
+        if (!settings.showPerformanceOverlay && !explain) {
+            runOnUiThread { performanceOverlay.visibility = View.GONE }
+            return
+        }
         val text = GbaDebugOverlay.render(
             fps,
             frameTimeMs,
@@ -549,7 +573,10 @@ class EmulationActivity : RavenActivity(), EmulationSession.Callbacks {
             audioStats,
             session?.audioOutputUnderruns() ?: 0,
         )
-        runOnUiThread { performanceOverlay.text = text }
+        runOnUiThread {
+            performanceOverlay.visibility = View.VISIBLE
+            performanceOverlay.text = text
+        }
     }
 
     /**
