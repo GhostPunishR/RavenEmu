@@ -1,10 +1,29 @@
 package com.ravenemu.input
 
+import com.ravenemu.emulation.api.ConsoleButtons
+import com.ravenemu.emulation.api.EmulatorButton
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
-/** Éléments de l'interface tactile. */
-enum class ControlId { DPAD, BUTTON_A, BUTTON_B, START, SELECT, MENU, BUTTON_L, BUTTON_R }
+/**
+ * Éléments dessinés par les commandes tactiles classiques.
+ *
+ * L'ordre est **figé** et les valeurs s'ajoutent à la fin : ces noms sont
+ * enregistrés dans les dispositions que les joueurs ont personnalisées, et en
+ * déplacer un ferait perdre son réglage.
+ */
+enum class ControlId {
+    DPAD,
+    BUTTON_A,
+    BUTTON_B,
+    START,
+    SELECT,
+    MENU,
+    BUTTON_L,
+    BUTTON_R,
+    BUTTON_X,
+    BUTTON_Y,
+}
 
 /**
  * Position et apparence d'un élément. Les coordonnées sont **relatives**
@@ -66,31 +85,48 @@ data class ControlLayout(
          * haut, les commandes occupent le tiers médian-bas, à portée de
          * pouce, en laissant la bordure basse aux gestes système.
          */
-        fun defaultPortrait(withShoulders: Boolean = false): ControlLayout = ControlLayout(
-            elements = listOf(
-                ControlElement(ControlId.DPAD, centerX = 0.20f, centerY = 0.70f),
-                ControlElement(ControlId.BUTTON_A, centerX = 0.87f, centerY = 0.63f),
-                ControlElement(ControlId.BUTTON_B, centerX = 0.71f, centerY = 0.72f),
-                ControlElement(ControlId.SELECT, centerX = 0.38f, centerY = 0.88f),
-                ControlElement(ControlId.START, centerX = 0.62f, centerY = 0.88f),
-                ControlElement(ControlId.MENU, centerX = 0.94f, centerY = 0.04f),
-                ControlElement(ControlId.BUTTON_L, centerX = 0.12f, centerY = 0.50f, visible = withShoulders),
-                ControlElement(ControlId.BUTTON_R, centerX = 0.88f, centerY = 0.50f, visible = withShoulders),
+        fun defaultPortrait(buttons: Set<EmulatorButton> = ConsoleButtons.FACE): ControlLayout {
+            val shoulders = EmulatorButton.L in buttons
+            val extra = EmulatorButton.X in buttons
+            // Les deux touches supplémentaires prennent place au-dessus de A et
+            // B, comme sur la console : les quatre y forment un losange, et un
+            // joueur les y trouve sans les chercher.
+            return ControlLayout(
+                elements = listOf(
+                    ControlElement(ControlId.DPAD, centerX = 0.20f, centerY = 0.70f),
+                    ControlElement(ControlId.BUTTON_A, centerX = 0.87f, centerY = 0.63f),
+                    ControlElement(ControlId.BUTTON_B, centerX = 0.71f, centerY = 0.72f),
+                    ControlElement(ControlId.SELECT, centerX = 0.38f, centerY = 0.88f),
+                    ControlElement(ControlId.START, centerX = 0.62f, centerY = 0.88f),
+                    ControlElement(ControlId.MENU, centerX = 0.94f, centerY = 0.04f),
+                    ControlElement(ControlId.BUTTON_L, 0.12f, 0.50f, visible = shoulders),
+                    ControlElement(ControlId.BUTTON_R, 0.88f, 0.50f, visible = shoulders),
+                    ControlElement(ControlId.BUTTON_X, 0.79f, 0.55f, visible = extra),
+                    ControlElement(ControlId.BUTTON_Y, 0.63f, 0.64f, visible = extra),
+                )
             )
-        )
+        }
 
         /** Disposition par défaut en paysage : commandes de part et d'autre. */
-        fun defaultLandscape(withShoulders: Boolean = false): ControlLayout = ControlLayout(
-            elements = listOf(
-                ControlElement(ControlId.DPAD, centerX = 0.12f, centerY = 0.70f),
-                ControlElement(ControlId.BUTTON_A, centerX = 0.93f, centerY = 0.60f),
-                ControlElement(ControlId.BUTTON_B, centerX = 0.84f, centerY = 0.74f),
-                ControlElement(ControlId.SELECT, centerX = 0.80f, centerY = 0.93f),
-                ControlElement(ControlId.START, centerX = 0.90f, centerY = 0.93f),
-                ControlElement(ControlId.MENU, centerX = 0.96f, centerY = 0.06f),
-                ControlElement(ControlId.BUTTON_L, centerX = 0.08f, centerY = 0.12f, visible = withShoulders),
-                ControlElement(ControlId.BUTTON_R, centerX = 0.92f, centerY = 0.12f, visible = withShoulders),
+        fun defaultLandscape(
+            buttons: Set<EmulatorButton> = ConsoleButtons.FACE,
+        ): ControlLayout {
+            val shoulders = EmulatorButton.L in buttons
+            val extra = EmulatorButton.X in buttons
+            return ControlLayout(
+                elements = listOf(
+                    ControlElement(ControlId.DPAD, centerX = 0.12f, centerY = 0.70f),
+                    ControlElement(ControlId.BUTTON_A, centerX = 0.93f, centerY = 0.60f),
+                    ControlElement(ControlId.BUTTON_B, centerX = 0.84f, centerY = 0.74f),
+                    ControlElement(ControlId.SELECT, centerX = 0.80f, centerY = 0.93f),
+                    ControlElement(ControlId.START, centerX = 0.90f, centerY = 0.93f),
+                    ControlElement(ControlId.MENU, centerX = 0.96f, centerY = 0.06f),
+                    ControlElement(ControlId.BUTTON_L, 0.08f, 0.12f, visible = shoulders),
+                    ControlElement(ControlId.BUTTON_R, 0.92f, 0.12f, visible = shoulders),
+                    ControlElement(ControlId.BUTTON_X, 0.88f, 0.47f, visible = extra),
+                    ControlElement(ControlId.BUTTON_Y, 0.79f, 0.61f, visible = extra),
+                )
             )
-        )
+        }
     }
 }

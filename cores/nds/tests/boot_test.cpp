@@ -90,13 +90,18 @@ constexpr std::int32_t black = static_cast<std::int32_t>(0xff00'0000U);
 /** Fabrique d'image de cartouche : en-tête scellé et deux blocs de programme. */
 class Cartridge {
 public:
-    Cartridge() : image_(rom_bytes, 0) {
+    /**
+     * @param size longueur de l'image. Elle se règle parce qu'un bloc de la
+     *   taille de celui d'un jeu du commerce ne tient pas dans la taille par
+     *   défaut, qui suffit à tous les autres cas.
+     */
+    explicit Cartridge(std::size_t size = rom_bytes) : image_(size, 0) {
         write_text(0x000, "RAVENBOOT");
         write_text(0x00c, "ARVE");
         write_text(0x010, "01");
         image_[0x012] = static_cast<std::uint8_t>(UnitCode::nintendo_ds);
         image_[0x014] = 0x09;
-        write_u32(0x080, static_cast<std::uint32_t>(rom_bytes));
+        write_u32(0x080, static_cast<std::uint32_t>(image_.size()));
         write_u32(0x084, 0x0000'4000);
         set_block(true, arm9_rom_offset, main_ram_base, main_ram_base, block_bytes);
         set_block(false, arm7_rom_offset, private_wram_base, private_wram_base, block_bytes);
@@ -267,6 +272,55 @@ void une_image_cedee_demarre_comme_une_image_pretee() {
     }
 }
 
+/**
+ * Le bloc secondaire d'un jeu du commerce arrive intact, à cheval sur deux
+ * mémoires.
+ *
+ * Un jeu charge son bloc secondaire à `0x037F8000`, juste sous la mémoire
+ * propre de ce processeur : les deux se suivent alors sans trou, et un bloc de
+ * quatre-vingt-seize kilooctets tient dans la mémoire commune puis déborde
+ * proprement dans la mémoire propre. Ce n'est vrai que si le processeur
+ * secondaire **tient** la mémoire commune. Sans part, sa fenêtre se replie sur
+ * sa mémoire propre, le bloc s'y enroule et écrase son propre début : le
+ * processeur exécute alors la fin de son programme prise pour le commencement,
+ * et la console reste noire sans que rien ne le signale.
+ *
+ * Chaque mot porte son propre rang, si bien qu'un mot déplacé se voit.
+ */
+void le_bloc_secondaire_arrive_intact_a_son_adresse_reelle() {
+    constexpr std::uint32_t arm7_offset = 0x8000;
+    constexpr std::uint32_t arm7_size = 0x18000;
+    constexpr std::uint32_t arm7_address = 0x037f'8000;
+    constexpr std::uint32_t shared_wram_end = 0x0380'0000;
+
+    Cartridge cartridge{0x4'0000};
+    cartridge.set_block(false, arm7_offset, arm7_address, arm7_address, arm7_size);
+    for (std::uint32_t written = 0; written < arm7_size; written += 4U) {
+        cartridge.write_u32(arm7_offset + written, 0xa500'0000U | (written / 4U));
+    }
+    const auto& image = cartridge.sealed();
+
+    Machine machine;
+    machine.boot(CartridgeHeader::parse(image), image);
+
+    std::uint32_t wrong = 0;
+    for (std::uint32_t written = 0; written < arm7_size; written += 4U) {
+        const auto read = machine.secondary_memory().read32(arm7_address + written);
+        if (read != (0xa500'0000U | (written / 4U))) ++wrong;
+    }
+    check(wrong == 0U, "chaque mot du bloc secondaire est à sa place");
+
+    // Le bloc franchit bien la frontière entre les deux mémoires : sans cela, la
+    // vérification ci-dessus tiendrait aussi pour un bloc qui n'en toucherait
+    // qu'une seule, et ne dirait rien de ce qui compte.
+    check(arm7_address + arm7_size > shared_wram_end, "le bloc franchit les deux mémoires");
+    check(
+        machine.secondary_memory().read32(shared_wram_end) ==
+            (0xa500'0000U | ((shared_wram_end - arm7_address) / 4U)),
+        "et le premier mot de la mémoire propre est celui qui suit"
+    );
+}
+
 /** Chaque bloc va où l'en-tête le dit, et l'exécution commence où il le dit. */
 void les_blocs_vont_ou_l_en_tete_les_envoie() {
     auto cartridge = relay_cartridge();
@@ -423,6 +477,7 @@ int main() {
     using namespace ravenemu::nds::testing;
     une_cartouche_demarre_et_dessine();
     une_image_cedee_demarre_comme_une_image_pretee();
+    le_bloc_secondaire_arrive_intact_a_son_adresse_reelle();
     les_blocs_vont_ou_l_en_tete_les_envoie();
     amorcer_efface_la_partie_precedente();
     un_bloc_de_taille_impaire_passe_par_mots();

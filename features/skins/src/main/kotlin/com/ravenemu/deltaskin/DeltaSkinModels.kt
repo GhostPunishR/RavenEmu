@@ -1,5 +1,6 @@
 package com.ravenemu.deltaskin
 
+import com.ravenemu.emulation.api.ConsoleType
 import com.ravenemu.emulation.api.EmulatorButton
 import java.util.Locale
 import kotlinx.serialization.KSerializer
@@ -41,20 +42,18 @@ enum class DeltaSkinConsole(
      */
     val hasTouchScreen: Boolean = false,
 ) {
-    GB_GBC("com.rileytestut.delta.game.gbc", 160.0, 144.0, DeltaSkinInputNames.FACE_BUTTONS),
+    GB_GBC("com.rileytestut.delta.game.gbc", 160.0, 144.0, ConsoleType.GAME_BOY.buttons),
     GBA(
         "com.rileytestut.delta.game.gba",
         240.0,
         160.0,
-        DeltaSkinInputNames.FACE_BUTTONS + DeltaSkinInputNames.SHOULDER_BUTTONS,
+        ConsoleType.GAME_BOY_ADVANCE.buttons,
     ),
     DS(
         "com.rileytestut.delta.game.ds",
         256.0,
         384.0,
-        DeltaSkinInputNames.FACE_BUTTONS +
-            DeltaSkinInputNames.SHOULDER_BUTTONS +
-            DeltaSkinInputNames.EXTRA_BUTTONS,
+        ConsoleType.NINTENDO_DS.buttons,
         hasTouchScreen = true,
     ),
     ;
@@ -104,19 +103,6 @@ object DeltaSkinInputNames {
 
     /** Entrée qui n'appartient à aucune console : elle ouvre le menu de l'application. */
     const val MENU = "menu"
-
-    val FACE_BUTTONS: Set<EmulatorButton> = setOf(
-        EmulatorButton.UP,
-        EmulatorButton.DOWN,
-        EmulatorButton.LEFT,
-        EmulatorButton.RIGHT,
-        EmulatorButton.A,
-        EmulatorButton.B,
-        EmulatorButton.START,
-        EmulatorButton.SELECT,
-    )
-    val SHOULDER_BUTTONS: Set<EmulatorButton> = setOf(EmulatorButton.L, EmulatorButton.R)
-    val EXTRA_BUTTONS: Set<EmulatorButton> = setOf(EmulatorButton.X, EmulatorButton.Y)
 
     /** Les deux axes que Delta emploie pour désigner la zone tactile. */
     val TOUCH_SCREEN_AXES: Set<String> = setOf("x", "y")

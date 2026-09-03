@@ -40,13 +40,39 @@ enum class ConsoleType(
      * Le cœur, lui, ne reçoit que le résultat.
      */
     val touchScreen: TouchScreenSize? = null,
+    /**
+     * Touches que la console possède réellement.
+     *
+     * Elle est ici, et non dans les couches qui dessinent des commandes, parce
+     * que c'est un fait de la console et non un choix d'interface. Deux
+     * endroits en avaient besoin sans se parler : la disposition tactile
+     * classique n'affichait ni gâchettes ni touches supplémentaires à la
+     * Nintendo DS, quand les skins Delta les honoraient déjà. Une console
+     * n'ayant qu'un jeu de touches, elle n'a qu'une déclaration.
+     */
+    val buttons: Set<EmulatorButton> = ConsoleButtons.FACE,
+    /**
+     * Suffixe des profils de commandes tactiles enregistrés.
+     *
+     * Il est **figé** au même titre que [storageId] : ce mot entre dans le nom
+     * sous lequel une disposition personnalisée est rangée, et le changer
+     * rendrait introuvable ce qu'un joueur a réglé. Il est court parce qu'il
+     * n'est jamais montré ; le nom affiché est [displayName].
+     */
+    val layoutKey: String,
 ) {
     // Cœur Game Boy (module gameboy-core) : cartouches DMG et Game Boy Color,
     // `.gb` comme `.gbc`. Le mode exact vient de l'en-tête, pas de l'extension.
-    GAME_BOY("Game Boy", setOf("gb", "gbc"), storageId = 0),
+    GAME_BOY("Game Boy", setOf("gb", "gbc"), storageId = 0, layoutKey = "gb"),
 
     // Game Boy Advance : moteur ARM7TDMI dédié (module gba-core).
-    GAME_BOY_ADVANCE("Game Boy Advance", setOf("gba"), storageId = 2),
+    GAME_BOY_ADVANCE(
+        "Game Boy Advance",
+        setOf("gba"),
+        storageId = 2,
+        buttons = ConsoleButtons.FACE + ConsoleButtons.SHOULDERS,
+        layoutKey = "gba",
+    ),
 
     // Nintendo DS : deux processeurs, deux écrans (module nds-core). La valeur
     // 3 est la première libre, 1 restant retiré.
@@ -56,6 +82,8 @@ enum class ConsoleType(
         storageId = 3,
         // L'écran du bas, seul tactile des deux.
         touchScreen = TouchScreenSize(width = 256, height = 192),
+        buttons = ConsoleButtons.FACE + ConsoleButtons.SHOULDERS + ConsoleButtons.X_AND_Y,
+        layoutKey = "nds",
     ),
     ;
 

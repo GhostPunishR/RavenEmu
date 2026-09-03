@@ -84,6 +84,22 @@ void Machine::boot(const CartridgeHeader& header, std::span<const std::uint8_t> 
     // vivante aussi longtemps que la console tourne.
     cartridge_.insert(rom);
 
+    // La mémoire commune revient au processeur secondaire avant que son bloc y
+    // soit écrit, et c'est la seule part de l'état d'amorçage que ce cœur pose.
+    //
+    // Elle n'est pas devinée : elle se **déduit** de ce que l'en-tête demande.
+    // Un jeu du commerce charge son bloc secondaire à `0x037F8000`, juste sous
+    // la mémoire propre de ce processeur, précisément pour que les deux se
+    // suivent sans trou. Ce n'est vrai que s'il tient la mémoire commune : sans
+    // part, la fenêtre se replie sur sa mémoire propre, le bloc s'y enroule et
+    // écrase son propre début. Le processeur exécute alors la fin de son
+    // programme prise pour le commencement, et la console reste noire.
+    //
+    // Le partage par défaut donne tout au processeur principal, ce qui est
+    // l'état de mise sous tension. Un programme qui veut un autre découpage
+    // l'écrit lui-même, comme sur console.
+    system_.set_shared_control(SystemMemory::shared_to_secondary);
+
     load_block(main_map_, rom, header.arm9_rom_offset, header.arm9_ram_address, header.arm9_size);
     load_block(
         secondary_map_, rom, header.arm7_rom_offset, header.arm7_ram_address, header.arm7_size);

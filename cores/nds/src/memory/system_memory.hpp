@@ -47,6 +47,17 @@ public:
     [[nodiscard]] Window main_processor_window() const noexcept;
     [[nodiscard]] Window secondary_processor_window() const noexcept;
 
+    /**
+     * Découpage qui confie **toute** la mémoire commune au processeur
+     * secondaire.
+     *
+     * C'est le seul des quatre qui soit nommé, parce que c'est le seul dont un
+     * autre organe ait besoin : l'amorçage le pose pour que le bloc de code du
+     * processeur secondaire tombe où son en-tête le demande. Les trois autres
+     * ne se désignent que par le registre, qu'un programme écrit lui-même.
+     */
+    static constexpr std::uint8_t shared_to_secondary = 3;
+
     /** Registre qui commande le partage ; seuls ses deux bits bas comptent. */
     [[nodiscard]] std::uint8_t shared_control() const noexcept { return shared_control_; }
     void set_shared_control(std::uint8_t value) noexcept { shared_control_ = value & 0x3U; }

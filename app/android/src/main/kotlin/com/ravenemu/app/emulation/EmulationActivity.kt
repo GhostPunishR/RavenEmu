@@ -189,9 +189,14 @@ class EmulationActivity : RavenActivity(), EmulationSession.Callbacks {
 
     // ---- Profils de commandes ----
 
-    /** Suffixe de profil propre à la console : la GBA a ses propres commandes. */
-    private fun consoleKey(): String =
-        if (console == ConsoleType.GAME_BOY_ADVANCE) "gba" else "gb"
+    /**
+     * Suffixe de profil propre à la console : chacune a ses propres commandes.
+     *
+     * Il vient de la console elle-même. L’avoir décidé ici rangeait les
+     * dispositions de la Nintendo DS avec celles de la Game Boy, si bien qu’une
+     * console à six touches de plus héritait d’une disposition qui les ignore.
+     */
+    private fun consoleKey(): String = console.layoutKey
 
     private fun orientationKey(): String =
         if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) {
@@ -210,13 +215,12 @@ class EmulationActivity : RavenActivity(), EmulationSession.Callbacks {
         if (hasPerGameProfile()) perGameProfileKey() else "${orientationKey()}_${consoleKey()}"
 
     private fun defaultLayout(): ControlLayout {
-        // Les gâchettes L/R ne sont affichées que pour les consoles qui en ont
-        // (Game Boy Advance).
-        val withShoulders = console == ConsoleType.GAME_BOY_ADVANCE
+        // Les touches dessinées sont celles que la console possède : la
+        // disposition n’en décide pas, elle les reçoit.
         return if (orientationKey() == "landscape") {
-            ControlLayout.defaultLandscape(withShoulders)
+            ControlLayout.defaultLandscape(console.buttons)
         } else {
-            ControlLayout.defaultPortrait(withShoulders)
+            ControlLayout.defaultPortrait(console.buttons)
         }
     }
 
