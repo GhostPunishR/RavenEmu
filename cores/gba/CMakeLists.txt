@@ -25,4 +25,14 @@ if(RAVENEMU_BUILD_TESTS)
     )
     target_link_libraries(gba_raven_rtc_tests PRIVATE gba_raven_core)
     add_test(NAME gba_raven_rtc COMMAND gba_raven_rtc_tests)
+
+    # Le mélangeur audio se pilote par ses registres, qui vivent dans les
+    # en-têtes internes du cœur : même raison que pour le RTC.
+    add_executable(gba_raven_apu_tests tests/gba_apu_test.cpp)
+    target_include_directories(gba_raven_apu_tests PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/src
+        ${CMAKE_CURRENT_LIST_DIR}/../common/tests/support
+    )
+    target_link_libraries(gba_raven_apu_tests PRIVATE gba_raven_core)
+    add_test(NAME gba_raven_apu COMMAND gba_raven_apu_tests)
 endif()

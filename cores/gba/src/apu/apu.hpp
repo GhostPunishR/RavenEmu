@@ -160,23 +160,55 @@ private:
     }
     void clock_lengths() noexcept { square1.clock_length(); square2.clock_length(); wave.clock_length(); noise.clock_length(); }
     void emit_sample() {
-        if (!master_enable) { push_sample(0, 0); return; }
-        const std::array outputs{square1.output(), square2.output(), wave.output(), noise.output()};
+        if (!master_enable) {
+            // Les cumuls sont vidés même à l'arrêt : les garder ferait verser
+            // la fenêtre d'avant dans le premier échantillon d'après.
+            drain_channels();
+            push_sample(0, 0);
+            return;
+        }
+        // **La moyenne sur la fenêtre, et non la valeur de l'instant.** Un
+        // canal carré change d'état bien plus vite que le débit de sortie ; le
+        // prélever d'un coup replierait ses harmoniques dans l'audible, où
+        // elles s'entendent comme des sifflements sans rapport avec le
+        // morceau. Le cœur Game Boy procède ainsi depuis toujours.
+        const auto outputs = drain_channels();
         int left{}; int right{};
         for (std::size_t i = 0; i < outputs.size(); ++i) {
             if ((control_l & (1 << (8 + static_cast<int>(i)))) != 0) left += outputs[i];
             if ((control_l & (1 << (12 + static_cast<int>(i)))) != 0) right += outputs[i];
         }
         static constexpr std::array ratio{64, 128, 256, 256};
-        left = left * (((control_l >> 4) & 7) + 1) * 24 * ratio[static_cast<std::size_t>(control_h & 3)] >> 8;
-        right = right * ((control_l & 7) + 1) * 24 * ratio[static_cast<std::size_t>(control_h & 3)] >> 8;
+        // Une seule division, tout à la fin. Les cumuls valent au plus quinze
+        // fois la fenêtre, soit mille neuf cent vingt par canal ; le produit
+        // complet, volume et proportion compris, tient largement dans un entier
+        // de trente-deux bits, et le résultat ne dépend d'aucun arrondi
+        // intermédiaire.
+        const auto psg_ratio = ratio[static_cast<std::size_t>(control_h & 3)];
+        auto mixed_left = left * (((control_l >> 4) & 7) + 1) * psg_scale * psg_ratio
+            / (256 * cycles_per_sample);
+        auto mixed_right = right * ((control_l & 7) + 1) * psg_scale * psg_ratio
+            / (256 * cycles_per_sample);
         const auto direct_a = direct_a_ * 32 * ((control_h & 4) != 0 ? 2 : 1);
         const auto direct_b = direct_b_ * 32 * ((control_h & 8) != 0 ? 2 : 1);
-        if ((control_h & 0x0200) != 0) left += direct_a;
-        if ((control_h & 0x0100) != 0) right += direct_a;
-        if ((control_h & 0x2000) != 0) left += direct_b;
-        if ((control_h & 0x1000) != 0) right += direct_b;
-        push_sample(std::clamp(left, -32768, 32767), std::clamp(right, -32768, 32767));
+        // Les deux voies directes ne se moyennent pas : elles portent déjà des
+        // échantillons, tenus jusqu'au suivant. Les lisser reviendrait à
+        // filtrer deux fois ce que le jeu a lui-même échantillonné.
+        if ((control_h & 0x0200) != 0) mixed_left += direct_a;
+        if ((control_h & 0x0100) != 0) mixed_right += direct_a;
+        if ((control_h & 0x2000) != 0) mixed_left += direct_b;
+        if ((control_h & 0x1000) != 0) mixed_right += direct_b;
+        push_sample(std::clamp(mixed_left, -32768, 32767), std::clamp(mixed_right, -32768, 32767));
+    }
+
+    /** Vide les quatre cumuls et les rend, dans l'ordre des canaux. */
+    std::array<int, 4> drain_channels() noexcept {
+        return {
+            square1.drain_accumulator(),
+            square2.drain_accumulator(),
+            wave.drain_accumulator(),
+            noise.drain_accumulator(),
+        };
     }
     void push_sample(int left, int right) noexcept {
         if (available_ + 2U > ring_.size()) return;
@@ -185,6 +217,8 @@ private:
         available_ += 2;
     }
     static constexpr int cycles_per_sample = 128;
+    /** Mise à l'échelle des canaux PSG vers le PCM seize bits. */
+    static constexpr int psg_scale = 24;
     static constexpr std::size_t ring_mask = 8191;
     Fifo fifo_a_;
     Fifo fifo_b_;
