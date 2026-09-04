@@ -1,13 +1,17 @@
 #pragma once
 
 #include "interrupt/interrupt_controller.hpp"
+#include <ravenemu/link_endpoint.hpp>
 
 namespace ravenemu::cgb {
 
-class SerialPort {
+class SerialPort final : public LinkPort {
 public:
     SerialPort(InterruptController& interrupts, bool cgb_mode)
         : interrupts_(interrupts), cgb_mode_(cgb_mode) {}
+    ~SerialPort() override { disconnect(); }
+    SerialPort(const SerialPort&) = delete;
+    SerialPort& operator=(const SerialPort&) = delete;
 
     /**
      * Avance l'horloge série interne en cycles CPU. Les périodes restent 512
@@ -16,23 +20,50 @@ public:
      * la fréquence série réelle.
      */
     void tick(int cycles) noexcept {
-        if (!internal_transfer_active() || cycles <= 0) return;
-        int remaining = cycles;
-        while (remaining > 0 && bits_remaining_ > 0) {
-            const int slice = std::min(bit_timer_, remaining);
-            bit_timer_ -= slice;
-            remaining -= slice;
-            if (bit_timer_ == 0) {
-                shift_bit(1); // ligne SIN au repos = niveau haut
-                if (bits_remaining_ > 0) bit_timer_ = bit_period();
+        for (int cycle = 0; cycle < cycles; ++cycle) {
+            serial_divider_ = (serial_divider_ + 1) & 0x1ff;
+            if (internal_transfer_active() &&
+                (serial_divider_ & (bit_period() - 1)) == 0) {
+                const bool outgoing = outgoing_bit_high();
+                const int incoming = endpoint_ != nullptr
+                    ? (endpoint_->exchange_bit(*this, outgoing) ? 1 : 0)
+                    : 1;
+                shift_bit(incoming);
             }
         }
     }
 
+    void initialize_hle_post_boot(int reset_aligned_phase) noexcept {
+        data_ = 0;
+        control_ = 0;
+        bits_remaining_ = 0;
+        serial_divider_ = reset_aligned_phase & 0x1ff;
+    }
+
     /** Front d'horloge fourni par un périphérique externe/link cable. */
-    void clock_external_bit(bool incoming_high) noexcept {
+    void clock_external_bit(bool incoming_high) noexcept override {
         if (!external_transfer_active()) return;
         shift_bit(incoming_high ? 1 : 0);
+    }
+
+    [[nodiscard]] bool outgoing_bit_high() const noexcept override { return (data_ & 0x80) != 0; }
+
+    void set_cgb_mode(bool enabled) noexcept {
+        cgb_mode_ = enabled;
+        if (!enabled) control_ &= 0x81;
+    }
+
+    [[nodiscard]] bool connect(LinkEndpoint* endpoint) noexcept {
+        if (endpoint_ == endpoint) return true;
+        if (endpoint != nullptr && !endpoint->attach(*this)) return false;
+        if (endpoint_ != nullptr) endpoint_->detach(*this);
+        endpoint_ = endpoint;
+        return true;
+    }
+
+    void disconnect() noexcept {
+        if (endpoint_ != nullptr) endpoint_->detach(*this);
+        endpoint_ = nullptr;
     }
 
     [[nodiscard]] int read_data() const noexcept { return data_; }
@@ -48,11 +79,9 @@ public:
         control_ = value & mask;
         if ((control_ & 0x80) == 0) {
             bits_remaining_ = 0;
-            bit_timer_ = 0;
             return;
         }
         bits_remaining_ = 8;
-        bit_timer_ = internal_transfer_active() ? bit_period() : 0;
     }
 
     [[nodiscard]] bool transfer_active() const noexcept { return (control_ & 0x80) != 0; }
@@ -61,17 +90,31 @@ public:
     [[nodiscard]] int bits_remaining() const noexcept { return bits_remaining_; }
 
     void save(BinaryWriter& out) const {
+        out.i32(4);
         out.i32(data_);
         out.i32(control_);
         out.i32(bits_remaining_);
-        out.i32(bit_timer_);
+        out.i32(serial_divider_);
     }
 
     void load(BinaryReader& in) {
-        data_ = byte(in.i32());
-        control_ = in.i32() & (cgb_mode_ ? 0x83 : 0x81);
-        bits_remaining_ = std::clamp(in.i32(), 0, 8);
-        bit_timer_ = std::max(0, in.i32());
+        if (in.i32() != 4) throw SaveStateError("Etat instantane corrompu (serie)");
+        const auto bounded = [&in](int minimum, int maximum) {
+            const int value = in.i32();
+            if (value < minimum || value > maximum) {
+                throw SaveStateError("Etat instantane corrompu (serie)");
+            }
+            return value;
+        };
+        data_ = bounded(0, 0xff);
+        control_ = bounded(0, 0x83);
+        const int allowed = cgb_mode_ ? 0x83 : 0x81;
+        if ((control_ & ~allowed) != 0) throw SaveStateError("Etat instantane corrompu (serie)");
+        bits_remaining_ = bounded(0, 8);
+        serial_divider_ = bounded(0, 0x1ff);
+        if (((control_ & 0x80) == 0) != (bits_remaining_ == 0)) {
+            throw SaveStateError("Etat instantane corrompu (serie)");
+        }
     }
 
 private:
@@ -88,7 +131,6 @@ private:
         if (bits_remaining_ > 0) --bits_remaining_;
         if (bits_remaining_ == 0) {
             control_ &= ~0x80;
-            bit_timer_ = 0;
             interrupts_.request(Interrupt::serial);
         }
     }
@@ -98,7 +140,8 @@ private:
     int data_{};
     int control_{};
     int bits_remaining_{};
-    int bit_timer_{};
+    int serial_divider_{};
+    LinkEndpoint* endpoint_{};
 };
 
 } // namespace ravenemu::cgb

@@ -41,6 +41,19 @@ Les détails d'installation et de signature sont dans le [wiki](https://github.c
 
 La compatibilité varie selon les jeux. Consultez la [matrice de compatibilité](https://github.com/GhostPunishR/RavenEmu/wiki/Compatibilite-des-jeux).
 
+Le moteur GB/GBC distingue explicitement DMG, CGB natif et compatibilité DMG sur
+CGB. Son CPU ordonne les accès par M-cycle, son PPU utilise un fetcher avec des
+FIFO BG et OBJ séparés, et ses portes VRAM/OAM/CRAM suivent les transitions LCD
+internes plutôt qu'une approximation par ligne. Les DMA OAM/GDMA/HDMA arbitrent
+le bus progressivement et la pause `KEY1` fige les portes vidéo selon le mode
+PPU où `STOP` est exécuté. Le séquenceur audio suit les fronts du diviseur
+matériel en vitesse normale ou double. RavenEmu ne revendique toutefois pas
+encore une émulation cycle-perfect.
+Les ROMs de test de conformité restent externes au dépôt. Un manifeste
+versionné contrôle leur SHA-256 et leur provenance déclarée, orchestre le runner
+natif et produit un rapport JSON ; son usage est documenté dans
+[`cores/gb/tests/README.md`](cores/gb/tests/README.md).
+
 ## Architecture
 
 ```text

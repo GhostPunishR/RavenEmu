@@ -92,7 +92,10 @@ class CartridgeHeaderTest {
             0x13 to MbcType.MBC3,
             0x19 to MbcType.MBC5,
             0x1E to MbcType.MBC5,
-            0x20 to MbcType.UNSUPPORTED,
+            0x20 to MbcType.MBC6,
+            0x22 to MbcType.MBC7,
+            0xFE to MbcType.HUC3,
+            0xFF to MbcType.HUC1,
         )
         for ((code, expected) in cases) {
             val header = CartridgeHeader.parse(TestRoms.build(type = code))
@@ -111,6 +114,22 @@ class CartridgeHeaderTest {
         assertFalse(mbc1.hasBattery)
         assertFalse(mbc1.hasRtc)
         assertFalse(mbc1.hasRam)
+
+        val mbc7 = CartridgeHeader.parse(TestRoms.build(type = 0x22))
+        assertTrue(mbc7.hasBattery)
+        assertTrue(mbc7.hasRam)
+        assertEquals(256, mbc7.ramSizeBytes)
+
+        val huc1 = CartridgeHeader.parse(TestRoms.build(type = 0xFF, ramSizeCode = 0x03))
+        assertTrue(huc1.hasBattery)
+        assertTrue(huc1.hasRam)
+        assertEquals(32 * 1024, huc1.ramSizeBytes)
+
+        val huc3 = CartridgeHeader.parse(TestRoms.build(type = 0xFE))
+        assertTrue(huc3.hasBattery)
+        assertTrue(huc3.hasRtc)
+        assertTrue(huc3.hasRam)
+        assertEquals(32 * 1024, huc3.ramSizeBytes)
     }
 
     @Test

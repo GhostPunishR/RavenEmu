@@ -12,6 +12,10 @@ captures/
 .externalNativeBuild/
 .cxx/
 
+# Python (outils de conformité)
+__pycache__/
+*.py[cod]
+
 # Signature : jamais de keystore dans le dépôt
 *.jks
 *.keystore
