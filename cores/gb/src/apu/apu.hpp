@@ -249,11 +249,29 @@ private:
             accumulator = 0; return average;
         }
         void clock_length() noexcept { if (length_enabled && length > 0 && --length == 0) enabled = false; }
+        /**
+         * Cadence l'enveloppe de volume, à 64 Hz.
+         *
+         * Deux règles distinctes, et c'est leur confusion qui coûte cher :
+         *
+         * - le **compteur** traite une période nulle comme une période de
+         *   huit ; c'est ce qui fixe l'instant du prochain top si le jeu
+         *   réécrit NRx2 avec une période non nulle sans redéclencher ;
+         * - le **volume**, lui, ne bouge que si la période est non nulle. Une
+         *   période nulle veut dire « pas d'enveloppe » : le volume programmé
+         *   est tenu tant que le canal joue.
+         *
+         * Ne garder que la première règle fait perdre un cran de volume toutes
+         * les huit périodes à *tout* son de volume fixe, soit une extinction
+         * complète en moins de deux secondes. C'est le cas le plus courant de
+         * la musique Game Boy, qui tient ses notes à volume constant : les
+         * tenues et les basses disparaissaient en cours de morceau.
+         */
         void clock_envelope() noexcept {
-            if (--envelope_timer <= 0) {
-                envelope_timer = envelope_period != 0 ? envelope_period : 8;
-                volume = envelope_add ? std::min(15, volume + 1) : std::max(0, volume - 1);
-            }
+            if (--envelope_timer > 0) return;
+            envelope_timer = envelope_period != 0 ? envelope_period : 8;
+            if (envelope_period == 0) return;
+            volume = envelope_add ? std::min(15, volume + 1) : std::max(0, volume - 1);
         }
         int next_sweep_frequency() noexcept {
             const int delta = shadow_frequency >> sweep_shift;
@@ -431,11 +449,12 @@ private:
             accumulator = 0; return average;
         }
         void clock_length() noexcept { if (length_enabled && length > 0 && --length == 0) enabled = false; }
+        /** Même règle que pour les canaux carrés : période nulle, volume tenu. */
         void clock_envelope() noexcept {
-            if (--envelope_timer <= 0) {
-                envelope_timer = envelope_period != 0 ? envelope_period : 8;
-                volume = envelope_add ? std::min(15, volume + 1) : std::max(0, volume - 1);
-            }
+            if (--envelope_timer > 0) return;
+            envelope_timer = envelope_period != 0 ? envelope_period : 8;
+            if (envelope_period == 0) return;
+            volume = envelope_add ? std::min(15, volume + 1) : std::max(0, volume - 1);
         }
         void trigger(bool shorten_zero_length_reload, bool delay_envelope_clock) noexcept {
             enabled = dac_enabled;

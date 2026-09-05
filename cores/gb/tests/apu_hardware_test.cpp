@@ -1,6 +1,8 @@
 #include "apu/apu.hpp"
 #include "check.hpp"
 
+#include <algorithm>
+
 using ravenemu::testing::check;
 using ravenemu::testing::expect_failure;
 
@@ -130,19 +132,110 @@ void extra_length_clock_test() {
           "trigger hors étape a rechargé 64 au lieu de 63");
 }
 
+/** Niveau le plus haut atteint par le canal 1 sur un cycle de rapport cyclique. */
+[[nodiscard]] int peak_square1(Apu& apu, int frequency) {
+    int peak = 0;
+    const int step_cycles = (2048 - frequency) * 4;
+    for (int cycle = 0; cycle < step_cycles * 8; ++cycle) {
+        apu.tick(1);
+        peak = std::max(peak, apu.read_pcm12() & 0x0f);
+    }
+    return peak;
+}
+
+/** Idem pour le canal de bruit, lu dans les bits hauts de PCM34. */
+[[nodiscard]] int peak_noise(Apu& apu, int cycles) {
+    int peak = 0;
+    for (int cycle = 0; cycle < cycles; ++cycle) {
+        apu.tick(1);
+        peak = std::max(peak, (apu.read_pcm34() >> 4) & 0x0f);
+    }
+    return peak;
+}
+
+/**
+ * Une période d'enveloppe nulle ne fait pas bouger le volume.
+ *
+ * La documentation matérielle énonce deux règles qu'il est tentant de
+ * confondre : « le compteur d'enveloppe traite une période de 0 comme 8 » et
+ * « quand le compteur produit un top **et que la période n'est pas nulle**,
+ * un nouveau volume est calculé ». La première ne concerne que l'instant du
+ * top ; c'est la seconde qui décide si le volume change.
+ *
+ * Ne retenir que la première fait décroître le volume d'un cran toutes les
+ * huit périodes. Cette vérification échoue alors dès le soixante-quatrième
+ * top.
+ */
 void period_zero_envelope_test() {
     Apu apu(gb::HardwareMode::dmg);
     apu.write(0xff11, 0xc0); // duty 75 %, étape 1 haute
-    apu.write(0xff12, 0x18); // volume 1, addition, période codée 0 (= 8)
+    apu.write(0xff12, 0x18); // volume 1, addition, période 0 = pas d'enveloppe
     apu.write(0xff13, 0xff);
     apu.write(0xff14, 0x87);
     apu.tick(4); // quitte la première étape forcée à zéro
-    for (int edge = 0; edge < 63; ++edge) apu.clock_divider_falling_edge();
+    for (int edge = 0; edge < 8 * 64; ++edge) apu.clock_divider_falling_edge();
     check((apu.read_pcm12() & 0x0f) == 1,
-          "envelope période 0 n'a pas attendu huit clocks envelope");
-    apu.clock_divider_falling_edge();
-    check((apu.read_pcm12() & 0x0f) == 2,
-          "envelope période 0 n'est pas traité comme une période de huit");
+          "une période d'enveloppe nulle a fait bouger le volume");
+}
+
+/**
+ * Une note à volume fixe tient, et une note à enveloppe descend toujours.
+ *
+ * Les deux moitiés comptent, et elles se contredisent : la première seule
+ * serait satisfaite en supprimant l'enveloppe, la seconde seule l'était par le
+ * défaut qu'on corrige ici. Ensemble, elles fixent le comportement.
+ *
+ * La durée est choisie pour dépasser franchement ce que coûtait le défaut :
+ * quinze crans à retirer, à un cran toutes les huit tops d'enveloppe, soit
+ * neuf cent soixante pas de séquenceur, à peine moins de deux secondes
+ * émulées. Une tenue ou une ligne de basse de cette longueur n'a rien
+ * d'exceptionnel dans un morceau Game Boy : elle disparaissait en route.
+ */
+void sustained_fixed_volume_test() {
+    constexpr int frequency = 1750; // environ 440 Hz
+    Apu apu(gb::HardwareMode::dmg);
+    apu.write(0xff26, 0x80); // alimentation
+    apu.write(0xff24, 0x77); // volumes maîtres au maximum
+    apu.write(0xff25, 0x11); // canal 1 des deux côtés
+    apu.write(0xff11, 0x80); // rapport cyclique de moitié, longueur non armée
+    apu.write(0xff12, 0xf0); // volume 15, décroissante, période 0
+    apu.write(0xff13, frequency & 0xff);
+    apu.write(0xff14, 0x80 | ((frequency >> 8) & 7));
+    check(peak_square1(apu, frequency) == 15, "la note ne part pas au volume programmé");
+
+    for (int step = 0; step < 1024; ++step) apu.clock_divider_falling_edge();
+    check(peak_square1(apu, frequency) == 15,
+          "une note à volume fixe s'est éteinte toute seule");
+
+    // Le même canal, avec une enveloppe réelle, doit bien descendre.
+    Apu fading(gb::HardwareMode::dmg);
+    fading.write(0xff26, 0x80);
+    fading.write(0xff24, 0x77);
+    fading.write(0xff25, 0x11);
+    fading.write(0xff11, 0x80);
+    fading.write(0xff12, 0xf1); // volume 15, décroissante, période 1
+    fading.write(0xff13, frequency & 0xff);
+    fading.write(0xff14, 0x80 | ((frequency >> 8) & 7));
+    // Quinze crans à un top chacun, soit cent vingt pas de séquenceur.
+    for (int step = 0; step < 8 * 20; ++step) fading.clock_divider_falling_edge();
+    check(peak_square1(fading, frequency) == 0,
+          "une enveloppe de période non nulle ne descend plus");
+}
+
+/** Le canal de bruit suit la même règle : sa percussion ne doit pas fondre. */
+void sustained_fixed_volume_noise_test() {
+    Apu apu(gb::HardwareMode::dmg);
+    apu.write(0xff26, 0x80);
+    apu.write(0xff24, 0x77);
+    apu.write(0xff25, 0x88); // canal 4 des deux côtés
+    apu.write(0xff20, 0x00); // longueur non armée
+    apu.write(0xff21, 0xf0); // volume 15, décroissante, période 0
+    apu.write(0xff22, 0x00); // cadence de décalage la plus rapide
+    apu.write(0xff23, 0x80); // déclenchement
+    check(peak_noise(apu, 4096) == 15, "le bruit ne part pas au volume programmé");
+
+    for (int step = 0; step < 1024; ++step) apu.clock_divider_falling_edge();
+    check(peak_noise(apu, 4096) == 15, "un bruit à volume fixe s'est éteint tout seul");
 }
 
 void trigger_envelope_delay_and_zombie_test() {
@@ -308,6 +401,8 @@ int main() {
     div_driven_frame_sequencer_test();
     extra_length_clock_test();
     period_zero_envelope_test();
+    sustained_fixed_volume_test();
+    sustained_fixed_volume_noise_test();
     trigger_envelope_delay_and_zombie_test();
     dmg_wave_retrigger_corruption_test();
     noise_shift_disconnect_test();
