@@ -76,7 +76,21 @@ public:
         square1_.enabled = true;
         square1_.envelope_initial = 15;
         square1_.envelope_period = 3;
-        square1_.volume = 15;
+        // **Zéro, et non quinze.** Quinze est le volume *initial* que NR12
+        // déclare ; ce n'est pas celui du canal quand le jeu prend la main.
+        //
+        // La ROM d'amorçage déclenche le canal 1 pour son carillon pendant le
+        // défilement du logo. L'enveloppe décroissante de période trois retire
+        // un cran tous les trois tops du séquenceur à 64 Hz : quinze crans en
+        // sept dixièmes de seconde, quand le défilement en dure plusieurs. À
+        // l'entrée en $0100, le carillon est donc éteint depuis longtemps.
+        //
+        // Le canal reste *signalé* allumé dans NR52 — sa longueur n'a jamais
+        // été armée, NR14 bit 6 étant à zéro — mais il ne produit plus rien.
+        // Reproduire le volume initial faisait sonner un créneau à pleine
+        // amplitude pendant les huit premiers dixièmes de seconde de chaque
+        // partie, avant la musique du titre.
+        square1_.volume = 0;
         square1_.envelope_timer = 3;
         square1_.length = 1;
         square1_.timer_running = true;
@@ -84,7 +98,7 @@ public:
         frame_step_ = 0;
         sample_timer_ = cycles_per_sample;
         ring_read_ = 0; ring_write_ = 0; ring_count_ = 0;
-        capacitor_left_ = 0; capacitor_right_ = 0;
+        prime_capacitors();
     }
 
     [[nodiscard]] int read(int address) const noexcept {
@@ -582,15 +596,15 @@ private:
     static std::int16_t clamp_short(double value) noexcept {
         return static_cast<std::int16_t>(std::clamp(static_cast<int>(value), -32768, 32767));
     }
-    void emit_sample() noexcept {
-        const double c1 = square1_.drain_average(); const double c2 = square2_.drain_average();
-        const double c3 = wave_.drain_average(); const double c4 = noise_.drain_average();
-        if (!power_on_ || !any_dac_enabled()) {
-            // Le condensateur est physiquement déconnecté lorsque les quatre
-            // DAC sont coupés : sortie nulle et charge conservée.
-            push_sample(0, 0);
-            return;
-        }
+    /**
+     * Aiguillage NR51 et volumes maîtres NR50, pour quatre sorties de canaux.
+     *
+     * Partagé entre le prélèvement d'un échantillon et l'amorçage du
+     * condensateur : les deux doivent voir exactement le même niveau, sans quoi
+     * l'amorçage laisserait justement la marche qu'il vise à supprimer.
+     */
+    [[nodiscard]] std::pair<double, double> route(
+        double c1, double c2, double c3, double c4) const noexcept {
         double left{}; double right{};
         if ((nr51_ & 0x10) != 0) left += c1;
         if ((nr51_ & 0x20) != 0) left += c2;
@@ -602,6 +616,41 @@ private:
         if ((nr51_ & 0x08) != 0) right += c4;
         left *= static_cast<double>(((nr50_ >> 4) & 7) + 1) * mix_gain;
         right *= static_cast<double>((nr50_ & 7) + 1) * mix_gain;
+        return {left, right};
+    }
+
+    /**
+     * Charge le condensateur au niveau continu courant.
+     *
+     * Le filtre ne laisse passer que l'écart entre l'entrée et la charge : un
+     * condensateur à zéro devant un convertisseur qui repose déjà sur un
+     * niveau non nul produit une marche de toute la hauteur de ce niveau, puis
+     * sa décroissance — un claquement de quelques millisecondes.
+     *
+     * Sur le matériel, la question ne se pose pas : quand le jeu prend la main,
+     * la ROM d'amorçage a alimenté le convertisseur depuis plusieurs secondes
+     * et le condensateur est chargé depuis longtemps. C'est cet état-là que
+     * l'entrée en $0100 doit installer, et non celui d'une machine dont on
+     * vient de brancher le haut-parleur.
+     */
+    void prime_capacitors() noexcept {
+        const auto [left, right] = route(
+            square1_.dac_output(), square2_.dac_output(),
+            wave_.dac_output(), noise_.dac_output());
+        capacitor_left_ = left;
+        capacitor_right_ = right;
+    }
+
+    void emit_sample() noexcept {
+        const double c1 = square1_.drain_average(); const double c2 = square2_.drain_average();
+        const double c3 = wave_.drain_average(); const double c4 = noise_.drain_average();
+        if (!power_on_ || !any_dac_enabled()) {
+            // Le condensateur est physiquement déconnecté lorsque les quatre
+            // DAC sont coupés : sortie nulle et charge conservée.
+            push_sample(0, 0);
+            return;
+        }
+        const auto [left, right] = route(c1, c2, c3, c4);
         const double charge_factor = gb::is_cgb_hardware(hardware_mode_)
             ? cgb_charge_factor : dmg_charge_factor;
         const double filtered_left = left - capacitor_left_;

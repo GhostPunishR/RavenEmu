@@ -2,11 +2,99 @@
 #include "check.hpp"
 
 #include <algorithm>
+#include <array>
+#include <cstdint>
+#include <cstdlib>
 
 using ravenemu::testing::check;
 using ravenemu::testing::expect_failure;
 
 namespace ravenemu::cgb::testing {
+
+/**
+ * Fait tourner l'APU comme le bus le ferait : un cycle à la fois, avec le front
+ * descendant du compteur DIV tous les 8192 cycles, et relève ce qui en sort.
+ */
+class Runner {
+public:
+    explicit Runner(Apu& apu) : apu_(apu) {}
+
+    /** Avance de [cycles] et rend le plus grand écart au silence rencontré. */
+    [[nodiscard]] int run(int cycles) {
+        for (int cycle = 0; cycle < cycles; ++cycle) {
+            apu_.tick(1);
+            if (++divider_ >= 8192) { divider_ = 0; apu_.clock_divider_falling_edge(); }
+        }
+        int peak = 0;
+        std::array<std::int16_t, 4096> block{};
+        while (true) {
+            const auto count = apu_.read_samples(block);
+            if (count == 0) break;
+            for (std::size_t i = 0; i < count; ++i) {
+                peak = std::max(peak, std::abs(static_cast<int>(block[i])));
+            }
+        }
+        return peak;
+    }
+
+private:
+    Apu& apu_;
+    int divider_{};
+};
+
+/**
+ * L'entrée en $0100 ne produit aucun son.
+ *
+ * La ROM d'amorçage déclenche le canal 1 pour son carillon pendant le
+ * défilement du logo, avec une enveloppe décroissante de période trois : quinze
+ * crans en sept dixièmes de seconde, quand le défilement en dure plusieurs. Le
+ * carillon est donc éteint depuis longtemps quand le jeu prend la main.
+ *
+ * L'état HLE reproduisait le volume *initial* déclaré par NR12 au lieu du
+ * volume atteint, et laissait le condensateur déchargé devant un convertisseur
+ * qui repose déjà sur un niveau non nul. Il en sortait un créneau à pleine
+ * amplitude pendant huit dixièmes de seconde, ouvert par une marche de tout un
+ * quart de la dynamique : un bruit avant la musique du titre, à chaque partie.
+ *
+ * La vérification exige aussi que le canal reste **signalé allumé**, faute de
+ * quoi elle serait satisfaite en éteignant simplement l'APU — ce que le
+ * matériel ne fait pas, et ce qui casserait la lecture de NR52.
+ */
+void hle_post_boot_silence_test() {
+    Apu apu(gb::HardwareMode::dmg);
+    apu.initialize_hle_post_boot();
+    check((apu.read(0xff26) & 0x01) != 0,
+          "le canal 1 doit rester signalé allumé dans NR52 après l'amorçage");
+
+    Runner runner(apu);
+    int peak = 0;
+    // Une seconde émulée, bien au-delà des sept dixièmes qu'aurait duré le
+    // carillon fautif.
+    for (int frame = 0; frame < 60; ++frame) peak = std::max(peak, runner.run(70'224));
+    check(peak == 0, "l'entrée en $0100 doit être parfaitement silencieuse");
+}
+
+/**
+ * Et le canal redevient audible dès que le jeu le demande.
+ *
+ * Sans cette moitié, la précédente serait satisfaite par un APU muet. Les deux
+ * ensemble disent ce qu'on veut : silencieux tant que personne ne joue, sonore
+ * dès la première note.
+ */
+void post_boot_channel_still_audible_test() {
+    constexpr int frequency = 1750; // environ 440 Hz
+    Apu apu(gb::HardwareMode::dmg);
+    apu.initialize_hle_post_boot();
+    Runner runner(apu);
+    check(runner.run(70'224) == 0, "la trame qui précède la première note est muette");
+
+    apu.write(0xff11, 0x80); // rapport cyclique de moitié
+    apu.write(0xff12, 0xf0); // volume 15, sans enveloppe
+    apu.write(0xff13, frequency & 0xff);
+    apu.write(0xff14, 0x80 | ((frequency >> 8) & 7)); // déclenchement
+    check(runner.run(70'224) > 1000,
+          "le canal doit redevenir audible dès que le jeu le déclenche");
+}
 
 void hle_post_boot_register_test() {
     Apu apu(gb::HardwareMode::cgb_native);
@@ -395,6 +483,8 @@ void apu_state_layout_rejection_test() {
 int main() {
     using namespace ravenemu::cgb::testing;
     hle_post_boot_register_test();
+    hle_post_boot_silence_test();
+    post_boot_channel_still_audible_test();
     wave_ram_access_test();
     sweep_negate_clear_test();
     powered_off_length_counter_test();
