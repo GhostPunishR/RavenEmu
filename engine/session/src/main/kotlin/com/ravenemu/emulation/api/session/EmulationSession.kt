@@ -4,6 +4,10 @@ import com.ravenemu.emulation.api.EmulatorButton
 import com.ravenemu.emulation.api.EmulatorCore
 import com.ravenemu.emulation.api.timing.AdaptiveFrameSkipper
 import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.LockSupport
 
 /**
@@ -30,6 +34,16 @@ class EmulationSession(
      * indépendante d'Android et donc testable.
      */
     private val onThreadStart: () -> Unit = {},
+    /**
+     * Cadence des sauvegardes périodiques de la RAM de cartouche, en
+     * nanosecondes.
+     *
+     * Elle arbitre entre l'usure du support et ce qu'une interruption brutale
+     * ferait perdre. Cinq secondes est le réglage du produit ; le paramètre
+     * existe pour que le comportement de la sauvegarde puisse être éprouvé
+     * sans attendre ce délai à chaque vérification.
+     */
+    private val batterySaveIntervalNanos: Long = BATTERY_SAVE_INTERVAL_NANOS,
 ) {
 
     /** Issue d'un appel à [stop]. */
@@ -62,13 +76,25 @@ class EmulationSession(
         fun onStats(fps: Double, frameTimeMs: Double)
 
         /**
-         * RAM de cartouche à persister (thread d'émulation).
+         * RAM de cartouche à persister.
          *
          * Doit retourner `true` **uniquement si l'écriture a réellement
          * abouti**. Sur `false`, le moteur reste marqué modifié et la
          * sauvegarde sera retentée : c'est ce retour qui empêche une partie de
          * disparaître en silence quand le disque est plein ou le fichier
          * verrouillé.
+         *
+         * ### Fil d'exécution
+         *
+         * Appelé depuis **deux** fils, jamais en même temps :
+         *
+         * - les sauvegardes périodiques, sur un fil dédié à l'écriture ;
+         * - la sauvegarde finale et celles demandées par [flushBattery], sur le
+         *   thread d'émulation.
+         *
+         * L'implémentation doit donc être utilisable hors du thread
+         * d'émulation. Elle n'a en revanche pas à gérer d'appels concurrents :
+         * la session n'en émet jamais deux à la fois.
          */
         fun onBatterySave(data: ByteArray): Boolean
 
@@ -112,6 +138,37 @@ class EmulationSession(
     private val framebuffer = IntArray(core.video.pixelCount)
     private val audioBuffer = ShortArray(8192)
     private val commands = ConcurrentLinkedQueue<(EmulatorCore) -> Unit>()
+
+    /**
+     * Fil d'écriture des sauvegardes périodiques.
+     *
+     * Persister la RAM de cartouche est une écriture de fichier, et sur Android
+     * elle peut traverser le fournisseur de documents du système : énumération
+     * du dossier choisi par l'utilisateur, ouverture, écriture, le tout en
+     * communication entre processus. Quelques centaines de millisecondes n'ont
+     * rien d'exceptionnel.
+     *
+     * Faite sur le thread d'émulation, cette attente arrête net la production
+     * d'échantillons. La sortie audio ne tient qu'une fraction de seconde
+     * d'avance : elle se vide, et le son saute. Toutes les cinq secondes, tant
+     * que le jeu écrit dans sa sauvegarde — ce que les jeux Game Boy font en
+     * continu, leur état vivant résidant dans la RAM de cartouche.
+     *
+     * Un seul fil : les écritures restent ordonnées entre elles, et la dernière
+     * écrite est bien la dernière produite. Créé à la première sauvegarde, donc
+     * jamais pour une cartouche sans pile.
+     */
+    private var batteryWriter: ExecutorService? = null
+
+    /**
+     * Une écriture différée est en cours.
+     *
+     * Lu et écrit uniquement depuis le thread d'émulation : la remise à faux
+     * passe par la file de commandes, qui s'y exécute. Empêche d'empiler des
+     * instantanés derrière une écriture lente — le tic suivant reprendra de
+     * toute façon des données plus fraîches.
+     */
+    private var batterySaveInFlight = false
 
     /** Audio actif (paramètre utilisateur), modifiable à chaud. */
     @Volatile
@@ -301,7 +358,7 @@ class EmulationSession(
                 workNanos = 0
             }
 
-            if (now - lastBatteryCheck >= BATTERY_SAVE_INTERVAL_NANOS) {
+            if (now - lastBatteryCheck >= batterySaveIntervalNanos) {
                 lastBatteryCheck = now
                 saveBatteryIfDirty()
             }
@@ -331,7 +388,15 @@ class EmulationSession(
 
         rumbleSink?.setActive(false)
         drainCommands()
-        saveBatteryIfDirty()
+        // Les écritures différées doivent être achevées **avant** la dernière :
+        // l'une d'elles pourrait sinon se terminer après et réécrire par-dessus
+        // un état plus ancien. Si l'attente échoue, on préfère laisser
+        // l'écriture en vol avoir le dernier mot plutôt que de risquer cet
+        // ordre inversé : ses données sont un peu plus anciennes, mais elles
+        // sont cohérentes.
+        val differeesTerminees = awaitBatteryWriter()
+        drainCommands()
+        if (differeesTerminees) saveBatteryNow()
     }
 
     private fun drainCommands() {
@@ -346,7 +411,14 @@ class EmulationSession(
     }
 
     /**
-     * Sauvegarde en deux temps : instantané, écriture, puis acquittement.
+     * Sauvegarde périodique, en trois temps : instantané, écriture **ailleurs**,
+     * puis acquittement.
+     *
+     * L'instantané est pris sur le thread d'émulation — c'est une copie de
+     * mémoire, quelques dizaines de microsecondes — et c'est tout ce que la
+     * boucle paie. L'écriture part sur [batteryWriter] ; l'acquittement revient
+     * par la file de commandes, donc sur le thread d'émulation, seul endroit
+     * d'où le moteur se touche.
      *
      * L'acquittement ne vient qu'après confirmation de l'écriture, et porte la
      * génération de l'instantané. Si le jeu a écrit entre-temps, le moteur
@@ -354,15 +426,71 @@ class EmulationSession(
      */
     private fun saveBatteryIfDirty(target: EmulatorCore = core) {
         if (!target.hasBatteryRam || !target.batteryRamDirty) return
+        if (batterySaveInFlight) return
+        val snapshot = target.snapshotBatteryRam() ?: return
+        val writer = batteryWriter ?: Executors.newSingleThreadExecutor { body ->
+            Thread(body, "RavenEmu-Sauvegarde").apply { isDaemon = true }
+        }.also { batteryWriter = it }
+        batterySaveInFlight = true
+        try {
+            writer.execute {
+                val written = try {
+                    callbacks.onBatterySave(snapshot.data)
+                } catch (_: Exception) {
+                    // Une écriture qui lève vaut une écriture ratée : rien n'est
+                    // acquitté, le moteur reste modifié, on retentera.
+                    false
+                }
+                post { c ->
+                    batterySaveInFlight = false
+                    if (written) c.acknowledgeBatteryRamSaved(snapshot.generation)
+                }
+            }
+        } catch (_: RejectedExecutionException) {
+            // Le fil d'écriture s'arrête : la sauvegarde finale prendra le
+            // relais, et le moteur est toujours marqué modifié.
+            batterySaveInFlight = false
+        }
+    }
+
+    /**
+     * Sauvegarde **bloquante**, sur le fil appelant.
+     *
+     * Réservée aux deux moments où l'attente est non seulement acceptable mais
+     * requise : l'arrêt de la session, où plus aucune trame ne sera produite et
+     * où rendre la main avant que la partie soit sur le disque la perdrait, et
+     * la demande explicite de [flushBattery], émise quand la partie passe à
+     * l'arrière-plan et peut être interrompue par le système.
+     */
+    private fun saveBatteryNow(target: EmulatorCore = core) {
+        if (!target.hasBatteryRam || !target.batteryRamDirty) return
         val snapshot = target.snapshotBatteryRam() ?: return
         if (callbacks.onBatterySave(snapshot.data)) {
             target.acknowledgeBatteryRamSaved(snapshot.generation)
         }
     }
 
+    /**
+     * Termine les écritures différées et rend `true` si elles ont bien fini.
+     *
+     * Le délai est borné : un fournisseur de documents qui ne répond plus ne
+     * doit pas retenir l'arrêt de la session au-delà de son propre délai.
+     */
+    private fun awaitBatteryWriter(): Boolean {
+        val writer = batteryWriter ?: return true
+        batteryWriter = null
+        writer.shutdown()
+        return try {
+            writer.awaitTermination(BATTERY_WRITER_DRAIN_MILLIS, TimeUnit.MILLISECONDS)
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+            false
+        }
+    }
+
     /** Force une sauvegarde de la RAM cartouche (pause, arrière-plan…). */
     fun flushBattery() {
-        post { c -> saveBatteryIfDirty(c) }
+        post { c -> saveBatteryNow(c) }
     }
 
     companion object {
@@ -370,6 +498,15 @@ class EmulationSession(
         const val STOP_TIMEOUT_MILLIS = 2_000L
 
         private const val BATTERY_SAVE_INTERVAL_NANOS = 5_000_000_000L
+
+        /**
+         * Attente maximale des écritures différées à l'arrêt.
+         *
+         * Tenue sous [STOP_TIMEOUT_MILLIS] pour laisser à la sauvegarde finale,
+         * puis à la terminaison du thread, le temps d'aboutir dans le délai que
+         * l'appelant a demandé.
+         */
+        private const val BATTERY_WRITER_DRAIN_MILLIS = 1_000L
         private const val MAX_LAG_NANOS = 100_000_000L
     }
 }
