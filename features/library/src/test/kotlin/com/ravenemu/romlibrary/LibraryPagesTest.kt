@@ -26,7 +26,6 @@ class LibraryPagesTest {
         console = console,
         title = nom,
         fingerprints = Fingerprints("0", "0", "0"),
-        status = RomStatus.INTACT,
         cartridgeMode = mode,
     )
 

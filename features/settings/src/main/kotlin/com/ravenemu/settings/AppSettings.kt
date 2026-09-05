@@ -221,9 +221,6 @@ class AppSettings(context: Context) {
         get() = prefs.getString("library_sort", "title") ?: "title"
         set(value) = prefs.edit { putString("library_sort", value) }
 
-    var showStatusBadges: Boolean
-        get() = prefs.getBoolean("library_badges", true)
-        set(value) = prefs.edit { putBoolean("library_badges", value) }
 
     /**
      * Console affichée dans la bibliothèque : nom d'énumération `ConsoleType`,

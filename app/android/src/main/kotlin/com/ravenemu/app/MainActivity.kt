@@ -293,7 +293,6 @@ class MainActivity : RavenActivity() {
         }
         return when (settings.librarySortOrder) {
             "size" -> entries.sortedByDescending { it.sizeBytes }
-            "status" -> entries.sortedBy { it.status.ordinal }
             else -> entries.sortedBy { it.displayName.lowercase() }
         }
     }
@@ -311,7 +310,6 @@ class MainActivity : RavenActivity() {
 
     private fun render() {
         pagerAdapter.gridMode = settings.libraryViewMode == "grid"
-        pagerAdapter.showBadges = settings.showStatusBadges
 
         val nouvelles = LibraryPages.forEntries(index.entries)
         if (nouvelles != pages) {
@@ -548,9 +546,6 @@ class MainActivity : RavenActivity() {
                 if (entry.gameCode.isNotBlank()) appendLine("Code jeu : ${entry.gameCode}")
                 appendLine("Sauvegarde : ${saveTypeLabel(entry)}")
                 appendLine("Horloge : ${rtcLabel(entry)}")
-                appendLine(
-                    "En-tête : ${if (entry.headerChecksumValid) "valide" else "somme incorrecte"}"
-                )
             } else {
                 appendLine("Région : ${entry.region.displayName}")
                 appendLine("MBC : ${entry.mbcType.displayName}")
@@ -558,7 +553,6 @@ class MainActivity : RavenActivity() {
                 appendLine("RAM : ${entry.ramSizeBytes} octets")
                 appendLine("Pile : ${if (entry.hasBattery) "oui" else "non"}")
             }
-            appendLine("Statut : ${entry.status.displayName}")
             appendLine("CRC32 : ${entry.fingerprints.crc32}")
             appendLine("SHA-1 : ${entry.fingerprints.sha1}")
             appendLine("SHA-256 : ${entry.fingerprints.sha256}")
@@ -597,10 +591,6 @@ class MainActivity : RavenActivity() {
             }
             R.id.action_sort_size -> {
                 settings.librarySortOrder = "size"
-                render()
-            }
-            R.id.action_sort_status -> {
-                settings.librarySortOrder = "status"
                 render()
             }
             else -> return false

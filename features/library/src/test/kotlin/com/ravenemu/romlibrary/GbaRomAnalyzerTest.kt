@@ -43,7 +43,6 @@ class GbaRomAnalyzerTest {
         assertEquals(ConsoleType.GAME_BOY_ADVANCE, entry.console)
         assertEquals("TESTGBA", entry.title)
         assertEquals("AGBE", entry.gameCode)
-        assertTrue(entry.headerChecksumValid)
         // Les champs propres à la Game Boy gardent leurs valeurs neutres.
         assertEquals(0, entry.cartridgeTypeCode)
         assertFalse(entry.supportsCgb)
@@ -69,24 +68,25 @@ class GbaRomAnalyzerTest {
     }
 
     /**
-     * La cartouche Game Boy Advance ne porte aucune somme couvrant son
-     * contenu : le badge ne peut donc vouloir dire que « l'en-tête est
-     * conforme ». Annoncer « Intègre » ici serait une garantie que rien ne
-     * soutient.
+     * Une somme d'en-tête fausse n'écarte pas la cartouche.
+     *
+     * RavenEmu ne juge plus l'intégrité d'une ROM : ce qui décide de son
+     * acceptation, c'est qu'elle soit lisible comme cartouche Game Boy Advance
+     * — marqueur présent et taille suffisante. Une somme d'en-tête qui ne
+     * tombe pas juste est le fait de bien des traductions et correctifs ; s'en
+     * servir pour refuser ou décorer le fichier n'apprendrait rien d'utile.
+     *
+     * La vérification garde donc trace du seul comportement qui reste : le jeu
+     * entre dans la bibliothèque, avec ses métadonnées.
      */
     @Test
-    fun `une ROM GBA valide n'engage que son en-tete`() {
-        val result = analyzer.analyze("u", "jeu.gba", 0L, gbaRom())
-        val entry = assertIs<AnalysisResult.Success>(result).entry
-        assertEquals(RomStatus.HEADER_ONLY, entry.status)
-    }
-
-    @Test
-    fun `une somme d'en-tete GBA fausse est signalee`() {
+    fun `une somme d'en-tete fausse n'empeche pas l'indexation`() {
         val rom = gbaRom()
         rom[0xBD] = (rom[0xBD].toInt() xor 0xFF).toByte()
-        val result = analyzer.analyze("u", "jeu.gba", 0L, rom)
-        val entry = assertIs<AnalysisResult.Success>(result).entry
-        assertEquals(RomStatus.INVALID_HEADER, entry.status)
+        val entry = assertIs<AnalysisResult.Success>(
+            analyzer.analyze("u", "jeu.gba", 0L, rom)
+        ).entry
+        assertEquals("TESTGBA", entry.title)
+        assertEquals("AGBE", entry.gameCode)
     }
 }

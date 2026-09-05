@@ -18,7 +18,10 @@
     <color name="raven_icon_background">#262835</color>
 
     <!-- Badges suffisamment sombres pour conserver un texte blanc lisible. -->
-    <color name="badge_modified">#8A5200</color>
-    <color name="badge_header_only">#455A64</color>
-    <color name="badge_invalid_header">#B3261E</color>
+    <!--
+      Rouge des actions destructrices (retirer un jeu, supprimer un état).
+      Nommé d'après son rôle et non d'après l'ancien badge d'intégrité, qui
+      était sa première utilisation.
+    -->
+    <color name="raven_destructive">#B3261E</color>
 </resources>

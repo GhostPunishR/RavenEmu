@@ -1,6 +1,5 @@
 package com.ravenemu.app.library
 
-import android.graphics.drawable.GradientDrawable
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -11,7 +10,6 @@ import androidx.recyclerview.widget.RecyclerView
 import com.ravenemu.app.R
 import com.ravenemu.emulation.api.ConsoleType
 import com.ravenemu.romlibrary.RomEntry
-import com.ravenemu.romlibrary.RomStatus
 import kotlinx.coroutines.Job
 
 /**
@@ -30,7 +28,6 @@ class RomAdapter(
     private val onClick: (RomEntry) -> Unit,
     private val onLongClick: (RomEntry) -> Unit,
     private val covers: CoverLoader,
-    showBadges: Boolean = true,
     gridMode: Boolean = true,
 ) : RecyclerView.Adapter<RomAdapter.Holder>() {
 
@@ -47,14 +44,6 @@ class RomAdapter(
             if (field == value) return
             field = value
             notifyDataSetChanged()
-        }
-
-    /** Pastilles d'état. Leur bascule ne change que la liaison des vues. */
-    var showBadges: Boolean = showBadges
-        set(value) {
-            if (field == value) return
-            field = value
-            notifyItemRangeChanged(0, items.size)
         }
 
     private companion object {
@@ -130,7 +119,6 @@ class RomAdapter(
     inner class Holder(view: View) : RecyclerView.ViewHolder(view) {
         private val cover: ImageView = view.findViewById(R.id.cover)
         private val title: TextView = view.findViewById(R.id.title)
-        private val statusDot: View = view.findViewById(R.id.statusDot)
 
         /** Absent de la grille, qui ne montre que la jaquette et le titre. */
         private val subtitle: TextView? = view.findViewById(R.id.subtitle)
@@ -148,7 +136,6 @@ class RomAdapter(
             title.text = entry.displayName
             subtitle?.text = detailsDe(entry)
             bindCover(entry)
-            bindStatus(entry)
 
             itemView.setOnClickListener { onClick(items[bindingAdapterPosition]) }
             itemView.setOnLongClickListener {
@@ -171,31 +158,6 @@ class RomAdapter(
                     " · " + entry.region.displayName
             }
             return itemView.context.getString(R.string.library_size_kib, sizeKib) + " · " + details
-        }
-
-        /**
-         * L'état ne se signale que lorsqu'il y a quelque chose à signaler.
-         * Décorer chaque cartouche conforme d'une étiquette n'apprendrait rien
-         * et couvrirait les jaquettes ; l'anomalie, elle, mérite un point.
-         */
-        private fun bindStatus(entry: RomEntry) {
-            val couleur = when (entry.status) {
-                RomStatus.INTACT -> null
-                RomStatus.MODIFIED -> R.color.badge_modified
-                RomStatus.HEADER_ONLY -> R.color.badge_header_only
-                RomStatus.INVALID_HEADER -> R.color.badge_invalid_header
-            }
-            if (!showBadges || couleur == null) {
-                statusDot.visibility = View.GONE
-                return
-            }
-            statusDot.visibility = View.VISIBLE
-            // La teinte ne passe pas par `backgroundTintList` : elle
-            // recouvrirait le liseré sombre qui détache la pastille d'une
-            // jaquette claire. Seul le remplissage change.
-            (statusDot.background?.mutate() as? GradientDrawable)
-                ?.setColor(itemView.context.getColor(couleur))
-            statusDot.contentDescription = entry.status.displayName
         }
 
         private fun bindCover(entry: RomEntry) {

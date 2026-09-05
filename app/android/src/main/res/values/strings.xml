@@ -13,7 +13,6 @@
     <string name="library_sort">Trier</string>
     <string name="library_sort_title">Par titre</string>
     <string name="library_sort_size">Par taille</string>
-    <string name="library_sort_status">Par statut</string>
     <string name="library_refresh_done">Bibliothèque actualisée : %1$d jeux</string>
     <string name="library_rom_details">Détails</string>
     <string name="library_choose_cover">Choisir une pochette</string>
@@ -116,7 +115,6 @@
     <string name="settings_covers_dir">Dossier des pochettes</string>
     <string name="settings_covers_dir_none">Aucun dossier choisi</string>
     <string name="settings_category_library">Bibliothèque</string>
-    <string name="settings_badges">Signaler les cartouches non intègres</string>
     <string name="settings_clear_index">Nettoyer l\'index</string>
     <string name="settings_index_cleared">Index nettoyé</string>
     <string name="settings_category_debug">Débogage</string>

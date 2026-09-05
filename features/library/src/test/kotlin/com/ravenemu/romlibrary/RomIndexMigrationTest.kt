@@ -102,7 +102,6 @@ class RomIndexMigrationTest {
             console = ConsoleType.GAME_BOY,
             title = "TETRIS",
             fingerprints = Fingerprints("0", "0", "0"),
-            status = RomStatus.INTACT,
             cartridgeMode = GameBoyCartridgeMode.DMG_ONLY,
         )
         val index = RomIndex().upsert(entree)
@@ -124,7 +123,6 @@ class RomIndexMigrationTest {
             console = ConsoleType.GAME_BOY_ADVANCE,
             title = "POKEMON EMER",
             fingerprints = Fingerprints("0", "0", "0"),
-            status = RomStatus.HEADER_ONLY,
         )
         assertFalse(
             entree.needsReanalysis,
@@ -145,7 +143,6 @@ class RomIndexMigrationTest {
                     console = ConsoleType.GAME_BOY,
                     title = mode.name,
                     fingerprints = Fingerprints("0", "0", "0"),
-                    status = RomStatus.INTACT,
                     cartridgeMode = mode,
                 )
             }
@@ -155,6 +152,60 @@ class RomIndexMigrationTest {
         assertEquals(
             GameBoyCartridgeMode.entries,
             relu.entries.map { it.cartridgeMode },
+        )
+    }
+
+    /**
+     * Un index écrit **avant** le retrait du contrôle d'intégrité se relit
+     * intact.
+     *
+     * C'est le seul vrai risque de ce retrait : `status` et
+     * `headerChecksumValid` sont présents dans tous les index déjà installés,
+     * et `RomEntry` ne les connaît plus. Ils ne provoquent pas d'erreur parce
+     * que le décodeur est configuré avec `ignoreUnknownKeys` — mais cette
+     * configuration est à un autre endroit du code que le modèle, et rien ne
+     * dirait qu'elle a disparu. Sans elle, la lecture lèverait, la bibliothèque
+     * repartirait de zéro, et les pochettes et renommages choisis à la main
+     * seraient perdus.
+     */
+    @Test
+    fun `un index portant l'ancien controle d'integrite se relit sans perte`() {
+        val json = """
+            {
+              "version": 2,
+              "entries": [
+                {
+                  "uri": "content://roms/metroid.gba",
+                  "fileName": "metroid.gba",
+                  "sizeBytes": 8388608,
+                  "lastModified": 1700000000,
+                  "console": "GAME_BOY_ADVANCE",
+                  "title": "METROID4",
+                  "fingerprints": { "crc32": "1", "sha1": "2", "sha256": "3" },
+                  "status": "HEADER_ONLY",
+                  "headerChecksumValid": true,
+                  "gameCode": "AMTE",
+                  "coverUri": "content://images/metroid.png",
+                  "customTitle": "Metroid Fusion"
+                }
+              ]
+            }
+        """.trimIndent()
+
+        val index = RomIndex.fromJson(json)
+        val entree = index.entries.singleOrNull()
+            ?: error("L'index a été jeté : les champs retirés ne sont plus ignorés")
+        assertEquals("metroid.gba", entree.fileName)
+        assertEquals("AMTE", entree.gameCode)
+        assertEquals(
+            "content://images/metroid.png",
+            entree.coverUri,
+            "La pochette choisie à la main doit survivre au retrait",
+        )
+        assertEquals(
+            "Metroid Fusion",
+            entree.customTitle,
+            "Le renommage doit survivre au retrait",
         )
     }
 }
