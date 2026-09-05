@@ -29,7 +29,7 @@ charge.
 
 ## Importer un skin
 
-1. Ouvrez **Paramètres**.
+1. Ouvrez **Paramètres**, puis **Interface**.
 2. Dans **Contrôles tactiles**, ouvrez **Skins de contrôleur**.
 3. Touchez **Importer un fichier .deltaskin**.
 4. Choisissez un fichier portant l'extension `.deltaskin`.
@@ -76,7 +76,8 @@ modifiés.
 
 Les boutons font déjà partie du PDF. RavenEmu ne les redessine pas et ne les
 déplace pas. Un calque léger peut seulement signaler la hitbox pressée ; il se
-désactive dans **Paramètres → Contrôles tactiles → Retour visuel des skins**.
+désactive dans **Paramètres → Interface → Contrôles tactiles → Retour visuel des
+skins**.
 La vibration utilise le réglage tactile existant.
 
 ## Limites de sécurité

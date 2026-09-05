@@ -1,135 +1,176 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Les réglages sont rangés en quatre écrans, et non déroulés en une seule
+  liste. Vingt-deux réglages à la file obligent à parcourir tout l'écran pour
+  savoir s'il existe, alors que quatre entrées tiennent d'un coup d'œil et
+  disent chacune ce qu'elles contiennent.
+
+  Les regroupements d'origine (Émulation, Fichiers, Débogage, Contrôles
+  tactiles, Bibliothèque) sont conservés à l'intérieur des écrans : ils
+  gardent leur valeur de repère une fois qu'on est au bon endroit.
+-->
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
-    <PreferenceCategory android:title="@string/settings_category_emulation">
-        <SwitchPreferenceCompat
-            android:defaultValue="true"
-            android:key="emu_pause_background"
-            android:title="@string/settings_pause_background" />
-        <SwitchPreferenceCompat
-            android:defaultValue="false"
-            android:key="emu_auto_resume"
-            android:summary="@string/settings_auto_resume_summary"
-            android:title="@string/settings_auto_resume" />
-    </PreferenceCategory>
+    <PreferenceScreen
+        android:key="screen_general"
+        android:summary="@string/settings_screen_general_summary"
+        android:title="@string/settings_category_general">
 
-    <PreferenceCategory android:title="@string/settings_category_video">
-        <SwitchPreferenceCompat
-            android:defaultValue="true"
-            android:key="video_keep_aspect"
-            android:title="@string/settings_keep_aspect" />
-        <!--
-          La mise à l'échelle entière n'a de sens qu'avec le ratio conservé :
-          sans lui, l'image est étirée au cadre et le facteur d'agrandissement
-          n'est plus le sien. La dépendance grise donc le réglage plutôt que de
-          le laisser cocher sans effet.
-        -->
-        <SwitchPreferenceCompat
-            android:defaultValue="false"
-            android:dependency="video_keep_aspect"
-            android:key="video_integer_scaling"
-            android:summary="@string/settings_integer_scaling_summary"
-            android:title="@string/settings_integer_scaling" />
-        <ListPreference
-            android:defaultValue="dmg"
-            android:key="video_screen_profile"
-            android:title="@string/settings_screen_profile"
-            app:useSimpleSummaryProvider="true" />
-        <SwitchPreferenceCompat
-            android:defaultValue="false"
-            android:key="video_show_fps"
-            android:title="@string/settings_show_fps" />
-        <SeekBarPreference
-            android:defaultValue="100"
-            android:key="video_brightness"
-            android:max="200"
-            android:summary="@string/settings_brightness_summary"
-            android:title="@string/settings_brightness"
-            app:min="0"
-            app:showSeekBarValue="true" />
-        <SeekBarPreference
-            android:defaultValue="100"
-            android:key="video_contrast"
-            android:max="200"
-            android:summary="@string/settings_contrast_summary"
-            android:title="@string/settings_contrast"
-            app:min="0"
-            app:showSeekBarValue="true" />
-        <SwitchPreferenceCompat
-            android:defaultValue="false"
-            android:key="video_lcd_correction"
-            android:summary="@string/settings_lcd_correction_summary"
-            android:title="@string/settings_lcd_correction" />
-        <SwitchPreferenceCompat
-            android:defaultValue="false"
-            android:key="video_lcd_correction_gba"
-            android:summary="@string/settings_lcd_correction_gba_summary"
-            android:title="@string/settings_lcd_correction_gba" />
-    </PreferenceCategory>
+        <PreferenceCategory android:title="@string/settings_category_emulation">
+            <SwitchPreferenceCompat
+                android:defaultValue="true"
+                android:key="emu_pause_background"
+                android:title="@string/settings_pause_background" />
+            <SwitchPreferenceCompat
+                android:defaultValue="false"
+                android:key="emu_auto_resume"
+                android:summary="@string/settings_auto_resume_summary"
+                android:title="@string/settings_auto_resume" />
+        </PreferenceCategory>
 
-    <PreferenceCategory android:title="@string/settings_category_audio">
-        <SwitchPreferenceCompat
-            android:defaultValue="true"
-            android:key="audio_enabled"
-            android:summary="@string/settings_audio_enabled_summary"
-            android:title="@string/settings_audio_enabled" />
-        <SeekBarPreference
-            android:defaultValue="100"
-            android:key="audio_volume"
-            android:max="100"
-            android:title="@string/settings_audio_volume"
-            app:showSeekBarValue="true" />
-    </PreferenceCategory>
+        <PreferenceCategory android:title="@string/settings_category_files">
+            <Preference
+                android:key="files_sav_dir_picker"
+                android:title="@string/settings_sav_dir" />
+            <Preference
+                android:key="files_covers_dir_picker"
+                android:title="@string/settings_covers_dir" />
+        </PreferenceCategory>
 
-    <PreferenceCategory android:title="@string/settings_category_controls">
-        <SwitchPreferenceCompat
-            android:defaultValue="true"
-            android:key="controls_haptic"
-            android:title="@string/settings_haptic" />
-        <Preference
-            android:key="controls_skin_manager"
-            android:summary="@string/settings_controller_skins_summary"
-            android:title="@string/settings_controller_skins" />
-        <SwitchPreferenceCompat
-            android:defaultValue="true"
-            android:key="controls_delta_visual_feedback"
-            android:summary="@string/settings_delta_visual_feedback_summary"
-            android:title="@string/settings_delta_visual_feedback" />
-        <Preference
-            android:key="controls_reset_layouts"
-            android:title="@string/settings_reset_layouts" />
-    </PreferenceCategory>
+        <PreferenceCategory android:title="@string/settings_category_debug">
+            <Preference
+                android:enabled="false"
+                android:key="debug_info"
+                android:summary="@string/settings_debug_info"
+                android:title="@string/settings_category_debug" />
+            <SwitchPreferenceCompat
+                android:defaultValue="false"
+                android:key="debug_video_diagnostics"
+                android:summary="@string/settings_video_diagnostics_summary"
+                android:title="@string/settings_video_diagnostics" />
+        </PreferenceCategory>
+    </PreferenceScreen>
 
-    <PreferenceCategory android:title="@string/settings_category_files">
-        <Preference
-            android:key="files_sav_dir_picker"
-            android:title="@string/settings_sav_dir" />
-        <Preference
-            android:key="files_covers_dir_picker"
-            android:title="@string/settings_covers_dir" />
-    </PreferenceCategory>
+    <PreferenceScreen
+        android:key="screen_audio"
+        android:summary="@string/settings_screen_audio_summary"
+        android:title="@string/settings_category_audio">
 
-    <PreferenceCategory android:title="@string/settings_category_library">
-        <SwitchPreferenceCompat
-            android:defaultValue="true"
-            android:key="library_badges"
-            android:title="@string/settings_badges" />
-        <Preference
-            android:key="library_clear_index"
-            android:title="@string/settings_clear_index" />
-    </PreferenceCategory>
+        <PreferenceCategory android:title="@string/settings_category_audio">
+            <SwitchPreferenceCompat
+                android:defaultValue="true"
+                android:key="audio_enabled"
+                android:summary="@string/settings_audio_enabled_summary"
+                android:title="@string/settings_audio_enabled" />
+            <SeekBarPreference
+                android:defaultValue="100"
+                android:key="audio_volume"
+                android:max="100"
+                android:title="@string/settings_audio_volume"
+                app:showSeekBarValue="true" />
+        </PreferenceCategory>
+    </PreferenceScreen>
 
-    <PreferenceCategory android:title="@string/settings_category_debug">
-        <Preference
-            android:enabled="false"
-            android:key="debug_info"
-            android:summary="@string/settings_debug_info"
-            android:title="@string/settings_category_debug" />
-        <SwitchPreferenceCompat
-            android:defaultValue="false"
-            android:key="debug_video_diagnostics"
-            android:summary="@string/settings_video_diagnostics_summary"
-            android:title="@string/settings_video_diagnostics" />
-    </PreferenceCategory>
+    <PreferenceScreen
+        android:key="screen_video"
+        android:summary="@string/settings_screen_video_summary"
+        android:title="@string/settings_category_video">
+
+        <PreferenceCategory android:title="@string/settings_category_video_geometry">
+            <SwitchPreferenceCompat
+                android:defaultValue="true"
+                android:key="video_keep_aspect"
+                android:title="@string/settings_keep_aspect" />
+            <!--
+              La mise à l'échelle entière n'a de sens qu'avec le ratio conservé :
+              sans lui, l'image est étirée au cadre et le facteur d'agrandissement
+              n'est plus le sien. La dépendance grise donc le réglage plutôt que de
+              le laisser cocher sans effet. Les deux restent voisins pour que ce
+              grisement se lise comme une conséquence et non comme une panne.
+            -->
+            <SwitchPreferenceCompat
+                android:defaultValue="false"
+                android:dependency="video_keep_aspect"
+                android:key="video_integer_scaling"
+                android:summary="@string/settings_integer_scaling_summary"
+                android:title="@string/settings_integer_scaling" />
+        </PreferenceCategory>
+
+        <PreferenceCategory android:title="@string/settings_category_video_rendering">
+            <ListPreference
+                android:defaultValue="dmg"
+                android:key="video_screen_profile"
+                android:title="@string/settings_screen_profile"
+                app:useSimpleSummaryProvider="true" />
+            <SeekBarPreference
+                android:defaultValue="100"
+                android:key="video_brightness"
+                android:max="200"
+                android:summary="@string/settings_brightness_summary"
+                android:title="@string/settings_brightness"
+                app:min="0"
+                app:showSeekBarValue="true" />
+            <SeekBarPreference
+                android:defaultValue="100"
+                android:key="video_contrast"
+                android:max="200"
+                android:summary="@string/settings_contrast_summary"
+                android:title="@string/settings_contrast"
+                app:min="0"
+                app:showSeekBarValue="true" />
+            <SwitchPreferenceCompat
+                android:defaultValue="false"
+                android:key="video_lcd_correction"
+                android:summary="@string/settings_lcd_correction_summary"
+                android:title="@string/settings_lcd_correction" />
+            <SwitchPreferenceCompat
+                android:defaultValue="false"
+                android:key="video_lcd_correction_gba"
+                android:summary="@string/settings_lcd_correction_gba_summary"
+                android:title="@string/settings_lcd_correction_gba" />
+        </PreferenceCategory>
+
+        <PreferenceCategory android:title="@string/settings_category_video_overlay">
+            <SwitchPreferenceCompat
+                android:defaultValue="false"
+                android:key="video_show_fps"
+                android:title="@string/settings_show_fps" />
+        </PreferenceCategory>
+    </PreferenceScreen>
+
+    <PreferenceScreen
+        android:key="screen_ui"
+        android:summary="@string/settings_screen_ui_summary"
+        android:title="@string/settings_category_ui">
+
+        <PreferenceCategory android:title="@string/settings_category_controls">
+            <SwitchPreferenceCompat
+                android:defaultValue="true"
+                android:key="controls_haptic"
+                android:title="@string/settings_haptic" />
+            <Preference
+                android:key="controls_skin_manager"
+                android:summary="@string/settings_controller_skins_summary"
+                android:title="@string/settings_controller_skins" />
+            <SwitchPreferenceCompat
+                android:defaultValue="true"
+                android:key="controls_delta_visual_feedback"
+                android:summary="@string/settings_delta_visual_feedback_summary"
+                android:title="@string/settings_delta_visual_feedback" />
+            <Preference
+                android:key="controls_reset_layouts"
+                android:title="@string/settings_reset_layouts" />
+        </PreferenceCategory>
+
+        <PreferenceCategory android:title="@string/settings_category_library">
+            <SwitchPreferenceCompat
+                android:defaultValue="true"
+                android:key="library_badges"
+                android:title="@string/settings_badges" />
+            <Preference
+                android:key="library_clear_index"
+                android:title="@string/settings_clear_index" />
+        </PreferenceCategory>
+    </PreferenceScreen>
 </PreferenceScreen>
