@@ -33,6 +33,8 @@ Conserver le ratio évite une image étirée. La mise à l'échelle entière am�
 
 Les moteurs produisent du PCM transmis à la couche audio Android. La synchronisation audio participe à la cadence normale de l'émulation.
 
+La chaîne comporte trois étages. Le mixage des cœurs prélève la **moyenne** de chaque canal sur la durée d'un échantillon, et non sa valeur instantanée: les canaux d'une console changent d'état bien plus vite que le débit de sortie, et un prélèvement instantané ferait redescendre leurs harmoniques dans l'audible sous forme de sifflements. Le passage au débit de sortie de l'appareil est ensuite fait par un filtre à bande limitée, qui laisse la bande utile intacte au lieu de ternir l'aigu. Enfin, l'écart inévitable entre l'horloge du jeu et celle du téléphone est rattrapé en continu par une correction de débit inférieure à un demi pour cent, trop petite pour s'entendre, qui évite les blancs périodiques dus au vidage de la sortie.
+
 Si le son craque:
 
 - fermez les applications lourdes;
