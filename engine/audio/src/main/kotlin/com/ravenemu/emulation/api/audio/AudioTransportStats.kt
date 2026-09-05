@@ -12,8 +12,8 @@ package com.ravenemu.emulation.api.audio
  *   produit pas assez ;
  * - [samplesWritten] inférieur à [samplesResampled] → la sortie refuse une
  *   partie du bloc, et [shortWrites] compte les fois où c'est arrivé ;
- * - [outputUnderruns] et [restarts] qui montent → la sortie se vide plus vite
- *   qu'on ne l'alimente ;
+ * - [outputUnderruns] qui monte → la sortie se vide plus vite qu'on ne
+ *   l'alimente ;
  * - [failures] non nul → la piste est en erreur, [lastFailure] dit laquelle.
  *
  * ### Coût
@@ -54,11 +54,6 @@ class AudioTransportStats {
     var shortWrites: Int = 0
         private set
 
-    /** Réamorçages de la piste après une rupture (arrêt, vidage, préremplissage). */
-    @Volatile
-    var restarts: Int = 0
-        private set
-
     /** Ruptures cumulées rapportées par la plateforme. */
     @Volatile
     var outputUnderruns: Int = 0
@@ -81,12 +76,6 @@ class AudioTransportStats {
         samplesResampled += resampled.coerceAtLeast(0)
         samplesWritten += written.coerceAtLeast(0)
         if (written < resampled) shortWrites++
-    }
-
-    /** La piste a été arrêtée, vidée et repréremplie. */
-    fun onRestart() {
-        if (!enabled) return
-        restarts++
     }
 
     /** Compteur cumulatif de ruptures rapporté par la plateforme. */
@@ -121,7 +110,6 @@ class AudioTransportStats {
             if (perdus > 0) append(" -").append(perdus / 2)
             if (shortWrites > 0) append(" tronq:").append(shortWrites)
             if (outputUnderruns > 0) append(" vide:").append(outputUnderruns)
-            if (restarts > 0) append(" relance:").append(restarts)
             if (failures > 0) append(" err:").append(failures)
         }
     }
@@ -131,7 +119,6 @@ class AudioTransportStats {
         samplesResampled = 0L
         samplesWritten = 0L
         shortWrites = 0
-        restarts = 0
         outputUnderruns = 0
         failures = 0
         lastFailure = null

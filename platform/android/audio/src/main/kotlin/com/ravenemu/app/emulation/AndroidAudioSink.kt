@@ -31,6 +31,13 @@ import kotlin.math.ceil
  * ce qui évite la séquence rupture-vidage-repréremplissage et le blanc
  * périodique qu'elle produisait.
  *
+ * Une rupture rapportée par la plateforme est **comptée, pas réparée**. La
+ * réparation d'avant — arrêter la piste, la vider, repréremplir — jetait
+ * l'avance déjà calculée et imposait une centaine de millisecondes de silence
+ * pour une interruption qui en durait quelques-unes ; voir [AudioBufferPrimer].
+ * La file se reconstitue d'elle-même, l'écriture bloquante ne bloquant que sur
+ * une file pleine.
+ *
  * [stats] relève ce que devient chaque bloc le long de la chaîne. Inactif par
  * défaut, il ne coûte que la lecture d'un booléen par appel.
  */
@@ -117,7 +124,7 @@ class AndroidAudioSink(
      * journal, ni compteur, ni message, ne l'indique.
      */
     override fun write(samples: ShortArray, count: Int) {
-        recoverFromUnderrun()
+        stats.onUnderrunCount(currentUnderrunCount())
 
         // Le rééchantillonnage suit le débit natif du moteur, à la correction
         // de dérive près : une variation du temps de rendu ne doit jamais
@@ -182,21 +189,6 @@ class AndroidAudioSink(
     }
 
     /**
-     * Une rupture vide l'avance accumulée. On arrête alors la piste, on jette
-     * son tampon devenu discontinu et on repasse par le même préremplissage.
-     */
-    private fun recoverFromUnderrun() {
-        val ruptures = currentUnderrunCount()
-        stats.onUnderrunCount(ruptures)
-        if (!primer.onUnderrunCount(ruptures)) return
-        stats.onRestart()
-        track.pause()
-        track.flush()
-        primer.reset(currentUnderrunCount())
-        forgetQueuedFrames()
-    }
-
-    /**
      * Après un vidage, la piste et son compteur de trames jouées repartent de
      * zéro : le nôtre aussi, et la correction avec, faute de quoi la première
      * mesure d'après comparerait deux origines différentes.
@@ -231,7 +223,7 @@ class AndroidAudioSink(
         try {
             track.pause()
             track.flush()
-            primer.reset(currentUnderrunCount())
+            primer.reset()
             forgetQueuedFrames()
             resampler.reset()
         } catch (e: Exception) {
