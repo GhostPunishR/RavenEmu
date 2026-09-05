@@ -134,6 +134,32 @@ class EmulationSessionStopTest {
         }
     }
 
+    /**
+     * Sauvegarde volontairement lente, qui compte les trames produites pendant
+     * qu'elle écrit.
+     *
+     * Deux cents millisecondes : l'ordre de grandeur d'une écriture qui passe
+     * par le fournisseur de documents d'Android, et bien plus que l'avance que
+     * la sortie audio garde devant elle.
+     */
+    private class SlowSaveCallbacks(private val core: FakeCore) : RecordingCallbacks() {
+        val ecritureTerminee = CountDownLatch(1)
+        val tramesPendantEcriture = AtomicInteger(-1)
+
+        override fun onBatterySave(data: ByteArray): Boolean {
+            val avant = core.frames.get()
+            Thread.sleep(DUREE_ECRITURE_MILLIS)
+            tramesPendantEcriture.compareAndSet(-1, core.frames.get() - avant)
+            val resultat = super.onBatterySave(data)
+            ecritureTerminee.countDown()
+            return resultat
+        }
+
+        companion object {
+            const val DUREE_ECRITURE_MILLIS = 200L
+        }
+    }
+
     private open class RecordingCallbacks : EmulationSession.Callbacks {
         val saves = AtomicInteger()
         val audioFailures = AtomicInteger()
@@ -275,6 +301,76 @@ class EmulationSessionStopTest {
         assertTrue(callbacks.saves.get() >= 1, "une sauvegarde finale est attendue")
         assertEquals(7L, core.acknowledged)
         assertFalse(core.batteryRamDirty)
+    }
+
+    /**
+     * Une sauvegarde lente ne doit pas arrêter la production de trames.
+     *
+     * C'est le défaut que ce test verrouille, et il s'entend avant de se voir :
+     * persister la RAM de cartouche traverse, sur Android, le fournisseur de
+     * documents du système. Faite sur le thread d'émulation, l'attente arrête
+     * la production d'échantillons ; la sortie audio se vide et le son saute.
+     * Toutes les cinq secondes, tant que le jeu écrit dans sa sauvegarde — ce
+     * que les jeux Game Boy font en continu.
+     *
+     * Le seuil est bas volontairement : ce n'est pas le débit qu'on mesure,
+     * c'est l'absence de blocage. Sur le chemin fautif, le compte est
+     * exactement zéro.
+     */
+    @Test
+    fun `une sauvegarde lente n'arrete pas la production de trames`() {
+        val core = FakeCore(batterySize = 32).apply { dirtyFlag = true; generation = 1 }
+        val callbacks = SlowSaveCallbacks(core)
+        val session = EmulationSession(
+            core,
+            callbacks,
+            batterySaveIntervalNanos = 50_000_000L,
+        )
+        session.start()
+        assertTrue(
+            callbacks.ecritureTerminee.await(10, TimeUnit.SECONDS),
+            "aucune sauvegarde périodique n'a eu lieu",
+        )
+        session.stop()
+
+        val trames = callbacks.tramesPendantEcriture.get()
+        assertTrue(
+            trames >= 4,
+            "le thread d'émulation est resté bloqué pendant l'écriture : $trames trame(s)",
+        )
+    }
+
+    /**
+     * L'acquittement d'une écriture différée revient bien au moteur.
+     *
+     * Écrire ailleurs ne sert à rien si le moteur n'apprend jamais que c'est
+     * fait : il resterait marqué modifié et réécrirait indéfiniment. Le témoin
+     * est le nombre d'écritures — une seule. S'il en fallait une seconde, c'est
+     * que l'arrêt a dû refaire le travail.
+     */
+    @Test
+    fun `une sauvegarde differee est acquittee sans attendre l'arret`() {
+        val core = FakeCore(batterySize = 32).apply { dirtyFlag = true; generation = 9 }
+        val callbacks = RecordingCallbacks()
+        val session = EmulationSession(
+            core,
+            callbacks,
+            batterySaveIntervalNanos = 50_000_000L,
+        )
+        session.start()
+        val limite = System.nanoTime() + 10_000_000_000L
+        while (callbacks.saves.get() == 0 && System.nanoTime() < limite) Thread.sleep(5)
+        // Laisse l'acquittement traverser la file de commandes.
+        Thread.sleep(300)
+        session.stop()
+
+        assertEquals(9L, core.acknowledged, "aucun acquittement n'est revenu")
+        assertFalse(core.batteryRamDirty)
+        assertEquals(
+            1,
+            callbacks.saves.get(),
+            "l'arrêt a dû réécrire : l'acquittement différé n'était pas revenu",
+        )
     }
 
     /** Si l'écriture échoue à l'arrêt, rien n'est acquitté. */
