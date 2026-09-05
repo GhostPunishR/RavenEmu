@@ -96,6 +96,50 @@ void post_boot_channel_still_audible_test() {
           "le canal doit redevenir audible dès que le jeu le déclenche");
 }
 
+/**
+ * L'initialisation audio type d'un jeu ne fait aucun bruit.
+ *
+ * Un jeu commence presque toujours par couper l'APU, le rallumer, poser ses
+ * volumes et son aiguillage, puis allumer le convertisseur d'un canal — le
+ * tout avant de jouer la moindre note.
+ *
+ * Rien de cette séquence ne doit s'entendre. Le niveau continu est le même
+ * avant la coupure et après le rallumage, et la charge gardée pendant la
+ * coupure le rejoint exactement : chaque moitié de la fenêtre de reconnexion
+ * vaut zéro. Leur **moyenne**, elle, ne valait zéro que par accident, et
+ * filtrée contre la charge elle sortait une impulsion d'un seul échantillon,
+ * jusqu'à un sixième de la dynamique. C'était le tic entendu à l'ouverture
+ * d'une partie, après que le carillon d'amorçage eut cessé d'être rejoué.
+ *
+ * Les avances ne sont volontairement pas des multiples de la fenêtre de cent
+ * vingt-huit cycles : les écritures tombent ainsi au milieu d'une fenêtre,
+ * ce qui est le cas courant et le seul qui révèle le défaut.
+ */
+void game_apu_init_is_silent_test() {
+    Apu apu(gb::HardwareMode::dmg);
+    apu.initialize_hle_post_boot();
+    Runner runner(apu);
+    int peak = runner.run(70'224);
+
+    apu.write(0xff26, 0x00); // coupure de l'APU
+    peak = std::max(peak, runner.run(7'000));
+    apu.write(0xff26, 0x80); // rallumage
+    peak = std::max(peak, runner.run(7'000));
+    apu.write(0xff24, 0x77); // volumes maîtres
+    apu.write(0xff25, 0xff); // aiguillage complet
+    peak = std::max(peak, runner.run(7'000));
+    apu.write(0xff12, 0xf0); // convertisseur du canal 1 allumé, volume 15
+    peak = std::max(peak, runner.run(7'000));
+    check(peak == 0, "l'initialisation audio d'un jeu doit être silencieuse");
+
+    // Et la première note s'entend : le silence obtenu n'est pas celui d'un
+    // APU resté muet.
+    apu.write(0xff11, 0x80);
+    apu.write(0xff13, 0xd6);
+    apu.write(0xff14, 0x86); // déclenchement, environ 440 Hz
+    check(runner.run(70'224) > 1000, "la première note doit s'entendre");
+}
+
 void hle_post_boot_register_test() {
     Apu apu(gb::HardwareMode::cgb_native);
     apu.initialize_hle_post_boot();
@@ -485,6 +529,7 @@ int main() {
     hle_post_boot_register_test();
     hle_post_boot_silence_test();
     post_boot_channel_still_audible_test();
+    game_apu_init_is_silent_test();
     wave_ram_access_test();
     sweep_negate_clear_test();
     powered_off_length_counter_test();

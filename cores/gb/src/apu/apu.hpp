@@ -118,7 +118,25 @@ public:
         return raw_registers_[static_cast<std::size_t>(offset)] | read_masks[static_cast<std::size_t>(offset)];
     }
 
+    /**
+     * Écriture d'un registre audio.
+     *
+     * Le mixeur peut s'y connecter ou s'en déconnecter — un DAC qu'on allume,
+     * NR52 qu'on coupe. Quand cela survient au milieu d'une fenêtre déjà
+     * entamée, la fenêtre est à cheval sur deux régimes et sa moyenne ne
+     * représente ni l'un ni l'autre ; [emit_sample] la traite à part.
+     */
     void write(int address, int value) {
+        const bool connected_before = power_on_ && any_dac_enabled();
+        write_register(address, value);
+        if (sample_timer_ < cycles_per_sample &&
+            connected_before != (power_on_ && any_dac_enabled())) {
+            mixer_changed_mid_window_ = true;
+        }
+    }
+
+private:
+    void write_register(int address, int value) {
         value = byte(value);
         if (address >= 0xff30 && address <= 0xff3f) {
             write_wave_ram(address - 0xff30, value);
@@ -181,6 +199,7 @@ public:
         }
     }
 
+public:
     void save(BinaryWriter& out) const {
         out.i32(state_layout);
         out.boolean(power_on_); out.i32(nr50_); out.i32(nr51_);
@@ -206,6 +225,7 @@ public:
         capacitor_left_ = in.f64(); capacitor_right_ = in.f64();
         square1_.load(in); square2_.load(in); wave_.load(in); noise_.load(in);
         ring_read_ = 0; ring_write_ = 0; ring_count_ = 0;
+        mixer_changed_mid_window_ = false;
     }
 
 private:
@@ -647,6 +667,29 @@ private:
         if (!power_on_ || !any_dac_enabled()) {
             // Le condensateur est physiquement déconnecté lorsque les quatre
             // DAC sont coupés : sortie nulle et charge conservée.
+            mixer_changed_mid_window_ = false;
+            push_sample(0, 0);
+            return;
+        }
+        if (mixer_changed_mid_window_) {
+            // Fenêtre à cheval sur une reconnexion du mixeur. Une partie s'est
+            // écoulée mixeur coupé — sortie nulle par la règle ci-dessus — et
+            // l'autre mixeur rétabli, sur un niveau continu que la charge
+            // gardée pendant la coupure rejoint exactement. Les deux moitiés
+            // valent donc zéro séparément.
+            //
+            // Leur *moyenne*, elle, ne vaut zéro que par accident : elle mêle
+            // les deux dans une proportion qui ne tient qu'à l'instant où le
+            // jeu a écrit son registre. Filtrée contre la charge, elle sortait
+            // une impulsion d'un seul échantillon, jusqu'à un sixième de la
+            // dynamique — le tic entendu à l'ouverture d'une partie, quand le
+            // jeu éteint puis rallume l'APU avant de jouer sa première note.
+            //
+            // On rend donc le zéro que valent les deux moitiés, et on reprend
+            // la charge sur le niveau retrouvé : le régime établi commence à la
+            // fenêtre suivante, sans marche.
+            mixer_changed_mid_window_ = false;
+            prime_capacitors();
             push_sample(0, 0);
             return;
         }
@@ -719,6 +762,15 @@ private:
     std::size_t ring_count_{};
     double capacitor_left_{};
     double capacitor_right_{};
+
+    /**
+     * Le mixeur a changé d'état de connexion dans la fenêtre en cours.
+     *
+     * Transitoire : consommé par le prélèvement suivant. Rien n'en est
+     * sérialisé, un état instantané reprenant toujours à une frontière de
+     * fenêtre.
+     */
+    bool mixer_changed_mid_window_{};
 };
 
 } // namespace ravenemu::cgb
