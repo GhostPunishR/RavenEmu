@@ -63,53 +63,6 @@ class FingerprintsTest {
     }
 }
 
-/**
- * État déduit des seules sommes de contrôle de la cartouche : aucune base
- * extérieure n'intervient, donc rien à importer ni à tenir à jour.
- */
-class RomStatusTest {
-
-    private val analyzer = GameBoyRomAnalyzer(GameBoyConsoleProvider())
-
-    private fun statusOf(rom: ByteArray): RomStatus =
-        (analyzer.analyze("u", "f.gb", 0, rom) as AnalysisResult.Success).entry.status
-
-    @Test
-    fun `une cartouche cohérente avec elle-même est intègre`() {
-        assertEquals(RomStatus.INTACT, statusOf(testRom()))
-    }
-
-    /**
-     * Le cas qui justifie le badge : un seul octet retouché ailleurs que dans
-     * l'en-tête suffit à faire mentir la somme globale.
-     */
-    @Test
-    fun `un seul octet modifié bascule en modifiée`() {
-        val rom = testRom()
-        rom[0x2000] = (rom[0x2000].toInt() xor 0xFF).toByte()
-        assertEquals(RomStatus.MODIFIED, statusOf(rom))
-    }
-
-    @Test
-    fun `une somme d'en-tête fausse est signalée comme telle`() {
-        val rom = testRom()
-        rom[0x014D] = (rom[0x014D].toInt() xor 0xFF).toByte()
-        assertEquals(RomStatus.INVALID_HEADER, statusOf(rom))
-    }
-
-    /**
-     * L'en-tête prime : sans lui, la somme globale n'a pas de sens à
-     * commenter, et annoncer « Modifiée » masquerait un fichier douteux.
-     */
-    @Test
-    fun `en-tête invalide prime sur la somme globale`() {
-        val rom = testRom()
-        rom[0x2000] = (rom[0x2000].toInt() xor 0xFF).toByte()
-        rom[0x014D] = (rom[0x014D].toInt() xor 0xFF).toByte()
-        assertEquals(RomStatus.INVALID_HEADER, statusOf(rom))
-    }
-}
-
 class GameBoyRomAnalyzerTest {
 
     private val analyzer = GameBoyRomAnalyzer(GameBoyConsoleProvider())
@@ -131,8 +84,6 @@ class GameBoyRomAnalyzerTest {
         assertEquals(MbcType.MBC1, entry.mbcType)
         assertTrue(entry.hasBattery)
         assertEquals(rom.size.toLong(), entry.sizeBytes)
-        assertEquals(RomStatus.INTACT, entry.status)
-        assertTrue(entry.headerChecksumValid)
         assertEquals("RAVENQUEST", entry.displayName)
     }
 

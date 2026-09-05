@@ -98,9 +98,7 @@ class GameBoyRomAnalyzer(override val provider: ConsoleProvider) : RomAnalyzer {
                 ramSizeBytes = header.ramSizeBytes,
                 region = header.region,
                 cartridgeMode = header.cartridgeMode,
-                headerChecksumValid = header.headerChecksumValid,
                 fingerprints = fingerprints,
-                status = header.romStatus(),
             )
         )
     }

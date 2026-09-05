@@ -164,10 +164,6 @@
         </PreferenceCategory>
 
         <PreferenceCategory android:title="@string/settings_category_library">
-            <SwitchPreferenceCompat
-                android:defaultValue="true"
-                android:key="library_badges"
-                android:title="@string/settings_badges" />
             <Preference
                 android:key="library_clear_index"
                 android:title="@string/settings_clear_index" />

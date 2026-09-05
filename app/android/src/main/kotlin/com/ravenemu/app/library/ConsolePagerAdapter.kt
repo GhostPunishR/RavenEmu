@@ -49,9 +49,6 @@ class ConsolePagerAdapter(
     /** Vue liste plutôt que grille, réglage commun à toutes les pages. */
     var gridMode: Boolean = true
 
-    /** Pastilles d'état, réglage commun à toutes les pages. */
-    var showBadges: Boolean = true
-
     /** Filtre de la page à l'index donné, ou `null` hors limites. */
     fun pageAt(index: Int): String? = pages.getOrNull(index)
 
@@ -100,12 +97,10 @@ class ConsolePagerAdapter(
                     onClick = onClick,
                     onLongClick = onLongClick,
                     covers = covers,
-                    showBadges = showBadges,
                     gridMode = gridMode,
                 )
             }
             adaptateur.gridMode = gridMode
-            adaptateur.showBadges = showBadges
 
             appliquerDisposition()
             if (liste.adapter !== adaptateur) liste.adapter = adaptateur
