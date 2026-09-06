@@ -5,8 +5,27 @@ package com.ravenemu.emulation.api.audio
  *
  * Une piste démarrée avant de contenir assez d'échantillons consomme son premier
  * bloc pendant que le suivant est encore calculé. Elle reste alors au bord de la
- * rupture même si le tampon alloué est grand. Ce contrôleur retarde le démarrage
- * jusqu'au seuil demandé et recommence le préremplissage après une rupture.
+ * rupture même si le tampon alloué est grand. Ce contrôleur retarde donc le
+ * démarrage jusqu'au seuil demandé.
+ *
+ * ### Une rupture ne déclenche plus de nouveau préremplissage
+ *
+ * Elle le faisait, et c'était le mauvais réflexe. Arrêter la piste, la vider et
+ * repréremplir jette l'avance déjà calculée — jusqu'à huit trames vidéo — puis
+ * impose six trames de silence avant de rejouer : autour de cent millisecondes
+ * de blanc, garanties, pour réparer une interruption qui en durait quelques-unes.
+ *
+ * Ne rien faire est strictement meilleur. Après une rupture la file est vide,
+ * mais la piste continue de jouer ce qui arrive, et l'écriture bloquante ne
+ * bloque que sur une file **pleine** : en dessous, elle rend la main
+ * immédiatement. Le thread d'émulation calcule une trame en quelques
+ * millisecondes et en produit seize de son, si bien que la réserve se reconstitue
+ * bien plus vite que le temps réel, en quelques blocs, sans que la piste
+ * s'arrête une seule fois. Il n'existe pas de cas où le vidage produise moins de
+ * silence que l'attente.
+ *
+ * Le préremplissage garde donc son seul rôle utile : le démarrage, et la reprise
+ * après un vidage volontaire ([reset], sur pause ou arrêt de session).
  */
 class AudioBufferPrimer(
     private val startThresholdSamples: Int,
@@ -20,8 +39,6 @@ class AudioBufferPrimer(
 
     var playbackStarted: Boolean = false
         private set
-
-    private var observedUnderruns: Int = 0
 
     /**
      * Enregistre [sampleCount] échantillons entrelacés écrits dans la piste.
@@ -37,24 +54,9 @@ class AudioBufferPrimer(
         return true
     }
 
-    /**
-     * Observe le compteur cumulatif de la plateforme. Retourne vrai lorsqu'une
-     * nouvelle rupture impose d'arrêter la piste et de la préremplir à nouveau.
-     */
-    fun onUnderrunCount(totalUnderruns: Int): Boolean {
-        val normalized = totalUnderruns.coerceAtLeast(0)
-        val increased = normalized > observedUnderruns
-        observedUnderruns = maxOf(observedUnderruns, normalized)
-        if (!increased || !playbackStarted) return false
-        playbackStarted = false
-        queuedSamples = 0
-        return true
-    }
-
-    /** Repart avec une piste vide et le compteur actuel de la plateforme. */
-    fun reset(currentUnderruns: Int = 0) {
+    /** Repart avec une piste vide, après un vidage volontaire. */
+    fun reset() {
         queuedSamples = 0
         playbackStarted = false
-        observedUnderruns = currentUnderruns.coerceAtLeast(0)
     }
 }
