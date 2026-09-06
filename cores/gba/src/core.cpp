@@ -34,7 +34,7 @@ public:
         require_loaded();
         if (framebuffer.size() < Ppu::screen_width * Ppu::screen_height) throw std::invalid_argument("Framebuffer trop petit");
         machine_->ppu.render_enabled = render_video;
-        try { machine_->run_frame(280'896); } catch (...) { machine_->ppu.render_enabled = true; throw; }
+        try { machine_->run_frame(); } catch (...) { machine_->ppu.render_enabled = true; throw; }
         machine_->ppu.render_enabled = true;
         if (render_video) std::copy(machine_->ppu.frame.begin(), machine_->ppu.frame.end(), framebuffer.begin());
     }

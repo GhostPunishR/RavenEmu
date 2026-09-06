@@ -58,10 +58,15 @@ class GbaMachine(rom: ByteArray, forcedSaveType: GbaSaveType? = null) {
     }
 
     /**
-     * Exécute [cycles] cycles CPU en faisant avancer l'affichage et les timers à
-     * la même cadence. Avant chaque instruction, une interruption en attente et
-     * autorisée (drapeau `I` du CPU dégagé) provoque l'exception IRQ (vecteur
-     * `0x18`, traité par le BIOS/HLE).
+     * Avance jusqu'à la prochaine frontière de trame PPU en faisant progresser
+     * le CPU, l'affichage et les timers à la même cadence.
+     */
+    fun runFrame() = runFrame(ppu.cyclesUntilNextFrame())
+
+    /**
+     * Exécute [cycles] cycles CPU. Avant chaque instruction, une interruption
+     * en attente et autorisée (drapeau `I` du CPU dégagé) provoque l'exception
+     * IRQ (vecteur `0x18`, traité par le BIOS/HLE).
      */
     fun runFrame(cycles: Int) {
         var elapsed = 0

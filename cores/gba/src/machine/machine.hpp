@@ -21,6 +21,11 @@ public:
         interrupts.on_request = [this](int mask) { bios.interrupt_raised(mask); bus.diagnostics.interrupt(mask); };
         cpu.reset(i32(0x08000000U));
     }
+    void run_frame() {
+        // Une instruction peut franchir la frontière PPU. La position courante
+        // retranche ce dépassement à la trame suivante au lieu de l'accumuler.
+        run_frame(ppu.cycles_until_next_frame());
+    }
     void run_frame(int cycles) {
         auto elapsed = 0; bus.diagnostics.begin_frame();
         while (elapsed < cycles) {
