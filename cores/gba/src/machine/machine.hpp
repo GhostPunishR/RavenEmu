@@ -21,11 +21,21 @@ public:
         interrupts.on_request = [this](int mask) { bios.interrupt_raised(mask); bus.diagnostics.interrupt(mask); };
         cpu.reset(i32(0x08000000U));
     }
+    void run_frame() {
+        // Une instruction peut franchir la frontière PPU. La position courante
+        // retranche ce dépassement à la trame suivante au lieu de l'accumuler.
+        run_frame(ppu.cycles_until_next_frame());
+    }
     void run_frame(int cycles) {
         auto elapsed = 0; bus.diagnostics.begin_frame();
         while (elapsed < cycles) {
-            const auto dma_cycles = dma.take_pending_cycles();
-            if (dma_cycles > 0) { advance_peripherals(dma_cycles); elapsed += dma_cycles; continue; }
+            if (dma.active()) {
+                const auto dma_cycles = std::min(cycles - elapsed, dma.cycles_until_event());
+                // L'effet mémoire survient après que le coût de l'accès s'est
+                // écoulé, à la même position temporelle dans tous les périphériques.
+                advance_peripherals(dma_cycles); dma.tick(dma_cycles); elapsed += dma_cycles;
+                continue;
+            }
             if (cpu.state.halted) {
                 advance_peripherals(64); elapsed += 64;
                 bus.diagnostics.wait_step(64, bios.wait_state() ? bios.wait_state()->interrupt_mask : 0);

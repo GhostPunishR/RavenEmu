@@ -92,6 +92,7 @@ class IoWriteWidthTest {
         // (bit 15) dans l'octet haut.
         m.bus.write8(0x0400_00BA, 0x00)
         m.bus.write8(0x0400_00BB, 0x84)         // activation + transfert 32 bits
+        m.runFrame(2 + 2 * 6)
         assertEquals(0xCAFE_BABE.toInt(), m.bus.read32(0x0200_1000))
     }
 

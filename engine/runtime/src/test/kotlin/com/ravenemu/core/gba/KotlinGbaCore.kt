@@ -91,7 +91,7 @@ internal class KotlinGbaCore(
         }
         m.ppu.renderEnabled = renderVideo
         try {
-            m.runFrame(CYCLES_PER_FRAME)
+            m.runFrame()
         } finally {
             // Une demande de saut ne doit jamais survivre à la trame courante.
             m.ppu.renderEnabled = true

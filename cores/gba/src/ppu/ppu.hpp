@@ -68,6 +68,10 @@ public:
         return {vcount, line_cycles_, in_vblank ? 1 : 0, in_hblank ? 1 : 0,
                 vcount_match ? 1 : 0, bg2_ref_x_, bg2_ref_y_, bg3_ref_x_, bg3_ref_y_};
     }
+    /** Cycles restants avant le retour à VCOUNT 0, position de ligne 0. */
+    [[nodiscard]] int cycles_until_next_frame() const noexcept {
+        return total_lines * line_cycles_total - (vcount * line_cycles_total + line_cycles_);
+    }
     void restore_state(std::span<const std::int32_t> values) {
         if (values.size() != state_field_count || values[0] < 0 || values[0] >= total_lines ||
             values[1] < 0 || values[1] >= line_cycles_total) throw SaveStateError("État PPU GBA invalide");

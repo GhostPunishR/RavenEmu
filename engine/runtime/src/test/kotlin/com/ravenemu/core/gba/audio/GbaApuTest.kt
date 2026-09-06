@@ -107,6 +107,8 @@ class GbaApuTest {
         bus.write16(0x0400_00C6, 0x8000 or 0x3000 or 0x0400) // activé, spécial, 32 bits
 
         m.dma.triggerSoundFifo(0)
+        assertEquals(0, m.apu.fifoSize(0), "le transfert ne doit pas être instantané")
+        m.runFrame(2 + 4 * (6 + 1))
         assertEquals(16, m.apu.fifoSize(0), "quatre mots doivent être transférés")
     }
 
