@@ -26,6 +26,16 @@ if(RAVENEMU_BUILD_TESTS)
     target_link_libraries(gba_raven_rtc_tests PRIVATE gba_raven_core)
     add_test(NAME gba_raven_rtc COMMAND gba_raven_rtc_tests)
 
+    # L'affichage se pilote lui aussi par ses registres, dans les mêmes
+    # en-têtes internes : même raison que pour le RTC.
+    add_executable(gba_raven_ppu_tests tests/gba_ppu_test.cpp)
+    target_include_directories(gba_raven_ppu_tests PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/src
+        ${CMAKE_CURRENT_LIST_DIR}/../common/tests/support
+    )
+    target_link_libraries(gba_raven_ppu_tests PRIVATE gba_raven_core)
+    add_test(NAME gba_raven_ppu COMMAND gba_raven_ppu_tests)
+
     # Le mélangeur audio se pilote par ses registres, qui vivent dans les
     # en-têtes internes du cœur : même raison que pour le RTC.
     add_executable(gba_raven_apu_tests tests/gba_apu_test.cpp)

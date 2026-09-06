@@ -40,7 +40,6 @@ Cette page présente les priorités générales. Les issues et pull requests res
 ## Pistes futures
 
 - effets vidéo au milieu d'une ligne;
-- mosaïque Game Boy Advance;
 - détails audio matériels supplémentaires;
 - BIOS Game Boy Advance fourni par l'utilisateur avec validation stricte;
 - nouvelles consoles sous forme de modules indépendants.

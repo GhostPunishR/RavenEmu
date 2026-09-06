@@ -126,6 +126,7 @@ Le moteur Game Boy Advance est expérimental. Il comprend:
 - modes vidéo bitmap 3, 4 et 5;
 - arrière-plans texte et affines;
 - sprites, fenêtres et effets de couleur;
+- mosaïque des plans et des objets;
 - interruptions, quatre timers et quatre canaux DMA;
 - audio PSG et Direct Sound;
 - SRAM, Flash 64 ou 128 Kio et EEPROM;
@@ -136,7 +137,10 @@ Le moteur Game Boy Advance est expérimental. Il comprend:
 
 - compatibilité à vérifier jeu par jeu;
 - performances encore insuffisantes sur certains appareils;
-- mosaïque et effets au milieu d'une ligne non émulés;
+- effets au milieu d'une ligne non émulés;
+- mosaïque des objets comptée dans le repère de l'objet et non depuis le
+  bord de l'écran, ce qui décale la grille des blocs lorsque l'objet n'est
+  pas posé sur un multiple de leur taille;
 - DMA de capture vidéo absent;
 - interruptions clavier et série absentes;
 - `SOUNDBIAS` et certains détails de la mémoire d'onde absents;
