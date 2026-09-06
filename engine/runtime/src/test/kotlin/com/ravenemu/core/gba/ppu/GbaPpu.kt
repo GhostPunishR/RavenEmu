@@ -19,10 +19,15 @@ import com.ravenemu.core.gba.memory.GbaBus
  * - modes **affines** 1 et 2 : rotation et mise à l'échelle avec points de
  *   référence internes ;
  * - **sprites** (dont affines et à surface doublée), fenêtres 0/1 et fenêtre
- *   objet, mélange alpha, éclaircissement et assombrissement.
+ *   objet, mélange alpha, éclaircissement et assombrissement ;
+ * - **mosaïque** des plans (bit 6 de `BGxCNT`) et des objets (bit 12 de
+ *   l'attribut 0), aux tailles données par les quatre quartets de `MOSAIC`.
  *
  * Les événements VBlank/HBlank/VCount alimentent le contrôleur d'interruptions
- * et le DMA. Limite documentée : la mosaïque n'est pas émulée.
+ * et le DMA. Limite documentée : la mosaïque des objets compte ses blocs dans
+ * le repère de l'objet, alors que le matériel les compte depuis le bord de
+ * l'écran ; la grille se décale donc pour un objet dont la position n'est pas
+ * un multiple de la taille des blocs.
  *
  * Le rendu d'une ligne n'alloue rien : tampons de composition et ordre de tracé
  * des plans sont des tableaux réutilisés.
@@ -137,6 +142,13 @@ class GbaPpu(private val bus: GbaBus) {
     private var bg2RefY = 0
     private var bg3RefX = 0
     private var bg3RefY = 0
+
+    // Copie des points de référence figée au début de chaque bande de la
+    // mosaïque verticale : c'est elle que lit le rendu affine mosaïqué.
+    private var bg2MosaicRefX = 0
+    private var bg2MosaicRefY = 0
+    private var bg3MosaicRefX = 0
+    private var bg3MosaicRefY = 0
 
     /** Ligne courante (`VCOUNT`), 0..227. */
     var vcount = 0
@@ -256,6 +268,7 @@ class GbaPpu(private val bus: GbaBus) {
         bg2RefY = 0
         bg3RefX = 0
         bg3RefY = 0
+        latchMosaicReferencePoints()
         paletteStamp.fill(0)
         paletteEpoch = 0
         simpleComposition = false
@@ -290,11 +303,13 @@ class GbaPpu(private val bus: GbaBus) {
         bg2RefY = fields[6]
         bg3RefX = fields[7]
         bg3RefY = fields[8]
+        latchMosaicReferencePoints()
     }
 
     // ---- Rendu ----
 
     private fun renderScanline(y: Int) {
+        if (y % bgMosaicHeight() == 0) latchMosaicReferencePoints()
         val dispcnt = reg16(0x00)
         val rowBase = y * SCREEN_WIDTH
         // Écran blanc forcé (DISPCNT bit 7).
@@ -390,8 +405,18 @@ class GbaPpu(private val bus: GbaBus) {
         val paramBase = if (bg == 2) 0x20 else 0x30
         val pa = signed16(reg16(paramBase))
         val pc = signed16(reg16(paramBase + 4))
-        var currentX = if (bg == 2) bg2RefX else bg3RefX
-        var currentY = if (bg == 2) bg2RefY else bg3RefY
+        val mosaic = control and 0x0040 != 0
+        val mosaicWidth = if (mosaic) bgMosaicWidth() else 1
+        var currentX = when {
+            mosaic -> if (bg == 2) bg2MosaicRefX else bg3MosaicRefX
+            else -> if (bg == 2) bg2RefX else bg3RefX
+        }
+        var currentY = when {
+            mosaic -> if (bg == 2) bg2MosaicRefY else bg3MosaicRefY
+            else -> if (bg == 2) bg2RefY else bg3RefY
+        }
+        var blockX = 0
+        var blockY = 0
 
         val layerBit = 1 shl bg
         for (x in 0 until SCREEN_WIDTH) {
@@ -400,6 +425,17 @@ class GbaPpu(private val bus: GbaBus) {
             var texY = currentY shr 8
             currentX += pa
             currentY += pc
+
+            // Le parcours avance à chaque point, mais un bloc entier réutilise
+            // les coordonnées échantillonnées à sa colonne de gauche.
+            if (mosaic) {
+                if (x % mosaicWidth == 0) {
+                    blockX = texX
+                    blockY = texY
+                }
+                texX = blockX
+                texY = blockY
+            }
 
             if (windowMask[x] and layerBit == 0) continue
             if (wraps) {
@@ -617,7 +653,14 @@ class GbaPpu(private val bus: GbaBus) {
         val hofs = reg16(0x10 + bg * 4) and 0x1FF
         val vofs = reg16(0x12 + bg * 4) and 0x1FF
 
-        val effY = (y + vofs) and (heightPixels - 1)
+        // BGxCNT bit 6 : mosaïque du plan. Le repère d'écran est ramené au coin
+        // haut-gauche de son bloc *avant* l'ajout du défilement, si bien que la
+        // grille des blocs reste fixe à l'écran quand le plan défile.
+        val mosaic = control and 0x0040 != 0
+        val mosaicWidth = if (mosaic) bgMosaicWidth() else 1
+        val sourceY = if (mosaic) y - y % bgMosaicHeight() else y
+
+        val effY = (sourceY + vofs) and (heightPixels - 1)
         val tileY = effY ushr 3
         val py0 = effY and 7
         val layerBit = 1 shl bg
@@ -632,7 +675,8 @@ class GbaPpu(private val bus: GbaBus) {
 
         for (x in 0 until SCREEN_WIDTH) {
             if (windowMask[x] and layerBit == 0) continue
-            val effX = (x + hofs) and (widthPixels - 1)
+            val sourceX = if (mosaic) x - x % mosaicWidth else x
+            val effX = (sourceX + hofs) and (widthPixels - 1)
             val tileX = effX ushr 3
 
             if (tileX != cachedTileX) {
@@ -726,23 +770,33 @@ class GbaPpu(private val bus: GbaBus) {
             val hflip = !affine && attr1 and 0x1000 != 0
             val vflip = !affine && attr1 and 0x2000 != 0
 
+            // Attribut 0 bit 12 : mosaïque de l'objet. Simplification assumée :
+            // les blocs sont comptés dans le repère de l'objet, donc ancrés sur
+            // son coin haut-gauche, alors que le matériel compte à partir du
+            // bord de l'écran. La différence ne se voit que sur un objet dont la
+            // position n'est pas un multiple de la taille du bloc.
+            val mosaic = attr0 and 0x1000 != 0
+            val mosaicWidth = if (mosaic) objMosaicWidth() else 1
+            val sampleY = if (mosaic) sy - sy % objMosaicHeight() else sy
+
             for (col in 0 until boxW) {
                 val screenX = xPos + col
                 if (screenX < 0 || screenX >= SCREEN_WIDTH) continue
+                val sampleCol = if (mosaic) col - col % mosaicWidth else col
 
                 val texX: Int
                 val texY: Int
                 if (affine) {
                     // Transformation autour du centre de l'emprise, résultat
                     // ramené dans les dimensions réelles du sprite.
-                    val dx = col - boxW / 2
-                    val dy = sy - boxH / 2
+                    val dx = sampleCol - boxW / 2
+                    val dy = sampleY - boxH / 2
                     texX = ((pa * dx + pb * dy) shr 8) + w / 2
                     texY = ((pc * dx + pd * dy) shr 8) + h / 2
                     if (texX < 0 || texX >= w || texY < 0 || texY >= h) continue
                 } else {
-                    texX = if (hflip) w - 1 - col else col
-                    texY = if (vflip) h - 1 - sy else sy
+                    texX = if (hflip) w - 1 - sampleCol else sampleCol
+                    texY = if (vflip) h - 1 - sampleY else sampleY
                 }
 
                 val tileIndex = tileBase + (texY / 8) * rowStride + (texX / 8) * slots
@@ -842,6 +896,29 @@ class GbaPpu(private val bus: GbaBus) {
         bg2RefY = signed28(reg32(0x2C))
         bg3RefX = signed28(reg32(0x38))
         bg3RefY = signed28(reg32(0x3C))
+        latchMosaicReferencePoints()
+    }
+
+    // MOSAIC (0x4000004C) : quatre quartets, chacun « taille du bloc moins un ».
+    private fun bgMosaicWidth(): Int = (reg16(0x4C) and 0xF) + 1
+
+    private fun bgMosaicHeight(): Int = ((reg16(0x4C) ushr 4) and 0xF) + 1
+
+    private fun objMosaicWidth(): Int = ((reg16(0x4C) ushr 8) and 0xF) + 1
+
+    private fun objMosaicHeight(): Int = ((reg16(0x4C) ushr 12) and 0xF) + 1
+
+    /**
+     * La mosaïque verticale fait afficher à toute une bande de lignes ce que
+     * montre sa première ligne. Pour un plan affine, cela revient à figer le
+     * point de référence interne au début de la bande : lui continue d'avancer
+     * ligne par ligne, comme sur le matériel, mais le rendu utilise la copie.
+     */
+    private fun latchMosaicReferencePoints() {
+        bg2MosaicRefX = bg2RefX
+        bg2MosaicRefY = bg2RefY
+        bg3MosaicRefX = bg3RefX
+        bg3MosaicRefY = bg3RefY
     }
 
     /** Étend le signe d'une valeur 16 bits (paramètres affines, format 8.8). */

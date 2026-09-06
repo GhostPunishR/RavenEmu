@@ -74,6 +74,7 @@ public:
         vcount = values[0]; line_cycles_ = values[1]; in_vblank = values[2] != 0;
         in_hblank = values[3] != 0; vcount_match = values[4] != 0;
         bg2_ref_x_ = values[5]; bg2_ref_y_ = values[6]; bg3_ref_x_ = values[7]; bg3_ref_y_ = values[8];
+        latch_mosaic_references();
     }
 
     std::array<std::int32_t, screen_width * screen_height> frame{};
@@ -143,8 +144,23 @@ private:
     void reload_affine_references() noexcept {
         bg2_ref_x_ = signed28(reg32(0x28)); bg2_ref_y_ = signed28(reg32(0x2c));
         bg3_ref_x_ = signed28(reg32(0x38)); bg3_ref_y_ = signed28(reg32(0x3c));
+        latch_mosaic_references();
+    }
+    // MOSAIC (0x4000004c) : quatre quartets, chacun « taille du bloc moins un ».
+    [[nodiscard]] int bg_mosaic_width() const noexcept { return (reg16(0x4c) & 15) + 1; }
+    [[nodiscard]] int bg_mosaic_height() const noexcept { return ((reg16(0x4c) >> 4) & 15) + 1; }
+    [[nodiscard]] int obj_mosaic_width() const noexcept { return ((reg16(0x4c) >> 8) & 15) + 1; }
+    [[nodiscard]] int obj_mosaic_height() const noexcept { return ((reg16(0x4c) >> 12) & 15) + 1; }
+    // La mosaïque verticale fait afficher à toute une bande de lignes ce que
+    // montre sa première ligne. Pour un plan affine, cela revient à figer le
+    // point de référence interne au début de la bande : lui continue d'avancer
+    // ligne par ligne, comme sur le matériel, mais le rendu utilise la copie.
+    void latch_mosaic_references() noexcept {
+        bg2_mosaic_ref_x_ = bg2_ref_x_; bg2_mosaic_ref_y_ = bg2_ref_y_;
+        bg3_mosaic_ref_x_ = bg3_ref_x_; bg3_mosaic_ref_y_ = bg3_ref_y_;
     }
     void render_scanline(int y) {
+        if (y % bg_mosaic_height() == 0) latch_mosaic_references();
         const auto display = reg16(0);
         const auto row = static_cast<std::size_t>(y * screen_width);
         if ((display & 0x80) != 0) { std::fill_n(frame.begin() + static_cast<std::ptrdiff_t>(row), screen_width, i32(0xffffffffU)); return; }
@@ -197,10 +213,19 @@ private:
         const auto wraps = (control & 0x2000) != 0; const auto tiles = 16 << ((control >> 14) & 3);
         const auto pixels = tiles * 8; const auto param = bg == 2 ? 0x20 : 0x30;
         const auto pa = signed16(reg16(param)); const auto pc = signed16(reg16(param + 4));
-        auto current_x = bg == 2 ? bg2_ref_x_ : bg3_ref_x_; auto current_y = bg == 2 ? bg2_ref_y_ : bg3_ref_y_;
+        const auto mosaic = (control & 0x40) != 0; const auto mosaic_width = mosaic ? bg_mosaic_width() : 1;
+        auto current_x = mosaic ? (bg == 2 ? bg2_mosaic_ref_x_ : bg3_mosaic_ref_x_) : (bg == 2 ? bg2_ref_x_ : bg3_ref_x_);
+        auto current_y = mosaic ? (bg == 2 ? bg2_mosaic_ref_y_ : bg3_mosaic_ref_y_) : (bg == 2 ? bg2_ref_y_ : bg3_ref_y_);
+        std::int32_t block_x{}; std::int32_t block_y{};
         for (int x = 0; x < screen_width; ++x) {
             auto texture_x = current_x >> 8; auto texture_y = current_y >> 8;
             current_x = add32(current_x, pa); current_y = add32(current_y, pc);
+            // Le parcours avance à chaque point, mais un bloc entier réutilise
+            // les coordonnées échantillonnées à sa colonne de gauche.
+            if (mosaic) {
+                if (x % mosaic_width == 0) { block_x = texture_x; block_y = texture_y; }
+                texture_x = block_x; texture_y = block_y;
+            }
             if ((window_mask_[static_cast<std::size_t>(x)] & (1 << bg)) == 0) continue;
             if (wraps) { texture_x = positive_mod(texture_x, pixels); texture_y = positive_mod(texture_y, pixels); }
             else if (texture_x < 0 || texture_x >= pixels || texture_y < 0 || texture_y >= pixels) continue;
@@ -214,12 +239,18 @@ private:
         const auto char_base = ((control >> 2) & 3) * 0x4000; const auto screen_base = ((control >> 8) & 31) * 0x800;
         const auto eight_bpp = (control & 0x80) != 0; const auto size = (control >> 14) & 3;
         const auto width = size == 1 || size == 3 ? 512 : 256; const auto height = size >= 2 ? 512 : 256;
-        const auto effective_y = (y + (reg16(0x12 + bg * 4) & 0x1ff)) & (height - 1);
+        // BGxCNT bit 6 : mosaïque du plan. Le repère d'écran est ramené au coin
+        // haut-gauche de son bloc *avant* l'ajout du défilement, si bien que la
+        // grille des blocs reste fixe à l'écran quand le plan défile.
+        const auto mosaic = (control & 0x40) != 0; const auto mosaic_width = mosaic ? bg_mosaic_width() : 1;
+        const auto source_y = mosaic ? y - y % bg_mosaic_height() : y;
+        const auto effective_y = (source_y + (reg16(0x12 + bg * 4) & 0x1ff)) & (height - 1);
         const auto tile_y = effective_y >> 3; const auto initial_py = effective_y & 7;
         const auto horizontal = reg16(0x10 + bg * 4) & 0x1ff;
         for (int x = 0; x < screen_width; ++x) {
             if ((window_mask_[static_cast<std::size_t>(x)] & (1 << bg)) == 0) continue;
-            const auto effective_x = (x + horizontal) & (width - 1); const auto tile_x = effective_x >> 3;
+            const auto source_x = mosaic ? x - x % mosaic_width : x;
+            const auto effective_x = (source_x + horizontal) & (width - 1); const auto tile_x = effective_x >> 3;
             const auto block_x = tile_x >= 32 ? 1 : 0; const auto block_y = tile_y >= 32 ? 1 : 0;
             const auto block = size == 1 ? block_x : size == 2 ? block_y : size == 3 ? block_y * 2 + block_x : 0;
             const auto entry = vram16(screen_base + block * 0x800 + ((tile_y & 31) * 32 + (tile_x & 31)) * 2);
@@ -250,15 +281,23 @@ private:
             auto pa = 0x100; auto pb = 0; auto pc = 0; auto pd = 0x100;
             if (affine) { const auto group = ((attr1 >> 9) & 31) * 32; pa = signed16(oam16(group + 6)); pb = signed16(oam16(group + 14)); pc = signed16(oam16(group + 22)); pd = signed16(oam16(group + 30)); }
             const auto horizontal_flip = !affine && (attr1 & 0x1000) != 0; const auto vertical_flip = !affine && (attr1 & 0x2000) != 0;
+            // Attribut 0 bit 12 : mosaïque de l'objet. Simplification assumée :
+            // les blocs sont comptés dans le repère de l'objet, donc ancrés sur
+            // son coin haut-gauche, alors que le matériel compte à partir du
+            // bord de l'écran. La différence ne se voit que sur un objet dont la
+            // position n'est pas un multiple de la taille du bloc.
+            const auto mosaic = (attr0 & 0x1000) != 0; const auto mosaic_width = mosaic ? obj_mosaic_width() : 1;
+            const auto sample_y = mosaic ? sprite_y - sprite_y % obj_mosaic_height() : sprite_y;
             for (int column = 0; column < box_width; ++column) {
                 const auto screen_x = sprite_x + column; if (screen_x < 0 || screen_x >= screen_width) continue;
+                const auto sample_column = mosaic ? column - column % mosaic_width : column;
                 int texture_x{}; int texture_y{};
                 if (affine) {
-                    const auto dx = column - box_width / 2; const auto dy = sprite_y - box_height / 2;
+                    const auto dx = sample_column - box_width / 2; const auto dy = sample_y - box_height / 2;
                     texture_x = (pa * dx + pb * dy) >> 8; texture_x += width / 2;
                     texture_y = (pc * dx + pd * dy) >> 8; texture_y += height / 2;
                     if (texture_x < 0 || texture_x >= width || texture_y < 0 || texture_y >= height) continue;
-                } else { texture_x = horizontal_flip ? width - 1 - column : column; texture_y = vertical_flip ? height - 1 - sprite_y : sprite_y; }
+                } else { texture_x = horizontal_flip ? width - 1 - sample_column : sample_column; texture_y = vertical_flip ? height - 1 - sample_y : sample_y; }
                 const auto tile = tile_base + texture_y / 8 * row_stride + texture_x / 8 * slots;
                 int color{}; const auto in_x = texture_x & 7; const auto in_y = texture_y & 7;
                 if (eight_bpp) color = vram8(object_tile_base + tile * 32 + in_y * 8 + in_x);
@@ -362,6 +401,8 @@ private:
     Bus& bus_;
     int line_cycles_{};
     std::int32_t bg2_ref_x_{}; std::int32_t bg2_ref_y_{}; std::int32_t bg3_ref_x_{}; std::int32_t bg3_ref_y_{};
+    std::int32_t bg2_mosaic_ref_x_{}; std::int32_t bg2_mosaic_ref_y_{};
+    std::int32_t bg3_mosaic_ref_x_{}; std::int32_t bg3_mosaic_ref_y_{};
     bool simple_composition_{};
     std::array<std::int32_t, screen_width> line_color_{}; std::array<int, screen_width> line_priority_{}; std::array<int, screen_width> line_layer_{};
     std::array<std::int32_t, screen_width> line_color2_{}; std::array<int, screen_width> line_priority2_{}; std::array<int, screen_width> line_layer2_{};
