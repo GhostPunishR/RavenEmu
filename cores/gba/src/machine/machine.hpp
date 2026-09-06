@@ -29,10 +29,13 @@ public:
     void run_frame(int cycles) {
         auto elapsed = 0; bus.diagnostics.begin_frame();
         while (elapsed < cycles) {
-            // Un DMA peut durer plus longtemps que le budget demandé. Le solde
-            // reste alors dû : le CPU ne récupérera le bus qu'à l'appel suivant.
-            const auto dma_cycles = dma.take_pending_cycles(cycles - elapsed);
-            if (dma_cycles > 0) { advance_peripherals(dma_cycles); elapsed += dma_cycles; continue; }
+            if (dma.active()) {
+                const auto dma_cycles = std::min(cycles - elapsed, dma.cycles_until_event());
+                // L'effet mémoire survient après que le coût de l'accès s'est
+                // écoulé, à la même position temporelle dans tous les périphériques.
+                advance_peripherals(dma_cycles); dma.tick(dma_cycles); elapsed += dma_cycles;
+                continue;
+            }
             if (cpu.state.halted) {
                 advance_peripherals(64); elapsed += 64;
                 bus.diagnostics.wait_step(64, bios.wait_state() ? bios.wait_state()->interrupt_mask : 0);

@@ -3,6 +3,7 @@ package com.ravenemu.core.gba.state
 import com.ravenemu.core.gba.KotlinGbaCore
 import com.ravenemu.core.gba.GbaMachine
 import com.ravenemu.core.gba.cartridge.GbaGpio
+import com.ravenemu.core.gba.dma.DmaController
 import com.ravenemu.emulation.api.SaveStateException
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -30,6 +31,10 @@ internal object GbaState {
 
     private const val MAGIC = 0x52564E53 // "RVNS"
     /**
+     * Version 9 : état d'un DMA progressif (phase, valeur lue, mots restants,
+     * requêtes et transferts suspendus), afin qu'une restauration au milieu
+     * d'un accès reprenne sans copier trop tôt ni perdre l'interruption de fin.
+     *
      * Version 8 : ajoute le port GPIO de la cartouche et son horloge temps réel
      * (broches, transaction en cours, registre d'état, écart avec l'heure de
      * l'hôte). Sans eux, recharger un état au milieu d'un dialogue avec l'horloge
@@ -40,10 +45,10 @@ internal object GbaState {
      * (`halted`), attente d'interruption du BIOS (`IntrWait`) et mémoire de
      * sauvegarde de la cartouche.
      */
-    private const val VERSION = 8
+    private const val VERSION = 9
     private const val BANK_WORDS = 28 // CpuState.exportBanks(): 6*3 + 10
     private const val TIMER_STATE_WORDS = 16
-    private const val DMA_STATE_WORDS = 9 // 4 sources + 4 destinations + cycles dus
+    private const val DMA_STATE_WORDS = DmaController.STATE_WORDS
 
     /** Taille maximale acceptée pour un état (garde-fou anti-« fichier trop volumineux »). */
     private const val MAX_STATE_SIZE = 1 shl 20 // 1 Mio
