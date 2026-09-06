@@ -54,11 +54,17 @@ class DmaController(
     /** `true` si le contrôleur retient encore le bus. */
     val isActive: Boolean get() = pendingCycles > 0
 
-    /** Récupère et remet à zéro les cycles dus par le contrôleur. */
-    fun takePendingCycles(): Int {
-        val value = pendingCycles
-        pendingCycles = 0
-        return value
+    /** Récupère tous les cycles dus par le contrôleur. */
+    fun takePendingCycles(): Int = takePendingCycles(pendingCycles)
+
+    /**
+     * Consomme au plus [maximum] cycles dus. Le solde conserve la priorité sur
+     * le CPU lors du prochain passage de la boucle de la machine.
+     */
+    fun takePendingCycles(maximum: Int): Int {
+        val consumed = minOf(pendingCycles, maximum.coerceAtLeast(0))
+        pendingCycles -= consumed
+        return consumed
     }
 
     /** Écriture du registre de contrôle `DMAxCNT_H` : arme ou déclenche le canal. */

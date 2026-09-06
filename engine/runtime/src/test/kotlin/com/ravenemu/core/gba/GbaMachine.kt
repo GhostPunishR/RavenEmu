@@ -74,7 +74,7 @@ class GbaMachine(rom: ByteArray, forcedSaveType: GbaSaveType? = null) {
         while (elapsed < cycles) {
             // Le DMA est prioritaire sur le processeur : tant qu'il occupe le
             // bus, seuls les périphériques avancent.
-            val dmaCycles = dma.takePendingCycles()
+            val dmaCycles = dma.takePendingCycles(cycles - elapsed)
             if (dmaCycles > 0) {
                 advancePeripherals(dmaCycles)
                 elapsed += dmaCycles

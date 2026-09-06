@@ -35,7 +35,12 @@ public:
             if ((control & 0x4000) != 0) interrupts_.request(InterruptController::dma0 + channel);
         }
     }
-    int take_pending_cycles() noexcept { return std::exchange(pending_cycles, 0); }
+    int take_pending_cycles() noexcept { return take_pending_cycles(pending_cycles); }
+    int take_pending_cycles(int maximum) noexcept {
+        const auto consumed = std::min(pending_cycles, std::max(0, maximum));
+        pending_cycles -= consumed;
+        return consumed;
+    }
     [[nodiscard]] bool active() const noexcept { return pending_cycles > 0; }
     std::array<std::int32_t, 9> export_state() const noexcept {
         std::array<std::int32_t, 9> result{};

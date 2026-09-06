@@ -29,7 +29,9 @@ public:
     void run_frame(int cycles) {
         auto elapsed = 0; bus.diagnostics.begin_frame();
         while (elapsed < cycles) {
-            const auto dma_cycles = dma.take_pending_cycles();
+            // Un DMA peut durer plus longtemps que le budget demandé. Le solde
+            // reste alors dû : le CPU ne récupérera le bus qu'à l'appel suivant.
+            const auto dma_cycles = dma.take_pending_cycles(cycles - elapsed);
             if (dma_cycles > 0) { advance_peripherals(dma_cycles); elapsed += dma_cycles; continue; }
             if (cpu.state.halted) {
                 advance_peripherals(64); elapsed += 64;
