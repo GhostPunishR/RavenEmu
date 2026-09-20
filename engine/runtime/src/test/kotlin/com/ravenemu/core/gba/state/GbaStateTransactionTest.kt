@@ -187,7 +187,7 @@ class GbaStateTransactionTest {
         val ppu = GbaPpu.STATE_FIELD_COUNT * 4 + machine.ppu.frame.size * 4
         val peripheriques = 4 + 4 + 1 + // IE, IF, IME
             16 * 4 + // timers
-            9 * 4 + // DMA
+            machine.dma.exportState().size * 4 + // DMA
             1 + 4 + 1 // attente BIOS
         return decalageChampsPpu(core) + ppu + peripheriques
     }

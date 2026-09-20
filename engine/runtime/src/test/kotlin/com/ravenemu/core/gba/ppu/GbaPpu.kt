@@ -287,6 +287,10 @@ class GbaPpu(private val bus: GbaBus) {
         bg3RefY,
     )
 
+    /** Cycles restants avant le retour à VCOUNT 0, position de ligne 0. */
+    fun cyclesUntilNextFrame(): Int =
+        TOTAL_LINES * LINE_CYCLES - (vcount * LINE_CYCLES + lineCycles)
+
     fun restoreState(fields: IntArray) {
         require(fields.size == STATE_FIELD_COUNT) { "État PPU GBA invalide" }
         require(fields[0] in 0 until TOTAL_LINES) { "VCOUNT GBA invalide" }

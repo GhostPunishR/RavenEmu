@@ -20,6 +20,7 @@ class DmaControllerTest {
         bus.write32(0x0400_00B4, 0x0200_1000) // DAD
         bus.write16(0x0400_00B8, 4)           // CNT_L : 4 mots
         bus.write16(0x0400_00BA, 0x8400)      // activé + 32 bits + immédiat
+        m.runFrame(2 + 4 * 2 * 6)
 
         for (i in 0 until 4) {
             assertEquals(0x1111_1111 * (i + 1), bus.read32(0x0200_1000 + i * 4))
@@ -34,6 +35,8 @@ class DmaControllerTest {
         bus.write32(0x0400_00B4, 0x0200_1000)
         bus.write16(0x0400_00B8, 1)
         bus.write16(0x0400_00BA, 0x8400)
+        assertTrue(bus.read16(0x0400_00BA) and 0x8000 != 0)
+        m.runFrame(2 + 2 * 6)
         // Le bit d'activation (0x8000) doit être retombé.
         assertEquals(0, bus.read16(0x0400_00BA) and 0x8000)
     }
@@ -49,6 +52,7 @@ class DmaControllerTest {
         bus.write16(0x0400_00B8, 2)
         // Contrôle : activé + destination fixe (bits 5-6 = 10 → 0x40) + 16 bits + immédiat.
         bus.write16(0x0400_00BA, 0x8000 or 0x0040)
+        m.runFrame(2 + 2 * 2 * 3)
         // Source incrémentée, destination fixe : les deux demi-mots vont à la
         // même adresse, le dernier lu subsiste.
         assertEquals(0x1234, bus.read16(0x0200_1000))
@@ -62,6 +66,8 @@ class DmaControllerTest {
         bus.write32(0x0400_00B4, 0x0200_1000)
         bus.write16(0x0400_00B8, 1)
         bus.write16(0x0400_00BA, 0x8400 or 0x4000) // + IRQ de fin
+        assertEquals(0, m.interrupts.flags and (1 shl Interrupt.DMA0))
+        m.runFrame(2 + 2 * 6)
         assertTrue(m.interrupts.flags and (1 shl Interrupt.DMA0) != 0)
     }
 }
