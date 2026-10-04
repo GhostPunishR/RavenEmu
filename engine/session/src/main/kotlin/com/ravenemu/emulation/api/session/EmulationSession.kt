@@ -294,6 +294,7 @@ class EmulationSession(
         var workNanos = 0L
         var lastBatteryCheck = System.nanoTime()
         var lastRumbleActive = false
+        var audioFailed = false
 
         while (running) {
             drainCommands()
@@ -330,13 +331,16 @@ class EmulationSession(
             // vidéo. Si l'audio est coupé, les échantillons sont drainés puis
             // abandonnés et le cadencement par horloge reprend la main.
             val audioCount = core.readAudio(audioBuffer)
-            val audioPaced = audioSink != null && audioEnabled && audioCount > 0
+            var audioPaced = audioSink != null && audioEnabled && !audioFailed && audioCount > 0
             if (audioPaced) {
                 // Le débit audio reste celui du moteur. Les variations de temps
                 // de rendu ne doivent jamais modifier la hauteur du son.
                 try {
                     audioSink!!.write(audioBuffer, audioCount)
                 } catch (e: Exception) {
+                    audioFailed = true
+                    audioPaced = false
+                    runCatching { audioSink?.pause() }
                     // Une sortie audio défaillante ne doit pas emporter la
                     // session : la partie continue en silence, et l'arrêt
                     // pourra encore sauvegarder la RAM de cartouche.
@@ -428,7 +432,7 @@ class EmulationSession(
         if (!target.hasBatteryRam || !target.batteryRamDirty) return
         if (batterySaveInFlight) return
         val snapshot = target.snapshotBatteryRam() ?: return
-        val writer = batteryWriter ?: Executors.newSingleThreadExecutor { body ->
+        val writer = batteryWriter?.takeUnless { it.isShutdown } ?: Executors.newSingleThreadExecutor { body ->
             Thread(body, "RavenEmu-Sauvegarde").apply { isDaemon = true }
         }.also { batteryWriter = it }
         batterySaveInFlight = true
@@ -463,6 +467,10 @@ class EmulationSession(
      * l'arrière-plan et peut être interrompue par le système.
      */
     private fun saveBatteryNow(target: EmulatorCore = core) {
+        // Le flush peut arriver pendant une écriture périodique. Attendre
+        // sa fin avant de prendre et persister une génération plus récente.
+        // En cas de délai dépassé, conserver le writer pour les essais suivants.
+        if (!awaitBatteryWriter()) return
         if (!target.hasBatteryRam || !target.batteryRamDirty) return
         val snapshot = target.snapshotBatteryRam() ?: return
         if (callbacks.onBatterySave(snapshot.data)) {
@@ -478,10 +486,11 @@ class EmulationSession(
      */
     private fun awaitBatteryWriter(): Boolean {
         val writer = batteryWriter ?: return true
-        batteryWriter = null
         writer.shutdown()
         return try {
-            writer.awaitTermination(BATTERY_WRITER_DRAIN_MILLIS, TimeUnit.MILLISECONDS)
+            writer.awaitTermination(BATTERY_WRITER_DRAIN_MILLIS, TimeUnit.MILLISECONDS).also {
+                if (it) batteryWriter = null
+            }
         } catch (_: InterruptedException) {
             Thread.currentThread().interrupt()
             false

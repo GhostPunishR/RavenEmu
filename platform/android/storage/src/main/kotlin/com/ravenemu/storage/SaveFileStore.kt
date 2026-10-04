@@ -68,7 +68,7 @@ class SaveFileStore(private val context: Context) {
         val private = privateSaveFile(romSha256, romFileName)
         if (private.isFile) {
             return try {
-                private.readBytes()
+                private.inputStream().use { BatterySaveReader.read(it) }
             } catch (_: Exception) {
                 null
             }
@@ -94,11 +94,10 @@ class SaveFileStore(private val context: Context) {
     /** Importe un `.sav` externe comme sauvegarde privée (écriture atomique). */
     fun importFrom(romSha256: String, romFileName: String, source: Uri): Boolean {
         val data = try {
-            context.contentResolver.openInputStream(source)?.use { it.readBytes() }
+            context.contentResolver.openInputStream(source)?.use { BatterySaveReader.read(it) }
         } catch (_: Exception) {
             null
         } ?: return false
-        if (data.size > MAX_SAVE_SIZE) return false
         return write(romSha256, romFileName, data)
     }
 
@@ -122,8 +121,7 @@ class SaveFileStore(private val context: Context) {
             val dir = DocumentFile.fromTreeUri(context, dirUri) ?: return null
             val doc = dir.findFile(fileName) ?: return null
             context.contentResolver.openInputStream(doc.uri)?.use { stream ->
-                val data = stream.readBytes()
-                if (data.size > MAX_SAVE_SIZE) null else data
+                BatterySaveReader.read(stream)
             }
         } catch (_: Exception) {
             null
@@ -131,7 +129,7 @@ class SaveFileStore(private val context: Context) {
     }
 
     companion object {
-        /** 128 KiB de RAM + pied RTC : au-delà, fichier considéré invalide. */
-        const val MAX_SAVE_SIZE = 128 * 1024 + 48
+        /** Inclut SRAM, flash et pied de sauvegarde MBC6. */
+        const val MAX_SAVE_SIZE = BatterySaveReader.MAX_SIZE
     }
 }

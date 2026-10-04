@@ -146,7 +146,10 @@ class AndroidAudioSink(
                 produced - offset,
                 AudioTrack.WRITE_BLOCKING,
             )
-            if (written <= 0) break
+            if (written <= 0) {
+                if (stopped) return
+                throw IllegalStateException("AudioTrack.write n'a pas progressé : $written")
+            }
             offset += written
         }
         framesWritten += offset / CHANNEL_COUNT
