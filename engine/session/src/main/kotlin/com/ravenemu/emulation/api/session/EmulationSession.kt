@@ -169,6 +169,7 @@ class EmulationSession(
      * toute façon des données plus fraîches.
      */
     private var batterySaveInFlight = false
+    private var batteryFlushPending = false
 
     /** Audio actif (paramètre utilisateur), modifiable à chaud. */
     @Volatile
@@ -448,6 +449,10 @@ class EmulationSession(
                 post { c ->
                     batterySaveInFlight = false
                     if (written) c.acknowledgeBatteryRamSaved(snapshot.generation)
+                    if (batteryFlushPending) {
+                        batteryFlushPending = false
+                        saveBatteryNow(c)
+                    }
                 }
             }
         } catch (_: RejectedExecutionException) {
@@ -470,7 +475,11 @@ class EmulationSession(
         // Le flush peut arriver pendant une écriture périodique. Attendre
         // sa fin avant de prendre et persister une génération plus récente.
         // En cas de délai dépassé, conserver le writer pour les essais suivants.
-        if (!awaitBatteryWriter()) return
+        if (!awaitBatteryWriter()) {
+            batteryFlushPending = true
+            return
+        }
+        batteryFlushPending = false
         if (!target.hasBatteryRam || !target.batteryRamDirty) return
         val snapshot = target.snapshotBatteryRam() ?: return
         if (callbacks.onBatterySave(snapshot.data)) {

@@ -188,6 +188,7 @@ class EmulationSessionStopTest {
         val completed = CountDownLatch(1)
         val flushReturned = CountDownLatch(1)
         val finalFlush = CountDownLatch(1)
+        val latestWritten = CountDownLatch(1)
         val active = AtomicInteger()
         val overlapping = AtomicBoolean()
         val writes = java.util.concurrent.CopyOnWriteArrayList<Int>()
@@ -200,6 +201,7 @@ class EmulationSessionStopTest {
                         check(release.await(10, TimeUnit.SECONDS))
                     }
                     writes.add(data[0].toInt())
+                    if (data[0].toInt() == 2) latestWritten.countDown()
                     return true
                 } finally {
                     active.decrementAndGet()
@@ -226,7 +228,7 @@ class EmulationSessionStopTest {
             assertTrue(writes.isEmpty())
             release.countDown()
             assertTrue(completed.await(5, TimeUnit.SECONDS))
-            session.flushBattery()
+            assertTrue(latestWritten.await(5, TimeUnit.SECONDS), "le flush expiré doit être repris en pause")
             session.post { finalFlush.countDown() }
             assertTrue(finalFlush.await(5, TimeUnit.SECONDS))
             assertEquals(listOf(1, 2), writes.toList())
