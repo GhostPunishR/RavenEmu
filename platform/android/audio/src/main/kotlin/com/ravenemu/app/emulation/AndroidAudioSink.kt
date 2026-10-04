@@ -146,6 +146,9 @@ class AndroidAudioSink(
                 produced - offset,
                 AudioTrack.WRITE_BLOCKING,
             )
+            // Une pause peut interrompre WRITE_BLOCKING sans transférer de
+            // données. Elle ne signifie pas que la piste est défaillante.
+            if (written == 0 && track.playState == AudioTrack.PLAYSTATE_PAUSED) break
             if (written <= 0) {
                 if (stopped) return
                 throw IllegalStateException("AudioTrack.write n'a pas progressé : $written")
