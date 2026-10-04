@@ -79,7 +79,7 @@ La Nintendo DS apparaît dans la bibliothèque : un fichier `.nds` est reconnu, 
 
 - deux processeurs, ARM946E-S et ARM7TDMI, entrelacés par un ordonnanceur;
 - leurs cartes mémoire, la mémoire partagée et la communication entre les deux;
-- décors en mode texte et sprites ordinaires des deux moteurs 2D;
+- décors en mode texte et transformés, sprites ordinaires et transformés des deux moteurs 2D (matrices OAM, rotation, agrandissement et fenêtre double);
 - balayage des deux écrans, empilés dans un tampon unique de 256 sur 384;
 - amorçage d'une cartouche depuis son en-tête, minuteries, transferts autonomes, touches;
 - les services du programme d'amorçage : attente d'interruption, division, racine, somme de contrôle, recopies, et les cinq formats de décompression;

@@ -90,6 +90,7 @@ struct ObjectAttributes {
     std::uint32_t priority{};
     std::uint32_t sub_palette{};
     std::uint32_t mode{};
+    std::uint32_t matrix_index{};
     bool full_palette{};
     bool flip_x{};
     bool flip_y{};
@@ -104,7 +105,7 @@ void write_object(Screen& screen, Engine which, std::size_t index, const ObjectA
         (object.mosaic ? 1U << 12U : 0U) | (object.full_palette ? 1U << 13U : 0U) |
         (object.shape << 14U);
     const std::uint32_t second = object.x | (object.flip_x ? 1U << 12U : 0U) |
-        (object.flip_y ? 1U << 13U : 0U) | (object.size << 14U);
+        (object.flip_y ? 1U << 13U : 0U) | (object.size << 14U) | (object.matrix_index << 9U);
     const std::uint32_t third = object.tile | (object.priority << 10U) |
         (object.sub_palette << 12U);
 
@@ -1261,10 +1262,10 @@ void un_sprite_devant_ne_couvre_pas_avec_sa_transparence() {
 
 void la_remise_a_zero_efface_le_compte_des_sprites() {
     Screen screen;
-    write_object(screen, Engine::main, 0, {.rotated = true});
+    write_object(screen, Engine::main, 0, {.mode = 1});
     screen.main.set_display_control(object_display_command());
     screen.main.render_row(0, screen.row);
-    check(screen.main.unimplemented_object_count() == 1U, "le sprite tournant est compté");
+    check(screen.main.unimplemented_object_count() == 1U, "le sprite semi-transparent est compté");
 
     screen.main.reset();
     check(screen.main.unimplemented_object_count() == 0U, "et la remise à zéro l'efface");
@@ -1370,6 +1371,153 @@ void un_sprite_se_replie_sur_les_bords() {
     }
 }
 
+void write_object_matrix(Screen& screen, Engine engine, std::uint32_t index,
+                         std::array<std::int16_t, 4> values) {
+    const std::size_t base = (engine == Engine::main ? 0U : 1024U) + index * 32U;
+    for (std::size_t i = 0; i < values.size(); ++i) {
+        const auto word = static_cast<std::uint16_t>(values[i]);
+        screen.objects[base + 6U + i * 8U] = static_cast<std::uint8_t>(word);
+        screen.objects[base + 7U + i * 8U] = static_cast<std::uint8_t>(word >> 8U);
+    }
+}
+
+void les_sprites_affines_identite_conservent_le_rangement_et_les_palettes() {
+    for (const auto which : {Engine::main, Engine::secondary}) {
+        for (const bool full : {false, true}) {
+            for (const bool linear : {false, true}) {
+                Screen screen;
+                auto vram = screen.attach_objects(which);
+                for (std::size_t i = 0; i < 4096U; ++i) {
+                    vram[i] = static_cast<std::uint8_t>(i * 13U + 17U);
+                }
+                for (std::uint32_t i = 1; i < 256U; ++i) {
+                    screen.set_object_colour(which, i, static_cast<std::uint16_t>(i));
+                }
+                auto& engine = screen.engine(which);
+                engine.set_display_control(object_display_command() | (linear ? 1U << 4U : 0U));
+                // Le dernier indice utilise aussi les deux bits qui étaient
+                // des retournements en mode ordinaire. Et sa dernière valeur
+                // occupe les deux derniers octets de la table de ce moteur.
+                write_object_matrix(screen, which, 31, {256, 0, 0, 256});
+                for (std::uint32_t row = 0; row < 16U; ++row) {
+                    write_object(screen, which, 0, {
+                        .y = 252, .x = 508, .size = 1, .sub_palette = 2, .full_palette = full,
+                    });
+                    engine.render_row(row, screen.row);
+                    const auto expected = screen.row;
+                    write_object(screen, which, 0, {
+                        .y = 252, .x = 508, .size = 1, .sub_palette = 2, .matrix_index = 31,
+                        .full_palette = full, .rotated = true,
+                    });
+                    engine.render_row(row, screen.row);
+                    check(screen.row == expected, "identité affine : pixels, transparence et repli inchangés");
+                }
+                check(engine.unimplemented_object_count() == 0U, "le sprite affine est pris en charge");
+            }
+        }
+    }
+}
+
+void la_rotation_des_sprites_lit_les_quatre_coefficients_signes() {
+    for (const auto which : {Engine::main, Engine::secondary}) {
+        Screen screen;
+        auto vram = screen.attach_objects(which);
+        write_pixel4(vram, 0, 0, 2, 1, 1);
+        screen.set_object_colour(which, 1, 0x001fU);
+        write_object(screen, which, 0, {.rotated = true});
+        write_object_matrix(screen, which, 0, {0, 256, -256, 0});
+        auto& engine = screen.engine(which);
+        engine.set_display_control(object_display_command());
+        engine.render_row(2, screen.row);
+        for (std::size_t x = 0; x < screen.row.size(); ++x) {
+            check(static_cast<std::uint32_t>(screen.row[x]) ==
+                (x == 7U ? 0xffff'0000U : 0xff00'0000U), "quart de tour autour du centre du sprite");
+        }
+        // Un coefficient négatif fractionnaire doit être arrondi vers -inf,
+        // pas tronqué à zéro : à x=5, la source vaut 3, et non 4.
+        write_pixel4(vram, 0, 0, 3, 4, 1);
+        write_object_matrix(screen, which, 0, {-128, 0, 0, 256});
+        engine.render_row(4, screen.row);
+        check(static_cast<std::uint32_t>(screen.row[5]) == 0xffff'0000U, "coefficient signé fractionnaire");
+        check(static_cast<std::uint32_t>(screen.row[4]) == 0xff00'0000U, "le centre transparent le reste");
+    }
+}
+
+void la_fenetre_double_des_sprites_ne_double_pas_la_texture() {
+    for (const auto which : {Engine::main, Engine::secondary}) {
+        Screen screen;
+        auto vram = screen.attach_objects(which);
+        for (std::uint32_t y = 0; y < 8U; ++y) {
+            for (std::uint32_t x = 0; x < 8U; ++x) write_pixel4(vram, 0, 0, x, y, 1);
+        }
+        screen.set_object_colour(which, 1, 0x03e0U);
+        auto& engine = screen.engine(which);
+        engine.set_display_control(object_display_command());
+        write_object(screen, which, 0, {.rotated = true, .disabled = true});
+        write_object_matrix(screen, which, 0, {256, 0, 0, 256});
+        for (std::uint32_t y = 0; y <= 16U; ++y) {
+            engine.render_row(y, screen.row);
+            for (std::size_t x = 0; x <= 16U; ++x) {
+                const bool inside = x >= 4U && x < 12U && y >= 4U && y < 12U;
+                check(static_cast<std::uint32_t>(screen.row[x]) ==
+                    (inside ? 0xff00'ff00U : 0xff00'0000U), "identité centrée dans la fenêtre double");
+            }
+        }
+        write_object_matrix(screen, which, 0, {128, 0, 0, 128});
+        for (std::uint32_t y = 0; y <= 16U; ++y) {
+            engine.render_row(y, screen.row);
+            for (std::size_t x = 0; x <= 16U; ++x) {
+                check(static_cast<std::uint32_t>(screen.row[x]) ==
+                    (x < 16U && y < 16U ? 0xff00'ff00U : 0xff00'0000U), "agrandissement dans la fenêtre double");
+            }
+        }
+        // Une réduction sort de la texture dès le bord du sprite : les
+        // coordonnées hors texture ne doivent ni se replier ni lire la tuile voisine.
+        write_object(screen, which, 0, {.rotated = true});
+        write_object_matrix(screen, which, 0, {512, 0, 0, 512});
+        engine.render_row(4, screen.row);
+        for (std::size_t x = 0; x < 9U; ++x) {
+            check(static_cast<std::uint32_t>(screen.row[x]) ==
+                (x >= 2U && x < 6U ? 0xff00'ff00U : 0xff00'0000U), "réduction découpée dans la texture");
+        }
+    }
+}
+
+void les_sprites_affines_rectangulaires_et_les_matrices_nulles() {
+    for (const auto which : {Engine::main, Engine::secondary}) {
+        Screen screen;
+        auto vram = screen.attach_objects(which);
+        write_pixel4(vram, 0, 0, 1, 2, 1);
+        screen.set_object_colour(which, 1, 0x001fU);
+        write_object(screen, which, 0, {
+            .y = 255, .x = 508, .shape = 1, .matrix_index = 16, .rotated = true, .disabled = true,
+        });
+        write_object_matrix(screen, which, 16, {0, 256, -256, 0});
+        auto& engine = screen.engine(which);
+        engine.set_display_control(object_display_command());
+        engine.render_row(0, screen.row);
+        for (std::size_t x = 0; x < screen.row.size(); ++x) {
+            check(static_cast<std::uint32_t>(screen.row[x]) ==
+                (x == 14U ? 0xffff'0000U : 0xff00'0000U), "rotation rectangulaire, fenêtre double et repli XY");
+        }
+        write_pixel4(vram, 0, 0, 4, 4, 1);
+        write_object(screen, which, 0, {.rotated = true});
+        write_object_matrix(screen, which, 0, {0, 0, 0, 0});
+        engine.render_row(0, screen.row);
+        for (std::size_t x = 0; x < 9U; ++x) {
+            check(static_cast<std::uint32_t>(screen.row[x]) ==
+                (x < 8U ? 0xffff'0000U : 0xff00'0000U), "une matrice nulle répète le centre de la texture");
+        }
+        // Les couleurs nulles demeurent transparentes, même si la matrice
+        // répète ce point sur toute la fenêtre : le sprite suivant reste visible.
+        write_pixel4(vram, 0, 0, 4, 4, 0);
+        write_pixel4(vram, 0, 1, 0, 0, 1);
+        write_object(screen, which, 1, {.tile = 1, .priority = 1});
+        engine.render_row(0, screen.row);
+        check(static_cast<std::uint32_t>(screen.row[0]) == 0xffff'0000U, "transparence du sprite transformé");
+    }
+}
+
 void ce_qui_n_est_pas_un_sprite_ordinaire_est_compte() {
     struct Case {
         ObjectAttributes attributes;
@@ -1377,8 +1525,7 @@ void ce_qui_n_est_pas_un_sprite_ordinaire_est_compte() {
         bool drawn;
         const char* label;
     };
-    const std::array<Case, 6> cases{{
-        {{.rotated = true}, 1, false, "un sprite tournant"},
+    const std::array<Case, 5> cases{{
         {{.mode = 1}, 1, false, "la semi-transparence"},
         {{.mode = 2}, 1, false, "la fenêtre par sprite"},
         {{.mode = 3}, 1, false, "l'image directe"},
@@ -1617,6 +1764,10 @@ int main() {
     un_sprite_passe_devant_un_decor_de_meme_priorite();
     entre_sprites_le_premier_de_la_table_l_emporte();
     un_sprite_se_replie_sur_les_bords();
+    les_sprites_affines_identite_conservent_le_rangement_et_les_palettes();
+    la_rotation_des_sprites_lit_les_quatre_coefficients_signes();
+    la_fenetre_double_des_sprites_ne_double_pas_la_texture();
+    les_sprites_affines_rectangulaires_et_les_matrices_nulles();
     ce_qui_n_est_pas_un_sprite_ordinaire_est_compte();
     les_sprites_s_eteignent_et_chaque_moteur_a_les_siens();
     les_priorites_decident_de_ce_qui_couvre();

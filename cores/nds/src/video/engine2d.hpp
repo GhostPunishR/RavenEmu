@@ -62,7 +62,10 @@ enum class LayerKind : std::uint8_t {
  *
  * ### Ce qu'il ne rend pas encore
  *
- * La grande image du dernier mode, le plan 3D, les sprites tournants, la
+ * Les sprites tournants utilisent les 32 matrices OAM signées 8.8 de chaque
+ * moteur, avec fenêtre simple ou double et découpage dans la texture.
+ *
+ * La grande image du dernier mode, le plan 3D, la
  * semi-transparence, la fenêtre par sprite, les sprites en image directe, les
  * fenêtres et les mélanges. Rien de cela n'est passé sous silence : un plan ou
  * un sprite décrit sous une de ces formes est **compté**, parce qu'un élément

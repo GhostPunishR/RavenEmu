@@ -471,15 +471,9 @@ void Engine2d::render_object(std::size_t index, std::uint32_t row, std::span<Pix
     const auto third = attribute(2);
 
     const bool rotated = (first & (1U << 8U)) != 0U;
-    if (rotated) {
-        // Un sprite tournant dessiné comme un sprite ordinaire donnerait une
-        // image plausible et fausse : mieux vaut ne rien poser et le dire.
-        ++unimplemented_objects_;
-        return;
-    }
     // Sans rotation, le second bit éteint le sprite. C'est un état ordinaire,
     // et non un manque : la plupart des sprites d'un jeu sont éteints.
-    if ((first & (1U << 9U)) != 0U) return;
+    if (!rotated && (first & (1U << 9U)) != 0U) return;
 
     const auto mode = (first >> 10U) & 0x3U;
     if (mode != 0U) {
@@ -493,6 +487,11 @@ void Engine2d::render_object(std::size_t index, std::uint32_t row, std::span<Pix
     if ((first & (1U << 12U)) != 0U) ++unimplemented_objects_;
 
     const auto shape = object_shapes[(first >> 14U) & 0x3U][(second >> 14U) & 0x3U];
+    // En mode affine le bit 9 double la fenêtre de destination, jamais la
+    // texture. La transformation reste centrée dans cette fenêtre agrandie.
+    const auto extent = rotated && (first & (1U << 9U)) != 0U ? 2U : 1U;
+    const auto width = shape.width * extent;
+    const auto height = shape.height * extent;
 
     // La ligne se compte modulo 256 : un sprite posé bas reparaît en haut, et
     // c'est ainsi qu'on le fait entrer par le bord. La forme interdite n'a pas
@@ -500,7 +499,24 @@ void Engine2d::render_object(std::size_t index, std::uint32_t row, std::span<Pix
     // n'est jamais dedans, et une garde de plus ne serait jamais exercée.
     const auto top = first & 0xffU;
     const auto row_in_object = (row - top) & 0xffU;
-    if (row_in_object >= shape.height) return;
+    if (row_in_object >= height) return;
+
+    std::array<std::int32_t, 4> matrix{};
+    if (rotated) {
+        // 32 matrices par moteur : PA, PB, PC, PD dans le quatrième mot de
+        // quatre entrées OAM successives. Les bits de retournement font alors
+        // partie de l'indice de matrice et n'ont plus leur sens ordinaire.
+        const auto matrix_base = static_cast<std::size_t>(base) +
+            static_cast<std::size_t>((second >> 9U) & 0x1fU) * 32U;
+        if (matrix_base + 31U >= objects_.size()) return;
+        for (std::size_t parameter = 0; parameter < matrix.size(); ++parameter) {
+            const auto at = matrix_base + parameter * 8U + 6U;
+            const auto value = static_cast<std::uint32_t>(objects_[at]) |
+                (static_cast<std::uint32_t>(objects_[at + 1U]) << 8U);
+            matrix[parameter] = static_cast<std::int32_t>(value) -
+                ((value & 0x8000U) != 0U ? 0x10000 : 0);
+        }
+    }
 
     const bool full_palette = (first & (1U << 13U)) != 0U;
     const bool flip_x = (second & (1U << 12U)) != 0U;
@@ -520,9 +536,7 @@ void Engine2d::render_object(std::size_t index, std::uint32_t row, std::span<Pix
         : 32U;
     const auto tiles_across = shape.width / 8U;
 
-    const auto object_row = flip_y ? shape.height - 1U - row_in_object : row_in_object;
-
-    for (std::uint32_t column = 0; column < shape.width; ++column) {
+    for (std::uint32_t column = 0; column < width; ++column) {
         // L'abscisse tient sur neuf bits et se replie : un sprite posé très à
         // droite entre par la gauche. Ce qui reste au-delà de l'écran est déposé
         // tout de même, dans la partie du tampon que la composition ne relit
@@ -531,7 +545,27 @@ void Engine2d::render_object(std::size_t index, std::uint32_t row, std::span<Pix
         // part. La largeur du tampon fait le découpage à sa place.
         const auto screen_x = (left + column) & 0x1ffU;
 
-        const auto object_column = flip_x ? shape.width - 1U - column : column;
+        std::uint32_t object_column;
+        std::uint32_t object_row;
+        if (rotated) {
+            // Coefficients signés 8.8 : la matrice va de l'écran à la texture.
+            // Le décalage arithmétique conserve l'arrondi vers moins l'infini
+            // des coordonnées fractionnaires négatives (C++20).
+            const auto dx = static_cast<std::int32_t>(column) - static_cast<std::int32_t>(width / 2U);
+            const auto dy = static_cast<std::int32_t>(row_in_object) - static_cast<std::int32_t>(height / 2U);
+            const auto source_x = ((matrix[0] * dx + matrix[1] * dy) >> 8) +
+                static_cast<std::int32_t>(shape.width / 2U);
+            const auto source_y = ((matrix[2] * dx + matrix[3] * dy) >> 8) +
+                static_cast<std::int32_t>(shape.height / 2U);
+            if (source_x < 0 || source_y < 0 ||
+                source_x >= static_cast<std::int32_t>(shape.width) ||
+                source_y >= static_cast<std::int32_t>(shape.height)) continue;
+            object_column = static_cast<std::uint32_t>(source_x);
+            object_row = static_cast<std::uint32_t>(source_y);
+        } else {
+            object_column = flip_x ? shape.width - 1U - column : column;
+            object_row = flip_y ? shape.height - 1U - row_in_object : row_in_object;
+        }
 
         const auto tile_column = object_column / 8U;
         const auto tile_row = object_row / 8U;

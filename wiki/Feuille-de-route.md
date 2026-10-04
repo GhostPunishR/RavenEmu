@@ -136,9 +136,14 @@ propre pile démarre ; une cartouche qui compte sur l'amorceur ne démarre pas.
 Un programme qui n'a besoin que de ces organes démarre désormais, produit une
 image, lit sa cartouche et répond au doigt. Ce qui manque à un jeu du commerce
 n'est plus un organe par lequel il s'arrête, mais ce qu'il montre et ce qu'il
-garde : les décors tournants et les modes étendus, les sprites tournants et
-semi-transparents, le moteur 3D, les fenêtres et les mélanges, les palettes
+garde : les sprites semi-transparents, le moteur 3D, les fenêtres et les mélanges, les palettes
 étendues, la sauvegarde de cartouche et le son.
+Les décors transformés et les sprites en rotation ou agrandissement sont rendus.
+Pour les sprites, les deux moteurs lisent leurs 32 matrices OAM signées 8.8 ;
+la fenêtre peut doubler sans changer la taille de la texture. Les coordonnées
+hors texture restent transparentes, et les priorités et palettes ordinaires
+continuent de s'appliquer. Les sprites en image directe et les effets de
+mosaïque restent à compléter.
 L'enregistrement d'un état reste refusé par une erreur nommée, faute de format ;
 l'application ne le propose donc pas pour cette console, plutôt que de l'offrir
 et d'échouer. La console est en revanche entrée dans la bibliothèque : un jeu s'y
