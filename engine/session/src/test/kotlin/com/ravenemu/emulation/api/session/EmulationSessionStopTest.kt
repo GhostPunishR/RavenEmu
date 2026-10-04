@@ -65,7 +65,9 @@ class EmulationSessionStopTest {
         override val hasBatteryRam: Boolean get() = batterySize > 0
         override val batteryRamDirty: Boolean get() = dirtyFlag
         override fun snapshotBatteryRam(): BatteryRamSnapshot? =
-            if (batterySize == 0) null else BatteryRamSnapshot(ByteArray(batterySize), generation)
+            if (batterySize == 0) null else BatteryRamSnapshot(
+                ByteArray(batterySize) { generation.toByte() }, generation,
+            )
 
         override fun acknowledgeBatteryRamSaved(generation: Long) {
             acknowledged = generation
@@ -177,6 +179,88 @@ class EmulationSessionStopTest {
     }
 
     // ---- Tests ----
+
+    @Test
+    fun `un flush expire ne concurrence pas le writer et le suivant conserve la derniere generation`() {
+        val core = FakeCore(batterySize = 32).apply { dirtyFlag = true; generation = 1 }
+        val started = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val completed = CountDownLatch(1)
+        val flushReturned = CountDownLatch(1)
+        val finalFlush = CountDownLatch(1)
+        val latestWritten = CountDownLatch(1)
+        val active = AtomicInteger()
+        val overlapping = AtomicBoolean()
+        val writes = java.util.concurrent.CopyOnWriteArrayList<Int>()
+        val callbacks = object : RecordingCallbacks() {
+            override fun onBatterySave(data: ByteArray): Boolean {
+                if (active.incrementAndGet() != 1) overlapping.set(true)
+                try {
+                    if (data[0].toInt() == 1) {
+                        started.countDown()
+                        check(release.await(10, TimeUnit.SECONDS))
+                    }
+                    writes.add(data[0].toInt())
+                    if (data[0].toInt() == 2) latestWritten.countDown()
+                    return true
+                } finally {
+                    active.decrementAndGet()
+                    completed.countDown()
+                }
+            }
+        }
+        val session = EmulationSession(core, callbacks, batterySaveIntervalNanos = 1L)
+        session.start()
+        try {
+            assertTrue(started.await(5, TimeUnit.SECONDS))
+            session.pause()
+            session.post { core.generation = 2; core.dirtyFlag = true }
+            session.flushBattery()
+            session.post { flushReturned.countDown() }
+            assertTrue(flushReturned.await(5, TimeUnit.SECONDS), "flush doit avoir un délai borné")
+            assertFalse(overlapping.get())
+            assertTrue(writes.isEmpty(), "aucune écriture ne doit doubler le writer bloqué")
+            // Un deuxième flush après expiration doit encore attendre le même writer.
+            session.flushBattery()
+            val retried = CountDownLatch(1)
+            session.post { retried.countDown() }
+            assertTrue(retried.await(5, TimeUnit.SECONDS))
+            assertTrue(writes.isEmpty())
+            release.countDown()
+            assertTrue(completed.await(5, TimeUnit.SECONDS))
+            assertTrue(latestWritten.await(5, TimeUnit.SECONDS), "le flush expiré doit être repris en pause")
+            session.post { finalFlush.countDown() }
+            assertTrue(finalFlush.await(5, TimeUnit.SECONDS))
+            assertEquals(listOf(1, 2), writes.toList())
+            assertFalse(overlapping.get())
+            assertEquals(2L, core.acknowledged)
+            assertFalse(core.batteryRamDirty)
+        } finally {
+            release.countDown()
+            session.stop()
+        }
+    }
+
+    @Test
+    fun `la panne audio conserve une cadence bornee sans retenter la piste defaillante`() {
+        val core = FakeCore()
+        val tenFrames = CountDownLatch(10)
+        val callbacks = object : RecordingCallbacks() {
+            override fun onFrame(framebuffer: IntArray) { tenFrames.countDown() }
+        }
+        val session = EmulationSession(core, callbacks, FakeSink().apply { throwOnWrite = true })
+        val start = System.nanoTime()
+        session.start()
+        try {
+            assertTrue(tenFrames.await(5, TimeUnit.SECONDS))
+            // Dix trames à 60 Hz prennent environ 150 ms ; une marge large
+            // distingue le repli cadencé d'une boucle sans aucune attente.
+            assertTrue(System.nanoTime() - start >= 100_000_000L)
+            assertEquals(1, callbacks.audioFailures.get())
+        } finally {
+            session.stop()
+        }
+    }
 
     @Test
     fun `une combinaison de boutons est appliquee avant la meme trame`() {
