@@ -13,6 +13,17 @@ import com.ravenemu.emulation.api.display.DisplayAdjustments
 import com.ravenemu.emulation.api.render.FrameSwapChain
 
 /**
+ * Une découpe du tampon de la console, et l'endroit où elle se pose.
+ *
+ * [source] est en pixels du tampon produit par le moteur ; `null` désigne le
+ * tampon entier. [destination] est en pixels de la vue, et l'image y est posée
+ * telle quelle, sans ratio conservé ni échelle entière : quand un skin place
+ * lui-même les écrans, c'est lui qui décide, et corriger son cadrage le
+ * décalerait de l'image qu'il dessine autour.
+ */
+data class ScreenPlacement(val source: Rect?, val destination: Rect)
+
+/**
  * Affichage du framebuffer produit par un moteur d'émulation.
  *
  * Le rendu est **découplé** du thread d'émulation : [presentFrame] se contente
@@ -61,6 +72,21 @@ class EmulatorSurfaceView @JvmOverloads constructor(
     var contentBounds: Rect? = null
         set(value) {
             field = value?.let(::Rect)
+        }
+
+    /**
+     * Découpes du tampon et leurs emplacements, quand un skin place lui-même
+     * les écrans de la console.
+     *
+     * Vide par défaut : le tampon est alors dessiné d'un bloc dans
+     * [contentBounds]. Une Nintendo DS rend ses deux écrans empilés dans un
+     * seul tampon, et un skin les sépare d'une charnière dessinée : sans cette
+     * liste, l'image passerait par-dessus.
+     */
+    @Volatile
+    var screenPlacements: List<ScreenPlacement> = emptyList()
+        set(value) {
+            field = value.map { ScreenPlacement(it.source?.let(::Rect), Rect(it.destination)) }
         }
 
     /**
@@ -262,8 +288,26 @@ class EmulatorSurfaceView @JvmOverloads constructor(
             } ?: return
             try {
                 canvas.drawColor(Color.BLACK)
-                computeDestination(canvas.width, canvas.height)
-                canvas.drawBitmap(bmp, null, destRect, paint)
+                val placements = screenPlacements
+                if (placements.isEmpty()) {
+                    computeDestination(canvas.width, canvas.height)
+                    canvas.drawBitmap(bmp, null, destRect, paint)
+                } else {
+                    for (placement in placements) {
+                        val source = placement.source
+                        if (source == null) {
+                            canvas.drawBitmap(bmp, null, placement.destination, paint)
+                            continue
+                        }
+                        // Une découpe qui déborde du tampon est ramenée dedans
+                        // plutôt que refusée : mieux vaut un écran un peu
+                        // décalé qu'un écran noir. Celle qui n'en touche rien
+                        // n'a rien à dessiner.
+                        val clipped = Rect(source)
+                        if (!clipped.intersect(0, 0, bmp.width, bmp.height)) continue
+                        canvas.drawBitmap(bmp, clipped, placement.destination, paint)
+                    }
+                }
             } finally {
                 try {
                     holder.unlockCanvasAndPost(canvas)

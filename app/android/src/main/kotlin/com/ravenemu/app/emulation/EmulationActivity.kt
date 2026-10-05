@@ -27,7 +27,7 @@ import com.ravenemu.deltaskin.DeltaSkinErrorCode
 import com.ravenemu.deltaskin.DeltaSkinInsets
 import com.ravenemu.deltaskin.DeltaSkinRepresentationKind
 import com.ravenemu.deltaskin.DeltaSkinRepository
-import com.ravenemu.deltaskin.DeltaSkinSize
+import com.ravenemu.deltaskin.DeltaSkinScreenPlacement
 import com.ravenemu.emulation.api.ConsoleType
 import com.ravenemu.emulation.api.audio.AudioTransportStats
 import com.ravenemu.emulation.api.EmulatorCore
@@ -41,7 +41,10 @@ import com.ravenemu.input.DeltaSkinControllerView
 import com.ravenemu.input.DeltaSkinPdfRenderer
 import com.ravenemu.input.GamepadMapper
 import com.ravenemu.input.TouchControlsView
+import com.ravenemu.core.nds.NdsCore
 import com.ravenemu.renderer.EmulatorSurfaceView
+import com.ravenemu.renderer.ScreenPlacement
+import kotlin.math.round
 import com.ravenemu.romlibrary.RomEntry
 import com.ravenemu.settings.AppSettings
 import com.ravenemu.emulation.api.display.DisplayAdjustments
@@ -190,9 +193,14 @@ class EmulationActivity : RavenActivity(), EmulationSession.Callbacks {
 
     // ---- Profils de commandes ----
 
-    /** Suffixe de profil propre à la console : la GBA a ses propres commandes. */
-    private fun consoleKey(): String =
-        if (console == ConsoleType.GAME_BOY_ADVANCE) "gba" else "gb"
+    /**
+     * Suffixe de profil propre à la console : chacune a ses propres commandes.
+     *
+     * Il vient de la console elle-même. L’avoir décidé ici rangeait les
+     * dispositions de la Nintendo DS avec celles de la Game Boy, si bien qu’une
+     * console à six touches de plus héritait d’une disposition qui les ignore.
+     */
+    private fun consoleKey(): String = console.layoutKey
 
     private fun orientationKey(): String =
         if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) {
@@ -211,13 +219,12 @@ class EmulationActivity : RavenActivity(), EmulationSession.Callbacks {
         if (hasPerGameProfile()) perGameProfileKey() else "${orientationKey()}_${consoleKey()}"
 
     private fun defaultLayout(): ControlLayout {
-        // Les gâchettes L/R ne sont affichées que pour les consoles qui en ont
-        // (Game Boy Advance).
-        val withShoulders = console == ConsoleType.GAME_BOY_ADVANCE
+        // Les touches dessinées sont celles que la console possède : la
+        // disposition n’en décide pas, elle les reçoit.
         return if (orientationKey() == "landscape") {
-            ControlLayout.defaultLandscape(withShoulders)
+            ControlLayout.defaultLandscape(console.buttons)
         } else {
-            ControlLayout.defaultPortrait(withShoulders)
+            ControlLayout.defaultPortrait(console.buttons)
         }
     }
 
@@ -250,22 +257,49 @@ class EmulationActivity : RavenActivity(), EmulationSession.Callbacks {
                 showEmulatorMenu()
             }
 
-            override fun onSkinReady(gameArea: android.graphics.Rect) {
+            override fun onSkinReady(
+                gameArea: android.graphics.Rect,
+                screens: List<DeltaSkinScreenPlacement>,
+            ) {
                 customSkinActive = true
                 controls.visibility = View.GONE
                 editorPanel.visibility = View.GONE
                 surface.contentBounds = gameArea
+                surface.screenPlacements = screens.map(::toPlacement)
                 surface.keepAspectRatio = true
                 surface.integerScaling = settings.integerScaling
                 surface.topAligned = false
             }
 
-            override fun onSkinLayoutChanged(gameArea: android.graphics.Rect) {
-                if (customSkinActive) surface.contentBounds = gameArea
+            override fun onSkinLayoutChanged(
+                gameArea: android.graphics.Rect,
+                screens: List<DeltaSkinScreenPlacement>,
+            ) {
+                if (!customSkinActive) return
+                surface.contentBounds = gameArea
+                surface.screenPlacements = screens.map(::toPlacement)
             }
 
             override fun onSkinError(code: DeltaSkinErrorCode) {
                 handleDeltaSkinFailure(code)
+            }
+
+            /**
+             * Le skin donne une position en fractions de sa zone tactile ; la
+             * console la veut en pixels de son écran. La conversion appartient
+             * à la console, qui seule connaît sa résolution.
+             */
+            override fun onTouchScreen(point: com.ravenemu.deltaskin.DeltaSkinTouchPoint) {
+                val screen = console.touchScreen ?: return
+                val (x, y) = screen.pixelAt(point.fractionX, point.fractionY)
+                session?.setTouch(down = true, x = x, y = y)
+            }
+
+            override fun onTouchScreenReleased() {
+                if (console.touchScreen == null) return
+                // Un stylet levé n'a pas de position : les coordonnées sont
+                // ignorées par le moteur, qui n'en retient aucune.
+                session?.setTouch(down = false, x = 0, y = 0)
             }
         }
     }
@@ -319,11 +353,10 @@ class EmulationActivity : RavenActivity(), EmulationSession.Callbacks {
                     console = skinConsole,
                     assets = assets,
                     preference = settings.deltaSkinRepresentationPreference,
-                    nativeScreenSize = if (skinConsole == DeltaSkinConsole.GBA) {
-                        DeltaSkinSize(240.0, 160.0)
-                    } else {
-                        DeltaSkinSize(160.0, 144.0)
-                    },
+                    // Les dimensions viennent de la console elle-même : les
+                    // redire ici en aurait fait une seconde source, et une
+                    // console ajoutée aurait pris l'écran d'une autre.
+                    nativeScreenSize = skinConsole.screenSize,
                     hapticFeedback = settings.hapticFeedback,
                     visualFeedback = settings.deltaSkinVisualFeedback,
                 )
@@ -331,12 +364,39 @@ class EmulationActivity : RavenActivity(), EmulationSession.Callbacks {
         }
     }
 
+    /**
+     * Passe un emplacement d'écran du vocabulaire des skins à celui du rendu.
+     *
+     * Les deux mondes se rencontrent ici et nulle part ailleurs : le module des
+     * skins raisonne en réels, parce qu'un cadre de manifeste n'est pas un
+     * pixel, et l'affichage en pixels entiers de la vue.
+     */
+    private fun toPlacement(
+        placement: DeltaSkinScreenPlacement,
+    ): ScreenPlacement = ScreenPlacement(
+        source = placement.source?.let { frame ->
+            android.graphics.Rect(
+                round(frame.x).toInt(),
+                round(frame.y).toInt(),
+                round(frame.x + frame.width).toInt(),
+                round(frame.y + frame.height).toInt(),
+            )
+        },
+        destination = android.graphics.Rect(
+            round(placement.destination.left).toInt(),
+            round(placement.destination.top).toInt(),
+            round(placement.destination.right).toInt(),
+            round(placement.destination.bottom).toInt(),
+        ),
+    )
+
     private fun showClassicControls() {
         customSkinActive = false
         activeDeltaSkinSha256 = null
         deltaSkinControls.setConfiguration(null)
         controls.visibility = View.VISIBLE
         surface.contentBounds = null
+        surface.screenPlacements = emptyList()
         applyVideoSettings()
     }
 
@@ -354,35 +414,38 @@ class EmulationActivity : RavenActivity(), EmulationSession.Callbacks {
         ).show()
     }
 
-    private fun deltaSkinConsole(): DeltaSkinConsole =
-        if (console == ConsoleType.GAME_BOY_ADVANCE) {
-            DeltaSkinConsole.GBA
-        } else {
-            DeltaSkinConsole.GB_GBC
-        }
+    private fun deltaSkinConsole(): DeltaSkinConsole = when (console) {
+        ConsoleType.GAME_BOY_ADVANCE -> DeltaSkinConsole.GBA
+        ConsoleType.NINTENDO_DS -> DeltaSkinConsole.DS
+        ConsoleType.GAME_BOY -> DeltaSkinConsole.GB_GBC
+    }
 
     // ---- Chargement ----
 
     private fun loadRomAndStart() {
-        // Seule la lecture de la ROM est nécessaire ici : base de références
-        // par défaut (l'identification est faite par la bibliothèque).
-        val repository = LibraryRepository(this, RavenConsoles.romAnalyzers())
-        lifecycleScope.launch {
-            val data = repository.readRom(romUri)
-            if (data == null) {
-                Toast.makeText(
-                    this@EmulationActivity,
-                    R.string.emulation_rom_error,
-                    Toast.LENGTH_LONG,
-                ).show()
-                finish()
-                return@launch
-            }
-            startEmulation(data)
-        }
+        lifecycleScope.launch { startEmulation() }
     }
 
-    private fun startEmulation(rom: ByteArray) {
+    /**
+     * Charge la cartouche dans [core] sans la faire passer par la mémoire Java.
+     *
+     * Une cartouche Nintendo DS pèse jusqu'à un demi-gigaoctet, et le tas Java
+     * d'une application Android est plafonné bien en dessous de ce que
+     * l'appareil permettrait : c'est ce plafond, et non le matériel, qui
+     * refusait les grosses cartouches. Le descripteur est ouvert ici et rendu
+     * ici ; le pont natif ne le ferme pas.
+     *
+     * Rend `false` quand ce chemin n'est pas disponible — moteur qui ne le sait
+     * pas, ou document dont la taille n'est pas connue d'avance. L'appelant
+     * retombe alors sur la lecture en mémoire.
+     */
+    private fun loadFromDescriptor(core: EmulatorCore, battery: ByteArray?): Boolean =
+        contentResolver.openFileDescriptor(romUri, "r")?.use { opened ->
+            val size = opened.statSize
+            if (size < 0L) false else core.loadRomFromDescriptor(opened.fd, size, battery)
+        } ?: false
+
+    private suspend fun startEmulation() {
         // Le registre reçoit les réglages propres à ce jeu : mémoire de
         // sauvegarde et présence de l'horloge de cartouche.
         val newCore = RavenConsoles.registry(
@@ -391,8 +454,22 @@ class EmulationActivity : RavenActivity(), EmulationSession.Callbacks {
         ).create(console)
         try {
             val battery = saveStore.read(romSha256, romFileName, settings.saveDirectory)
-            newCore.loadRom(rom, battery)
-        } catch (e: Exception) {
+            if (!withContext(Dispatchers.IO) { loadFromDescriptor(newCore, battery) }) {
+                // Base de références par défaut : l'identification a été faite
+                // par la bibliothèque, seule la lecture est nécessaire ici.
+                val repository = LibraryRepository(this, RavenConsoles.romAnalyzers())
+                val data = repository.readRom(romUri) ?: error("ROM illisible")
+                newCore.loadRom(data, battery)
+            }
+        } catch (e: Throwable) {
+            // `Throwable` et non `Exception`, délibérément. Charger une ROM
+            // choisie par le joueur peut échouer de deux façons qui ne sont pas
+            // des exceptions : un fichier trop gros pour le tas Java lève une
+            // `OutOfMemoryError`, et un champ interne refusé par Android une
+            // `NoSuchFieldError`. Ces erreurs traversent un rattrapage
+            // d'exceptions et tuent l'application, là où elles devraient donner
+            // un refus lisible. Aucun fichier ouvert par un joueur ne doit
+            // pouvoir arrêter RavenEmu.
             runCatching { (newCore as? AutoCloseable)?.close() }
             Toast.makeText(this, R.string.emulation_rom_error, Toast.LENGTH_LONG).show()
             finish()
@@ -464,8 +541,31 @@ class EmulationActivity : RavenActivity(), EmulationSession.Callbacks {
         surface.presentFrame(framebuffer)
     }
 
+    /**
+     * Une console qui ne produit aucune image se raconte d’elle-même.
+     *
+     * Sans cela, l’application montre un écran vide et n’en dit pas la raison :
+     * le joueur ne peut pas distinguer un jeu qui ne démarre pas d’une image
+     * que ce moteur ne sait pas encore dessiner, et il faudrait qu’il aille
+     * chercher un réglage pour l’apprendre. Le relevé s’affiche donc tout seul
+     * tant que rien n’est dessiné, et s’efface dès que la console produit
+     * quelque chose.
+     *
+     * Il ne concerne que la Nintendo DS, seule console dont le moteur soit
+     * assez incomplet pour ne rien montrer.
+     */
+    private fun mustExplainBlankScreen(): Boolean {
+        if (!BuildConfig.DIAGNOSTICS) return false
+        val snapshot = (core as? NdsCore)?.debugSnapshot() ?: return false
+        return snapshot.nonBlackPixels == 0
+    }
+
     override fun onStats(fps: Double, frameTimeMs: Double) {
-        if (!settings.showPerformanceOverlay) return
+        val explain = mustExplainBlankScreen()
+        if (!settings.showPerformanceOverlay && !explain) {
+            runOnUiThread { performanceOverlay.visibility = View.GONE }
+            return
+        }
         val text = GbaDebugOverlay.render(
             fps,
             frameTimeMs,
@@ -473,7 +573,10 @@ class EmulationActivity : RavenActivity(), EmulationSession.Callbacks {
             audioStats,
             session?.audioOutputUnderruns() ?: 0,
         )
-        runOnUiThread { performanceOverlay.text = text }
+        runOnUiThread {
+            performanceOverlay.visibility = View.VISIBLE
+            performanceOverlay.text = text
+        }
     }
 
     /**
@@ -505,34 +608,48 @@ class EmulationActivity : RavenActivity(), EmulationSession.Callbacks {
             if (hasPerGameProfile()) R.string.emulation_per_game_profile_off
             else R.string.emulation_per_game_profile_on
         )
-        val items = arrayOf(
-            getString(R.string.emulation_resume),
-            getString(R.string.emulation_save_state),
-            getString(R.string.emulation_load_state),
-            getString(R.string.emulation_reset),
-            getString(R.string.emulation_edit_controls),
-            perGameLabel,
-            getString(R.string.emulation_quit),
-        )
+        // Libellé et action vont ensemble. Ils étaient auparavant un tableau de
+        // textes et un « when » sur l'indice : retirer une entrée décalait
+        // silencieusement toutes les suivantes, et le joueur qui demandait la
+        // remise à zéro obtenait l'édition des commandes.
+        val actions = mutableListOf<Pair<String, () -> Unit>>()
+        fun entree(label: String, action: () -> Unit) {
+            actions += label to action
+        }
+
+        entree(getString(R.string.emulation_resume)) { currentSession.resume() }
+        // Un moteur sans format d'état ne se voit pas proposer d'en écrire un :
+        // l'entrée est absente plutôt que présente et fautive.
+        if (supportsSaveState) {
+            entree(getString(R.string.emulation_save_state)) { saveSnapshot() }
+            entree(getString(R.string.emulation_load_state)) { loadSnapshot() }
+        }
+        entree(getString(R.string.emulation_reset)) {
+            currentSession.post { it.reset() }
+            currentSession.resume()
+        }
+        entree(getString(R.string.emulation_edit_controls)) { enterEditMode() }
+        entree(perGameLabel) { togglePerGameProfile() }
+        entree(getString(R.string.emulation_quit)) { finish() }
         AlertDialog.Builder(this)
             .setTitle(romTitle.ifBlank { romFileName })
-            .setItems(items) { _, which ->
-                when (which) {
-                    0 -> currentSession.resume()
-                    1 -> saveSnapshot()
-                    2 -> loadSnapshot()
-                    3 -> {
-                        currentSession.post { it.reset() }
-                        currentSession.resume()
-                    }
-                    4 -> enterEditMode()
-                    5 -> togglePerGameProfile()
-                    6 -> finish()
-                }
+            .setItems(actions.map { it.first }.toTypedArray()) { _, which ->
+                actions[which].second()
             }
             .setOnCancelListener { currentSession.resume() }
             .show()
     }
+
+    /**
+     * Vrai quand le moteur chargé sait enregistrer un instantané.
+     *
+     * C'est le moteur qui répond, jamais la console : redire ici quelle console
+     * a un format d'état en ferait une seconde source, et l'écran continuerait
+     * d'offrir des emplacements le jour où un moteur cesserait de les tenir.
+     * Sans moteur il n'y a pas de partie, donc rien à enregistrer non plus.
+     */
+    private val supportsSaveState: Boolean
+        get() = core?.supportsSaveState == true
 
     /**
      * Sauvegarde dans un emplacement choisi.
@@ -772,11 +889,16 @@ class EmulationActivity : RavenActivity(), EmulationSession.Callbacks {
         val currentSession = session ?: return
         currentSession.flushBattery()
         // Sauvegarde de secours avant une éventuelle interruption du processus.
-        currentSession.post { c ->
-            try {
-                snapshotStore.write(romSha256, SnapshotStore.AUTO_SLOT, c.saveState())
-            } catch (_: Exception) {
-                // La sauvegarde de secours ne doit jamais faire échouer la pause.
+        // Un moteur sans format d'état ne la tente pas : elle échouerait à
+        // chaque mise en pause, et le rattrapage silencieux ci-dessous cacherait
+        // une erreur attendue au milieu de celles qui ne le sont pas.
+        if (supportsSaveState) {
+            currentSession.post { c ->
+                try {
+                    snapshotStore.write(romSha256, SnapshotStore.AUTO_SLOT, c.saveState())
+                } catch (_: Exception) {
+                    // La sauvegarde de secours ne doit jamais faire échouer la pause.
+                }
             }
         }
         if (settings.pauseInBackground) currentSession.pause()

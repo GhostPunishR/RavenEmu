@@ -27,6 +27,7 @@ class ConsoleTypeTest {
     fun `les identifiants persistes sont figes`() {
         assertEquals(0, ConsoleType.GAME_BOY.storageId)
         assertEquals(2, ConsoleType.GAME_BOY_ADVANCE.storageId)
+        assertEquals(3, ConsoleType.NINTENDO_DS.storageId)
     }
 
     @Test

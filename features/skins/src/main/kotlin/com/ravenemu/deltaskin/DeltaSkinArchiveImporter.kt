@@ -56,25 +56,36 @@ class DeltaSkinArchiveImporter(
         val edgeRepresentation = iphone.edgeToEdge?.portrait
         val standardAsset = standardRepresentation?.assets?.resizable
         val edgeAsset = edgeRepresentation?.assets?.resizable
-        val referencedAssets = listOfNotNull(
-            iphone.standard?.portrait?.toReferencedPdf(),
-            iphone.standard?.landscape?.toReferencedPdf(),
-            iphone.edgeToEdge?.portrait?.toReferencedPdf(),
-            iphone.edgeToEdge?.landscape?.toReferencedPdf(),
-        )
-        val referencedNames = referencedAssets.map(ReferencedPdf::name).distinct()
         val availableEntries = inspection.entries
             .filterNot { isIgnored(it.name) }
             .associateBy { it.name }
-        referencedNames.forEach { asset ->
-            val entry = availableEntries[asset]
-            if (entry == null || entry.isDirectory) {
+        fun isPresent(asset: ReferencedPdf): Boolean =
+            availableEntries[asset.name]?.isDirectory == false
+
+        val requiredAssets = listOfNotNull(
+            standardRepresentation?.toReferencedPdf(),
+            edgeRepresentation?.toReferencedPdf(),
+        )
+        requiredAssets.forEach { asset ->
+            if (!isPresent(asset)) {
                 throw DeltaSkinException(
                     DeltaSkinErrorCode.RESIZABLE_ASSET_MISSING,
                     "Un asset PDF référencé est absent de l'archive",
                 )
             }
         }
+
+        // Le paysage n'est jamais rendu : son PDF est contrôlé s'il est livré,
+        // mais son absence ne condamne pas l'archive. De vrais skins déclarent
+        // une représentation paysage sans joindre son image, et refuser tout
+        // priverait l'utilisateur d'un portrait parfaitement valide.
+        val landscapeAssets = listOfNotNull(
+            iphone.standard?.landscape?.toReferencedPdf(),
+            iphone.edgeToEdge?.landscape?.toReferencedPdf(),
+        ).filter(::isPresent)
+
+        val referencedAssets = requiredAssets + landscapeAssets
+        val referencedNames = referencedAssets.map(ReferencedPdf::name).distinct()
         val requiredStorageBytes = archiveFile.length() +
             referencedNames.sumOf { availableEntries.getValue(it).size } +
             MAX_INFO_JSON_BYTES

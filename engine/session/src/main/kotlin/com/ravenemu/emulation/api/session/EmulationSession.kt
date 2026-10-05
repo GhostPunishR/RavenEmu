@@ -264,6 +264,17 @@ class EmulationSession(
     }
 
     /**
+     * Pose ou lève un contact sur l'écran tactile, en pixels de cet écran.
+     *
+     * Le geste passe par la même file que les boutons, et pour la même raison :
+     * le moteur tourne sur son propre thread, et lui écrire dessus depuis celui
+     * de l'interface ferait voir au jeu un demi-contact.
+     */
+    fun setTouch(down: Boolean, x: Int, y: Int) {
+        post { it.setTouch(down, x, y) }
+    }
+
+    /**
      * Applique un groupe de transitions dans une seule commande de session.
      *
      * Les boutons combinés d'un skin tactile deviennent donc visibles ensemble
@@ -528,3 +539,4 @@ class EmulationSession(
         private const val MAX_LAG_NANOS = 100_000_000L
     }
 }
+

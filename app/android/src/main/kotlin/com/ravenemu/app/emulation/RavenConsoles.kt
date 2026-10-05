@@ -3,10 +3,12 @@ package com.ravenemu.app.emulation
 import com.ravenemu.core.gb.GameBoyConsoleProvider
 import com.ravenemu.core.gba.GbaConsoleProvider
 import com.ravenemu.core.gba.save.GbaSaveType
+import com.ravenemu.core.nds.NdsConsoleProvider
 import com.ravenemu.emulation.api.ConsoleRegistry
 import com.ravenemu.emulation.api.ConsoleType
 import com.ravenemu.romlibrary.GameBoyRomAnalyzer
 import com.ravenemu.romlibrary.GbaRomAnalyzer
+import com.ravenemu.romlibrary.NdsRomAnalyzer
 import com.ravenemu.romlibrary.RomAnalyzer
 
 /**
@@ -44,8 +46,20 @@ object RavenConsoles {
                     ?.let { name -> runCatching { GbaSaveType.valueOf(name) }.getOrNull() },
                 forcedRtc = forcedGbaRtc,
             ),
+            NdsConsoleProvider(),
         )
     )
+
+    /**
+     * `true` si les moteurs de [console] savent enregistrer un instantané.
+     *
+     * Posée au fournisseur, donc sans construire de moteur : la bibliothèque
+     * décide d'offrir ou non les états d'un jeu qu'elle n'a pas lancé. Une
+     * console absente du registre répond faux, ce qui est le comportement utile
+     * — on ne propose pas d'enregistrer l'état d'un moteur qui n'existe pas.
+     */
+    fun supportsSaveState(console: ConsoleType): Boolean =
+        registry().providerFor(console)?.supportsSaveState == true
 
     /**
      * Analyseurs de ROM de la bibliothèque, construits sur les fournisseurs du
@@ -71,6 +85,7 @@ object RavenConsoles {
         return listOfNotNull(
             registre.providerFor(ConsoleType.GAME_BOY)?.let(::GameBoyRomAnalyzer),
             registre.providerFor(ConsoleType.GAME_BOY_ADVANCE)?.let(::GbaRomAnalyzer),
+            registre.providerFor(ConsoleType.NINTENDO_DS)?.let(::NdsRomAnalyzer),
         )
     }
 }

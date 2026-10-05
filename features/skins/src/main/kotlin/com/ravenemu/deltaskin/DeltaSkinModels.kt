@@ -1,5 +1,8 @@
 package com.ravenemu.deltaskin
 
+import com.ravenemu.emulation.api.ConsoleType
+import com.ravenemu.emulation.api.EmulatorButton
+import java.util.Locale
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.SerialDescriptor
@@ -12,17 +15,101 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 
-/** Consoles Delta prises en charge par cette première version. */
+/**
+ * Consoles Delta prises en charge.
+ *
+ * Chacune porte les dimensions de son image, parce qu'un skin encadre un écran
+ * dont il ignore la taille : c'est la console qui la connaît, et la calculer
+ * ailleurs obligerait chaque appelant à la redire.
+ *
+ * La Nintendo DS en a deux, empilés dans un seul tampon : sa hauteur est donc
+ * le double de celle d'un écran, et c'est ce que le skin encadre.
+ */
 @Serializable
-enum class DeltaSkinConsole(val gameTypeIdentifier: String) {
-    GB_GBC("com.rileytestut.delta.game.gbc"),
-    GBA("com.rileytestut.delta.game.gba"),
+enum class DeltaSkinConsole(
+    val gameTypeIdentifier: String,
+    val screenWidth: Double,
+    val screenHeight: Double,
+    /** Touches que cette console possède réellement. */
+    val buttons: Set<EmulatorButton>,
+    /**
+     * Vrai pour une console dont un des écrans se touche.
+     *
+     * Un skin peut déclarer une zone tactile pour n'importe quelle console : ce
+     * qui décide n'est pas ce que le skin dit, mais ce que le matériel a. Sans
+     * cette distinction, un doigt posé sur l'image d'une Game Boy Advance
+     * enverrait un contact à une console qui n'a rien pour le recevoir.
+     */
+    val hasTouchScreen: Boolean = false,
+) {
+    GB_GBC("com.rileytestut.delta.game.gbc", 160.0, 144.0, ConsoleType.GAME_BOY.buttons),
+    GBA(
+        "com.rileytestut.delta.game.gba",
+        240.0,
+        160.0,
+        ConsoleType.GAME_BOY_ADVANCE.buttons,
+    ),
+    DS(
+        "com.rileytestut.delta.game.ds",
+        256.0,
+        384.0,
+        ConsoleType.NINTENDO_DS.buttons,
+        hasTouchScreen = true,
+    ),
     ;
+
+    /** Dimensions de l'image que ce skin encadre. */
+    val screenSize: DeltaSkinSize get() = DeltaSkinSize(screenWidth, screenHeight)
+
+    /** Noms Delta que cette console sait honorer, menu et dalle compris. */
+    val supportedInputNames: Set<String>
+        get() = DeltaSkinInputNames.BUTTONS
+            .filterValues { it in buttons }
+            .keys + DeltaSkinInputNames.MENU +
+            // Les deux axes de la dalle ne sont honorés que là où il y en a une.
+            // Ailleurs ils restent signalés à l'utilisateur : un skin peut en
+            // déclarer pour n'importe quelle console, et le laisser croire que
+            // sa Game Boy Advance a un écran tactile serait pire que muet.
+            if (hasTouchScreen) DeltaSkinInputNames.TOUCH_SCREEN_VALUES else emptySet()
 
     companion object {
         fun fromGameTypeIdentifier(identifier: String): DeltaSkinConsole? =
             entries.firstOrNull { it.gameTypeIdentifier == identifier }
     }
+}
+
+/**
+ * Noms que Delta donne aux entrées, et ce qu'ils désignent.
+ *
+ * Une seule table, consultée par le contrôle des archives comme par la
+ * traduction des appuis. Deux tables dériveraient : un skin serait accepté avec
+ * une touche que rien ne presse ensuite, sans que rien ne le signale.
+ */
+object DeltaSkinInputNames {
+    val BUTTONS: Map<String, EmulatorButton> = linkedMapOf(
+        "up" to EmulatorButton.UP,
+        "down" to EmulatorButton.DOWN,
+        "left" to EmulatorButton.LEFT,
+        "right" to EmulatorButton.RIGHT,
+        "a" to EmulatorButton.A,
+        "b" to EmulatorButton.B,
+        "start" to EmulatorButton.START,
+        "select" to EmulatorButton.SELECT,
+        "l" to EmulatorButton.L,
+        "r" to EmulatorButton.R,
+        "x" to EmulatorButton.X,
+        "y" to EmulatorButton.Y,
+    )
+
+    /** Entrée qui n'appartient à aucune console : elle ouvre le menu de l'application. */
+    const val MENU = "menu"
+
+    /** Les deux axes que Delta emploie pour désigner la zone tactile. */
+    val TOUCH_SCREEN_AXES: Set<String> = setOf("x", "y")
+    val TOUCH_SCREEN_VALUES: Set<String> = setOf("touchscreenx", "touchscreeny")
+
+    /** Les quatre directions qu'une croix doit déclarer. */
+    val DIRECTIONS: Set<String> = setOf("up", "down", "left", "right")
 }
 
 @Serializable
@@ -82,7 +169,27 @@ data class DeltaSkinRepresentation(
     val translucent: Boolean = false,
     val gameScreenFrame: DeltaSkinFrame? = null,
     val screens: List<DeltaSkinScreen> = emptyList(),
-)
+) {
+    /**
+     * Les écrans que cette représentation place elle-même, sous une seule
+     * forme.
+     *
+     * Delta a deux écritures pour la même chose : `screens`, qui sait en
+     * décrire plusieurs et découper le tampon, et `gameScreenFrame`, plus
+     * ancienne, qui n'en pose qu'un et prend le tampon entier. Les laisser
+     * toutes deux aux appelants aurait fait deux chemins pour un seul cas, dont
+     * l'un se serait fait oublier.
+     *
+     * Vide quand le skin ne place rien : le jeu prend alors la place laissée
+     * au-dessus du panneau, comme sur les skins des consoles à un seul écran.
+     */
+    val declaredScreens: List<DeltaSkinScreen>
+        get() = when {
+            screens.isNotEmpty() -> screens
+            gameScreenFrame != null -> listOf(DeltaSkinScreen(outputFrame = gameScreenFrame))
+            else -> emptyList()
+        }
+}
 
 @Serializable
 data class DeltaSkinAssets(
@@ -142,7 +249,24 @@ data class DeltaSkinItem(
 @Serializable(with = DeltaSkinInputsSerializer::class)
 sealed interface DeltaSkinInputs {
     data class Buttons(val values: List<String>) : DeltaSkinInputs
-    data class Directional(val values: Map<String, String>) : DeltaSkinInputs
+
+    data class Directional(val values: Map<String, String>) : DeltaSkinInputs {
+        /**
+         * Vrai quand ce dictionnaire décrit la zone tactile, non une croix.
+         *
+         * Delta se sert de la même forme pour les deux, et seules les clés les
+         * distinguent : une croix nomme quatre directions, la zone tactile deux
+         * axes. Les confondre découperait l'écran tactile en neuf cases de
+         * direction, ce qui presserait des touches au toucher.
+         */
+        val isTouchScreen: Boolean
+            get() {
+                val keys = values.keys.mapTo(mutableSetOf()) { it.trim().lowercase(Locale.ROOT) }
+                if (keys != DeltaSkinInputNames.TOUCH_SCREEN_AXES) return false
+                val named = values.values.mapTo(mutableSetOf()) { it.trim().lowercase(Locale.ROOT) }
+                return named == DeltaSkinInputNames.TOUCH_SCREEN_VALUES
+            }
+    }
 }
 
 /**

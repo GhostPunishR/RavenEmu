@@ -37,15 +37,54 @@ data class DeltaSkinLayout(
     val gameArea: DeltaSkinRect,
     val gameScreen: DeltaSkinRect,
     val scale: Double,
+    /**
+     * Où chaque écran de la console se pose, quand le skin le dit lui-même.
+     *
+     * Vide pour un skin qui ne place pas ses écrans : le jeu occupe alors
+     * [gameArea] tout entier, à son ratio. Une liste de deux entrées est le cas
+     * ordinaire d'une Nintendo DS, dont les deux écrans sont dessinés à des
+     * endroits que le skin choisit et qui ne se touchent pas forcément.
+     */
+    val screens: List<DeltaSkinScreenPlacement> = emptyList(),
+)
+
+/**
+ * Une découpe du tampon de la console, et l'endroit où elle se pose.
+ *
+ * [source] est en pixels du tampon produit par le moteur, `null` valant « tout
+ * le tampon » ; [destination] est en pixels de la vue. Les deux écrans d'une
+ * Nintendo DS arrivent empilés dans un seul tampon : le skin les redécoupe.
+ */
+data class DeltaSkinScreenPlacement(
+    val source: DeltaSkinFrame?,
+    val destination: DeltaSkinRect,
 )
 
 object DeltaSkinLayoutCalculator {
+    /**
+     * Place le panneau du skin et l'écran du jeu dans la vue.
+     *
+     * Deux formes de skin existent, et [declaredScreens] les sépare.
+     *
+     * Un skin **qui place ses écrans** occupe toute la vue : le jeu se dessine
+     * dans les trous que son image réserve, aux cadres qu'il donne. C'est la
+     * forme de tous les skins de Nintendo DS, dont les deux écrans doivent
+     * tomber de part et d'autre de la charnière dessinée. Sans cette forme, un
+     * tel skin était refusé : son image est aussi haute que l'écran, il ne
+     * restait aucune place au-dessus, et l'utilisateur ne voyait qu'un « skin
+     * invalide » sans savoir ce qu'on lui reprochait.
+     *
+     * Un skin **qui ne place rien** garde la disposition historique : son
+     * panneau s'ancre en bas sur toute la largeur, et le jeu prend ce qui reste
+     * au-dessus.
+     */
     fun calculate(
         containerWidth: Double,
         containerHeight: Double,
         insets: DeltaSkinInsets,
         mappingSize: DeltaSkinSize,
         nativeScreenSize: DeltaSkinSize,
+        declaredScreens: List<DeltaSkinScreen> = emptyList(),
     ): DeltaSkinLayout? {
         if (
             containerWidth <= 0.0 ||
@@ -63,6 +102,14 @@ object DeltaSkinLayoutCalculator {
         val contentBottom = containerHeight - insets.bottom.coerceAtLeast(0.0)
         val panelWidth = contentRight - contentLeft
         if (panelWidth <= 0.0 || contentBottom <= contentTop) return null
+
+        if (declaredScreens.isNotEmpty()) {
+            return fullPanel(
+                content = DeltaSkinRect(contentLeft, contentTop, contentRight, contentBottom),
+                mappingSize = mappingSize,
+                declaredScreens = declaredScreens,
+            )
+        }
 
         val scale = panelWidth / mappingSize.width
         val panelHeight = mappingSize.height * scale
@@ -101,6 +148,61 @@ object DeltaSkinLayoutCalculator {
             gameArea = gameArea,
             gameScreen = screen,
             scale = scale,
+        )
+    }
+
+    /**
+     * Disposition d'un skin qui occupe toute la vue et place ses écrans.
+     *
+     * Le panneau est mis à l'échelle pour tenir en entier, sans déformation, et
+     * centré : une image plus étroite que la vue laisse une marge de chaque
+     * côté plutôt que de s'étirer. Les cadres de sortie suivent le panneau,
+     * puisqu'ils sont écrits dans ses coordonnées.
+     */
+    private fun fullPanel(
+        content: DeltaSkinRect,
+        mappingSize: DeltaSkinSize,
+        declaredScreens: List<DeltaSkinScreen>,
+    ): DeltaSkinLayout? {
+        val scale = min(
+            content.width / mappingSize.width,
+            content.height / mappingSize.height,
+        )
+        if (!scale.isFinite() || scale <= 0.0) return null
+        val panelWidth = mappingSize.width * scale
+        val panelHeight = mappingSize.height * scale
+        val panelLeft = content.left + (content.width - panelWidth) / 2.0
+        val panelTop = content.top + (content.height - panelHeight) / 2.0
+        val panel = DeltaSkinRect(
+            left = panelLeft,
+            top = panelTop,
+            right = panelLeft + panelWidth,
+            bottom = panelTop + panelHeight,
+        )
+
+        val placements = declaredScreens.map { screen ->
+            DeltaSkinScreenPlacement(
+                source = screen.inputFrame,
+                destination = mapFrame(screen.outputFrame, panel, mappingSize),
+            )
+        }
+        // L'enveloppe des écrans sert à ce qui ne sait raisonner que sur une
+        // seule zone. Le dessin, lui, suit les cadres un par un : les réunir
+        // étalerait l'image d'un écran sur la charnière qui les sépare.
+        val enveloppe = placements.map { it.destination }.reduce { a, b ->
+            DeltaSkinRect(
+                left = minOf(a.left, b.left),
+                top = minOf(a.top, b.top),
+                right = maxOf(a.right, b.right),
+                bottom = maxOf(a.bottom, b.bottom),
+            )
+        }
+        return DeltaSkinLayout(
+            panel = panel,
+            gameArea = enveloppe,
+            gameScreen = enveloppe,
+            scale = scale,
+            screens = placements,
         )
     }
 

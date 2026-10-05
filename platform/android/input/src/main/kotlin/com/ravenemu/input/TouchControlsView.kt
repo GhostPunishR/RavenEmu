@@ -76,7 +76,8 @@ class TouchControlsView @JvmOverloads constructor(
         val density = resources.displayMetrics.density
         return when (id) {
             ControlId.DPAD -> 76f * density
-            ControlId.BUTTON_A, ControlId.BUTTON_B -> 34f * density
+            ControlId.BUTTON_A, ControlId.BUTTON_B,
+            ControlId.BUTTON_X, ControlId.BUTTON_Y -> 34f * density
             ControlId.START, ControlId.SELECT -> 26f * density
             ControlId.BUTTON_L, ControlId.BUTTON_R -> 28f * density
             ControlId.MENU -> 22f * density
@@ -107,6 +108,8 @@ class TouchControlsView @JvmOverloads constructor(
                 ControlId.DPAD -> drawDpad(canvas, cx, cy, radius)
                 ControlId.BUTTON_A -> drawRound(canvas, cx, cy, radius, "A")
                 ControlId.BUTTON_B -> drawRound(canvas, cx, cy, radius, "B")
+                ControlId.BUTTON_X -> drawRound(canvas, cx, cy, radius, "X")
+                ControlId.BUTTON_Y -> drawRound(canvas, cx, cy, radius, "Y")
                 ControlId.START -> drawPill(canvas, cx, cy, radius, "START")
                 ControlId.SELECT -> drawPill(canvas, cx, cy, radius, "SELECT")
                 ControlId.BUTTON_L -> drawPill(canvas, cx, cy, radius, "L")
@@ -234,6 +237,10 @@ class TouchControlsView @JvmOverloads constructor(
                     if (dx * dx + dy * dy <= reach * reach) result += EmulatorButton.A
                 ControlId.BUTTON_B ->
                     if (dx * dx + dy * dy <= reach * reach) result += EmulatorButton.B
+                ControlId.BUTTON_X ->
+                    if (dx * dx + dy * dy <= reach * reach) result += EmulatorButton.X
+                ControlId.BUTTON_Y ->
+                    if (dx * dx + dy * dy <= reach * reach) result += EmulatorButton.Y
                 ControlId.START ->
                     if (abs(dx) <= reach * 1.6f && abs(dy) <= reach) {
                         result += EmulatorButton.START

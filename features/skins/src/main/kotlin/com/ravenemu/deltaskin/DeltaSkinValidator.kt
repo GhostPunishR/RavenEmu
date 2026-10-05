@@ -146,8 +146,14 @@ object DeltaSkinValidator {
                 inputs.values
             }
             is DeltaSkinInputs.Directional -> {
-                val required = setOf("up", "down", "left", "right")
-                if (!inputs.values.keys.containsAll(required)) {
+                // La zone tactile emprunte la forme d'une croix mais n'en est
+                // pas une : elle nomme deux axes au lieu de quatre directions.
+                // Lui réclamer les quatre ferait refuser tout skin de Nintendo
+                // DS, dont c'est l'élément principal.
+                if (
+                    !inputs.isTouchScreen &&
+                    !inputs.values.keys.containsAll(DeltaSkinInputNames.DIRECTIONS)
+                ) {
                     throw DeltaSkinException(
                         DeltaSkinErrorCode.MISSING_REQUIRED_PROPERTY,
                         "Un D-pad doit déclarer up, down, left et right",
@@ -156,15 +162,14 @@ object DeltaSkinValidator {
                 inputs.values.values.toList()
             }
         }
+        // Les entrées honorées viennent de la console elle-même : en tenir une
+        // liste ici en aurait fait une seconde source, et un skin aurait pu être
+        // accepté avec une touche que rien ne presse ensuite.
+        val supported = console.supportedInputNames
         values.forEach { raw ->
             val value = raw.trim().lowercase(Locale.ROOT)
-            if (value !in supportedInputs(console)) ignoredInputs += raw
+            if (value !in supported) ignoredInputs += raw
         }
-    }
-
-    private fun supportedInputs(console: DeltaSkinConsole): Set<String> = when (console) {
-        DeltaSkinConsole.GB_GBC -> GB_INPUTS
-        DeltaSkinConsole.GBA -> GBA_INPUTS
     }
 
     private fun validateEdges(edges: DeltaSkinEdges) {
@@ -258,7 +263,4 @@ object DeltaSkinValidator {
     }
 
     private val WINDOWS_DRIVE = Regex("^[A-Za-z]:.*")
-    private val GB_INPUTS =
-        setOf("up", "down", "left", "right", "a", "b", "start", "select", "menu")
-    private val GBA_INPUTS = GB_INPUTS + setOf("l", "r")
 }

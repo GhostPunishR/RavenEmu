@@ -32,8 +32,10 @@ class LibraryPagesTest {
     private val monochrome = entree("tetris.gb", mode = GameBoyCartridgeMode.DMG_ONLY)
     private val couleur = entree("cristal.gbc", mode = GameBoyCartridgeMode.CGB_ONLY)
     private val advance = entree("emeraude.gba", console = ConsoleType.GAME_BOY_ADVANCE)
+    private val ds = entree("donjon.nds", console = ConsoleType.NINTENDO_DS)
 
     private val gba = ConsoleType.GAME_BOY_ADVANCE.name
+    private val nds = ConsoleType.NINTENDO_DS.name
 
     @Test
     fun `une bibliotheque vide garde une page`() {
@@ -84,6 +86,27 @@ class LibraryPagesTest {
     }
 
     @Test
+    fun `la Nintendo DS ferme la marche des generations`() {
+        // L'ordre suit le matériel : la DS vient après la Game Boy Advance, et
+        // n'apparaît que si la bibliothèque en contient un jeu.
+        assertEquals(
+            listOf(
+                LibraryFilter.ALL,
+                LibraryFilter.GAME_BOY_MONOCHROME_CARTRIDGES,
+                gba,
+                nds,
+            ),
+            LibraryPages.forEntries(listOf(monochrome, advance, ds)),
+        )
+        assertTrue(nds !in LibraryPages.forEntries(listOf(monochrome, advance)))
+    }
+
+    @Test
+    fun `une bibliotheque uniquement Nintendo DS n'a qu'une page`() {
+        assertEquals(listOf(nds), LibraryPages.forEntries(listOf(ds)))
+    }
+
+    @Test
     fun `la page retenue est retrouvee par son filtre`() {
         val pages = LibraryPages.forEntries(listOf(monochrome, couleur, advance))
         assertEquals(2, LibraryPages.indexOf(pages, LibraryFilter.GAME_BOY_COLOR_CARTRIDGES))
@@ -107,3 +130,4 @@ class LibraryPagesTest {
         assertEquals(2, LibraryPages.indexOf(pages, "GAME_BOY_COLOR"))
     }
 }
+

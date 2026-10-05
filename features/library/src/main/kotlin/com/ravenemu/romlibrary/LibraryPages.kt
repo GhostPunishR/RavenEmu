@@ -24,6 +24,7 @@ object LibraryPages {
         LibraryFilter.GAME_BOY_MONOCHROME_CARTRIDGES,
         LibraryFilter.GAME_BOY_COLOR_CARTRIDGES,
         ConsoleType.GAME_BOY_ADVANCE.name,
+        ConsoleType.NINTENDO_DS.name,
     )
 
     /**
