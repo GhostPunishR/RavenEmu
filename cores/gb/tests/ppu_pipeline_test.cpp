@@ -68,6 +68,48 @@ void window_restart_and_line_counter_test() {
     }
 }
 
+void window_horizontal_scroll_independence_test() {
+    for (const auto hardware : {gb::HardwareMode::dmg, gb::HardwareMode::cgb_compatibility,
+                               gb::HardwareMode::cgb_native}) {
+        for (const int wx : {1, 6, 7, 15, 87}) {
+            for (const int scx : {0, 1, 2, 3, 4, 5, 6, 7, 8, 31, 255}) {
+                InterruptController interrupts;
+                Ppu ppu(interrupts, hardware);
+                ppu.write_lcdc(0x11);
+                ppu.set_bgp(0xe4);
+                if (hardware == gb::HardwareMode::cgb_compatibility) {
+                    ppu.initialize_hle_compatibility_palettes();
+                } else if (hardware == gb::HardwareMode::cgb_native) {
+                    ppu.write_bcps(0); ppu.write_bcpd(0);
+                    ppu.write_bcps(1); ppu.write_bcpd(0);
+                    ppu.write_bcps(2); ppu.write_bcpd(0x1f);
+                    ppu.write_bcps(3); ppu.write_bcpd(0);
+                }
+                // BG uni, window avec une colonne colorée par tuile.
+                for (int row = 0; row < 8; ++row) {
+                    ppu.vram[static_cast<std::size_t>(16 + row * 2)] = 0x80;
+                }
+                for (int tile = 0; tile < 32 * 32; ++tile) {
+                    ppu.vram[static_cast<std::size_t>(0x1c00 + tile)] = 1;
+                }
+                ppu.set_scx(scx);
+                ppu.set_wy(112); // panneau en bas de l'écran
+                ppu.set_wx(wx);
+                ppu.write_lcdc(0xf1);
+                while (ppu.mode() != Ppu::mode_vblank) ppu.tick(1);
+                const auto background = ppu.completed_frame[0];
+                for (int y = 112; y < Ppu::height; ++y) {
+                    for (int x = 0; x < Ppu::width; ++x) {
+                        const bool stripe = x >= wx - 7 && (x - (wx - 7)) % 8 == 0;
+                        check((ppu.completed_frame[static_cast<std::size_t>(y * Ppu::width + x)] != background) == stripe,
+                              "SCX déplace le panneau window ou altère son bord gauche");
+                    }
+                }
+            }
+        }
+    }
+}
+
 void mid_scanline_wx_glitch_test() {
     for (const auto hardware_mode : {gb::HardwareMode::dmg,
                                      gb::HardwareMode::cgb_compatibility,
@@ -1004,6 +1046,7 @@ int main() {
     using namespace ravenemu::cgb::testing;
     fifo_baseline_and_scx_test();
     window_restart_and_line_counter_test();
+    window_horizontal_scroll_independence_test();
     mid_scanline_wx_glitch_test();
     mid_scanline_scx_tile_fetch_test();
     sprite_penalty_test();
