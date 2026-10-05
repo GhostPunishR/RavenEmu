@@ -27,7 +27,6 @@ class RomEntryDisplayNameTest {
         console = ConsoleType.GAME_BOY,
         title = title,
         fingerprints = Fingerprints("0", "0", "0"),
-        status = RomStatus.INTACT,
         customTitle = customTitle,
     )
 

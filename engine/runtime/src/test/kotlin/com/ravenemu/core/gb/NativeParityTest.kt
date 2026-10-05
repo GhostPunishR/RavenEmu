@@ -8,14 +8,17 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * Parité entre l'implémentation Kotlin de référence et le cœur C++ livré.
+ * Contrats communs avec l'ancienne implémentation Kotlin et déterminisme du
+ * cœur C++ livré.
  *
- * Voir la note du test homonyme de `gba-core` : l'implémentation Kotlin est
- * restée dans les sources de test sous le nom d'oracle, mais un oracle qu'on
- * ne confronte à rien ne prouve rien. Les deux modes de la gamme sont couverts,
- * le Game Boy monochrome produisant des niveaux 0..3 quand le Game Boy Color
- * produit déjà de l'ARGB : une confusion de format ne se verrait pas sur un
- * seul des deux.
+ * L'implémentation Kotlin reste utile comme oracle de façade (format vidéo,
+ * cadence audio, batterie), mais plus comme oracle matériel : elle avance
+ * encore les périphériques après une instruction entière et conserve l'ancien
+ * PPU à durée fixe. Comparer ses pixels et ses échantillons bit à bit obligerait
+ * donc le cœur natif à reproduire précisément les approximations que ses tests
+ * matériels corrigent. Les sorties natives sont comparées à une seconde
+ * instance native déterministe ; la conformité matérielle est couverte dans
+ * `cores/gb/tests`.
  */
 class NativeParityTest {
 
@@ -112,118 +115,148 @@ class NativeParityTest {
         return tampon.copyOf(core.readAudio(tampon))
     }
 
-    /** Compare les deux implémentations sur une ROM donnée, trame par trame. */
-    private fun comparer(rom: ByteArray, etiquette: String) {
+    /** Vérifie la façade commune et les sorties natives, trame par trame. */
+    private fun verifierContratsEtDeterminisme(rom: ByteArray, etiquette: String) {
         val reference = KotlinGameBoyCore(HORLOGE)
-        GameBoyCore(HORLOGE).use { natif ->
-            reference.loadRom(rom, null)
-            natif.loadRom(rom, null)
+        GameBoyCore(HORLOGE).use { natifA ->
+            GameBoyCore(HORLOGE).use { natifB ->
+                reference.loadRom(rom, null)
+                natifA.loadRom(rom, null)
+                natifB.loadRom(rom, null)
 
-            assertEquals(
-                reference.framebufferFormat,
-                natif.framebufferFormat,
-                "$etiquette : format de tampon vidéo divergent",
-            )
-
-            val trameRef = framebuffer()
-            val trameNat = framebuffer()
-
-            for (trame in 0 until FRAMES) {
-                reference.runFrame(trameRef)
-                natif.runFrame(trameNat)
-                assertContentEquals(
-                    trameRef,
-                    trameNat,
-                    "$etiquette : trames différentes à la trame $trame",
-                )
-
-                val audioRef = drain(reference)
-                val audioNat = drain(natif)
                 assertEquals(
-                    audioRef.size,
-                    audioNat.size,
-                    "$etiquette : nombre d'échantillons différent à la trame $trame",
+                    reference.framebufferFormat,
+                    natifA.framebufferFormat,
+                    "$etiquette : format de tampon vidéo divergent",
                 )
-                assertContentEquals(
-                    audioRef,
-                    audioNat,
-                    "$etiquette : audio différent à la trame $trame",
-                )
+                assertEquals(natifA.framebufferFormat, natifB.framebufferFormat)
 
-                val bouton = BOUTONS[trame % BOUTONS.size]
-                reference.setButton(bouton, trame % 2 == 0)
-                natif.setButton(bouton, trame % 2 == 0)
+                val trameRef = framebuffer()
+                val trameNatA = framebuffer()
+                val trameNatB = framebuffer()
+
+                for (trame in 0 until FRAMES) {
+                    reference.runFrame(trameRef)
+                    natifA.runFrame(trameNatA)
+                    natifB.runFrame(trameNatB)
+                    assertContentEquals(
+                        trameNatA,
+                        trameNatB,
+                        "$etiquette : sortie vidéo native non déterministe à la trame $trame",
+                    )
+
+                    val audioRef = drain(reference)
+                    val audioNatA = drain(natifA)
+                    val audioNatB = drain(natifB)
+                    assertEquals(
+                        audioRef.size,
+                        audioNatA.size,
+                        "$etiquette : nombre d'échantillons différent à la trame $trame",
+                    )
+                    assertContentEquals(
+                        audioNatA,
+                        audioNatB,
+                        "$etiquette : sortie audio native non déterministe à la trame $trame",
+                    )
+
+                    val bouton = BOUTONS[trame % BOUTONS.size]
+                    reference.setButton(bouton, trame % 2 == 0)
+                    natifA.setButton(bouton, trame % 2 == 0)
+                    natifB.setButton(bouton, trame % 2 == 0)
+                }
+
+                val etatReference = reference.saveState()
+                val etatNatifA = natifA.saveState()
+                val etatNatifB = natifB.saveState()
+                reference.loadState(etatReference)
+                natifA.loadState(etatNatifA)
+                natifB.loadState(etatNatifB)
             }
+        }
+    }
 
-            // L'oracle Kotlin et le cœur C++ n'ont plus vocation à partager leur
-            // représentation binaire interne : le natif porte désormais l'état
-            // du pipeline PPU, des DMA, de STOP, du SIO et de l'IR. On exige en
-            // revanche que chacun puisse restaurer transactionnellement son
-            // propre état avant de poursuivre la comparaison fonctionnelle.
-            val etatReference = reference.saveState()
-            val etatNatif = natif.saveState()
-            reference.loadState(etatReference)
-            natif.loadState(etatNatif)
+    /** Vérifie qu'un save state reproduit ensuite vidéo et audio à l'identique. */
+    private fun verifierRestauration(
+        core: EmulatorCore,
+        rom: ByteArray,
+        etiquette: String,
+        verifierAudio: Boolean,
+    ) {
+        core.loadRom(rom, null)
+        repeat(40) {
+            core.runFrame(framebuffer())
+            drain(core)
+        }
+
+        val etat = core.saveState()
+        val tramesAttendues = Array(20) { framebuffer() }
+        val audioAttendu = Array(20) { pas ->
+            core.runFrame(tramesAttendues[pas])
+            drain(core)
+        }
+
+        core.loadState(etat)
+        repeat(20) { pas ->
+            val trameObtenue = framebuffer()
+            core.runFrame(trameObtenue)
+            assertContentEquals(
+                tramesAttendues[pas],
+                trameObtenue,
+                "$etiquette : vidéo divergente à la trame $pas après restauration",
+            )
+            val audioObtenu = drain(core)
+            if (verifierAudio) {
+                assertContentEquals(
+                    audioAttendu[pas],
+                    audioObtenu,
+                    "$etiquette : audio divergent à la trame $pas après restauration",
+                )
+            }
         }
     }
 
     @Test
-    fun `le coeur natif suit le Kotlin sur une cartouche Game Boy`() {
-        comparer(boucleStable(TestRoms.build()), "Game Boy")
+    fun `le coeur natif respecte les contrats sur une cartouche Game Boy`() {
+        verifierContratsEtDeterminisme(boucleStable(TestRoms.build()), "Game Boy")
     }
 
     @Test
-    fun `le coeur natif suit le Kotlin sur une cartouche Game Boy Color`() {
-        comparer(boucleStable(TestRoms.build(cgbFlag = 0x80)), "Game Boy Color")
+    fun `le coeur natif respecte les contrats sur une cartouche Game Boy Color`() {
+        verifierContratsEtDeterminisme(
+            boucleStable(TestRoms.build(cgbFlag = 0x80)),
+            "Game Boy Color",
+        )
     }
 
     @Test
-    fun `le coeur natif suit le Kotlin sur une cartouche a pile`() {
-        comparer(
+    fun `le coeur natif respecte les contrats sur une cartouche a pile`() {
+        verifierContratsEtDeterminisme(
             boucleStable(TestRoms.build(type = 0x13, romSizeCode = 0x01, ramSizeCode = 0x02)),
             "MBC3 + pile",
         )
     }
 
     @Test
-    fun `le coeur natif suit le Kotlin sur un programme qui allume ecran et son`() {
-        comparer(programmeReel(), "programme réel, Game Boy")
+    fun `le coeur natif est deterministe sur un programme qui allume ecran et son`() {
+        verifierContratsEtDeterminisme(programmeReel(), "programme réel, Game Boy")
     }
 
     @Test
-    fun `le coeur natif suit le Kotlin sur ce programme en mode Color`() {
-        comparer(programmeReel(cgbFlag = 0x80), "programme réel, Game Boy Color")
+    fun `le coeur natif est deterministe sur ce programme en mode Color`() {
+        verifierContratsEtDeterminisme(
+            programmeReel(cgbFlag = 0x80),
+            "programme réel, Game Boy Color",
+        )
     }
 
     @Test
-    fun `chaque implementation restaure son propre etat puis reste en parite`() {
+    fun `chaque implementation restaure deterministement son propre etat`() {
         val rom = programmeReel(cgbFlag = 0x80)
         val reference = KotlinGameBoyCore(HORLOGE)
+        // L'ancien état Kotlin ne sérialise pas la phase complète de l'APU.
+        verifierRestauration(reference, rom, "oracle Kotlin", verifierAudio = false)
         GameBoyCore(HORLOGE).use { natif ->
-            reference.loadRom(rom, null)
-            natif.loadRom(rom, null)
-
-            repeat(40) {
-                reference.runFrame(framebuffer())
-                natif.runFrame(framebuffer())
-            }
-
-            val etatReference = reference.saveState()
-            val etatNatif = natif.saveState()
-            reference.loadState(etatReference)
-            natif.loadState(etatNatif)
-
-            val suiteRef = framebuffer()
-            val suiteNat = framebuffer()
-            repeat(20) { pas ->
-                reference.runFrame(suiteRef)
-                natif.runFrame(suiteNat)
-                assertContentEquals(
-                    suiteRef,
-                    suiteNat,
-                    "Divergence à la trame $pas après restaurations propres",
-                )
-            }
+            verifierRestauration(natif, rom, "cœur natif", verifierAudio = true)
         }
     }
 
@@ -243,6 +276,23 @@ class NativeParityTest {
                 reference.snapshotBatteryRam()?.data,
                 natif.snapshotBatteryRam()?.data,
             )
+        }
+    }
+
+    @Test
+    fun `l entree accelerometre MBC7 traverse Kotlin et JNI`() {
+        val rom = boucleStable(TestRoms.build(type = 0x22, cgbFlag = 0xC0))
+        GameBoyCore(HORLOGE).use { core ->
+            core.loadRom(rom)
+            val auRepos = core.saveState()
+            core.setGameBoyAcceleration(0x70, -0x70)
+            val incline = core.saveState()
+            assertTrue(
+                !auRepos.contentEquals(incline),
+                "l'entrée MBC7 n'atteint pas le cœur natif",
+            )
+            core.loadState(auRepos)
+            assertContentEquals(auRepos, core.saveState())
         }
     }
 }

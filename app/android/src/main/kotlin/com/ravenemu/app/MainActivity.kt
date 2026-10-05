@@ -314,7 +314,6 @@ class MainActivity : RavenActivity() {
         }
         return when (settings.librarySortOrder) {
             "size" -> entries.sortedByDescending { it.sizeBytes }
-            "status" -> entries.sortedBy { it.status.ordinal }
             else -> entries.sortedBy { it.displayName.lowercase() }
         }
     }
@@ -332,7 +331,6 @@ class MainActivity : RavenActivity() {
 
     private fun render() {
         pagerAdapter.gridMode = settings.libraryViewMode == "grid"
-        pagerAdapter.showBadges = settings.showStatusBadges
 
         val nouvelles = LibraryPages.forEntries(index.entries)
         if (nouvelles != pages) {
@@ -571,9 +569,6 @@ class MainActivity : RavenActivity() {
     }
 
     /** Verdict de la somme de contrôle d'en-tête, dit de la même façon partout. */
-    private fun headerLabel(entry: RomEntry): String =
-        if (entry.headerChecksumValid) "valide" else "somme incorrecte"
-
     private fun showDetails(entry: RomEntry) {
         val details = buildString {
             appendLine(entry.fileName)
@@ -584,14 +579,12 @@ class MainActivity : RavenActivity() {
                     if (entry.gameCode.isNotBlank()) appendLine("Code jeu : ${entry.gameCode}")
                     appendLine("Sauvegarde : ${saveTypeLabel(entry)}")
                     appendLine("Horloge : ${rtcLabel(entry)}")
-                    appendLine("En-tête : ${headerLabel(entry)}")
                 }
                 ConsoleType.NINTENDO_DS -> {
                     // Ni MBC ni région : la cartouche n'a pas ces notions, et le
                     // type de sauvegarde passe par un bus que le cœur n'a pas
                     // encore. Ce qui n'est pas connu n'est pas affiché à zéro.
                     if (entry.gameCode.isNotBlank()) appendLine("Code jeu : ${entry.gameCode}")
-                    appendLine("En-tête : ${headerLabel(entry)}")
                 }
                 ConsoleType.GAME_BOY -> {
                     appendLine("Région : ${entry.region.displayName}")
@@ -601,7 +594,6 @@ class MainActivity : RavenActivity() {
                     appendLine("Pile : ${if (entry.hasBattery) "oui" else "non"}")
                 }
             }
-            appendLine("Statut : ${entry.status.displayName}")
             appendLine("CRC32 : ${entry.fingerprints.crc32}")
             appendLine("SHA-1 : ${entry.fingerprints.sha1}")
             appendLine("SHA-256 : ${entry.fingerprints.sha256}")
@@ -642,12 +634,9 @@ class MainActivity : RavenActivity() {
                 settings.librarySortOrder = "size"
                 render()
             }
-            R.id.action_sort_status -> {
-                settings.librarySortOrder = "status"
-                render()
-            }
             else -> return false
         }
         return true
     }
 }
+

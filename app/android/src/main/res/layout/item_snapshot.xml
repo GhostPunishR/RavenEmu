@@ -64,7 +64,7 @@
             android:paddingStart="12dp"
             android:paddingEnd="12dp"
             android:text="@string/states_delete"
-            android:textColor="@color/badge_invalid_header"
+            android:textColor="@color/raven_destructive"
             android:textSize="13sp" />
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>

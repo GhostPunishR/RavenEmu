@@ -26,7 +26,6 @@ class LibraryPagesTest {
         console = console,
         title = nom,
         fingerprints = Fingerprints("0", "0", "0"),
-        status = RomStatus.INTACT,
         cartridgeMode = mode,
     )
 
@@ -131,3 +130,4 @@ class LibraryPagesTest {
         assertEquals(2, LibraryPages.indexOf(pages, "GAME_BOY_COLOR"))
     }
 }
+

@@ -49,11 +49,9 @@ class GbaRomAnalyzer(override val provider: ConsoleProvider) : RomAnalyzer {
                 console = console,
                 title = header.title,
                 fingerprints = fingerprints,
-                status = header.romStatus(),
                 gameCode = header.gameCode,
                 saveType = GbaSaveType.detect(data).name,
                 romSizeBytes = data.size,
-                headerChecksumValid = header.headerChecksumValid,
             )
         )
     }

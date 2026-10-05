@@ -34,7 +34,7 @@ public:
         require_loaded();
         if (framebuffer.size() < Ppu::screen_width * Ppu::screen_height) throw std::invalid_argument("Framebuffer trop petit");
         machine_->ppu.render_enabled = render_video;
-        try { machine_->run_frame(280'896); } catch (...) { machine_->ppu.render_enabled = true; throw; }
+        try { machine_->run_frame(); } catch (...) { machine_->ppu.render_enabled = true; throw; }
         machine_->ppu.render_enabled = true;
         if (render_video) std::copy(machine_->ppu.frame.begin(), machine_->ppu.frame.end(), framebuffer.begin());
     }
@@ -115,7 +115,7 @@ public:
 
     [[nodiscard]] std::vector<std::uint8_t> save_state() const override {
         require_loaded(); auto& m = *machine_; BinaryWriter out(768U * 1024U);
-        out.u32(0x52564e53U); out.u16(8); out.u8(2); out.raw(rom_hash_);
+        out.u32(0x52564e53U); out.u16(9); out.u8(2); out.raw(rom_hash_);
         const auto banks = m.cpu.state.export_banks(); for (const auto value : m.cpu.state.regs) out.i32(value);
         out.i32(m.cpu.state.cpsr()); out.boolean(m.cpu.state.halted); out.i32(static_cast<int>(banks.size()));
         for (const auto value : banks) out.i32(value);
@@ -135,7 +135,7 @@ public:
     void load_state(std::span<const std::uint8_t> bytes) override {
         require_loaded(); if (bytes.size() > (1U << 20U)) throw SaveStateError("État GBA trop volumineux");
         BinaryReader in(bytes); if (in.u32() != 0x52564e53U) throw SaveStateError("Ce fichier n'est pas un état RavenEmu");
-        if (in.u16() != 8) throw SaveStateError("Version d'état GBA non prise en charge");
+        if (in.u16() != 9) throw SaveStateError("Version d'état GBA non prise en charge");
         if (in.u8() != 2) throw SaveStateError("État issu d'une autre console");
         std::array<std::uint8_t, 32> hash{}; in.raw(hash); if (hash != rom_hash_) throw SaveStateError("État issu d'une autre ROM");
         auto replacement = new_machine(loaded_rom_); auto& m = *replacement;
@@ -151,7 +151,9 @@ public:
         m.interrupts.flags = in.i32();
         m.interrupts.master_enable = in.boolean();
         std::array<std::int32_t, 16> timer_state{}; for (auto& value : timer_state) value = in.i32(); m.timers.import_state(timer_state);
-        std::array<std::int32_t, 9> dma_state{}; for (auto& value : dma_state) value = in.i32(); m.dma.import_state(dma_state);
+        std::array<std::int32_t, DmaController::state_words> dma_state{};
+        for (auto& value : dma_state) value = in.i32();
+        m.dma.import_state(dma_state);
         const auto waiting = in.boolean(); const auto wait_mask = in.i32(); const auto wait_discard = in.boolean();
         m.bios.restore_wait_state(waiting ? std::optional{Bios::WaitState{wait_mask, wait_discard}} : std::nullopt);
         const auto save_size = in.i32(); const auto expected_size = m.cartridge.save() ? static_cast<int>(m.cartridge.save()->data().size()) : 0;

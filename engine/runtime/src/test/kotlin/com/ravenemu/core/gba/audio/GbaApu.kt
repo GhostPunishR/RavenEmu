@@ -51,8 +51,8 @@ class GbaApu {
     private var sequencerTimer = 0
     private var sequencerStep = 0
 
-    // Niveaux PSG de l'échantillon courant, réutilisés d'un échantillon à
-    // l'autre : le mixage tourne 32 768 fois par seconde et ne doit rien allouer.
+    // Cumuls PSG de la fenêtre courante, réutilisés d'un échantillon à l'autre :
+    // le mixage tourne 32 768 fois par seconde et ne doit rien allouer.
     private val psgOutputs = IntArray(4)
 
     // Tampon circulaire de sortie (stéréo entrelacé).
@@ -265,14 +265,19 @@ class GbaApu {
 
     private fun emitSample() {
         if (!masterEnable) {
+            // Les cumuls sont vidés même à l'arrêt : les garder ferait verser
+            // la fenêtre d'avant dans le premier échantillon d'après.
+            drainChannels()
             push(0, 0)
             return
         }
         // --- PSG ---
-        psgOutputs[0] = square1.output()
-        psgOutputs[1] = square2.output()
-        psgOutputs[2] = wave.output()
-        psgOutputs[3] = noise.output()
+        // **Le cumul sur la fenêtre, et non le niveau de l'instant.** Un canal
+        // carré change d'état bien plus vite que le débit de sortie : à sa
+        // fréquence la plus haute il bascule trente-deux fois par échantillon.
+        // Le prélever d'un coup replierait ses harmoniques dans l'audible, où
+        // elles s'entendent comme des sifflements étrangers au morceau.
+        drainChannels()
         var psgLeft = 0
         var psgRight = 0
         for (i in 0 until 4) {
@@ -283,12 +288,19 @@ class GbaApu {
         }
         // Volumes maîtres gauche/droite (0..7) puis proportion PSG du mixage.
         // Le ratio est tabulé en virgule fixe 8 bits : 25/50/100 % s'expriment
-        // exactement en 64/128/256, ce qui remplace une division par un décalage.
-        psgLeft *= ((controlL ushr 4) and 0x7) + 1
-        psgRight *= (controlL and 0x7) + 1
+        // exactement en 64/128/256.
+        //
+        // Une seule division, tout à la fin. Les cumuls valent au plus quinze
+        // fois la fenêtre, soit mille neuf cent vingt par canal ; le produit
+        // complet, volume et proportion compris, tient largement dans un entier
+        // de trente-deux bits, et le résultat ne dépend d'aucun arrondi
+        // intermédiaire — condition pour que le portage C++ rende exactement
+        // les mêmes trames.
         val psgRatio = PSG_RATIO_Q8[controlH and 0x3]
-        psgLeft = (psgLeft * PSG_SCALE * psgRatio) shr 8
-        psgRight = (psgRight * PSG_SCALE * psgRatio) shr 8
+        psgLeft = psgLeft * (((controlL ushr 4) and 0x7) + 1) * PSG_SCALE * psgRatio /
+            (256 * CYCLES_PER_SAMPLE)
+        psgRight = psgRight * ((controlL and 0x7) + 1) * PSG_SCALE * psgRatio /
+            (256 * CYCLES_PER_SAMPLE)
 
         // --- Direct Sound ---
         val volumeA = if (controlH and 0x04 != 0) 2 else 1
@@ -303,6 +315,14 @@ class GbaApu {
         if (controlH and 0x1000 != 0) right += directB
 
         push(clamp(left), clamp(right))
+    }
+
+    /** Vide les quatre cumuls dans [psgOutputs], dans l'ordre des canaux. */
+    private fun drainChannels() {
+        psgOutputs[0] = square1.drainAccumulator()
+        psgOutputs[1] = square2.drainAccumulator()
+        psgOutputs[2] = wave.drainAccumulator()
+        psgOutputs[3] = noise.drainAccumulator()
     }
 
     private fun clamp(value: Int): Int = value.coerceIn(-32768, 32767)

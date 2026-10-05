@@ -31,11 +31,6 @@ data class RomEntry(
     /** Titre lu dans l'en-tête de cartouche (peut être vide). */
     val title: String,
     val fingerprints: Fingerprints,
-    /**
-     * État déduit des sommes de contrôle de la cartouche. Ce n'est pas un
-     * classement mais une mesure : il ne se force pas.
-     */
-    val status: RomStatus,
     // Champs propres à la cartouche Game Boy : valeurs neutres par défaut pour
     // les consoles dont l'en-tête ne les définit pas (ex. Game Boy Advance).
     val cartridgeTypeCode: Int = 0,
@@ -56,7 +51,6 @@ data class RomEntry(
      * elle doit être relue.
      */
     val cartridgeMode: GameBoyCartridgeMode? = null,
-    val headerChecksumValid: Boolean = false,
     /** Code jeu (Game Boy Advance : 4 caractères de l'en-tête), sinon vide. */
     val gameCode: String = "",
     /**

@@ -450,6 +450,22 @@ Java_com_ravenemu_nativebridge_NativeCoreBridge_rumbleActive(
     });
 }
 
+extern "C" JNIEXPORT void JNICALL
+Java_com_ravenemu_nativebridge_NativeCoreBridge_setGameBoyAcceleration(
+    JNIEnv* env,
+    jclass,
+    jlong handle,
+    jint x,
+    jint y
+) {
+    guarded_void(env, [&] {
+        core_from(handle).set_game_boy_acceleration(
+            static_cast<int>(x),
+            static_cast<int>(y)
+        );
+    });
+}
+
 extern "C" JNIEXPORT jint JNICALL
 Java_com_ravenemu_nativebridge_NativeCoreBridge_framebufferFormat(
     JNIEnv* env,
@@ -781,3 +797,4 @@ Java_com_ravenemu_nativebridge_NativeCoreBridge_drainDiagnostics(
         return result;
     });
 }
+

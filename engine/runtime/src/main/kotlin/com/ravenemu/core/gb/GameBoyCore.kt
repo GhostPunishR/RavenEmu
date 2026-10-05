@@ -68,6 +68,10 @@ class GameBoyCore(
             ?.let { NativeCoreBridge.rumbleActive(it.value.value()) }
             ?: false
 
+    override fun setGameBoyAcceleration(x: Int, y: Int) {
+        NativeCoreBridge.setGameBoyAcceleration(handle(), x, y)
+    }
+
     override val hasBatteryRam: Boolean
         get() = native.takeIf { it.isInitialized() }
             ?.let { NativeCoreBridge.hasBatteryRam(it.value.value()) }

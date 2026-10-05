@@ -83,5 +83,5 @@
         android:id="@+id/actionRemove"
         style="@style/RavenSheetAction"
         android:text="@string/library_action_remove"
-        android:textColor="@color/badge_invalid_header" />
+        android:textColor="@color/raven_destructive" />
 </LinearLayout>

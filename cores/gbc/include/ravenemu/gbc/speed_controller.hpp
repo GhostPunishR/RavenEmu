@@ -10,10 +10,9 @@ namespace ravenemu::cgb {
  *
  * Les périphériques LCD/APU restent cadencés sur l'horloge de base. Le CPU,
  * DIV/TIMA et le port série interne voient la fréquence doublée après la
- * transition. La transition elle-même bloque le CPU pendant une durée proche
- * de celle documentée par Nintendo (environ 16 ms vers double, 32 ms vers
- * normal), exprimée ici en dots de l'horloge de base pour rester indépendante
- * de la vitesse CPU courante.
+ * transition. La transition bloque le CPU pendant 2050 M-cycles. Elle est
+ * exprimée en dots LCD : 8200 depuis la vitesse normale et 4100 depuis la
+ * double vitesse.
  */
 class SpeedController {
 public:
@@ -23,6 +22,15 @@ public:
     [[nodiscard]] bool double_speed() const noexcept { return double_speed_; }
     [[nodiscard]] bool switching() const noexcept { return switch_dots_remaining_ > 0; }
     [[nodiscard]] int switch_dots_remaining() const noexcept { return switch_dots_remaining_; }
+
+    void set_cgb_mode(bool enabled) noexcept {
+        cgb_mode_ = enabled;
+        if (!enabled) {
+            double_speed_ = false;
+            armed_ = false;
+            switch_dots_remaining_ = 0;
+        }
+    }
 
     [[nodiscard]] int read_key1() const noexcept {
         if (!cgb_mode_) return 0xff;
@@ -40,7 +48,7 @@ public:
     bool begin_switch_from_stop() noexcept {
         if (!cgb_mode_ || !armed_ || switching()) return false;
         armed_ = false;
-        switch_dots_remaining_ = double_speed_ ? switch_to_normal_dots : switch_to_double_dots;
+        switch_dots_remaining_ = double_speed_ ? switch_from_double_dots : switch_from_normal_dots;
         return true;
     }
 
@@ -58,15 +66,25 @@ public:
     }
 
     void load(detail::BinaryReader& in) {
-        double_speed_ = in.i32() != 0;
-        armed_ = in.i32() != 0;
-        switch_dots_remaining_ = std::max(0, in.i32());
+        const int double_speed = in.i32();
+        const int armed = in.i32();
+        const int remaining = in.i32();
+        const int maximum_remaining = double_speed != 0
+            ? switch_from_double_dots : switch_from_normal_dots;
+        if ((double_speed != 0 && double_speed != 1) || (armed != 0 && armed != 1) ||
+            remaining < 0 || remaining > maximum_remaining ||
+            (remaining > 0 && armed != 0) ||
+            (!cgb_mode_ && (double_speed != 0 || armed != 0 || remaining != 0))) {
+            throw SaveStateError("État instantané corrompu (KEY1)");
+        }
+        double_speed_ = double_speed != 0;
+        armed_ = armed != 0;
+        switch_dots_remaining_ = remaining;
     }
 
 private:
-    // 4,194,304 dots/s : 16 ms ~= 67,109 dots ; 32 ms ~= 134,218 dots.
-    static constexpr int switch_to_double_dots = 67'109;
-    static constexpr int switch_to_normal_dots = 134'218;
+    static constexpr int switch_from_normal_dots = 2'050 * 4;
+    static constexpr int switch_from_double_dots = 2'050 * 2;
 
     bool cgb_mode_{};
     bool double_speed_{};

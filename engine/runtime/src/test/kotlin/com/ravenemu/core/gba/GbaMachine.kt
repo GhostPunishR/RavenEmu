@@ -58,20 +58,26 @@ class GbaMachine(rom: ByteArray, forcedSaveType: GbaSaveType? = null) {
     }
 
     /**
-     * Exécute [cycles] cycles CPU en faisant avancer l'affichage et les timers à
-     * la même cadence. Avant chaque instruction, une interruption en attente et
-     * autorisée (drapeau `I` du CPU dégagé) provoque l'exception IRQ (vecteur
-     * `0x18`, traité par le BIOS/HLE).
+     * Avance jusqu'à la prochaine frontière de trame PPU en faisant progresser
+     * le CPU, l'affichage et les timers à la même cadence.
+     */
+    fun runFrame() = runFrame(ppu.cyclesUntilNextFrame())
+
+    /**
+     * Exécute [cycles] cycles CPU. Avant chaque instruction, une interruption
+     * en attente et autorisée (drapeau `I` du CPU dégagé) provoque l'exception
+     * IRQ (vecteur `0x18`, traité par le BIOS/HLE).
      */
     fun runFrame(cycles: Int) {
         var elapsed = 0
         diagnostics.beginFrame()
         while (elapsed < cycles) {
-            // Le DMA est prioritaire sur le processeur : tant qu'il occupe le
-            // bus, seuls les périphériques avancent.
-            val dmaCycles = dma.takePendingCycles()
-            if (dmaCycles > 0) {
+            if (dma.isActive) {
+                val dmaCycles = minOf(cycles - elapsed, dma.cyclesUntilEvent())
+                // L'effet mémoire vient après le coût de l'accès, à la même
+                // position temporelle dans le PPU, les timers et l'audio.
                 advancePeripherals(dmaCycles)
+                dma.tick(dmaCycles)
                 elapsed += dmaCycles
                 continue
             }

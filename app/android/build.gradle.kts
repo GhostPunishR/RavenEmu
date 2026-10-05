@@ -35,8 +35,31 @@ android {
         // le Play Store. Le relever demande une validation sur appareil, hors
         // de portée de la CI actuelle qui construit sans exécuter.
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        // Version 0.8.0, et non 0.1.0.
+        //
+        // 0.1.0 datait du premier jet et ne disait plus rien de juste. Ce que
+        // la feuille de route range aujourd'hui dans « Réalisé » : les moteurs
+        // Game Boy et Game Boy Color complets — ordonnancement par M-cycle,
+        // PPU à fetcher et FIFO séparées, portes VRAM/OAM/CRAM liées aux
+        // phases, modes DMG, CGB natif et compatibilité, la plupart des
+        // contrôleurs de cartouche jusqu'à MBC6, MBC7, HuC1 et HuC3, boot ROM
+        // optionnelle et harness de conformité — plus la bibliothèque, les
+        // pochettes, les contrôles tactiles et les manettes, les profils
+        // d'écran, les sauvegardes et les états instantanés, et un APK Test
+        // signé et vérifiable.
+        //
+        // Pas 1.0.0 non plus, et le dépôt dit pourquoi : le moteur Game Boy
+        // Advance y est encore qualifié d'expérimental, et les priorités
+        // actuelles comprennent ses performances, ses fonctions vidéo et audio
+        // à compléter, la sélection du modèle, les backends link et
+        // infrarouge, et les contrôleurs de cartouche restants.
+        //
+        // Le code de version se déduit du nom, `MAJEUR * 10000 + MINEUR * 100
+        // + CORRECTIF`, pour que la prochaine numérotation n'ait pas à être
+        // devinée. Il doit croître à chaque publication : 1 était la seule
+        // valeur jamais publiée.
+        versionCode = 800
+        versionName = "0.8.0"
 
         externalNativeBuild {
             cmake {

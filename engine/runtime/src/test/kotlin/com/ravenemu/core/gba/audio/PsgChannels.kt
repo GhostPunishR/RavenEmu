@@ -60,6 +60,7 @@ internal class SquareChannel(private val hasSweep: Boolean) {
 
     private var timer = 0
     private var dutyStep = 0
+    private var accumulator = 0
 
     // Balayage (canal 1 uniquement).
     private var sweepPeriod = 0
@@ -88,15 +89,47 @@ internal class SquareChannel(private val hasSweep: Boolean) {
         sweepShift = value and 0x07
     }
 
+    /**
+     * Avance le canal en **cumulant sa sortie le temps qu'elle dure**.
+     *
+     * Le compteur est découpé aux frontières du rapport cyclique, et chaque
+     * tranche verse sa valeur pondérée par sa durée. C'est ce cumul, divisé par
+     * la fenêtre d'un échantillon, qui devient l'échantillon. Prendre la valeur
+     * qui se trouve là à l'instant du prélèvement replierait dans l'audible
+     * toutes les harmoniques au-dessus de la moitié du débit de sortie — et un
+     * signal carré en produit en quantité.
+     */
     fun tick(cycles: Int) {
         if (!enabled) return
-        timer -= cycles
-        if (timer > 0) return
-        // Avance en une seule division au lieu d'itérer période par période.
-        val period = (2048 - frequency) * 4
-        val steps = 1 + (-timer) / period
-        timer += steps * period
-        dutyStep = (dutyStep + steps) and 7
+        val period = maxOf(1, (2048 - frequency) * 4)
+        var remaining = cycles
+        while (remaining > 0) {
+            // Un compteur à plat est ramené à une période : sans cela une
+            // tranche de longueur nulle ferait tourner la boucle sans avancer.
+            if (timer <= 0) timer = period
+            val slice = minOf(timer, remaining)
+            accumulator += output() * slice
+            timer -= slice
+            remaining -= slice
+            if (timer <= 0) {
+                timer = period
+                dutyStep = (dutyStep + 1) and 7
+            }
+        }
+    }
+
+    /**
+     * Rend le cumul de la fenêtre écoulée et le remet à zéro.
+     *
+     * Le cumul sort **tel quel**, sans division : c'est le mélangeur qui divise,
+     * une seule fois, à la fin. Tout reste ainsi en entiers exacts, sans arrondi
+     * intermédiaire — ce que le portage C++ fait à l'identique, et c'est à cette
+     * condition que la comparaison trame par trame des deux a un sens.
+     */
+    fun drainAccumulator(): Int {
+        val total = accumulator
+        accumulator = 0
+        return total
     }
 
     fun clockLength() {
@@ -135,6 +168,7 @@ internal class SquareChannel(private val hasSweep: Boolean) {
         timer = 0
         dutyStep = 0
         lengthCounter = 0
+        accumulator = 0
     }
 
     private companion object {
@@ -167,6 +201,7 @@ internal class WaveChannel {
 
     private var timer = 0
     private var position = 0
+    private var accumulator = 0
 
     fun trigger() {
         enabled = dacEnabled
@@ -175,14 +210,36 @@ internal class WaveChannel {
         position = 0
     }
 
+    /** Même cumul que les canaux carrés, pour la même raison. */
     fun tick(cycles: Int) {
         if (!enabled) return
-        timer -= cycles
-        if (timer > 0) return
-        val period = (2048 - frequency) * 2
-        val steps = 1 + (-timer) / period
-        timer += steps * period
-        position = (position + steps) and 31
+        val period = maxOf(1, (2048 - frequency) * 2)
+        var remaining = cycles
+        while (remaining > 0) {
+            if (timer <= 0) timer = period
+            val slice = minOf(timer, remaining)
+            accumulator += output() * slice
+            timer -= slice
+            remaining -= slice
+            if (timer <= 0) {
+                timer = period
+                position = (position + 1) and 31
+            }
+        }
+    }
+
+    /**
+     * Rend le cumul de la fenêtre écoulée et le remet à zéro.
+     *
+     * Le cumul sort **tel quel**, sans division : c'est le mélangeur qui divise,
+     * une seule fois, à la fin. Tout reste ainsi en entiers exacts, sans arrondi
+     * intermédiaire — ce que le portage C++ fait à l'identique, et c'est à cette
+     * condition que la comparaison trame par trame des deux a un sens.
+     */
+    fun drainAccumulator(): Int {
+        val total = accumulator
+        accumulator = 0
+        return total
     }
 
     fun clockLength() {
@@ -207,6 +264,7 @@ internal class WaveChannel {
         timer = 0
         position = 0
         lengthCounter = 0
+        accumulator = 0
     }
 }
 
@@ -222,6 +280,7 @@ internal class NoiseChannel {
     private var widthMode = false
     private var divisorCode = 0
     private var timer = 0
+    private var accumulator = 0
     private var lfsr = 0x7FFF
 
     fun trigger() {
@@ -240,23 +299,50 @@ internal class NoiseChannel {
 
     private fun period(): Int {
         val divisor = if (divisorCode == 0) 8 else divisorCode * 16
-        return divisor shl shiftClock
+        return maxOf(1, divisor shl shiftClock)
     }
 
+    /**
+     * Avance le registre à décalage en cumulant chaque état le temps qu'il dure.
+     *
+     * C'est le canal où le repliement s'entend le plus : son spectre monte
+     * jusqu'à la fréquence de décalage, très au-dessus de la moitié du débit de
+     * sortie. Prélevé sans moyenne, il rend un souffle métallique au lieu d'un
+     * bruit plat.
+     */
     fun tick(cycles: Int) {
         if (!enabled) return
-        timer -= cycles
-        // Le registre à décalage ne peut pas être avancé d'un bloc : chaque pas
-        // dépend du précédent. La période, elle, est constante sur tout le tick.
         val period = period()
-        while (timer <= 0) {
-            timer += period
-            val feedback = (lfsr and 1) xor ((lfsr ushr 1) and 1)
-            lfsr = (lfsr ushr 1) or (feedback shl 14)
-            if (widthMode) {
-                lfsr = (lfsr and 0x40.inv()) or (feedback shl 6)
+        var remaining = cycles
+        while (remaining > 0) {
+            if (timer <= 0) timer = period
+            val slice = minOf(timer, remaining)
+            accumulator += output() * slice
+            timer -= slice
+            remaining -= slice
+            if (timer <= 0) {
+                timer = period
+                val feedback = (lfsr and 1) xor ((lfsr ushr 1) and 1)
+                lfsr = (lfsr ushr 1) or (feedback shl 14)
+                if (widthMode) {
+                    lfsr = (lfsr and 0x40.inv()) or (feedback shl 6)
+                }
             }
         }
+    }
+
+    /**
+     * Rend le cumul de la fenêtre écoulée et le remet à zéro.
+     *
+     * Le cumul sort **tel quel**, sans division : c'est le mélangeur qui divise,
+     * une seule fois, à la fin. Tout reste ainsi en entiers exacts, sans arrondi
+     * intermédiaire — ce que le portage C++ fait à l'identique, et c'est à cette
+     * condition que la comparaison trame par trame des deux a un sens.
+     */
+    fun drainAccumulator(): Int {
+        val total = accumulator
+        accumulator = 0
+        return total
     }
 
     fun clockLength() {
@@ -273,5 +359,6 @@ internal class NoiseChannel {
         timer = 0
         lfsr = 0x7FFF
         lengthCounter = 0
+        accumulator = 0
     }
 }

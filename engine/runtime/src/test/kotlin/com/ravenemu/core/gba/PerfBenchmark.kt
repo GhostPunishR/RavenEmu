@@ -237,7 +237,9 @@ class PerfBenchmark {
             dmaMachine.bus.write32(0x0400_00D8, 0x0600_0000)
             dmaMachine.bus.write16(0x0400_00DC, 0x4B00)
             dmaMachine.bus.write16(0x0400_00DE, 0x8400)
-            dmaMachine.dma.takePendingCycles()
+            while (dmaMachine.dma.isActive) {
+                dmaMachine.dma.tick(dmaMachine.dma.cyclesUntilEvent())
+            }
         }
         println("dma   %8.3f ms pour une trame recopiée (240x160 en 16 bits)".format(dmaMs))
 

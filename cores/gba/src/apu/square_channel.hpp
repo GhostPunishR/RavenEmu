@@ -24,14 +24,53 @@ public:
         sweep_negate_ = (value & 8) != 0;
         sweep_shift_ = value & 7;
     }
+    /**
+     * Fait avancer le canal, en **cumulant sa sortie le temps qu'elle dure**.
+     *
+     * Le compteur est découpé aux frontières du rapport cyclique, et chaque
+     * tranche verse sa valeur pondérée par sa durée. C'est ce cumul, moyenné
+     * sur la fenêtre d'un échantillon, qui devient l'échantillon : prendre la
+     * valeur instantanée à l'instant du prélèvement replierait toutes les
+     * harmoniques au-dessus de la moitié du débit de sortie, qu'un signal
+     * carré produit en quantité, et les rendrait comme des sifflements
+     * étrangers au morceau.
+     *
+     * Le cœur Game Boy procède déjà ainsi ; ce canal ne le faisait pas.
+     */
     void tick(int cycles) noexcept {
         if (!enabled) return;
-        timer_ -= cycles;
-        if (timer_ > 0) return;
         const auto period = std::max(1, (2048 - frequency) * 4);
-        const auto steps = 1 + (-timer_) / period;
-        timer_ += steps * period;
-        duty_step_ = (duty_step_ + steps) & 7;
+        int remaining = cycles;
+        while (remaining > 0) {
+            // Un compteur à plat ou négatif est ramené à une période : sans
+            // cela une tranche de longueur nulle ferait tourner la boucle sans
+            // consommer.
+            if (timer_ <= 0) timer_ = period;
+            const int slice = std::min(timer_, remaining);
+            accumulator_ += output() * slice;
+            timer_ -= slice;
+            remaining -= slice;
+            if (timer_ <= 0) {
+                timer_ = period;
+                duty_step_ = (duty_step_ + 1) & 7;
+            }
+        }
+    }
+
+    /**
+     * Rend le cumul de la fenêtre écoulée et le remet à zéro.
+     *
+     * Le cumul est rendu **tel quel**, sans division : c'est le mélangeur qui
+     * divise, une seule fois, à la toute fin. Diviser ici demanderait un
+     * flottant — la moyenne n'est presque jamais entière — et ferait dépendre
+     * la sortie de l'ordre des arrondis. Tout le mixage reste ainsi en entiers
+     * exacts, ce qui vaut aussi pour le modèle de référence Kotlin auquel ce
+     * cœur est confronté trame par trame.
+     */
+    [[nodiscard]] int drain_accumulator() noexcept {
+        const auto total = accumulator_;
+        accumulator_ = 0;
+        return total;
     }
     void clock_length() noexcept {
         if (length_enabled && length_counter > 0 && --length_counter == 0) enabled = false;
@@ -48,7 +87,9 @@ public:
         return enabled && ((masks[static_cast<std::size_t>(duty)] >> duty_step_) & 1) != 0
             ? envelope.volume : 0;
     }
-    void reset() noexcept { enabled = false; timer_ = 0; duty_step_ = 0; length_counter = 0; }
+    void reset() noexcept {
+        enabled = false; timer_ = 0; duty_step_ = 0; length_counter = 0; accumulator_ = 0;
+    }
     bool enabled{};
     int duty{2};
     int frequency{};
@@ -64,6 +105,7 @@ private:
     }
     bool has_sweep_{};
     int timer_{};
+    int accumulator_{};
     int duty_step_{};
     int sweep_period_{};
     bool sweep_negate_{};

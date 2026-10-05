@@ -25,7 +25,6 @@ class AudioTransportStatsTest {
         assertFalse(stats.enabled, "Le relevé doit être éteint par défaut")
 
         stats.onBlock(submitted = 1098, resampled = 1608, written = 800)
-        stats.onRestart()
         stats.onUnderrunCount(12)
         stats.onFailure(IllegalStateException("piste morte"))
 
@@ -33,7 +32,6 @@ class AudioTransportStatsTest {
         assertEquals(0L, stats.samplesResampled)
         assertEquals(0L, stats.samplesWritten)
         assertEquals(0, stats.shortWrites)
-        assertEquals(0, stats.restarts)
         assertEquals(0, stats.outputUnderruns)
         assertEquals(0, stats.failures)
         assertNull(stats.lastFailure)
@@ -113,17 +111,14 @@ class AudioTransportStatsTest {
         val sain = stats.summary()
         assertTrue("tronq" !in sain, sain)
         assertTrue("vide" !in sain, sain)
-        assertTrue("relance" !in sain, sain)
         assertTrue("err" !in sain, sain)
 
         stats.onBlock(submitted = 1098, resampled = 1608, written = 1000)
         stats.onUnderrunCount(4)
-        stats.onRestart()
         stats.onFailure(IllegalStateException("x"))
         val degrade = stats.summary()
         assertTrue("tronq:1" in degrade, degrade)
         assertTrue("vide:4" in degrade, degrade)
-        assertTrue("relance:1" in degrade, degrade)
         assertTrue("err:1" in degrade, degrade)
     }
 
@@ -131,7 +126,6 @@ class AudioTransportStatsTest {
     fun `la remise a zero efface tout sauf l'activation`() {
         val stats = actif()
         stats.onBlock(submitted = 100, resampled = 150, written = 100)
-        stats.onRestart()
         stats.onUnderrunCount(3)
         stats.onFailure(RuntimeException("x"))
 
@@ -139,7 +133,6 @@ class AudioTransportStatsTest {
 
         assertEquals(0L, stats.samplesSubmitted)
         assertEquals(0, stats.shortWrites)
-        assertEquals(0, stats.restarts)
         assertEquals(0, stats.outputUnderruns)
         assertEquals(0, stats.failures)
         assertNull(stats.lastFailure)

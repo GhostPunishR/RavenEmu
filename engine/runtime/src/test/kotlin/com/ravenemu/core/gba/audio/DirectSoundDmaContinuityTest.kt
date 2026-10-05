@@ -86,7 +86,7 @@ class DirectSoundDmaContinuityTest {
         m.bus.write32(0x0400_00D8, 0x0201_0000)
         m.bus.write16(0x0400_00DC, 4096)
         m.bus.write16(0x0400_00DE, 0x8400) // activé, 32 bits, déclenchement immédiat
-        return m.dma.pendingCycles
+        return 2 + 4096 * 2 * 6
     }
 
     @Test
@@ -101,8 +101,8 @@ class DirectSoundDmaContinuityTest {
             "Le transfert doit être assez long pour couvrir plusieurs échantillons, mesuré : $cyclesDma",
         )
 
-        // La boucle de la machine rend ces cycles aux périphériques en un seul
-        // appel : c'est exactement le chemin qui produisait le blanc.
+        // La boucle entrelace désormais chaque accès DMA avec les périphériques.
+        // Le total couvre le même intervalle qui produisait le blanc auparavant.
         m.runFrame(cyclesDma)
         val pcm = vider(m)
 

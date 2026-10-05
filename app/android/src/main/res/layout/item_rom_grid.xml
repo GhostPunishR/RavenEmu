@@ -30,16 +30,6 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
-    <View
-        android:id="@+id/statusDot"
-        android:layout_width="10dp"
-        android:layout_height="10dp"
-        android:layout_margin="4dp"
-        android:background="@drawable/bg_status_dot"
-        android:visibility="gone"
-        app:layout_constraintEnd_toEndOf="@id/cover"
-        app:layout_constraintTop_toTopOf="@id/cover" />
-
     <TextView
         android:id="@+id/title"
         android:layout_width="0dp"

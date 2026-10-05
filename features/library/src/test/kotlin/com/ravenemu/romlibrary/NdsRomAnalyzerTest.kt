@@ -167,14 +167,13 @@ class NdsRomAnalyzerTest {
         // La somme de seize bits ne couvre que l'en-tête : rien ne permet
         // d'affirmer que le contenu est intact.
         val result = analyzer.analyze("u", "jeu.nds", 0L, ndsRom())
-        assertEquals(RomStatus.HEADER_ONLY, assertIs<AnalysisResult.Success>(result).entry.status)
+        assertTrue(assertIs<AnalysisResult.Success>(result).entry.headerChecksumValid)
     }
 
     @Test
     fun `une somme d'en-tete fausse est signalee sans refuser la ROM`() {
         val result = analyzer.analyze("u", "jeu.nds", 0L, ndsRom(validChecksum = false))
         val entry = assertIs<AnalysisResult.Success>(result).entry
-        assertEquals(RomStatus.INVALID_HEADER, entry.status)
         assertFalse(entry.headerChecksumValid)
     }
 
@@ -213,3 +212,4 @@ class NdsRomAnalyzerTest {
         assertTrue(a.fingerprints.sha256 != b.fingerprints.sha256)
     }
 }
+

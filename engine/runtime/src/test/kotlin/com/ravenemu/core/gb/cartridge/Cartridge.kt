@@ -104,6 +104,7 @@ abstract class Cartridge(
                 MbcType.MBC2 -> Mbc2(rom, header)
                 MbcType.MBC3 -> Mbc3(rom, header, clock)
                 MbcType.MBC5 -> Mbc5(rom, header)
+                MbcType.MBC6, MbcType.MBC7, MbcType.HUC1, MbcType.HUC3,
                 MbcType.UNSUPPORTED -> throw RomLoadException(
                     "Type de cartouche non pris en charge : 0x%02X".format(
                         header.cartridgeTypeCode

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "cartridge/cartridge_header.hpp"
+#include <ravenemu/infrared_endpoint.hpp>
 
 namespace ravenemu::cgb {
 
@@ -20,6 +21,11 @@ public:
     virtual void write_ram(int address, int value) = 0;
     virtual void tick(int) {}
     [[nodiscard]] virtual bool rumble_active() const noexcept { return false; }
+    virtual void set_acceleration(int, int) noexcept {}
+    [[nodiscard]] virtual bool connect_infrared_endpoint(InfraredEndpoint*) noexcept {
+        return true;
+    }
+    virtual void disconnect_infrared_endpoint() noexcept {}
     virtual void save_state(BinaryWriter& out) const = 0;
     virtual void load_state(BinaryReader& in) = 0;
 

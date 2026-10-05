@@ -9,6 +9,10 @@ enum class MbcType(val displayName: String) {
     MBC2("MBC2"),
     MBC3("MBC3"),
     MBC5("MBC5"),
+    MBC6("MBC6"),
+    MBC7("MBC7"),
+    HUC1("HuC1"),
+    HUC3("HuC3"),
     UNSUPPORTED("Non pris en charge"),
 }
 
@@ -144,16 +148,23 @@ data class CartridgeHeader(
                 0x05, 0x06 -> MbcType.MBC2
                 0x0F, 0x10, 0x11, 0x12, 0x13 -> MbcType.MBC3
                 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E -> MbcType.MBC5
+                0x20 -> MbcType.MBC6
+                0x22 -> MbcType.MBC7
+                0xFE -> MbcType.HUC3
+                0xFF -> MbcType.HUC1
                 else -> MbcType.UNSUPPORTED
             }
             val hasRam = typeCode in intArrayOf(
                 0x02, 0x03, 0x05, 0x06, 0x08, 0x09, 0x10, 0x12, 0x13, 0x1A,
-                0x1B, 0x1D, 0x1E,
+                0x1B, 0x1D, 0x1E, 0x20, 0x22,
+                0xFE, 0xFF,
             )
             val hasBattery = typeCode in intArrayOf(
-                0x03, 0x06, 0x09, 0x0F, 0x10, 0x13, 0x1B, 0x1E,
+                0x03, 0x06, 0x09, 0x0F, 0x10, 0x13, 0x1B, 0x1E, 0x20, 0x22,
+                0xFE, 0xFF,
             )
-            val hasRtc = typeCode == 0x0F || typeCode == 0x10
+            val hasRtc = typeCode == 0x0F || typeCode == 0x10 ||
+                mbc == MbcType.HUC3
 
             val romSize = when {
                 romSizeCode <= 0x08 -> MIN_ROM_SIZE shl romSizeCode
@@ -164,6 +175,9 @@ data class CartridgeHeader(
             }
             val ramSize = when {
                 mbc == MbcType.MBC2 -> 512
+                mbc == MbcType.MBC6 -> 32 * 1024
+                mbc == MbcType.MBC7 -> 256
+                mbc == MbcType.HUC3 -> 32 * 1024
                 else -> when (ramSizeCode) {
                     0x00 -> 0
                     0x01 -> 2 * 1024

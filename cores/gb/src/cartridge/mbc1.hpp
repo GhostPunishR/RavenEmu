@@ -38,13 +38,18 @@ public:
     }
 private:
     [[nodiscard]] int current_rom_bank() const noexcept {
-        return normalize_rom_bank((bank_high_ << 5) | rom_bank_low_);
+        const int bank = header_.mbc1_multicart
+            ? (bank_high_ << 4) | (rom_bank_low_ & 0x0f)
+            : (bank_high_ << 5) | rom_bank_low_;
+        return normalize_rom_bank(bank);
     }
     [[nodiscard]] int fixed_bank() const noexcept {
-        return advanced_mode_ ? normalize_rom_bank(bank_high_ << 5) : 0;
+        if (!advanced_mode_) return 0;
+        return normalize_rom_bank(bank_high_ << (header_.mbc1_multicart ? 4 : 5));
     }
     [[nodiscard]] int ram_bank() const noexcept {
-        return advanced_mode_ && ram_.size() > ram_bank_size ? bank_high_ : 0;
+        return advanced_mode_ && !header_.mbc1_multicart && ram_.size() > ram_bank_size
+            ? bank_high_ : 0;
     }
     bool ram_enabled_{};
     int rom_bank_low_{1};

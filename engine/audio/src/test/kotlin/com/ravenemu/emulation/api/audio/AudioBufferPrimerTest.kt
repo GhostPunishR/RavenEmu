@@ -21,43 +21,35 @@ class AudioBufferPrimerTest {
         assertFalse(primer.onSamplesQueued(300), "la piste ne doit pas redémarrer")
     }
 
+    /**
+     * Le préremplissage ne se redéclenche jamais de lui-même.
+     *
+     * Il l'a fait, sur chaque rupture rapportée par la plateforme, et c'était le
+     * mauvais réflexe : vider la piste jetait l'avance déjà calculée et imposait
+     * une centaine de millisecondes de silence pour réparer une interruption qui
+     * en durait quelques-unes. Après une rupture la file est vide, mais la piste
+     * continue de jouer, et l'écriture bloquante ne bloque que sur une file
+     * pleine : la réserve se reconstitue seule, en quelques blocs.
+     *
+     * Une fois démarrée, la lecture ne s'arrête donc plus que sur demande
+     * explicite — pause ou arrêt de session, par [AudioBufferPrimer.reset].
+     */
     @Test
-    fun `une nouvelle rupture impose un nouveau preremplissage`() {
+    fun `la lecture demarree ne se rearme que sur demande explicite`() {
         val primer = AudioBufferPrimer(startThresholdSamples = 200)
         assertTrue(primer.onSamplesQueued(200))
+        assertTrue(primer.playbackStarted)
 
-        assertFalse(primer.onUnderrunCount(0))
-        assertTrue(primer.onUnderrunCount(1))
+        // Des blocs continuent d'arriver : rien ne redémarre, rien ne se remet
+        // à compter.
+        repeat(50) { assertFalse(primer.onSamplesQueued(200)) }
+        assertTrue(primer.playbackStarted)
+
+        primer.reset()
         assertFalse(primer.playbackStarted)
         assertEquals(0, primer.queuedSamples)
-
         assertFalse(primer.onSamplesQueued(120))
-        assertTrue(primer.onSamplesQueued(80))
-    }
-
-    @Test
-    fun `un ancien compteur ne casse pas un preremplissage en cours`() {
-        val primer = AudioBufferPrimer(startThresholdSamples = 200)
-
-        assertFalse(primer.onUnderrunCount(12))
-        assertFalse(primer.onSamplesQueued(100))
-        assertFalse(primer.onUnderrunCount(12))
-        assertTrue(primer.onSamplesQueued(100))
-        assertFalse(primer.onUnderrunCount(12))
-    }
-
-    @Test
-    fun `reset conserve le compteur courant et vide la piste`() {
-        val primer = AudioBufferPrimer(startThresholdSamples = 100)
-        assertTrue(primer.onSamplesQueued(100))
-
-        primer.reset(currentUnderruns = 7)
-
-        assertFalse(primer.playbackStarted)
-        assertEquals(0, primer.queuedSamples)
-        assertFalse(primer.onUnderrunCount(7))
-        assertTrue(primer.onSamplesQueued(100))
-        assertTrue(primer.onUnderrunCount(8))
+        assertTrue(primer.onSamplesQueued(80), "le seuil doit être repassé après un vidage")
     }
 
     @Test

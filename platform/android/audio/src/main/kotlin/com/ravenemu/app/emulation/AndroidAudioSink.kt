@@ -7,8 +7,9 @@ import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
 import com.ravenemu.emulation.api.audio.AudioBufferPrimer
+import com.ravenemu.emulation.api.audio.AudioClockGovernor
 import com.ravenemu.emulation.api.audio.AudioTransportStats
-import com.ravenemu.emulation.api.audio.LinearResampler
+import com.ravenemu.emulation.api.audio.BandLimitedResampler
 import kotlin.math.ceil
 
 /**
@@ -17,11 +18,25 @@ import kotlin.math.ceil
  * Le moteur produit ses échantillons à [sourceRateHz] (32768 Hz). Plutôt que
  * de laisser le système rééchantillonner vers le débit de sortie, avec une
  * qualité variable selon l'appareil, on ouvre l'AudioTrack au **débit natif**
- * du périphérique et on rééchantillonne nous-mêmes ([LinearResampler]).
+ * du périphérique et on rééchantillonne nous-mêmes ([BandLimitedResampler]).
  *
  * [write] est bloquant : appelé depuis le thread d'émulation, il cale la
  * cadence de la session sur l'horloge audio du système (synchronisation
  * audio/vidéo), quel que soit le débit de sortie.
+ *
+ * Ce calage laisse subsister une **dérive** : la seconde émulée et la seconde
+ * du quartz ne durent pas exactement pareil, et l'écart s'accumule toujours
+ * dans le même sens jusqu'à vider ou saturer la piste. [AudioClockGovernor] le
+ * rattrape en continu, par une correction de débit trop petite pour s'entendre,
+ * ce qui évite la séquence rupture-vidage-repréremplissage et le blanc
+ * périodique qu'elle produisait.
+ *
+ * Une rupture rapportée par la plateforme est **comptée, pas réparée**. La
+ * réparation d'avant — arrêter la piste, la vider, repréremplir — jetait
+ * l'avance déjà calculée et imposait une centaine de millisecondes de silence
+ * pour une interruption qui en durait quelques-unes ; voir [AudioBufferPrimer].
+ * La file se reconstitue d'elle-même, l'écriture bloquante ne bloquant que sur
+ * une file pleine.
  *
  * [stats] relève ce que devient chaque bloc le long de la chaîne. Inactif par
  * défaut, il ne coûte que la lecture d'un booléen par appel.
@@ -34,10 +49,20 @@ class AndroidAudioSink(
 ) : EmulationSession.AudioSink {
 
     private val outputRate = resolveNativeRate(context)
-    private val resampler = LinearResampler(sourceRateHz, outputRate)
+    private val resampler = BandLimitedResampler(sourceRateHz, outputRate)
     private var resampled = ShortArray(0)
     private val primer: AudioBufferPrimer
+    private val governor: AudioClockGovernor
     private val track: AudioTrack
+
+    /**
+     * Trames remises à la piste depuis le dernier vidage.
+     *
+     * `playbackHeadPosition` compte les trames **jouées** et repart de zéro à
+     * chaque `flush` : les deux compteurs sont donc remis à zéro ensemble, et
+     * leur différence est l'avance encore en attente dans la sortie.
+     */
+    private var framesWritten = 0L
 
     /** Passé à `true` par [unblock] : plus aucune écriture n'est tentée. */
     @Volatile
@@ -65,6 +90,9 @@ class AndroidAudioSink(
         primer = AudioBufferPrimer(
             outputFramesPerVideoFrame * CHANNEL_COUNT * PRIME_VIDEO_FRAMES,
         )
+        // L'avance visée est celle que le préremplissage vient d'installer :
+        // l'asservissement a pour seul rôle de la maintenir.
+        governor = AudioClockGovernor(outputFramesPerVideoFrame * PRIME_VIDEO_FRAMES)
         track = AudioTrack.Builder()
             .setAudioAttributes(
                 AudioAttributes.Builder()
@@ -96,15 +124,16 @@ class AndroidAudioSink(
      * journal, ni compteur, ni message, ne l'indique.
      */
     override fun write(samples: ShortArray, count: Int) {
-        recoverFromUnderrun()
+        stats.onUnderrunCount(currentUnderrunCount())
 
-        // Le rééchantillonnage conserve toujours le débit natif du moteur.
-        // Une variation du temps de rendu ne doit jamais modifier la hauteur
-        // du son, en particulier sur les moteurs GB et GBC.
+        // Le rééchantillonnage suit le débit natif du moteur, à la correction
+        // de dérive près : une variation du temps de rendu ne doit jamais
+        // modifier la hauteur du son, en particulier sur les moteurs GB et GBC.
         if (stopped) return
-        val needed = resampler.maxOutput(count)
+        val scale = correctionForDrift()
+        val needed = resampler.maxOutput(count, scale)
         if (resampled.size < needed) resampled = ShortArray(needed)
-        val produced = resampler.resample(samples, count, resampled)
+        val produced = resampler.resample(samples, count, resampled, scale)
 
         // WRITE_BLOCKING peut encore retourner une écriture partielle si la
         // piste change d'état. La fin du bloc est alors perdue : c'est une
@@ -117,9 +146,16 @@ class AndroidAudioSink(
                 produced - offset,
                 AudioTrack.WRITE_BLOCKING,
             )
-            if (written <= 0) break
+            // Une pause peut interrompre WRITE_BLOCKING sans transférer de
+            // données. Elle ne signifie pas que la piste est défaillante.
+            if (written == 0 && track.playState == AudioTrack.PLAYSTATE_PAUSED) break
+            if (written <= 0) {
+                if (stopped) return
+                throw IllegalStateException("AudioTrack.write n'a pas progressé : $written")
+            }
             offset += written
         }
+        framesWritten += offset / CHANNEL_COUNT
         stats.onBlock(submitted = count, resampled = produced, written = offset)
 
         // AudioTrack ne commence à consommer qu'après le préremplissage.
@@ -131,17 +167,41 @@ class AndroidAudioSink(
     override fun underrunCount(): Int = currentUnderrunCount()
 
     /**
-     * Une rupture vide l'avance accumulée. On arrête alors la piste, on jette
-     * son tampon devenu discontinu et on repasse par le même préremplissage.
+     * Correction de débit à appliquer au bloc courant.
+     *
+     * Tant que le préremplissage n'est pas terminé, la piste ne consomme rien :
+     * l'avance mesurée serait celle d'un démarrage, pas d'une dérive, et
+     * l'asservissement partirait dans le décor. On produit alors au débit natif.
      */
-    private fun recoverFromUnderrun() {
-        val ruptures = currentUnderrunCount()
-        stats.onUnderrunCount(ruptures)
-        if (!primer.onUnderrunCount(ruptures)) return
-        stats.onRestart()
-        track.pause()
-        track.flush()
-        primer.reset(currentUnderrunCount())
+    private fun correctionForDrift(): Double {
+        if (!primer.playbackStarted) return 1.0
+        val played = try {
+            // Le compteur de la plateforme est un entier **32 bits non signé**
+            // rendu dans un `Int` : il passe par les négatifs au bout d'une
+            // douzaine d'heures de lecture continue. Lu sans conversion, il
+            // ferait bondir l'avance calculée d'un coup et gèlerait
+            // l'asservissement sur un relevé absurde.
+            track.playbackHeadPosition.toLong() and MASK_32
+        } catch (e: Exception) {
+            stats.onFailure(e)
+            return governor.rateScale
+        }
+        // La différence est prise dans le même espace : l'avance réelle est
+        // petite et positive, elle traverse donc le rebouclage sans accroc. Une
+        // valeur invraisemblable, elle, ressort énorme et l'asservissement la
+        // rejette.
+        val queued = (framesWritten - played) and MASK_32
+        return governor.onQueuedFrames(queued.coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
+    }
+
+    /**
+     * Après un vidage, la piste et son compteur de trames jouées repartent de
+     * zéro : le nôtre aussi, et la correction avec, faute de quoi la première
+     * mesure d'après comparerait deux origines différentes.
+     */
+    private fun forgetQueuedFrames() {
+        framesWritten = 0L
+        governor.reset()
     }
 
     private fun currentUnderrunCount(): Int = try {
@@ -169,7 +229,8 @@ class AndroidAudioSink(
         try {
             track.pause()
             track.flush()
-            primer.reset(currentUnderrunCount())
+            primer.reset()
+            forgetQueuedFrames()
             resampler.reset()
         } catch (e: Exception) {
             stats.onFailure(e)
@@ -208,6 +269,9 @@ class AndroidAudioSink(
         const val BYTES_PER_SAMPLE = 2
         const val BUFFER_VIDEO_FRAMES = 8
         const val PRIME_VIDEO_FRAMES = 6
+
+        /** Espace du compteur de trames jouées de la plateforme. */
+        const val MASK_32 = 0xFFFF_FFFFL
 
         /** Débit de sortie natif du périphérique, avec repli sûr sur 48 kHz. */
         fun resolveNativeRate(context: Context): Int {

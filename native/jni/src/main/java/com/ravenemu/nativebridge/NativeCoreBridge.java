@@ -31,6 +31,7 @@ public final class NativeCoreBridge {
     public static native void setTouch(long handle, boolean down, int x, int y);
     public static native int readAudio(long handle, short[] destination);
     public static native boolean rumbleActive(long handle);
+    public static native void setGameBoyAcceleration(long handle, int x, int y);
     public static native int framebufferFormat(long handle);
     public static native boolean hasBatteryRam(long handle);
     public static native boolean batteryRamDirty(long handle);
@@ -65,3 +66,4 @@ public final class NativeCoreBridge {
 
     public static native NativeDiagnosticBatch drainDiagnostics(long handle);
 }
+
