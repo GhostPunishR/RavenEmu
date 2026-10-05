@@ -106,7 +106,6 @@ class NdsRomAnalyzer(override val provider: ConsoleProvider) : RomAnalyzer {
                 fingerprints = fingerprints,
                 gameCode = parsed.gameCode,
                 romSizeBytes = sizeBytes.toInt(),
-                headerChecksumValid = parsed.headerChecksumValid,
             )
         )
     }

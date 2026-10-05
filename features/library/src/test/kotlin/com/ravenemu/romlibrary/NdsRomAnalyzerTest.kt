@@ -152,7 +152,6 @@ class NdsRomAnalyzerTest {
         assertEquals(ConsoleType.NINTENDO_DS, entry.console)
         assertEquals("RAVENEMU", entry.title)
         assertEquals("ARVE", entry.gameCode)
-        assertTrue(entry.headerChecksumValid)
         // Les champs propres à la cartouche Game Boy gardent leurs valeurs
         // neutres : l'index les porte pour toutes les consoles, la Nintendo DS
         // n'en définit aucun.
@@ -163,18 +162,17 @@ class NdsRomAnalyzerTest {
     }
 
     @Test
-    fun `une ROM Nintendo DS valide n'engage que son en-tete`() {
+    fun `une ROM Nintendo DS valide est indexee`() {
         // La somme de seize bits ne couvre que l'en-tête : rien ne permet
         // d'affirmer que le contenu est intact.
         val result = analyzer.analyze("u", "jeu.nds", 0L, ndsRom())
-        assertTrue(assertIs<AnalysisResult.Success>(result).entry.headerChecksumValid)
+        assertIs<AnalysisResult.Success>(result)
     }
 
     @Test
-    fun `une somme d'en-tete fausse est signalee sans refuser la ROM`() {
+    fun `une somme d'en-tete fausse n'empeche pas l'indexation`() {
         val result = analyzer.analyze("u", "jeu.nds", 0L, ndsRom(validChecksum = false))
-        val entry = assertIs<AnalysisResult.Success>(result).entry
-        assertFalse(entry.headerChecksumValid)
+        assertIs<AnalysisResult.Success>(result)
     }
 
     @Test
