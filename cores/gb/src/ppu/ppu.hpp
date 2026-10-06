@@ -646,7 +646,12 @@ private:
         }
         if (discard_pixels_remaining_ > 0) {
             if (bg_fifo_size_ > 0) {
-                static_cast<void>(pop_bg_pixel());
+                // SCX décale uniquement le BG. Si la window a déjà remplacé
+                // la FIFO (WX <= 7), conserver ses pixels tout en terminant
+                // la pénalité de démarrage SCX. Le cas WX=0 est traité
+                // séparément par window_initial_skip_. Pan Docs, Pixel FIFO :
+                // https://gbdev.io/pandocs/pixel_fifo.html
+                if (!fetcher_window_) static_cast<void>(pop_bg_pixel());
                 --discard_pixels_remaining_;
             }
             return;
