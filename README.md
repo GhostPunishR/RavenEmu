@@ -72,7 +72,7 @@ Voir [ARCHITECTURE.md](ARCHITECTURE.md) et le [wiki Architecture](https://github
 
 ## Compiler
 
-Prérequis principaux : JDK, Android SDK avec `compileSdk 37`, NDK `29.0.14206865` et CMake `3.22.1`.
+Prérequis principaux : JDK, Android SDK avec `compileSdk 37`, NDK `30.0.16248370` et CMake `3.22.1`.
 
 ```bash
 git clone https://github.com/GhostPunishR/RavenEmu.git
