@@ -60,7 +60,7 @@ jobs:
         run: |
           sdkmanager_path="${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager"
           test -x "$sdkmanager_path"
-          "$sdkmanager_path" "ndk;29.0.14206865" "cmake;3.22.1"
+          "$sdkmanager_path" "ndk;30.0.16248370" "cmake;3.22.1"
 
       - name: Tester les cœurs C++ sur l'hôte
         run: |
