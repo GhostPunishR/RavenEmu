@@ -119,9 +119,9 @@ class GbaStateTransactionTest {
     }
 
     @Test
-    fun `une taille de sauvegarde incoherente laisse la partie intacte`() {
+    fun `un type de sauvegarde incoherent laisse la partie intacte`() {
         // Une cartouche à mémoire Flash : le bloc de sauvegarde est alors
-        // présent et sa taille annoncée peut être falsifiée.
+        // présent et son type annoncé peut être falsifié.
         val core = KotlinGbaCore(forcedSaveType = GbaSaveType.FLASH_128K)
         core.loadRom(SyntheticRom.build(programWords = SyntheticRom.backdropProgram(0x1F)))
         core.runFrame(IntArray(core.video.pixelCount))
@@ -129,7 +129,7 @@ class GbaStateTransactionTest {
         val machineAvant = core.machine!!
         val etatAvant = core.saveState()
         val corrompu = core.saveState()
-        ecrireInt(corrompu, decalageTailleSauvegarde(core), 1234)
+        ecrireInt(corrompu, decalageTypeSauvegarde(core), 1234)
 
         assertFailsWith<SaveStateException> { core.loadState(corrompu) }
         assertSame(machineAvant, core.machine)
@@ -182,7 +182,7 @@ class GbaStateTransactionTest {
     }
 
     /** Position de la taille annoncée du bloc de sauvegarde de cartouche. */
-    private fun decalageTailleSauvegarde(core: KotlinGbaCore): Int {
+    private fun decalageTypeSauvegarde(core: KotlinGbaCore): Int {
         val machine = core.machine!!
         val ppu = GbaPpu.STATE_FIELD_COUNT * 4 + machine.ppu.frame.size * 4
         val peripheriques = 4 + 4 + 1 + // IE, IF, IME

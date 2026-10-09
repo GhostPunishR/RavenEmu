@@ -101,6 +101,18 @@ void game_boy_color_and_battery_test() {
     const auto snapshot = battery_core->snapshot_battery_ram();
     check(snapshot.has_value(), "instantané batterie GB absent");
     check(snapshot->data == battery, "contenu batterie GB altéré à l'import");
+    const auto state = battery_core->save_state();
+    battery_core->load_state(state);
+    check(battery_core->battery_ram_dirty(), "RAM restaurée GB non marquée à persister");
+    battery_core->acknowledge_battery_ram_saved(snapshot->generation);
+    check(battery_core->battery_ram_dirty(), "ancien acquittement accepté après restauration GB");
+    const auto restored = battery_core->snapshot_battery_ram();
+    check(restored && restored->data == battery, "RAM restaurée GB altérée");
+    battery_core->acknowledge_battery_ram_saved(restored->generation);
+    check(!battery_core->battery_ram_dirty(), "nouvel acquittement GB refusé");
+    battery_core->load_state(state);
+    battery_core->acknowledge_battery_ram_saved(restored->generation);
+    check(battery_core->battery_ram_dirty(), "génération réutilisée après seconde restauration GB");
 }
 
 void mbc6_large_state_test() {

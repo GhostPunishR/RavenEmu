@@ -2,6 +2,8 @@ package com.ravenemu.core.gba
 
 import com.ravenemu.emulation.api.EmulatorButton
 import com.ravenemu.emulation.api.EmulatorCore
+import com.ravenemu.core.gba.save.GbaSaveMemory
+import com.ravenemu.core.gba.save.GbaSaveType
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -22,6 +24,43 @@ import kotlin.test.assertTrue
  * casserait leurs sauvegardes.
  */
 class NativeParityTest {
+
+    @Test
+    fun `les etats Flash et EEPROM en cours sont compatibles avec le natif`() {
+        for (type in listOf(GbaSaveType.FLASH_128K, GbaSaveType.EEPROM_512, GbaSaveType.EEPROM_8K)) {
+            val reference = KotlinGbaCore(forcedSaveType = type)
+            val rom = SyntheticRom.build()
+            reference.loadRom(rom, null)
+            val save = reference.machine!!.cartridge.save!!
+            when (save) {
+                is GbaSaveMemory.Flash -> {
+                    save.write(0x5555, 0xaa); save.write(0x2aaa, 0x55)
+                    save.write(0x5555, 0xb0); save.write(0, 1)
+                    save.write(0x5555, 0xaa); save.write(0x2aaa, 0x55)
+                    save.write(0x5555, 0xa0) // programmation armée en banque 1
+                }
+                is GbaSaveMemory.Eeprom -> {
+                    save.import(ByteArray(type.sizeBytes) { 0x5a })
+                    save.write(1); save.write(1)
+                    repeat(if (type == GbaSaveType.EEPROM_512) 6 else 14) { save.write(0) }
+                    save.write(0)
+                    repeat(11) { save.read() } // lecture entamée, préfixe déjà consommé
+                }
+                else -> error("type de test inattendu")
+            }
+            val state = reference.saveState()
+            GbaCore(forcedSaveType = type).use { native ->
+                native.loadRom(rom, null)
+                val oldSnapshot = native.snapshotBatteryRam()!!
+                native.loadState(state)
+                assertContentEquals(state, native.saveState(), "contrôleur $type divergent")
+                native.acknowledgeBatteryRamSaved(oldSnapshot.generation)
+                assertTrue(native.batteryRamDirty, "ancien acquittement accepté pour $type")
+                reference.loadState(native.saveState())
+                assertContentEquals(state, reference.saveState())
+            }
+        }
+    }
 
     private companion object {
         /**

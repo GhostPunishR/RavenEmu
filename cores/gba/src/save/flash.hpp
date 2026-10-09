@@ -66,6 +66,21 @@ public:
         }
     }
 
+    void save_state(BinaryWriter& out) const override {
+        SaveMemory::save_state(out);
+        out.i32(command_step_); out.boolean(id_mode_); out.boolean(erase_armed_);
+        out.boolean(write_armed_); out.boolean(bank_switch_armed_); out.i32(bank_);
+    }
+    void load_state(BinaryReader& in) override {
+        SaveMemory::load_state(in);
+        command_step_ = in.i32(); id_mode_ = in.boolean(); erase_armed_ = in.boolean();
+        write_armed_ = in.boolean(); bank_switch_armed_ = in.boolean(); bank_ = in.i32();
+        if (command_step_ < 0 || command_step_ > 2 || bank_ < 0 || bank_ > 1 ||
+            (type() != GbaSaveType::flash_128k && (bank_ != 0 || bank_switch_armed_))) {
+            throw SaveStateError("État Flash invalide");
+        }
+    }
+
 private:
     static constexpr std::size_t bank_size = 64U * 1024U;
     static constexpr std::size_t sector_size = 4096U;

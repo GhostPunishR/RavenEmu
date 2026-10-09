@@ -36,6 +36,12 @@ public:
     void acknowledge(std::uint64_t generation) noexcept {
         if (generation == generation_) saved_generation_ = generation;
     }
+    void mark_restored_after(std::uint64_t previous_generation) noexcept {
+        generation_ = previous_generation + 1;
+        saved_generation_ = previous_generation;
+    }
+    virtual void save_state(BinaryWriter& out) const { out.raw(data_); }
+    virtual void load_state(BinaryReader& in) { in.raw(data_); }
     virtual int read(int address) = 0;
     virtual void write(int address, int value) = 0;
     virtual void hint_transfer_length(int) noexcept {}

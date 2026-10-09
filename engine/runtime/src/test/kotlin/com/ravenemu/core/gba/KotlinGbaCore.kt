@@ -237,6 +237,7 @@ internal class KotlinGbaCore(
         // remplacée qu'après un retour normal. Un état corrompu laisse donc la
         // partie en cours strictement intacte, et jouable.
         val restored = GbaState.restore(this, state)
+        restored.cartridge.save?.markRestoredAfter(machine?.cartridge?.save?.generation ?: 0)
         // Journalisation et chronométrage relèvent de l'intention de l'appelant,
         // pas de l'état émulé : `install` les réapplique à la machine neuve.
         install(restored)
