@@ -1,5 +1,8 @@
 package com.ravenemu.core.gba.save
 
+import java.io.DataInputStream
+import java.io.DataOutputStream
+
 /** Mémoire de sauvegarde d'une cartouche : contenu brut et suivi des écritures. */
 sealed class GbaSaveMemory(val type: GbaSaveType) {
 
@@ -49,6 +52,14 @@ sealed class GbaSaveMemory(val type: GbaSaveType) {
     }
 
     fun export(): ByteArray = data.copyOf()
+
+    fun markRestoredAfter(previousGeneration: Long) {
+        generation = previousGeneration + 1
+        savedGeneration = previousGeneration
+    }
+
+    open fun saveState(out: DataOutputStream) { out.write(data) }
+    open fun loadState(input: DataInputStream) { input.readFully(data) }
 
     /** Mémoire SRAM : accès direct par octet, sans protocole. */
     class Sram : GbaSaveMemory(GbaSaveType.SRAM) {
@@ -139,6 +150,20 @@ sealed class GbaSaveMemory(val type: GbaSaveType) {
             }
         }
 
+        override fun saveState(out: DataOutputStream) {
+            super.saveState(out)
+            out.writeInt(commandStep); out.writeBoolean(idMode); out.writeBoolean(eraseArmed)
+            out.writeBoolean(writeArmed); out.writeBoolean(bankSwitchArmed); out.writeInt(bank)
+        }
+
+        override fun loadState(input: DataInputStream) {
+            super.loadState(input)
+            commandStep = input.readInt(); idMode = input.readBoolean(); eraseArmed = input.readBoolean()
+            writeArmed = input.readBoolean(); bankSwitchArmed = input.readBoolean(); bank = input.readInt()
+            require(commandStep in 0..2 && bank in 0..1)
+            require(type == GbaSaveType.FLASH_128K || (bank == 0 && !bankSwitchArmed))
+        }
+
         private companion object {
             const val BANK_SIZE = 64 * 1024
             const val SECTOR_SIZE = 4096
@@ -222,6 +247,26 @@ sealed class GbaSaveMemory(val type: GbaSaveType) {
                 State.WRITE_STOP -> state = State.IDLE
                 State.READING -> Unit // le bit d'arrêt clôt la requête de lecture
             }
+        }
+
+        override fun saveState(out: DataOutputStream) {
+            super.saveState(out)
+            out.writeInt(addressBits); out.writeInt(state.ordinal)
+            out.writeLong(bitBuffer); out.writeInt(bitCount); out.writeInt(address)
+            out.writeLong(readShift); out.writeInt(readBitsSent)
+        }
+
+        override fun loadState(input: DataInputStream) {
+            super.loadState(input)
+            addressBits = input.readInt(); val stateIndex = input.readInt()
+            bitBuffer = input.readLong(); bitCount = input.readInt(); address = input.readInt()
+            readShift = input.readLong(); readBitsSent = input.readInt()
+            require(addressBits == 6 || addressBits == 14)
+            require(stateIndex in State.entries.indices && bitCount in 0..64)
+            require(address in 0..0x1fff8 && (address and 7) == 0 && readBitsSent in 0..67)
+            state = State.entries[stateIndex]
+            require(state != State.COMMAND || bitCount in 1 until 2 + addressBits)
+            require(state != State.WRITING || bitCount < 64)
         }
 
         private fun beginTransfer() {

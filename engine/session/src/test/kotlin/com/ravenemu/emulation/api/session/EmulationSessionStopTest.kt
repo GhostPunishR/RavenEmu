@@ -181,6 +181,26 @@ class EmulationSessionStopTest {
     // ---- Tests ----
 
     @Test
+    fun `une session chargee en arriere plan attend resume avant sa premiere trame`() {
+        val core = FakeCore()
+        val session = EmulationSession(core, RecordingCallbacks())
+        val initialized = CountDownLatch(1)
+        // Le chargement se termine après onPause : appliquer la pause avant start.
+        session.pause()
+        session.post { initialized.countDown() }
+        session.start()
+        try {
+            assertTrue(initialized.await(1, TimeUnit.SECONDS))
+            assertFalse(core.firstFrameRendered.await(100, TimeUnit.MILLISECONDS))
+            assertEquals(0, core.frames.get())
+            session.resume()
+            assertTrue(core.firstFrameRendered.await(1, TimeUnit.SECONDS))
+        } finally {
+            session.stop()
+        }
+    }
+
+    @Test
     fun `un flush expire ne concurrence pas le writer et le suivant conserve la derniere generation`() {
         val core = FakeCore(batterySize = 32).apply { dirtyFlag = true; generation = 1 }
         val started = CountDownLatch(1)

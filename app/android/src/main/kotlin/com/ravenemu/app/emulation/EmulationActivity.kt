@@ -19,6 +19,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.Lifecycle
 import com.ravenemu.app.BuildConfig
 import com.ravenemu.app.R
 import com.ravenemu.app.RavenActivity
@@ -454,6 +455,12 @@ class EmulationActivity : RavenActivity(), EmulationSession.Callbacks {
                     }
                 }
             }
+        }
+        // La lecture SAF peut finir après onPause, alors que session était
+        // encore nulle. Appliquer le cycle de vie avant la première trame.
+        if (controls.editMode || (settings.pauseInBackground &&
+                !lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))) {
+            newSession.pause()
         }
         newSession.start()
     }

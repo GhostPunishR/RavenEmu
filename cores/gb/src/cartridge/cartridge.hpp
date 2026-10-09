@@ -51,6 +51,13 @@ public:
         if (generation == generation_) saved_generation_ = generation;
     }
 
+    // Une restauration remplace la RAM, pas le fichier déjà écrit. Repartir
+    // après l'ancienne génération invalide aussi ses acquittements en vol.
+    void mark_restored_after(std::uint64_t previous_generation) noexcept {
+        generation_ = previous_generation + 1;
+        saved_generation_ = previous_generation;
+    }
+
     [[nodiscard]] static std::unique_ptr<Cartridge> create(
         RomImage rom,
         Clock clock

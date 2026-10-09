@@ -49,6 +49,28 @@ public:
         }
     }
 
+    void save_state(BinaryWriter& out) const override {
+        SaveMemory::save_state(out);
+        out.i32(address_bits_); out.i32(static_cast<int>(state_));
+        out.u64(bit_buffer_); out.i32(bit_count_); out.i32(address_);
+        out.u64(read_shift_); out.i32(read_bits_sent_);
+    }
+    void load_state(BinaryReader& in) override {
+        SaveMemory::load_state(in);
+        address_bits_ = in.i32(); const int state = in.i32();
+        bit_buffer_ = in.u64(); bit_count_ = in.i32(); address_ = in.i32();
+        read_shift_ = in.u64(); read_bits_sent_ = in.i32();
+        if ((address_bits_ != 6 && address_bits_ != 14) || state < 0 || state > 4 ||
+            bit_count_ < 0 || bit_count_ > 64 || address_ < 0 || address_ > 0x1fff8 ||
+            (address_ & 7) != 0 || read_bits_sent_ < 0 || read_bits_sent_ > 67 ||
+            (state == static_cast<int>(State::command) &&
+             (bit_count_ < 1 || bit_count_ >= 2 + address_bits_)) ||
+            (state == static_cast<int>(State::writing) && bit_count_ >= 64)) {
+            throw SaveStateError("État EEPROM invalide");
+        }
+        state_ = static_cast<State>(state);
+    }
+
 private:
     enum class State { idle, command, writing, write_stop, reading };
     void begin_transfer() {

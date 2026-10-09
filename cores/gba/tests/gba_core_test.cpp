@@ -58,12 +58,26 @@ void gba_smoke_test() {
         "le saut de rendu GBA a modifié le framebuffer"
     );
     core->load_state(state);
+    check(core->battery_ram_dirty(), "RAM restaurée GBA non marquée à persister");
+    core->acknowledge_battery_ram_saved(battery->generation);
+    check(core->battery_ram_dirty(), "ancien acquittement accepté après restauration GBA");
+    const auto persisted = core->snapshot_battery_ram();
+    core->acknowledge_battery_ram_saved(persisted->generation);
+    check(!core->battery_ram_dirty(), "nouvel acquittement GBA refusé");
+    core->load_state(state);
+    core->acknowledge_battery_ram_saved(persisted->generation);
+    check(core->battery_ram_dirty(), "génération réutilisée après seconde restauration GBA");
     check(core->measuring_time(), "mesure GBA perdue après restauration d'état");
     core->run_frame(frame, true);
     const auto restored_battery = core->snapshot_battery_ram();
     check(restored_battery && restored_battery->data[0] == 0x5a, "SRAM GBA non restaurée");
 
     const auto before_failure = core->save_state();
+    auto old_version = before_failure;
+    old_version[4] = 0; old_version[5] = 9;
+    expect_failure<ravenemu::SaveStateError>(
+        [&] { core->load_state(old_version); }, "ancien format GBA accepté");
+    check(core->save_state() == before_failure, "ancien format GBA a modifié la machine");
     auto truncated = before_failure;
     truncated.resize(truncated.size() / 2U);
     expect_failure<ravenemu::SaveStateError>(

@@ -123,4 +123,13 @@ Ce que RavenEmu ne garantit pas :
 
 ## Après une mise à jour
 
+Le format des états GBA est désormais en version 10 : il conserve la banque
+Flash, les commandes Flash en cours et les transactions EEPROM. Les états GBA
+de version 9 sont refusés sans modifier la partie active ; les fichiers `.sav`
+restent compatibles. Le format GB/GBC ne change pas.
+
+Charger un état GB/GBC ou GBA marque sa mémoire de sauvegarde à persister,
+même si le jeu n'y écrit plus ensuite. Les acquittements d'écritures commencées
+avant la restauration ne peuvent pas acquitter cette nouvelle mémoire.
+
 Si un état ne se charge plus, démarrez le jeu normalement et utilisez sa sauvegarde `.sav`. Signalez le problème uniquement si la sauvegarde de cartouche est également touchée.

@@ -117,6 +117,7 @@ public:
         replacement->ppu.load(in); replacement->speed.load(in); replacement->bus.load(in);
         replacement->apu.load(in); replacement->cartridge->load_state(in);
         if (!in.exhausted()) throw SaveStateError("État instantané corrompu (données excédentaires)");
+        replacement->cartridge->mark_restored_after(machine_->cartridge->generation());
         install_machine(std::move(replacement));
     }
     void set_clock_epoch(std::optional<std::int64_t> epoch) noexcept override { clock_override_ = epoch; }
