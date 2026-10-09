@@ -6,7 +6,7 @@
 - JDK 21 recommandé, identique à la CI;
 - Gradle Wrapper fourni par le dépôt;
 - SDK Android avec `compileSdk 37` pour construire l'application;
-- Android NDK `29.0.14206865` et CMake `3.22.1`.
+- Android NDK `30.0.16248370` et CMake `3.22.1`.
 
 Les modules JVM peuvent être testés sans SDK Android. Les moteurs C++ se testent séparément sur l'hôte avec un compilateur C++20 et CMake.
 

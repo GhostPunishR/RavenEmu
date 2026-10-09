@@ -37,7 +37,7 @@ Prérequis recommandés :
 - JDK 21 ;
 - Gradle Wrapper fourni avec le dépôt ;
 - SDK Android avec `compileSdk 37` pour les modules Android ;
-- Android NDK `29.0.14206865`, CMake `3.22.1` et un compilateur C++20.
+- Android NDK `30.0.16248370`, CMake `3.22.1` et un compilateur C++20.
 
 Les modules JVM peuvent être construits et testés sans SDK Android. Les moteurs se valident également sur l'hôte avec CMake.
 
