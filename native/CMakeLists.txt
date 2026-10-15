@@ -2,18 +2,17 @@ cmake_minimum_required(VERSION 3.22.1)
 project(RavenEmuNative LANGUAGES C CXX)
 
 # Lock the emulator engines AND public C interface to a reviewed source commit.
-# RavenCore 0.1.2 (tag v0.1.2): GBA fixes and speed-up from 0.1.1, GB/GBC
-# fixes from the public test suites, HDMA bound fix. C API version 0 and save
-# state formats unchanged (GB/GBC 11, GBA 12, which still loads format 11).
-# Includes the merged neutral C API naming cleanup. Keep the reviewed
-# immutable commit SHA, not the movable tag.
+# RavenCore 0.2.0 (tag v0.2.0): the 0.1.2 engines with the C API named
+# ravenemu_* (no generation prefix). C API version 0 and save state formats
+# unchanged (GB/GBC 11, GBA 12, which still loads format 11). Keep the
+# reviewed immutable commit SHA, not the movable tag.
 include(FetchContent)
 set(RAVENEMU_BUILD_LIBRETRO OFF CACHE BOOL "" FORCE)
 set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
 set(RAVENEMU_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(ravenemu_cores
     GIT_REPOSITORY https://github.com/GhostPunishR/RavenCore.git
-    GIT_TAG bad9ade53076c3c44768cfe2599eeb55c996c434
+    GIT_TAG 5854e2c63155945dd9c78347ecdfd5b3a8a99795
     GIT_SHALLOW FALSE
 )
 FetchContent_MakeAvailable(ravenemu_cores)
@@ -29,13 +28,11 @@ if(ANDROID)
     endforeach()
 endif()
 
-# Expose neutral API names without changing the pinned RavenCore checkout.
-# Rename declarations and definitions together; the engine implementation and
-# its serialized states are unchanged. Both JNI and Swift use this same header.
-include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/NeutralBridge.cmake")
-ravenemu_neutral_bridge(ravenemu_c_api
-    "${ravenemu_cores_SOURCE_DIR}/sdk/include/ravenemu/bridge.h"
-    "${CMAKE_BINARY_DIR}/include")
+# JNI includes <ravenemu/bridge.h> straight from the pinned RavenCore SDK.
+# Swift imports the same header through a module map, which must sit next to
+# it: copy both to build/include, the folder Xcode and the CI point Swift to.
+configure_file("${ravenemu_cores_SOURCE_DIR}/sdk/include/ravenemu/bridge.h"
+               "${CMAKE_BINARY_DIR}/include/bridge.h" COPYONLY)
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/apple/module.modulemap"
                "${CMAKE_BINARY_DIR}/include/module.modulemap" COPYONLY)
 
