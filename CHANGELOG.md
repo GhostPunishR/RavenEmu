@@ -1,5 +1,12 @@
 # Journal des modifications de RavenEmu
 
+## Non publié
+
+### Modifié
+
+- Pont natif : `native/cmake/NeutralBridge.cmake` est retiré. RavenCore expose désormais directement les noms `ravenemu_*` : JNI et Swift utilisent son header tel quel, et le dossier `include/` lu par Xcode et la CI ne change pas.
+- Code : `MainActivity.kt` et `RavenEmuApp.kt` sont découpés en fichiers par responsabilité (lecteur, emplacements d'état, transferts de sauvegardes, jaquettes, RetroAchievements, composants de la bibliothèque), sans changement de comportement, de textes ni de formats.
+
 ## v0.1.0 - bêta - 2026-10-15
 
 Première base du dépôt autonome RavenEmu. Cette version rassemble l'application multiplateforme et ses outils ; les fonctionnalités ci-dessous décrivent le contenu livré, sans affirmer une validation sur tous les jeux ou appareils.
