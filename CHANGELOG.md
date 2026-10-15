@@ -4,6 +4,7 @@
 
 ### Modifié
 
+- RavenCore épinglé à la version 0.2.0, commit `5854e2c63155945dd9c78347ecdfd5b3a8a99795`. Moteurs, API C version 0 et formats d'états inchangés (GB/GBC 11, GBA 12).
 - Pont natif : `native/cmake/NeutralBridge.cmake` est retiré. RavenCore expose désormais directement les noms `ravenemu_*` : JNI et Swift utilisent son header tel quel, et le dossier `include/` lu par Xcode et la CI ne change pas.
 - Code : `MainActivity.kt` et `RavenEmuApp.kt` sont découpés en fichiers par responsabilité (lecteur, emplacements d'état, transferts de sauvegardes, jaquettes, RetroAchievements, composants de la bibliothèque), sans changement de comportement, de textes ni de formats.
 
