@@ -1,0 +1,28 @@
+.gradle/
+.kotlin/
+build/
+**/build/
+local.properties
+iosApp/*.xcodeproj/
+iosApp/*.xcworkspace/
+iosApp/DerivedData/
+.DS_Store
+native/build-ios/
+native/build/
+
+# Native and Xcode generated outputs
+/native/build-host/
+/native/build-ios/
+/iosApp/*.xcodeproj/
+
+# IDE, Android native builds, Python and signing data
+.idea/
+*.iml
+.cxx/
+.externalNativeBuild/
+captures/
+__pycache__/
+*.py[cod]
+*.jks
+*.keystore
+keystore.properties

@@ -1,0 +1,42 @@
+name: RavenEmu
+options:
+  deploymentTarget:
+    iOS: "15.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    IPHONEOS_DEPLOYMENT_TARGET: "15.0"
+    TARGETED_DEVICE_FAMILY: "1,2"
+targets:
+  RavenEmu:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.ghostpunishr.ravenemu
+        PRODUCT_NAME: RavenEmu
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: 1
+        GENERATE_INFOPLIST_FILE: YES
+        # Name shown under the home-screen icon.
+        INFOPLIST_KEY_CFBundleDisplayName: RavenEmu
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        CODE_SIGN_STYLE: Automatic
+        HEADER_SEARCH_PATHS: "$(inherited) $(SRCROOT)/../native/build-ios/$(PLATFORM_NAME)/include"
+        LIBRARY_SEARCH_PATHS: "$(inherited) $(SRCROOT)/../native/build-ios/$(PLATFORM_NAME)/_deps/ravenemu_cores-build/sdk $(SRCROOT)/../native/build-ios/$(PLATFORM_NAME)/_deps/ravenemu_cores-build/cores/gb $(SRCROOT)/../native/build-ios/$(PLATFORM_NAME)/_deps/ravenemu_cores-build/cores/gbc $(SRCROOT)/../native/build-ios/$(PLATFORM_NAME)/_deps/ravenemu_cores-build/cores/gba $(SRCROOT)/../native/build-ios/$(PLATFORM_NAME)/_deps/ravenemu_cores-build/cores/common"
+        OTHER_SWIFT_FLAGS: "$(inherited) -Xcc -fmodule-map-file=$(SRCROOT)/../native/build-ios/$(PLATFORM_NAME)/include/module.modulemap"
+        OTHER_LDFLAGS: "$(inherited) -lravenemu_c_api -lgbc_raven_core -lgb_raven_core -lgba_raven_core -lravenemu_common -lc++"
+        FRAMEWORK_SEARCH_PATHS: "$(inherited) $(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)"
+    preBuildScripts:
+      - name: Build RavenEmu native engines
+        basedOnDependencyAnalysis: false
+        script: |
+          set -e
+          sh "$SRCROOT/../native/build-ios.sh"
+      - name: Build shared Kotlin framework
+        basedOnDependencyAnalysis: false
+        script: |
+          set -e
+          "$SRCROOT/../gradlew" -p "$SRCROOT/.." :shared:embedAndSignAppleFrameworkForXcode

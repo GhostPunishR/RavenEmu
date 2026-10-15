@@ -1,0 +1,168 @@
+name: RavenEmu Multiplateforme
+# Application autonome : toutes les commandes partent de la racine.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "androidApp/**"
+      - "shared/**"
+      - "iosApp/**"
+      - "native/**"
+      - "policy/**"
+      - ".github/workflows/**"
+      - "gradle/**"
+      - "*.gradle.kts"
+      - "gradle.properties"
+      - "gradlew"
+      - "gradlew.bat"
+      - "TERMS.md"
+      - "PRIVACY.md"
+      - "LICENSE"
+  pull_request:
+    paths:
+      - "androidApp/**"
+      - "shared/**"
+      - "iosApp/**"
+      - "native/**"
+      - "policy/**"
+      - ".github/workflows/**"
+      - "gradle/**"
+      - "*.gradle.kts"
+      - "gradle.properties"
+      - "gradlew"
+      - "gradlew.bat"
+      - "TERMS.md"
+      - "PRIVACY.md"
+      - "LICENSE"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  policy:
+    name: Règles du dépôt
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Valider le wrapper Gradle
+        uses: gradle/actions/wrapper-validation@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
+      - name: Installer Java
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      # Le wrapper valide, la distribution qu'il télécharge reste à contrôler.
+      # `distributionSha256Sum` s'en charge à chaque exécution, sur le poste des
+      # développeurs comme ici : le wrapper refuse une archive dont l'empreinte
+      # diffère. Reste à s'assurer que la valeur inscrite dans le dépôt est bien
+      # celle que Gradle publie — sans quoi on épinglerait avec conviction une
+      # archive substituée. Cette étape compare les deux.
+      - name: Contrôler l'empreinte de la distribution Gradle
+        run: |
+          properties=gradle/wrapper/gradle-wrapper.properties
+          url="$(sed -n 's/^distributionUrl=//p' "$properties" | sed 's/\\//g')"
+          attendu="$(sed -n 's/^distributionSha256Sum=//p' "$properties")"
+
+          if [[ -z "$attendu" ]]; then
+            echo "::error::distributionSha256Sum absent de $properties : la distribution Gradle n'est pas épinglée. Voir CONTRIBUTING.md."
+            exit 1
+          fi
+
+          # Empreinte publiée par Gradle à côté de l'archive. Une panne réseau ne
+          # doit pas faire échouer la construction : le wrapper vérifie déjà
+          # l'archive localement, ce contrôle-ci porte sur la déclaration.
+          officiel="$(curl -fsSL --retry 3 --max-time 30 "$url.sha256" || true)"
+          if [[ -z "$officiel" ]]; then
+            echo "::notice::Empreinte officielle indisponible ($url.sha256), comparaison ignorée."
+            exit 0
+          fi
+
+          if [[ "${attendu,,}" != "${officiel,,}" ]]; then
+            echo "::error::distributionSha256Sum ($attendu) ne correspond pas à l'empreinte publiée par Gradle ($officiel)."
+            exit 1
+          fi
+          echo "Distribution Gradle épinglée sur l'empreinte publiée par Gradle."
+
+      - name: Règles des workflows
+        run: ./gradlew :policy:test --stacktrace
+
+  native:
+    name: API native (liaison et sauvegardes)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Configurer le test de liaison C
+        run: cmake -S native -B native/build-host -DCMAKE_BUILD_TYPE=Release -DRAVENEMU_BRIDGE_TESTS=ON
+      - name: Construire le test
+        run: cmake --build native/build-host --target ravenemu_bridge_smoke --parallel 2
+      - name: Exécuter le test de liaison et de sauvegarde
+        run: ctest --test-dir native/build-host --output-on-failure
+
+  android:
+    name: Android (APK bêta)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Le wrapper versionné s'exécute avant tout le reste : il est comparé
+      # aux empreintes publiées par Gradle, comme dans le workflow Android.
+      - name: Valider le wrapper Gradle
+        uses: gradle/actions/wrapper-validation@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
+      - name: Installer Java
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: "21"
+      # Variante « beta » : l'APK Debug sans le drapeau débogable, pour que
+      # le lecteur tourne optimisé sur téléphone (voir androidApp/build.gradle.kts).
+      - name: Construire l'APK bêta
+        run: ./gradlew :androidApp:assembleBeta --stacktrace
+      - name: Tests Android
+        run: ./gradlew :androidApp:testDebugUnitTest --stacktrace
+      - name: Publier l'APK bêta
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ravenemu-android-beta
+          path: androidApp/build/outputs/apk/beta/*.apk
+          if-no-files-found: error
+          retention-days: 7
+
+  ios:
+    name: iOS (framework partagé)
+    runs-on: macos-latest
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Le wrapper versionné s'exécute avant tout le reste : il est comparé
+      # aux empreintes publiées par Gradle, comme dans le workflow Android.
+      - name: Valider le wrapper Gradle
+        uses: gradle/actions/wrapper-validation@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
+      - name: Installer Java
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Build iOS simulator framework
+        run: ./gradlew :shared:linkDebugFrameworkIosSimulatorArm64 --stacktrace
+      - name: Cross-compile native emulator SDK for iOS simulator
+        run: sh native/build-ios.sh
+      - name: Vérifier les adaptateurs Swift
+        run: |
+          xcrun --sdk iphonesimulator swiftc -parse-as-library -typecheck \
+            -target arm64-apple-ios15.0-simulator \
+            -sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)" \
+            -I native/build-ios/iphonesimulator/include \
+            -F shared/build/bin/iosSimulatorArm64/debugFramework \
+            iosApp/Sources/*.swift

@@ -1,0 +1,80 @@
+name: "Demande de fonctionnalité"
+description: "Proposer une amélioration ciblée pour le projet multiplateforme"
+title: "[Fonctionnalité] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Décrivez le besoin avant la solution. Consultez la [feuille de route](https://github.com/GhostPunishR/RavenEmu/blob/main/wiki/Feuille-de-route.md) : le lecteur iOS, les skins et certaines validations restent en cours.
+        Pour une évolution du moteur, identifiez la partie RavenCore et utilisez des références techniques publiques.
+
+  - type: dropdown
+    id: target
+    attributes:
+      label: "Cible"
+      options:
+        - "Interface ou logique communes Android/iOS"
+        - "Android"
+        - "iOS"
+        - "Moteurs RavenCore ou intégration native"
+        - "Construction ou CI"
+        - "Documentation, site ou wiki"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: "Domaine"
+      options:
+        - "Game Boy / Game Boy Color / Game Boy Advance"
+        - "Bibliothèque, import ou jaquettes"
+        - "Commandes ou skins"
+        - "Affichage ou audio"
+        - "Sauvegardes, états ou transferts"
+        - "RetroAchievements"
+        - "Architecture ou outils"
+        - "Documentation, site ou wiki"
+        - "Autre"
+    validations:
+      required: true
+
+  - type: textarea
+    id: need
+    attributes:
+      label: "Besoin"
+      description: "Quel problème utilisateur ou technique souhaitez-vous résoudre ?"
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: "Comportement proposé"
+      description: "Décrivez le résultat attendu, le périmètre et un scénario permettant de le valider."
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: "Solutions alternatives"
+      description: "Facultatif : autres approches étudiées."
+
+  - type: textarea
+    id: references
+    attributes:
+      label: "Références et compatibilité"
+      description: "Références publiques pour le matériel ou les formats ; conséquences sur les sauvegardes, réglages ou plateformes si concerné."
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: "Avant envoi"
+      options:
+        - label: "J'ai recherché une proposition similaire."
+          required: true
+        - label: "La proposition ne nécessite pas de code copié, traduit ou adapté d'un autre émulateur, ni de contenu protégé."
+          required: true
+        - label: "J'accepte le code de conduite du projet."
+          required: true

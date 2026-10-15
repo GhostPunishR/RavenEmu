@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Same launcher background as RavenEmu RavenEmu 0.8.1 (app/android). -->
+    <color name="raven_icon_background">#262835</color>
+</resources>

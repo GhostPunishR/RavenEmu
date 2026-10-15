@@ -1,0 +1,4 @@
+module RavenBridge {
+    header "bridge.h"
+    export *
+}
