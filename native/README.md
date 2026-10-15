@@ -21,9 +21,9 @@ Android (SDK/NDK nécessaires) : `./gradlew :androidApp:assembleDebug`.
 
 **Le code natif ne contient aucune ROM ni BIOS protégé.** Les appels à une même instance doivent être sérialisés. Le frontend est responsable de la sauvegarde et de la synchronisation audio.
 
-## API neutre et vérification de liaison
+## API C et vérification de liaison
 
-Les adaptateurs appellent `ravenemu_*`. `cmake/NeutralBridge.cmake` génère un header public normalisé et applique le même renommage aux définitions compilées du SDK épinglé, sans modifier les moteurs ni leurs formats de sauvegarde. JNI et Swift utilisent le même header généré ; la bibliothèque Android s'appelle `ravenemu_android`.
+Les adaptateurs appellent directement les fonctions `ravenemu_*` du header `sdk/include/ravenemu/bridge.h` de RavenCore, sans renommage. JNI l'inclut depuis le SDK épinglé ; pour Swift, CMake le copie avec `apple/module.modulemap` dans `include/` du dossier de build. La bibliothèque Android s'appelle `ravenemu_android`.
 
 Le test hôte utilise une cartouche synthétique sans contenu de jeu et vérifie création des trois systèmes, vidéo, audio et sauvegarde/rechargement d'un état :
 

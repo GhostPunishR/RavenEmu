@@ -57,7 +57,7 @@ cmake --build native/build-host --target ravenemu_bridge_smoke --parallel 2
 ctest --test-dir native/build-host --output-on-failure
 ```
 
-Les adaptateurs JNI et Swift utilisent le même header généré. Aucun code moteur n'est copié dans ce dépôt. Les appels à une même instance sont sérialisés.
+Les adaptateurs JNI et Swift utilisent le même header `ravenemu/bridge.h` de RavenCore. Aucun code moteur n'est copié dans ce dépôt. Les appels à une même instance sont sérialisés.
 
 ## Vérifications CI et appareil
 

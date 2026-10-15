@@ -29,13 +29,11 @@ if(ANDROID)
     endforeach()
 endif()
 
-# Expose neutral API names without changing the pinned RavenCore checkout.
-# Rename declarations and definitions together; the engine implementation and
-# its serialized states are unchanged. Both JNI and Swift use this same header.
-include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/NeutralBridge.cmake")
-ravenemu_neutral_bridge(ravenemu_c_api
-    "${ravenemu_cores_SOURCE_DIR}/sdk/include/ravenemu/bridge.h"
-    "${CMAKE_BINARY_DIR}/include")
+# JNI includes <ravenemu/bridge.h> straight from the pinned RavenCore SDK.
+# Swift imports the same header through a module map, which must sit next to
+# it: copy both to build/include, the folder Xcode and the CI point Swift to.
+configure_file("${ravenemu_cores_SOURCE_DIR}/sdk/include/ravenemu/bridge.h"
+               "${CMAKE_BINARY_DIR}/include/bridge.h" COPYONLY)
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/apple/module.modulemap"
                "${CMAKE_BINARY_DIR}/include/module.modulemap" COPYONLY)
 

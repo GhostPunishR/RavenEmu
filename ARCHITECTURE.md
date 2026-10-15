@@ -18,7 +18,7 @@ RavenEmu partage une interface Compose Multiplatform entre Android et iOS. Le pr
 
 La [configuration CMake](native/CMakeLists.txt) épingle RavenCore au commit `bad9ade53076c3c44768cfe2599eeb55c996c434` : moteurs 0.1.2 et API C aux noms neutres `ravenemu_*`. Mettre à jour le dépôt RavenCore ne modifie pas automatiquement cette révision.
 
-Android utilise `NativeCore.kt` et `native/android/bridge_jni.cpp`. Swift utilise `RavenNativeCore.swift` et `native/apple/module.modulemap`. Les deux passent par la même API C : ROM, pixels ARGB8888, audio PCM16, boutons, mémoire et sauvegardes. Les déclarations du header et les définitions compilées restent cohérentes via la configuration native. Libretro n'est pas l'interface d'émulation de l'application ; son catalogue de jaquettes reste un service facultatif.
+Android utilise `NativeCore.kt` et `native/android/bridge_jni.cpp`. Swift utilise `RavenNativeCore.swift` et `native/apple/module.modulemap`. Les deux passent par la même API C : ROM, pixels ARGB8888, audio PCM16, boutons, mémoire et sauvegardes. Le header est celui du SDK RavenCore épinglé, utilisé tel quel. Libretro n'est pas l'interface d'émulation de l'application ; son catalogue de jaquettes reste un service facultatif.
 
 RetroAchievements utilise le SDK officiel rcheevos, également épinglé par SHA, et le pont maintenu dans `native/android/`.
 
