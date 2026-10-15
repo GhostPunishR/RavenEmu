@@ -4,7 +4,7 @@
 
 Émulateur open source **Game Boy, Game Boy Color et Game Boy Advance**, propulsé par les moteurs [RavenCore](https://github.com/GhostPunishR/RavenCore).
 
-**v0.1.0 — bêta · Android 8.0 et plus.** La version iOS est en développement ; aucune application iOS n’est encore distribuée.
+**v0.1.0 - bêta · Android 8.0 et plus.** La version iOS est en développement ; aucune application iOS n’est encore distribuée.
 
 [Documentation](wiki/Home.md) · [Changelog](CHANGELOG.md) · [Signaler un problème](https://github.com/GhostPunishR/RavenEmu/issues)
 
