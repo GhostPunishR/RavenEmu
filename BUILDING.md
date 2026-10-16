@@ -47,7 +47,7 @@ Le SDK Apple utilise `PLATFORM_NAME` (`iphonesimulator` par défaut, ou `iphoneo
 
 ## Liaison RavenCore
 
-La configuration [native/CMakeLists.txt](native/CMakeLists.txt) récupère RavenCore au commit `5854e2c63155945dd9c78347ecdfd5b3a8a99795` : version 0.2.0, API C `ravenemu_*`. Les versions des états restent GB/GBC 11 et GBA 12, ce dernier relisant le format 11. Le SDK rcheevos est épinglé séparément au commit `1433173220a7eaede6a9ed7a18e94117be1821e0`.
+La configuration [native/CMakeLists.txt](native/CMakeLists.txt) récupère RavenCore au commit `bb9e610bdf42262df192e1ca974e13c57d43664c` : version 0.3.1, API C `ravenemu_*`. Les états sont au format GB/GBC 11 et GBA 13 ; le format GBA 13 relit les formats 12 et 11. Le SDK rcheevos est épinglé séparément au commit `1433173220a7eaede6a9ed7a18e94117be1821e0`.
 
 Le test hôte vérifie la liaison, la création des trois systèmes, une frame et de l'audio synthétiques ainsi que l'enregistrement/rechargement d'un état :
 

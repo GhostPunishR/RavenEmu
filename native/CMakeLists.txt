@@ -2,17 +2,19 @@ cmake_minimum_required(VERSION 3.22.1)
 project(RavenEmuNative LANGUAGES C CXX)
 
 # Lock the emulator engines AND public C interface to a reviewed source commit.
-# RavenCore 0.2.0 (tag v0.2.0): the 0.1.2 engines with the C API named
-# ravenemu_* (no generation prefix). C API version 0 and save state formats
-# unchanged (GB/GBC 11, GBA 12, which still loads format 11). Keep the
-# reviewed immutable commit SHA, not the movable tag.
+# RavenCore 0.3.1 (tag v0.3.1): GBA cartridge sensors (solar, gyro, tilt),
+# an empty SRAM bus on EEPROM cartridges, which the Classic NES Series games
+# check, and semi-transparent OBJs blended inside windows without effects
+# (Pokemon Emerald's fog). C API version 0, only extended. Save states GB/GBC 11 and
+# GBA 13, which still loads formats 12 and 11. Keep the reviewed immutable
+# commit SHA, not the movable tag.
 include(FetchContent)
 set(RAVENEMU_BUILD_LIBRETRO OFF CACHE BOOL "" FORCE)
 set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
 set(RAVENEMU_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(ravenemu_cores
     GIT_REPOSITORY https://github.com/GhostPunishR/RavenCore.git
-    GIT_TAG 5854e2c63155945dd9c78347ecdfd5b3a8a99795
+    GIT_TAG bb9e610bdf42262df192e1ca974e13c57d43664c
     GIT_SHALLOW FALSE
 )
 FetchContent_MakeAvailable(ravenemu_cores)
