@@ -2,22 +2,22 @@ cmake_minimum_required(VERSION 3.22.1)
 project(RavenEmuNative LANGUAGES C CXX)
 
 # Lock the emulator engines AND public C interface to a reviewed source commit.
-# RavenCore 0.3.1 (tag v0.3.1): GBA cartridge sensors (solar, gyro, tilt),
+# RavenCore 0.4.0 (tag v0.4.0): GBA cartridge sensors (solar, gyro, tilt),
 # an empty SRAM bus on EEPROM cartridges, which the Classic NES Series games
 # check, and semi-transparent OBJs blended inside windows without effects
-# (Pokemon Emerald's fog). C API version 0, only extended. Save states GB/GBC 11 and
-# GBA 13, which still loads formats 12 and 11. Keep the reviewed immutable
-# commit SHA, not the movable tag.
+# (Pokemon Emerald's fog). 0.4.0 drops the old RavenEmu Cores names; the
+# targets used here keep theirs. C API version 0, only extended. Save states
+# GB/GBC 11 and GBA 13, which still loads formats 12 and 11. Keep the
+# reviewed immutable commit SHA, not the movable tag.
 include(FetchContent)
 set(RAVENEMU_BUILD_LIBRETRO OFF CACHE BOOL "" FORCE)
 set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
-set(RAVENEMU_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-FetchContent_Declare(ravenemu_cores
+FetchContent_Declare(ravencore
     GIT_REPOSITORY https://github.com/GhostPunishR/RavenCore.git
-    GIT_TAG bb9e610bdf42262df192e1ca974e13c57d43664c
+    GIT_TAG 83874b3aaa0c8f212bf8c3284bf7550b4f8b2ec7
     GIT_SHALLOW FALSE
 )
-FetchContent_MakeAvailable(ravenemu_cores)
+FetchContent_MakeAvailable(ravencore)
 
 # The installed preview is assembled with Gradle's debug variant. Without
 # overriding Debug's -O0, the emulated CPU/PPU loops run unoptimized even on
@@ -33,7 +33,7 @@ endif()
 # JNI includes <ravenemu/bridge.h> straight from the pinned RavenCore SDK.
 # Swift imports the same header through a module map, which must sit next to
 # it: copy both to build/include, the folder Xcode and the CI point Swift to.
-configure_file("${ravenemu_cores_SOURCE_DIR}/sdk/include/ravenemu/bridge.h"
+configure_file("${ravencore_SOURCE_DIR}/sdk/include/ravenemu/bridge.h"
                "${CMAKE_BINARY_DIR}/include/bridge.h" COPYONLY)
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/apple/module.modulemap"
                "${CMAKE_BINARY_DIR}/include/module.modulemap" COPYONLY)

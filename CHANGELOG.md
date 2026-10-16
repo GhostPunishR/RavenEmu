@@ -9,7 +9,8 @@
 
 ### Modifié
 
-- RavenCore épinglé à la version 0.3.1, commit `bb9e610bdf42262df192e1ca974e13c57d43664c`. L'API C reste en version 0 : depuis la 0.2.0, elle gagne seulement les fonctions des capteurs de cartouche, que l'application n'utilise pas encore. Les états GBA passent au format 13 et relisent les formats 12 et 11 ; un état GBA enregistré par cette version ne se recharge plus dans une version antérieure. Les états GB/GBC restent au format 11.
+- RavenCore épinglé à la version 0.4.0, commit `83874b3aaa0c8f212bf8c3284bf7550b4f8b2ec7`. L'API C reste en version 0 : depuis la 0.2.0, elle gagne seulement les fonctions des capteurs de cartouche, que l'application n'utilise pas encore. Les états GBA passent au format 13 et relisent les formats 12 et 11 ; un état GBA enregistré par cette version ne se recharge plus dans une version antérieure. Les états GB/GBC restent au format 11.
+- Pont natif : RavenCore est déclaré à FetchContent sous le nom `ravencore`, et non plus `ravenemu_cores`, l'ancien nom de RavenCore. Ses fichiers de compilation passent donc de `_deps/ravenemu_cores-*` à `_deps/ravencore-*`, et le projet iOS cherche ses bibliothèques dans `_deps/ravencore-build`. L'option `RAVENEMU_BUILD_TESTS`, retirée de RavenCore 0.4.0, n'est plus réglée.
 - Pont natif : `native/cmake/NeutralBridge.cmake` est retiré. RavenCore expose désormais directement les noms `ravenemu_*` : JNI et Swift utilisent son header tel quel, et le dossier `include/` lu par Xcode et la CI ne change pas.
 - Code : `MainActivity.kt` et `RavenEmuApp.kt` sont découpés en fichiers par responsabilité (lecteur, emplacements d'état, transferts de sauvegardes, jaquettes, RetroAchievements, composants de la bibliothèque), sans changement de comportement, de textes ni de formats.
 
