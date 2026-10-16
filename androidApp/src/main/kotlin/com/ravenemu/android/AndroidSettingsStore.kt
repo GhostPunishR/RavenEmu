@@ -22,6 +22,9 @@ internal class AndroidSettingsStore(context: Context) {
         lcdCorrectionGbc = prefs.getBoolean("lcd_correction_gbc", false),
         lcdCorrectionGba = prefs.getBoolean("lcd_correction_gba", false),
         cartridgeRumble = prefs.getBoolean("cartridge_rumble", true),
+        cartridgeSensors = prefs.getBoolean("cartridge_sensors", true),
+        solarLightAuto = prefs.getBoolean("solar_light_auto", true),
+        solarLightLevel = prefs.getInt("solar_light_level", 50),
         retroHardcore = prefs.getBoolean("retro_hardcore", false),
     ).normalized()
 
@@ -42,6 +45,9 @@ internal class AndroidSettingsStore(context: Context) {
             .putBoolean("lcd_correction_gbc", safe.lcdCorrectionGbc)
             .putBoolean("lcd_correction_gba", safe.lcdCorrectionGba)
             .putBoolean("cartridge_rumble", safe.cartridgeRumble)
+            .putBoolean("cartridge_sensors", safe.cartridgeSensors)
+            .putBoolean("solar_light_auto", safe.solarLightAuto)
+            .putInt("solar_light_level", safe.solarLightLevel)
             .putBoolean("retro_hardcore", safe.retroHardcore)
             .apply()
     }

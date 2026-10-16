@@ -38,8 +38,9 @@ internal class GbPlayback(
         private set
     @Volatile var lastAudioReport: String = "Aucune session audio enregistrée.\n"
     private val cartridgeRumble by lazy { CartridgeRumble(context) }
+    private val cartridgeSensors by lazy { CartridgeSensors(context) }
 
-    /** Plays [currentGame] until cancelled, then releases its audio and rumble. */
+    /** Plays [currentGame] until cancelled, then releases its audio, rumble and sensors. */
     suspend fun run(
         currentGame: LoadedGameInfo,
         playbackSettings: Settings,
@@ -58,8 +59,13 @@ internal class GbPlayback(
         val samples = ShortArray(4096)
         val images = GbFrameBitmaps(currentGame.width, currentGame.height)
         var output: AndroidGbAudioOutput? = null
+        // Only a cartridge with sensors listens to the phone's, and only
+        // while it plays: the game menu and the background stop this run.
+        val sensorKinds = gameSession.cartridgeSensors()
+        val sensors = if (sensorKinds != 0) cartridgeSensors else null
 
         try {
+            sensors?.start(sensorKinds, playbackSettings)
             try {
                 val rate = gameSession.audioRateHz()
                     ?: throw IllegalStateException("Aucune piste audio GB active.")
@@ -90,7 +96,7 @@ internal class GbPlayback(
                         val renderVideo = pacer.shouldRender(System.nanoTime())
                         val nativeStart = System.nanoTime()
                         val sampleCount =
-                            gameSession.nextFrameWithAudioInto(pixels, samples) ?: break
+                            gameSession.nextFrameWithAudioInto(pixels, samples, sensors) ?: break
                         val nativeElapsed = System.nanoTime() - nativeStart
                         // One non-blocking audio submission per frame.
                         val sink = output
@@ -160,6 +166,7 @@ internal class GbPlayback(
                 }
             }
         } finally {
+            sensors?.stop()
             cartridgeRumble.stop()
             if (activeAudio === output) activeAudio = null
             output?.let { lastAudioReport = it.exportReport() }

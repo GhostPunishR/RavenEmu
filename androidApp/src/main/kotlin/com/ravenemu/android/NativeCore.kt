@@ -87,6 +87,31 @@ class NativeCore(system: Int) : AutoCloseable {
      */
     fun rumbleActive(): Boolean = nativeRumbleActive(requireOpen())
 
+    /**
+     * Sensors of the loaded cartridge, as [SENSOR_SOLAR], [SENSOR_ROTATION]
+     * and [SENSOR_TILT] flags (Boktai, WarioWare: Twisted!, Yoshi
+     * Topsy-Turvy, Koro Koro Puzzle and GB MBC7 cartridges).
+     */
+    fun sensors(): Int = nativeSensors(requireOpen())
+
+    /** Light on the solar sensor: 0 (darkness) to 255 (full sun). */
+    fun setSolarLight(level: Int) {
+        check(nativeSetSolarLight(requireOpen(), level)) { nativeLastError() }
+    }
+
+    /** Rotation around the screen's axis: -32768..32767, positive clockwise. */
+    fun setRotation(speed: Int) {
+        check(nativeSetRotation(requireOpen(), speed)) { nativeLastError() }
+    }
+
+    /**
+     * Tilt: -32768..32767 per axis for -1 g..1 g; x > 0 when the right side
+     * goes down, y > 0 when the top edge moves away from the player.
+     */
+    fun setTilt(x: Int, y: Int) {
+        check(nativeSetTilt(requireOpen(), x, y)) { nativeLastError() }
+    }
+
     /** Only copy when the core reports changed battery-backed storage. */
     fun batteryDirty(): Boolean = nativeBatteryDirty(requireOpen())
 
@@ -133,6 +158,10 @@ class NativeCore(system: Int) : AutoCloseable {
     private external fun nativeSaveState(pointer: Long, output: ByteArray): Boolean
     private external fun nativeLoadState(pointer: Long, input: ByteArray): Boolean
     private external fun nativeRumbleActive(pointer: Long): Boolean
+    private external fun nativeSensors(pointer: Long): Int
+    private external fun nativeSetSolarLight(pointer: Long, level: Int): Boolean
+    private external fun nativeSetRotation(pointer: Long, speed: Int): Boolean
+    private external fun nativeSetTilt(pointer: Long, x: Int, y: Int): Boolean
     private external fun nativeBatteryDirty(pointer: Long): Boolean
     private external fun nativeCopyBatteryGeneration(
         pointer: Long, output: ByteArray, generation: LongArray,
@@ -146,6 +175,11 @@ class NativeCore(system: Int) : AutoCloseable {
         const val GB = 0
         const val GBC = 1
         const val GBA = 2
+
+        // Same values as enum ravenemu_sensor in RavenCore's bridge.h.
+        const val SENSOR_SOLAR = 1
+        const val SENSOR_ROTATION = 2
+        const val SENSOR_TILT = 4
 
         fun systemFor(platform: GamePlatform): Int = when (platform) {
             GamePlatform.GB -> GB

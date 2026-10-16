@@ -19,6 +19,9 @@ class SettingsTest {
         assertEquals(46, defaults.controlsGap)
         assertEquals("classic", defaults.controlsStyle)
         assertTrue(defaults.cartridgeRumble, "La vibration de cartouche est active par défaut")
+        assertTrue(defaults.cartridgeSensors, "Les capteurs de cartouche sont actifs par défaut")
+        assertTrue(defaults.solarLightAuto)
+        assertEquals(50, defaults.solarLightLevel)
 
         val frame = intArrayOf(0xff102030.toInt(), 0xff8899aa.toInt())
         val reference = frame.copyOf()

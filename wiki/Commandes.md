@@ -16,12 +16,31 @@ La croix prend en charge le glissement et les diagonales. Les boutons sont relâ
 Ouvrez **Paramètres → Interface** :
 
 - **Retour haptique** : vibration à la pression ;
+- **Vibration de la cartouche** : le téléphone vibre avec les jeux équipés d'un moteur ;
 - **Taille des commandes** : de 80 à 115 % ;
 - **Espacement vertical** : de 20 à 80 dp ;
 - **Style des boutons** : Classique ou Contraste élevé ;
 - **Réinitialiser les commandes** : retour aux réglages par défaut.
 
-Les réglages sont conservés sur Android. Le déplacement libre des boutons et les profils avancés ne sont pas proposés. Le menu **⋮** du lecteur donne accès aux états, au diagnostic audio et à RetroAchievements.
+Les réglages sont conservés sur Android.
+
+## Capteurs de la cartouche
+
+Certaines cartouches contiennent un capteur. Le téléphone le remplace par le sien pendant la partie :
+
+| Jeux | Capteur de la cartouche | Capteur du téléphone |
+|---|---|---|
+| WarioWare: Twisted! | Gyroscope | Gyroscope : tournez le téléphone dans le plan de l'écran |
+| Yoshi Topsy-Turvy, Koro Koro Puzzle, cartouches Game Boy MBC7 (Kirby Tilt 'n' Tumble) | Inclinaison | Accéléromètre : penchez le téléphone ; les axes suivent l'orientation de l'écran |
+| Boktai 1 à 3 | Capteur solaire | Capteur de lumière, ou niveau de soleil manuel |
+
+Dans **Paramètres → Interface → Capteurs de la cartouche** :
+
+- **Capteurs du téléphone** : active ou coupe les trois capteurs ;
+- **Soleil automatique (Boktai)** : le capteur de lumière règle le soleil. Comme sur la vraie cartouche, il faut la lumière du jour : l'éclairage d'une pièce ne donne rien ;
+- **Soleil (Boktai)** : niveau manuel de 0 à 100 %, utilisé quand le soleil automatique est coupé ou que le téléphone n'a pas de capteur de lumière.
+
+Comme sur la console, l'inclinaison a pour repère la gravité : posé à plat, le téléphone est au repos. Il n'y a pas encore de recentrage sur la position de jeu. Le déplacement libre des boutons et les profils avancés ne sont pas proposés. Le menu **⋮** du lecteur donne accès aux états, au diagnostic audio et à RetroAchievements.
 
 ## Manettes et skins
 

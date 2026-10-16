@@ -119,7 +119,7 @@ fun SettingsScreen(
                     CategoryRow("Général", "Pause, jaquettes et diagnostics") { page = Page.GENERAL }
                     CategoryRow("Audio", "Son du jeu et volume") { page = Page.AUDIO }
                     CategoryRow("Vidéo", "Couleurs, correction LCD, luminosité et contraste") { page = Page.VIDEO }
-                    CategoryRow("Interface", "Vibrations, commandes, style et Skin Delta") { page = Page.INTERFACE }
+                    CategoryRow("Interface", "Vibrations, capteurs, commandes, style et Skin Delta") { page = Page.INTERFACE }
                     CategoryRow("À propos", "Version, auteur, confidentialité et licences") {
                         page = Page.ABOUT
                     }
@@ -273,6 +273,24 @@ fun SettingsScreen(
                     }, enabled = onSettingsChange != null) {
                         Text("Réinitialiser les commandes", color = Accent)
                     }
+                    GroupTitle("Capteurs de la cartouche")
+                    SettingSwitch(
+                        "Capteurs du téléphone",
+                        "Le gyroscope, l'inclinaison et la lumière du téléphone remplacent ceux de la cartouche : WarioWare: Twisted!, Yoshi Topsy-Turvy, Kirby Tilt 'n' Tumble, Boktai.",
+                        settings.cartridgeSensors,
+                        onSettingsChange != null,
+                    ) { update(settings.copy(cartridgeSensors = it)) }
+                    SettingSwitch(
+                        "Soleil automatique (Boktai)",
+                        "Le capteur de lumière du téléphone règle le soleil : il faut la lumière du jour, celle d'une pièce ne suffit pas. Sans ce capteur, le niveau ci-dessous s'applique.",
+                        settings.solarLightAuto,
+                        onSettingsChange != null && settings.cartridgeSensors,
+                    ) { update(settings.copy(solarLightAuto = it)) }
+                    SettingSlider(
+                        "Soleil (Boktai)", "${settings.solarLightLevel} %",
+                        settings.solarLightLevel, 0..100,
+                        onSettingsChange != null && !(settings.cartridgeSensors && settings.solarLightAuto),
+                    ) { update(settings.copy(solarLightLevel = (it + 5) / 10 * 10)) }
                     GroupTitle("Skin Delta")
                     Text(
                         "RavenEmu lit les skins au format .deltaskin, en portrait. Ce projet n'est ni affilié à Delta, ni approuvé par ses auteurs : aucun skin n'est fourni, vous importez les vôtres.",

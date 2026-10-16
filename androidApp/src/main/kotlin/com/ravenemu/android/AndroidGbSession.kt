@@ -205,12 +205,16 @@ class AndroidGbSession(private val resolver: ContentResolver, filesDir: File) : 
     /**
      * Advance exactly one frame, then drain interleaved stereo PCM16 from the
      * same native handle under one lock. No second emulation clock is started.
+     * The latest [sensors] readings reach the core just before the frame.
      * Returns null if no ROM is active.
      */
-    fun nextFrameWithAudioInto(pixels: IntArray, audio: ShortArray): Int? =
+    internal fun nextFrameWithAudioInto(
+        pixels: IntArray, audio: ShortArray, sensors: CartridgeSensors? = null,
+    ): Int? =
         synchronized(lock) {
             check(!closed) { "La session a été fermée." }
             val core = active ?: return@synchronized null
+            sensors?.applyTo(core)
             core.frameInto(pixels)
             rumbleActive = core.rumbleActive()
             core.readAudioInto(audio)
@@ -219,6 +223,11 @@ class AndroidGbSession(private val resolver: ContentResolver, filesDir: File) : 
     /** The cartridge motor's state after the last frame (see NativeCore). */
     @Volatile var rumbleActive: Boolean = false
         private set
+
+    /** Sensors of the loaded cartridge (NativeCore.SENSOR_* flags), 0 without a game. */
+    fun cartridgeSensors(): Int = synchronized(lock) {
+        if (closed) 0 else active?.sensors() ?: 0
+    }
 
     fun refreshRateHz(): Double? = synchronized(lock) {
         if (closed) null else active?.fps

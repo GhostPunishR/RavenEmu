@@ -13,7 +13,7 @@
 - **Bibliothèque** : import de jeux ou de dossiers, recherche, vues grille/liste et jaquettes.
 - **Commandes** : boutons tactiles, manettes Android et skins `.deltaskin` en portrait.
 - **Sauvegardes** : sauvegarde de cartouche, quatre emplacements d’état et transfert ZIP ou `.sav`.
-- **Réglages** : image, son, disposition des commandes et vibration.
+- **Réglages** : image, son, disposition des commandes, vibration et capteurs de cartouche (gyroscope, inclinaison, lumière).
 - **RetroAchievements** : intégration Softcore avec connexion facultative. Hardcore désactivé.
 
 La bêta reste en cours de validation, notamment pour les performances GBC/GBA et RetroAchievements sur téléphone.

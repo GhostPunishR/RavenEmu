@@ -36,6 +36,15 @@ data class Settings(
     /** Rumble cartridges drive the phone's vibrator. */
     val cartridgeRumble: Boolean = true,
     /**
+     * The phone's gyroscope, gravity and light sensors stand in for the
+     * cartridge's (WarioWare: Twisted!, tilt cartridges, Boktai).
+     */
+    val cartridgeSensors: Boolean = true,
+    /** Boktai's sun follows the phone's light sensor, when it has one. */
+    val solarLightAuto: Boolean = true,
+    /** Boktai's sun otherwise, in percent of full sunlight. */
+    val solarLightLevel: Int = 50,
+    /**
      * RetroAchievements Hardcore, as chosen by the player. It only takes
      * effect once RetroAchievements has approved the app (Android:
      * HardcoreAvailability.APPROVED); until then the switch is not shown.
@@ -50,6 +59,7 @@ data class Settings(
         controlsScale = controlsScale.coerceIn(80, 115),
         controlsGap = controlsGap.coerceIn(20, 80),
         controlsStyle = controlsStyle.takeIf { it in listOf("classic", "contrast") } ?: "classic",
+        solarLightLevel = solarLightLevel.coerceIn(0, 100),
     )
 }
 
