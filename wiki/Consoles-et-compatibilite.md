@@ -36,7 +36,7 @@ Une ROM acceptée et un build réussi ne garantissent pas une partie jouable ou 
 
 ## Fonctions à ne pas confondre
 
-- Aucun parcours utilisateur câble link, infrarouge ou multijoueur n'est raccordé ici.
+- Le câble link relie deux jeux du même téléphone ([Jouer à deux](https://github.com/GhostPunishR/RavenEmu/blob/main/wiki/Jouer-a-deux.md)). Le jeu entre deux téléphones, l'infrarouge et l'adaptateur sans fil ne sont pas raccordés.
 - Les skins `.deltaskin` en portrait sont intégrés sur Android et restent à valider sur appareil ; le déplacement libre des commandes n’est pas proposé.
 - Le lecteur iOS n'est pas encore jouable.
 - [RetroAchievements](https://github.com/GhostPunishR/RavenEmu/blob/main/wiki/RetroAchievements.md) fonctionne en Softcore dans l'intégration, avec validation réelle des déblocages encore nécessaire. Hardcore est désactivé.

@@ -2,20 +2,20 @@ cmake_minimum_required(VERSION 3.22.1)
 project(RavenEmuNative LANGUAGES C CXX)
 
 # Lock the emulator engines AND public C interface to a reviewed source commit.
-# RavenCore 0.4.1 (tag v0.4.1): GBA DMA restarts only when enabled (GTA
-# Advance), a GBA game's clock setting kept in its battery save (mGBA's
-# 16-byte block) and across reset, pending battery writes kept across reset
-# (GB/GBC and GBA), and a faster GBA bus. Since 0.4.0: GBA cartridge sensors,
-# an empty SRAM bus on EEPROM cartridges and Pokemon Emerald's fog. C API
-# version 0, only extended. Save states GB/GBC 11 and GBA 13, which still
-# loads formats 12 and 11. Keep the reviewed immutable commit SHA, not the
-# movable tag.
+# RavenCore 0.5.0 (tag v0.5.0): the GBA cartridge prefetch buffer and
+# cycle-exact CPU timing, and the link cable (ravenemu_link_*: two GB/GBC or
+# two to four GBA cores of one process). Since 0.4.1: GBA DMA restarts only
+# when enabled (GTA Advance), a GBA game's clock setting kept in its battery
+# save and across reset, pending battery writes kept across reset. C API
+# version 0, only extended. Save states GB/GBC 11 and GBA 14, which still
+# loads formats 13, 12 and 11. Keep the reviewed immutable commit SHA, not
+# the movable tag.
 include(FetchContent)
 set(RAVENEMU_BUILD_LIBRETRO OFF CACHE BOOL "" FORCE)
 set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(ravencore
     GIT_REPOSITORY https://github.com/GhostPunishR/RavenCore.git
-    GIT_TAG cfe6ec4d9ec4c591e1a3c9c706df612ec27b2f1e
+    GIT_TAG 41fc01a376367394146bf7e13cf38c80a4287695
     GIT_SHALLOW FALSE
 )
 FetchContent_MakeAvailable(ravencore)

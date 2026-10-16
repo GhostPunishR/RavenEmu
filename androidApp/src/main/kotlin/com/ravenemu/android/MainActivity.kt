@@ -45,6 +45,10 @@ import kotlinx.coroutines.withContext
 class MainActivity : ComponentActivity() {
     private lateinit var gameSession: AndroidGbSession
     private lateinit var playback: GbPlayback
+    // Two games side by side, joined by a virtual link cable.
+    private lateinit var linkSession: AndroidLinkSession
+    private lateinit var linkPlayback: LinkPlayback
+    private var linkInputEnabled = false
     private var retroController: AchievementsController? = null
     private var foreground by mutableStateOf(false)
     // Physical controller. Its events are taken only while the player accepts
@@ -62,7 +66,7 @@ class MainActivity : ComponentActivity() {
         }
         if (gamepadInputEnabled && foreground && gamepad.handles(event.keyCode)) {
             gamepad.key(event.keyCode, event.action, event.repeatCount)?.let { (button, pressed) ->
-                gameSession.setButton(button, pressed)
+                setButton(button, pressed)
             }
             gamepadInUse = true
             return true
@@ -81,11 +85,17 @@ class MainActivity : ComponentActivity() {
                 event.getAxisValue(MotionEvent.AXIS_X),
                 event.getAxisValue(MotionEvent.AXIS_Y),
             )
-            for ((button, pressed) in changes) gameSession.setButton(button, pressed)
+            for ((button, pressed) in changes) setButton(button, pressed)
             if (changes.isNotEmpty()) gamepadInUse = true
             return true
         }
         return super.dispatchGenericMotionEvent(event)
+    }
+
+    // A physical controller drives the linked game in focus, or the single game.
+    private fun setButton(button: GbButton, pressed: Boolean) {
+        if (linkInputEnabled) linkSession.setButton(button, pressed)
+        else gameSession.setButton(button, pressed)
     }
 
     override fun onResume() {
@@ -96,12 +106,15 @@ class MainActivity : ComponentActivity() {
     override fun onPause() {
         foreground = false
         playback.activeAudio?.stopNow()
+        linkPlayback.activeAudio?.stopNow()
         gameSession.releaseAllButtons()
+        linkSession.releaseAllButtons()
         gamepad.reset()
         // A lifecycle stop can terminate the process soon after this callback;
         // commit changed SRAM before returning rather than relying on a job.
         try {
             gameSession.saveBatteryIfDirty()
+            linkSession.saveBatteriesIfDirty()
         } catch (error: Exception) {
             Log.e("RavenEmuSaves", "Cannot save game on pause", error)
             Toast.makeText(this, "Échec de la sauvegarde du jeu", Toast.LENGTH_LONG).show()
@@ -117,6 +130,8 @@ class MainActivity : ComponentActivity() {
         )
         gameSession = AndroidGbSession(contentResolver, filesDir)
         playback = GbPlayback(applicationContext, gameSession)
+        linkSession = AndroidLinkSession(filesDir)
+        linkPlayback = LinkPlayback(applicationContext, linkSession)
 
         setContent {
             val settingsStore = remember { AndroidSettingsStore(applicationContext) }
@@ -172,6 +187,10 @@ class MainActivity : ComponentActivity() {
                 )
             }
             var videoEnabled by remember { mutableStateOf(false) }
+            // Linked pair: both games loaded, then playing on the link screen.
+            var linkedGames by remember { mutableStateOf(emptyList<LoadedGameInfo>()) }
+            var linkEnabled by remember { mutableStateOf(false) }
+            var linkFocus by remember { mutableStateOf(0) }
             val slots = remember { GbStateSlotsUi(applicationContext, gameSession, playback, scope) }
             var pausedForGameMenu by remember { mutableStateOf(false) }
             // Controller mode: landscape and full screen while a game runs.
@@ -195,9 +214,10 @@ class MainActivity : ComponentActivity() {
             }
             // The controller reaches the game only while it runs on screen.
             SideEffect {
-                val accepts = videoEnabled && !pausedForGameMenu
+                val accepts = (videoEnabled && !pausedForGameMenu) || linkEnabled
                 if (!accepts && gamepadInputEnabled) gamepad.reset()
                 gamepadInputEnabled = accepts
+                linkInputEnabled = linkEnabled
             }
             val retroUi = remember {
                 RetroAchievementsUi(applicationContext, gameSession, scope)
@@ -248,6 +268,16 @@ class MainActivity : ComponentActivity() {
                 if (!foreground || slots.restoringState || pausedForGameMenu) return@LaunchedEffect
                 val currentGame = loadedGame ?: return@LaunchedEffect
                 playback.run(currentGame, userSettings, retro, scope)
+            }
+
+            LaunchedEffect(linkEnabled, linkedGames, foreground) {
+                if (!linkEnabled || linkedGames.size != 2) {
+                    linkPlayback.clear()
+                    return@LaunchedEffect
+                }
+                // In the background, the last pictures stay and the clock stops.
+                if (!foreground) return@LaunchedEffect
+                linkPlayback.run(linkedGames, userSettings, scope)
             }
 
             // OpenDocumentTree grants temporary read access to just the
@@ -346,6 +376,8 @@ class MainActivity : ComponentActivity() {
                     scope.launch {
                         try {
                             val (info, stored, rom) = withContext(Dispatchers.IO) {
+                                // A pair just left behind writes its saves first.
+                                linkSession.unload()
                                 val (name, bytes) = romLibrary.readSelected(uri)
                                 // Validate with native RavenGB before indexing the cartridge.
                                 val info = gameSession.loadBytes(name, bytes)
@@ -472,6 +504,8 @@ class MainActivity : ComponentActivity() {
                                     val entry = libraryGames.firstOrNull { it.id == id }
                                         ?: error("Ce jeu n'est plus dans la bibliothèque.")
                                     val (result, rom) = withContext(Dispatchers.IO) {
+                                        // A pair just left behind writes its saves first.
+                                        linkSession.unload()
                                         val rom = romLibrary.readRom(id)
                                         gameSession.loadBytes(entry.title, rom) to rom
                                     }
@@ -494,6 +528,64 @@ class MainActivity : ComponentActivity() {
                 },
                 importBusy = loading,
                 importError = importError,
+                onLaunchLinkedGames = { firstId, secondId, onReady ->
+                    if (!loading && !videoEnabled && !linkEnabled) {
+                        loading = true
+                        importError = null
+                        scope.launch {
+                            try {
+                                val ids = listOf(firstId, secondId)
+                                val entries = ids.map { id ->
+                                    libraryGames.firstOrNull { it.id == id }
+                                        ?: error("Ce jeu n'est plus dans la bibliothèque.")
+                                }
+                                val infos = withContext(Dispatchers.IO) {
+                                    val roms = entries.map { it.title to romLibrary.readRom(it.id) }
+                                    // A game held by the single player writes its save and
+                                    // leaves memory: only one copy of a save may run at once.
+                                    for (id in ids) gameSession.releaseForSaveImport(id)
+                                    linkSession.load(roms)
+                                }
+                                if (activeGameId in ids) {
+                                    activeGameId = null
+                                    loadedGame = null
+                                }
+                                linkedGames = infos
+                                linkFocus = 0
+                                onReady()
+                            } catch (error: Exception) {
+                                Log.e("RavenEmuLink", "Cannot load linked games", error)
+                                importError = error.message ?: "Impossible de relier ces jeux."
+                            } finally {
+                                loading = false
+                            }
+                        }
+                    }
+                },
+                onStartLinked = { linkEnabled = true },
+                onStopLinked = {
+                    linkPlayback.activeAudio?.stopNow()
+                    linkSession.releaseAllButtons()
+                    linkEnabled = false
+                    linkedGames = emptyList()
+                    linkPlayback.clear()
+                    scope.launch(Dispatchers.IO) {
+                        try {
+                            linkSession.unload()
+                        } catch (error: Exception) {
+                            Log.e("RavenEmuSaves", "Battery save on link exit failed", error)
+                        }
+                    }
+                },
+                linkedGames = linkedGames,
+                linkFrames = listOf(linkPlayback.firstFrame, linkPlayback.secondFrame),
+                linkFocus = linkFocus,
+                onLinkFocus = { index ->
+                    linkSession.setFocus(index)
+                    linkFocus = index
+                },
+                linkError = linkPlayback.error,
+                linkMetrics = linkPlayback.metrics,
                 onStartVideo = { videoEnabled = true },
                 onStopVideo = {
                     playback.activeAudio?.stopNow()
@@ -560,7 +652,9 @@ class MainActivity : ComponentActivity() {
                 // Touching the screen brings the touch controls back.
                 onScreenTouch = { gamepadInUse = false },
                 onButtonChange = { button: GbButton, pressed: Boolean ->
-                    if (videoEnabled && foreground && !pausedForGameMenu) {
+                    if (linkEnabled && foreground) {
+                        linkSession.setButton(button, pressed)
+                    } else if (videoEnabled && foreground && !pausedForGameMenu) {
                         gameSession.setButton(button, pressed)
                     }
                 },
@@ -601,8 +695,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         playback.activeAudio?.stopNow()
+        linkPlayback.activeAudio?.stopNow()
         retroController?.close()
         gameSession.close()
+        linkSession.close()
         super.onDestroy()
     }
 }

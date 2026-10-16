@@ -29,5 +29,21 @@ int main() {
     if (state.empty() || !ravenemu_save_state(handle.get(), state.data(), state.size()) ||
         !ravenemu_run_frame(handle.get(), frame.data(), frame.size()) ||
         !ravenemu_load_state(handle.get(), state.data(), state.size())) return 7;
-    std::cout << "Normalized C API: create GB/GBC/GBA, frame, audio and state round-trip passed\n";
+    // Two games side by side: the link cable advances both handles, and a
+    // linked handle refuses to run alone.
+    Handle other(ravenemu_create(RAVENEMU_GBC), ravenemu_destroy);
+    if (!other || !ravenemu_load(other.get(), rom.data(), rom.size(), nullptr, 0)) return 8;
+    ravenemu_bridge* const pair[] = {handle.get(), other.get()};
+    std::unique_ptr<ravenemu_link, decltype(&ravenemu_link_destroy)> link(
+        ravenemu_link_create(pair, 2), ravenemu_link_destroy);
+    std::vector<std::uint32_t> second(size);
+    std::uint32_t* const frames[] = {frame.data(), second.data()};
+    if (!link || !ravenemu_link_run_frame(link.get(), frames, frame.size()) ||
+        ravenemu_run_frame(handle.get(), frame.data(), frame.size())) return 9;
+    Handle advance(ravenemu_create(RAVENEMU_GBA), ravenemu_destroy);
+    ravenemu_bridge* const mixed[] = {advance.get(), other.get()};
+    if (!advance || ravenemu_link_create(mixed, 2)) return 10;
+    link.reset();
+    if (!ravenemu_run_frame(handle.get(), frame.data(), frame.size())) return 11;
+    std::cout << "Normalized C API: create GB/GBC/GBA, frame, audio, state round-trip and link cable passed\n";
 }

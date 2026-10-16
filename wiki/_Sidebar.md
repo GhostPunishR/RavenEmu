@@ -10,6 +10,7 @@
 
 - [Commandes](https://github.com/GhostPunishR/RavenEmu/blob/main/wiki/Commandes.md)
 - [Affichage et audio](https://github.com/GhostPunishR/RavenEmu/blob/main/wiki/Affichage-et-audio.md)
+- [Jouer à deux (câble link)](https://github.com/GhostPunishR/RavenEmu/blob/main/wiki/Jouer-a-deux.md)
 - [RetroAchievements](https://github.com/GhostPunishR/RavenEmu/blob/main/wiki/RetroAchievements.md)
 - [Skins : état de la migration](https://github.com/GhostPunishR/RavenEmu/blob/main/wiki/Skins-de-controleur.md)
 - [Consoles et compatibilité](https://github.com/GhostPunishR/RavenEmu/blob/main/wiki/Consoles-et-compatibilite.md)
