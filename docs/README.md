@@ -39,6 +39,10 @@ Sources de vérité :
 
 Ne présentez pas comme terminés sans confirmation : iOS jouable, déblocages RetroAchievements, compatibilité GBC/GBA. Quand l'épinglage de RavenCore change, mettez à jour la pastille de l'ouverture (« moteurs RavenCore x.y.z »).
 
+## Cache des navigateurs
+
+GitHub Pages laisse les navigateurs garder les fichiers 10 minutes. Sans précaution, un visiteur peut recevoir la nouvelle page avec l'ancienne feuille de style, et le rendu se casse. `index.html` appelle donc `styles.css` et `app.js` avec un numéro de version (`?v=AAAA-MM-JJ`) : **changez-le à chaque modification de l'un des deux**. Les icônes SVG ont aussi une taille par défaut dans le HTML, pour rester petites si la feuille de style ne charge pas.
+
 ## Vérification
 
 - `node --check docs/assets/app.js` et `git diff --check`.
