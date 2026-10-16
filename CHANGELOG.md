@@ -5,10 +5,11 @@
 ### Corrigé
 
 - GBA : The Legend of Zelda (Classic NES Series) affichait « GAME PAK ERROR » au démarrage. Il démarre avec RavenCore 0.3.0, qui laisse vide la zone SRAM des cartouches à EEPROM. Les autres jeux de la série font le même test.
+- GBA : dans Pokémon Émeraude, le brouillard d'une arène masquait entièrement le décor. RavenCore 0.3.1 mélange les objets semi-transparents au décor même dans une fenêtre qui coupe les effets spéciaux, comme la console.
 
 ### Modifié
 
-- RavenCore épinglé à la version 0.3.0, commit `a68481e79bd9dbd2c586117e30b558a895c65e59`. L'API C reste en version 0 : elle gagne seulement les fonctions des capteurs de cartouche, que l'application n'utilise pas encore. Les états GBA passent au format 13 et relisent les formats 12 et 11 ; un état GBA enregistré par cette version ne se recharge plus dans une version antérieure. Les états GB/GBC restent au format 11.
+- RavenCore épinglé à la version 0.3.1, commit `bb9e610bdf42262df192e1ca974e13c57d43664c`. L'API C reste en version 0 : depuis la 0.2.0, elle gagne seulement les fonctions des capteurs de cartouche, que l'application n'utilise pas encore. Les états GBA passent au format 13 et relisent les formats 12 et 11 ; un état GBA enregistré par cette version ne se recharge plus dans une version antérieure. Les états GB/GBC restent au format 11.
 - Pont natif : `native/cmake/NeutralBridge.cmake` est retiré. RavenCore expose désormais directement les noms `ravenemu_*` : JNI et Swift utilisent son header tel quel, et le dossier `include/` lu par Xcode et la CI ne change pas.
 - Code : `MainActivity.kt` et `RavenEmuApp.kt` sont découpés en fichiers par responsabilité (lecteur, emplacements d'état, transferts de sauvegardes, jaquettes, RetroAchievements, composants de la bibliothèque), sans changement de comportement, de textes ni de formats.
 
