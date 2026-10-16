@@ -2,6 +2,11 @@
 
 ## Non publié
 
+### Ajouté
+
+- Capteurs de cartouche sur Android : le gyroscope du téléphone pour WarioWare: Twisted!, son accéléromètre pour Yoshi Topsy-Turvy, Koro Koro Puzzle et les cartouches Game Boy MBC7 (Kirby Tilt 'n' Tumble), son capteur de lumière pour Boktai 1 à 3. Les axes suivent l'orientation de l'écran. Les capteurs ne sont écoutés que pendant la partie, et seulement ceux de la cartouche chargée.
+- Réglages, page Interface : **Capteurs du téléphone** (activé par défaut), **Soleil automatique (Boktai)** et un niveau de soleil manuel, de 0 à 100 %. Le niveau manuel s'applique quand le soleil automatique est coupé ou que le téléphone n'a pas de capteur de lumière. En automatique, il faut la lumière du jour : de 1 000 lx (une pièce bien éclairée, aucun soleil) à 100 000 lx (plein soleil), sur une échelle logarithmique.
+
 ### Corrigé
 
 - GBA : The Legend of Zelda (Classic NES Series) affichait « GAME PAK ERROR » au démarrage. Il démarre avec RavenCore 0.3.0, qui laisse vide la zone SRAM des cartouches à EEPROM. Les autres jeux de la série font le même test.

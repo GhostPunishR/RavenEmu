@@ -138,6 +138,28 @@ JNIEXPORT jboolean JNICALL
 Java_com_ravenemu_android_NativeCore_nativeRumbleActive(JNIEnv*, jobject, jlong pointer) {
     return ravenemu_rumble_active(handle(pointer)) ? JNI_TRUE : JNI_FALSE;
 }
+JNIEXPORT jint JNICALL
+Java_com_ravenemu_android_NativeCore_nativeSensors(JNIEnv*, jobject, jlong pointer) {
+    return ravenemu_sensors(handle(pointer));
+}
+JNIEXPORT jboolean JNICALL
+Java_com_ravenemu_android_NativeCore_nativeSetSolarLight(
+    JNIEnv*, jobject, jlong pointer, jint level
+) {
+    return ravenemu_set_solar_light(handle(pointer), level) ? JNI_TRUE : JNI_FALSE;
+}
+JNIEXPORT jboolean JNICALL
+Java_com_ravenemu_android_NativeCore_nativeSetRotation(
+    JNIEnv*, jobject, jlong pointer, jint speed
+) {
+    return ravenemu_set_rotation(handle(pointer), speed) ? JNI_TRUE : JNI_FALSE;
+}
+JNIEXPORT jboolean JNICALL
+Java_com_ravenemu_android_NativeCore_nativeSetTilt(
+    JNIEnv*, jobject, jlong pointer, jint x, jint y
+) {
+    return ravenemu_set_tilt(handle(pointer), x, y) ? JNI_TRUE : JNI_FALSE;
+}
 JNIEXPORT jboolean JNICALL
 Java_com_ravenemu_android_NativeCore_nativeBatteryDirty(JNIEnv*, jobject, jlong pointer) {
     return ravenemu_battery_dirty(handle(pointer)) ? JNI_TRUE : JNI_FALSE;
