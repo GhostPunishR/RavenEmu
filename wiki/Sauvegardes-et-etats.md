@@ -51,6 +51,8 @@ Le résumé précise les fichiers existants qui seront remplacés. Les élément
 
 Les fichiers de l'ancienne application et les états d'autres émulateurs ne doivent pas être importés comme des ZIP de cette version. Un `.sav` compatible peut être transféré, sans garantie de conversion automatique.
 
+Pour un jeu GBA à horloge (Pokémon Rubis, Saphir et Émeraude, Boktai), le `.sav` se termine par 16 octets qui gardent l'heure réglée par le jeu, au format de mGBA. mGBA le relit tel quel. Un `.sav` sans ces 16 octets, venu d'un autre émulateur, s'importe aussi : l'horloge suit alors l'heure du téléphone.
+
 ## Après une mise à jour
 
 Un état peut devenir incompatible après une évolution du moteur. Essayez alors de lancer normalement le jeu et de reprendre depuis sa sauvegarde de cartouche.
