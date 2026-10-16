@@ -11,13 +11,15 @@ Dans **Paramètres → Vidéo** :
 | Original | Préserve les couleurs produites par le moteur |
 | DMG vert | Profil monochrome vert, uniquement pour Game Boy |
 | Pocket gris | Profil monochrome gris, uniquement pour Game Boy |
+| Correction des couleurs LCD : Game Boy Color | Atténue les couleurs très vives pour retrouver l'aspect plus mat de l'écran d'origine |
+| Correction des couleurs LCD : Game Boy Advance | Même correction, réglée à part pour la Game Boy Advance |
 | Luminosité | Ajustement de -50 à +50 |
 | Contraste | Ajustement de 50 à 150 % |
-| Rétablir l'affichage d'origine | Original, luminosité 0 et contraste 100 % |
+| Rétablir l'affichage d'origine | Original, corrections LCD coupées, luminosité 0 et contraste 100 % |
 
-Les jeux GBC et GBA restent en couleur. Luminosité et contraste s'appliquent aux trois consoles.
+Les jeux GBC et GBA restent en couleur : les profils DMG vert et Pocket gris ne les concernent pas. La correction LCD, désactivée par défaut, ne touche jamais un jeu Game Boy. Luminosité et contraste s'appliquent aux trois consoles.
 
-Le lecteur respecte les dimensions fournies par le moteur et affiche l'image sans lissage : **160 × 144** pour GB/GBC, **240 × 160** pour GBA. Les anciens menus de correction LCD avancée de l'ancienne application ne sont pas disponibles dans ces réglages.
+Le lecteur respecte les dimensions fournies par le moteur et affiche l'image sans lissage : **160 × 144** pour GB/GBC, **240 × 160** pour GBA.
 
 ## Audio
 

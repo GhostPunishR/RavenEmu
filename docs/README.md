@@ -1,15 +1,51 @@
 # Site officiel RavenEmu
 
-Sources du site statique, prêtes pour GitHub Pages depuis `main`, dossier `docs/`. L’hébergement Pages doit être activé dans les paramètres du nouveau dépôt pour publier cette adresse. Aucune dépendance ni compilation : ouvrir `index.html` ou servir ce dossier avec un serveur HTTP local.
+Sources du site statique publié par GitHub Pages depuis `main`, dossier `docs/` : <https://ghostpunishr.github.io/RavenEmu/>. Aucune dépendance ni compilation : ouvrez `index.html` ou servez ce dossier avec un serveur HTTP local.
 
-Direction visuelle : sombre minimaliste, composition centrée sur le produit, violet discret. Pas d'animation, de transition ou de défilement animé. Le visuel de console de l'ancien site n'est plus utilisé. Le bloc de présentation utilise une capture réelle de la bibliothèque Android vide (`assets/ravenemu-library-android.jpg`), fournie par le créateur. Elle est affichée sans retouche, avec un lien pour l'agrandir et des instructions d'import. Aucun jeu fictif ni contrôle décoratif n'est présenté.
+## Direction visuelle
 
-- `index.html` : expérience Android, état des plateformes, installation de la bêta, ressources et FAQ.
-- `assets/styles.css` : composition et styles responsive.
-- `assets/app.js` : copie de la commande et année. Navigation, contenu et FAQ fonctionnent sans JavaScript.
+Sombre et violet, comme l'application.
+- **Mise en page.** Une page unique en sections : ouverture, capture de l'application, fonctions en grille de cartes, matériel de la cartouche, moteurs RavenCore, plateformes, installation, questions fréquentes.
+- **Typographie.** Polices système uniquement : la politique de sécurité n'autorise aucune ressource externe.
+- **Mouvement.**
+  - Les sections apparaissent au défilement, par une animation CSS liée au défilement (`animation-timeline: view()`). Un navigateur qui ne la connaît pas affiche tout d'emblée.
+  - La console de l'ouverture flotte doucement.
+  - Tout mouvement est coupé quand l'appareil demande moins d'animations (`prefers-reduced-motion`).
+- **Mobile.** Le menu devient une rangée défilante sous l'en-tête. Pas de page plus large que l'écran, de 320 px à l'écran de bureau.
+
+## Visuels
+
+- `assets/ravenemu-handheld.webp` : illustration de la marque (console portable au logo RavenEmu), présentée comme une illustration, pas comme un appareil réel.
+- `assets/ravenemu-library-android.jpg` : capture réelle de la bibliothèque Android vide, fournie par le créateur, affichée sans retouche dans un cadre de téléphone.
+- `assets/ravenemu-icon.png` : icône de l'application, recadrée depuis `ravenemu-logo.png` et aux coins transparents. Elle sert au logo du site, au favicon et à l'icône iOS.
+- `assets/ravenemu-og.jpg` : image d'aperçu des liens partagés (1200 × 630).
+
+Aucun jeu fictif ni capture inventée n'est présenté. Les écrans des cartes « consoles » et les nuanciers sont des dégradés abstraits.
+
+## Fichiers
+
+- `index.html` : contenu et structure.
+- `assets/styles.css` : styles et adaptation aux écrans.
+- `assets/app.js` : copie de la commande de compilation et année du pied de page. Navigation, contenu et questions fréquentes fonctionnent sans JavaScript.
+
+## Contenu
 
 La bêta actuelle est l'artefact `ravenemu-android-beta` de `multiplateforme.yml` (compte GitHub requis, rétention 7 jours).
 
-Sources de vérité : `README.md`, `BUILDING.md` et `CHANGELOG.md`, le workflow et `PRIVACY.md`. Ne pas présenter iOS jouable ou les validations RetroAchievements/GBC/GBA comme terminés sans confirmation.
+Sources de vérité :
+- `README.md`, `BUILDING.md` et `CHANGELOG.md` ;
+- le wiki (`wiki/`), en particulier Commandes, Affichage et audio, Sauvegardes et états, RetroAchievements ;
+- le workflow et `PRIVACY.md`.
 
-Vérification : `node --check docs/assets/app.js`, `git diff --check`, ancres, assets et chemins GitHub ; vérifier aussi le rendu desktop/mobile, le focus clavier et les débordements dans un navigateur. Le site utilise uniquement ses assets locaux et aucun outil de suivi.
+Ne présentez pas comme terminés sans confirmation : iOS jouable, déblocages RetroAchievements, compatibilité GBC/GBA. Quand l'épinglage de RavenCore change, mettez à jour la pastille de l'ouverture (« moteurs RavenCore x.y.z »).
+
+## Vérification
+
+- `node --check docs/assets/app.js` et `git diff --check`.
+- Ancres, assets et liens GitHub.
+- Rendu dans un navigateur à 1440, 820 et 390 px :
+  - aucun débordement horizontal ;
+  - aucune erreur dans la console ;
+  - focus clavier visible.
+
+Le site n'utilise que ses propres assets et aucun outil de suivi.
