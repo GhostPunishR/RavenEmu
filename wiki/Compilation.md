@@ -31,4 +31,4 @@ La CI construit le framework et le SDK natif pour simulateur et vérifie les ada
 
 ## RavenCore
 
-Le commit `0805bc5d7afd6dba9b6c21af759441b6a3a27c44` est épinglé dans `native/CMakeLists.txt` : RavenCore 0.5.1 et son API C `ravenemu_*`. Voir [la passerelle native](https://github.com/GhostPunishR/RavenEmu/blob/main/native/README.md).
+Le commit `50756fbdfa730ecf2d492b847c4fb0200a455ac7` est épinglé dans `native/CMakeLists.txt` : RavenCore 0.5.2 et son API C `ravenemu_*`. Voir [la passerelle native](https://github.com/GhostPunishR/RavenEmu/blob/main/native/README.md).
