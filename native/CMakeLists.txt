@@ -2,8 +2,9 @@ cmake_minimum_required(VERSION 3.22.1)
 project(RavenEmuNative LANGUAGES C CXX)
 
 # Lock the emulator engines AND public C interface to a reviewed source commit.
-# RavenCore 0.5.1 (tag v0.5.1): the GBA multiply instructions set the carry
-# flag as the ARM7TDMI's Booth multiplier does. Since 0.5.0: the GBA
+# RavenCore 0.5.2 (tag v0.5.2): the GBA BIOS ArcTan, ArcTan2 and Div return
+# the console's values. Since 0.5.1: the GBA multiply instructions set the
+# carry flag as the ARM7TDMI's Booth multiplier does. Since 0.5.0: the GBA
 # cartridge prefetch buffer and cycle-exact CPU timing, and the link cable
 # (ravenemu_link_*: two GB/GBC or two to four GBA cores of one process).
 # Since 0.4.1: GBA DMA restarts only
@@ -17,7 +18,7 @@ set(RAVENEMU_BUILD_LIBRETRO OFF CACHE BOOL "" FORCE)
 set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(ravencore
     GIT_REPOSITORY https://github.com/GhostPunishR/RavenCore.git
-    GIT_TAG 0805bc5d7afd6dba9b6c21af759441b6a3a27c44
+    GIT_TAG 50756fbdfa730ecf2d492b847c4fb0200a455ac7
     GIT_SHALLOW FALSE
 )
 FetchContent_MakeAvailable(ravencore)
