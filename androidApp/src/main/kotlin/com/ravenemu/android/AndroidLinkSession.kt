@@ -28,6 +28,13 @@ class AndroidLinkSession(filesDir: File) : Closeable {
         val heldButtons = mutableSetOf<GbButton>()
     }
 
+    /**
+     * Number of the loaded pair, bumped by each [load]: an [unload] requested
+     * for an earlier pair leaves the one that replaced it alone.
+     */
+    @Volatile var pairId: Long = 0
+        private set
+
     /** Index (0 or 1) of the game that receives the controls and is heard. */
     @Volatile var focus: Int = 0
         private set
@@ -70,6 +77,7 @@ class AndroidLinkSession(filesDir: File) : Closeable {
                     players = loaded
                     link = cable
                     focus = 0
+                    pairId++
                     transferred = true
                 }
                 infos
@@ -154,14 +162,15 @@ class AndroidLinkSession(filesDir: File) : Closeable {
 
     /**
      * Writes both saves and frees the pair, so that either game can then run
-     * alone without a second, stale copy of its save in memory.
+     * alone without a second, stale copy of its save in memory. With [pair],
+     * only that pair is freed: a later [load] may already have replaced it.
+     * The cores go only once their saves are written: if a write fails, the
+     * pair stays in memory and the next unload, pause or load tries again.
      */
-    fun unload() = synchronized(saveLock) {
-        try {
-            saveBatteriesIfDirtyLocked()
-        } finally {
-            synchronized(lock) { releaseLocked() }
-        }
+    fun unload(pair: Long? = null) = synchronized(saveLock) {
+        if (pair != null && pair != pairId) return@synchronized
+        saveBatteriesIfDirtyLocked()
+        synchronized(lock) { releaseLocked() }
     }
 
     private fun releaseButtonsLocked(player: Player) {

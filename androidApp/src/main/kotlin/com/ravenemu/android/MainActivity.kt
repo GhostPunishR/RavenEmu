@@ -569,10 +569,13 @@ class MainActivity : ComponentActivity() {
                     linkEnabled = false
                     linkedGames = emptyList()
                     linkPlayback.clear()
+                    // Only this pair: a new one may be loaded before the job runs.
+                    val pair = linkSession.pairId
                     scope.launch(Dispatchers.IO) {
                         try {
-                            linkSession.unload()
+                            linkSession.unload(pair)
                         } catch (error: Exception) {
+                            // The pair stays in memory; the next pause or launch retries.
                             Log.e("RavenEmuSaves", "Battery save on link exit failed", error)
                         }
                     }
