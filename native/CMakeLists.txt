@@ -15,7 +15,7 @@ set(RAVENEMU_BUILD_LIBRETRO OFF CACHE BOOL "" FORCE)
 set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(ravencore
     GIT_REPOSITORY https://github.com/GhostPunishR/RavenCore.git
-    GIT_TAG 41fc01a376367394146bf7e13cf38c80a4287695
+    GIT_TAG 453f9b097c91de67d6fa4a7179e9f2ac5268e7f6
     GIT_SHALLOW FALSE
 )
 FetchContent_MakeAvailable(ravencore)
