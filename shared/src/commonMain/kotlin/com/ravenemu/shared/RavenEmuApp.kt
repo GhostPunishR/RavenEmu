@@ -33,7 +33,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-private enum class RavenScreen { LIBRARY, SETTINGS, ABOUT, PLAYER }
+private enum class RavenScreen { LIBRARY, SETTINGS, ABOUT, PLAYER, LINK_PLAYER }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -61,6 +61,16 @@ fun RavenEmuApp(
     importError: String? = null,
     onStartVideo: (() -> Unit)? = null,
     onStopVideo: (() -> Unit)? = null,
+    /** Loads two library games linked by cable, then calls back once both are ready. */
+    onLaunchLinkedGames: ((String, String, () -> Unit) -> Unit)? = null,
+    onStartLinked: (() -> Unit)? = null,
+    onStopLinked: (() -> Unit)? = null,
+    linkedGames: List<LoadedGameInfo> = emptyList(),
+    linkFrames: List<ImageBitmap?> = emptyList(),
+    linkFocus: Int = 0,
+    onLinkFocus: ((Int) -> Unit)? = null,
+    linkError: String? = null,
+    linkMetrics: GbVideoMetrics? = null,
     videoFrame: ImageBitmap? = null,
     videoError: String? = null,
     videoMetrics: GbVideoMetrics? = null,
@@ -109,6 +119,7 @@ fun RavenEmuApp(
     var search by remember { mutableStateOf("") }
     var listMode by remember { mutableStateOf(false) }
     var gameDetails by remember { mutableStateOf<GameEntry?>(null) }
+    var linkPartnerFor by remember { mutableStateOf<GameEntry?>(null) }
     val games = if (libraryGames.isNotEmpty()) libraryGames
         else if (loadedGame == null) emptyList() else listOf(
             GameEntry("active", loadedGame.filename, loadedGame.platform),
@@ -269,6 +280,22 @@ fun RavenEmuApp(
                         screen = RavenScreen.LIBRARY
                     },
                 )
+                RavenScreen.LINK_PLAYER -> LinkPlayerScreen(
+                    settings = settings,
+                    games = linkedGames,
+                    frames = linkFrames,
+                    focus = linkFocus,
+                    onFocus = { onLinkFocus?.invoke(it) },
+                    error = linkError,
+                    metrics = linkMetrics,
+                    onButtonChange = onButtonChange,
+                    touchControlsVisible = touchControlsVisible,
+                    onScreenTouch = onScreenTouch,
+                    onBack = {
+                        onStopLinked?.invoke()
+                        screen = RavenScreen.LIBRARY
+                    },
+                )
             }
         }
         val details = gameDetails
@@ -296,12 +323,32 @@ fun RavenEmuApp(
                 } else {
                     null
                 },
+                onPlayLinked = if (onLaunchLinkedGames != null && onStartLinked != null) {
+                    { linkPartnerFor = details }
+                } else {
+                    null
+                },
                 onChooseCover = onChooseCover,
                 onRemoveCover = onRemoveCover,
                 onExportGameBackup = onExportGameBackup,
                 onExportBatterySave = onExportBatterySave,
                 onImportGameSave = onImportGameSave,
                 onDismiss = { gameDetails = null },
+            )
+        }
+        val linkGame = linkPartnerFor
+        if (linkGame != null) {
+            LinkPartnerDialog(
+                game = linkGame,
+                partners = LinkCable.partners(linkGame, games),
+                onPick = { partner ->
+                    linkPartnerFor = null
+                    onLaunchLinkedGames?.invoke(linkGame.id, partner.id) {
+                        onStartLinked?.invoke()
+                        screen = RavenScreen.LINK_PLAYER
+                    }
+                },
+                onDismiss = { linkPartnerFor = null },
             )
         }
         val folderSummary = folderImportSummary

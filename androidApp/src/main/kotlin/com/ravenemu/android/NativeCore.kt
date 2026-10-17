@@ -129,6 +129,9 @@ class NativeCore(system: Int) : AutoCloseable {
         check(nativeAcknowledgeBattery(requireOpen(), generation)) { nativeLastError() }
     }
 
+    /** Native handle, for [NativeLink] only: the link cable joins two handles. */
+    internal val nativeHandle: Long get() = requireOpen()
+
     private fun requireOpen(): Long = pointer.also {
         check(it != 0L) { "Native emulator is closed" }
     }

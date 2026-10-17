@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -39,6 +40,8 @@ internal fun GameDetailsSheet(
     saveTransferBusy: Boolean,
     /** Starts the game; null when it cannot be played from here. */
     onPlay: (() -> Unit)?,
+    /** Picks a second game to play alongside, linked by cable; null when unavailable. */
+    onPlayLinked: (() -> Unit)? = null,
     onChooseCover: ((String) -> Unit)?,
     onRemoveCover: ((String) -> Unit)?,
     onExportGameBackup: ((String) -> Unit)?,
@@ -119,6 +122,18 @@ internal fun GameDetailsSheet(
                     ),
                 ) {
                     Text("Jouer")
+                }
+            }
+            if (onPlayLinked != null) {
+                OutlinedButton(
+                    onClick = {
+                        onDismiss()
+                        onPlayLinked()
+                    },
+                    enabled = !importBusy,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Jouer à deux (câble link)")
                 }
             }
             if (onExportGameBackup != null || onImportGameSave != null) {
@@ -248,6 +263,61 @@ internal fun SaveImportReviewDialog(
             TextButton(onClick = { onCancel() }) {
                 Text("Annuler", color = RavenSecondary)
             }
+        },
+        containerColor = RavenSurface,
+        titleContentColor = RavenText,
+        textContentColor = RavenText,
+    )
+}
+
+/**
+ * Second game for a linked session: [partners] are the library's games that
+ * [game] can be linked to (see [LinkCable]).
+ */
+@Composable
+internal fun LinkPartnerDialog(
+    game: GameEntry,
+    partners: List<GameEntry>,
+    onPick: (GameEntry) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Jouer à deux") },
+        text = {
+            Column(
+                Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text(
+                    "${game.title} et un second jeu tournent côte à côte, reliés par un câble " +
+                        "link virtuel : échanges et combats entre vos propres sauvegardes. " +
+                        "Touchez un écran pour le piloter.",
+                    color = RavenSecondary, fontSize = 13.sp,
+                )
+                if (partners.isEmpty()) {
+                    Text(
+                        if (game.platform == GamePlatform.GBA)
+                            "Ajoutez un autre jeu Game Boy Advance à la bibliothèque."
+                        else "Ajoutez un autre jeu Game Boy ou Game Boy Color à la bibliothèque.",
+                        color = RavenMuted, fontSize = 13.sp,
+                    )
+                }
+                for (partner in partners) {
+                    OutlinedButton(
+                        onClick = { onPick(partner) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            "${partner.title} · ${platformLabel(partner.platform)}",
+                            maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Annuler", color = RavenAccent) }
         },
         containerColor = RavenSurface,
         titleContentColor = RavenText,

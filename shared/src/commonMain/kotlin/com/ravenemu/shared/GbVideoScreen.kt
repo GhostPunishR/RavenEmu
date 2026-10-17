@@ -490,5 +490,5 @@ internal fun GbVideoScreen(
     }
 }
 
-private fun oneDecimal(value: Double): String =
+internal fun oneDecimal(value: Double): String =
     ((value * 10.0).roundToInt() / 10.0).toString()

@@ -1,10 +1,12 @@
 #include <jni.h>
 #include <ravenemu/bridge.h>
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <span>
 #include <string>
 #include <limits>
+#include <vector>
 
 namespace {
 ravenemu_bridge* handle(jlong pointer) {
@@ -12,6 +14,9 @@ ravenemu_bridge* handle(jlong pointer) {
 }
 jlong to_long(ravenemu_bridge* pointer) {
     return static_cast<jlong>(reinterpret_cast<std::uintptr_t>(pointer));
+}
+ravenemu_link* link(jlong pointer) {
+    return reinterpret_cast<ravenemu_link*>(static_cast<std::uintptr_t>(pointer));
 }
 }
 
@@ -219,5 +224,46 @@ Java_com_ravenemu_android_NativeCore_nativeAchievementMemory(
         reinterpret_cast<std::uint8_t*>(bytes), static_cast<std::size_t>(capacity));
     env->ReleaseByteArrayElements(output, bytes, count ? 0 : JNI_ABORT);
     return static_cast<jint>(count);
+}
+
+// Câble link entre les cœurs de deux jeux lancés côte à côte.
+JNIEXPORT jlong JNICALL
+Java_com_ravenemu_android_NativeLink_nativeCreate(JNIEnv* env, jobject, jlongArray handles) {
+    if (!handles) return 0;
+    const auto count = env->GetArrayLength(handles);
+    std::vector<jlong> pointers(static_cast<std::size_t>(count));
+    env->GetLongArrayRegion(handles, 0, count, pointers.data());
+    std::vector<ravenemu_bridge*> bridges;
+    for (const auto pointer : pointers) bridges.push_back(handle(pointer));
+    return static_cast<jlong>(reinterpret_cast<std::uintptr_t>(
+        ravenemu_link_create(bridges.data(), bridges.size())));
+}
+JNIEXPORT void JNICALL
+Java_com_ravenemu_android_NativeLink_nativeDestroy(JNIEnv*, jobject, jlong pointer) {
+    ravenemu_link_destroy(link(pointer));
+}
+JNIEXPORT jboolean JNICALL
+Java_com_ravenemu_android_NativeLink_nativeFrame(
+    JNIEnv* env, jobject, jlong pointer, jintArray first, jintArray second
+) {
+    if (!first || !second) return JNI_FALSE;
+    const auto capacity = std::min(env->GetArrayLength(first), env->GetArrayLength(second));
+    jint* first_pixels = env->GetIntArrayElements(first, nullptr);
+    if (!first_pixels) return JNI_FALSE;
+    jint* second_pixels = env->GetIntArrayElements(second, nullptr);
+    if (!second_pixels) {
+        env->ReleaseIntArrayElements(first, first_pixels, JNI_ABORT);
+        return JNI_FALSE;
+    }
+    uint32_t* const frames[] = {
+        reinterpret_cast<uint32_t*>(first_pixels), reinterpret_cast<uint32_t*>(second_pixels)};
+    const auto ok = ravenemu_link_run_frame(link(pointer), frames, static_cast<size_t>(capacity));
+    env->ReleaseIntArrayElements(second, second_pixels, ok ? 0 : JNI_ABORT);
+    env->ReleaseIntArrayElements(first, first_pixels, ok ? 0 : JNI_ABORT);
+    return ok ? JNI_TRUE : JNI_FALSE;
+}
+JNIEXPORT jstring JNICALL
+Java_com_ravenemu_android_NativeLink_nativeLastError(JNIEnv* env, jobject) {
+    return env->NewStringUTF(ravenemu_last_error());
 }
 } // extern C
