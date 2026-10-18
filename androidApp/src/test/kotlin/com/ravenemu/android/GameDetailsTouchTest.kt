@@ -4,6 +4,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -18,13 +19,49 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [36], qualifiers = "w411dp-h891dp-xhdpi")
+@Config(sdk = [36], qualifiers = "en-rUS-w411dp-h891dp-xhdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class GameDetailsTouchTest {
     @get:Rule
     val compose = createComposeRule()
+
+    @Test
+    fun `la poignee permet de deplier puis replier le panneau`() {
+        openDetails(linkAvailable = true, onExport = {}, expanded = false)
+        val handle = compose.onNodeWithContentDescription("Drag handle").assertIsDisplayed()
+        val initial = handle.fetchSemanticsNode().boundsInRoot.top
+        handle.performTouchInput {
+            down(center)
+            moveTo(center - Offset(0f, 600f), delayMillis = 400)
+            advanceEventTime(200)
+            up()
+        }
+        compose.waitForIdle()
+        val expanded = handle.fetchSemanticsNode().boundsInRoot.top
+        assertTrue(expanded < initial - 100f, "Le panneau doit suivre le glissement vers le haut.")
+        handle.performTouchInput {
+            down(center)
+            moveTo(center + Offset(0f, initial - expanded), delayMillis = 400)
+            advanceEventTime(200)
+            up()
+        }
+        compose.waitForIdle()
+        assertEquals(initial, handle.fetchSemanticsNode().boundsInRoot.top, 2f)
+    }
+
+    @Test
+    fun `un glissement vers le bas ferme le panneau`() {
+        openDetails(linkAvailable = true, onExport = {}, expanded = false)
+        compose.onNodeWithContentDescription("Drag handle").assertIsDisplayed().performTouchInput {
+            down(center)
+            moveTo(center + Offset(0f, 600f), delayMillis = 300)
+            up()
+        }
+        compose.onNodeWithText("Jouer").assertDoesNotExist()
+    }
 
     @Test
     fun `le premier toucher sur Jouer apres un petit glissement lance le jeu`() {
@@ -59,7 +96,7 @@ class GameDetailsTouchTest {
     }
 
     @Test
-    @Config(qualifiers = "w320dp-h568dp-mdpi")
+    @Config(qualifiers = "en-rUS-w320dp-h568dp-mdpi")
     fun `le contenu defile sur petit ecran et Fermer ferme au premier toucher`() {
         openDetails(linkAvailable = true, onExport = {})
         compose.onNodeWithText("Fermer").performScrollTo()
@@ -71,6 +108,7 @@ class GameDetailsTouchTest {
         onStart: () -> Unit = {},
         linkAvailable: Boolean = false,
         onExport: ((String) -> Unit)? = null,
+        expanded: Boolean = true,
     ) {
         compose.setContent {
             RavenEmuApp(
@@ -87,12 +125,18 @@ class GameDetailsTouchTest {
         }
         compose.onNodeWithText("Jeu de test").performClick()
         compose.waitForIdle()
+        if (expanded) {
+            compose.onNodeWithContentDescription("Drag handle").performClick()
+            compose.waitForIdle()
+        }
         compose.onNodeWithText("Jouer").assertIsDisplayed()
     }
 
     private fun lightlyDragPanel() {
         // Freeze the frame clock so a drag cannot finish settling before the tap.
         // Use real pointer events: performClick() bypasses gesture interception.
+        val initial = compose.onNodeWithContentDescription("Drag handle")
+            .fetchSemanticsNode().boundsInRoot.top
         compose.mainClock.autoAdvance = false
         compose.onNodeWithText("Jaquette introuvable automatiquement").performTouchInput {
             down(center)
@@ -101,5 +145,8 @@ class GameDetailsTouchTest {
             up()
         }
         compose.mainClock.advanceTimeByFrame()
+        val moved = compose.onNodeWithContentDescription("Drag handle")
+            .fetchSemanticsNode().boundsInRoot.top
+        assertTrue(moved > initial + 1f, "Le contenu doit aussi permettre de déplacer le panneau.")
     }
 }

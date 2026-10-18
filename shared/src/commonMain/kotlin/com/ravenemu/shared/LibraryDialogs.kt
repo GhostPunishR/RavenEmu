@@ -50,19 +50,19 @@ internal fun GameDetailsSheet(
     onImportGameSave: ((String) -> Unit)?,
     onDismiss: () -> Unit,
 ) {
+    val sheetState = rememberModalBottomSheetState()
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        // This action panel scrolls its content instead of dragging the sheet.
-        // A settling sheet can otherwise consume the first tap on an action.
-        sheetGesturesEnabled = false,
-        dragHandle = null,
+        sheetState = sheetState,
+        // Keep dragging and the partial/expanded stops. While settling, avoid
+        // the sheet's immediate-drag handler swallowing a tap on a button.
+        sheetGesturesEnabled = !sheetState.isAnimationRunning,
         containerColor = RavenSurface,
         contentColor = RavenText,
     ) {
         Column(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
-                .padding(start = 20.dp, top = 20.dp, end = 20.dp, bottom = 28.dp),
+                .padding(start = 20.dp, end = 20.dp, bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(entry.title, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
