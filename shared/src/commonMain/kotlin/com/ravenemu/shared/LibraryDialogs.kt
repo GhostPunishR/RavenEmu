@@ -17,7 +17,6 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -50,13 +49,8 @@ internal fun GameDetailsSheet(
     onImportGameSave: ((String) -> Unit)?,
     onDismiss: () -> Unit,
 ) {
-    val sheetState = rememberModalBottomSheetState()
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        // Keep dragging and the partial/expanded stops. While settling, avoid
-        // the sheet's immediate-drag handler swallowing a tap on a button.
-        sheetGesturesEnabled = !sheetState.isAnimationRunning,
         containerColor = RavenSurface,
         contentColor = RavenText,
     ) {
