@@ -37,6 +37,18 @@ class RetroProgressNotificationsTest {
     }
 
     @Test
+    fun fractionalPercentGainsDoNotRepeatTheSameDisplayedPercentage() {
+        fun measured(percent: Float, text: String) = entry("a", 0)
+            .copy(measuredPercent = percent, progress = text)
+        notifications.update(listOf(measured(25.1f, "25%")), 0)
+        assertNull(notifications.update(listOf(measured(25.2f, "25%")), 100))
+        assertEquals("26%", notifications.update(listOf(measured(26f, "26%")), 200)?.detail)
+        assertNull(notifications.advance(2_200))
+        assertNull(notifications.update(listOf(measured(26.5f, "26%")), 2_300))
+        assertEquals("27%", notifications.update(listOf(measured(27f, "27%")), 2_400)?.detail)
+    }
+
+    @Test
     fun queuedAchievementShowsItsLatestValueWithoutLosingItsPlace() {
         val initial = listOf(entry("a", 0), entry("b", 0), entry("c", 0))
         notifications.update(initial, 0)

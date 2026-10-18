@@ -8,8 +8,9 @@ package com.ravenemu.shared
  */
 class RetroProgressNotifications {
     private data class Item(val id: String, val progress: RetroProgress, val changedAt: Long)
+    private data class Measurement(val percent: Float, val text: String)
 
-    private val best = mutableMapOf<String, Float>()
+    private val best = mutableMapOf<String, Measurement>()
     private val pending = linkedMapOf<String, Item>()
     private var initialized = false
     private var current: Item? = null
@@ -32,19 +33,22 @@ class RetroProgressNotifications {
         for (entry in entries) {
             val percent = entry.measuredPercent
             if (!percent.isFinite() || percent !in 0f..100f) continue
-            val previous = best[entry.id] ?: 0f
-            best[entry.id] = maxOf(previous, percent)
+            val previous = best[entry.id]
+            val previousPercent = previous?.percent ?: 0f
+            if (previous == null || percent > previousPercent) {
+                best[entry.id] = Measurement(percent, entry.progress)
+            }
             if (entry.id !in eligible) continue
             val item = Item(entry.id, RetroProgress(entry.title, entry.progress, entry.badgeUrl), nowMillis)
             if (current?.id == entry.id && nowMillis < (nextTransitionAt ?: 0L)) {
                 // Refresh the number without extending the turn. A frequently
                 // changing achievement must not keep other achievements waiting.
                 current = item
-            } else if (percent < previous) {
+            } else if (percent < previousPercent) {
                 // A counter can reset or decrease (MeasuredIf, a new attempt).
                 // Do not later announce an outdated, higher value.
                 pending.remove(entry.id)
-            } else if (!baseline && percent > previous &&
+            } else if (!baseline && percent > previousPercent && entry.progress != previous?.text &&
                 (entry.id in pending || pending.size < MAX_PENDING)) {
                 // Replacing an entry keeps its original place in the queue.
                 pending[entry.id] = item
