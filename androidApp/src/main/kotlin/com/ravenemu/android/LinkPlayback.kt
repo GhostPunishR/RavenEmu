@@ -23,7 +23,8 @@ import kotlin.math.roundToLong
 /**
  * Pictures and sound of two linked games (see [AndroidLinkSession]). [run]
  * drives both on the dedicated emulation thread, paced like [GbPlayback];
- * the Compose state below is written from there and read by the screen.
+ * the Compose state below is written from there and read by the screen,
+ * which shows the focused game only.
  */
 internal class LinkPlayback(
     private val context: Context,
@@ -93,11 +94,15 @@ internal class LinkPlayback(
                         }
                         var conversionNanos = 0L
                         if (renderVideo) {
+                            // Only the shown game is drawn; the other keeps its last picture.
                             val conversionStart = System.nanoTime()
-                            GbDisplayFilter.apply(firstPixels, settings, first.platform)
-                            GbDisplayFilter.apply(secondPixels, settings, second.platform)
-                            firstFrame = firstImages.publish(firstPixels)
-                            secondFrame = secondImages.publish(secondPixels)
+                            if (session.focus == 0) {
+                                GbDisplayFilter.apply(firstPixels, settings, first.platform)
+                                firstFrame = firstImages.publish(firstPixels)
+                            } else {
+                                GbDisplayFilter.apply(secondPixels, settings, second.platform)
+                                secondFrame = secondImages.publish(secondPixels)
+                            }
                             conversionNanos = System.nanoTime() - conversionStart
                         }
                         val now = System.nanoTime()
