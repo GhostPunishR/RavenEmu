@@ -2,9 +2,13 @@ cmake_minimum_required(VERSION 3.22.1)
 project(RavenEmuNative LANGUAGES C CXX)
 
 # Lock the emulator engines AND public C interface to a reviewed source commit.
-# RavenCore 0.6.0 (tag v0.6.0): GBA IRQs and timers at the console's cycle,
-# and the BIOS lets IRQs through IntrWait and its long copies, so Pokémon
-# Ruby links with Emerald over the cable. Since 0.5.2: the GBA BIOS ArcTan,
+# RavenCore 0.7.1 (tag v0.7.1): block copies for the RetroAchievements memory
+# reads (GBA 390 -> 24 us), same bytes. Since 0.7.0: GBA I/O and serial
+# registers read back the console's values, the H-Blank flag at cycle 1006,
+# the BIOS Halt returns 27 cycles after its IRQ, and switching sound off
+# clears the PSG registers. Since 0.6.0: GBA IRQs and timers at the console's
+# cycle, and the BIOS lets IRQs through IntrWait and its long copies, so
+# Pokémon Ruby links with Emerald over the cable. Since 0.5.2: the GBA BIOS ArcTan,
 # ArcTan2 and Div return the console's values. Since 0.5.1: the GBA multiply instructions set the
 # carry flag as the ARM7TDMI's Booth multiplier does. Since 0.5.0: the GBA
 # cartridge prefetch buffer and cycle-exact CPU timing, and the link cable
@@ -12,15 +16,15 @@ project(RavenEmuNative LANGUAGES C CXX)
 # Since 0.4.1: GBA DMA restarts only
 # when enabled (GTA Advance), a GBA game's clock setting kept in its battery
 # save and across reset, pending battery writes kept across reset. C API
-# version 0, only extended. Save states GB/GBC 11 and GBA 15, which still
-# loads formats 14, 13, 12 and 11. Keep the reviewed immutable commit SHA, not
+# version 0, only extended. Save states GB/GBC 11 and GBA 16, which still
+# loads formats 15, 14, 13, 12 and 11. Keep the reviewed immutable commit SHA, not
 # the movable tag.
 include(FetchContent)
 set(RAVENEMU_BUILD_LIBRETRO OFF CACHE BOOL "" FORCE)
 set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(ravencore
     GIT_REPOSITORY https://github.com/GhostPunishR/RavenCore.git
-    GIT_TAG 8aca7c4d26839412a741f8ba27927a4056b739a3
+    GIT_TAG 8f682a121b0ce2dc1d5c4777fc602e8f449110b5
     GIT_SHALLOW FALSE
 )
 FetchContent_MakeAvailable(ravencore)
