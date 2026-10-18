@@ -290,9 +290,10 @@ internal fun LinkPartnerDialog(
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 Text(
-                    "${game.title} et un second jeu tournent côte à côte, reliés par un câble " +
+                    "${game.title} et un second jeu tournent ensemble, reliés par un câble " +
                         "link virtuel : échanges et combats entre vos propres sauvegardes. " +
-                        "Touchez un écran pour le piloter.",
+                        "Un jeu est affiché à la fois : le bouton ⇄ passe à l'autre, " +
+                        "qui continue de tourner.",
                     color = RavenSecondary, fontSize = 13.sp,
                 )
                 if (partners.isEmpty()) {

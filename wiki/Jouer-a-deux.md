@@ -1,6 +1,6 @@
 # Jouer à deux sur un téléphone
 
-RavenEmu peut faire tourner deux jeux côte à côte sur le même téléphone, reliés par un câble link virtuel. Le cas typique : échanger des Pokémon entre vos propres sauvegardes, par exemple entre Rubis et Saphir, ou faire évoluer un Pokémon par échange.
+RavenEmu peut faire tourner deux jeux en même temps sur le même téléphone, reliés par un câble link virtuel. Le cas typique : échanger des Pokémon entre vos propres sauvegardes, par exemple entre Rubis et Saphir, ou faire évoluer un Pokémon par échange.
 
 ## Lancer une partie à deux
 
@@ -21,10 +21,10 @@ Les deux jeux doivent être différents : une cartouche n'a qu'une sauvegarde, e
 
 ## Pendant la partie
 
-- **Affichage** : les deux écrans sont empilés en portrait, côte à côte en paysage.
-- **Piloter un jeu** : touchez son écran, ou le bouton ⇄. Le jeu piloté est entouré, son nom est en couleur.
-- **Commandes** : les commandes tactiles et une manette pilotent ce jeu.
-- **Son** : seul le jeu piloté s'entend.
+- **Affichage** : un seul jeu est affiché, en grand, comme lorsqu'il tourne seul. La barre du haut indique lequel.
+- **Changer de jeu** : le bouton **⇄ Joueur 2** (ou **⇄ Joueur 1**), en haut à droite, affiche l'autre jeu. Celui qu'on quitte continue de tourner : la connexion entre les deux reste établie.
+- **Commandes** : les commandes tactiles et une manette pilotent le jeu affiché.
+- **Son** : seul le jeu affiché s'entend.
 - **Sauvegardes** : chaque jeu enregistre sa sauvegarde interne, comme lorsqu'il tourne seul. Elle est écrite régulièrement, en arrière-plan et à la sortie.
 - **États instantanés** : ils ne sont pas proposés à deux. Sauvegardez dans chaque jeu.
 - **Quitter** : la flèche de retour ramène à la bibliothèque. Chaque jeu se relance ensuite seul, avec sa sauvegarde.
