@@ -4,6 +4,8 @@ kotlin = "2.4.21"
 coroutines = "1.11.0"
 serialization = "1.11.0"
 junit = "4.13.2"
+robolectric = "4.16.1"
+composeUi = "1.12.1"
 androidxCore = "1.19.1"
 appcompat = "1.8.0"
 material = "1.14.0"
@@ -21,6 +23,10 @@ kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutine
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
 junit4 = { module = "junit:junit", version.ref = "junit" }
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test-junit", version.ref = "kotlin" }
+robolectric-core = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
+robolectric-sdk = { module = "org.robolectric:android-all-instrumented", version = "16-robolectric-13921718-i7" }
+compose-test-junit4 = { module = "androidx.compose.ui:ui-test-junit4", version.ref = "composeUi" }
+compose-test-manifest = { module = "androidx.compose.ui:ui-test-manifest", version.ref = "composeUi" }
 # Artefact du plugin Gradle Kotlin, requis par les plugins de convention JVM et
 # par les plugins compilateur comme kotlinx.serialization. Les modules Android
 # utilisent Kotlin intégré d'AGP 9 et n'appliquent plus kotlin-android.

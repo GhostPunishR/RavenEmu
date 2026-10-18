@@ -5,6 +5,26 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
+// Resolve Robolectric's test/resource SDK through Gradle as well, including
+// in environments where the user home is read-only.
+val robolectricSdks by configurations.creating {
+    isCanBeConsumed = false
+    isTransitive = false
+}
+val prepareRobolectricSdks by tasks.registering(Sync::class) {
+    from(robolectricSdks)
+    into(layout.buildDirectory.dir("robolectric-sdk"))
+}
+tasks.withType<Test>().configureEach {
+    dependsOn(prepareRobolectricSdks)
+    inputs.files(robolectricSdks).withPropertyName("robolectricSdks")
+    systemProperty("robolectric.offline", "true")
+    systemProperty(
+        "robolectric.dependency.dir",
+        layout.buildDirectory.dir("robolectric-sdk").get().asFile.absolutePath,
+    )
+}
+
 android {
     namespace = "com.ravenemu.android"
     compileSdk = 37
@@ -30,6 +50,9 @@ android {
         }
     }
     buildFeatures { compose = true }
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
     externalNativeBuild {
         cmake { path = file("../native/CMakeLists.txt") }
     }
@@ -48,4 +71,8 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit:2.4.21")
     testImplementation("org.json:json:20240303")
+    testImplementation(libs.robolectric.core)
+    testImplementation(libs.compose.test.junit4)
+    debugImplementation(libs.compose.test.manifest)
+    robolectricSdks(libs.robolectric.sdk)
 }
