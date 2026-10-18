@@ -48,7 +48,7 @@ class GbSaveTransferTest {
         val data = linkedMapOf(
             "battery.sav" to byteArrayOf(1, 2, 3),
             "slot0.state" to byteArrayOf(10, 11),
-            "slot0.png" to byteArrayOf(31, 32),
+            "slot0.png" to GbStatePreviewTest.png,
             "slot3.state" to byteArrayOf(44, 55),
         )
         val parsed = transfer.previewImport(
@@ -56,6 +56,7 @@ class GbSaveTransferTest {
         )
         assertEquals(false, parsed.rawBattery)
         assertEquals(listOf(0, 3), parsed.stateSlots)
+        assertArrayEquals(data.getValue("slot0.png"), parsed.bytes["slot0.png"])
         assertArrayEquals(data.getValue("slot3.state"), parsed.bytes["slot3.state"])
     }
 
@@ -94,6 +95,18 @@ class GbSaveTransferTest {
         val previewOnly = bundle(romId, mapOf("slot2.png" to byteArrayOf(1)))
         assertThrows(IllegalArgumentException::class.java) {
             transfer.previewImport(previewOnly.inputStream(), romId, "backup.zip")
+        }
+    }
+
+    @Test
+    fun unsafeOrMalformedThumbnailsAreDroppedWithoutLosingTheirSave() {
+        val state = byteArrayOf(10, 11)
+        for (preview in listOf(GbStatePreviewTest.header(10000, 10000), byteArrayOf(31, 32))) {
+            val parsed = transfer.previewImport(bundle(romId, mapOf(
+                "slot0.state" to state, "slot0.png" to preview,
+            )).inputStream(), romId, "backup.zip")
+            assertArrayEquals(state, parsed.bytes["slot0.state"])
+            assertEquals(false, parsed.bytes.containsKey("slot0.png"))
         }
     }
 

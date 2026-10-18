@@ -114,7 +114,7 @@ internal fun GameDetailsSheet(
                         onDismiss()
                         onPlay()
                     },
-                    enabled = !importBusy,
+                    enabled = !importBusy && !saveTransferBusy,
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = RavenAccent,
@@ -130,7 +130,7 @@ internal fun GameDetailsSheet(
                         onDismiss()
                         onPlayLinked()
                     },
-                    enabled = !importBusy,
+                    enabled = !importBusy && !saveTransferBusy,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text("Jouer à deux (câble link)")

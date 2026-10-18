@@ -21,8 +21,10 @@ internal class GbSaveStateStore(private val directory: File) {
 
     fun readPreview(romKey: String, slot: Int): ByteArray? =
         readAtomic(previewFileFor(romKey, slot), MAX_PREVIEW_BYTES)
+            ?.takeIf { GbStatePreview.size(it) != null }
 
     fun writePreview(romKey: String, slot: Int, bytes: ByteArray) {
+        require(GbStatePreview.size(bytes) != null) { "Miniature PNG invalide ou trop grande." }
         writeAtomic(previewFileFor(romKey, slot), bytes, MAX_PREVIEW_BYTES)
     }
 

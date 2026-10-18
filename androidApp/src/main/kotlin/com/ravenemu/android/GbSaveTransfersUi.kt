@@ -26,6 +26,8 @@ internal class GbSaveTransfersUi(
     private val applicationContext: Context,
     private val contentResolver: ContentResolver,
     private val gameSession: AndroidGbSession,
+    private val linkSession: AndroidLinkSession,
+    private val operations: LibraryOperationGate,
     private val romLibrary: GbRomLibrary,
     private val saveTransfer: GbSaveTransfer,
     private val scope: CoroutineScope,
@@ -34,6 +36,7 @@ internal class GbSaveTransfersUi(
         private set
     var saveImportReview by mutableStateOf<GbSaveImportReview?>(null)
         private set
+    private var pickerLease: LibraryOperationGate.Lease? = null
     private var pendingExport by mutableStateOf<Pair<String, String>?>(null)
     private var pendingImportGame by mutableStateOf<String?>(null)
     private var pendingSavePayload by mutableStateOf<GbSaveTransfer.ImportPayload?>(null)
@@ -45,14 +48,15 @@ internal class GbSaveTransfersUi(
     fun writeBackup(uri: Uri?) {
         val request = pendingExport
         pendingExport = null
-        if (uri != null && request != null && !saveTransferBusy) {
-            saveTransferBusy = true
+        val lease = pickerLease ?: return
+        pickerLease = null
+        if (uri != null && request != null) {
             scope.launch {
                 try {
                     withContext(Dispatchers.IO) {
                         // The active core may still own unsaved battery RAM
                         // after leaving the player; flush before exporting.
-                        gameSession.saveBatteryIfDirty()
+                        flushSessions()
                         contentResolver.openOutputStream(uri)?.use {
                             saveTransfer.exportBundle(request.first, it)
                         } ?: error("Destination d'export inaccessible.")
@@ -65,9 +69,11 @@ internal class GbSaveTransfersUi(
                         "Export impossible : ${error.message ?: "erreur inconnue"}",
                         Toast.LENGTH_LONG).show()
                 } finally {
-                    saveTransferBusy = false
+                    finish(lease)
                 }
             }
+        } else {
+            finish(lease)
         }
     }
 
@@ -75,12 +81,13 @@ internal class GbSaveTransfersUi(
     fun writeBattery(uri: Uri?) {
         val request = pendingExport
         pendingExport = null
-        if (uri != null && request != null && !saveTransferBusy) {
-            saveTransferBusy = true
+        val lease = pickerLease ?: return
+        pickerLease = null
+        if (uri != null && request != null) {
             scope.launch {
                 try {
                     withContext(Dispatchers.IO) {
-                        gameSession.saveBatteryIfDirty()
+                        flushSessions()
                         contentResolver.openOutputStream(uri)?.use {
                             saveTransfer.exportBattery(request.first, it)
                         } ?: error("Destination d'export inaccessible.")
@@ -93,9 +100,11 @@ internal class GbSaveTransfersUi(
                         "Export .sav impossible : ${error.message ?: "erreur inconnue"}",
                         Toast.LENGTH_LONG).show()
                 } finally {
-                    saveTransferBusy = false
+                    finish(lease)
                 }
             }
+        } else {
+            finish(lease)
         }
     }
 
@@ -103,8 +112,9 @@ internal class GbSaveTransfersUi(
     fun reviewImport(uri: Uri?, libraryGames: List<GameEntry>) {
         val id = pendingImportGame
         pendingImportGame = null
-        if (uri != null && id != null && !saveTransferBusy) {
-            saveTransferBusy = true
+        val lease = pickerLease ?: return
+        pickerLease = null
+        if (uri != null && id != null) {
             scope.launch {
                 try {
                     val (payload, conflicts) = withContext(Dispatchers.IO) {
@@ -139,9 +149,11 @@ internal class GbSaveTransfersUi(
                         "Import refusé : ${error.message ?: "fichier invalide"}",
                         Toast.LENGTH_LONG).show()
                 } finally {
-                    saveTransferBusy = false
+                    finish(lease)
                 }
             }
+        } else {
+            finish(lease)
         }
     }
 
@@ -156,20 +168,20 @@ internal class GbSaveTransfersUi(
      */
     fun confirmImport(playerOpen: Boolean, onGameReplaced: (romKey: String) -> Unit) {
         val payload = pendingSavePayload
-        if (payload != null && !saveTransferBusy && !playerOpen) {
+        if (payload != null) {
+            val lease = begin(playerOpen) ?: return
             // Drop the review before any disk mutation, and never
             // apply a package if the target game was removed.
             pendingSavePayload = null
             saveImportReview = null
-            saveTransferBusy = true
             scope.launch {
                 try {
                     withContext(Dispatchers.IO) {
                         check(romLibrary.list().any { it.id == payload.romKey }) {
                             "La ROM associée n'existe plus."
                         }
-                        gameSession.releaseForSaveImport(payload.romKey)
-                        saveTransfer.apply(payload)
+                        linkSession.unload()
+                        gameSession.importSave(payload.romKey) { saveTransfer.apply(payload) }
                     }
                     onGameReplaced(payload.romKey)
                     Toast.makeText(applicationContext,
@@ -182,69 +194,110 @@ internal class GbSaveTransfersUi(
                         "Import impossible : ${error.message ?: "erreur inconnue"}",
                         Toast.LENGTH_LONG).show()
                 } finally {
-                    saveTransferBusy = false
+                    finish(lease)
                 }
             }
         }
     }
 
     fun exportGameBackup(id: String, libraryGames: List<GameEntry>, playerOpen: Boolean) {
-        if (!saveTransferBusy && !playerOpen && libraryGames.any { it.id == id }) {
-            saveTransferBusy = true
+        if (libraryGames.any { it.id == id }) {
+            val lease = begin(playerOpen) ?: return
             val gameName = exportName(libraryGames.first { it.id == id }.title)
             scope.launch {
+                var handedToPicker = false
                 try {
                     withContext(Dispatchers.IO) {
-                        gameSession.saveBatteryIfDirty()
+                        flushSessions()
                         check(saveTransfer.hasAnySave(id)) {
                             "Aucune sauvegarde à exporter pour ce jeu."
                         }
                     }
                     pendingExport = id to "zip"
+                    pickerLease = lease
                     exportBackup.launch("$gameName-ravenemu-saves.zip")
+                    handedToPicker = true
                 } catch (error: Exception) {
                     Toast.makeText(applicationContext,
                         error.message ?: "Export impossible", Toast.LENGTH_LONG).show()
                 } finally {
-                    saveTransferBusy = false
+                    if (!handedToPicker) {
+                        pickerLease = null
+                        pendingExport = null
+                        finish(lease)
+                    }
                 }
             }
         }
     }
 
     fun exportBatterySave(id: String, libraryGames: List<GameEntry>, playerOpen: Boolean) {
-        if (!saveTransferBusy && !playerOpen && libraryGames.any { it.id == id }) {
-            saveTransferBusy = true
+        if (libraryGames.any { it.id == id }) {
+            val lease = begin(playerOpen) ?: return
             val gameName = exportName(libraryGames.first { it.id == id }.title)
             scope.launch {
+                var handedToPicker = false
                 try {
                     withContext(Dispatchers.IO) {
-                        gameSession.saveBatteryIfDirty()
+                        flushSessions()
                         check(saveTransfer.hasBattery(id)) {
                             "Ce jeu n'a pas encore de sauvegarde .sav."
                         }
                     }
                     pendingExport = id to "sav"
+                    pickerLease = lease
                     exportBattery.launch("$gameName.sav")
+                    handedToPicker = true
                 } catch (error: Exception) {
                     Toast.makeText(applicationContext,
                         error.message ?: "Export .sav impossible",
                         Toast.LENGTH_LONG).show()
                 } finally {
-                    saveTransferBusy = false
+                    if (!handedToPicker) {
+                        pickerLease = null
+                        pendingExport = null
+                        finish(lease)
+                    }
                 }
             }
         }
     }
 
     fun importGameSave(id: String, libraryGames: List<GameEntry>, playerOpen: Boolean) {
-        if (!saveTransferBusy && !playerOpen && libraryGames.any { it.id == id }) {
-            pendingSavePayload = null
-            saveImportReview = null
-            pendingImportGame = id
-            importSavePicker.launch(arrayOf("application/zip",
-                "application/octet-stream", "*/*"))
+        if (libraryGames.any { it.id == id }) {
+            val lease = begin(playerOpen) ?: return
+            try {
+                pendingSavePayload = null
+                saveImportReview = null
+                pendingImportGame = id
+                pickerLease = lease
+                importSavePicker.launch(arrayOf("application/zip",
+                    "application/octet-stream", "*/*"))
+            } catch (error: Exception) {
+                pendingImportGame = null
+                pickerLease = null
+                finish(lease)
+                Toast.makeText(applicationContext, "Import impossible", Toast.LENGTH_LONG).show()
+            }
         }
+    }
+
+    private fun begin(playerOpen: Boolean): LibraryOperationGate.Lease? {
+        if (playerOpen || saveTransferBusy) return null
+        val lease = operations.tryAcquire() ?: return null
+        saveTransferBusy = true
+        return lease
+    }
+
+    private fun finish(lease: LibraryOperationGate.Lease) {
+        saveTransferBusy = false
+        lease.close()
+    }
+
+    /** A link pair can still be retained after a failed/asynchronous exit. */
+    private fun flushSessions() {
+        linkSession.unload()
+        gameSession.saveBatteryIfDirty()
     }
 
     /** File name stem for an export: the ROM name without extension or symbols. */

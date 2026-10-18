@@ -23,8 +23,8 @@ internal class AchievementsController(
     private val onSnapshot: (RetroSnapshot) -> Unit,
     private val onEvent: (AchievementClient.Event) -> Unit,
 ) {
+    private val applicationContext = context.applicationContext
     private val account = AchievementAccount(context.applicationContext)
-    private val journal = AwardJournal(context.applicationContext)
     private val main = Handler(Looper.getMainLooper())
     private val executor = Executors.newSingleThreadExecutor { task ->
         Thread(task, "RavenEmu-RetroAchievements").apply { isDaemon = true }
@@ -122,7 +122,7 @@ internal class AchievementsController(
         account.clear()
         // Signing out forgets this device's unsent unlocks too (RavenEmu 0.8.1 rule):
         // they belong to an account that is no longer signed in here.
-        runCatching { journal.clear() }
+        runCatching { AwardJournal(applicationContext).clear() }
         client?.close()
         client = null
         connected = false
@@ -136,7 +136,9 @@ internal class AchievementsController(
         currentUser = username
         val fresh = AchievementClient(
             readMemory = { address, count -> session.readAchievementMemory(address, count) },
-            journal = journal,
+            // Each client gets a fresh lease. Sign-out permanently revokes
+            // old clients, including HTTP callbacks still finishing late.
+            journal = AwardJournal(applicationContext),
             account = username,
             onEvent = { event -> handleEvent(event) },
         )

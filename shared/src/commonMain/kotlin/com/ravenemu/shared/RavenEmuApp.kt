@@ -153,7 +153,7 @@ fun RavenEmuApp(
                 RavenScreen.LIBRARY -> {
                     LibraryToolbar(
                         title = pages.getOrElse(pagerState.currentPage) { pages.first() }.title,
-                        importEnabled = onImportRom != null && !importBusy,
+                        importEnabled = onImportRom != null && !importBusy && !saveTransferBusy,
                         listMode = listMode,
                         onSettings = { screen = RavenScreen.SETTINGS },
                         onAdd = { onImportRom?.invoke() },

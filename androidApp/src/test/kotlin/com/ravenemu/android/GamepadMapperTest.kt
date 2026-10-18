@@ -52,4 +52,39 @@ class GamepadMapperTest {
         assertEquals(listOf(GbButton.RIGHT to true, GbButton.UP to true),
             mapper.axes(1f, -1f, -0.9f, 0.9f))
     }
+
+    @Test
+    fun shoulderAliasesStayPressedUntilTheirLastSourceIsReleased() {
+        val mapper = GamepadMapper()
+        assertEquals(GbButton.L to true, mapper.key(KeyEvent.KEYCODE_BUTTON_L1, down, 0))
+        assertNull(mapper.key(KeyEvent.KEYCODE_BUTTON_L2, down, 0))
+        assertNull(mapper.key(KeyEvent.KEYCODE_BUTTON_L1, up, 0))
+        assertEquals(GbButton.L to false, mapper.key(KeyEvent.KEYCODE_BUTTON_L2, up, 0))
+        assertNull(mapper.key(KeyEvent.KEYCODE_BUTTON_L2, up, 0))
+    }
+
+    @Test
+    fun dpadKeyAndStickDoNotReleaseEachOther() {
+        val mapper = GamepadMapper()
+        assertEquals(GbButton.LEFT to true, mapper.key(KeyEvent.KEYCODE_DPAD_LEFT, down, 0))
+        assertEquals(emptyList<Pair<GbButton, Boolean>>(), mapper.axes(0f, 0f, -1f, 0f))
+        assertNull(mapper.key(KeyEvent.KEYCODE_DPAD_LEFT, up, 0))
+        assertEquals(listOf(GbButton.LEFT to false), mapper.axes(0f, 0f, 0f, 0f))
+
+        assertEquals(listOf(GbButton.RIGHT to true), mapper.axes(0f, 0f, 1f, 0f))
+        assertNull(mapper.key(KeyEvent.KEYCODE_DPAD_RIGHT, down, 0))
+        assertEquals(emptyList<Pair<GbButton, Boolean>>(), mapper.axes(0f, 0f, 0f, 0f))
+        assertEquals(GbButton.RIGHT to false, mapper.key(KeyEvent.KEYCODE_DPAD_RIGHT, up, 0))
+    }
+
+    @Test
+    fun resetForgetsAllSourcesAfterTheSessionReleasesItsButtons() {
+        val mapper = GamepadMapper()
+        mapper.key(KeyEvent.KEYCODE_BUTTON_L1, down, 0)
+        mapper.axes(0f, 0f, -1f, 0f)
+        mapper.reset()
+        assertNull(mapper.key(KeyEvent.KEYCODE_BUTTON_L1, up, 0))
+        assertEquals(GbButton.L to true, mapper.key(KeyEvent.KEYCODE_BUTTON_L1, down, 0))
+        assertEquals(listOf(GbButton.LEFT to true), mapper.axes(0f, 0f, -1f, 0f))
+    }
 }

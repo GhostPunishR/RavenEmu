@@ -14,6 +14,15 @@ import com.ravenemu.shared.GbButton
 internal class GamepadMapper {
     private var axisX = 0
     private var axisY = 0
+    private val heldKeys = mutableSetOf<Int>()
+
+    private fun pressedButtons(): Set<GbButton> = buildSet {
+        heldKeys.mapNotNullTo(this) { KEY_MAP[it] }
+        if (axisX < 0) add(GbButton.LEFT)
+        if (axisX > 0) add(GbButton.RIGHT)
+        if (axisY < 0) add(GbButton.UP)
+        if (axisY > 0) add(GbButton.DOWN)
+    }
 
     /** True when [keyCode] is a console button, whatever the event does. */
     fun handles(keyCode: Int): Boolean = keyCode in KEY_MAP
@@ -24,11 +33,14 @@ internal class GamepadMapper {
      */
     fun key(keyCode: Int, action: Int, repeatCount: Int): Pair<GbButton, Boolean>? {
         val button = KEY_MAP[keyCode] ?: return null
-        return when {
-            action == KeyEvent.ACTION_DOWN && repeatCount == 0 -> button to true
-            action == KeyEvent.ACTION_UP -> button to false
-            else -> null
+        val before = button in pressedButtons()
+        when {
+            action == KeyEvent.ACTION_DOWN && repeatCount == 0 -> heldKeys.add(keyCode)
+            action == KeyEvent.ACTION_UP -> heldKeys.remove(keyCode)
+            else -> return null
         }
+        val after = button in pressedButtons()
+        return if (before != after) button to after else null
     }
 
     /**
@@ -36,30 +48,21 @@ internal class GamepadMapper {
      * reported as axes) wins over the analog stick when both move.
      */
     fun axes(hatX: Float, hatY: Float, stickX: Float, stickY: Float): List<Pair<GbButton, Boolean>> {
-        val x = direction(hatX, stickX)
-        val y = direction(hatY, stickY)
-        val changes = mutableListOf<Pair<GbButton, Boolean>>()
-        if (x != axisX) {
-            if (axisX < 0) changes += GbButton.LEFT to false
-            if (axisX > 0) changes += GbButton.RIGHT to false
-            if (x < 0) changes += GbButton.LEFT to true
-            if (x > 0) changes += GbButton.RIGHT to true
-            axisX = x
-        }
-        if (y != axisY) {
-            if (axisY < 0) changes += GbButton.UP to false
-            if (axisY > 0) changes += GbButton.DOWN to false
-            if (y < 0) changes += GbButton.UP to true
-            if (y > 0) changes += GbButton.DOWN to true
-            axisY = y
-        }
-        return changes
+        val before = pressedButtons()
+        axisX = direction(hatX, stickX)
+        axisY = direction(hatY, stickY)
+        val after = pressedButtons()
+        // Release old directions before pressing new ones; keys and axes
+        // are sources of the same logical button, never competing owners.
+        return (before - after).map { it to false } +
+            (after - before).map { it to true }
     }
 
     /** Forget the axis state, after the session released every button. */
     fun reset() {
         axisX = 0
         axisY = 0
+        heldKeys.clear()
     }
 
     private fun direction(hat: Float, stick: Float): Int {
