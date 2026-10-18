@@ -109,6 +109,8 @@ jobs:
   android:
     name: Android (APK bêta)
     runs-on: ubuntu-latest
+    env:
+      RAVENEMU_VERSION_CODE: ${{ github.run_number }}
     steps:
       - name: Récupérer le dépôt
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -131,10 +133,45 @@ jobs:
         run: ./gradlew :androidApp:testDebugUnitTest :shared:testAndroidHostTest --stacktrace
       - name: Analyse Android Lint
         run: ./gradlew :androidApp:lintDebug --stacktrace
-      - name: Publier l'APK bêta
+      - name: Signer l'APK de distribution
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${ANDROID_KEYSTORE_BASE64:-}" || -z "${ANDROID_KEYSTORE_PASSWORD:-}" ]]; then
+            echo "::error::Les secrets de signature Android sont requis pour distribuer un APK."
+            exit 1
+          fi
+          umask 077
+          signing_dir="$(mktemp -d "$RUNNER_TEMP/ravenemu-signing.XXXXXX")"
+          trap 'rm -rf "$signing_dir"' EXIT
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$signing_dir/release.p12"
+          build_tools="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+          mkdir -p androidApp/build/outputs/apk/signed
+          "$build_tools/zipalign" -f -P 16 4 \
+            androidApp/build/outputs/apk/beta/androidApp-beta.apk "$signing_dir/aligned.apk"
+          "$build_tools/apksigner" sign \
+            --ks "$signing_dir/release.p12" --ks-type PKCS12 \
+            --ks-pass env:ANDROID_KEYSTORE_PASSWORD --key-pass env:ANDROID_KEYSTORE_PASSWORD \
+            --out androidApp/build/outputs/apk/signed/ravenemu-beta.apk "$signing_dir/aligned.apk"
+          "$build_tools/apksigner" verify --verbose androidApp/build/outputs/apk/signed/ravenemu-beta.apk
+          "$build_tools/zipalign" -c -P 16 4 androidApp/build/outputs/apk/signed/ravenemu-beta.apk
+      - name: Publier l'APK bêta signé
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ravenemu-android-beta
+          path: androidApp/build/outputs/apk/signed/ravenemu-beta.apk
+          if-no-files-found: error
+          retention-days: 7
+      - name: Publier l'APK de test
+        if: github.ref != 'refs/heads/main' || github.event_name == 'pull_request'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ravenemu-android-beta-test
           path: androidApp/build/outputs/apk/beta/*.apk
           if-no-files-found: error
           retention-days: 7
@@ -168,3 +205,56 @@ jobs:
             -I native/build-ios/iphonesimulator/include \
             -F shared/build/bin/iosSimulatorArm64/debugFramework \
             iosApp/Sources/*.swift
+
+  prerelease:
+    name: Publier la préversion Android
+    needs: [policy, native, android, ios]
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - name: Publier l'APK signé dans les Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          CI_RUN_ID: ${{ github.run_id }}
+          CI_RUN_NUMBER: ${{ github.run_number }}
+          COMMIT_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="android-beta-$CI_RUN_NUMBER"
+          dist="$RUNNER_TEMP/ravenemu-release"
+          mkdir -p "$dist"
+          gh run download "$CI_RUN_ID" --name ravenemu-android-beta --dir "$dist"
+          test -s "$dist/ravenemu-beta.apk"
+          (cd "$dist" && sha256sum ravenemu-beta.apk > SHA256SUMS.txt)
+          notes="$RUNNER_TEMP/ravenemu-release-notes.md"
+          cat > "$notes" <<EOF
+          Bêta Android 8.0 et plus, construite et signée après validation des quatre jobs de CI.
+
+          Téléchargez **ravenemu-beta.apk** dans les fichiers ci-dessous et installez-le directement, sans ZIP ni compte GitHub.
+          Les prochaines bêtas signées s'installent par-dessus celle-ci. Si vous venez d'un ancien APK dont la signature diffère, exportez vos sauvegardes avant la première désinstallation.
+
+          - Version Android (versionCode) : $CI_RUN_NUMBER
+          - Commit : $COMMIT_SHA
+          - CI : https://github.com/$GH_REPO/actions/runs/$CI_RUN_ID
+          - Empreinte du téléchargement : SHA256SUMS.txt
+
+          La compatibilité des jeux et les performances restent en cours de validation sur appareil. Aucun jeu inclus ; aucune application iOS distribuée.
+          EOF
+          # Une relance reprend un brouillon, sans remplacer une préversion publiée.
+          if gh release view "$tag" --json isDraft > "$dist/release.json" 2> "$dist/release-error.txt"; then
+            if [[ "$(jq -r .isDraft "$dist/release.json")" != "true" ]]; then
+              echo "La préversion $tag est déjà publiée."
+              exit 0
+            fi
+          else
+            gh release create "$tag" --target "$COMMIT_SHA" \
+              --title "RavenEmu Android - bêta $CI_RUN_NUMBER" \
+              --prerelease --latest=false --draft --notes-file "$notes"
+          fi
+          gh release upload "$tag" "$dist/ravenemu-beta.apk" "$dist/SHA256SUMS.txt" --clobber
+          gh release edit "$tag" --draft=false --prerelease --latest=false --notes-file "$notes"

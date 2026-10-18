@@ -25,4 +25,6 @@ __pycache__/
 *.py[cod]
 *.jks
 *.keystore
+*.p12
+*.pfx
 keystore.properties

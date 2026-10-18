@@ -2,18 +2,17 @@
 
 Les vérifications suivantes concernent la bêta Android multiplateforme. Commencez par relever le **commit du build**, votre appareil et la version Android.
 
-## L'artefact Android est introuvable
+## Le téléchargement Android est introuvable
 
-- Connectez-vous à GitHub.
-- Ouvrez le bon [workflow multiplateforme](https://github.com/GhostPunishR/RavenEmu/actions/workflows/multiplateforme.yml?query=branch%3Amain+is%3Asuccess), une exécution de `main` et son job Android réussi.
-- Cherchez `ravenemu-android-beta` dans les artefacts.
-- Les artefacts expirent après 7 jours ; essayez une exécution plus récente ou [compilez](https://github.com/GhostPunishR/RavenEmu/blob/main/wiki/Compilation.md).
+- Ouvrez les [Releases Android](https://github.com/GhostPunishR/RavenEmu/releases), sans connexion nécessaire.
+- Choisissez une préversion `android-beta-N` et téléchargez `ravenemu-beta.apk` dans ses fichiers.
+- Chaque préversion conserve son APK. Une nouvelle préversion apparaît après la réussite de tous les jobs du [workflow multiplateforme](https://github.com/GhostPunishR/RavenEmu/actions/workflows/multiplateforme.yml?query=branch%3Amain+is%3Asuccess) sur `main`.
 
 ## L'APK ne s'installe pas
 
-Vérifiez Android 8.0 minimum, l'espace libre et l'autorisation d'installer depuis la source utilisée. Extrayez bien l'APK du ZIP.
+Vérifiez Android 8.0 minimum, l'espace libre et l'autorisation d'installer depuis la source utilisée. Téléchargez directement `ravenemu-beta.apk` et choisissez une version plus récente que celle installée.
 
-En cas de signature incompatible, **exportez vos sauvegardes depuis la version installée avant toute désinstallation**. La bêta utilise une signature Debug, qui n'est pas la clé Test dédiée de l'ancienne application. Voir [Installation](https://github.com/GhostPunishR/RavenEmu/blob/main/wiki/Installation.md).
+En cas de signature incompatible avec un ancien APK, **exportez vos sauvegardes depuis la version installée avant toute désinstallation**. Les préversions signées actuelles utilisent le même certificat entre les builds et s'installent ensuite par-dessus les précédentes. Voir [Installation](https://github.com/GhostPunishR/RavenEmu/blob/main/wiki/Installation.md).
 
 ## Un jeu n'apparaît pas
 

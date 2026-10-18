@@ -13,12 +13,13 @@ android {
         applicationId = "com.ravenemu.preview"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
+        versionCode = providers.environmentVariable("RAVENEMU_VERSION_CODE")
+            .orElse("1").get().toInt()
         versionName = "0.1.0 - Bêta"
     }
     buildTypes {
-        // APK bêta publié par la CI : même identifiant et même signature que
-        // l'APK Debug (une mise à jour garde les données), mais non débogable.
+        // Non-debuggable beta; CI applies the persistent distribution
+        // signature after building and testing this variant.
         // Un APK débogable fait tourner le code Kotlin du lecteur (son, image,
         // cadence) moins optimisé ; la version 0.8.1 de RavenEmu publiait pour cela sa variante
         // « profil ». L'APK Debug reste disponible pour le débogage local.

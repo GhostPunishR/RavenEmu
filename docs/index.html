@@ -303,20 +303,20 @@
             <div>
               <p class="eyebrow">À vous de jouer</p>
               <h2 id="install-title">Installer la bêta Android</h2>
-              <p class="lead">La bêta est construite par l'intégration continue du projet, à chaque modification de <code>main</code>.</p>
+              <p class="lead">L'APK Android est vérifié et signé avant chaque publication. Téléchargez la bêta sans compte GitHub.</p>
             </div>
-            <a class="button button-primary" href="https://github.com/GhostPunishR/RavenEmu/actions/workflows/multiplateforme.yml?query=branch%3Amain+is%3Asuccess">Accéder aux builds
+            <a class="button button-primary" href="https://github.com/GhostPunishR/RavenEmu/releases">Télécharger l'APK signé
               <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </a>
           </div>
           <ol class="install-steps">
-            <li><span class="step-num">1</span><h3>Ouvrir un build réussi</h3><p>Choisissez la dernière exécution réussie de «&nbsp;RavenEmu Multiplateforme&nbsp;» sur <code>main</code>.</p></li>
-            <li><span class="step-num">2</span><h3>Récupérer l'APK</h3><p>Téléchargez l'artefact <code>ravenemu-android-beta</code>, puis extrayez l'APK de l'archive ZIP.</p></li>
+            <li><span class="step-num">1</span><h3>Choisir une préversion</h3><p>Ouvrez les Releases et choisissez la bêta Android au numéro le plus élevé.</p></li>
+            <li><span class="step-num">2</span><h3>Récupérer l'APK signé</h3><p>Dans les fichiers de la préversion, téléchargez <code>ravenemu-beta.apk</code>. Aucun ZIP à extraire.</p></li>
             <li><span class="step-num">3</span><h3>Installer et jouer</h3><p>Installez-le sur Android 8.0 ou plus récent, puis importez vos jeux avec le bouton <kbd>+</kbd>.</p></li>
           </ol>
           <div class="install-notes">
-            <p><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16h.01" /></svg>Un compte GitHub connecté est nécessaire&nbsp;; les artefacts sont conservés 7 jours.</p>
-            <p><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h11l3 3v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" /><path d="M7 3v5h8V3" /></svg>Exportez vos sauvegardes avant une désinstallation&nbsp;: une mise à jour exige le même certificat de signature.</p>
+            <p><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16h.01" /></svg>Les APK signés restent disponibles dans les Releases, sans compte GitHub.</p>
+            <p><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h11l3 3v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" /><path d="M7 3v5h8V3" /></svg>Les prochaines bêtas s'installent par-dessus la précédente. Si un ancien APK a une signature différente, exportez vos sauvegardes avant la première désinstallation.</p>
           </div>
         </div>
       </div>
@@ -361,7 +361,7 @@
           </details>
           <details>
             <summary>Pourquoi passer par GitHub pour télécharger&nbsp;?</summary>
-            <p>La bêta n'est pas encore publiée sur un magasin d'applications. Chaque modification de <code>main</code> produit un APK vérifié par l'intégration continue, que vous récupérez depuis GitHub.</p>
+            <p>La bêta n'est pas encore publiée sur un magasin d'applications. Retrouvez les APK signés dans les <a class="inline-link" href="https://github.com/GhostPunishR/RavenEmu/releases">Releases GitHub</a>, téléchargeables sans compte. Chaque préversion conserve son APK.</p>
           </details>
           <details class="build-card">
             <summary>Compiler depuis le code source</summary>

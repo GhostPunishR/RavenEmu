@@ -6,7 +6,7 @@
 
 **v0.1.0 - bêta · Android 8.0 et plus.** La version iOS est en développement ; aucune application iOS n’est encore distribuée.
 
-[Documentation](wiki/Home.md) · [Changelog](CHANGELOG.md) · [Signaler un problème](https://github.com/GhostPunishR/RavenEmu/issues)
+[Télécharger la bêta Android](https://github.com/GhostPunishR/RavenEmu/releases) · [Site officiel](https://ghostpunishr.github.io/RavenEmu/) · [Documentation](wiki/Home.md) · [Changelog](CHANGELOG.md) · [Signaler un problème](https://github.com/GhostPunishR/RavenEmu/issues)
 
 ## Fonctionnalités
 
@@ -21,11 +21,11 @@ La bêta reste en cours de validation, notamment pour les performances GBC/GBA e
 
 ## Installer sur Android
 
-1. Ouvrez un [build réussi de `main`](https://github.com/GhostPunishR/RavenEmu/actions/workflows/multiplateforme.yml?query=branch%3Amain+is%3Asuccess).
-2. Téléchargez **`ravenemu-android-beta`** et extrayez l’APK du ZIP.
+1. Ouvrez les [préversions Android](https://github.com/GhostPunishR/RavenEmu/releases) et choisissez la bêta au numéro le plus élevé.
+2. Dans les fichiers de la préversion, téléchargez **`ravenemu-beta.apk`**.
 3. Installez l’APK, puis importez vos jeux depuis l’application.
 
-Un compte GitHub est nécessaire ; les artefacts sont conservés **7 jours**. Exportez vos sauvegardes avant toute désinstallation. [Guide d’installation](wiki/Installation.md).
+Aucun compte GitHub ni extraction ZIP nécessaire. Chaque CI réussie de `main` publie une préversion avec son APK signé, conservé dans les Releases. Les nouvelles bêtas s’installent par-dessus les précédentes avec vos données. Si un ancien APK a une signature différente, exportez vos sauvegardes avant la première désinstallation. [Guide d’installation](wiki/Installation.md).
 
 ## Développer
 
