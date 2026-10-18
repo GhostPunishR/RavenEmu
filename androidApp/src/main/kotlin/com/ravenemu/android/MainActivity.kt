@@ -246,6 +246,10 @@ class MainActivity : ComponentActivity() {
             LaunchedEffect(retro) { retroUi.restore() }
             LaunchedEffect(retroUi.retroProgress?.badgeUrl) { retroUi.loadProgressBadge() }
             LaunchedEffect(Unit) { retroUi.showUnlocks() }
+            LaunchedEffect(videoEnabled, foreground) {
+                if (videoEnabled && foreground) retroUi.showProgress()
+                else retroUi.hideProgress()
+            }
             LaunchedEffect(retro, videoEnabled, pausedForGameMenu, foreground) {
                 retroUi.tickWhile { !videoEnabled || pausedForGameMenu || !foreground }
             }

@@ -5,6 +5,7 @@
 #include <rc_error.h>
 #include <algorithm>
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 #include <chrono>
 #include <memory>
@@ -209,11 +210,16 @@ std::vector<std::string> achievement_records(rc_client_t* rc) {
         const auto& bucket = list->buckets[b];
         for (uint32_t i = 0; i < bucket.num_achievements; ++i) {
             const auto& a = *bucket.achievements[i];
+            char measured_percent[32];
+            // Nine significant digits preserve the SDK's float, including
+            // small improvements in achievements with very large targets.
+            std::snprintf(measured_percent, sizeof(measured_percent), "%.9g",
+                static_cast<double>(a.measured_percent));
             for (auto value : {std::to_string(a.id), std::string(a.title ? a.title : ""),
                 std::string(a.description ? a.description : ""), std::to_string(a.points),
                 std::to_string(a.state), std::string(a.measured_progress),
                 std::to_string(a.unlock_time), std::to_string(bucket.bucket_type),
-                achievement_image(a)}) result.push_back(value);
+                achievement_image(a), std::string(measured_percent)}) result.push_back(value);
         }
     }
     return result;

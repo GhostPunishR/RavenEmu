@@ -37,6 +37,8 @@ internal class AchievementsController(
     private var currentUser = ""
     private var lastSnapshotMs = 0L
     private var stopped = false
+    private var progressBaselinePending = false
+    private var resetDuringTick = false
     // Hardcore needs RetroAchievements' approval: wanted AND approved.
     private var hardcoreWanted = false
 
@@ -95,7 +97,13 @@ internal class AchievementsController(
     }
 
     suspend fun resetProgress() = withContext(dispatcher) {
-        if (!stopped) client?.reset()
+        if (!stopped) {
+            client?.reset()
+            progressBaselinePending = true
+            main.post {
+                if (!stopped) onEvent(AchievementClient.Event("progress_reset", "", "", "", ""))
+            }
+        }
     }
 
     /**
@@ -132,6 +140,7 @@ internal class AchievementsController(
 
     private fun start(username: String, secret: String, token: Boolean) {
         client?.close()
+        progressBaselinePending = false
         connected = false
         currentUser = username
         val fresh = AchievementClient(
@@ -153,6 +162,7 @@ internal class AchievementsController(
     }
 
     private fun handleEvent(event: AchievementClient.Event) {
+        if (event.kind == "game") progressBaselinePending = true
         if (event.kind == "login") {
             val name = event.title.ifBlank { currentUser }
             val token = event.extra
@@ -178,6 +188,8 @@ internal class AchievementsController(
             // the game restarts from power-on, and so does the SDK's state.
             runCatching { session.resetGame() }
             client?.reset()
+            progressBaselinePending = true
+            resetDuringTick = true
         }
         hardcoreActive = client?.hardcore() ?: false
         // Indicator and leaderboard events can arrive every frame (a running
@@ -195,9 +207,20 @@ internal class AchievementsController(
 
     private fun poll(frame: Boolean) {
         val c = client ?: return
-        c.tick(frame && connected && currentRom != null)
+        val processFrame = frame && connected && currentRom != null
+        resetDuringTick = false
+        c.tick(processFrame)
         val now = System.nanoTime() / 1_000_000L
-        if (now - lastSnapshotMs >= 1200L) {
+        if (processFrame && progressBaselinePending && !resetDuringTick) {
+            // The first evaluated frame initializes Measured values. They
+            // are a baseline, not gains (rc_client ignores UNKNOWN -> value).
+            progressBaselinePending = false
+            main.post {
+                if (!stopped) onEvent(AchievementClient.Event("progress_baseline", "", "", "", ""))
+            }
+            lastSnapshotMs = now
+            publish(c.snapshot())
+        } else if (now - lastSnapshotMs >= 1200L) {
             lastSnapshotMs = now
             publish(c.snapshot())
         }

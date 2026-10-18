@@ -11,6 +11,8 @@ data class AchievementEntry(
     val unlockedAt: Long,
     val bucket: Int,
     val badgeUrl: String,
+    /** Numeric measurement supplied by rcheevos, independent of its formatted text. */
+    val measuredPercent: Float = 0f,
 ) {
     val unlocked: Boolean get() = state == 2
 }

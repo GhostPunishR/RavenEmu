@@ -3,11 +3,14 @@ package com.ravenemu.android
 import android.os.Looper
 import com.ravenemu.shared.RetroProgress
 import com.ravenemu.shared.RetroSnapshot
+import com.ravenemu.shared.AchievementEntry
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.launch
+import java.time.Duration
 import org.junit.After
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -25,7 +28,8 @@ class RetroAchievementsUiTest {
     private val context = RuntimeEnvironment.getApplication()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val session = AndroidGbSession(context.contentResolver, context.filesDir)
-    private val ui = RetroAchievementsUi(context, session, scope)
+    private var nowMillis = 0L
+    private val ui = RetroAchievementsUi(context, session, scope) { nowMillis }
 
     @After
     fun close() {
@@ -36,9 +40,8 @@ class RetroAchievementsUiTest {
 
     @Test
     fun `la deconnexion efface la progression meme sans signal hide du SDK`() {
-        ui.updateSnapshot(RetroSnapshot(username = "joueur", gameId = 1))
+        showMeasuredProgress()
         ui.handleEvent(AchievementClient.Event("challenge_show", "Défi", "", "1", ""))
-        ui.handleEvent(AchievementClient.Event("progress_show", "Collection", "4/10", "2", ""))
         assertTrue(ui.retroIndicators.isNotEmpty())
         assertTrue(ui.retroProgress != null)
         // No native client is needed: disconnect must reset the UI even if
@@ -51,22 +54,110 @@ class RetroAchievementsUiTest {
 
     @Test
     fun `un rafraichissement conserve la progression mais un autre jeu la supprime`() {
-        val snapshot = RetroSnapshot(username = "joueur", gameId = 1)
-        ui.updateSnapshot(snapshot)
-        ui.handleEvent(AchievementClient.Event("progress_show", "Collection", "4/10", "2", ""))
+        val snapshot = showMeasuredProgress()
         ui.updateSnapshot(snapshot.copy(unlockedCount = 1))
-        assertEquals(RetroProgress("Collection", "4/10", ""), ui.retroProgress)
+        assertEquals(RetroProgress("Collection", "4/10", "2.png"), ui.retroProgress)
         ui.updateSnapshot(snapshot.copy(gameId = 2))
         assertNull(ui.retroProgress)
     }
 
     @Test
     fun `la reconnexion efface les indicateurs avant la reponse du serveur`() {
-        ui.updateSnapshot(RetroSnapshot(username = "joueur", gameId = 1))
+        showMeasuredProgress()
         ui.handleEvent(AchievementClient.Event("tracker_show", "Classement", "0:12", "3", ""))
-        ui.handleEvent(AchievementClient.Event("progress_show", "Collection", "4/10", "2", ""))
         ui.updateSnapshot(RetroSnapshot(status = "Connexion en cours…", busy = true))
         assertNull(ui.retroProgress)
         assertTrue(ui.retroIndicators.isEmpty())
     }
+
+    @Test
+    fun `le succes prioritaire du SDK ne masque pas les autres progressions`() {
+        val baseline = RetroSnapshot(username = "joueur", gameId = 1, entries = listOf(
+            achievement("1", "Collection", "7/10", 70f),
+            achievement("2", "Exploration", "1/10", 10f),
+        ))
+        publishBaseline(baseline)
+        // As documented by rcheevos, only the achievement closest to completion
+        // emits a popup event when both measurements change in the same frame.
+        ui.handleEvent(AchievementClient.Event("progress_show", "Collection", "8/10", "1", "1.png"))
+        val improved = baseline.copy(entries = listOf(
+            achievement("1", "Collection", "8/10", 80f),
+            achievement("2", "Exploration", "2/10", 20f),
+        ))
+        ui.updateSnapshot(improved)
+        assertEquals("Collection", ui.retroProgress?.title)
+        nowMillis = 2_000L
+        ui.handleEvent(AchievementClient.Event("progress_show", "Collection", "9/10", "1", "1.png"))
+        ui.updateSnapshot(improved.copy(entries = listOf(
+            achievement("1", "Collection", "9/10", 90f),
+            improved.entries[1],
+        )))
+        assertEquals(RetroProgress("Exploration", "2/10", "2.png"), ui.retroProgress)
+    }
+
+    @Test
+    fun `le timer donne le tour au second succes puis ferme sans nouvel evenement`() {
+        publishBaseline(RetroSnapshot(username = "joueur", gameId = 1, entries = listOf(
+            achievement("1", "Collection", "7/10", 70f), achievement("2", "Exploration", "1/10", 10f),
+        )))
+        ui.updateSnapshot(ui.retroSnapshot.copy(entries = listOf(
+            achievement("1", "Collection", "8/10", 80f), achievement("2", "Exploration", "2/10", 20f),
+        )))
+        val job = scope.launch { ui.showProgress() }
+        ui.handleEvent(AchievementClient.Event("progress_hide", "", "", "", ""))
+        nowMillis = 2_000L
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(2_000))
+        assertEquals("Exploration", ui.retroProgress?.title)
+        nowMillis = 4_000L
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(2_000))
+        assertNull(ui.retroProgress)
+        job.cancel()
+    }
+
+    @Test
+    fun `quitter le lecteur et charger un etat ne rejouent pas une ancienne progression`() {
+        val snapshot = showMeasuredProgress()
+        ui.hideProgress()
+        ui.updateSnapshot(snapshot)
+        assertNull(ui.retroProgress)
+        ui.handleEvent(AchievementClient.Event("progress_reset", "", "", "", ""))
+        publishBaseline(snapshot)
+        assertNull(ui.retroProgress)
+        ui.updateSnapshot(snapshot.copy(entries = listOf(achievement("2", "Collection", "5/10", 50f))))
+        assertEquals("5/10", ui.retroProgress?.detail)
+    }
+
+    private fun showMeasuredProgress(): RetroSnapshot {
+        publishBaseline(RetroSnapshot(username = "joueur", gameId = 1,
+            entries = listOf(achievement("2", "Collection", "3/10", 30f))))
+        val snapshot = ui.retroSnapshot.copy(entries = listOf(achievement("2", "Collection", "4/10", 40f)))
+        ui.updateSnapshot(snapshot)
+        return snapshot
+    }
+
+    @Test
+    fun `la premiere frame retablit une mesure existante sans popup ni perte du defi`() {
+        val snapshot = RetroSnapshot(username = "joueur", gameId = 1,
+            entries = listOf(achievement("2", "Collection", "", 0f)))
+        ui.updateSnapshot(snapshot)
+        ui.handleEvent(AchievementClient.Event("challenge_show", "Défi", "", "1", ""))
+        val loaded = snapshot.copy(entries = listOf(achievement("2", "Collection", "8/10", 80f)))
+        ui.updateSnapshot(loaded)
+        assertNull(ui.retroProgress)
+        ui.handleEvent(AchievementClient.Event("progress_baseline", "", "", "", ""))
+        ui.updateSnapshot(loaded)
+        assertNull(ui.retroProgress)
+        assertEquals(listOf("Défi"), ui.retroIndicators)
+        ui.updateSnapshot(loaded.copy(entries = listOf(achievement("2", "Collection", "9/10", 90f))))
+        assertEquals("9/10", ui.retroProgress?.detail)
+    }
+
+    private fun publishBaseline(snapshot: RetroSnapshot) {
+        ui.updateSnapshot(snapshot)
+        ui.handleEvent(AchievementClient.Event("progress_baseline", "", "", "", ""))
+        ui.updateSnapshot(snapshot)
+    }
+
+    private fun achievement(id: String, title: String, progress: String, percent: Float) =
+        AchievementEntry(id, title, "", 5, 1, progress, 0L, 1, "$id.png", percent)
 }

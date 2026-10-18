@@ -1,6 +1,7 @@
 package com.ravenemu.android
 
 import android.content.Context
+import android.os.SystemClock
 import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -12,6 +13,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import com.ravenemu.shared.RetroIndicatorState
 import com.ravenemu.shared.RetroNoticeText
 import com.ravenemu.shared.RetroProgress
+import com.ravenemu.shared.RetroProgressNotifications
 import com.ravenemu.shared.RetroSnapshot
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -34,6 +36,7 @@ internal class RetroAchievementsUi(
     applicationContext: Context,
     gameSession: AndroidGbSession,
     private val scope: CoroutineScope,
+    private val nowMillis: () -> Long = SystemClock::uptimeMillis,
 ) {
     var retroSnapshot by mutableStateOf(RetroSnapshot())
         private set
@@ -55,9 +58,10 @@ internal class RetroAchievementsUi(
     // Unlocks wait their turn: several often fire on the same frame,
     // and each used to replace the previous popup at once.
     private val retroUnlocks = mutableStateListOf<RetroPopup>()
-    // Challenges, measured progress and leaderboard trackers stay on
-    // screen until the SDK hides them (RA compliance requirement).
+    // Challenges and leaderboard trackers follow the SDK's SHOW/HIDE events.
     private val retroIndicatorState = RetroIndicatorState()
+    private val progressNotifications = RetroProgressNotifications()
+    private var progressReady = false
     val retro = AchievementsController(
         applicationContext, gameSession,
         onSnapshot = ::updateSnapshot,
@@ -73,16 +77,23 @@ internal class RetroAchievementsUi(
             clearIndicators()
         }
         retroSnapshot = snapshot
+        if (progressReady) retroProgress = progressNotifications.update(snapshot.entries, nowMillis())
     }
 
     internal fun handleEvent(event: AchievementClient.Event) {
-        if (event.kind == "login" || event.kind == "game") {
+        if (event.kind == "progress_baseline") {
+            progressNotifications.clear()
+            retroProgress = null
+            progressReady = true
+        }
+        if (event.kind == "progress_reset" || event.kind == "hardcore_reset") {
             clearIndicators()
         }
-        if (retroIndicatorState.handles(event.kind)) {
+        // Progress events omit concurrent achievements; use the complete SDK
+        // measurements instead. Challenges and trackers still follow HIDE.
+        if (retroIndicatorState.handles(event.kind) && !event.kind.startsWith("progress_")) {
             retroIndicatorState.update(event.kind, event.extra, event.title, event.detail, event.image)
             retroIndicators = retroIndicatorState.labels
-            retroProgress = retroIndicatorState.progress
         }
         val popup = RetroNoticeText.of(event.kind, event.title, event.detail, event.extra)
         if (popup != null && retroUnlocks.size < MAX_QUEUED_UNLOCKS) {
@@ -97,8 +108,25 @@ internal class RetroAchievementsUi(
 
     private fun clearIndicators() {
         retroIndicatorState.clear()
+        progressNotifications.clear()
+        progressReady = false
         retroIndicators = emptyList()
         retroProgress = null
+    }
+
+    fun hideProgress() {
+        progressNotifications.dismiss()
+        retroProgress = null
+    }
+
+    /** Sleep until the current turn ends; no polling while there is no popup. */
+    suspend fun showProgress() {
+        while (currentCoroutineContext().isActive) {
+            snapshotFlow { retroProgress }.filterNotNull().first()
+            val transitionAt = progressNotifications.nextTransitionAt ?: continue
+            delay((transitionAt - nowMillis()).coerceAtLeast(1L))
+            retroProgress = progressNotifications.advance(nowMillis())
+        }
     }
 
     /** Loads the avatar and every badge of the set not loaded yet. */

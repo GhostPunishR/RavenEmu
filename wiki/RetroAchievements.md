@@ -19,6 +19,16 @@ L'intégration transmet au SDK la console du jeu : Game Boy, Game Boy Color ou G
 
 Le SDK observe la mémoire fournie par l'API C de RavenCore. Les restaurations d'état réinitialisent les conditions temporaires des succès.
 
+## Notifications de progression
+
+Le popup affiche un seul succès à la fois. Lorsque plusieurs mesures progressent, leurs notifications passent à tour de rôle, pendant deux secondes chacune. Les mises à jour d'un même succès sont regroupées avec sa valeur la plus récente, sans repousser le tour des autres.
+
+Les notifications s'appuient sur les mesures de la liste complète du SDK : son événement de progression ne signale que le succès le plus proche de son objectif lorsque plusieurs mesures changent dans la même image. Une valeur déjà atteinte dans la session ne relance pas le popup à chaque oscillation du compteur. Les valeurs présentes au chargement servent de référence et les notifications anciennes sont abandonnées.
+
+Seuls les succès qui possèdent une mesure définie par leur auteur peuvent produire ces notifications. Les mesures sont relevées au rythme du tableau de bord, environ toutes les 1,2 seconde ; plusieurs hausses rapprochées peuvent être regroupées. La notification ne signifie pas que le succès est débloqué ou synchronisé.
+
+Références officielles : [intégration de l'indicateur de progression](https://github.com/RetroAchievements/rcheevos/wiki/rc_client-integration#progress-indicator) et [fonctionnement de Measured](https://github.com/RetroAchievements/docs/blob/main/docs/developer-docs/flags/measured.md).
+
 ## Limites
 
 - Hardcore reste désactivé.
