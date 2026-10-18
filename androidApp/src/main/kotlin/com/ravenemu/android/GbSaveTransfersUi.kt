@@ -234,7 +234,7 @@ internal class GbSaveTransfersUi(
     fun exportBatterySave(id: String, libraryGames: List<GameEntry>, playerOpen: Boolean) {
         if (libraryGames.any { it.id == id }) {
             val lease = begin(playerOpen) ?: return
-            val gameName = exportName(libraryGames.first { it.id == id }.title)
+            val filename = batteryExportName(libraryGames.first { it.id == id }.title)
             scope.launch {
                 var handedToPicker = false
                 try {
@@ -246,7 +246,7 @@ internal class GbSaveTransfersUi(
                     }
                     pendingExport = id to "sav"
                     pickerLease = lease
-                    exportBattery.launch("$gameName.sav")
+                    exportBattery.launch(filename)
                     handedToPicker = true
                 } catch (error: Exception) {
                     Toast.makeText(applicationContext,
@@ -300,10 +300,19 @@ internal class GbSaveTransfersUi(
         gameSession.saveBatteryIfDirty()
     }
 
-    /** File name stem for an export: the ROM name without extension or symbols. */
+    /** File name stem for a backup archive. */
     private fun exportName(title: String): String = title
         .substringBeforeLast('.')
         .replace(Regex("[^A-Za-z0-9_-]+"), "-")
         .take(48)
         .ifBlank { "GameBoy" }
+}
+
+/** Keep the ROM's complete name so other emulators can associate its save. */
+private fun batteryExportName(romFilename: String): String {
+    val stem = romFilename.substringAfterLast('/').substringAfterLast('\\')
+        .substringBeforeLast('.')
+        .filterNot { it.isISOControl() }
+        .ifBlank { "GameBoy" }
+    return "$stem.sav"
 }
