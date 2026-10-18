@@ -60,30 +60,46 @@ internal class RetroAchievementsUi(
     private val retroIndicatorState = RetroIndicatorState()
     val retro = AchievementsController(
         applicationContext, gameSession,
-        onSnapshot = { snapshot -> retroSnapshot = snapshot },
-        onEvent = { event ->
-            if (event.kind == "login" || event.kind == "game") {
-                // A new session or game: earlier indicators are void.
-                retroIndicatorState.clear()
-                retroIndicators = emptyList()
-                retroProgress = null
-            }
-            if (retroIndicatorState.handles(event.kind)) {
-                retroIndicatorState.update(event.kind, event.extra, event.title, event.detail, event.image)
-                retroIndicators = retroIndicatorState.labels
-                retroProgress = retroIndicatorState.progress
-            }
-            val popup = RetroNoticeText.of(event.kind, event.title, event.detail, event.extra)
-            if (popup != null && retroUnlocks.size < MAX_QUEUED_UNLOCKS) {
-                // Only an unlock has a badge; other notices keep the star.
-                val badge = if (event.kind == "achievement") event.image else ""
-                retroUnlocks.add(RetroPopup(popup, badge))
-            }
-            if (event.kind == "login_error" || event.kind == "login") {
-                retroBusy = false
-            }
-        },
+        onSnapshot = ::updateSnapshot,
+        onEvent = ::handleEvent,
     )
+
+    internal fun updateSnapshot(snapshot: RetroSnapshot) {
+        // Closing/replacing the SDK client does not emit indicator HIDE
+        // events. Reset at the session boundary, including failed logins.
+        if (snapshot.username != retroSnapshot.username ||
+            snapshot.gameId != retroSnapshot.gameId ||
+            snapshot.username.isBlank() || snapshot.gameId == 0) {
+            clearIndicators()
+        }
+        retroSnapshot = snapshot
+    }
+
+    internal fun handleEvent(event: AchievementClient.Event) {
+        if (event.kind == "login" || event.kind == "game") {
+            clearIndicators()
+        }
+        if (retroIndicatorState.handles(event.kind)) {
+            retroIndicatorState.update(event.kind, event.extra, event.title, event.detail, event.image)
+            retroIndicators = retroIndicatorState.labels
+            retroProgress = retroIndicatorState.progress
+        }
+        val popup = RetroNoticeText.of(event.kind, event.title, event.detail, event.extra)
+        if (popup != null && retroUnlocks.size < MAX_QUEUED_UNLOCKS) {
+            // Only an unlock has a badge; other notices keep the star.
+            val badge = if (event.kind == "achievement") event.image else ""
+            retroUnlocks.add(RetroPopup(popup, badge))
+        }
+        if (event.kind == "login_error" || event.kind == "login") {
+            retroBusy = false
+        }
+    }
+
+    private fun clearIndicators() {
+        retroIndicatorState.clear()
+        retroIndicators = emptyList()
+        retroProgress = null
+    }
 
     /** Loads the avatar and every badge of the set not loaded yet. */
     suspend fun loadImages() {
