@@ -40,13 +40,14 @@ internal class AchievementClient(
     fun snapshot(): RetroSnapshot {
         val summary = NativeAchievementsBridge.summary(handle).toList()
         val achievements = NativeAchievementsBridge.achievements(handle).toList()
-            .chunked(9).filter { it.size == 9 }.mapNotNull { a ->
+            .chunked(10).filter { it.size == 10 }.mapNotNull { a ->
                 runCatching {
                     AchievementEntry(
                         id = a[0], title = a[1], description = a[2],
                         points = a[3].toInt(), state = a[4].toInt(),
                         progress = a[5], unlockedAt = a[6].toLong(),
                         bucket = a[7].toInt(), badgeUrl = a[8],
+                        measuredPercent = a[9].toFloatOrNull() ?: 0f,
                     )
                 }.getOrNull()
             }

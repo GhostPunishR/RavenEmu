@@ -11,6 +11,7 @@
 ### Corrigé
 
 - RetroAchievements : le popup garde la valeur de progression lisible même avec un titre de succès long. Les indicateurs sont effacés à la déconnexion ou au remplacement de la session, même sans événement de disparition du SDK.
+- RetroAchievements : les hausses mesurées des différents succès passent à tour de rôle dans le popup, avec deux secondes par tour. Un succès fréquemment mis à jour ne masque plus les autres et les valeurs déjà atteintes dans la session ne relancent plus continuellement la notification.
 - RetroAchievements : une reconnexion crée un nouveau journal de session après la révocation de la déconnexion ; les anciens callbacks ne peuvent pas réécrire le journal.
 - Fiche de jeu : les gestes restent actifs pendant le dépliage, comme dans le menu en jeu. Le panneau peut être repris avec le doigt pendant son animation.
 - Export `.sav` : le nom proposé reprend le nom complet de la ROM en remplaçant son extension par `.sav`, en conservant les espaces, accents, parenthèses et noms longs.
