@@ -12,6 +12,7 @@
 
 - RetroAchievements : le popup garde la valeur de progression lisible même avec un titre de succès long. Les indicateurs sont effacés à la déconnexion ou au remplacement de la session, même sans événement de disparition du SDK.
 - RetroAchievements : une reconnexion crée un nouveau journal de session après la révocation de la déconnexion ; les anciens callbacks ne peuvent pas réécrire le journal.
+- Fiche de jeu : les gestes restent actifs pendant le dépliage, comme dans le menu en jeu. Le panneau peut être repris avec le doigt pendant son animation.
 - Sauvegardes : lancements, imports et exports sont exclus mutuellement jusqu'à la fin de leur mise à jour d'interface, y compris pendant le sélecteur de fichiers. Une paire link encore en mémoire est libérée avant un transfert.
 - Miniatures des états : contrôle des dimensions PNG avant décodage et réduction de résolution ; une miniature importée invalide est ignorée sans perdre son état associé.
 - Manettes : plusieurs touches ou axes commandant le même bouton restent actifs jusqu'au relâchement de leur dernière source. Les touches sont interceptées par l'API publique Window.Callback.
