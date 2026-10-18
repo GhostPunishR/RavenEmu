@@ -90,9 +90,8 @@ internal fun BoxScope.RetroOverlays(
             RetroPopupCard(retroNotice.orEmpty(), retroNoticeBadge, noticeAlpha)
         }
         if (showProgress && progress != null) {
-            val text = listOf("Progression · ${progress.title}", progress.detail)
-                .filter { it.isNotBlank() }.joinToString("\n")
-            RetroPopupCard(text, held.badge, progressAlpha)
+            RetroPopupCard("Progression · ${progress.title}", held.badge, progressAlpha,
+                detail = progress.detail)
         }
     }
 }
@@ -108,7 +107,7 @@ private class HeldProgress {
  * Fixed badge slot: the popup keeps the same size either way.
  */
 @Composable
-private fun RetroPopupCard(text: String, badge: ImageBitmap?, alpha: Float) {
+private fun RetroPopupCard(text: String, badge: ImageBitmap?, alpha: Float, detail: String = "") {
     Row(
         Modifier.alpha(alpha)
             .background(RavenSurface, RoundedCornerShape(12.dp))
@@ -128,7 +127,15 @@ private fun RetroPopupCard(text: String, badge: ImageBitmap?, alpha: Float) {
             }
         }
         Spacer(Modifier.width(8.dp))
-        Text(text, color = RavenText, fontSize = 12.sp,
-            maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Column {
+            Text(text, color = RavenText, fontSize = 12.sp,
+                maxLines = if (detail.isBlank()) 2 else 1, overflow = TextOverflow.Ellipsis)
+            // Reserve the second line for the measured value, even when
+            // a long achievement title needs ellipsizing on a small screen.
+            if (detail.isNotBlank()) {
+                Text(detail, color = RavenText, fontSize = 12.sp,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
     }
 }
