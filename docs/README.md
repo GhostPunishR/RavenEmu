@@ -5,7 +5,7 @@ Sources du site statique publié par GitHub Pages depuis `main`, dossier `docs/`
 ## Direction visuelle
 
 Sombre et violet, comme l'application.
-- **Mise en page.** Une page unique en sections : ouverture, capture de l'application, fonctions en grille de cartes, matériel de la cartouche, moteurs RavenCore, plateformes, installation, questions fréquentes.
+- **Mise en page.** Une page unique en sections : ouverture, capture de l'application, fonctions en grille de cartes, matériel de la cartouche, jeu à deux (câble link), moteurs RavenCore, plateformes, installation, questions fréquentes.
 - **Typographie.** Polices système uniquement : la politique de sécurité n'autorise aucune ressource externe.
 - **Mouvement.**
   - Les sections apparaissent au défilement, par une animation CSS liée au défilement (`animation-timeline: view()`). Un navigateur qui ne la connaît pas affiche tout d'emblée.
