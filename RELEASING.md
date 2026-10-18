@@ -1,24 +1,26 @@
 # Distribution de RavenEmu
 
-La version de référence est **v0.1.0 - bêta** ; son contenu et ses limites sont décrits dans [CHANGELOG.md](CHANGELOG.md). Le workflow [multiplateforme.yml](.github/workflows/multiplateforme.yml) publie l'APK Android depuis les builds réussis de `main`.
+La version de référence est **v0.1.0 - bêta** ; son contenu et ses limites sont décrits dans [CHANGELOG.md](CHANGELOG.md). Le workflow [multiplateforme.yml](.github/workflows/multiplateforme.yml) publie l'APK Android signé dans les [Releases](https://github.com/GhostPunishR/RavenEmu/releases) après validation de tous les jobs sur `main`.
 
 | Élément | Valeur |
 | --- | --- |
 | Commande | `./gradlew :androidApp:assembleBeta` |
-| Variante | Debug sans drapeau débogable, avec la même signature de build |
+| Variante | Bêta sans drapeau débogable, signée pour la distribution |
 | Identifiant Android | `com.ravenemu.preview` |
 | Nom affiché | RavenEmu |
 | Artefact Actions | `ravenemu-android-beta` |
-| APK | `androidApp/build/outputs/apk/beta/androidApp-beta.apk` |
-| Rétention | 7 jours |
+| APK distribué | `ravenemu-beta.apk` |
+| Préversion | `android-beta-N`, où N est le numéro de la CI et le `versionCode` Android |
+| Empreinte | `SHA256SUMS.txt` joint à la préversion |
+| Conservation | APK conservé dans chaque Release ; artefact Actions de secours pendant 7 jours |
 
-Un compte GitHub connecté est nécessaire pour télécharger un artefact. Voir [Installation](wiki/Installation.md).
+Les téléchargements des Releases sont accessibles sans compte GitHub ni archive ZIP. Les APK de test des pull requests restent des artefacts Actions distincts. Voir [Installation](wiki/Installation.md).
 
 ## Signature et données
 
-La bêta utilise la signature Debug du build, sans clé de distribution stable configurée. Une mise à jour exige le même identifiant et le même certificat. Le déplacement du dépôt conserve l'identifiant et les noms de stockage ; il ne garantit pas que le certificat d'un nouveau runner soit identique à celui d'un APK déjà installé.
+Les APK distribués conservent le même certificat de signature et le même identifiant Android. Le `versionCode` augmente avec le numéro de CI pour permettre les mises à jour sans désinstallation. Un ancien APK signé avec un certificat différent peut exiger une première désinstallation ; les préversions suivantes s'installent par-dessus la précédente.
 
-Avant toute désinstallation ou effacement de données, exportez les sauvegardes. Les ZIP historiques et les `.sav` compatibles peuvent être réimportés avec les ROM correspondantes. Les formats natifs restent ceux du RavenCore épinglé. Aucun secret, keystore ou mot de passe ne doit être ajouté au dépôt pour construire cette variante.
+Avant toute désinstallation ou effacement de données, exportez les sauvegardes. Les ZIP historiques et les `.sav` compatibles peuvent être réimportés avec les ROM correspondantes. Les formats natifs restent ceux du RavenCore épinglé.
 
 ## Avant de distribuer un build
 
@@ -31,4 +33,4 @@ Les jobs iOS construisent le framework partagé et le SDK natif pour simulateur 
 
 ## Versions et publications
 
-Le changelog décrit la bêta initiale. Créer un tag `v*` ne déclenche pas de GitHub Release dans le workflow actuel. Une distribution signée stable nécessitera une clé conservée de façon sécurisée, des artefacts vérifiables et une validation sur appareil.
+Le changelog décrit la bêta initiale. Après réussite des jobs règles du dépôt, natif, Android et iOS sur `main`, la CI crée automatiquement le tag `android-beta-N` sur le commit validé et publie sa préversion avec l'APK signé et son empreinte. Une relance reprend un éventuel brouillon sans remplacer une préversion déjà publiée. Les anciennes préversions restent disponibles. La création manuelle d'un tag ne déclenche pas de build ; la publication part de la CI de `main`.

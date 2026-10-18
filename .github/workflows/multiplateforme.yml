@@ -205,3 +205,56 @@ jobs:
             -I native/build-ios/iphonesimulator/include \
             -F shared/build/bin/iosSimulatorArm64/debugFramework \
             iosApp/Sources/*.swift
+
+  prerelease:
+    name: Publier la préversion Android
+    needs: [policy, native, android, ios]
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - name: Publier l'APK signé dans les Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          CI_RUN_ID: ${{ github.run_id }}
+          CI_RUN_NUMBER: ${{ github.run_number }}
+          COMMIT_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="android-beta-$CI_RUN_NUMBER"
+          dist="$RUNNER_TEMP/ravenemu-release"
+          mkdir -p "$dist"
+          gh run download "$CI_RUN_ID" --name ravenemu-android-beta --dir "$dist"
+          test -s "$dist/ravenemu-beta.apk"
+          (cd "$dist" && sha256sum ravenemu-beta.apk > SHA256SUMS.txt)
+          notes="$RUNNER_TEMP/ravenemu-release-notes.md"
+          cat > "$notes" <<EOF
+          Bêta Android 8.0 et plus, construite et signée après validation des quatre jobs de CI.
+
+          Téléchargez **ravenemu-beta.apk** dans les fichiers ci-dessous et installez-le directement, sans ZIP ni compte GitHub.
+          Les prochaines bêtas signées s'installent par-dessus celle-ci. Si vous venez d'un ancien APK dont la signature diffère, exportez vos sauvegardes avant la première désinstallation.
+
+          - Version Android (versionCode) : $CI_RUN_NUMBER
+          - Commit : $COMMIT_SHA
+          - CI : https://github.com/$GH_REPO/actions/runs/$CI_RUN_ID
+          - Empreinte du téléchargement : SHA256SUMS.txt
+
+          La compatibilité des jeux et les performances restent en cours de validation sur appareil. Aucun jeu inclus ; aucune application iOS distribuée.
+          EOF
+          # Une relance reprend un brouillon, sans remplacer une préversion publiée.
+          if gh release view "$tag" --json isDraft > "$dist/release.json" 2> "$dist/release-error.txt"; then
+            if [[ "$(jq -r .isDraft "$dist/release.json")" != "true" ]]; then
+              echo "La préversion $tag est déjà publiée."
+              exit 0
+            fi
+          else
+            gh release create "$tag" --target "$COMMIT_SHA" \
+              --title "RavenEmu Android - bêta $CI_RUN_NUMBER" \
+              --prerelease --latest=false --draft --notes-file "$notes"
+          fi
+          gh release upload "$tag" "$dist/ravenemu-beta.apk" "$dist/SHA256SUMS.txt" --clobber
+          gh release edit "$tag" --draft=false --prerelease --latest=false --notes-file "$notes"

@@ -30,7 +30,7 @@ Aucun jeu fictif ni capture inventée n'est présenté. Les écrans des cartes �
 
 ## Contenu
 
-La bêta actuelle est l'artefact `ravenemu-android-beta` de `multiplateforme.yml` (compte GitHub requis, rétention 7 jours).
+La bêta se télécharge depuis les [Releases](https://github.com/GhostPunishR/RavenEmu/releases), sans compte GitHub : chaque CI réussie de `main` publie `ravenemu-beta.apk` signé dans une préversion `android-beta-N`. Chaque préversion conserve son APK. Le lien `/releases/latest` exclut les préversions ; utilisez `/releases`.
 
 Sources de vérité :
 - `README.md`, `BUILDING.md` et `CHANGELOG.md` ;

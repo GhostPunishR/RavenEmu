@@ -36,6 +36,6 @@ Les fonctions de la dernière branche RavenCore ne sont pas automatiquement cell
 
 ## Distribution
 
-Le workflow `multiplateforme.yml` est la CI de construction active. Il produit `ravenemu-android-beta`. Aucun binaire iOS signé n’est distribué.
+Le workflow `multiplateforme.yml` est la CI de construction active. Après validation de tous les jobs sur `main`, il publie une préversion `android-beta-N` avec `ravenemu-beta.apk` signé dans les Releases. Aucun binaire iOS signé n’est distribué.
 
 Consultez [Installation](https://github.com/GhostPunishR/RavenEmu/blob/main/wiki/Installation.md), [Compatibilité des jeux](https://github.com/GhostPunishR/RavenEmu/blob/main/wiki/Compatibilite-des-jeux.md) et l'[état détaillé du projet](https://github.com/GhostPunishR/RavenEmu/blob/main/README.md).
