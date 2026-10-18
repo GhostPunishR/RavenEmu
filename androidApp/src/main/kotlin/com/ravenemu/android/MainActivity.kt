@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.content.pm.ActivityInfo
 import android.view.InputDevice
 import android.view.KeyEvent
+import android.view.Window
 import android.view.MotionEvent
 import android.util.Log
 import android.widget.Toast
@@ -59,7 +60,7 @@ class MainActivity : ComponentActivity() {
     // Bumped by the controller's Home key to open the game menu.
     private var gameMenuRequests by mutableStateOf(0)
 
-    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+    private fun handleGamepadKeyEvent(event: KeyEvent): Boolean {
         if (gamepadInputEnabled && foreground && event.keyCode == KeyEvent.KEYCODE_BUTTON_MODE) {
             if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) gameMenuRequests++
             return true
@@ -71,7 +72,7 @@ class MainActivity : ComponentActivity() {
             gamepadInUse = true
             return true
         }
-        return super.dispatchKeyEvent(event)
+        return false
     }
 
     override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
@@ -128,6 +129,13 @@ class MainActivity : ComponentActivity() {
             statusBarStyle = SystemBarStyle.dark(android.graphics.Color.BLACK),
             navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.BLACK),
         )
+        // Window.Callback is the public event-dispatch contract. Calling
+        // ComponentActivity's AndroidX-internal dispatch override fails Lint.
+        val activityCallback = window.callback
+        window.callback = object : Window.Callback by activityCallback {
+            override fun dispatchKeyEvent(event: KeyEvent): Boolean =
+                handleGamepadKeyEvent(event) || activityCallback.dispatchKeyEvent(event)
+        }
         gameSession = AndroidGbSession(contentResolver, filesDir)
         playback = GbPlayback(applicationContext, gameSession)
         linkSession = AndroidLinkSession(filesDir)
@@ -139,6 +147,7 @@ class MainActivity : ComponentActivity() {
             val romLibrary = remember { GbRomLibrary(File(filesDir, "gb-library"), contentResolver) }
             val saveTransfer = remember { GbSaveTransfer(filesDir) }
             val scope = rememberCoroutineScope()
+            val libraryOperations = remember { LibraryOperationGate() }
             val covers = remember {
                 GbCoversUi(applicationContext, filesDir, contentResolver, romLibrary, scope)
             }
@@ -183,7 +192,8 @@ class MainActivity : ComponentActivity() {
             var folderImportSummary by remember { mutableStateOf<GbFolderImportSummary?>(null) }
             val saveTransfers = remember {
                 GbSaveTransfersUi(
-                    applicationContext, contentResolver, gameSession, romLibrary, saveTransfer, scope,
+                    applicationContext, contentResolver, gameSession, linkSession, libraryOperations,
+                    romLibrary, saveTransfer, scope,
                 )
             }
             var videoEnabled by remember { mutableStateOf(false) }
@@ -286,7 +296,9 @@ class MainActivity : ComponentActivity() {
             val folderPicker = rememberLauncherForActivityResult(
                 contract = ActivityResultContracts.OpenDocumentTree(),
             ) { uri ->
-                if (uri != null && !loading && !videoEnabled) {
+                if (uri != null && !loading && !videoEnabled && !linkEnabled) {
+                    val operation = libraryOperations.tryAcquire()
+                        ?: return@rememberLauncherForActivityResult
                     loading = true
                     importError = null
                     folderImportSummary = null
@@ -331,6 +343,7 @@ class MainActivity : ComponentActivity() {
                         } finally {
                             folderImportProgress = null
                             loading = false
+                            operation.close()
                         }
                     }
                 }
@@ -370,7 +383,9 @@ class MainActivity : ComponentActivity() {
             val documentPicker = rememberLauncherForActivityResult(
                 contract = ActivityResultContracts.OpenDocument(),
             ) { uri ->
-                if (uri != null && !loading) {
+                if (uri != null && !loading && !videoEnabled && !linkEnabled) {
+                    val operation = libraryOperations.tryAcquire()
+                        ?: return@rememberLauncherForActivityResult
                     loading = true
                     importError = null
                     scope.launch {
@@ -399,6 +414,7 @@ class MainActivity : ComponentActivity() {
                             importError = exception.message ?: "Échec du chargement de la ROM."
                         } finally {
                             loading = false
+                            operation.close()
                         }
                     }
                 }
@@ -460,10 +476,10 @@ class MainActivity : ComponentActivity() {
                     }
                 },
                 onImportRom = {
-                    if (!loading) documentPicker.launch(arrayOf("*/*"))
+                    if (!libraryOperations.isBusy()) documentPicker.launch(arrayOf("*/*"))
                 },
                 onImportFolder = {
-                    if (!loading && !videoEnabled) folderPicker.launch(null)
+                    if (!libraryOperations.isBusy() && !videoEnabled && !linkEnabled) folderPicker.launch(null)
                 },
                 folderImportProgress = folderImportProgress,
                 folderImportSummary = folderImportSummary,
@@ -474,7 +490,7 @@ class MainActivity : ComponentActivity() {
                 saveImportReview = saveTransfers.saveImportReview,
                 onCancelSaveImport = { saveTransfers.cancelImport() },
                 onConfirmSaveImport = {
-                    saveTransfers.confirmImport(playerOpen = videoEnabled) { romKey ->
+                    saveTransfers.confirmImport(playerOpen = videoEnabled || linkEnabled) { romKey ->
                         if (activeGameId == romKey) {
                             activeGameId = null
                             loadedGame = null
@@ -482,20 +498,21 @@ class MainActivity : ComponentActivity() {
                     }
                 },
                 onExportGameBackup = { id ->
-                    saveTransfers.exportGameBackup(id, libraryGames, playerOpen = videoEnabled)
+                    saveTransfers.exportGameBackup(id, libraryGames, playerOpen = videoEnabled || linkEnabled)
                 },
                 onExportBatterySave = { id ->
-                    saveTransfers.exportBatterySave(id, libraryGames, playerOpen = videoEnabled)
+                    saveTransfers.exportBatterySave(id, libraryGames, playerOpen = videoEnabled || linkEnabled)
                 },
                 onImportGameSave = { id ->
-                    saveTransfers.importGameSave(id, libraryGames, playerOpen = videoEnabled)
+                    saveTransfers.importGameSave(id, libraryGames, playerOpen = videoEnabled || linkEnabled)
                 },
                 libraryCovers = covers.libraryCovers,
                 coverBusy = covers.coverBusy || covers.autoCoverLoading,
                 onChooseCover = { id -> covers.choose(id, libraryGames) },
                 onRemoveCover = { id -> covers.remove(id, libraryGames) },
-                onLaunchLibraryGame = { id, onReady ->
-                    if (!loading && !videoEnabled) {
+                onLaunchLibraryGame = launchGame@{ id, onReady ->
+                    if (!loading && !videoEnabled && !linkEnabled) {
+                        val operation = libraryOperations.tryAcquire() ?: return@launchGame
                         loading = true
                         importError = null
                         scope.launch {
@@ -522,14 +539,16 @@ class MainActivity : ComponentActivity() {
                                 importError = error.message ?: "Impossible de lancer ce jeu."
                             } finally {
                                 loading = false
+                                operation.close()
                             }
                         }
                     }
                 },
                 importBusy = loading,
                 importError = importError,
-                onLaunchLinkedGames = { firstId, secondId, onReady ->
+                onLaunchLinkedGames = launchLinked@{ firstId, secondId, onReady ->
                     if (!loading && !videoEnabled && !linkEnabled) {
+                        val operation = libraryOperations.tryAcquire() ?: return@launchLinked
                         loading = true
                         importError = null
                         scope.launch {
@@ -558,6 +577,7 @@ class MainActivity : ComponentActivity() {
                                 importError = error.message ?: "Impossible de relier ces jeux."
                             } finally {
                                 loading = false
+                                operation.close()
                             }
                         }
                     }

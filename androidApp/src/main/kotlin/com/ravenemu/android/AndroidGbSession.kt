@@ -128,6 +128,12 @@ class AndroidGbSession(private val resolver: ContentResolver, filesDir: File) : 
         }
     }
 
+    /** No load or autosave may recreate/write stale SRAM during installation. */
+    fun importSave(romKey: String, install: () -> Unit) = synchronized(saveLock) {
+        releaseForSaveImport(romKey)
+        install()
+    }
+
     /** Read-only RetroAchievements memory; do not clock the emulated bus. */
     fun readAchievementMemory(address: Int, count: Int): ByteArray = synchronized(lock) {
         if (closed || address < 0 || count <= 0 || count > 0x58000) return@synchronized ByteArray(0)

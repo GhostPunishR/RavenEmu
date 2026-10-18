@@ -10,6 +10,12 @@
 
 ### Corrigé
 
+- RetroAchievements : une reconnexion crée un nouveau journal de session après la révocation de la déconnexion ; les anciens callbacks ne peuvent pas réécrire le journal.
+- Sauvegardes : lancements, imports et exports sont exclus mutuellement jusqu'à la fin de leur mise à jour d'interface, y compris pendant le sélecteur de fichiers. Une paire link encore en mémoire est libérée avant un transfert.
+- Miniatures des états : contrôle des dimensions PNG avant décodage et réduction de résolution ; une miniature importée invalide est ignorée sans perdre son état associé.
+- Manettes : plusieurs touches ou axes commandant le même bouton restent actifs jusqu'au relâchement de leur dernière source. Les touches sont interceptées par l'API publique Window.Callback.
+- Vérifications : les tests communs sont activés sur JVM et exécutés en CI avec Android Lint.
+
 - GBA : The Legend of Zelda (Classic NES Series) affichait « GAME PAK ERROR » au démarrage. Il démarre avec RavenCore 0.3.0, qui laisse vide la zone SRAM des cartouches à EEPROM. Les autres jeux de la série font le même test.
 - GBA : dans Pokémon Émeraude, le brouillard d'une arène masquait entièrement le décor. RavenCore 0.3.1 mélange les objets semi-transparents au décor même dans une fenêtre qui coupe les effets spéciaux, comme la console.
 - GBA : GTA Advance restait sur un écran noir après le choix du nom d'une nouvelle partie. RavenCore 0.4.1 ne relance plus un DMA déjà actif quand le jeu réécrit son contrôle.

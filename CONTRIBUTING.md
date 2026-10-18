@@ -26,6 +26,8 @@ Prérequis : JDK 21, Gradle Wrapper du dépôt, SDK Android API 37 et CMake/NDK.
 
 ```sh
 ./gradlew :androidApp:testDebugUnitTest
+./gradlew :shared:testAndroidHostTest
+./gradlew :androidApp:lintDebug
 ./gradlew :androidApp:assembleDebug
 ./gradlew :policy:test
 ./gradlew :shared:tasks

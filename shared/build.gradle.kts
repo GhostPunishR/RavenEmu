@@ -59,6 +59,7 @@ kotlin {
         androidResources {
             enable = true
         }
+        withHostTest {}
     }
 
     listOf(iosArm64(), iosSimulatorArm64()).forEach { target ->

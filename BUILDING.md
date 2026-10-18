@@ -11,6 +11,8 @@ git clone https://github.com/GhostPunishR/RavenEmu.git
 cd RavenEmu
 ./gradlew :androidApp:assembleDebug
 ./gradlew :androidApp:testDebugUnitTest
+./gradlew :shared:testAndroidHostTest
+./gradlew :androidApp:lintDebug
 ./gradlew :policy:test
 ```
 
@@ -61,4 +63,4 @@ Les adaptateurs JNI et Swift utilisent le même header `ravenemu/bridge.h` de Ra
 
 ## Vérifications CI et appareil
 
-Le workflow [multiplateforme.yml](.github/workflows/multiplateforme.yml) vérifie le Wrapper, les règles du dépôt, le test de liaison native, l'APK bêta et ses tests, le framework/SDK natif iOS et les adaptateurs Swift. Une compilation réussie ne remplace pas les essais visuels, audio, sauvegardes et RetroAchievements sur un appareil réel.
+Le workflow [multiplateforme.yml](.github/workflows/multiplateforme.yml) vérifie le Wrapper, les règles du dépôt, le test de liaison native, l'APK bêta, les tests Android et communs sur JVM, Android Lint, le framework/SDK natif iOS et les adaptateurs Swift. Une compilation réussie ne remplace pas les essais visuels, audio, sauvegardes et RetroAchievements sur un appareil réel.

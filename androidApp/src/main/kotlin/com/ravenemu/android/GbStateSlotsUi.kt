@@ -53,8 +53,17 @@ internal class GbStateSlotsUi(
                     )
                     gameSession.listStateSlots().map { stored ->
                         val thumbnail = stored.preview?.let { bytes ->
-                            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                                ?.asImageBitmap()
+                            val size = GbStatePreview.size(bytes) ?: return@let null
+                            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+                            if (bounds.outWidth != size.width || bounds.outHeight != size.height) {
+                                return@let null
+                            }
+                            BitmapFactory.decodeByteArray(bytes, 0, bytes.size,
+                                BitmapFactory.Options().apply {
+                                    inSampleSize = GbStatePreview.sampleSize(size)
+                                    inPreferredConfig = Bitmap.Config.ARGB_8888
+                                })?.asImageBitmap()
                         }
                         GbStateSlot(
                             index = stored.slot,

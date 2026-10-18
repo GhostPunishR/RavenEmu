@@ -145,7 +145,12 @@ internal class GbSaveTransfer(filesDir: File) {
                 }
             }
         }
-        return ImportPayload(targetKey, entries, false)
+        // A thumbnail is optional. Keep valid saves from older archives,
+        // but never install an image that could allocate an unbounded bitmap.
+        val safeEntries = entries.filter { (name, bytes) ->
+            !name.endsWith(".png") || GbStatePreview.size(bytes) != null
+        }
+        return ImportPayload(targetKey, safeEntries, false)
     }
 
     fun conflicts(payload: ImportPayload): List<String> {
@@ -170,6 +175,9 @@ internal class GbSaveTransfer(filesDir: File) {
         require(payload.bytes.keys.all { it in allowedNames() && it != "manifest.json" })
         payload.bytes.forEach { (name, bytes) ->
             require(bytes.size in 1..maxFor(name)) { "Sauvegarde invalide : $name." }
+            require(!name.endsWith(".png") || GbStatePreview.size(bytes) != null) {
+                "Miniature PNG invalide ou trop grande."
+            }
         }
         // Apply states before their previews. If a new state has no preview,
         // remove the old, now-misleading thumbnail for that slot.
