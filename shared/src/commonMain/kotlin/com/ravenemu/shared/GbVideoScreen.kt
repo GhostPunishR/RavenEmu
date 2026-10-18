@@ -191,16 +191,16 @@ internal fun GbVideoScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
-                "FPS ${metrics?.let { oneDecimal(it.actualFps) } ?: "--"} / ${metrics?.let { oneDecimal(it.targetFps) } ?: "--"}",
-                color = RavenAccent, fontSize = 11.sp, maxLines = 1,
+                "FPS ${metrics?.let { oneDecimal(it.actualFps) } ?: "--"}",
+                color = RavenText, fontSize = 11.sp, maxLines = 1,
             )
             Text(
                 "Moteur ${metrics?.let { oneDecimal(it.coreMs) } ?: "--"} ms",
-                color = RavenSecondary, fontSize = 10.sp, maxLines = 1,
+                color = RavenText, fontSize = 10.sp, maxLines = 1,
             )
             Text(
                 "Conv. ${metrics?.let { oneDecimal(it.conversionMs) } ?: "--"} ms",
-                color = RavenMuted, fontSize = 10.sp, maxLines = 1,
+                color = RavenText, fontSize = 10.sp, maxLines = 1,
             )
         }
         if (skinControls != null) {

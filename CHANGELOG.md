@@ -18,6 +18,7 @@
 
 ### Modifié
 
+- Barre de diagnostic du lecteur, seul ou à deux : les mesures sont écrites en blanc, et les FPS n'indiquent plus que la cadence obtenue (« FPS 59.7 »), sans la cadence visée.
 - RavenCore épinglé à la version 0.5.2, commit `50756fbdfa730ecf2d492b847c4fb0200a455ac7`. Les fonctions ArcTan, ArcTan2 et Div du BIOS GBA rendent les valeurs de la console : les jeux qui calculent un angle avec ArcTan2 obtiennent exactement celui de la GBA. L'API C et les formats d'états ne changent pas.
 - Avec RavenCore 0.5.1, les multiplications GBA (MULS, UMULLS, SMLALS…) laissent dans le drapeau C la valeur que produit le multiplieur de la console.
 - Avec RavenCore 0.5.0, le cœur GBA émule le tampon de préchargement de la cartouche et compte le temps du processeur au cycle près : les jeux tournent à la cadence de la console, au prix d'environ 5 % de calcul en plus sur Pokémon Émeraude. Il émule aussi le câble link GBA (modes multijoueur et normal). L'API C reste en version 0 et gagne les fonctions `ravenemu_link_*`. Les états GBA passent au format 14 et relisent les formats 13, 12 et 11 ; un état GBA enregistré par cette version ne se recharge plus dans une version antérieure.
