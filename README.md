@@ -1,6 +1,8 @@
 # RavenEmu
 
 [![Build](https://github.com/GhostPunishR/RavenEmu/actions/workflows/multiplateforme.yml/badge.svg)](https://github.com/GhostPunishR/RavenEmu/actions/workflows/multiplateforme.yml)
+[![Anthropic](https://img.shields.io/badge/Anthropic-Claude-D97757?logo=anthropic&logoColor=white)](https://www.anthropic.com/)
+[![Licence AGPL-3.0](https://img.shields.io/badge/Licence-AGPL--3.0-663399?logo=gnu&logoColor=white)](LICENSE)
 
 Émulateur open source **Game Boy, Game Boy Color et Game Boy Advance**, propulsé par les moteurs [RavenCore](https://github.com/GhostPunishR/RavenCore).
 
