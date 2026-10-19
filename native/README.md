@@ -31,6 +31,8 @@ Le test hôte utilise une cartouche synthétique sans contenu de jeu et vérifie
 
 ```sh
 cmake -S native -B native/build-host -DCMAKE_BUILD_TYPE=Release -DRAVENEMU_BRIDGE_TESTS=ON
-cmake --build native/build-host --target ravenemu_bridge_smoke --parallel 2
+cmake --build native/build-host --target ravenemu_bridge_smoke ravenemu_achievements_smoke --parallel 2
 ctest --test-dir native/build-host --output-on-failure
 ```
+
+Le test `ravenemu_achievements_smoke` compile aussi l'adaptateur RetroAchievements de production sur l'hôte avec les en-têtes JNI du JDK (`JAVA_HOME`). Il vérifie les identifiants des événements, la copie des résultats de classement, les erreurs de consultation et les bilans Softcore/Hardcore avec des données synthétiques, sans compte ni requête réseau. Le SDK rcheevos reste épinglé au même SHA que sur Android.

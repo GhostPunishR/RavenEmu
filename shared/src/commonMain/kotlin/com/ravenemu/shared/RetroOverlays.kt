@@ -44,6 +44,7 @@ internal fun BoxScope.RetroOverlays(
     retroNoticeVisible: Boolean,
     retroProgress: RetroProgress?,
     retroProgressBadge: ImageBitmap?,
+    popupPosition: String = "top",
 ) {
     if (retroIndicators.isNotEmpty()) {
         // Persistent, non-interactive: challenges and trackers.
@@ -82,12 +83,14 @@ internal fun BoxScope.RetroOverlays(
     val showProgress = progress != null && progressAlpha > 0f
     if (!showNotice && !showProgress) return
     Column(
-        Modifier.align(Alignment.TopCenter).padding(top = 10.dp, start = 12.dp, end = 12.dp),
+        Modifier.align(if (popupPosition == "bottom") Alignment.BottomCenter else Alignment.TopCenter)
+            .padding(top = 10.dp, bottom = if (retroIndicators.isEmpty()) 10.dp else 90.dp, start = 12.dp, end = 12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         if (showNotice) {
-            RetroPopupCard(retroNotice.orEmpty(), retroNoticeBadge, noticeAlpha)
+            RetroPopupCard(retroNotice.orEmpty().substringBefore('\n'), retroNoticeBadge, noticeAlpha,
+                detail = retroNotice.orEmpty().substringAfter('\n', ""), detailLines = 2)
         }
         if (showProgress && progress != null) {
             RetroPopupCard("Progression · ${progress.title}", held.badge, progressAlpha,
@@ -107,7 +110,7 @@ private class HeldProgress {
  * Fixed badge slot: the popup keeps the same size either way.
  */
 @Composable
-private fun RetroPopupCard(text: String, badge: ImageBitmap?, alpha: Float, detail: String = "") {
+private fun RetroPopupCard(text: String, badge: ImageBitmap?, alpha: Float, detail: String = "", detailLines: Int = 1) {
     Row(
         Modifier.alpha(alpha)
             .background(RavenSurface, RoundedCornerShape(12.dp))
@@ -134,7 +137,7 @@ private fun RetroPopupCard(text: String, badge: ImageBitmap?, alpha: Float, deta
             // a long achievement title needs ellipsizing on a small screen.
             if (detail.isNotBlank()) {
                 Text(detail, color = RavenText, fontSize = 12.sp,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    maxLines = detailLines, overflow = TextOverflow.Ellipsis)
             }
         }
     }

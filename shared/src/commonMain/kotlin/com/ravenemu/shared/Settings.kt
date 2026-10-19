@@ -50,6 +50,12 @@ data class Settings(
      * HardcoreAvailability.APPROVED); until then the switch is not shown.
      */
     val retroHardcore: Boolean = false,
+    val retroUnlockPopups: Boolean = true,
+    val retroProgressPopups: Boolean = true,
+    val retroPopupSound: Boolean = false,
+    val retroPopupPosition: String = "top",
+    val retroPopupSeconds: Int = 5,
+    val retroProgressSeconds: Int = 2,
 ) {
     fun normalized(): Settings = copy(
         audioVolume = audioVolume.coerceIn(0, 100),
@@ -60,6 +66,9 @@ data class Settings(
         controlsGap = controlsGap.coerceIn(20, 80),
         controlsStyle = controlsStyle.takeIf { it in listOf("classic", "contrast") } ?: "classic",
         solarLightLevel = solarLightLevel.coerceIn(0, 100),
+        retroPopupPosition = retroPopupPosition.takeIf { it in listOf("top", "bottom") } ?: "top",
+        retroPopupSeconds = retroPopupSeconds.coerceIn(2, 10),
+        retroProgressSeconds = retroProgressSeconds.coerceIn(1, 5),
     )
 }
 

@@ -46,7 +46,7 @@ if(RAVENEMU_BRIDGE_TESTS)
     add_test(NAME ravenemu_bridge_smoke COMMAND ravenemu_bridge_smoke)
 endif()
 
-if(ANDROID)
+if(ANDROID OR RAVENEMU_BRIDGE_TESTS)
     # Pin the official RetroAchievements SDK to its reviewed revision.
     FetchContent_Declare(rcheevos
         GIT_REPOSITORY https://github.com/RetroAchievements/rcheevos.git
@@ -63,6 +63,18 @@ if(ANDROID)
     target_include_directories(ravenemu_rcheevos PUBLIC "${rcheevos_SOURCE_DIR}/include")
     target_compile_definitions(ravenemu_rcheevos PUBLIC RC_DISABLE_LUA RC_CLIENT_SUPPORTS_HASH)
 
+endif()
+
+if(RAVENEMU_BRIDGE_TESTS AND NOT ANDROID)
+    find_package(JNI REQUIRED COMPONENTS JVM)
+    add_executable(ravenemu_achievements_smoke tests/achievements_smoke.cpp)
+    target_include_directories(ravenemu_achievements_smoke PRIVATE ${JNI_INCLUDE_DIRS} "${rcheevos_SOURCE_DIR}/src")
+    target_compile_features(ravenemu_achievements_smoke PRIVATE cxx_std_20)
+    target_link_libraries(ravenemu_achievements_smoke PRIVATE ravenemu_rcheevos)
+    add_test(NAME ravenemu_achievements_smoke COMMAND ravenemu_achievements_smoke)
+endif()
+
+if(ANDROID)
     add_library(ravenemu_android SHARED android/bridge_jni.cpp android/achievements_bridge.cpp)
     target_compile_features(ravenemu_android PRIVATE cxx_std_20)
     target_link_libraries(ravenemu_android PRIVATE ravenemu_c_api ravenemu_rcheevos)

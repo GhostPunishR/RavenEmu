@@ -146,11 +146,7 @@ internal class GbStateSlotsUi(
             gameSession.releaseAllButtons()
             scope.launch {
                 try {
-                    withContext(Dispatchers.IO) { gameSession.loadStateSlot(slot) }
-                    try { retro.resetProgress() }
-                    catch (error: Exception) {
-                        Log.w("RavenEmuRetro", "RA reset after state load failed", error)
-                    }
+                    retro.loadState(slot)
                     Toast.makeText(
                         applicationContext, "État chargé (emplacement ${slot + 1})",
                         Toast.LENGTH_SHORT,

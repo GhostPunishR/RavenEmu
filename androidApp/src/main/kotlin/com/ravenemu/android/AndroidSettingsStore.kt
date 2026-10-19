@@ -26,6 +26,12 @@ internal class AndroidSettingsStore(context: Context) {
         solarLightAuto = prefs.getBoolean("solar_light_auto", true),
         solarLightLevel = prefs.getInt("solar_light_level", 50),
         retroHardcore = prefs.getBoolean("retro_hardcore", false),
+        retroUnlockPopups = prefs.getBoolean("retro_unlock_popups", true),
+        retroProgressPopups = prefs.getBoolean("retro_progress_popups", true),
+        retroPopupSound = prefs.getBoolean("retro_popup_sound", false),
+        retroPopupPosition = prefs.getString("retro_popup_position", "top") ?: "top",
+        retroPopupSeconds = prefs.getInt("retro_popup_seconds", 5),
+        retroProgressSeconds = prefs.getInt("retro_progress_seconds", 2),
     ).normalized()
 
     fun write(settings: Settings) {
@@ -49,6 +55,12 @@ internal class AndroidSettingsStore(context: Context) {
             .putBoolean("solar_light_auto", safe.solarLightAuto)
             .putInt("solar_light_level", safe.solarLightLevel)
             .putBoolean("retro_hardcore", safe.retroHardcore)
+            .putBoolean("retro_unlock_popups", safe.retroUnlockPopups)
+            .putBoolean("retro_progress_popups", safe.retroProgressPopups)
+            .putBoolean("retro_popup_sound", safe.retroPopupSound)
+            .putString("retro_popup_position", safe.retroPopupPosition)
+            .putInt("retro_popup_seconds", safe.retroPopupSeconds)
+            .putInt("retro_progress_seconds", safe.retroProgressSeconds)
             .apply()
     }
 }

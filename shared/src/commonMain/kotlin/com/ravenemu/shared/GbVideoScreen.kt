@@ -91,6 +91,7 @@ internal fun GbVideoScreen(
     onRetroLogin: ((String, String) -> Unit)?,
     onRetroDisconnect: (() -> Unit)?,
     onRetroRetry: (() -> Unit)?,
+    onRetroLeaderboard: ((Int, Boolean) -> Unit)?,
     onOpenLink: ((String) -> Unit)?,
     retroNotice: String?,
     retroNoticeBadge: ImageBitmap?,
@@ -156,7 +157,7 @@ internal fun GbVideoScreen(
                 )
             }
             RetroOverlays(retroIndicators, retroNotice, retroNoticeBadge, retroNoticeVisible,
-                retroProgress, retroProgress?.let { retroImages[it.badgeUrl] })
+                retroProgress, retroProgress?.let { retroImages[it.badgeUrl] }, settings.retroPopupPosition)
         }
     } else Column(Modifier.fillMaxSize().background(Color.Black)) {
         Row(
@@ -209,7 +210,7 @@ internal fun GbVideoScreen(
             Box(Modifier.fillMaxWidth().weight(1f).background(Color.Black)) {
                 skinControls(frame) { setGameMenu(true) }
                 RetroOverlays(retroIndicators, retroNotice, retroNoticeBadge, retroNoticeVisible,
-                    retroProgress, retroProgress?.let { retroImages[it.badgeUrl] })
+                    retroProgress, retroProgress?.let { retroImages[it.badgeUrl] }, settings.retroPopupPosition)
             }
         } else {
             // Pin the picture to the top of its available area rather than
@@ -251,7 +252,7 @@ internal fun GbVideoScreen(
                     )
                 }
                 RetroOverlays(retroIndicators, retroNotice, retroNoticeBadge, retroNoticeVisible,
-                    retroProgress, retroProgress?.let { retroImages[it.badgeUrl] })
+                    retroProgress, retroProgress?.let { retroImages[it.badgeUrl] }, settings.retroPopupPosition)
             }
             if (onButtonChange != null && !touchControlsVisible) {
                 Text(
@@ -298,6 +299,7 @@ internal fun GbVideoScreen(
                         onLogin = onRetroLogin,
                         onDisconnect = onRetroDisconnect,
                         onRetry = onRetroRetry,
+                        onLeaderboard = onRetroLeaderboard,
                         onOpenLink = onOpenLink,
                     )
                 } else {
