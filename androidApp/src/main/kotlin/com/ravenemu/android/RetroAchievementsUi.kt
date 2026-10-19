@@ -15,6 +15,7 @@ import com.ravenemu.shared.RetroNoticeText
 import com.ravenemu.shared.RetroProgress
 import com.ravenemu.shared.RetroProgressNotifications
 import com.ravenemu.shared.RetroSnapshot
+import com.ravenemu.shared.Settings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -36,6 +37,7 @@ internal class RetroAchievementsUi(
     applicationContext: Context,
     gameSession: AndroidGbSession,
     private val scope: CoroutineScope,
+    private val playSound: () -> Unit = RetroNotificationSound::play,
     private val nowMillis: () -> Long = SystemClock::uptimeMillis,
 ) {
     var retroSnapshot by mutableStateOf(RetroSnapshot())
@@ -62,6 +64,38 @@ internal class RetroAchievementsUi(
     private val retroIndicatorState = RetroIndicatorState()
     private val progressNotifications = RetroProgressNotifications()
     private var progressReady = false
+    private var preferences = Settings()
+    private var currentPopup: RetroPopup? = null
+
+    fun configure(settings: Settings) {
+        preferences = settings.normalized()
+        progressNotifications.displayMillis = preferences.retroProgressSeconds * 1000L
+        if (!preferences.retroProgressPopups) hideProgress()
+        if (!preferences.retroUnlockPopups) {
+            retroUnlocks.removeAll { it.award }
+            if (currentPopup?.award == true) hideNotice()
+        }
+    }
+
+    private fun hideNotice() {
+        currentPopup = null
+        retroNoticeVisible = false
+        retroNotice = null
+        retroNoticeBadge = null
+    }
+
+    fun hidePopups() {
+        retroUnlocks.clear()
+        hideNotice()
+    }
+
+    fun fetchLeaderboard(id: Int, around: Boolean) {
+        scope.launch {
+            runCatching { retro.fetchLeaderboard(id, around) }.onFailure {
+                retroSnapshot = retroSnapshot.copy(error = "Impossible de charger les scores. Réessayez.")
+            }
+        }
+    }
     val retro = AchievementsController(
         applicationContext, gameSession,
         onSnapshot = ::updateSnapshot,
@@ -75,9 +109,13 @@ internal class RetroAchievementsUi(
             snapshot.gameId != retroSnapshot.gameId ||
             snapshot.username.isBlank() || snapshot.gameId == 0) {
             clearIndicators()
+            if (snapshot.username != retroSnapshot.username || snapshot.gameId != retroSnapshot.gameId) hidePopups()
         }
         retroSnapshot = snapshot
-        if (progressReady) retroProgress = progressNotifications.update(snapshot.entries, nowMillis())
+        if (progressReady) {
+            retroProgress = progressNotifications.update(snapshot.entries, nowMillis())
+            if (!preferences.retroProgressPopups) hideProgress()
+        }
     }
 
     internal fun handleEvent(event: AchievementClient.Event) {
@@ -96,10 +134,10 @@ internal class RetroAchievementsUi(
             retroIndicators = retroIndicatorState.labels
         }
         val popup = RetroNoticeText.of(event.kind, event.title, event.detail, event.extra)
-        if (popup != null && retroUnlocks.size < MAX_QUEUED_UNLOCKS) {
-            // Only an unlock has a badge; other notices keep the star.
-            val badge = if (event.kind == "achievement") event.image else ""
-            retroUnlocks.add(RetroPopup(popup, badge))
+        val award = event.kind in setOf("achievement", "completed", "mastered")
+        if (popup != null && (!award || preferences.retroUnlockPopups) && retroUnlocks.size < MAX_QUEUED_UNLOCKS) {
+            val badge = if (award) event.image else ""
+            retroUnlocks.add(RetroPopup(popup, badge, award))
         }
         if (event.kind == "login_error" || event.kind == "login") {
             retroBusy = false
@@ -133,7 +171,7 @@ internal class RetroAchievementsUi(
     suspend fun loadImages() {
         // Every badge of the set: a cap of 120 left the badges of
         // larger sets blank. 64x64 badges stay small in memory.
-        val urls = (listOf(retroSnapshot.avatarUrl) +
+        val urls = (listOf(retroSnapshot.avatarUrl, retroSnapshot.gameImageUrl) +
             retroSnapshot.entries.map { it.badgeUrl })
             .filter { it.isNotBlank() }.distinct().take(MAX_RETRO_IMAGES)
         for (batch in urls.chunked(12)) {
@@ -197,16 +235,21 @@ internal class RetroAchievementsUi(
                 badge = withTimeoutOrNull(2_000) { download.await() }
                 if (badge != null) retroImages = retroImages + (url to badge)
             }
+            if (retroUnlocks.firstOrNull() !== unlock) continue
+            currentPopup = unlock
             retroNoticeBadge = badge
             retroNotice = unlock.text
             retroNoticeVisible = true
-            delay(4_800)
+            if (unlock.award && preferences.retroPopupSound) playSound()
+            delay(preferences.retroPopupSeconds * 1000L - 200L)
+            if (retroUnlocks.firstOrNull() !== unlock) continue
             // Fade out with the same content, then clear it.
             retroNoticeVisible = false
             delay(400)
-            retroNotice = null
-            retroNoticeBadge = null
-            retroUnlocks.removeAt(0)
+            if (retroUnlocks.firstOrNull() === unlock) {
+                hideNotice()
+                retroUnlocks.removeAt(0)
+            }
         }
     }
 
@@ -273,4 +316,4 @@ private const val MAX_RETRO_IMAGES = 600
 /** A burst beyond this is not worth minutes of popups; the list keeps them all. */
 private const val MAX_QUEUED_UNLOCKS = 20
 
-private data class RetroPopup(val text: String, val badgeUrl: String)
+private class RetroPopup(val text: String, val badgeUrl: String, val award: Boolean)

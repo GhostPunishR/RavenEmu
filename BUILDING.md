@@ -55,7 +55,7 @@ Le test hôte vérifie la liaison, la création des trois systèmes, une frame e
 
 ```sh
 cmake -S native -B native/build-host -DCMAKE_BUILD_TYPE=Release -DRAVENEMU_BRIDGE_TESTS=ON
-cmake --build native/build-host --target ravenemu_bridge_smoke --parallel 2
+cmake --build native/build-host --target ravenemu_bridge_smoke ravenemu_achievements_smoke --parallel 2
 ctest --test-dir native/build-host --output-on-failure
 ```
 

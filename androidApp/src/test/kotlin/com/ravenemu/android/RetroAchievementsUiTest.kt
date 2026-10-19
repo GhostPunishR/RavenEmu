@@ -1,8 +1,10 @@
 package com.ravenemu.android
 
 import android.os.Looper
+import androidx.compose.runtime.snapshots.Snapshot
 import com.ravenemu.shared.RetroProgress
 import com.ravenemu.shared.RetroSnapshot
+import com.ravenemu.shared.Settings
 import com.ravenemu.shared.AchievementEntry
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -125,6 +127,98 @@ class RetroAchievementsUiTest {
         assertNull(ui.retroProgress)
         ui.updateSnapshot(snapshot.copy(entries = listOf(achievement("2", "Collection", "5/10", 50f))))
         assertEquals("5/10", ui.retroProgress?.detail)
+    }
+
+    @Test
+    fun `desactiver la progression ne la rejoue pas a la reactivation`() {
+        val snapshot = showMeasuredProgress()
+        ui.configure(Settings(retroProgressPopups = false))
+        assertNull(ui.retroProgress)
+        val improved = snapshot.copy(entries = listOf(achievement("2", "Collection", "5/10", 50f)))
+        ui.updateSnapshot(improved)
+        assertNull(ui.retroProgress)
+        ui.configure(Settings())
+        ui.updateSnapshot(improved)
+        assertNull(ui.retroProgress)
+        ui.updateSnapshot(improved.copy(entries = listOf(achievement("2", "Collection", "6/10", 60f))))
+        assertEquals("6/10", ui.retroProgress?.detail)
+    }
+
+    @Test
+    fun `les preferences de notification sont conservees et normalisees`() {
+        val store = AndroidSettingsStore(context)
+        val chosen = Settings(retroUnlockPopups = false, retroProgressPopups = false,
+            retroPopupSound = true, retroPopupPosition = "bottom", retroPopupSeconds = 8, retroProgressSeconds = 4)
+        store.write(chosen)
+        assertEquals(chosen, AndroidSettingsStore(context).read())
+    }
+
+    @Test
+    fun `le son ne joue que pour les succes et peut etre coupe`() {
+        var played = 0
+        val soundUi = RetroAchievementsUi(context, session, scope, playSound = { played++ })
+        try {
+            soundUi.configure(Settings(retroPopupSound = true, retroPopupSeconds = 2))
+            soundUi.handleEvent(AchievementClient.Event("completed", "Synthetic", "10/10", "", ""))
+            val job = scope.launch { soundUi.showUnlocks() }
+            shadowOf(Looper.getMainLooper()).idle()
+            assertEquals(1, played)
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(3))
+            soundUi.configure(Settings(retroPopupSound = false))
+            soundUi.handleEvent(AchievementClient.Event("achievement", "Second", "", "5", ""))
+            Snapshot.sendApplyNotifications()
+            shadowOf(Looper.getMainLooper()).idle()
+            assertEquals(1, played)
+            job.cancel()
+        } finally { soundUi.retro.close() }
+    }
+
+    @Test
+    fun `la duree choisie garde un tour fini pour chaque progression`() {
+        ui.configure(Settings(retroProgressSeconds = 4))
+        showMeasuredProgress()
+        val job = scope.launch { ui.showProgress() }
+        nowMillis = 2_000L
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(2_000))
+        assertTrue(ui.retroProgress != null)
+        nowMillis = 4_000L
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(2_000))
+        assertNull(ui.retroProgress)
+        job.cancel()
+    }
+
+    @Test
+    fun `les notifications de succes peuvent etre coupees sans masquer une erreur reseau`() {
+        ui.configure(Settings(retroUnlockPopups = false))
+        val job = scope.launch { ui.showUnlocks() }
+        ui.handleEvent(AchievementClient.Event("achievement", "Victoire", "", "5", ""))
+        shadowOf(Looper.getMainLooper()).idle()
+        assertNull(ui.retroNotice)
+        ui.handleEvent(AchievementClient.Event("offline", "Hors ligne", "", "", ""))
+        Snapshot.sendApplyNotifications()
+        shadowOf(Looper.getMainLooper()).idle()
+        assertEquals("Hors ligne", ui.retroNotice)
+        ui.configure(Settings(retroUnlockPopups = false))
+        assertEquals("Hors ligne", ui.retroNotice)
+        job.cancel()
+    }
+
+    @Test
+    fun `changer de compte efface une notification sans casser sa coroutine`() {
+        ui.updateSnapshot(RetroSnapshot(username = "first", gameId = 1))
+        val job = scope.launch { ui.showUnlocks() }
+        ui.handleEvent(AchievementClient.Event("completed", "Synthetic", "first · 10/10", "", ""))
+        Snapshot.sendApplyNotifications()
+        shadowOf(Looper.getMainLooper()).idle()
+        assertTrue(ui.retroNotice.orEmpty().contains("Synthetic"))
+        ui.updateSnapshot(RetroSnapshot(username = "second", gameId = 1))
+        assertNull(ui.retroNotice)
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(6))
+        ui.handleEvent(AchievementClient.Event("achievement", "Nouveau", "", "5", ""))
+        Snapshot.sendApplyNotifications()
+        shadowOf(Looper.getMainLooper()).idle()
+        assertTrue(ui.retroNotice.orEmpty().contains("Nouveau"))
+        job.cancel()
     }
 
     private fun showMeasuredProgress(): RetroSnapshot {

@@ -58,11 +58,13 @@ object RetroNoticeText {
             "leaderboard_failed" -> "Classement annulé · $title"
             "leaderboard_submitted" -> "Classement envoyé · $title"
             "leaderboard_scoreboard" -> "Classement terminé · $title"
+            "completed" -> "Jeu terminé · $title"
+            "mastered" -> "Jeu maîtrisé · $title"
             "notice", "offline", "online", "hardcore_reset" -> title
             else -> return null
         }
         // An unlock's description is long; the popup keeps it to the title.
-        val body = if (kind == "achievement" || kind.startsWith("leaderboard_")) "" else detail
+        val body = if (kind == "achievement" || (kind.startsWith("leaderboard_") && kind != "leaderboard_scoreboard")) "" else detail
         return listOf(headline, body).filter { it.isNotBlank() }.joinToString("\n")
     }
 }

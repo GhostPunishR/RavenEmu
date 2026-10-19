@@ -245,7 +245,10 @@ class MainActivity : ComponentActivity() {
             }
             LaunchedEffect(retro) { retroUi.restore() }
             LaunchedEffect(retroUi.retroProgress?.badgeUrl) { retroUi.loadProgressBadge() }
-            LaunchedEffect(Unit) { retroUi.showUnlocks() }
+            SideEffect { retroUi.configure(userSettings) }
+            LaunchedEffect(videoEnabled, foreground) {
+                if (videoEnabled && foreground) retroUi.showUnlocks() else retroUi.hidePopups()
+            }
             LaunchedEffect(videoEnabled, foreground) {
                 if (videoEnabled && foreground) retroUi.showProgress()
                 else retroUi.hideProgress()
@@ -448,7 +451,7 @@ class MainActivity : ComponentActivity() {
                 retroProgress = retroUi.retroProgress,
                 hardcoreAvailable = HardcoreAvailability.APPROVED,
                 // Hardcore forbids restoring a save state (saving stays allowed).
-                stateLoadAllowed = !retro.hardcoreActive,
+                stateLoadAllowed = !retroUi.retroSnapshot.hardcore,
                 onRequestGameMenu = {
                     retro.requestPause().also { allowed ->
                         if (!allowed) Toast.makeText(
@@ -461,6 +464,7 @@ class MainActivity : ComponentActivity() {
                 onRetroLogin = { username, password -> retroUi.login(username, password) },
                 onRetroDisconnect = { retroUi.disconnect() },
                 onRetroRetry = { retroUi.retry() },
+                onRetroLeaderboard = { id, around -> retroUi.fetchLeaderboard(id, around) },
                 settings = userSettings,
                 onSettingsChange = { updated ->
                     userSettings = updated.normalized()

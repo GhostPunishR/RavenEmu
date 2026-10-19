@@ -96,6 +96,13 @@ internal class AchievementsController(
         if (!stopped) poll(frame = false)
     }
 
+    suspend fun fetchLeaderboard(id: Int, aroundUser: Boolean) = withContext(dispatcher) {
+        if (!stopped && connected) {
+            client?.fetchLeaderboard(id, aroundUser)
+            client?.let { publish(it.snapshot()) }
+        }
+    }
+
     suspend fun resetProgress() = withContext(dispatcher) {
         if (!stopped) {
             client?.reset()
@@ -111,9 +118,18 @@ internal class AchievementsController(
      * for a reset, which [handleEvent] performs. Turning it off is immediate.
      */
     suspend fun setHardcore(enabled: Boolean) = withContext(dispatcher) {
-        hardcoreWanted = enabled && HardcoreAvailability.APPROVED
+        hardcoreWanted = RetroHardcorePolicy.enabled(enabled)
         client?.setHardcore(hardcoreWanted)
         hardcoreActive = client?.hardcore() ?: false
+        client?.let { publish(it.snapshot()) }
+    }
+
+    /** Serialize state restores and Hardcore transitions on the SDK owner. */
+    suspend fun loadState(slot: Int) = withContext(dispatcher) {
+        check(!stopped)
+        RetroHardcorePolicy.requireStateLoadAllowed(hardcoreActive)
+        session.loadStateSlot(slot)
+        resetProgress()
     }
 
     /**
@@ -186,7 +202,13 @@ internal class AchievementsController(
         if (event.kind == "hardcore_reset") {
             // Required by rcheevos before Hardcore processing can resume:
             // the game restarts from power-on, and so does the SDK's state.
-            runCatching { session.resetGame() }
+            val reset = runCatching { session.resetGame() }.isSuccess
+            if (!reset) {
+                hardcoreWanted = false
+                client?.setHardcore(false)
+                main.post { if (!stopped) onEvent(AchievementClient.Event("notice",
+                    "Mode Hardcore désactivé", "Le redémarrage du jeu a échoué.", "", "")) }
+            }
             client?.reset()
             progressBaselinePending = true
             resetDuringTick = true

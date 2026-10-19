@@ -55,12 +55,15 @@ fun RetroAchievementsContent(
     onDisconnect: (() -> Unit)?,
     onRetry: (() -> Unit)?,
     onOpenLink: ((String) -> Unit)?,
+    onLeaderboard: ((Int, Boolean) -> Unit)? = null,
 ) {
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    var filter by remember { mutableStateOf(0) }
+    var filter by remember(snapshot.username, snapshot.gameId) { mutableStateOf(0) }
+    var query by remember(snapshot.username, snapshot.gameId) { mutableStateOf("") }
+    var sort by remember { mutableStateOf(RetroAchievementSort.DEFAULT) }
     var visibleCount by remember { mutableStateOf(10) }
-    var selected by remember { mutableStateOf<AchievementEntry?>(null) }
+    var selected by remember(snapshot.username, snapshot.gameId) { mutableStateOf<AchievementEntry?>(null) }
 
     Column(
         Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
@@ -130,6 +133,7 @@ fun RetroAchievementsContent(
                     HorizontalDivider(color = Color(0xFF3C4052))
                     Text(snapshot.gameTitle, color = raText,
                         fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                    if (snapshot.richPresence.isNotBlank()) Text(snapshot.richPresence, color = raMuted, fontSize = 12.sp)
                     Text("${snapshot.unlockedCount}/${snapshot.totalCount} succès  ·  ${snapshot.unlockedPoints}/${snapshot.totalPoints} points",
                         color = raMuted, fontSize = 12.sp)
                 } else {
@@ -137,6 +141,11 @@ fun RetroAchievementsContent(
                         color = raMuted, fontSize = 12.sp)
                 }
             }
+            if (snapshot.pendingAwards > 0) Text(
+                "${snapshot.pendingAwards} déblocage(s) en attente sur cet appareil. La confirmation du serveur est nécessaire.",
+                color = raAccent, fontSize = 12.sp)
+            if (snapshot.syncWarning) Text("Le stockage sécurisé des déblocages est indisponible ou plein. Gardez le jeu ouvert jusqu'à la synchronisation.",
+                color = Color(0xFFFF928B), fontSize = 12.sp)
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -164,9 +173,14 @@ fun RetroAchievementsContent(
                         }
                     }
                 }
-                val items = snapshot.entries.filter {
-                    filter == 0 || (filter == 2) == it.unlocked
-                }
+                OutlinedTextField(query, { query = it.take(120); visibleCount = 10 },
+                    label = { Text("Rechercher un succès") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                TextButton(onClick = {
+                    sort = RetroAchievementSort.entries[(sort.ordinal + 1) % RetroAchievementSort.entries.size]
+                    visibleCount = 10
+                }) { Text("Tri : ${sort.label}", color = raAccent) }
+                val items = retroAchievementList(snapshot.entries, query, filter, sort)
+                if (items.isEmpty()) Text("Aucun succès ne correspond à cette recherche.", color = raMuted)
                 for (achievement in items.take(visibleCount)) {
                     Column(
                         Modifier.fillMaxWidth()
@@ -199,6 +213,7 @@ fun RetroAchievementsContent(
                         }
                         Text(
                             when {
+                                achievement.sync != RetroSync.NONE -> achievement.sync.label
                                 achievement.unlocked -> "Débloqué"
                                 achievement.state == 3 -> "Non pris en charge"
                                 achievement.progress.isNotBlank() -> achievement.progress
@@ -206,6 +221,7 @@ fun RetroAchievementsContent(
                             },
                             color = raMuted, fontSize = 11.sp,
                         )
+                        if (achievement.unlockedDate.isNotBlank()) Text(achievement.unlockedDate, color = raMuted, fontSize = 11.sp)
                     }
                 }
                 if (items.size > visibleCount) {
@@ -214,7 +230,8 @@ fun RetroAchievementsContent(
                             color = raAccent)
                     }
                 }
-                selected?.let { achievement ->
+                selected?.let { previous ->
+                    val achievement = snapshot.entries.firstOrNull { it.id == previous.id } ?: previous
                     androidx.compose.material3.AlertDialog(
                         onDismissRequest = { selected = null },
                         title = { Text(achievement.title) },
@@ -226,7 +243,8 @@ fun RetroAchievementsContent(
                                 }
                                 Text(achievement.description +
                                     "\n\n${achievement.points} points · " +
-                                    (if (achievement.unlocked) "Débloqué" else "À obtenir"))
+                                    (if (achievement.sync != RetroSync.NONE) achievement.sync.label else if (achievement.unlocked) "Débloqué" else "À obtenir") +
+                                    (if (achievement.unlockedDate.isBlank()) "" else "\n${achievement.unlockedDate}"))
                             }
                         },
                         confirmButton = {
@@ -244,7 +262,9 @@ fun RetroAchievementsContent(
         if (snapshot.error != null) {
             Text(snapshot.error, color = Color(0xFFFF928B), fontSize = 12.sp)
         }
-        Text("Mode Hardcore désactivé · SDK officiel rcheevos 12.5.0",
+        if (snapshot.username.isNotBlank() && snapshot.gameId != 0)
+            RetroLeaderboardsContent(snapshot, onLeaderboard, onOpenLink)
+        Text((if (snapshot.hardcore) "Mode Hardcore" else "Mode Softcore") + " · SDK officiel rcheevos 12.5.0",
             color = raMuted, fontSize = 11.sp)
     }
 }

@@ -24,6 +24,11 @@ internal object NativeAchievementsBridge {
     external fun events(handle: Long): Array<String>
     external fun summary(handle: Long): Array<String>
     external fun achievements(handle: Long): Array<String>
+    external fun richPresence(handle: Long): String
+    external fun leaderboards(handle: Long): Array<String>
+    external fun leaderboardView(handle: Long): Array<String>
+    external fun scoreboard(handle: Long): Array<String>
+    external fun fetchLeaderboard(handle: Long, id: Int, aroundUser: Boolean)
     external fun setHardcore(handle: Long, enabled: Boolean)
     external fun hardcore(handle: Long): Boolean
     /** Records a pause when it returns true (Hardcore pause limits). */

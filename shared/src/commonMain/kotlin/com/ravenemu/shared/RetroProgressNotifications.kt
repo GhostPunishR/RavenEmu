@@ -7,6 +7,8 @@ package com.ravenemu.shared
  * Measurements and achievement eligibility remain entirely owned by rcheevos.
  */
 class RetroProgressNotifications {
+    var displayMillis: Long = 2_000L
+        set(value) { field = value.coerceIn(1_000L, 5_000L) }
     private data class Item(val id: String, val progress: RetroProgress, val changedAt: Long)
     private data class Measurement(val percent: Float, val text: String)
 
@@ -67,7 +69,7 @@ class RetroProgressNotifications {
             if (nowMillis - next.changedAt > MAX_AGE_MS) continue
             current = next
             // Match the SDK's two-second progress-indicator timer.
-            nextTransitionAt = nowMillis + DISPLAY_MS
+            nextTransitionAt = nowMillis + displayMillis
             break
         }
         return progress
@@ -87,7 +89,6 @@ class RetroProgressNotifications {
     }
 
     private companion object {
-        const val DISPLAY_MS = 2_000L
         const val MAX_AGE_MS = 10_000L
         const val MAX_PENDING = 20
     }

@@ -68,6 +68,7 @@ fun SettingsScreen(
     onRetroLogin: ((String, String) -> Unit)? = null,
     onRetroDisconnect: (() -> Unit)? = null,
     onRetroRetry: (() -> Unit)? = null,
+    onRetroLeaderboard: ((Int, Boolean) -> Unit)? = null,
     hardcoreAvailable: Boolean = false,
     deltaSkins: List<DeltaSkinEntry> = emptyList(),
     onImportSkin: (() -> Unit)? = null,
@@ -132,8 +133,34 @@ fun SettingsScreen(
                         onLogin = onRetroLogin,
                         onDisconnect = onRetroDisconnect,
                         onRetry = onRetroRetry,
+                        onLeaderboard = onRetroLeaderboard,
                         onOpenLink = onOpenLink,
                     )
+                    GroupTitle("Notifications RetroAchievements")
+                    SettingSwitch("Déblocages et bilan", "Afficher les succès obtenus et le jeu terminé.",
+                        settings.retroUnlockPopups, onSettingsChange != null) {
+                        update(settings.copy(retroUnlockPopups = it))
+                    }
+                    SettingSwitch("Progression des succès", "Afficher les hausses mesurées à tour de rôle.",
+                        settings.retroProgressPopups, onSettingsChange != null) {
+                        update(settings.copy(retroProgressPopups = it))
+                    }
+                    SettingSwitch("Son des notifications", "Un signal discret pour les succès et le jeu terminé.",
+                        settings.retroPopupSound, onSettingsChange != null) {
+                        update(settings.copy(retroPopupSound = it))
+                    }
+                    ChoiceRow("Popups en haut", settings.retroPopupPosition == "top", onSettingsChange != null) {
+                        update(settings.copy(retroPopupPosition = "top"))
+                    }
+                    ChoiceRow("Popups en bas", settings.retroPopupPosition == "bottom", onSettingsChange != null) {
+                        update(settings.copy(retroPopupPosition = "bottom"))
+                    }
+                    SettingSlider("Durée des déblocages", "${settings.retroPopupSeconds} s", settings.retroPopupSeconds,
+                        2..10, onSettingsChange != null) { update(settings.copy(retroPopupSeconds = it)) }
+                    SettingSlider("Durée des progressions", "${settings.retroProgressSeconds} s", settings.retroProgressSeconds,
+                        1..5, onSettingsChange != null) { update(settings.copy(retroProgressSeconds = it)) }
+                    if (!hardcoreAvailable) SettingDescription("Mode Hardcore indisponible",
+                        "L'activation attend la validation de RavenEmu par RetroAchievements. Le mode Softcore reste disponible.")
                     if (hardcoreAvailable) {
                         GroupTitle("Mode Hardcore")
                         SettingSwitch(
