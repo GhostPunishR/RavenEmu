@@ -57,6 +57,8 @@ Pour un jeu GBA à horloge (Pokémon Rubis, Saphir et Émeraude, Boktai), le `.s
 
 Un état peut devenir incompatible après une évolution du moteur. Essayez alors de lancer normalement le jeu et de reprendre depuis sa sauvegarde de cartouche.
 
+Avec le correctif RTC Pokémon/CFRU de RavenCore (`241f56c`), certaines ROMs modifiées sont désormais reconnues comme ayant une horloge. Leur ancienne sauvegarde Flash se charge ; le cœur conserve ses données et utilise désormais un bloc RTC supplémentaire de 16 octets. Un ancien état créé sans horloge peut être incompatible : relancez normalement le jeu depuis sa sauvegarde de cartouche, puis créez un nouvel état. La reconnaissance dépend du pilote de la ROM ; toutes les variantes d'Unbound n'ont pas été validées en jeu. Voir [les limites du correctif](https://github.com/GhostPunishR/RavenCore/blob/241f56c3564ca1389813753d5c13dd931771fe40/cores/gba/tests/rtc_compatibility.md).
+
 Lorsqu'un ancien jeu GB est reclassé comme GBC d'après son en-tête, sa sauvegarde de cartouche est conservée, mais ses états créés avec le moteur GB ne sont plus chargeables sur le moteur GBC.
 
 ## iOS et précautions

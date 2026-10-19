@@ -31,4 +31,4 @@ La CI construit le framework et le SDK natif pour simulateur et vérifie les ada
 
 ## RavenCore
 
-Le commit `8f682a121b0ce2dc1d5c4777fc602e8f449110b5` est épinglé dans `native/CMakeLists.txt` : RavenCore 0.7.1 et son API C `ravenemu_*`. Voir [la passerelle native](https://github.com/GhostPunishR/RavenEmu/blob/main/native/README.md).
+Le commit `241f56c3564ca1389813753d5c13dd931771fe40` est épinglé dans `native/CMakeLists.txt` : RavenCore 0.7.1 avec correction RTC Pokémon et son API C `ravenemu_*`. Voir [la passerelle native](https://github.com/GhostPunishR/RavenEmu/blob/main/native/README.md).

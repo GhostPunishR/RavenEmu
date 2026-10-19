@@ -1,8 +1,56 @@
 #include <ravenemu/bridge.h>
+#include <algorithm>
 #include <cstdint>
 #include <iostream>
 #include <memory>
 #include <vector>
+
+// Exercise automatic RTC detection through the same public ABI as Android/iOS.
+// All bytes are fabricated: ARM B ., an identity string and GPIO literals.
+static bool automatic_rtc_battery_round_trip() {
+    std::vector<std::uint8_t> rom(0x800);
+    rom[0] = 0xfe; rom[1] = 0xff; rom[2] = 0xff; rom[3] = 0xea;
+    rom[0xb2] = 0x96;
+    constexpr char identity[] = "pokemon red version";
+    constexpr char flash[] = "FLASH1M_V103";
+    std::copy_n(identity, sizeof(identity), rom.begin() + 0x108);
+    std::copy_n(flash, sizeof(flash), rom.begin() + 0x600);
+    std::unique_ptr<ravenemu_bridge, decltype(&ravenemu_destroy)> core(
+        ravenemu_create(RAVENEMU_GBA), ravenemu_destroy);
+    std::vector<std::uint8_t> legacy(0x20000, 0xff);
+    legacy[0x123] = 0x5a; legacy[0x10123] = 0xa5;
+    // A Pokémon identity alone must not add hardware to the cartridge.
+    if (!core || !ravenemu_load(core.get(), rom.data(), rom.size(), legacy.data(), legacy.size()) ||
+        ravenemu_battery_size(core.get()) != legacy.size()) return false;
+    for (unsigned port = 0; port < 3; ++port) {
+        const auto at = 0x400 + port * 8;
+        rom[at] = static_cast<std::uint8_t>(0xc4 + port * 2);
+        rom[at + 3] = 8;
+    }
+    // Reproduce the old hardware layout for this exact ROM, not another hash.
+    if (!ravenemu_set_gba_rtc(core.get(), RAVENEMU_GBA_RTC_OFF) ||
+        !ravenemu_load(core.get(), rom.data(), rom.size(), legacy.data(), legacy.size())) return false;
+    std::vector<std::uint8_t> without_rtc(ravenemu_state_size(core.get()));
+    if (without_rtc.empty() ||
+        !ravenemu_save_state(core.get(), without_rtc.data(), without_rtc.size()) ||
+        !ravenemu_set_gba_rtc(core.get(), RAVENEMU_GBA_RTC_AUTO)) return false;
+    if (!ravenemu_load(core.get(), rom.data(), rom.size(), legacy.data(), legacy.size()) ||
+        ravenemu_battery_size(core.get()) != legacy.size() + 16) return false;
+    // A pre-detection state lacks GPIO. Reject it while keeping battery data.
+    if (ravenemu_load_state(core.get(), without_rtc.data(), without_rtc.size())) return false;
+    std::vector<std::uint8_t> battery(ravenemu_battery_size(core.get()));
+    if (!ravenemu_copy_battery(core.get(), battery.data(), battery.size()) ||
+        !std::equal(legacy.begin(), legacy.end(), battery.begin())) return false;
+    // Reopening and resetting must preserve both Flash banks and the RTC layout.
+    if (!ravenemu_load(core.get(), rom.data(), rom.size(), battery.data(), battery.size()) ||
+        !ravenemu_reset(core.get()) || ravenemu_battery_size(core.get()) != battery.size() ||
+        !ravenemu_copy_battery(core.get(), battery.data(), battery.size()) ||
+        !std::equal(legacy.begin(), legacy.end(), battery.begin())) return false;
+    std::vector<std::uint8_t> state(ravenemu_state_size(core.get()));
+    if (state.empty() || !ravenemu_save_state(core.get(), state.data(), state.size()) ||
+        !ravenemu_load_state(core.get(), state.data(), state.size())) return false;
+    return true;
+}
 
 // A synthetic cartridge with an endless JP 0100, containing no game content.
 // Exercise the normalized ABI through real frame, audio and state operations.
@@ -45,5 +93,9 @@ int main() {
     if (!advance || ravenemu_link_create(mixed, 2)) return 10;
     link.reset();
     if (!ravenemu_run_frame(handle.get(), frame.data(), frame.size())) return 11;
-    std::cout << "Normalized C API: create GB/GBC/GBA, frame, audio, state round-trip and link cable passed\n";
+    if (!automatic_rtc_battery_round_trip()) {
+        std::cerr << "Automatic GBA RTC detection or battery/state round-trip failed\n";
+        return 12;
+    }
+    std::cout << "Normalized C API: create GB/GBC/GBA, frame, audio, state round-trip, link cable and automatic RTC passed\n";
 }
