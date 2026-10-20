@@ -165,7 +165,7 @@ final class RavenRuntime: NSObject, IosHostActions, UIDocumentPickerDelegate {
                 let width = Int32(core.width), height = Int32(core.height)
                 DispatchQueue.main.async { [weak self] in
                     guard let self else { return }
-                    if !self.didShutdown { self.host.presentFrame(bytes: data as NSData, width: width, height: height) }
+                    if !self.didShutdown { self.host.presentFrame(bytes: data, width: width, height: height) }
                     self.queue.async { [weak self] in self?.framePending = false }
                 }
             }
