@@ -5,7 +5,7 @@ Sources du site statique publié par GitHub Pages depuis `main`, dossier `docs/`
 ## Direction visuelle
 
 Sombre et violet, comme l'application.
-- **Mise en page.** Une page unique en sections : ouverture, capture de l'application, fonctions en grille de cartes, matériel de la cartouche, jeu à deux (câble link), moteurs RavenCore, plateformes, installation, questions fréquentes.
+- **Mise en page.** Une page unique en sections : ouverture, capture de l'application, fonctions en grille de cartes, matériel de la cartouche, jeu à deux (câble link), moteurs RavenCore, plateformes (Android, iOS, PC), installation Android, installation PC, questions fréquentes.
 - **Typographie.** Polices système uniquement : la politique de sécurité n'autorise aucune ressource externe.
 - **Mouvement.**
   - Les sections apparaissent au défilement, par une animation CSS liée au défilement (`animation-timeline: view()`). Un navigateur qui ne la connaît pas affiche tout d'emblée.
@@ -32,12 +32,15 @@ Aucun jeu fictif ni capture inventée n'est présenté. Les écrans des cartes �
 
 La bêta se télécharge depuis les [Releases](https://github.com/GhostPunishR/RavenEmu/releases), sans compte GitHub : chaque CI réussie de `main` publie `ravenemu-beta.apk` signé dans une préversion `android-beta-N`. Chaque préversion conserve son APK. Le lien `/releases/latest` exclut les préversions ; utilisez `/releases`.
 
+La version PC vient du dépôt [RavenEmuDSK](https://github.com/GhostPunishR/RavenEmuDSK). Elle n'a pas encore de release : ses paquets sont les artefacts `RavenEmuDSK-Windows`, `RavenEmuDSK-Linux` et `RavenEmuDSK-macOS` de son workflow `build.yml`, téléchargeables avec un compte GitHub. Le site le dit tel quel ; quand une release PC existera, remplacez le lien vers les compilations par celui des Releases.
+
 Sources de vérité :
 - `README.md`, `BUILDING.md` et `CHANGELOG.md` ;
 - le wiki (`wiki/`), en particulier Commandes, Affichage et audio, Sauvegardes et états, RetroAchievements ;
-- le workflow et `PRIVACY.md`.
+- le workflow et `PRIVACY.md` ;
+- pour la version PC, le README de RavenEmuDSK et son workflow `build.yml`.
 
-Ne présentez pas comme terminés sans confirmation : iOS jouable, déblocages RetroAchievements, compatibilité GBC/GBA. Quand l'épinglage de RavenCore change, mettez à jour la pastille de l'ouverture (« moteurs RavenCore x.y.z »).
+Ne présentez pas comme terminés sans confirmation : iOS jouable, déblocages RetroAchievements, compatibilité GBC/GBA. Le Hardcore de la version PC est présenté sans approbation officielle de RetroAchievements, comme dans son README. Quand l'épinglage de RavenCore change, mettez à jour la pastille de l'ouverture (« moteurs RavenCore x.y.z »).
 
 ## Cache des navigateurs
 

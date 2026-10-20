@@ -266,7 +266,7 @@ kbd { display: inline-block; min-width: 1.6em; padding: 0 .4em; text-align: cent
 
 /* Plateformes */
 
-.platforms { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.platforms { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
 .platform { padding: 32px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--surface); }
 .platform-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
 .platform h3 { font-size: 1.6rem; }
