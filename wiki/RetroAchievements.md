@@ -11,6 +11,8 @@ L'intégration de la version multiplateforme est raccordée sur **Android**, ave
 3. Lancez une ROM reconnue par le service.
 4. Consultez le profil, les points, le jeu identifié, les badges et les filtres de succès.
 
+Dans le menu du jeu, l'encart **RetroAchievements** résume le compte : avatar, nom, points Softcore puis Hardcore, progression du jeu en cours et mode actif (Softcore ou Hardcore). Hors connexion, il invite à se connecter ou affiche la raison donnée par le serveur. Le toucher ouvre le tableau de bord. La session d'un jeu ne dure que le temps de la partie : en quittant le lecteur, la bibliothèque n'affiche plus ses succès.
+
 Une première connexion propre à cette application est nécessaire : le jeton de l'ancienne application n'est pas partagé. Le mot de passe n'est pas conservé ; le jeton est chiffré via Android Keystore.
 
 ## Console et identification

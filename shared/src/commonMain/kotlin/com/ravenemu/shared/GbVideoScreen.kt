@@ -304,10 +304,11 @@ internal fun GbVideoScreen(
                 } else {
                 Text("Menu du jeu", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
                 if (onRetroLogin != null) {
-                    OutlinedButton(
+                    RetroAccountCard(
+                        snapshot = retroSnapshot,
+                        avatar = retroImages[retroSnapshot.avatarUrl],
                         onClick = { retroPanelOpen = true },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) { Text("RetroAchievements  ·  ${retroSnapshot.status}") }
+                    )
                 }
                 Text(title, color = RavenSecondary, fontSize = 13.sp)
                 if (onControllerModeChange != null) {
