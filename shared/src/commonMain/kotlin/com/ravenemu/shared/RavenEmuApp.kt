@@ -112,6 +112,7 @@ fun RavenEmuApp(
     onToggleSkin: ((String) -> Unit)? = null,
     onDeleteSkin: ((String) -> Unit)? = null,
     settings: Settings = Settings(),
+    settingsCapabilities: SettingsCapabilities = SettingsCapabilities(),
     onSettingsChange: ((Settings) -> Unit)? = null,
     appVersion: String = "0.1.0 - Bêta",
     onOpenLink: ((String) -> Unit)? = null,
@@ -214,6 +215,7 @@ fun RavenEmuApp(
                     )
                 }
                 RavenScreen.SETTINGS -> SettingsScreen(
+                    capabilities = settingsCapabilities,
                     settings = settings,
                     onSettingsChange = onSettingsChange,
                     appVersion = appVersion,

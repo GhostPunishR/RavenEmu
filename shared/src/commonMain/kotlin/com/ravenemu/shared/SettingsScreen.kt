@@ -59,6 +59,7 @@ private enum class Page(val label: String) {
 @Composable
 fun SettingsScreen(
     settings: Settings,
+    capabilities: SettingsCapabilities = SettingsCapabilities(),
     onSettingsChange: ((Settings) -> Unit)?,
     appVersion: String,
     onOpenLink: ((String) -> Unit)?,
@@ -117,10 +118,10 @@ fun SettingsScreen(
                             page = Page.RETRO
                         }
                     }
-                    CategoryRow("Général", "Pause, jaquettes et diagnostics") { page = Page.GENERAL }
+                    CategoryRow("Général", if (capabilities.onlineCovers) "Pause, jaquettes et diagnostics" else "Pause automatique") { page = Page.GENERAL }
                     CategoryRow("Audio", "Son du jeu et volume") { page = Page.AUDIO }
                     CategoryRow("Vidéo", "Couleurs, correction LCD, luminosité et contraste") { page = Page.VIDEO }
-                    CategoryRow("Interface", "Vibrations, capteurs, commandes, style et Skin Delta") { page = Page.INTERFACE }
+                    CategoryRow("Interface", if (capabilities.cartridgeHardware) "Vibrations, capteurs, commandes, style et Skin Delta" else "Commandes tactiles et style") { page = Page.INTERFACE }
                     CategoryRow("À propos", "Version, auteur, confidentialité et licences") {
                         page = Page.ABOUT
                     }
@@ -177,6 +178,7 @@ fun SettingsScreen(
                         "Pause automatique",
                         "Le jeu et son audio sont suspendus lorsque RavenEmu passe en arrière-plan ou lorsque le panneau de jeu est ouvert. Ce comportement est fixe pour protéger la partie.",
                     )
+                    if (capabilities.onlineCovers) {
                     GroupTitle("Bibliothèque")
                     SettingSwitch(
                         "Jaquettes en ligne",
@@ -184,6 +186,8 @@ fun SettingsScreen(
                         settings.onlineCovers,
                         onSettingsChange != null,
                     ) { update(settings.copy(onlineCovers = it)) }
+                    }
+                    if (capabilities.diagnostics) {
                     GroupTitle("Diagnostic")
                     SettingSwitch(
                         "Afficher les performances",
@@ -193,6 +197,7 @@ fun SettingsScreen(
                     ) { update(settings.copy(showDiagnostics = it)) }
                     Text("Le diagnostic audio reste exportable depuis le menu du jeu.",
                         color = Muted, fontSize = 12.sp)
+                    }
                 }
                 Page.AUDIO -> {
                     GroupTitle("Son du jeu")
@@ -207,7 +212,7 @@ fun SettingsScreen(
                         settings.audioVolume, 0..100,
                         settings.audioEnabled && onSettingsChange != null,
                     ) { update(settings.copy(audioVolume = it)) }
-                    Text("Le fondu de démarrage de 180 ms reste inchangé.",
+                    if (capabilities.audioStartupFade) Text("Le fondu de démarrage de 180 ms reste inchangé.",
                         color = Muted, fontSize = 12.sp)
                 }
                 Page.VIDEO -> {
@@ -261,18 +266,22 @@ fun SettingsScreen(
                 }
                 Page.INTERFACE -> {
                     GroupTitle("Commandes tactiles")
+                    if (capabilities.haptics) {
                     SettingSwitch(
                         "Retour haptique",
                         "Petite vibration à la pression des boutons.",
                         settings.haptics,
                         onSettingsChange != null,
                     ) { update(settings.copy(haptics = it)) }
+                    }
+                    if (capabilities.cartridgeHardware) {
                     SettingSwitch(
                         "Vibration de la cartouche",
                         "Fait vibrer le téléphone avec les jeux équipés d'un moteur de vibration (Drill Dozer, WarioWare: Twisted!, cartouches Game Boy Rumble).",
                         settings.cartridgeRumble,
                         onSettingsChange != null,
                     ) { update(settings.copy(cartridgeRumble = it)) }
+                    }
                     SettingSlider(
                         "Taille des commandes", "${settings.controlsScale} %",
                         settings.controlsScale, 80..115, onSettingsChange != null,
@@ -300,6 +309,7 @@ fun SettingsScreen(
                     }, enabled = onSettingsChange != null) {
                         Text("Réinitialiser les commandes", color = Accent)
                     }
+                    if (capabilities.cartridgeHardware) {
                     GroupTitle("Capteurs de la cartouche")
                     SettingSwitch(
                         "Capteurs du téléphone",
@@ -318,6 +328,8 @@ fun SettingsScreen(
                         settings.solarLightLevel, 0..100,
                         onSettingsChange != null && !(settings.cartridgeSensors && settings.solarLightAuto),
                     ) { update(settings.copy(solarLightLevel = (it + 5) / 10 * 10)) }
+                    }
+                    if (capabilities.deltaSkins) {
                     GroupTitle("Skin Delta")
                     Text(
                         "RavenEmu lit les skins au format .deltaskin, en portrait. Ce projet n'est ni affilié à Delta, ni approuvé par ses auteurs : aucun skin n'est fourni, vous importez les vôtres.",
@@ -347,6 +359,7 @@ fun SettingsScreen(
                                 Text("Supprimer", color = Muted, fontSize = 13.sp)
                             }
                         }
+                    }
                     }
                 }
                 Page.ABOUT -> {

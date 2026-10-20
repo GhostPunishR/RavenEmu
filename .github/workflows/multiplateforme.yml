@@ -177,7 +177,7 @@ jobs:
           retention-days: 7
 
   ios:
-    name: iOS (framework partagé)
+    name: iOS (application et tests simulateur)
     runs-on: macos-latest
     steps:
       - name: Récupérer le dépôt
@@ -205,6 +205,25 @@ jobs:
             -I native/build-ios/iphonesimulator/include \
             -F shared/build/bin/iosSimulatorArm64/debugFramework \
             iosApp/Sources/*.swift
+      - name: Installer XcodeGen si nécessaire
+        run: command -v xcodegen || brew install xcodegen
+      - name: Construire et tester l'application iOS
+        run: sh iosApp/ci-test.sh
+      - name: Publier l'application pour simulateur Apple Silicon
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ravenemu-ios-simulator
+          path: iosApp/build/RavenEmu-simulator.zip
+          if-no-files-found: error
+          retention-days: 7
+      - name: Conserver les résultats de test iOS
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ravenemu-ios-test-results
+          path: iosApp/build/test-run.*/results.xcresult
+          if-no-files-found: ignore
+          retention-days: 7
 
   prerelease:
     name: Publier la préversion Android

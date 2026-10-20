@@ -8,6 +8,7 @@ final class RavenNativeCore {
     private var handle: OpaquePointer?
 
     init?(system: System) {
+        guard ravenemu_api_version() == RAVENEMU_API_VERSION else { return nil }
         guard let value = ravenemu_create(system.rawValue) else { return nil }
         self.handle = value
     }
@@ -87,6 +88,30 @@ final class RavenNativeCore {
             ravenemu_copy_battery(handle, $0.baseAddress, $0.count) != 0
         }
         return ok ? Data(bytes) : nil
+    }
+
+    func dirtyBattery() throws -> (Data, UInt64)? {
+        guard let handle else { return nil }
+        guard ravenemu_battery_dirty(handle) != 0 else { return nil }
+        let capacity = Int(ravenemu_battery_size(handle))
+        guard capacity > 0, capacity <= RavenLibraryStore.maxBattery else {
+            throw RavenStorageError.invalid("Taille de sauvegarde batterie invalide.")
+        }
+        var bytes = [UInt8](repeating: 0, count: capacity)
+        var generation: UInt64 = 0
+        let ok = bytes.withUnsafeMutableBufferPointer {
+            ravenemu_copy_battery_generation(handle, $0.baseAddress, $0.count, &generation) != 0
+        }
+        guard ok else { throw RavenStorageError.invalid(lastError) }
+        return (Data(bytes), generation)
+    }
+
+    func acknowledgeBattery(_ generation: UInt64) {
+        _ = ravenemu_acknowledge_battery(handle, generation)
+    }
+
+    func releaseButtons() {
+        for id in Int32(0)...Int32(9) { _ = button(id, pressed: false) }
     }
 
     func reset() -> Bool { ravenemu_reset(handle) != 0 }
