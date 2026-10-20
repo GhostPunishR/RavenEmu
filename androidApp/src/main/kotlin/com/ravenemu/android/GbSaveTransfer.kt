@@ -1,6 +1,7 @@
 package com.ravenemu.android
 
 import org.json.JSONObject
+import java.io.BufferedInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.InputStream
@@ -14,7 +15,8 @@ import java.util.zip.ZipOutputStream
  *
  * Packages are bound to the exact SHA-256 of the selected cartridge, and
  * validated in memory before any existing save is touched. Missing files in
- * the archive do NOT delete existing saves.
+ * the archive do NOT delete existing saves. A library archive holds one such
+ * package per game, each in its own folder.
  */
 internal class GbSaveTransfer(filesDir: File) {
     private val battery = GbBatteryStore(File(filesDir, "gb-battery"))
@@ -39,13 +41,40 @@ internal class GbSaveTransfer(filesDir: File) {
 
     fun exportBattery(key: String, output: OutputStream) {
         val bytes = battery.read(validKey(key))
-            ?: error("Ce jeu n'a pas encore de sauvegarde .sav.")
+            ?: error("Ce jeu n'a pas encore de sauvegarde.")
         output.write(bytes)
         output.flush()
     }
 
-    fun exportBundle(key: String, output: OutputStream) {
-        validKey(key)
+    /** A library game as the archive names it: its ROM key and file name. */
+    data class LibraryGame(val key: String, val title: String)
+
+    /**
+     * Saves of every game of [games] that has one, in a single archive: one
+     * folder per game, laid out like a single game's package with its
+     * manifest first, so importing a game finds its own folder. Each game
+     * is read and written in turn. Returns the number of games written.
+     */
+    fun exportLibrary(games: List<LibraryGame>, output: OutputStream): Int {
+        require(games.any { hasAnySave(it.key) }) { "Aucune sauvegarde à exporter dans la bibliothèque." }
+        val folders = HashSet<String>()
+        var written = 0
+        ZipOutputStream(output).use { zip ->
+            for (game in games) {
+                val data = gameFiles(validKey(game.key))
+                if (data.isEmpty()) continue
+                var folder = libraryFolder(game)
+                var suffix = 2
+                while (!folders.add(folder)) folder = "${libraryFolder(game)} ${suffix++}"
+                writePackage(zip, game.key, data, "$folder/")
+                written++
+            }
+            zip.finish()
+        }
+        return written
+    }
+
+    private fun gameFiles(key: String): Map<String, ByteArray> {
         val data = linkedMapOf<String, ByteArray>()
         battery.read(key)?.let { data["battery.sav"] = it }
         for (slot in 0 until GbSaveStateStore.SLOT_COUNT) {
@@ -53,75 +82,63 @@ internal class GbSaveTransfer(filesDir: File) {
             data["slot$slot.state"] = state
             states.readPreview(key, slot)?.let { data["slot$slot.png"] = it }
         }
-        require(data.isNotEmpty()) { "Aucune sauvegarde à exporter pour ce jeu." }
+        return data
+    }
+
+    private fun writePackage(zip: ZipOutputStream, key: String, data: Map<String, ByteArray>, prefix: String) {
         val checksums = JSONObject()
-        data.forEach { (name, content) ->
-            checksums.put(name, sha256(content))
-        }
+        data.forEach { (name, content) -> checksums.put(name, sha256(content)) }
         val manifest = JSONObject()
             .put("format", FORMAT)
             .put("version", VERSION)
             .put("romSha256", key)
             .put("entries", checksums)
             .toString().toByteArray(Charsets.UTF_8)
-        ZipOutputStream(output).use { zip ->
-            fun write(name: String, bytes: ByteArray) {
-                zip.putNextEntry(ZipEntry(name))
-                zip.write(bytes)
-                zip.closeEntry()
-            }
-            write("manifest.json", manifest)
-            data.forEach { (name, bytes) -> write(name, bytes) }
-            zip.finish()
+        fun write(name: String, bytes: ByteArray) {
+            zip.putNextEntry(ZipEntry(prefix + name))
+            zip.write(bytes)
+            zip.closeEntry()
         }
+        write("manifest.json", manifest)
+        data.forEach { (name, bytes) -> write(name, bytes) }
     }
 
     /** This must run on Dispatchers.IO. Source is capped even for ZIP bombs. */
     fun previewImport(stream: InputStream, targetKey: String, filename: String): ImportPayload {
         validKey(targetKey)
         val archive = filename.endsWith(".zip", ignoreCase = true)
-        val raw = filename.endsWith(".sav", ignoreCase = true)
+        val raw = RAW_EXTENSIONS.any { filename.endsWith(it, ignoreCase = true) }
         require(archive || raw) {
-            "Sélectionnez une sauvegarde .sav ou une archive .zip RavenEmu."
+            "Sélectionnez une sauvegarde .sav ou .srm, ou une archive .zip RavenEmu."
         }
-        val source = readLimited(stream, MAX_ARCHIVE_BYTES)
-        require(source.isNotEmpty()) { "Le fichier est vide." }
-        val magic = source.size >= 4 && source[0] == 'P'.code.toByte() &&
-            source[1] == 'K'.code.toByte() && source[2] == 3.toByte() &&
-            source[3] == 4.toByte()
+        val input = BufferedInputStream(stream)
+        input.mark(4)
+        val head = ByteArray(4)
+        var read = 0
+        while (read < head.size) {
+            val n = input.read(head, read, head.size - read)
+            if (n < 0) break
+            read += n
+        }
+        input.reset()
+        require(read > 0) { "Le fichier est vide." }
+        val magic = read == 4 && head[0] == 'P'.code.toByte() &&
+            head[1] == 'K'.code.toByte() && head[2] == 3.toByte() &&
+            head[3] == 4.toByte()
         require(magic == archive) {
             "Le contenu du fichier ne correspond pas à son extension."
         }
         if (!magic) {
-            // A raw .sav has no embedded ROM ID: caller explicitly confirms
-            // the selected target game before writing it.
+            // A raw .sav or .srm (RetroArch) is the cartridge memory alone,
+            // with no ROM ID: caller explicitly confirms the target game.
+            val source = readLimited(input, MAX_ARCHIVE_BYTES)
             require(source.size in 1..MAX_BATTERY_BYTES) {
-                "Ce fichier n'est ni une archive RavenEmu ZIP ni un .sav valide."
+                "Ce fichier n'est ni une archive RavenEmu ZIP ni une sauvegarde .sav ou .srm valide."
             }
             return ImportPayload(targetKey, mapOf("battery.sav" to source), true)
         }
 
-        val entries = linkedMapOf<String, ByteArray>()
-        var total = 0
-        ZipInputStream(source.inputStream()).use { zip ->
-            while (true) {
-                val entry = zip.nextEntry ?: break
-                require(!entry.isDirectory) { "Dossier inattendu dans l'archive." }
-                val name = entry.name
-                require(name in allowedNames() && !entries.containsKey(name)) {
-                    "Fichier inattendu ou doublon dans l'archive."
-                }
-                val maxSize = maxFor(name)
-                val bytes = readLimited(zip, maxSize)
-                require(bytes.isNotEmpty()) { "Fichier vide dans l'archive : $name." }
-                total += bytes.size
-                require(total <= MAX_UNPACKED_BYTES) {
-                    "Archive trop volumineuse une fois décompressée."
-                }
-                entries[name] = bytes
-                zip.closeEntry()
-            }
-        }
+        val entries = readArchive(input, targetKey)
         val manifestBytes = entries.remove("manifest.json")
             ?: error("Cette archive n'est pas une sauvegarde de cette version de RavenEmu.")
         val manifest = JSONObject(manifestBytes.toString(Charsets.UTF_8))
@@ -153,10 +170,60 @@ internal class GbSaveTransfer(filesDir: File) {
         return ImportPayload(targetKey, safeEntries, false)
     }
 
+    /**
+     * Entries of the target game's package, manifest included. A library
+     * archive holds a folder per game, each starting with its manifest: only
+     * the target's folder is kept, the others are read through, within a
+     * bounded total. A single game's package has its files at the root.
+     */
+    private fun readArchive(input: InputStream, targetKey: String): LinkedHashMap<String, ByteArray> {
+        val entries = linkedMapOf<String, ByteArray>()
+        var library: Boolean? = null
+        var selected: String? = null
+        var kept = 0
+        var scanned = 0L
+        ZipInputStream(input).use { zip ->
+            while (true) {
+                val entry = zip.nextEntry ?: break
+                require(!entry.isDirectory) { "Dossier inattendu dans l'archive." }
+                val folder = entry.name.substringBeforeLast('/', "")
+                val name = entry.name.substringAfterLast('/')
+                require(name in allowedNames()) { "Fichier inattendu ou doublon dans l'archive." }
+                val inFolder = folder.isNotEmpty()
+                require(library == null || library == inFolder) { "Archive de sauvegardes incohérente." }
+                library = inFolder
+                require(!inFolder || isLibraryFolder(folder)) { "Dossier inattendu dans l'archive." }
+                val bytes = readLimited(zip, maxFor(name))
+                if (inFolder && folder != selected) {
+                    // Another game, or the target's folder before its manifest.
+                    scanned += bytes.size
+                    require(scanned <= MAX_LIBRARY_BYTES) { "Archive trop volumineuse une fois décompressée." }
+                    if (selected != null || name != "manifest.json" || manifestKey(bytes) != targetKey) {
+                        zip.closeEntry()
+                        continue
+                    }
+                    selected = folder
+                }
+                require(!entries.containsKey(name)) { "Fichier inattendu ou doublon dans l'archive." }
+                require(bytes.isNotEmpty()) { "Fichier vide dans l'archive : $name." }
+                kept += bytes.size
+                require(kept <= MAX_UNPACKED_BYTES) {
+                    "Archive trop volumineuse une fois décompressée."
+                }
+                entries[name] = bytes
+                zip.closeEntry()
+            }
+        }
+        require(library != true || selected != null) {
+            "Cette archive ne contient aucune sauvegarde de ce jeu."
+        }
+        return entries
+    }
+
     fun conflicts(payload: ImportPayload): List<String> {
         val key = validKey(payload.romKey)
         val clashes = mutableListOf<String>()
-        if (payload.hasBattery && battery.read(key) != null) clashes += "sauvegarde .sav"
+        if (payload.hasBattery && battery.read(key) != null) clashes += "sauvegarde du jeu"
         for (slot in payload.stateSlots) {
             if (states.read(key, slot) != null) clashes += "emplacement ${slot + 1}"
         }
@@ -259,6 +326,29 @@ internal class GbSaveTransfer(filesDir: File) {
         private const val MAX_MANIFEST_BYTES = 16 * 1024
         private const val MAX_ARCHIVE_BYTES = 24 * 1024 * 1024
         private const val MAX_UNPACKED_BYTES = 21 * 1024 * 1024
+        // Every game's saves read through to find one game's folder.
+        private const val MAX_LIBRARY_BYTES = 2L * 1024 * 1024 * 1024
+        private const val MAX_FOLDER_CHARS = 120
+        /** Raw cartridge memory: .sav for most emulators, .srm for RetroArch. */
+        private val RAW_EXTENSIONS = listOf(".sav", ".srm")
+
+        private fun manifestKey(bytes: ByteArray): String? = runCatching {
+            JSONObject(bytes.toString(Charsets.UTF_8)).getString("romSha256")
+        }.getOrNull()
+
+        private fun isLibraryFolder(folder: String): Boolean =
+            folder.length <= MAX_FOLDER_CHARS && folder != "." && folder != ".." &&
+                folder.none { it == '/' || it == '\\' || it.isISOControl() }
+
+        /** Readable and unique: the ROM name, then the start of its key. */
+        private fun libraryFolder(game: LibraryGame): String {
+            val stem = game.title.substringAfterLast('/').substringAfterLast('\\')
+                .substringBeforeLast('.')
+                .map { if (it.isISOControl() || it in "/\\:*?\"<>|") '_' else it }
+                .joinToString("").trim().trimEnd('.').take(80)
+                .ifBlank { "Jeu" }
+            return "$stem (${game.key.take(8)})"
+        }
 
         private fun validKey(key: String): String {
             require(key.length == 64 && key.all { it in '0'..'9' || it in 'a'..'f' }) {

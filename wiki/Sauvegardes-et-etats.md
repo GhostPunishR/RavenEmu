@@ -30,13 +30,16 @@ L'emplacement 1 conserve le chemin historique `.slot0.state` des premières pré
 
 ## Exporter sa progression
 
-Ouvrez la **fiche du jeu dans la bibliothèque** :
+**Un jeu** : dans sa fiche, touchez **Exporter** puis choisissez le type de fichier :
 
-1. **Exporter toutes les sauvegardes (.zip)** : sauvegarde de cartouche, emplacements d'état occupés et miniatures disponibles.
-2. **Exporter .sav** : fichier batterie seul, lorsqu'une sauvegarde existe.
-3. Choisissez une destination avec le sélecteur Android.
+- **.sav** : lu par la plupart des émulateurs ;
+- **.srm** : le nom attendu par RetroArch.
 
-Le ZIP comporte un manifeste versionné, l'empreinte de la ROM et les sommes de contrôle des fichiers. **Il ne contient pas la ROM.** Conservez aussi votre propre copie de celle-ci.
+Les deux contiennent la même sauvegarde de cartouche ; seule l'extension change. Le fichier reprend le nom complet de la ROM.
+
+**Toute la bibliothèque** : dans le menu **⋮** de la bibliothèque, **Exporter toutes les sauvegardes (.zip)** réunit, pour chaque jeu qui en a, la sauvegarde de cartouche, les emplacements d'état occupés et leurs miniatures. Chaque jeu a son dossier, au nom de sa ROM.
+
+Choisissez ensuite une destination avec le sélecteur Android. Chaque dossier du ZIP comporte un manifeste versionné, l'empreinte de la ROM et les sommes de contrôle des fichiers. **Il ne contient aucune ROM.** Conservez aussi votre propre copie de celles-ci.
 
 ## Importer
 
@@ -45,11 +48,12 @@ Dans la fiche du jeu cible, touchez **Importer**, puis sélectionnez :
 | Fichier | Contrôle et confirmation |
 |---|---|
 | ZIP RavenEmu de la nouvelle version | Le manifeste doit correspondre à la même ROM exacte. Les fichiers et empreintes sont vérifiés avant écriture |
-| `.sav` brut | Aucune identité de ROM n'est incluse ; un avertissement demande de confirmer le jeu cible |
+| ZIP de toute la bibliothèque | Seul le dossier du jeu cible est lu, avec les mêmes contrôles. Importez-le dans la fiche de chaque jeu à restaurer |
+| `.sav` ou `.srm` brut | Aucune identité de ROM n'est incluse ; un avertissement demande de confirmer le jeu cible |
 
 Le résumé précise les fichiers existants qui seront remplacés. Les éléments absents du paquet restent intacts ; si un état est remplacé sans miniature, l'ancienne miniature correspondante est retirée. Les ROM ne sont pas modifiées.
 
-Les fichiers de l'ancienne application et les états d'autres émulateurs ne doivent pas être importés comme des ZIP de cette version. Un `.sav` compatible peut être transféré, sans garantie de conversion automatique.
+Les fichiers de l'ancienne application et les états d'autres émulateurs ne doivent pas être importés comme des ZIP de cette version. Un `.sav` ou un `.srm` compatible peut être transféré, sans garantie de conversion automatique.
 
 Pour un jeu GBA à horloge (Pokémon Rubis, Saphir et Émeraude, Boktai), le `.sav` se termine par 16 octets qui gardent l'heure réglée par le jeu, au format de mGBA. mGBA le relit tel quel. Un `.sav` sans ces 16 octets, venu d'un autre émulateur, s'importe aussi : l'horloge suit alors l'heure du téléphone.
 

@@ -33,13 +33,17 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-private enum class RavenScreen { LIBRARY, SETTINGS, ABOUT, PLAYER, LINK_PLAYER }
+private enum class RavenScreen { LIBRARY, SETTINGS, PLAYER, LINK_PLAYER }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RavenEmuApp(
     onImportRom: (() -> Unit)? = null,
     onImportFolder: (() -> Unit)? = null,
+    /** Library menu: reads the library again. */
+    onRefreshLibrary: (() -> Unit)? = null,
+    /** Library menu: one archive with the saves of every game that has one. */
+    onExportAllSaves: (() -> Unit)? = null,
     folderImportSummary: GbFolderImportSummary? = null,
     folderImportProgress: String? = null,
     onDismissFolderImportSummary: (() -> Unit)? = null,
@@ -50,8 +54,9 @@ fun RavenEmuApp(
     onRemoveCover: ((String) -> Unit)? = null,
     coverBusy: Boolean = false,
     onLaunchLibraryGame: ((String, () -> Unit) -> Unit)? = null,
-    onExportGameBackup: ((String) -> Unit)? = null,
-    onExportBatterySave: ((String) -> Unit)? = null,
+    onExportBatterySave: ((String, BatteryFileFormat) -> Unit)? = null,
+    /** Formats offered when exporting a game's save. */
+    batteryFormats: List<BatteryFileFormat> = BatteryFileFormat.entries,
     onImportGameSave: ((String) -> Unit)? = null,
     saveTransferBusy: Boolean = false,
     saveImportReview: GbSaveImportReview? = null,
@@ -161,7 +166,9 @@ fun RavenEmuApp(
                         onAdd = { onImportRom?.invoke() },
                         onToggleView = { listMode = !listMode },
                         onImportFolder = onImportFolder,
-                        onAbout = { screen = RavenScreen.ABOUT },
+                        onRefresh = onRefreshLibrary,
+                        onExportAllSaves = onExportAllSaves,
+                        libraryIdle = !importBusy && !saveTransferBusy,
                     )
                     SearchField(query = search, onChange = { search = it })
                     if (importBusy) {
@@ -233,14 +240,6 @@ fun RavenEmuApp(
                     onImportSkin = onImportSkin,
                     onToggleSkin = onToggleSkin,
                     onDeleteSkin = onDeleteSkin,
-                    onBack = { screen = RavenScreen.LIBRARY },
-                )
-                RavenScreen.ABOUT -> SettingsScreen(
-                    settings = settings,
-                    onSettingsChange = onSettingsChange,
-                    appVersion = appVersion,
-                    onOpenLink = onOpenLink,
-                    aboutOnly = true,
                     onBack = { screen = RavenScreen.LIBRARY },
                 )
                 RavenScreen.PLAYER -> GbVideoScreen(
@@ -335,9 +334,9 @@ fun RavenEmuApp(
                 },
                 onChooseCover = onChooseCover,
                 onRemoveCover = onRemoveCover,
-                onExportGameBackup = onExportGameBackup,
                 onExportBatterySave = onExportBatterySave,
                 onImportGameSave = onImportGameSave,
+                batteryFormats = batteryFormats,
                 onDismiss = { gameDetails = null },
             )
         }

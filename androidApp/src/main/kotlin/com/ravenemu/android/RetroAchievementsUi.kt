@@ -67,6 +67,9 @@ internal class RetroAchievementsUi(
     private var preferences = Settings()
     private var currentPopup: RetroPopup? = null
 
+    /** Hardcore was switched off by the app (the game could not restart): the settings follow. */
+    var onHardcoreRefused: () -> Unit = {}
+
     fun configure(settings: Settings) {
         preferences = settings.normalized()
         progressNotifications.displayMillis = preferences.retroProgressSeconds * 1000L
@@ -142,6 +145,7 @@ internal class RetroAchievementsUi(
         if (event.kind == "login_error" || event.kind == "login") {
             retroBusy = false
         }
+        if (event.kind == "hardcore_refused") onHardcoreRefused()
     }
 
     private fun clearIndicators() {

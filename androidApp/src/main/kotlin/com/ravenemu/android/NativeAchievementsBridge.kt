@@ -15,6 +15,8 @@ internal object NativeAchievementsBridge {
     external fun destroy(handle: Long)
     external fun login(handle: Long, username: String, secret: String, token: Boolean)
     external fun load(handle: Long, console: Int, rom: ByteArray)
+    /** Ends the game session; the account stays signed in. */
+    external fun unload(handle: Long)
     external fun tick(handle: Long, memory: Memory?, frame: Boolean)
     external fun reset(handle: Long)
     external fun requests(handle: Long): Array<String>

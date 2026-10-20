@@ -153,31 +153,37 @@ class MainActivity : ComponentActivity() {
             }
             var libraryGames by remember { mutableStateOf(emptyList<GameEntry>()) }
             var activeGameId by remember { mutableStateOf<String?>(null) }
+            // Each refresh from the library menu searches the missing covers again.
+            var libraryRefreshes by remember { mutableStateOf(0) }
+            // Games and covers as stored; throws when the index cannot be read.
+            suspend fun reloadLibrary() {
+                val (games, coverImages) = withContext(Dispatchers.IO) {
+                    val entries = romLibrary.list()
+                    val pictures = entries.mapNotNull { entry ->
+                        try {
+                            covers.coverStore.read(entry.id)?.asImageBitmap()?.let { entry.id to it }
+                        } catch (error: Exception) {
+                            Log.w("RavenEmuLibrary", "Cannot read cover for ${entry.id.take(12)}", error)
+                            null
+                        }
+                    }.toMap()
+                    entries.map { GameEntry(it.id, it.filename, it.platform) } to pictures
+                }
+                libraryGames = games
+                covers.libraryCovers = coverImages
+            }
             LaunchedEffect(romLibrary) {
                 try {
-                    val (games, coverImages) = withContext(Dispatchers.IO) {
-                        val entries = romLibrary.list()
-                        val pictures = entries.mapNotNull { entry ->
-                            try {
-                                covers.coverStore.read(entry.id)?.asImageBitmap()?.let { entry.id to it }
-                            } catch (error: Exception) {
-                                Log.w("RavenEmuLibrary", "Cannot read cover for ${entry.id.take(12)}", error)
-                                null
-                            }
-                        }.toMap()
-                        entries.map { GameEntry(it.id, it.filename, it.platform) } to pictures
-                    }
-                    libraryGames = games
-                    covers.libraryCovers = coverImages
+                    reloadLibrary()
                 } catch (error: Exception) {
                     Log.e("RavenEmuLibrary", "Cannot open library index", error)
                 }
             }
             // Only run a cover search when the user enabled it, and then only
-            // when the library changes or an excluded ROM is explicitly
-            // re-enabled. Recomposition/video frames never initiate network
-            // calls.
-            LaunchedEffect(libraryGames, covers.ignoredAutoCovers, userSettings.onlineCovers) {
+            // when the library changes, an excluded ROM is explicitly
+            // re-enabled or the library is refreshed. Recomposition/video
+            // frames never initiate network calls.
+            LaunchedEffect(libraryGames, covers.ignoredAutoCovers, userSettings.onlineCovers, libraryRefreshes) {
                 covers.fillMissingOnline(libraryGames, userSettings.onlineCovers)
             }
             val appVersion = remember {
@@ -230,8 +236,14 @@ class MainActivity : ComponentActivity() {
                 linkInputEnabled = linkEnabled
             }
             val retroUi = remember {
-                RetroAchievementsUi(applicationContext, gameSession, scope)
-                    .also { retroController = it.retro }
+                RetroAchievementsUi(applicationContext, gameSession, scope).also {
+                    retroController = it.retro
+                    // A refused Hardcore stays off: the next launch must not ask again.
+                    it.onHardcoreRefused = {
+                        userSettings = userSettings.copy(retroHardcore = false).normalized()
+                        settingsStore.write(userSettings)
+                    }
+                }
             }
             val retro = retroUi.retro
             LaunchedEffect(retroUi.retroSnapshot.avatarUrl,
@@ -408,7 +420,7 @@ class MainActivity : ComponentActivity() {
                             }
                             loadedGame = info
                             activeGameId = stored.id
-                            try { retro.attachRom(rom, info.platform) }
+                            try { retro.selectRom(rom, info.platform) }
                             catch (error: Exception) {
                                 Log.w("RavenEmuRetro", "RA identify failed after import", error)
                             }
@@ -489,6 +501,33 @@ class MainActivity : ComponentActivity() {
                 onImportFolder = {
                     if (!libraryOperations.isBusy() && !videoEnabled && !linkEnabled) folderPicker.launch(null)
                 },
+                onRefreshLibrary = refresh@{
+                    if (loading || videoEnabled || linkEnabled) return@refresh
+                    val operation = libraryOperations.tryAcquire() ?: return@refresh
+                    loading = true
+                    importError = null
+                    folderImportProgress = "Actualisation de la bibliothèque…"
+                    scope.launch {
+                        try {
+                            reloadLibrary()
+                            // Games the cover index did not know are searched again.
+                            covers.forgetUnmatched()
+                            libraryRefreshes++
+                            val count = libraryGames.size
+                            Toast.makeText(applicationContext,
+                                "Bibliothèque actualisée : $count ${if (count > 1) "jeux" else "jeu"}",
+                                Toast.LENGTH_SHORT).show()
+                        } catch (error: Exception) {
+                            Log.e("RavenEmuLibrary", "Library refresh failed", error)
+                            importError = "Actualisation impossible : " +
+                                (error.message ?: "erreur inconnue")
+                        } finally {
+                            folderImportProgress = null
+                            loading = false
+                            operation.close()
+                        }
+                    }
+                },
                 folderImportProgress = folderImportProgress,
                 folderImportSummary = folderImportSummary,
                 onDismissFolderImportSummary = { folderImportSummary = null },
@@ -505,11 +544,11 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 },
-                onExportGameBackup = { id ->
-                    saveTransfers.exportGameBackup(id, libraryGames, playerOpen = videoEnabled || linkEnabled)
+                onExportAllSaves = {
+                    saveTransfers.exportAllSaves(libraryGames, playerOpen = videoEnabled || linkEnabled)
                 },
-                onExportBatterySave = { id ->
-                    saveTransfers.exportBatterySave(id, libraryGames, playerOpen = videoEnabled || linkEnabled)
+                onExportBatterySave = { id, format ->
+                    saveTransfers.exportBatterySave(id, format, libraryGames, playerOpen = videoEnabled || linkEnabled)
                 },
                 onImportGameSave = { id ->
                     saveTransfers.importGameSave(id, libraryGames, playerOpen = videoEnabled || linkEnabled)
@@ -536,7 +575,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                     loadedGame = result
                                     activeGameId = id
-                                    try { retro.attachRom(rom, result.platform) }
+                                    try { retro.selectRom(rom, result.platform) }
                                     catch (error: Exception) {
                                         Log.w("RavenEmuRetro", "RA identify failed on launch", error)
                                     }
@@ -617,8 +656,23 @@ class MainActivity : ComponentActivity() {
                 },
                 linkError = linkPlayback.error,
                 linkMetrics = linkPlayback.metrics,
-                onStartVideo = { videoEnabled = true },
+                onStartVideo = {
+                    videoEnabled = true
+                    // The game's RetroAchievements session lives while the player is open.
+                    scope.launch {
+                        try { retro.resumeGame() }
+                        catch (error: Exception) {
+                            Log.w("RavenEmuRetro", "RA game session could not start", error)
+                        }
+                    }
+                },
                 onStopVideo = {
+                    scope.launch {
+                        try { retro.leaveGame() }
+                        catch (error: Exception) {
+                            Log.w("RavenEmuRetro", "RA game session could not end", error)
+                        }
+                    }
                     playback.activeAudio?.stopNow()
                     gameSession.releaseAllButtons()
                     videoEnabled = false

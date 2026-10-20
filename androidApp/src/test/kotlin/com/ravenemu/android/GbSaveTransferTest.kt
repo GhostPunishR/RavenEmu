@@ -1,5 +1,6 @@
 package com.ravenemu.android
 
+import com.ravenemu.shared.BatteryFileFormat
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.security.MessageDigest
@@ -24,6 +25,65 @@ class GbSaveTransferTest {
         assertEquals(romId, payload.romKey)
         assertArrayEquals(bytes, payload.bytes["battery.sav"])
         assertEquals(emptyList<Int>(), payload.stateSlots)
+    }
+
+    @Test
+    fun acceptsRetroArchSrmLikeASav() {
+        val bytes = byteArrayOf(9, 8, 7)
+        val payload = transfer.previewImport(bytes.inputStream(), romId, "Pokemon Emeraude.SRM")
+        assertEquals(true, payload.rawBattery)
+        assertArrayEquals(bytes, payload.bytes["battery.sav"])
+    }
+
+    @Test
+    fun exportNamesKeepTheRomNameWithTheChosenExtension() {
+        assertEquals("Pokémon - Version Cristal (France).sav",
+            batteryExportName("Pokémon - Version Cristal (France).gbc"))
+        assertEquals("Pokémon - Version Cristal (France).srm",
+            batteryExportName("Pokémon - Version Cristal (France).gbc", BatteryFileFormat.SRM))
+    }
+
+    @Test
+    fun libraryArchiveImportsOnlyTheTargetGamesFolder() {
+        val archive = library(linkedMapOf(
+            "Autre jeu (abcdef12)" to (otherRomId to mapOf("battery.sav" to byteArrayOf(7, 7))),
+            "Jeu (01234567)" to (romId to mapOf(
+                "battery.sav" to byteArrayOf(1, 2, 3),
+                "slot1.state" to byteArrayOf(4, 5),
+            )),
+        ))
+        val parsed = transfer.previewImport(archive.inputStream(), romId, "RavenEmu-sauvegardes.zip")
+        assertEquals(false, parsed.rawBattery)
+        assertEquals(listOf(1), parsed.stateSlots)
+        assertArrayEquals(byteArrayOf(1, 2, 3), parsed.bytes["battery.sav"])
+        val other = transfer.previewImport(archive.inputStream(), otherRomId, "RavenEmu-sauvegardes.zip")
+        assertArrayEquals(byteArrayOf(7, 7), other.bytes["battery.sav"])
+    }
+
+    @Test
+    fun libraryArchiveWithoutTheGameOrWithUnsafeFoldersIsRejected() {
+        val missing = library(linkedMapOf(
+            "Autre jeu" to (otherRomId to mapOf("battery.sav" to byteArrayOf(7))),
+        ))
+        val error = assertThrows(IllegalArgumentException::class.java) {
+            transfer.previewImport(missing.inputStream(), romId, "saves.zip")
+        }
+        assertEquals("Cette archive ne contient aucune sauvegarde de ce jeu.", error.message)
+        for (folder in listOf("..", "a/b")) {
+            val unsafe = library(linkedMapOf(folder to (romId to mapOf("battery.sav" to byteArrayOf(1)))))
+            assertThrows(IllegalArgumentException::class.java) {
+                transfer.previewImport(unsafe.inputStream(), romId, "saves.zip")
+            }
+        }
+        val mixed = ByteArrayOutputStream().also { output ->
+            ZipOutputStream(output).use { zip ->
+                zip.putNextEntry(ZipEntry("battery.sav")); zip.write(byteArrayOf(1)); zip.closeEntry()
+                zip.putNextEntry(ZipEntry("Jeu/battery.sav")); zip.write(byteArrayOf(1)); zip.closeEntry()
+            }
+        }.toByteArray()
+        assertThrows(IllegalArgumentException::class.java) {
+            transfer.previewImport(mixed.inputStream(), romId, "saves.zip")
+        }
     }
 
     @Test
@@ -108,6 +168,24 @@ class GbSaveTransferTest {
             assertArrayEquals(state, parsed.bytes["slot0.state"])
             assertEquals(false, parsed.bytes.containsKey("slot0.png"))
         }
+    }
+
+    /** A library archive as RavenEmu writes it: a folder per game, manifest first. */
+    private fun library(folders: Map<String, Pair<String, Map<String, ByteArray>>>): ByteArray {
+        val output = ByteArrayOutputStream()
+        ZipOutputStream(output).use { zip ->
+            for ((folder, game) in folders) {
+                java.util.zip.ZipInputStream(bundle(game.first, game.second).inputStream()).use { source ->
+                    while (true) {
+                        val entry = source.nextEntry ?: break
+                        zip.putNextEntry(ZipEntry("$folder/${entry.name}"))
+                        zip.write(source.readBytes())
+                        zip.closeEntry()
+                    }
+                }
+            }
+        }
+        return output.toByteArray()
     }
 
     private fun bundle(

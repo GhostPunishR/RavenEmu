@@ -123,12 +123,35 @@ void server_call(const rc_api_request_t* request, rc_client_server_callback_t ca
     c.requests.push_back(std::to_string(id));
     for (const char* s : {request->url, request->post_data, request->content_type}) c.requests.emplace_back(s ? s : "");
 }
-void logged_in(int result, const char*, rc_client_t* rc, void*) {
+// Server text shown to the player: one line, bounded, never cut inside a character.
+std::string server_text(const char* message) {
+    std::string text = message ? message : "";
+    for (auto& ch : text) if (static_cast<unsigned char>(ch) < 0x20 || ch == 0x7f) ch = ' ';
+    if (text.size() > 200) {
+        std::size_t cut = 200;
+        while (cut && (static_cast<unsigned char>(text[cut]) & 0xC0) == 0x80) --cut;
+        text = text.substr(0, cut) + "…";
+    }
+    const auto first = text.find_first_not_of(' ');
+    if (first == std::string::npos) return {};
+    return text.substr(first, text.find_last_not_of(' ') - first + 1);
+}
+// A wrong password and an outage must not read the same: give the service's reason.
+std::string login_failure(int result, const char* message) {
+    const auto reason = server_text(message);
+    if (result == RC_NO_RESPONSE || result == RC_INVALID_JSON)
+        return "Connexion impossible : RetroAchievements ne répond pas. Vérifiez le réseau.";
+    if (result == RC_INVALID_CREDENTIALS || result == RC_EXPIRED_TOKEN || result == RC_ACCESS_DENIED)
+        return "Connexion refusée par RetroAchievements : " +
+            (reason.empty() ? std::string("identifiant ou mot de passe incorrect.") : reason);
+    return "Connexion impossible : " + (reason.empty() ? std::string("vérifiez vos identifiants et le réseau.") : reason);
+}
+void logged_in(int result, const char* message, rc_client_t* rc, void*) {
     auto& c = client(rc);
     if (result == RC_OK) {
         const auto* user = rc_client_get_user_info(rc);
         c.event("login", user->username, user->display_name, user->token, user_image(user).c_str());
-    } else c.event("login_error", "Connexion RetroAchievements impossible. Vérifiez vos identifiants et le réseau.");
+    } else c.event("login_error", login_failure(result, message).c_str());
 }
 void loaded(int result, const char*, rc_client_t* rc, void*) {
     auto& c = client(rc);
@@ -218,6 +241,16 @@ void event_handler(const rc_client_event_t* event, rc_client_t* rc) {
         c.event(kind, event->leaderboard->title, event->leaderboard->description,
             std::to_string(event->leaderboard->id).c_str());
     }
+}
+// Leaving the game: the SDK forgets it, so nothing keeps reporting it as played
+// (no ping, no game session reopened by a later sign-in), and its rankings go.
+void unload_game(Client& c) {
+    if (c.leaderboard_query) rc_client_abort_async(c.rc, c.leaderboard_query);
+    c.leaderboard_query = nullptr;
+    c.leaderboard_id = 0; c.leaderboard_total = 0;
+    c.leaderboard_loading = false; c.leaderboard_around = false;
+    c.leaderboard_error.clear(); c.leaderboard_entries.clear(); c.scoreboard.clear();
+    rc_client_unload_game(c.rc);
 }
 // Copy SDK-owned strings on the owner thread. No credentials enter UI snapshots.
 std::vector<std::string> summary_records(rc_client_t* rc) {
@@ -433,6 +466,9 @@ JNIEXPORT void JNICALL JNI_RA(tick)(JNIEnv* env, jclass, jlong h, jobject memory
     guarded<int>(env, 0, [&] { auto& c = client(h); MemoryScope scope(c, env, memory); if (frame) rc_client_do_frame(c.rc); else rc_client_idle(c.rc); return 0; });
 }
 JNIEXPORT void JNICALL JNI_RA(reset)(JNIEnv*, jclass, jlong h) { rc_client_reset(client(h).rc); }
+JNIEXPORT void JNICALL JNI_RA(unload)(JNIEnv* env, jclass, jlong h) {
+    guarded<int>(env, 0, [&] { unload_game(client(h)); return 0; });
+}
 JNIEXPORT jobjectArray JNICALL JNI_RA(requests)(JNIEnv* env, jclass, jlong h) { return guarded<jobjectArray>(env, nullptr, [&] { return drain(env, client(h).requests); }); }
 JNIEXPORT jobjectArray JNICALL JNI_RA(events)(JNIEnv* env, jclass, jlong h) { return guarded<jobjectArray>(env, nullptr, [&] { return drain(env, client(h).events); }); }
 JNIEXPORT void JNICALL JNI_RA(respond)(JNIEnv* env, jclass, jlong h, jint id, jbyteArray body, jint status, jobject memory) {

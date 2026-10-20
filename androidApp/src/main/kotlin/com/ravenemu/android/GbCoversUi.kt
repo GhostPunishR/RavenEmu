@@ -53,6 +53,13 @@ internal class GbCoversUi(
     private var pendingCoverId by mutableStateOf<String?>(null)
     lateinit var coverPicker: ManagedActivityResultLauncher<Array<String>, Uri?>
 
+    /** Games the catalogue did not know are looked up again on the next search. */
+    fun forgetUnmatched() {
+        if (unmatchedAutoCovers.isEmpty()) return
+        unmatchedAutoCovers = emptySet()
+        coverPreferences.edit().remove("unmatched_auto_cover_ids").apply()
+    }
+
     /**
      * Looks up the missing covers in the online catalogue, only when the user
      * enabled it ([onlineCovers]). Disabled by default: the requests tell a
@@ -60,10 +67,7 @@ internal class GbCoversUi(
      */
     suspend fun fillMissingOnline(libraryGames: List<GameEntry>, onlineCovers: Boolean) {
         if (!onlineCovers) {
-            if (unmatchedAutoCovers.isNotEmpty()) {
-                unmatchedAutoCovers = emptySet()
-                coverPreferences.edit().remove("unmatched_auto_cover_ids").apply()
-            }
+            forgetUnmatched()
             return
         }
         if (libraryGames.isNotEmpty()) {

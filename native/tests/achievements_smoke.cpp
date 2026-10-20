@@ -67,8 +67,91 @@ static void close_with_pending_mastery() {
     delete c;
 }
 
+static Client* session_client() {
+    auto* c = new Client();
+    c->rc = rc_client_create(read_memory, server_call);
+    require(c->rc != nullptr, "session client allocation");
+    rc_client_set_userdata(c->rc, c);
+    rc_client_set_get_time_millisecs_function(c->rc, session_clock);
+    rc_client_set_hardcore_enabled(c->rc, 0);
+    rc_client_set_allow_background_memory_reads(c->rc, 0);
+    rc_client_set_event_handler(c->rc, event_handler);
+    rc_client_set_read_memory_function(c->rc, session_read);
+    return c;
+}
+static void close_session(Client* c) {
+    rc_client_set_get_time_millisecs_function(c->rc, time_millis);
+    delete c;
+}
+static void answer_status(Client& c, const char* body, int status) {
+    require(c.requests.size() >= 4, "request expected");
+    const int id = std::stoi(c.requests[0]);
+    c.requests.erase(c.requests.begin(), c.requests.begin() + 4);
+    const auto call = c.pending.at(id);
+    c.pending.erase(id);
+    const rc_api_server_response_t response{body, std::strlen(body), status};
+    call.callback(&response, call.data);
+}
+static std::string login_error(int status, const char* body) {
+    auto* c = session_client();
+    rc_client_begin_login_with_password(c->rc, "SyntheticUser", "WrongPassword", logged_in, nullptr);
+    answer_status(*c, body, status);
+    std::string message;
+    for (std::size_t i = 0; i + 5 < c->events.size(); i += 6)
+        if (c->events[i] == "login_error") message = c->events[i + 1];
+    close_session(c);
+    return message;
+}
+// A wrong password and an outage do not read the same: the service's reason is shown.
+static void login_reasons() {
+    const auto refused = login_error(401, R"({"Success":false,"Error":"Invalid User/Password combination. Please try again","Code":"invalid_credentials","Status":401})");
+    require(refused.find("refusée") != std::string::npos &&
+            refused.find("Invalid User/Password combination") != std::string::npos, "refused password reason");
+    const auto silent = login_error(-2, "");
+    require(silent.find("ne répond pas") != std::string::npos && silent.find("refusée") == std::string::npos,
+            "an outage must not read as a refused password");
+    const auto lines = login_error(403, R"({"Success":false,"Error":"Line one\nLine two","Code":"access_denied","Status":403})");
+    require(lines.find("Line one Line two") != std::string::npos && lines.find('\n') == std::string::npos,
+            "server text stays on one line");
+}
+// Leaving the game forgets it: no title, list or ranking afterwards, and no
+// request while idle (no ping, no game session), even with an award in flight.
+static void unload_forgets_game() {
+    std::memset(session_ram, 0, sizeof(session_ram));
+    auto* c = session_client();
+    rc_client_begin_login_with_password(c->rc, "SyntheticUser", "SyntheticPassword", logged_in, nullptr);
+    answer(*c, R"({"Success":true,"User":"SyntheticUser","Token":"SyntheticToken","Score":1,"SoftcoreScore":2,"Messages":0})");
+    std::vector<uint8_t> rom(0x8000, 0);
+    rc_client_begin_identify_and_load_game(c->rc, 4, nullptr, rom.data(), rom.size(), loaded, nullptr);
+    while (!c->requests.empty()) {
+        const auto& post = c->requests[2];
+        answer(*c, post.rfind("r=achievementsets", 0) == 0 ?
+            R"({"Success":true,"GameId":1234,"Title":"Synthetic game","ConsoleId":4,"ImageIconUrl":"https://media.retroachievements.org/Images/000001.png","RichPresenceGameId":1234,"RichPresencePatch":"","Sets":[{"AchievementSetId":1111,"GameId":1234,"Title":null,"Type":"core","ImageIconUrl":"https://media.retroachievements.org/Images/000001.png","Achievements":[{"ID":5501,"Title":"Last one","Description":"Synthetic","Flags":3,"Points":5,"MemAddr":"0xH0001=3","Author":"Test","BadgeName":"00234","Created":1367266583,"Modified":1376929305}],"Leaderboards":[]}]})" :
+            R"({"Success":true})");
+    }
+    // Without background memory reads, the SDK activates the game on the next frame.
+    rc_client_do_frame(c->rc);
+    rc_client_do_frame(c->rc);
+    require(summary_records(c->rc)[3] == "Synthetic game", "fixture game loaded");
+    session_ram[1] = 3;
+    rc_client_do_frame(c->rc);
+    require(c->requests.size() >= 4 && c->requests[2].rfind("r=awardachievement", 0) == 0, "award in flight");
+    c->scoreboard = {"7", "Ranking", "1", "1", "1", "1"};
+    unload_game(*c);
+    const auto summary = summary_records(c->rc);
+    require(summary[3].empty() && summary[4] == "0" && achievement_records(c->rc).empty() &&
+            leaderboard_records(c->rc).empty() && c->scoreboard.empty(), "the left game must not be shown");
+    answer(*c, R"({"Success":true,"Score":1,"SoftcoreScore":7,"AchievementID":5501,"AchievementsRemaining":0})");
+    session_now += 10 * 60 * 1000;
+    rc_client_idle(c->rc);
+    require(c->requests.empty(), "nothing may be sent for a game that was left");
+    close_session(c);
+}
+
 int main() {
     close_with_pending_mastery();
+    login_reasons();
+    unload_forgets_game();
     Client c;
     c.rc = rc_client_create(read_memory, server_call);
     require(c.rc != nullptr, "client allocation");
@@ -128,5 +211,5 @@ int main() {
     rc_client_set_hardcore_enabled(c.rc, 1);
     c.events.clear(); event_handler(&event, c.rc);
     require(c.events.size() == 6 && c.events[0] == "mastered", "hardcore mastery missing");
-    std::cout << "RetroAchievements: closing with pending mastery, event IDs, scoreboard, copied query rows/errors and completion modes passed\n";
+    std::cout << "RetroAchievements: closing with pending mastery, login reasons, leaving a game, event IDs, scoreboard, copied query rows/errors and completion modes passed\n";
 }

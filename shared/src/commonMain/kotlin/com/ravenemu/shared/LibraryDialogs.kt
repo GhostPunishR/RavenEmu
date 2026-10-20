@@ -1,9 +1,11 @@
 package com.ravenemu.shared
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,13 +15,19 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -44,13 +52,20 @@ internal fun GameDetailsSheet(
     onPlayLinked: (() -> Unit)? = null,
     onChooseCover: ((String) -> Unit)?,
     onRemoveCover: ((String) -> Unit)?,
-    onExportGameBackup: ((String) -> Unit)?,
-    onExportBatterySave: ((String) -> Unit)?,
+    onExportBatterySave: ((String, BatteryFileFormat) -> Unit)?,
     onImportGameSave: ((String) -> Unit)?,
+    /** Offered on export; with only one, the button exports it directly. */
+    batteryFormats: List<BatteryFileFormat> = BatteryFileFormat.entries,
     onDismiss: () -> Unit,
 ) {
+    // Opens straight at its full height: no half step to drag up before
+    // Jouer can be reached. It still follows the finger down to close, but
+    // while it settles a tap goes to the button instead of grabbing it.
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        sheetGesturesEnabled = !sheetState.isAnimationRunning,
         containerColor = RavenSurface,
         contentColor = RavenText,
     ) {
@@ -95,19 +110,14 @@ internal fun GameDetailsSheet(
                             )
                         }
                     }
+                    if (cover != null && onRemoveCover != null) {
+                        TextButton(
+                            onClick = { onRemoveCover(entry.id) },
+                            enabled = !coverBusy,
+                        ) { Text("Retirer la jaquette", color = RavenAccent, fontSize = 12.sp) }
+                    }
                 }
             }
-            if (cover != null && onRemoveCover != null) {
-                TextButton(
-                    onClick = { onRemoveCover(entry.id) },
-                    enabled = !coverBusy,
-                ) { Text("Retirer la jaquette", color = RavenAccent) }
-            }
-            Text(
-                "Vidéo, commandes et audio Game Boy, Game Boy Color et Game Boy Advance disponibles sur Android. La sauvegarde interne du jeu est automatique et un save state manuel est disponible dans le menu ⋮.",
-                color = RavenMuted,
-                fontSize = 13.sp,
-            )
             if (onPlay != null) {
                 Button(
                     onClick = {
@@ -136,30 +146,48 @@ internal fun GameDetailsSheet(
                     Text("Jouer à deux (câble link)")
                 }
             }
-            if (onExportGameBackup != null || onImportGameSave != null) {
+            if (onExportBatterySave != null || onImportGameSave != null) {
                 Text("Sauvegardes", color = RavenText,
                     fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                 Text(
                     "Transférez votre progression sans exporter la ROM.",
                     color = RavenMuted, fontSize = 12.sp,
                 )
-                if (onExportGameBackup != null) {
-                    FilledTonalButton(
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = !importBusy && !saveTransferBusy,
-                        onClick = { onExportGameBackup(entry.id) },
-                    ) { Text("Exporter toutes les sauvegardes (.zip)") }
-                }
                 Row(
                     Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    if (onExportBatterySave != null) {
-                        OutlinedButton(
-                            modifier = Modifier.weight(1f),
-                            enabled = !importBusy && !saveTransferBusy,
-                            onClick = { onExportBatterySave(entry.id) },
-                        ) { Text("Exporter .sav", fontSize = 12.sp) }
+                    if (onExportBatterySave != null && batteryFormats.isNotEmpty()) {
+                        var formatsOpen by remember { mutableStateOf(false) }
+                        Box(Modifier.weight(1f)) {
+                            OutlinedButton(
+                                modifier = Modifier.fillMaxWidth(),
+                                enabled = !importBusy && !saveTransferBusy,
+                                onClick = {
+                                    val only = batteryFormats.singleOrNull()
+                                    if (only != null) onExportBatterySave(entry.id, only)
+                                    else formatsOpen = true
+                                },
+                            ) {
+                                Text(batteryFormats.singleOrNull()?.let { "Exporter ${it.extension}" }
+                                    ?: "Exporter", fontSize = 12.sp)
+                            }
+                            DropdownMenu(
+                                expanded = formatsOpen,
+                                onDismissRequest = { formatsOpen = false },
+                                modifier = Modifier.background(RavenSurface),
+                            ) {
+                                for (format in batteryFormats) {
+                                    DropdownMenuItem(
+                                        text = { Text(format.label, color = RavenText) },
+                                        onClick = {
+                                            formatsOpen = false
+                                            onExportBatterySave(entry.id, format)
+                                        },
+                                    )
+                                }
+                            }
+                        }
                     }
                     if (onImportGameSave != null) {
                         OutlinedButton(
@@ -170,6 +198,11 @@ internal fun GameDetailsSheet(
                     }
                 }
             }
+            Text(
+                "Vidéo, commandes et audio Game Boy, Game Boy Color et Game Boy Advance disponibles sur Android. La sauvegarde interne du jeu est automatique et un save state manuel est disponible dans le menu ⋮.",
+                color = RavenMuted,
+                fontSize = 13.sp,
+            )
             OutlinedButton(
                 onClick = onDismiss,
                 modifier = Modifier.fillMaxWidth(),
@@ -231,13 +264,13 @@ internal fun SaveImportReviewDialog(
                 Text("Jeu : ${review.gameTitle}")
                 Text(
                     "Contenu : " +
-                        (if (review.hasBattery) "sauvegarde .sav" else "pas de .sav") +
+                        (if (review.hasBattery) "sauvegarde du jeu" else "pas de sauvegarde du jeu") +
                         (if (review.slots.isEmpty()) "" else
                             ", états ${review.slots.joinToString(", ")}"),
                 )
                 if (review.rawSav) {
                     Text(
-                        "Un fichier .sav seul n'identifie pas sa ROM. Vérifiez que vous avez choisi le bon jeu.",
+                        "Un fichier .sav ou .srm seul n'identifie pas sa ROM. Vérifiez que vous avez choisi le bon jeu.",
                         color = RavenDanger, fontSize = 13.sp,
                     )
                 }

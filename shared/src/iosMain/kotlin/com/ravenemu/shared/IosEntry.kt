@@ -69,7 +69,9 @@ class IosHost {
             onSaveState = { stateBusy = true; actions?.saveState(it) },
             onLoadState = { stateBusy = true; actions?.loadState(it) },
             onDeleteState = { stateBusy = true; actions?.deleteState(it) },
-            onExportBatterySave = { transferBusy = true; actions?.exportBattery(it) },
+            // The iOS host writes .sav files only.
+            onExportBatterySave = { id, _ -> transferBusy = true; actions?.exportBattery(id) },
+            batteryFormats = listOf(BatteryFileFormat.SAV),
             onImportGameSave = { transferBusy = true; actions?.importBattery(it) },
             settings = settings,
             settingsCapabilities = SettingsCapabilities(onlineCovers = false, cartridgeHardware = false, deltaSkins = false, haptics = false, diagnostics = false, audioStartupFade = false),
