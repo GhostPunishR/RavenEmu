@@ -59,7 +59,12 @@ internal fun LibraryToolbar(
     onAdd: () -> Unit,
     onToggleView: () -> Unit,
     onImportFolder: (() -> Unit)?,
-    onAbout: () -> Unit,
+    /** Reads the library again; null where the host cannot. */
+    onRefresh: (() -> Unit)?,
+    /** One archive with the saves of every game that has one. */
+    onExportAllSaves: (() -> Unit)?,
+    /** No import, refresh or transfer running. */
+    libraryIdle: Boolean,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     Box(Modifier.fillMaxWidth().height(48.dp)) {
@@ -90,7 +95,7 @@ internal fun LibraryToolbar(
             Box {
                 IconButton(
                     onClick = { menuOpen = true },
-                    modifier = Modifier.size(48.dp),
+                    modifier = Modifier.size(48.dp).semantics { contentDescription = "Plus d'options" },
                 ) { RavenIcon(RavenGlyph.MORE, RavenText) }
                 DropdownMenu(
                     expanded = menuOpen,
@@ -108,10 +113,20 @@ internal fun LibraryToolbar(
                             onClick = { menuOpen = false; onImportFolder() },
                         )
                     }
-                    DropdownMenuItem(
-                        text = { Text("À propos", color = RavenText) },
-                        onClick = { menuOpen = false; onAbout() },
-                    )
+                    if (onRefresh != null) {
+                        DropdownMenuItem(
+                            text = { Text("Actualiser la bibliothèque de jeux", color = RavenText) },
+                            enabled = libraryIdle,
+                            onClick = { menuOpen = false; onRefresh() },
+                        )
+                    }
+                    if (onExportAllSaves != null) {
+                        DropdownMenuItem(
+                            text = { Text("Exporter toutes les sauvegardes (.zip)", color = RavenText) },
+                            enabled = libraryIdle,
+                            onClick = { menuOpen = false; onExportAllSaves() },
+                        )
+                    }
                 }
             }
         }

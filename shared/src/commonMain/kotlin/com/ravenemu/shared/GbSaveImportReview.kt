@@ -8,3 +8,12 @@ data class GbSaveImportReview(
     val conflicts: List<String>,
     val rawSav: Boolean,
 )
+
+/**
+ * File type of an exported game save. Both hold the same bytes, the
+ * cartridge memory: only the name tells other emulators what to load.
+ */
+enum class BatteryFileFormat(val extension: String, val label: String) {
+    SAV(".sav", "Fichier .sav (la plupart des émulateurs)"),
+    SRM(".srm", "Fichier .srm (RetroArch)"),
+}

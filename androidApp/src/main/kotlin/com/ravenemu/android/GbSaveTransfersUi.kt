@@ -10,17 +10,20 @@ import androidx.activity.compose.ManagedActivityResultLauncher
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.ravenemu.shared.BatteryFileFormat
 import com.ravenemu.shared.GameEntry
 import com.ravenemu.shared.GbSaveImportReview
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.time.LocalDate
 
 /**
- * Save transfers of library games: .zip and .sav exports, and imports
- * reviewed before they replace anything. No transfer starts while the player
- * is open ([playerOpen]). The activity registers the three system pickers.
+ * Save transfers of library games: one game's save as .sav or .srm, every
+ * game's saves in one .zip, and imports reviewed before they replace
+ * anything. No transfer starts while the player is open ([playerOpen]). The
+ * activity registers the three system pickers.
  */
 internal class GbSaveTransfersUi(
     private val applicationContext: Context,
@@ -44,7 +47,7 @@ internal class GbSaveTransfersUi(
     lateinit var exportBattery: ManagedActivityResultLauncher<String, Uri?>
     lateinit var importSavePicker: ManagedActivityResultLauncher<Array<String>, Uri?>
 
-    /** Result of [exportBackup]: writes the chosen game's .zip there. */
+    /** Result of [exportBackup]: writes every game's saves there. */
     fun writeBackup(uri: Uri?) {
         val request = pendingExport
         pendingExport = null
@@ -53,16 +56,19 @@ internal class GbSaveTransfersUi(
         if (uri != null && request != null) {
             scope.launch {
                 try {
-                    withContext(Dispatchers.IO) {
+                    val count = withContext(Dispatchers.IO) {
                         // The active core may still own unsaved battery RAM
                         // after leaving the player; flush before exporting.
                         flushSessions()
+                        val games = romLibrary.list().map { GbSaveTransfer.LibraryGame(it.id, it.filename) }
                         contentResolver.openOutputStream(uri)?.use {
-                            saveTransfer.exportBundle(request.first, it)
+                            saveTransfer.exportLibrary(games, it)
                         } ?: error("Destination d'export inaccessible.")
                     }
                     Toast.makeText(applicationContext,
-                        "Sauvegardes exportées", Toast.LENGTH_SHORT).show()
+                        if (count == 1) "Sauvegardes d'un jeu exportées"
+                        else "Sauvegardes de $count jeux exportées",
+                        Toast.LENGTH_SHORT).show()
                 } catch (error: Exception) {
                     Log.e("RavenEmuTransfer", "Unable to export full backup", error)
                     Toast.makeText(applicationContext,
@@ -77,7 +83,7 @@ internal class GbSaveTransfersUi(
         }
     }
 
-    /** Result of [exportBattery]: writes the chosen game's .sav there. */
+    /** Result of [exportBattery]: writes the chosen game's .sav or .srm there. */
     fun writeBattery(uri: Uri?) {
         val request = pendingExport
         pendingExport = null
@@ -93,11 +99,11 @@ internal class GbSaveTransfersUi(
                         } ?: error("Destination d'export inaccessible.")
                     }
                     Toast.makeText(applicationContext,
-                        "Fichier .sav exporté", Toast.LENGTH_SHORT).show()
+                        "Fichier ${request.second} exporté", Toast.LENGTH_SHORT).show()
                 } catch (error: Exception) {
-                    Log.e("RavenEmuTransfer", "Unable to export .sav", error)
+                    Log.e("RavenEmuTransfer", "Unable to export the game save", error)
                     Toast.makeText(applicationContext,
-                        "Export .sav impossible : ${error.message ?: "erreur inconnue"}",
+                        "Export ${request.second} impossible : ${error.message ?: "erreur inconnue"}",
                         Toast.LENGTH_LONG).show()
                 } finally {
                     finish(lease)
@@ -200,57 +206,58 @@ internal class GbSaveTransfersUi(
         }
     }
 
-    fun exportGameBackup(id: String, libraryGames: List<GameEntry>, playerOpen: Boolean) {
-        if (libraryGames.any { it.id == id }) {
-            val lease = begin(playerOpen) ?: return
-            val gameName = exportName(libraryGames.first { it.id == id }.title)
-            scope.launch {
-                var handedToPicker = false
-                try {
-                    withContext(Dispatchers.IO) {
-                        flushSessions()
-                        check(saveTransfer.hasAnySave(id)) {
-                            "Aucune sauvegarde à exporter pour ce jeu."
-                        }
+    /** Every game of the library that has a save, in one archive. */
+    fun exportAllSaves(libraryGames: List<GameEntry>, playerOpen: Boolean) {
+        if (libraryGames.isEmpty()) return
+        val lease = begin(playerOpen) ?: return
+        scope.launch {
+            var handedToPicker = false
+            try {
+                withContext(Dispatchers.IO) {
+                    flushSessions()
+                    check(romLibrary.list().any { saveTransfer.hasAnySave(it.id) }) {
+                        "Aucun jeu de la bibliothèque n'a de sauvegarde à exporter."
                     }
-                    pendingExport = id to "zip"
-                    pickerLease = lease
-                    exportBackup.launch("$gameName-ravenemu-saves.zip")
-                    handedToPicker = true
-                } catch (error: Exception) {
-                    Toast.makeText(applicationContext,
-                        error.message ?: "Export impossible", Toast.LENGTH_LONG).show()
-                } finally {
-                    if (!handedToPicker) {
-                        pickerLease = null
-                        pendingExport = null
-                        finish(lease)
-                    }
+                }
+                pendingExport = "" to "zip"
+                pickerLease = lease
+                exportBackup.launch("RavenEmu-sauvegardes-${LocalDate.now()}.zip")
+                handedToPicker = true
+            } catch (error: Exception) {
+                Toast.makeText(applicationContext,
+                    error.message ?: "Export impossible", Toast.LENGTH_LONG).show()
+            } finally {
+                if (!handedToPicker) {
+                    pickerLease = null
+                    pendingExport = null
+                    finish(lease)
                 }
             }
         }
     }
 
-    fun exportBatterySave(id: String, libraryGames: List<GameEntry>, playerOpen: Boolean) {
+    fun exportBatterySave(
+        id: String, format: BatteryFileFormat, libraryGames: List<GameEntry>, playerOpen: Boolean,
+    ) {
         if (libraryGames.any { it.id == id }) {
             val lease = begin(playerOpen) ?: return
-            val filename = batteryExportName(libraryGames.first { it.id == id }.title)
+            val filename = batteryExportName(libraryGames.first { it.id == id }.title, format)
             scope.launch {
                 var handedToPicker = false
                 try {
                     withContext(Dispatchers.IO) {
                         flushSessions()
                         check(saveTransfer.hasBattery(id)) {
-                            "Ce jeu n'a pas encore de sauvegarde .sav."
+                            "Ce jeu n'a pas encore de sauvegarde."
                         }
                     }
-                    pendingExport = id to "sav"
+                    pendingExport = id to format.extension
                     pickerLease = lease
                     exportBattery.launch(filename)
                     handedToPicker = true
                 } catch (error: Exception) {
                     Toast.makeText(applicationContext,
-                        error.message ?: "Export .sav impossible",
+                        error.message ?: "Export ${format.extension} impossible",
                         Toast.LENGTH_LONG).show()
                 } finally {
                     if (!handedToPicker) {
@@ -299,20 +306,13 @@ internal class GbSaveTransfersUi(
         linkSession.unload()
         gameSession.saveBatteryIfDirty()
     }
-
-    /** File name stem for a backup archive. */
-    private fun exportName(title: String): String = title
-        .substringBeforeLast('.')
-        .replace(Regex("[^A-Za-z0-9_-]+"), "-")
-        .take(48)
-        .ifBlank { "GameBoy" }
 }
 
 /** Keep the ROM's complete name so other emulators can associate its save. */
-private fun batteryExportName(romFilename: String): String {
+internal fun batteryExportName(romFilename: String, format: BatteryFileFormat = BatteryFileFormat.SAV): String {
     val stem = romFilename.substringAfterLast('/').substringAfterLast('\\')
         .substringBeforeLast('.')
         .filterNot { it.isISOControl() }
         .ifBlank { "GameBoy" }
-    return "$stem.sav"
+    return stem + format.extension
 }

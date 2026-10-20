@@ -10,6 +10,9 @@
 
 - RetroAchievements : états de synchronisation par succès (local, en attente, confirmé), compteur des demandes en attente, recherche, tris par progression/date, dates de déblocage et activité en jeu (Rich Presence).
 - RetroAchievements : consultation des classements (20 meilleurs scores ou autour du compte), chargement/réessai et dernier résultat avec score, record personnel et rang. Les soumissions nécessitent le Hardcore, qui reste verrouillé en attente de validation externe.
+- Bibliothèque, menu **⋮** : **Actualiser la bibliothèque de jeux** relit la bibliothèque et ses jaquettes, et relance la recherche des jaquettes manquantes si la recherche en ligne est activée. **À propos** quitte ce menu ; il reste dans **Paramètres**.
+- Sauvegardes : **Exporter toutes les sauvegardes (.zip)** passe de la fiche d'un jeu au menu **⋮** de la bibliothèque. L'archive réunit tous les jeux qui ont une sauvegarde, un dossier par jeu. Dans la fiche d'un jeu, **Importer** retrouve le dossier de ce jeu dans cette archive.
+- Sauvegardes : l'export d'un jeu propose `.sav` ou `.srm` (RetroArch), avec le même contenu. L'import accepte aussi les `.srm`.
 - Menu en jeu : l'entrée RetroAchievements devient un encart du compte. Il affiche l'avatar, le nom, les points Softcore puis Hardcore, la progression du jeu en cours et le mode actif. Hors connexion, il invite à se connecter ou affiche la raison du refus. Le toucher ouvre le tableau de bord.
 - RetroAchievements : réglages persistants des popups (activation des succès et des progressions séparée, haut/bas, durées, son facultatif), bilan de jeu terminé avec image et distinction Softcore/Hardcore.
 

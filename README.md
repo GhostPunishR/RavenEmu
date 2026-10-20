@@ -14,7 +14,7 @@
 
 - **Bibliothèque** : import de jeux ou de dossiers, recherche, vues grille/liste et jaquettes.
 - **Commandes** : boutons tactiles, manettes Android et skins `.deltaskin` en portrait.
-- **Sauvegardes** : sauvegarde de cartouche, quatre emplacements d’état et transfert ZIP ou `.sav`.
+- **Sauvegardes** : sauvegarde de cartouche, quatre emplacements d’état et transfert `.sav`/`.srm` par jeu ou ZIP de toute la bibliothèque.
 - **Jouer à deux** : deux jeux en même temps sur un téléphone, reliés par un câble link virtuel, pour échanger ou se battre entre ses propres sauvegardes.
 - **Réglages** : image, son, disposition des commandes, vibration et capteurs de cartouche (gyroscope, inclinaison, lumière).
 - **RetroAchievements** : intégration Softcore avec connexion facultative. Hardcore désactivé.

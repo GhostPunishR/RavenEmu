@@ -49,7 +49,7 @@ Pour un défaut reproductible, indiquez s'il survient au lancement, après un é
 
 Une sauvegarde normale du jeu et un état instantané sont distincts. Vérifiez que vous avez réimporté la **même ROM exacte**, pas une autre édition. Un état peut ne plus fonctionner après une évolution du moteur ou un reclassement GB vers GBC.
 
-Les exports ZIP doivent correspondre au SHA-256 du jeu cible. Un `.sav` brut nécessite une confirmation explicite. Ne désinstallez pas pour résoudre ce problème sans avoir exporté la progression encore accessible. Voir [Sauvegardes et états](https://github.com/GhostPunishR/RavenEmu/blob/main/wiki/Sauvegardes-et-etats.md).
+Les exports ZIP doivent correspondre au SHA-256 du jeu cible. Un `.sav` ou `.srm` brut nécessite une confirmation explicite. Ne désinstallez pas pour résoudre ce problème sans avoir exporté la progression encore accessible. Voir [Sauvegardes et états](https://github.com/GhostPunishR/RavenEmu/blob/main/wiki/Sauvegardes-et-etats.md).
 
 ## RetroAchievements ou skins
 

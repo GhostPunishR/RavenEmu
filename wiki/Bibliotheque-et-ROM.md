@@ -34,7 +34,8 @@ L'application n'obtient pas d'accès global au stockage ni d'autorisation perman
 - vue grille ou liste ;
 - pages pour les consoles qui contiennent des jeux ;
 - navigation par balayage et pictogrammes de console ;
-- fiche de jeu avec **Jouer**, jaquette et actions de transfert de sauvegardes.
+- fiche de jeu avec **Jouer**, jaquette, export `.sav`/`.srm` et import de sauvegarde ;
+- menu **⋮** : vue grille ou liste, **Importer un dossier**, **Actualiser la bibliothèque de jeux** (relit la bibliothèque et ses jaquettes, et relance la recherche de jaquettes en ligne si elle est activée) et **Exporter toutes les sauvegardes (.zip)**. **À propos** se trouve dans **Paramètres**.
 
 Ne supposez pas que les tris, surveillances de dossiers ou options de l'ancienne application sont présents dans cette version.
 

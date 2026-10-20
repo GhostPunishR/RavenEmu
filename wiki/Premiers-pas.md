@@ -38,6 +38,6 @@ Quittez avec les commandes de l'application. Le jeu et l'audio sont suspendus en
 
 ## 5. Faire une copie externe
 
-Depuis la fiche du jeu, utilisez **Exporter toutes les sauvegardes (.zip)** ou **Exporter .sav**. Conservez l'export hors de l'espace privé de l'application avant de changer d'installation.
+Depuis la fiche du jeu, **Exporter** enregistre sa sauvegarde en `.sav` ou en `.srm` (RetroArch). Le menu **⋮** de la bibliothèque propose **Exporter toutes les sauvegardes (.zip)** pour tous les jeux à la fois. Conservez l'export hors de l'espace privé de l'application avant de changer d'installation.
 
 Voir [Sauvegardes et états](https://github.com/GhostPunishR/RavenEmu/blob/main/wiki/Sauvegardes-et-etats.md) et [Dépannage](https://github.com/GhostPunishR/RavenEmu/blob/main/wiki/Depannage.md).

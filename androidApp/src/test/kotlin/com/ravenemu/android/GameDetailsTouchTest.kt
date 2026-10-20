@@ -9,6 +9,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
+import com.ravenemu.shared.BatteryFileFormat
 import com.ravenemu.shared.GameEntry
 import com.ravenemu.shared.GamePlatform
 import com.ravenemu.shared.RavenEmuApp
@@ -30,7 +31,7 @@ class GameDetailsTouchTest {
 
     @Test
     fun `la fiche s'ouvre en entier et ne remonte pas quand on la tire vers le haut`() {
-        openDetails(linkAvailable = true, onExport = {})
+        openDetails(linkAvailable = true, onExport = { _, _ -> })
         val handle = compose.onNodeWithContentDescription("Drag handle").assertIsDisplayed()
         val opened = handle.fetchSemanticsNode().boundsInRoot.top
         assertTrue(opened > 100f, "La fiche ne doit pas remplir l'écran quand son contenu tient.")
@@ -49,7 +50,7 @@ class GameDetailsTouchTest {
     @Config(qualifiers = "en-rUS-w360dp-h640dp-xhdpi")
     fun `Jouer est visible des l'ouverture et lance le jeu au premier toucher`() {
         var starts = 0
-        openDetails(onStart = { starts++ }, linkAvailable = true, onExport = {})
+        openDetails(onStart = { starts++ }, linkAvailable = true, onExport = { _, _ -> })
         compose.onNodeWithText("Jouer").assertIsDisplayed().performTouchInput { click() }
         compose.runOnIdle { assertEquals(1, starts) }
     }
@@ -65,7 +66,7 @@ class GameDetailsTouchTest {
 
     @Test
     fun `un glissement vers le bas ferme le panneau`() {
-        openDetails(linkAvailable = true, onExport = {})
+        openDetails(linkAvailable = true, onExport = { _, _ -> })
         compose.onNodeWithContentDescription("Drag handle").assertIsDisplayed().performTouchInput {
             down(center)
             moveTo(center + Offset(0f, 600f), delayMillis = 300)
@@ -96,20 +97,21 @@ class GameDetailsTouchTest {
     }
 
     @Test
-    fun `le premier toucher sur Exporter pendant que le panneau se replace appelle une seule fois le transfert`() {
-        val exported = mutableListOf<String>()
-        openDetails(onExport = { exported.add(it) })
+    fun `le premier toucher sur Exporter pendant que le panneau se replace propose sav ou srm`() {
+        val exported = mutableListOf<Pair<String, BatteryFileFormat>>()
+        openDetails(onExport = { id, format -> exported.add(id to format) })
         lightlyDragPanel()
-        compose.onNodeWithText("Exporter toutes les sauvegardes (.zip)")
-            .assertIsDisplayed().performTouchInput { click() }
-        compose.runOnIdle { assertEquals(listOf("test"), exported) }
+        compose.onNodeWithText("Exporter").assertIsDisplayed().performTouchInput { click() }
         compose.mainClock.autoAdvance = true
+        compose.onNodeWithText(BatteryFileFormat.SAV.label).assertIsDisplayed()
+        compose.onNodeWithText(BatteryFileFormat.SRM.label).assertIsDisplayed().performClick()
+        compose.runOnIdle { assertEquals(listOf("test" to BatteryFileFormat.SRM), exported) }
     }
 
     @Test
     @Config(qualifiers = "en-rUS-w320dp-h568dp-mdpi")
     fun `le contenu defile sur petit ecran et Fermer ferme au premier toucher`() {
-        openDetails(linkAvailable = true, onExport = {})
+        openDetails(linkAvailable = true, onExport = { _, _ -> })
         compose.onNodeWithText("Fermer").performScrollTo()
             .assertIsDisplayed().performTouchInput { click() }
         compose.onNodeWithText("Jouer").assertDoesNotExist()
@@ -118,7 +120,7 @@ class GameDetailsTouchTest {
     private fun openDetails(
         onStart: () -> Unit = {},
         linkAvailable: Boolean = false,
-        onExport: ((String) -> Unit)? = null,
+        onExport: ((String, BatteryFileFormat) -> Unit)? = null,
         controllerMode: Boolean = false,
     ) {
         compose.setContent {
@@ -131,7 +133,7 @@ class GameDetailsTouchTest {
                 onLaunchLibraryGame = { _, ready -> ready() },
                 onStartLinked = if (linkAvailable) ({}) else null,
                 onLaunchLinkedGames = if (linkAvailable) ({ _, _, ready -> ready() }) else null,
-                onExportGameBackup = onExport,
+                onExportBatterySave = onExport,
                 controllerMode = controllerMode,
             )
         }
