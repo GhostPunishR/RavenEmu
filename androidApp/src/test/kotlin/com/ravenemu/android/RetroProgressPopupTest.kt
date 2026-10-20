@@ -126,8 +126,6 @@ class RetroProgressPopupTest {
         }
         compose.onNodeWithText("Jeu de test").performClick()
         compose.waitForIdle()
-        compose.onNodeWithContentDescription("Drag handle").performClick()
-        compose.waitForIdle()
         compose.onNodeWithText("Jouer").performClick()
         compose.waitForIdle()
     }
