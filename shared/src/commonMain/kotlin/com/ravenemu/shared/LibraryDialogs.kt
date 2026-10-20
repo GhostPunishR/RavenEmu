@@ -17,6 +17,7 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -49,8 +50,14 @@ internal fun GameDetailsSheet(
     onImportGameSave: ((String) -> Unit)?,
     onDismiss: () -> Unit,
 ) {
+    // Opens straight at its full height: no half step to drag up before
+    // Jouer can be reached. It still follows the finger down to close, but
+    // while it settles a tap goes to the button instead of grabbing it.
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        sheetGesturesEnabled = !sheetState.isAnimationRunning,
         containerColor = RavenSurface,
         contentColor = RavenText,
     ) {
@@ -95,19 +102,14 @@ internal fun GameDetailsSheet(
                             )
                         }
                     }
+                    if (cover != null && onRemoveCover != null) {
+                        TextButton(
+                            onClick = { onRemoveCover(entry.id) },
+                            enabled = !coverBusy,
+                        ) { Text("Retirer la jaquette", color = RavenAccent, fontSize = 12.sp) }
+                    }
                 }
             }
-            if (cover != null && onRemoveCover != null) {
-                TextButton(
-                    onClick = { onRemoveCover(entry.id) },
-                    enabled = !coverBusy,
-                ) { Text("Retirer la jaquette", color = RavenAccent) }
-            }
-            Text(
-                "Vidéo, commandes et audio Game Boy, Game Boy Color et Game Boy Advance disponibles sur Android. La sauvegarde interne du jeu est automatique et un save state manuel est disponible dans le menu ⋮.",
-                color = RavenMuted,
-                fontSize = 13.sp,
-            )
             if (onPlay != null) {
                 Button(
                     onClick = {
@@ -170,6 +172,11 @@ internal fun GameDetailsSheet(
                     }
                 }
             }
+            Text(
+                "Vidéo, commandes et audio Game Boy, Game Boy Color et Game Boy Advance disponibles sur Android. La sauvegarde interne du jeu est automatique et un save state manuel est disponible dans le menu ⋮.",
+                color = RavenMuted,
+                fontSize = 13.sp,
+            )
             OutlinedButton(
                 onClick = onDismiss,
                 modifier = Modifier.fillMaxWidth(),

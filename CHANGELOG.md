@@ -29,7 +29,7 @@
 - RetroAchievements : le popup garde la valeur de progression lisible même avec un titre de succès long. Les indicateurs sont effacés à la déconnexion ou au remplacement de la session, même sans événement de disparition du SDK.
 - RetroAchievements : les hausses mesurées des différents succès passent à tour de rôle dans le popup, avec deux secondes par tour. Un succès fréquemment mis à jour ne masque plus les autres et les valeurs déjà atteintes dans la session ne relancent plus continuellement la notification.
 - RetroAchievements : une reconnexion crée un nouveau journal de session après la révocation de la déconnexion ; les anciens callbacks ne peuvent pas réécrire le journal.
-- Fiche de jeu : les gestes restent actifs pendant le dépliage, comme dans le menu en jeu. Le panneau peut être repris avec le doigt pendant son animation.
+- Fiche d'un jeu : elle s'ouvre directement à sa hauteur, avec **Jouer** et **Jouer à deux** juste sous la jaquette. Elle ne remonte plus jusqu'en haut de l'écran quand on la tire, et le premier appui sur un bouton compte, même pendant que la fiche se replace. Elle se ferme toujours en la faisant glisser vers le bas.
 - Export `.sav` : le nom proposé reprend le nom complet de la ROM en remplaçant son extension par `.sav`, en conservant les espaces, accents, parenthèses et noms longs.
 - Sauvegardes : lancements, imports et exports sont exclus mutuellement jusqu'à la fin de leur mise à jour d'interface, y compris pendant le sélecteur de fichiers. Une paire link encore en mémoire est libérée avant un transfert.
 - Miniatures des états : contrôle des dimensions PNG avant décodage et réduction de résolution ; une miniature importée invalide est ignorée sans perdre son état associé.

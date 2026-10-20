@@ -29,25 +29,11 @@ class GameDetailsTouchTest {
     val compose = createComposeRule()
 
     @Test
-    fun `la poignee suit le doigt meme pendant le depliage`() {
-        openDetails(linkAvailable = true, onExport = {}, expanded = false)
-        interruptExpansionWithDrag()
-    }
-
-    @Test
-    fun `le menu en jeu permet aussi de reprendre le depliage`() {
-        openDetails(expanded = false, controllerMode = true)
-        compose.onNodeWithText("Jouer").performClick()
-        compose.onNodeWithText("Préparation de l'image du jeu...").performClick()
-        compose.waitForIdle()
-        interruptExpansionWithDrag()
-    }
-
-    @Test
-    fun `la poignee permet de deplier puis replier le panneau`() {
-        openDetails(linkAvailable = true, onExport = {}, expanded = false)
+    fun `la fiche s'ouvre en entier et ne remonte pas quand on la tire vers le haut`() {
+        openDetails(linkAvailable = true, onExport = {})
         val handle = compose.onNodeWithContentDescription("Drag handle").assertIsDisplayed()
-        val initial = handle.fetchSemanticsNode().boundsInRoot.top
+        val opened = handle.fetchSemanticsNode().boundsInRoot.top
+        assertTrue(opened > 100f, "La fiche ne doit pas remplir l'écran quand son contenu tient.")
         handle.performTouchInput {
             down(center)
             moveTo(center - Offset(0f, 600f), delayMillis = 400)
@@ -55,21 +41,31 @@ class GameDetailsTouchTest {
             up()
         }
         compose.waitForIdle()
-        val expanded = handle.fetchSemanticsNode().boundsInRoot.top
-        assertTrue(expanded < initial - 100f, "Le panneau doit suivre le glissement vers le haut.")
-        handle.performTouchInput {
-            down(center)
-            moveTo(center + Offset(0f, initial - expanded), delayMillis = 400)
-            advanceEventTime(200)
-            up()
-        }
+        assertEquals(opened, handle.fetchSemanticsNode().boundsInRoot.top, 2f)
+        compose.onNodeWithText("Jouer").assertIsDisplayed()
+    }
+
+    @Test
+    @Config(qualifiers = "en-rUS-w360dp-h640dp-xhdpi")
+    fun `Jouer est visible des l'ouverture et lance le jeu au premier toucher`() {
+        var starts = 0
+        openDetails(onStart = { starts++ }, linkAvailable = true, onExport = {})
+        compose.onNodeWithText("Jouer").assertIsDisplayed().performTouchInput { click() }
+        compose.runOnIdle { assertEquals(1, starts) }
+    }
+
+    @Test
+    fun `le menu en jeu permet aussi de reprendre le depliage`() {
+        openDetails(controllerMode = true)
+        compose.onNodeWithText("Jouer").performClick()
+        compose.onNodeWithText("Préparation de l'image du jeu...").performClick()
         compose.waitForIdle()
-        assertEquals(initial, handle.fetchSemanticsNode().boundsInRoot.top, 2f)
+        interruptExpansionWithDrag()
     }
 
     @Test
     fun `un glissement vers le bas ferme le panneau`() {
-        openDetails(linkAvailable = true, onExport = {}, expanded = false)
+        openDetails(linkAvailable = true, onExport = {})
         compose.onNodeWithContentDescription("Drag handle").assertIsDisplayed().performTouchInput {
             down(center)
             moveTo(center + Offset(0f, 600f), delayMillis = 300)
@@ -79,32 +75,35 @@ class GameDetailsTouchTest {
     }
 
     @Test
-    fun `le premier toucher sur Jouer apres stabilisation du panneau lance le jeu`() {
+    fun `le premier toucher sur Jouer pendant que le panneau se replace lance le jeu`() {
         var starts = 0
         openDetails(onStart = { starts++ })
         lightlyDragPanel()
         compose.onNodeWithText("Jouer").assertIsDisplayed().performTouchInput { click() }
         compose.runOnIdle { assertEquals(1, starts) }
+        compose.mainClock.autoAdvance = true
     }
 
     @Test
-    fun `le premier toucher sur Jouer a deux apres stabilisation ouvre le partenaire`() {
+    fun `le premier toucher sur Jouer a deux pendant que le panneau se replace ouvre le partenaire`() {
         openDetails(linkAvailable = true)
         lightlyDragPanel()
         compose.onNodeWithText("Jouer à deux (câble link)")
             .assertIsDisplayed().performTouchInput { click() }
+        compose.mainClock.autoAdvance = true
         compose.onNodeWithText("Jouer à deux").assertIsDisplayed()
         compose.onNodeWithText("Second jeu · Game Boy").assertIsDisplayed()
     }
 
     @Test
-    fun `le premier toucher sur Exporter apres stabilisation appelle une seule fois le transfert`() {
+    fun `le premier toucher sur Exporter pendant que le panneau se replace appelle une seule fois le transfert`() {
         val exported = mutableListOf<String>()
         openDetails(onExport = { exported.add(it) })
         lightlyDragPanel()
         compose.onNodeWithText("Exporter toutes les sauvegardes (.zip)")
             .assertIsDisplayed().performTouchInput { click() }
         compose.runOnIdle { assertEquals(listOf("test"), exported) }
+        compose.mainClock.autoAdvance = true
     }
 
     @Test
@@ -120,7 +119,6 @@ class GameDetailsTouchTest {
         onStart: () -> Unit = {},
         linkAvailable: Boolean = false,
         onExport: ((String) -> Unit)? = null,
-        expanded: Boolean = true,
         controllerMode: Boolean = false,
     ) {
         compose.setContent {
@@ -139,10 +137,6 @@ class GameDetailsTouchTest {
         }
         compose.onNodeWithText("Jeu de test").performClick()
         compose.waitForIdle()
-        if (expanded) {
-            compose.onNodeWithContentDescription("Drag handle").performClick()
-            compose.waitForIdle()
-        }
         compose.onNodeWithText("Jouer").assertIsDisplayed()
     }
 
@@ -168,8 +162,9 @@ class GameDetailsTouchTest {
     }
 
     private fun lightlyDragPanel() {
-        // Check that the content really moves the sheet, then let it settle
-        // before tapping, following the same Material behavior as the game menu.
+        // Drag the content a little, then freeze the clock while the sheet
+        // settles back: the tap that follows must reach the button.
+        // Real pointer events: performClick() bypasses gesture interception.
         val initial = compose.onNodeWithContentDescription("Drag handle")
             .fetchSemanticsNode().boundsInRoot.top
         compose.mainClock.autoAdvance = false
@@ -183,7 +178,5 @@ class GameDetailsTouchTest {
         val moved = compose.onNodeWithContentDescription("Drag handle")
             .fetchSemanticsNode().boundsInRoot.top
         assertTrue(moved > initial + 1f, "Le contenu doit aussi permettre de déplacer le panneau.")
-        compose.mainClock.autoAdvance = true
-        compose.waitForIdle()
     }
 }
