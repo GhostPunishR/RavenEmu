@@ -1,6 +1,6 @@
 # Compiler RavenEmu
 
-Le projet Gradle autonome se trouve à la racine. L'interface Compose Multiplatform est partagée ; Android raccorde le lecteur GB/GBC/GBA, iOS dispose de l'hôte SwiftUI et de l'adaptateur natif. Voir [README.md](README.md), [ARCHITECTURE.md](ARCHITECTURE.md) et [CHANGELOG.md](CHANGELOG.md) pour les fonctions et les limites de la bêta.
+Le projet Gradle autonome se trouve à la racine. L'interface Compose Multiplatform est partagée ; Android raccorde le lecteur GB/GBC/GBA, iOS raccorde une première session SwiftUI/Compose avec import, lecteur, audio et sauvegardes, à valider sur appareil. Voir [README.md](README.md), [ARCHITECTURE.md](ARCHITECTURE.md) et [CHANGELOG.md](CHANGELOG.md) pour les fonctions et les limites de la bêta.
 
 ## Android
 
@@ -45,7 +45,15 @@ Le script Xcode construit les archives natives et intègre `RavenShared` via `..
 sh native/build-ios.sh
 ```
 
-Le SDK Apple utilise `PLATFORM_NAME` (`iphonesimulator` par défaut, ou `iphoneos`). Le lecteur iOS complet, les imports et la persistance restent à raccorder ; aucun binaire signé n'est distribué.
+Le SDK Apple utilise `PLATFORM_NAME` (`iphonesimulator` par défaut, ou `iphoneos`). La première session iOS raccorde les imports de fichiers, la bibliothèque, le lecteur GB/GBC/GBA, l'audio et les sauvegardes. Aucun binaire iPhone signé n'est distribué. Voir [le périmètre et les essais restants](iosApp/README.md).
+
+Sur Apple Silicon, construire et exécuter les tests dans un simulateur disponible :
+
+```sh
+sh iosApp/ci-test.sh
+```
+
+La CI produit aussi `ravenemu-ios-simulator` : une application pour simulateur, pas une IPA pour iPhone.
 
 ## Liaison RavenCore
 

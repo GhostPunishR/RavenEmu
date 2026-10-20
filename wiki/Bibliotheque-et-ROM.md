@@ -1,6 +1,6 @@
 # Bibliothèque et ROM
 
-La bibliothèque persistante décrite ici est raccordée à l'hôte Android de la version multiplateforme. La persistance iOS reste à implémenter.
+Cette page décrit principalement Android. La première session iOS propose aussi une bibliothèque persistante par contenu et l'import d'un fichier depuis Fichiers ; l'import de dossiers et les jaquettes ne sont pas encore raccordés sur Apple. Voir [le périmètre iOS](https://github.com/GhostPunishR/RavenEmu/blob/main/iosApp/README.md).
 
 ## Import d'un fichier
 

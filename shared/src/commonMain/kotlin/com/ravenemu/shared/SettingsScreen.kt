@@ -179,24 +179,24 @@ fun SettingsScreen(
                         "Le jeu et son audio sont suspendus lorsque RavenEmu passe en arrière-plan ou lorsque le panneau de jeu est ouvert. Ce comportement est fixe pour protéger la partie.",
                     )
                     if (capabilities.onlineCovers) {
-                    GroupTitle("Bibliothèque")
-                    SettingSwitch(
-                        "Jaquettes en ligne",
-                        "Cherche les jaquettes manquantes sur thumbnails.libretro.com. Ce serveur tiers reçoit le nom des jeux de la bibliothèque et l'adresse IP de l'appareil.",
-                        settings.onlineCovers,
-                        onSettingsChange != null,
-                    ) { update(settings.copy(onlineCovers = it)) }
+                        GroupTitle("Bibliothèque")
+                        SettingSwitch(
+                            "Jaquettes en ligne",
+                            "Cherche les jaquettes manquantes sur thumbnails.libretro.com. Ce serveur tiers reçoit le nom des jeux de la bibliothèque et l'adresse IP de l'appareil.",
+                            settings.onlineCovers,
+                            onSettingsChange != null,
+                        ) { update(settings.copy(onlineCovers = it)) }
                     }
                     if (capabilities.diagnostics) {
-                    GroupTitle("Diagnostic")
-                    SettingSwitch(
-                        "Afficher les performances",
-                        "FPS, temps du moteur et conversion vidéo dans le lecteur.",
-                        settings.showDiagnostics,
-                        onSettingsChange != null,
-                    ) { update(settings.copy(showDiagnostics = it)) }
-                    Text("Le diagnostic audio reste exportable depuis le menu du jeu.",
-                        color = Muted, fontSize = 12.sp)
+                        GroupTitle("Diagnostic")
+                        SettingSwitch(
+                            "Afficher les performances",
+                            "FPS, temps du moteur et conversion vidéo dans le lecteur.",
+                            settings.showDiagnostics,
+                            onSettingsChange != null,
+                        ) { update(settings.copy(showDiagnostics = it)) }
+                        Text("Le diagnostic audio reste exportable depuis le menu du jeu.",
+                            color = Muted, fontSize = 12.sp)
                     }
                 }
                 Page.AUDIO -> {
@@ -267,20 +267,20 @@ fun SettingsScreen(
                 Page.INTERFACE -> {
                     GroupTitle("Commandes tactiles")
                     if (capabilities.haptics) {
-                    SettingSwitch(
-                        "Retour haptique",
-                        "Petite vibration à la pression des boutons.",
-                        settings.haptics,
-                        onSettingsChange != null,
-                    ) { update(settings.copy(haptics = it)) }
+                        SettingSwitch(
+                            "Retour haptique",
+                            "Petite vibration à la pression des boutons.",
+                            settings.haptics,
+                            onSettingsChange != null,
+                        ) { update(settings.copy(haptics = it)) }
                     }
                     if (capabilities.cartridgeHardware) {
-                    SettingSwitch(
-                        "Vibration de la cartouche",
-                        "Fait vibrer le téléphone avec les jeux équipés d'un moteur de vibration (Drill Dozer, WarioWare: Twisted!, cartouches Game Boy Rumble).",
-                        settings.cartridgeRumble,
-                        onSettingsChange != null,
-                    ) { update(settings.copy(cartridgeRumble = it)) }
+                        SettingSwitch(
+                            "Vibration de la cartouche",
+                            "Fait vibrer le téléphone avec les jeux équipés d'un moteur de vibration (Drill Dozer, WarioWare: Twisted!, cartouches Game Boy Rumble).",
+                            settings.cartridgeRumble,
+                            onSettingsChange != null,
+                        ) { update(settings.copy(cartridgeRumble = it)) }
                     }
                     SettingSlider(
                         "Taille des commandes", "${settings.controlsScale} %",
@@ -310,56 +310,56 @@ fun SettingsScreen(
                         Text("Réinitialiser les commandes", color = Accent)
                     }
                     if (capabilities.cartridgeHardware) {
-                    GroupTitle("Capteurs de la cartouche")
-                    SettingSwitch(
-                        "Capteurs du téléphone",
-                        "Le gyroscope, l'inclinaison et la lumière du téléphone remplacent ceux de la cartouche : WarioWare: Twisted!, Yoshi Topsy-Turvy, Kirby Tilt 'n' Tumble, Boktai.",
-                        settings.cartridgeSensors,
-                        onSettingsChange != null,
-                    ) { update(settings.copy(cartridgeSensors = it)) }
-                    SettingSwitch(
-                        "Soleil automatique (Boktai)",
-                        "Le capteur de lumière du téléphone règle le soleil : il faut la lumière du jour, celle d'une pièce ne suffit pas. Sans ce capteur, le niveau ci-dessous s'applique.",
-                        settings.solarLightAuto,
-                        onSettingsChange != null && settings.cartridgeSensors,
-                    ) { update(settings.copy(solarLightAuto = it)) }
-                    SettingSlider(
-                        "Soleil (Boktai)", "${settings.solarLightLevel} %",
-                        settings.solarLightLevel, 0..100,
-                        onSettingsChange != null && !(settings.cartridgeSensors && settings.solarLightAuto),
-                    ) { update(settings.copy(solarLightLevel = (it + 5) / 10 * 10)) }
+                        GroupTitle("Capteurs de la cartouche")
+                        SettingSwitch(
+                            "Capteurs du téléphone",
+                            "Le gyroscope, l'inclinaison et la lumière du téléphone remplacent ceux de la cartouche : WarioWare: Twisted!, Yoshi Topsy-Turvy, Kirby Tilt 'n' Tumble, Boktai.",
+                            settings.cartridgeSensors,
+                            onSettingsChange != null,
+                        ) { update(settings.copy(cartridgeSensors = it)) }
+                        SettingSwitch(
+                            "Soleil automatique (Boktai)",
+                            "Le capteur de lumière du téléphone règle le soleil : il faut la lumière du jour, celle d'une pièce ne suffit pas. Sans ce capteur, le niveau ci-dessous s'applique.",
+                            settings.solarLightAuto,
+                            onSettingsChange != null && settings.cartridgeSensors,
+                        ) { update(settings.copy(solarLightAuto = it)) }
+                        SettingSlider(
+                            "Soleil (Boktai)", "${settings.solarLightLevel} %",
+                            settings.solarLightLevel, 0..100,
+                            onSettingsChange != null && !(settings.cartridgeSensors && settings.solarLightAuto),
+                        ) { update(settings.copy(solarLightLevel = (it + 5) / 10 * 10)) }
                     }
                     if (capabilities.deltaSkins) {
-                    GroupTitle("Skin Delta")
-                    Text(
-                        "RavenEmu lit les skins au format .deltaskin, en portrait. Ce projet n'est ni affilié à Delta, ni approuvé par ses auteurs : aucun skin n'est fourni, vous importez les vôtres.",
-                        color = Muted, fontSize = 12.sp,
-                    )
-                    TextButton(onClick = { onImportSkin?.invoke() }, enabled = onImportSkin != null) {
-                        Text("Importer un fichier .deltaskin", color = Accent)
-                    }
-                    if (deltaSkins.isEmpty()) {
-                        Text("Aucun skin installé : commandes classiques.", color = Muted, fontSize = 12.sp)
-                    }
-                    for (skin in deltaSkins) {
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                Text(skin.name, color = TextMain, fontSize = 14.sp,
-                                    fontWeight = FontWeight.Medium)
-                                Text(skin.console + if (skin.selected) " · utilisé" else "",
-                                    color = if (skin.selected) Accent else Muted, fontSize = 12.sp)
-                            }
-                            TextButton(onClick = { onToggleSkin?.invoke(skin.id) }, enabled = onToggleSkin != null) {
-                                Text(if (skin.selected) "Retirer" else "Utiliser", color = Accent, fontSize = 13.sp)
-                            }
-                            TextButton(onClick = { skinToDelete = skin }, enabled = onDeleteSkin != null) {
-                                Text("Supprimer", color = Muted, fontSize = 13.sp)
+                        GroupTitle("Skin Delta")
+                        Text(
+                            "RavenEmu lit les skins au format .deltaskin, en portrait. Ce projet n'est ni affilié à Delta, ni approuvé par ses auteurs : aucun skin n'est fourni, vous importez les vôtres.",
+                            color = Muted, fontSize = 12.sp,
+                        )
+                        TextButton(onClick = { onImportSkin?.invoke() }, enabled = onImportSkin != null) {
+                            Text("Importer un fichier .deltaskin", color = Accent)
+                        }
+                        if (deltaSkins.isEmpty()) {
+                            Text("Aucun skin installé : commandes classiques.", color = Muted, fontSize = 12.sp)
+                        }
+                        for (skin in deltaSkins) {
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text(skin.name, color = TextMain, fontSize = 14.sp,
+                                        fontWeight = FontWeight.Medium)
+                                    Text(skin.console + if (skin.selected) " · utilisé" else "",
+                                        color = if (skin.selected) Accent else Muted, fontSize = 12.sp)
+                                }
+                                TextButton(onClick = { onToggleSkin?.invoke(skin.id) }, enabled = onToggleSkin != null) {
+                                    Text(if (skin.selected) "Retirer" else "Utiliser", color = Accent, fontSize = 13.sp)
+                                }
+                                TextButton(onClick = { skinToDelete = skin }, enabled = onDeleteSkin != null) {
+                                    Text("Supprimer", color = Muted, fontSize = 13.sp)
+                                }
                             }
                         }
-                    }
                     }
                 }
                 Page.ABOUT -> {

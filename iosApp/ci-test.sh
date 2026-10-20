@@ -17,7 +17,12 @@ print(phones[0])
 ')"
 mkdir -p "$ROOT/iosApp/build"
 RESULT_DIR="$(mktemp -d "$ROOT/iosApp/build/test-run.XXXXXX")"
-xcodebuild -project RavenEmu.xcodeproj -scheme RavenEmu -configuration Debug \
+set -- -project RavenEmu.xcodeproj -scheme RavenEmu -configuration Debug
+if [ "${RAVENEMU_PREBUILT_SHARED:-NO}" = YES ]; then
+    test -f "$ROOT/shared/build/bin/iosSimulatorArm64/debugFramework/RavenShared.framework/Headers/RavenShared.h"
+    set -- "$@" "RAVENEMU_PREBUILT_SHARED=YES" "RAVENEMU_SHARED_FRAMEWORK_DIR=$ROOT/shared/build/bin/iosSimulatorArm64/debugFramework"
+fi
+sh "$ROOT/iosApp/run-checked.sh" xcodebuild "$@" \
     -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
     -derivedDataPath "$ROOT/iosApp/DerivedData" \
     -resultBundlePath "$RESULT_DIR/results.xcresult" \

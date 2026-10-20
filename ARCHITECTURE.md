@@ -6,7 +6,7 @@ RavenEmu partage une interface Compose Multiplatform entre Android et iOS. Le pr
 | --- | --- |
 | `shared/` | Interface Compose, modèles, navigation, réglages et logique Kotlin commune |
 | `androidApp/` | Activité, session de jeu, audio, stockage privé, imports, manettes, skins et RetroAchievements |
-| `iosApp/` | Hôte SwiftUI, spécification XcodeGen et adaptateur Swift |
+| `iosApp/` | Hôte SwiftUI, session série, stockage, audio, spécification XcodeGen et adaptateur Swift |
 | `native/` | CMake, pont JNI Android et module API C pour Apple |
 | `policy/` | Tests JVM des règles de CI et des chemins du dépôt |
 | `docs/` | Sources du site statique |
@@ -35,4 +35,4 @@ RetroAchievements utilise le SDK officiel rcheevos, également épinglé par SHA
 
 Android raccorde le lecteur, le rendu, l'audio, les commandes, la bibliothèque, les skins et les sauvegardes. Les performances GBC/GBA et les déblocages RetroAchievements nécessitent encore des essais sur téléphone.
 
-iOS dispose des écrans partagés et du pont natif ; l'import, la persistance et le lecteur jouable restent à connecter. Une compilation ne prouve pas une partie jouable. Voir [BUILDING.md](BUILDING.md), [CONTRIBUTING.md](CONTRIBUTING.md) et [CHANGELOG.md](CHANGELOG.md).
+iOS raccorde une première session : `IosHost` détient les états Compose sur le thread principal, `RavenRuntime` détient les handles sur une file série, `RavenLibraryStore` conserve les copies et écrit atomiquement, `RavenAudioOutput` borne la file audio. Les frames immuables passent par NSData vers Compose ; un seul envoi d'image peut attendre le thread principal. Les réglages des services non raccordés sont masqués. Voir [la première tranche iOS](iosApp/README.md) ; les essais réels et la distribution iPhone restent à effectuer. Une compilation ne prouve pas une partie jouable sur appareil. Voir [BUILDING.md](BUILDING.md), [CONTRIBUTING.md](CONTRIBUTING.md) et [CHANGELOG.md](CHANGELOG.md).

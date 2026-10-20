@@ -61,9 +61,8 @@ import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
 
 /**
- * Shared GB player. Android supplies native frames and touch input,
- * while the iOS app still needs native session integration.
- * No audio output or file-save behavior is implied.
+ * Shared player. Android and the first iOS session supply native frames,
+ * touch input and their platform-specific audio/storage services.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

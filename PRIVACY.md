@@ -31,6 +31,12 @@ Les badges des succès, l’image du jeu et le portrait du compte sont des image
 
 Les informations enregistrées par RetroAchievements relèvent de sa [politique de confidentialité](https://retroachievements.org/privacy.php). RavenEmu ne stocke pas ces informations sur un serveur du projet. Les requêtes Softcore légitimes émises par le SDK sont désormais conservées localement dans un journal chiffré via Android Keystore et exclu des sauvegardes Android. Ce journal contient les paramètres de la requête d'origine, y compris le jeton du compte ; il est limité à 256 demandes et les nouvelles tentatives ne sont effectuées qu'après authentification du même compte, avec le jeton de cette connexion. Les échecs sont retentés pendant la session avec un délai progressif de 5 à 120 secondes. Les entrées sont retirées après confirmation de réussite et toute la file est effacée lors d'une déconnexion explicite ou de la suppression des données de l'application. RavenEmu n'héberge pas ces données sur un serveur.
 
+## Première session iOS
+
+Le lecteur iOS importe uniquement les fichiers choisis dans Fichiers et en garde une copie dans l'espace privé de l'application, avec un index local, les sauvegardes et les états. Les préférences utilisent UserDefaults. Le lecteur ne téléverse pas ces fichiers ; les sauvegardes système de l'appareil dépendent des réglages iOS de l'utilisateur. Les exports `.sav` sont écrits à la destination choisie dans Fichiers, qui peut être un fournisseur distant choisi par l'utilisateur. La suppression de l'application peut supprimer son stockage privé.
+
+RetroAchievements et le téléchargement des jaquettes ne sont pas raccordés dans cette première session iOS. Les mécanismes de jeton et de journal décrits plus haut concernent Android.
+
 ## Jaquettes en ligne (facultatif, version multiplateforme)
 
 La nouvelle version multiplateforme de RavenEmu peut chercher les jaquettes manquantes de la bibliothèque sur `https://thumbnails.libretro.com`, un service tiers. Cette recherche est **désactivée par défaut** et ne démarre que si l’utilisateur l’active dans Réglages → Général → Bibliothèque.

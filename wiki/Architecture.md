@@ -6,7 +6,7 @@ Le projet Gradle RavenEmu se trouve à la racine. `settings.gradle.kts` inclut `
 | --- | --- |
 | `shared/` | Interface, modèles et logique Kotlin commune |
 | `androidApp/` | Lecteur, fichiers, audio, commandes, skins et services Android |
-| `iosApp/` | Hôte SwiftUI et projet XcodeGen |
+| `iosApp/` | Hôte SwiftUI, session, stockage, audio et projet XcodeGen |
 | `native/` | API C, JNI Android, module Swift et révision RavenCore épinglée |
 | `policy/` | Règles de CI et chemins de la racine |
 

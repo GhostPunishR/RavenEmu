@@ -30,7 +30,8 @@ targets:
         LIBRARY_SEARCH_PATHS: "$(inherited) $(SRCROOT)/../native/build-ios/$(PLATFORM_NAME)/_deps/ravencore-build/sdk $(SRCROOT)/../native/build-ios/$(PLATFORM_NAME)/_deps/ravencore-build/cores/gb $(SRCROOT)/../native/build-ios/$(PLATFORM_NAME)/_deps/ravencore-build/cores/gbc $(SRCROOT)/../native/build-ios/$(PLATFORM_NAME)/_deps/ravencore-build/cores/gba $(SRCROOT)/../native/build-ios/$(PLATFORM_NAME)/_deps/ravencore-build/cores/common"
         OTHER_SWIFT_FLAGS: "$(inherited) -Xcc -fmodule-map-file=$(SRCROOT)/../native/build-ios/$(PLATFORM_NAME)/include/module.modulemap"
         OTHER_LDFLAGS: "$(inherited) -framework RavenShared -lravenemu_c_api -lgbc_raven_core -lgb_raven_core -lgba_raven_core -lravenemu_common -lc++"
-        FRAMEWORK_SEARCH_PATHS: "$(inherited) $(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)"
+        RAVENEMU_SHARED_FRAMEWORK_DIR: "$(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)"
+        FRAMEWORK_SEARCH_PATHS: "$(inherited) $(RAVENEMU_SHARED_FRAMEWORK_DIR)"
     preBuildScripts:
       - name: Build RavenEmu native engines
         basedOnDependencyAnalysis: false
@@ -41,7 +42,9 @@ targets:
         basedOnDependencyAnalysis: false
         script: |
           set -e
-          "$SRCROOT/../gradlew" -p "$SRCROOT/.." :shared:embedAndSignAppleFrameworkForXcode
+          if [ "$RAVENEMU_PREBUILT_SHARED" != YES ]; then
+            "$SRCROOT/../gradlew" -p "$SRCROOT/.." :shared:embedAndSignAppleFrameworkForXcode
+          fi
   RavenEmuTests:
     type: bundle.unit-test
     platform: iOS

@@ -1,6 +1,6 @@
 # Affichage et audio
 
-Les réglages partagés sont présents dans l'interface Compose. Leur application au lecteur et leur persistance sont raccordées sur Android ; le lecteur iOS complet reste à connecter.
+Les réglages partagés sont présents dans l'interface Compose. Leur application et leur persistance sont raccordées sur Android et dans la première session iOS. Sur iOS, l'audio utilise AVAudioEngine ; le routage et les performances restent à valider sur appareil. Les options des services absents y sont masquées.
 
 ## Vidéo
 

@@ -29,7 +29,7 @@ Avant toute désinstallation ou effacement de données, exportez les sauvegardes
 - Distinguer compilation, tests automatisés et validation réelle des jeux.
 - Documenter les limites et incompatibilités de signature ou d'états.
 
-Les jobs iOS construisent le framework partagé et le SDK natif pour simulateur et vérifient les adaptateurs Swift. Ils ne distribuent pas d'application iOS signée ; le lecteur complet reste à raccorder.
+Le job iOS construit le framework partagé, le SDK natif et l'application Xcode, puis exécute les XCTest sur simulateur. L'artefact `ravenemu-ios-simulator` contient une application pour simulateur Apple Silicon ; il ne constitue pas une IPA pour iPhone. Aucun binaire iPhone signé n'est distribué. Voir [la première tranche et ses limites](iosApp/README.md).
 
 ## Versions et publications
 

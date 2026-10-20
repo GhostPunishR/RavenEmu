@@ -28,7 +28,7 @@ Cette page décrit la version multiplateforme, sans date de livraison promise. L
 
 ## Travaux restants
 
-- Raccorder import, stockage et lecteur jouable iOS.
+- Valider la première session iOS sur appareil, puis raccorder RetroAchievements, manettes et fonctions avancées avant distribution iPhone.
 - Étendre les réglages des commandes et valider les skins sur appareil.
 - Étendre la matrice de résultats reproductibles et traiter les défauts observés.
 

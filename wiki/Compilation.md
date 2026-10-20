@@ -27,7 +27,7 @@ xcodegen generate
 open RavenEmu.xcodeproj
 ```
 
-La CI construit le framework et le SDK natif pour simulateur et vérifie les adaptateurs Swift. Le lecteur iOS complet reste à raccorder.
+La CI construit aussi l'application Xcode complète et exécute les XCTest sur simulateur. Sur Apple Silicon : `sh iosApp/ci-test.sh`. L'artefact `ravenemu-ios-simulator` est réservé au simulateur, sans IPA iPhone. Voir [le périmètre iOS](https://github.com/GhostPunishR/RavenEmu/blob/main/iosApp/README.md).
 
 ## RavenCore
 
