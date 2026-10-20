@@ -177,7 +177,7 @@ jobs:
           retention-days: 7
 
   ios:
-    name: iOS (framework partagé)
+    name: iOS (application et tests simulateur)
     runs-on: macos-latest
     steps:
       - name: Récupérer le dépôt
@@ -193,18 +193,60 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
+      - name: Identifier la version Xcode
+        id: apple-tools
+        run: echo "version=$(xcodebuild -version | shasum -a 256 | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+      - name: Restaurer les binaires Apple pour ces sources
+        id: apple-cache
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: |
+            shared/build
+            native/build-ios
+          key: apple-v1-${{ runner.arch }}-${{ steps.apple-tools.outputs.version }}-${{ hashFiles('shared/src/**', 'shared/build.gradle.kts', 'native/**', 'gradle/**', '*.gradle.kts', 'gradle.properties', 'TERMS.md', 'PRIVACY.md', 'LICENSE') }}
       - name: Build iOS simulator framework
+        if: steps.apple-cache.outputs.cache-hit != 'true'
         run: ./gradlew :shared:linkDebugFrameworkIosSimulatorArm64 --stacktrace
       - name: Cross-compile native emulator SDK for iOS simulator
+        if: steps.apple-cache.outputs.cache-hit != 'true'
         run: sh native/build-ios.sh
+      - name: Conserver les binaires Apple après compilation
+        if: steps.apple-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: |
+            shared/build
+            native/build-ios
+          key: ${{ steps.apple-cache.outputs.cache-primary-key }}
       - name: Vérifier les adaptateurs Swift
         run: |
-          xcrun --sdk iphonesimulator swiftc -parse-as-library -typecheck \
+          sh iosApp/run-checked.sh xcrun --sdk iphonesimulator swiftc -parse-as-library -typecheck \
             -target arm64-apple-ios15.0-simulator \
             -sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)" \
             -I native/build-ios/iphonesimulator/include \
             -F shared/build/bin/iosSimulatorArm64/debugFramework \
             iosApp/Sources/*.swift
+      - name: Installer XcodeGen si nécessaire
+        run: command -v xcodegen || brew install xcodegen
+      - name: Construire et tester l'application iOS
+        env:
+          RAVENEMU_PREBUILT_SHARED: "YES"
+        run: sh iosApp/ci-test.sh
+      - name: Publier l'application pour simulateur Apple Silicon
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ravenemu-ios-simulator
+          path: iosApp/build/RavenEmu-simulator.zip
+          if-no-files-found: error
+          retention-days: 7
+      - name: Conserver les résultats de test iOS
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ravenemu-ios-test-results
+          path: iosApp/build/test-run.*/results.xcresult
+          if-no-files-found: ignore
+          retention-days: 7
 
   prerelease:
     name: Publier la préversion Android

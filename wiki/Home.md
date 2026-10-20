@@ -9,7 +9,7 @@ L'application installée s'appelle **RavenEmu**. Les paquets Kotlin et les noms 
 | Plateforme | État actuel |
 |---|---|
 | Android 8.0 et plus | Bêta : bibliothèque, lecteur GB/GBC/GBA, audio, commandes tactiles et sauvegardes raccordés |
-| iOS | Interface partagée et passerelle native présentes ; import, persistance et lecteur jouable à connecter. Aucun binaire signé distribué |
+| iOS | Première session avec import Fichiers, lecteur, audio et sauvegardes ; essais sur appareil restants. Artefact simulateur, sans IPA iPhone signée |
 
 La compatibilité GBC/GBA, les performances sur téléphone et les déblocages RetroAchievements nécessitent encore des validations. Un build réussi n'atteste pas du fonctionnement de chaque jeu.
 

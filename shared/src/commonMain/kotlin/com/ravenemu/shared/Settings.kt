@@ -3,6 +3,16 @@ package com.ravenemu.shared
 import kotlin.math.pow
 import kotlin.math.roundToInt
 
+/** Hide settings for services the current host has not connected yet. */
+data class SettingsCapabilities(
+    val onlineCovers: Boolean = true,
+    val cartridgeHardware: Boolean = true,
+    val deltaSkins: Boolean = true,
+    val haptics: Boolean = true,
+    val diagnostics: Boolean = true,
+    val audioStartupFade: Boolean = true,
+)
+
 /**
  * RavenEmu preferences: portable value object. Android stores this in private
  * SharedPreferences; other hosts can supply their own persistence adapter.

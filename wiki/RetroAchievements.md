@@ -64,7 +64,7 @@ Références : [User-Agent et validation](https://github.com/RetroAchievements/r
 - Hardcore reste désactivé.
 - Les classements se consultent en Softcore ; les soumissions restent indisponibles tant que le Hardcore est verrouillé.
 - Les déblocages et leur synchronisation nécessitent une validation réelle.
-- L'hôte iOS n'a pas encore le lecteur et l'intégration complète raccordés.
+- La première session iOS raccorde le lecteur ; son service RetroAchievements reste à développer.
 
 ## Données et réseau
 

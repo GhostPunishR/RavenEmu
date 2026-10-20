@@ -4,6 +4,10 @@
 
 ### Ajouté
 
+- Première session iOS raccordée à l'interface partagée : import Fichiers de ROM GB/GBC/GBA, bibliothèque persistante par SHA-256, commandes tactiles, images natives et audio AVAudioEngine. Réglages audio, affichage et commandes persistés ; les services absents sont masqués.
+- iOS : sauvegarde batterie atomique périodique et avant pause/suspension, quatre emplacements d'état, import `.sav` avec confirmation et export au nom de la ROM. Pause/menu et interruptions relâchent les commandes.
+- CI iOS : construction de l'application Xcode complète, XCTest sur simulateur avec programmes synthétiques et artefact `ravenemu-ios-simulator`. Aucune IPA signée pour iPhone ; audio, performances et parcours sur appareil restent à valider.
+
 - RetroAchievements : états de synchronisation par succès (local, en attente, confirmé), compteur des demandes en attente, recherche, tris par progression/date, dates de déblocage et activité en jeu (Rich Presence).
 - RetroAchievements : consultation des classements (20 meilleurs scores ou autour du compte), chargement/réessai et dernier résultat avec score, record personnel et rang. Les soumissions nécessitent le Hardcore, qui reste verrouillé en attente de validation externe.
 - RetroAchievements : réglages persistants des popups (activation des succès et des progressions séparée, haut/bas, durées, son facultatif), bilan de jeu terminé avec image et distinction Softcore/Hardcore.

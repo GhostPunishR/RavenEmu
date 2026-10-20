@@ -4,7 +4,7 @@ options:
     iOS: "15.0"
 settings:
   base:
-    SWIFT_VERSION: "5.9"
+    SWIFT_VERSION: "5.0"
     IPHONEOS_DEPLOYMENT_TARGET: "15.0"
     TARGETED_DEVICE_FAMILY: "1,2"
 targets:
@@ -19,7 +19,9 @@ targets:
         PRODUCT_NAME: RavenEmu
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: 1
-        GENERATE_INFOPLIST_FILE: YES
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Info.plist
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
         # Name shown under the home-screen icon.
         INFOPLIST_KEY_CFBundleDisplayName: RavenEmu
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
@@ -27,8 +29,9 @@ targets:
         HEADER_SEARCH_PATHS: "$(inherited) $(SRCROOT)/../native/build-ios/$(PLATFORM_NAME)/include"
         LIBRARY_SEARCH_PATHS: "$(inherited) $(SRCROOT)/../native/build-ios/$(PLATFORM_NAME)/_deps/ravencore-build/sdk $(SRCROOT)/../native/build-ios/$(PLATFORM_NAME)/_deps/ravencore-build/cores/gb $(SRCROOT)/../native/build-ios/$(PLATFORM_NAME)/_deps/ravencore-build/cores/gbc $(SRCROOT)/../native/build-ios/$(PLATFORM_NAME)/_deps/ravencore-build/cores/gba $(SRCROOT)/../native/build-ios/$(PLATFORM_NAME)/_deps/ravencore-build/cores/common"
         OTHER_SWIFT_FLAGS: "$(inherited) -Xcc -fmodule-map-file=$(SRCROOT)/../native/build-ios/$(PLATFORM_NAME)/include/module.modulemap"
-        OTHER_LDFLAGS: "$(inherited) -lravenemu_c_api -lgbc_raven_core -lgb_raven_core -lgba_raven_core -lravenemu_common -lc++"
-        FRAMEWORK_SEARCH_PATHS: "$(inherited) $(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)"
+        OTHER_LDFLAGS: "$(inherited) -framework RavenShared -lravenemu_c_api -lgbc_raven_core -lgb_raven_core -lgba_raven_core -lravenemu_common -lc++"
+        RAVENEMU_SHARED_FRAMEWORK_DIR: "$(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)"
+        FRAMEWORK_SEARCH_PATHS: "$(inherited) $(RAVENEMU_SHARED_FRAMEWORK_DIR)"
     preBuildScripts:
       - name: Build RavenEmu native engines
         basedOnDependencyAnalysis: false
@@ -39,4 +42,32 @@ targets:
         basedOnDependencyAnalysis: false
         script: |
           set -e
-          "$SRCROOT/../gradlew" -p "$SRCROOT/.." :shared:embedAndSignAppleFrameworkForXcode
+          if [ "$RAVENEMU_PREBUILT_SHARED" != YES ]; then
+            "$SRCROOT/../gradlew" -p "$SRCROOT/.." :shared:embedAndSignAppleFrameworkForXcode
+          fi
+  RavenEmuTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests
+      # Production storage/core wrappers, without a second Kotlin runtime in the test bundle.
+      - path: Sources/RavenLibraryStore.swift
+      - path: Sources/RavenNativeCore.swift
+    dependencies:
+      - target: RavenEmu
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.ghostpunishr.ravenemu.tests
+        GENERATE_INFOPLIST_FILE: YES
+        HEADER_SEARCH_PATHS: "$(inherited) $(SRCROOT)/../native/build-ios/$(PLATFORM_NAME)/include"
+        LIBRARY_SEARCH_PATHS: "$(inherited) $(SRCROOT)/../native/build-ios/$(PLATFORM_NAME)/_deps/ravencore-build/sdk $(SRCROOT)/../native/build-ios/$(PLATFORM_NAME)/_deps/ravencore-build/cores/gb $(SRCROOT)/../native/build-ios/$(PLATFORM_NAME)/_deps/ravencore-build/cores/gbc $(SRCROOT)/../native/build-ios/$(PLATFORM_NAME)/_deps/ravencore-build/cores/gba $(SRCROOT)/../native/build-ios/$(PLATFORM_NAME)/_deps/ravencore-build/cores/common"
+        OTHER_SWIFT_FLAGS: "$(inherited) -Xcc -fmodule-map-file=$(SRCROOT)/../native/build-ios/$(PLATFORM_NAME)/include/module.modulemap"
+        OTHER_LDFLAGS: "$(inherited) -lravenemu_c_api -lgbc_raven_core -lgb_raven_core -lgba_raven_core -lravenemu_common -lc++"
+schemes:
+  RavenEmu:
+    build:
+      targets:
+        RavenEmu: all
+    test:
+      targets:
+        - RavenEmuTests

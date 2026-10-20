@@ -1,6 +1,6 @@
 # Premiers pas
 
-Les étapes suivantes concernent la **bêta Android multiplateforme**. Le lecteur iOS n'est pas encore jouable.
+Les étapes suivantes concernent la **bêta Android multiplateforme**. La première intégration iOS est décrite dans [son guide](https://github.com/GhostPunishR/RavenEmu/blob/main/iosApp/README.md), avec les essais restants sur appareil.
 
 ## 1. Importer un jeu
 
