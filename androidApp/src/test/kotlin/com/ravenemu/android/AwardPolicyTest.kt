@@ -89,4 +89,38 @@ class AwardPolicyTest {
         repeat(12) { assertTrue(replay.attempt({ true }) { false }!! <= 120000L) }
         assertNull(replay.attempt({ false }) { fail("signed out"); false })
     }
+
+    // rcheevos rebuilds each retry with a new delay `o` and signature `v`.
+    private data class Entry(val account: String, val post: String)
+    private fun attempt(account: String, id: Int, delay: Int, mode: Int = 0) =
+        Entry(account, "r=awardachievement&u=$account&t=secret&a=$id&h=$mode&m=hash&o=$delay&v=sig$delay")
+    private val keyOf = { entry: Entry -> AwardJournalEntries.key(entry.account, entry.post) }
+
+    @Test fun retriesOfOneUnlockKeepOnlyTheLatestAttempt() {
+        var journal = listOf<Entry>()
+        for (delay in listOf(140, 275, 410)) journal = AwardJournalEntries.remember(journal, attempt("Player", 5501, delay), 256, keyOf)!!
+        assertEquals(listOf(attempt("Player", 5501, 410)), journal)
+        journal = AwardJournalEntries.remember(journal, attempt("player", 5501, 545), 256, keyOf)!!
+        assertEquals(listOf(attempt("player", 5501, 545)), journal) // account names ignore case
+        journal = AwardJournalEntries.remember(journal, attempt("Player", 5502, 5), 256, keyOf)!!
+        journal = AwardJournalEntries.remember(journal, attempt("Player", 5501, 5, mode = 1), 256, keyOf)!!
+        journal = AwardJournalEntries.remember(journal, attempt("Other", 5501, 5), 256, keyOf)!!
+        assertEquals(4, journal.size)
+        assertSame(journal, AwardJournalEntries.remember(journal, attempt("Other", 5501, 5), 256, keyOf))
+        // A full journal still takes the newer attempt of an unlock it holds, never a new unlock.
+        assertEquals(4, AwardJournalEntries.remember(journal, attempt("Player", 5502, 9), 4, keyOf)!!.size)
+        assertNull(AwardJournalEntries.remember(journal, attempt("Player", 5503, 9), 4, keyOf))
+    }
+
+    @Test fun anAcceptedAttemptSettlesEveryAttemptOfItsUnlock() {
+        // Journals written before attempts were merged hold one entry per retry.
+        val journal = listOf(attempt("Player", 5501, 140), attempt("Player", 5502, 3),
+            attempt("Player", 5501, 275), attempt("Player", 5501, 410, mode = 1))
+        assertEquals(listOf(attempt("Player", 5502, 3), attempt("Player", 5501, 410, mode = 1)),
+            AwardJournalEntries.acknowledge(journal, attempt("Player", 5501, 140), keyOf))
+        assertEquals(listOf(attempt("Player", 5502, 3), attempt("Player", 5501, 275), attempt("Player", 5501, 410, mode = 1)),
+            AwardJournalEntries.latest(journal, keyOf))
+        val malformed = Entry("Player", "r=awardachievement&a=1&a=2&h=0")
+        assertEquals(journal, AwardJournalEntries.acknowledge(journal + malformed, malformed, keyOf))
+    }
 }

@@ -29,6 +29,11 @@ class RetroServicesTest {
         fun accepted(status: Int, json: String) = AwardSyncTracker.accepted(status, json.toByteArray())
         assertTrue(accepted(200, """{"Success":true}"""))
         assertFalse(accepted(200, """{"Success":false,"Error":"Refused"}"""))
+        // As in rcheevos: an earlier attempt already put the unlock on the account.
+        assertTrue(accepted(200, """{"Success":false,"Error":"User already has this achievement awarded."}"""))
+        assertTrue(accepted(200, """{"Success":false,"Error":"User already has hardcore and regular achievements awarded."}"""))
+        assertFalse(accepted(500, """{"Success":false,"Error":"User already has this achievement awarded."}"""))
+        assertFalse(accepted(200, """{"Success":false,"Error":"user already has"}"""))
         assertFalse(accepted(500, """{"Success":true}"""))
         assertFalse(accepted(200, "<html>Error</html>"))
         assertFalse(accepted(-2, ""))

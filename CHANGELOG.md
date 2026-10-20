@@ -18,6 +18,8 @@
 
 ### Corrigé
 
+- RetroAchievements : l'application ne plante plus quand le client RetroAchievements se ferme (changement de jeu, déconnexion, retour à la bibliothèque) alors que le dernier succès d'un jeu vient d'être confirmé pendant une pause. Le défaut est dans le SDK rcheevos épinglé ; le même correctif local que RavenEmu PC est appliqué à la compilation (`native/cmake/rcheevos_safety.cmake`).
+- RetroAchievements : le journal des succès hors ligne ne garde plus une entrée par tentative d'envoi. Une seule entrée par succès est conservée, la plus récente. La réponse « User already has… » confirme le succès, comme dans rcheevos, et une confirmation retire toutes les tentatives du même succès, y compris celles déjà enregistrées par les versions précédentes. Le compteur « en attente » se vide donc après la synchronisation, et le journal ne se remplit plus de tentatives périmées.
 - RetroAchievements : le pont lit le véritable objet de résultat des classements, copie les données avant leur libération et conserve le rang reçu. Les notifications d'un compte ou d'un jeu précédent sont retirées sans casser la file d'affichage.
 - Hardcore préparé : identifiant HTTP à version numérique, restauration d'état sérialisée avec les changements de mode et retour en Softcore si le redémarrage requis échoue. Le verrou d'approbation reste fermé.
 

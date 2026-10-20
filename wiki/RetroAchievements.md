@@ -33,9 +33,9 @@ Références officielles : [intégration de l'indicateur de progression](https:/
 
 La liste permet de rechercher dans le titre et la description, de filtrer les succès à obtenir ou obtenus et de changer le tri : ordre du jeu, progression mesurée, date de déblocage. Les dates utilisent le fuseau et le format de l'appareil. Le texte d'activité du jeu (Rich Presence), s'il existe, figure sous son titre.
 
-Chaque succès distingue **débloqué localement**, **en attente d'envoi** et **confirmé par RetroAchievements**. Une réponse HTTP seule ne suffit pas : le corps de la réponse doit confirmer la réussite. Les succès déjà obtenus dans la liste chargée du serveur sont confirmés. Le compteur d'attente concerne le compte connecté sur cet appareil, tous jeux confondus ; il ne modifie jamais les conditions ou les attributions du SDK.
+Chaque succès distingue **débloqué localement**, **en attente d'envoi** et **confirmé par RetroAchievements**. Une réponse HTTP seule ne suffit pas : le corps de la réponse doit confirmer la réussite. Comme dans le SDK rcheevos, la réponse « User already has… » confirme aussi le succès : il est déjà sur le compte. Les succès déjà obtenus dans la liste chargée du serveur sont confirmés. Le compteur d'attente concerne le compte connecté sur cet appareil, tous jeux confondus ; il ne modifie jamais les conditions ou les attributions du SDK.
 
-Les demandes légitimes du SDK restent dans le journal chiffré jusqu'à confirmation. À la connexion suivante au même compte, elles sont retentées. Une erreur de stockage affiche un avertissement : garder le jeu ouvert jusqu'à la synchronisation. Se déconnecter explicitement efface ce journal local.
+Les demandes légitimes du SDK restent dans le journal chiffré jusqu'à confirmation, à raison d'une entrée par succès : chaque nouvelle tentative du SDK remplace la précédente. À la connexion suivante au même compte, elles sont retentées ; une tentative confirmée retire toutes celles du même succès. Une erreur de stockage affiche un avertissement : garder le jeu ouvert jusqu'à la synchronisation. Se déconnecter explicitement efface ce journal local.
 
 ## Réglages des notifications
 

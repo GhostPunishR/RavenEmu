@@ -33,20 +33,22 @@ internal class AwardJournal(context: Context) {
         if (entry.account.isBlank() || !AwardPolicy.isSdkAward(entry.url, entry.post)) return@access false
         if (entry.contentType.length !in 1..128) return@access false
         val entries = read()
-        if (entries.contains(entry)) return@access true
-        if (entries.size >= MAX_PENDING) return@access false
-        write(entries + entry)
+        val kept = AwardJournalEntries.remember(entries, entry, MAX_PENDING, ::keyOf) ?: return@access false
+        if (kept != entries) write(kept)
         true
     }
 
     fun forAccount(account: String): List<Award> = lease.access(emptyList()) {
-        read().filter { it.account.equals(account, ignoreCase = true) }
+        AwardJournalEntries.latest(read().filter { it.account.equals(account, ignoreCase = true) }, ::keyOf)
     }
 
     fun acknowledge(entry: Award) = lease.access(Unit) {
         val entries = read()
-        if (entry in entries) write(entries - entry)
+        val kept = AwardJournalEntries.acknowledge(entries, entry, ::keyOf)
+        if (kept != entries) write(kept)
     }
+
+    private fun keyOf(award: Award) = AwardJournalEntries.key(award.account, award.post)
 
     /** Sign-out: revokes this and every other open client, then deletes. */
     fun clear() = guard.clear { file.delete() }
