@@ -246,6 +246,17 @@ class RetroAchievementsUiTest {
         assertEquals("9/10", ui.retroProgress?.detail)
     }
 
+    @Test
+    fun `un Hardcore refuse previent les reglages une seule fois`() {
+        var refused = 0
+        ui.onHardcoreRefused = { refused++ }
+        ui.handleEvent(AchievementClient.Event("hardcore_reset", "Mode Hardcore", "", "", ""))
+        assertEquals(0, refused)
+        ui.handleEvent(AchievementClient.Event("hardcore_refused",
+            "Mode Hardcore désactivé", "Le redémarrage du jeu a échoué.", "", ""))
+        assertEquals(1, refused)
+    }
+
     private fun publishBaseline(snapshot: RetroSnapshot) {
         ui.updateSnapshot(snapshot)
         ui.handleEvent(AchievementClient.Event("progress_baseline", "", "", "", ""))

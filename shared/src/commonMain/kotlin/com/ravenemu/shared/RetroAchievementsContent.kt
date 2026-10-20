@@ -61,8 +61,8 @@ fun RetroAchievementsContent(
     var password by remember { mutableStateOf("") }
     var filter by remember(snapshot.username, snapshot.gameId) { mutableStateOf(0) }
     var query by remember(snapshot.username, snapshot.gameId) { mutableStateOf("") }
-    var sort by remember { mutableStateOf(RetroAchievementSort.DEFAULT) }
-    var visibleCount by remember { mutableStateOf(10) }
+    var sort by remember(snapshot.username, snapshot.gameId) { mutableStateOf(RetroAchievementSort.DEFAULT) }
+    var visibleCount by remember(snapshot.username, snapshot.gameId) { mutableStateOf(10) }
     var selected by remember(snapshot.username, snapshot.gameId) { mutableStateOf<AchievementEntry?>(null) }
 
     Column(

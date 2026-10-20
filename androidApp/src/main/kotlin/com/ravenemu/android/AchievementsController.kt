@@ -31,8 +31,12 @@ internal class AchievementsController(
     }
     private val dispatcher = executor.asCoroutineDispatcher()
     private var client: AchievementClient? = null // dedicated SDK thread only
+    // The cartridge whose session runs while the player is open; the
+    // parked one waits for the player to open again.
     private var currentRom: ByteArray? = null
     private var currentPlatform = GamePlatform.GB
+    private var parkedRom: ByteArray? = null
+    private var parkedPlatform = GamePlatform.GB
     private var connected = false
     private var currentUser = ""
     private var lastSnapshotMs = 0L
@@ -68,11 +72,49 @@ internal class AchievementsController(
         }
     }
 
-    suspend fun attachRom(rom: ByteArray, platform: GamePlatform) = withContext(dispatcher) {
+    /**
+     * The cartridge the player will run. Its session starts with [resumeGame],
+     * so the library never opens one; a running session is replaced at once.
+     */
+    suspend fun selectRom(rom: ByteArray, platform: GamePlatform) = withContext(dispatcher) {
         if (stopped) return@withContext
+        if (currentRom != null) {
+            attach(rom, platform)
+            return@withContext
+        }
+        parkedRom = rom.copyOf()
+        parkedPlatform = platform
+    }
+
+    /** The player opens: the selected cartridge's session starts. */
+    suspend fun resumeGame() = withContext(dispatcher) {
+        if (stopped) return@withContext
+        val rom = parkedRom ?: return@withContext
+        attach(rom, parkedPlatform)
+    }
+
+    /**
+     * The player closes: the game's session ends, so neither its data nor a
+     * retry outlives it. The cartridge stays selected for [resumeGame].
+     */
+    suspend fun leaveGame() = withContext(dispatcher) {
+        if (stopped) return@withContext
+        val rom = currentRom ?: return@withContext
+        parkedRom = rom
+        parkedPlatform = currentPlatform
+        currentRom = null
+        progressBaselinePending = false
+        client?.let {
+            it.unload()
+            publish(it.snapshot())
+        }
+    }
+
+    private fun attach(rom: ByteArray, platform: GamePlatform) {
+        parkedRom = null
         val id = GbBatteryStore.keyForRom(rom)
         val currentId = currentRom?.let(GbBatteryStore::keyForRom)
-        if (id == currentId) return@withContext
+        if (id == currentId) return
         currentRom = rom.copyOf()
         currentPlatform = platform
         // New ROM means a new SDK game session, including pending award
@@ -206,7 +248,8 @@ internal class AchievementsController(
             if (!reset) {
                 hardcoreWanted = false
                 client?.setHardcore(false)
-                main.post { if (!stopped) onEvent(AchievementClient.Event("notice",
+                // The settings follow, so the next launch does not ask again.
+                main.post { if (!stopped) onEvent(AchievementClient.Event("hardcore_refused",
                     "Mode Hardcore désactivé", "Le redémarrage du jeu a échoué.", "", "")) }
             }
             client?.reset()
@@ -260,6 +303,7 @@ internal class AchievementsController(
                 client?.close()
                 client = null
                 currentRom = null
+                parkedRom = null
             }.get(2, TimeUnit.SECONDS)
         } catch (_: Exception) {
             // Teardown errors must not crash or block app shutdown.

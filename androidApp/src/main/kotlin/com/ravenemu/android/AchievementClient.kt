@@ -108,6 +108,7 @@ internal class AchievementClient(
 
     fun login(username: String, secret: String, token: Boolean) = NativeAchievementsBridge.login(handle, username, secret, token)
     fun load(console: Int, rom: ByteArray) = NativeAchievementsBridge.load(handle, console, rom)
+    fun unload() = NativeAchievementsBridge.unload(handle)
     fun reset() = NativeAchievementsBridge.reset(handle)
     fun setHardcore(enabled: Boolean) = NativeAchievementsBridge.setHardcore(handle, enabled)
     fun hardcore(): Boolean = NativeAchievementsBridge.hardcore(handle)

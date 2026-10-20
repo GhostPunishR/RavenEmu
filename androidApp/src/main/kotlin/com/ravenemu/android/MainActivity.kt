@@ -230,8 +230,14 @@ class MainActivity : ComponentActivity() {
                 linkInputEnabled = linkEnabled
             }
             val retroUi = remember {
-                RetroAchievementsUi(applicationContext, gameSession, scope)
-                    .also { retroController = it.retro }
+                RetroAchievementsUi(applicationContext, gameSession, scope).also {
+                    retroController = it.retro
+                    // A refused Hardcore stays off: the next launch must not ask again.
+                    it.onHardcoreRefused = {
+                        userSettings = userSettings.copy(retroHardcore = false).normalized()
+                        settingsStore.write(userSettings)
+                    }
+                }
             }
             val retro = retroUi.retro
             LaunchedEffect(retroUi.retroSnapshot.avatarUrl,
@@ -408,7 +414,7 @@ class MainActivity : ComponentActivity() {
                             }
                             loadedGame = info
                             activeGameId = stored.id
-                            try { retro.attachRom(rom, info.platform) }
+                            try { retro.selectRom(rom, info.platform) }
                             catch (error: Exception) {
                                 Log.w("RavenEmuRetro", "RA identify failed after import", error)
                             }
@@ -536,7 +542,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                     loadedGame = result
                                     activeGameId = id
-                                    try { retro.attachRom(rom, result.platform) }
+                                    try { retro.selectRom(rom, result.platform) }
                                     catch (error: Exception) {
                                         Log.w("RavenEmuRetro", "RA identify failed on launch", error)
                                     }
@@ -617,8 +623,23 @@ class MainActivity : ComponentActivity() {
                 },
                 linkError = linkPlayback.error,
                 linkMetrics = linkPlayback.metrics,
-                onStartVideo = { videoEnabled = true },
+                onStartVideo = {
+                    videoEnabled = true
+                    // The game's RetroAchievements session lives while the player is open.
+                    scope.launch {
+                        try { retro.resumeGame() }
+                        catch (error: Exception) {
+                            Log.w("RavenEmuRetro", "RA game session could not start", error)
+                        }
+                    }
+                },
                 onStopVideo = {
+                    scope.launch {
+                        try { retro.leaveGame() }
+                        catch (error: Exception) {
+                            Log.w("RavenEmuRetro", "RA game session could not end", error)
+                        }
+                    }
                     playback.activeAudio?.stopNow()
                     gameSession.releaseAllButtons()
                     videoEnabled = false
