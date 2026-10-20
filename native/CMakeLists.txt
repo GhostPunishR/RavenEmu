@@ -58,8 +58,11 @@ if(ANDROID OR RAVENEMU_BRIDGE_TESTS)
         "${rcheevos_SOURCE_DIR}/src/rapi/*.c"
         "${rcheevos_SOURCE_DIR}/src/rhash/*.c")
     list(FILTER RA_SDK_SOURCES EXCLUDE REGEX "/rc_(libretro|client_external)\\.c$")
+    # Closing a client with mastery pending dereferenced the unloaded game.
+    include(cmake/rcheevos_safety.cmake)
     add_library(ravenemu_rcheevos STATIC ${RA_SDK_SOURCES})
     set_target_properties(ravenemu_rcheevos PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    target_include_directories(ravenemu_rcheevos PRIVATE "${rcheevos_SOURCE_DIR}/src")
     target_include_directories(ravenemu_rcheevos PUBLIC "${rcheevos_SOURCE_DIR}/include")
     target_compile_definitions(ravenemu_rcheevos PUBLIC RC_DISABLE_LUA RC_CLIENT_SUPPORTS_HASH)
 

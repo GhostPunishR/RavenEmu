@@ -144,6 +144,8 @@ void loaded(int result, const char*, rc_client_t* rc, void*) {
 }
 void event_handler(const rc_client_event_t* event, rc_client_t* rc) {
     auto& c = client(rc);
+    // Unloading during destruction may still raise events about the old game.
+    if (c.closing) return;
     if (event->type == RC_CLIENT_EVENT_ACHIEVEMENT_TRIGGERED && event->achievement) {
         const auto& a = *event->achievement;
         const auto points = std::to_string(a.points);

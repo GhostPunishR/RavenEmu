@@ -16,7 +16,11 @@ internal class AwardSyncTracker {
 
     companion object {
         fun accepted(status: Int, body: ByteArray): Boolean = status in 200..299 && runCatching {
-            JSONObject(String(body, Charsets.UTF_8)).opt("Success") == true
+            val reply = JSONObject(String(body, Charsets.UTF_8))
+            // As in rcheevos (rc_api_runtime.c): the unlock is already on the
+            // account, set by an earlier attempt whose reply was lost.
+            reply.opt("Success") == true ||
+                reply.opt("Success") == false && reply.optString("Error").startsWith("User already has")
         }.getOrDefault(false)
 
         fun requestKey(post: String): Key? {

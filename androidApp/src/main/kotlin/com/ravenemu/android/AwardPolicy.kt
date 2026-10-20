@@ -53,6 +53,37 @@ internal object AwardPolicy {
     }
 }
 
+/**
+ * Journal bookkeeping, free of Android types. rcheevos rebuilds an award
+ * request on every retry, with a new delay `o` and signature, so the journal
+ * keeps one entry per account, achievement and mode: the latest attempt,
+ * whose delay drifts least once it is replayed.
+ */
+internal object AwardJournalEntries {
+    fun key(account: String, post: String): String? =
+        AwardSyncTracker.requestKey(post)?.let { "${account.lowercase()}:${it.id}:${it.hardcore}" }
+
+    /** The entries with [entry] as the attempt kept for its unlock, or null when full. */
+    fun <T> remember(entries: List<T>, entry: T, max: Int, key: (T) -> String?): List<T>? {
+        if (entry in entries) return entries
+        val own = key(entry)
+        val others = if (own == null) entries else entries.filter { key(it) != own }
+        return if (others.size >= max) null else others + entry
+    }
+
+    /** An accepted attempt settles every attempt of the same unlock. */
+    fun <T> acknowledge(entries: List<T>, entry: T, key: (T) -> String?): List<T> {
+        val own = key(entry) ?: return entries - entry
+        return entries.filter { it != entry && key(it) != own }
+    }
+
+    /** One replay per unlock, also for journals written before attempts were merged. */
+    fun <T> latest(entries: List<T>, key: (T) -> String?): List<T> {
+        val last = entries.withIndex().associate { (index, entry) -> (key(entry) ?: "#$index") to index }
+        return entries.filterIndexed { index, entry -> last[key(entry) ?: "#$index"] == index }
+    }
+}
+
 /** One transaction lock per journal file, including explicit sign-out. */
 internal class AwardJournalGuard {
     private var generation = 0L
