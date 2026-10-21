@@ -135,7 +135,7 @@ internal class GbStateSlotsUi(
     }
 
     fun load(slot: Int, playing: Boolean, retro: AchievementsController) {
-        if (retro.hardcoreActive) {
+        if (retro.stateLoadLocked) {
             Toast.makeText(applicationContext,
                 "Mode Hardcore : le chargement d'un état est désactivé.",
                 Toast.LENGTH_LONG).show()

@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <string>
+#include <tuple>
 #include <vector>
 
 static void require(bool condition, const char* message) {
@@ -148,9 +149,65 @@ static void unload_forgets_game() {
     close_session(c);
 }
 
+// The first event of one kind, as its six columns; empty when there is none.
+static std::vector<std::string> first_event(const Client& c, const char* kind) {
+    for (std::size_t i = 0; i + 5 < c.events.size(); i += 6)
+        if (c.events[i] == kind) return {c.events.begin() + static_cast<long>(i), c.events.begin() + static_cast<long>(i) + 6};
+    return {};
+}
+// A login the service refuses and a service out of reach are told apart.
+static void login_outcomes() {
+    for (const auto& [status, body, marker] : {
+             std::tuple{401, R"({"Success":false,"Error":"Invalid User/Password combination. Please try again","Code":"invalid_credentials","Status":401})", "refused"},
+             std::tuple{-2, "", "offline"}}) {
+        auto* c = session_client();
+        rc_client_begin_login_with_password(c->rc, "SyntheticUser", "Password", logged_in, nullptr);
+        answer_status(*c, body, status);
+        const auto event = first_event(*c, "login_error");
+        require(event.size() == 6 && event[3] == marker, "login failure class");
+        close_session(c);
+    }
+}
+// A game load ends in one of four events: a game to track, a ROM the service
+// does not know, a service out of reach, or a refusal with the service's reason.
+static std::vector<std::string> load_outcome(int status, const char* body) {
+    auto* c = session_client();
+    rc_client_begin_login_with_password(c->rc, "SyntheticUser", "SyntheticPassword", logged_in, nullptr);
+    answer(*c, R"({"Success":true,"User":"SyntheticUser","Token":"SyntheticToken","Score":1,"SoftcoreScore":2,"Messages":0})");
+    c->events.clear();
+    std::vector<uint8_t> rom(0x8000, 0);
+    rc_client_begin_identify_and_load_game(c->rc, 4, nullptr, rom.data(), rom.size(), loaded, nullptr);
+    answer_status(*c, body, status);
+    // A known game goes on to open its session; any other outcome is final.
+    while (!c->requests.empty()) answer(*c, R"({"Success":true})");
+    // Without background memory reads the SDK activates the game on its next
+    // tick. An idle tick is enough: the Hardcore barrier holds frames meanwhile.
+    rc_client_idle(c->rc);
+    std::vector<std::string> kinds;
+    for (std::size_t i = 0; i + 5 < c->events.size(); i += 6)
+        if (c->events[i].rfind("game", 0) == 0) kinds.insert(kinds.end(), {c->events[i], c->events[i + 1], c->events[i + 2]});
+    close_session(c);
+    return kinds;
+}
+static void load_outcomes() {
+    const auto known = load_outcome(200,
+        R"({"Success":true,"GameId":1234,"Title":"Synthetic game","ConsoleId":4,"ImageIconUrl":"https://media.retroachievements.org/Images/000001.png","RichPresenceGameId":1234,"RichPresencePatch":"","Sets":[{"AchievementSetId":1111,"GameId":1234,"Title":null,"Type":"core","ImageIconUrl":"https://media.retroachievements.org/Images/000001.png","Achievements":[{"ID":5501,"Title":"Last one","Description":"Synthetic","Flags":3,"Points":5,"MemAddr":"0xH0001=3","Author":"Test","BadgeName":"00234","Created":1367266583,"Modified":1376929305}],"Leaderboards":[]}]})");
+    require(known.size() == 3 && known[0] == "game" && known[1] == "Synthetic game", "known game");
+    const auto unknown = load_outcome(404, R"({"Success":false,"Error":"Unknown game","Code":"not_found","Status":404})");
+    require(unknown.size() == 3 && unknown[0] == "game_unknown", "unknown ROM");
+    const auto offline = load_outcome(-2, "");
+    require(offline.size() == 3 && offline[0] == "game_offline", "service out of reach");
+    const auto garbled = load_outcome(502, "<html>Bad gateway</html>");
+    require(garbled.size() == 3 && garbled[0] == "game_offline", "an answer that is not the service's");
+    const auto refused = load_outcome(403, R"({"Success":false,"Error":"Access denied for this game","Code":"access_denied","Status":403})");
+    require(refused.size() == 3 && refused[0] == "game_error" && refused[2] == "Access denied for this game", "refusal reason");
+}
+
 int main() {
     close_with_pending_mastery();
     login_reasons();
+    login_outcomes();
+    load_outcomes();
     unload_forgets_game();
     Client c;
     c.rc = rc_client_create(read_memory, server_call);
@@ -211,5 +268,5 @@ int main() {
     rc_client_set_hardcore_enabled(c.rc, 1);
     c.events.clear(); event_handler(&event, c.rc);
     require(c.events.size() == 6 && c.events[0] == "mastered", "hardcore mastery missing");
-    std::cout << "RetroAchievements: closing with pending mastery, login reasons, leaving a game, event IDs, scoreboard, copied query rows/errors and completion modes passed\n";
+    std::cout << "RetroAchievements: closing with pending mastery, login reasons and classes, load outcomes, leaving a game, event IDs, scoreboard, copied query rows/errors and completion modes passed\n";
 }

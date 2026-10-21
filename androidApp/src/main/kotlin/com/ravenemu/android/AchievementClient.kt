@@ -24,6 +24,8 @@ internal class AchievementClient(
     private val journal: AwardJournal? = null,
     /** The account this client signs in, owner of the journaled awards. */
     private val account: String = "",
+    /** See [RetroUserAgent]. */
+    private val userAgent: String = "",
     private val onEvent: (Event) -> Unit,
 ) : AutoCloseable {
     data class Event(val kind: String, val title: String, val detail: String, val extra: String, val image: String, val id: String = "")
@@ -133,7 +135,7 @@ internal class AchievementClient(
                 }
                 "game", "online" -> status = if (NativeAchievementsBridge.hardcore(handle))
                     "Connecté • Mode Hardcore" else "Connecté • Mode normal (Softcore)"
-                "login_error", "game_error", "offline" -> status = it[1]
+                "login_error", "game_unknown", "game_offline", "game_error", "offline" -> status = it[1]
             }
             if (it[0] == "achievement" && it[5].isNotBlank())
                 sync.local(AwardSyncTracker.Key(it[5], hardcore()))
@@ -217,7 +219,7 @@ internal class AchievementClient(
             connection.instanceFollowRedirects = false // Never forward credentials to another host.
             connection.connectTimeout = 10_000
             connection.readTimeout = 15_000
-            connection.setRequestProperty("User-Agent", RetroHardcorePolicy.USER_AGENT)
+            if (userAgent.isNotEmpty()) connection.setRequestProperty("User-Agent", userAgent)
             if (post.isNotEmpty()) {
                 connection.requestMethod = "POST"
                 connection.doOutput = true

@@ -12,10 +12,11 @@ import java.security.MessageDigest
 import javax.net.ssl.HttpsURLConnection
 
 /**
- * RavenEmu 0.8.1's public RA badge/avatar loading policy, limited to RA HTTPS hosts.
+ * RavenEmu 0.8.1's public RA badge/avatar loading policy, limited to the RA image host.
  * Cache files are derived from the URL hash, not the username or badge title.
  */
 internal class RetroBadgeStore(context: Context) {
+    private val applicationContext = context.applicationContext
     private val directory = File(context.cacheDir, "retroachievements-images")
 
     fun load(rawUrl: String): Bitmap? {
@@ -52,7 +53,7 @@ internal class RetroBadgeStore(context: Context) {
             connection.instanceFollowRedirects = false
             connection.connectTimeout = 6_000
             connection.readTimeout = 8_000
-            connection.setRequestProperty("User-Agent", "RavenEmu/Preview")
+            connection.setRequestProperty("User-Agent", RetroUserAgent.of(applicationContext))
             if (connection.responseCode != 200) return null
             // No Content-Type gate: an image host may label badges with a
             // generic type, and that silently dropped them. The decoder below
@@ -78,8 +79,12 @@ internal class RetroBadgeStore(context: Context) {
 
     companion object {
         private const val MAX_BYTES = 768 * 1024
+        private const val IMAGE_HOST = "media.retroachievements.org"
 
-        /** Accept exactly RetroAchievements HTTPS image origins, never a redirect. */
+        /**
+         * Accept only the RetroAchievements image host, over HTTPS, never a
+         * redirect: the one host besides the API that PRIVACY.md names.
+         */
         fun sanitize(raw: String?): String? {
             val value = raw?.trim().orEmpty()
             if (value.isBlank() || value.length > 512) return null
@@ -87,9 +92,7 @@ internal class RetroBadgeStore(context: Context) {
             if (uri.scheme?.lowercase() != "https" || uri.rawUserInfo != null ||
                 uri.rawQuery != null || uri.rawFragment != null ||
                 (uri.port != -1 && uri.port != 443)) return null
-            val host = uri.host?.lowercase() ?: return null
-            if (host != "retroachievements.org" &&
-                !host.endsWith(".retroachievements.org")) return null
+            if (uri.host?.lowercase() != IMAGE_HOST) return null
             if (!uri.rawPath.orEmpty().startsWith("/") ||
                 uri.rawPath.orEmpty().contains("..")) return null
             return uri.toASCIIString()

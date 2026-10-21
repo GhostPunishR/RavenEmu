@@ -45,10 +45,25 @@ internal class AchievementsController(
     private var resetDuringTick = false
     // Hardcore needs RetroAchievements' approval: wanted AND approved.
     private var hardcoreWanted = false
+    private var stage = HardcoreGate.Stage.IDLE
+    private var retryAttempt = 0
+    private var retryAtMs = 0L
+    private var evaluationFailureReported = false
 
     /** Read by the UI: true while the SDK runs this session in Hardcore. */
     @Volatile var hardcoreActive: Boolean = false
         private set
+
+    /**
+     * Read by the emulation loop before each frame: true while Hardcore waits
+     * for the sign-in or the identification of the ROM (see [HardcoreGate]).
+     * The loop then only ticks [idle].
+     */
+    @Volatile var framesOnHold: Boolean = false
+        private set
+
+    /** Hardcore wanted or running: no save state may be loaded. */
+    val stateLoadLocked: Boolean get() = session.stateLoadLocked
 
     /** Persisted token is used only after a prior, explicit login. */
     suspend fun restore() = withContext(dispatcher) {
@@ -61,11 +76,13 @@ internal class AchievementsController(
             "Saisissez votre nom d'utilisateur et mot de passe."
         }
         if (stopped) return@withContext
+        retryAttempt = 0
         start(username.trim(), password, false)
     }
 
     suspend fun retry() = withContext(dispatcher) {
         if (!stopped) {
+            retryAttempt = 0
             val identity = account.read()
             if (identity != null) start(identity.username, identity.token, true)
             else publish(RetroSnapshot(status = "Connectez votre compte RetroAchievements."))
@@ -104,6 +121,8 @@ internal class AchievementsController(
         parkedPlatform = currentPlatform
         currentRom = null
         progressBaselinePending = false
+        stage = HardcoreGate.Stage.IDLE
+        updateGate()
         client?.let {
             it.unload()
             publish(it.snapshot())
@@ -120,13 +139,19 @@ internal class AchievementsController(
         // New ROM means a new SDK game session, including pending award
         // requests. Never let the old game's award be associated with a
         // different cartridge.
+        retryAttempt = 0
         val credentials = account.read()
         if (credentials != null) start(credentials.username, credentials.token, true)
-        else if (client != null) {
-            client?.close()
-            client = null
-            connected = false
-            publish(RetroSnapshot(status = "Non connecté"))
+        else {
+            // No account: nothing to evaluate, the game runs.
+            stage = HardcoreGate.Stage.IDLE
+            updateGate()
+            if (client != null) {
+                client?.close()
+                client = null
+                connected = false
+                publish(RetroSnapshot(status = "Non connecté"))
+            }
         }
     }
 
@@ -161,15 +186,19 @@ internal class AchievementsController(
      */
     suspend fun setHardcore(enabled: Boolean) = withContext(dispatcher) {
         hardcoreWanted = RetroHardcorePolicy.enabled(enabled)
+        // State loads lock before the SDK enters Hardcore and unlock only once it left.
+        updateGate()
         client?.setHardcore(hardcoreWanted)
-        hardcoreActive = client?.hardcore() ?: false
+        updateGate()
         client?.let { publish(it.snapshot()) }
     }
 
-    /** Serialize state restores and Hardcore transitions on the SDK owner. */
+    /**
+     * Serialize state restores and Hardcore transitions on the SDK owner. The
+     * session refuses the restore itself while Hardcore is wanted or running.
+     */
     suspend fun loadState(slot: Int) = withContext(dispatcher) {
         check(!stopped)
-        RetroHardcorePolicy.requireStateLoadAllowed(hardcoreActive)
         session.loadStateSlot(slot)
         resetProgress()
     }
@@ -193,6 +222,8 @@ internal class AchievementsController(
         client = null
         connected = false
         currentUser = ""
+        stage = HardcoreGate.Stage.IDLE
+        updateGate()
         publish(RetroSnapshot(status = "Non connecté"))
     }
 
@@ -200,6 +231,7 @@ internal class AchievementsController(
         client?.close()
         progressBaselinePending = false
         connected = false
+        evaluationFailureReported = false
         currentUser = username
         val fresh = AchievementClient(
             readMemory = { address, count -> session.readAchievementMemory(address, count) },
@@ -207,12 +239,14 @@ internal class AchievementsController(
             // old clients, including HTTP callbacks still finishing late.
             journal = AwardJournal(applicationContext),
             account = username,
+            userAgent = RetroUserAgent.of(applicationContext),
             onEvent = { event -> handleEvent(event) },
         )
         client = fresh
         // Before the game loads, so switching it on needs no reset.
         fresh.setHardcore(hardcoreWanted)
-        hardcoreActive = fresh.hardcore()
+        stage = HardcoreGate.Stage.SIGNING_IN
+        updateGate()
         fresh.login(username, secret, token)
         publish(RetroSnapshot(status = "Connexion en cours…", busy = true))
         // Never retain the plaintext password; it is needed only for this
@@ -220,43 +254,47 @@ internal class AchievementsController(
     }
 
     private fun handleEvent(event: AchievementClient.Event) {
-        if (event.kind == "game") progressBaselinePending = true
-        if (event.kind == "login") {
-            val name = event.title.ifBlank { currentUser }
-            val token = event.extra
-            if (token.isNotEmpty()) {
-                // A device with unavailable Keystore can still use this
-                // active session; don't strand the game on token-save failure.
-                runCatching {
-                    account.save(name, token, event.detail.ifBlank { name }, event.image)
+        when (event.kind) {
+            "login" -> {
+                val name = event.title.ifBlank { currentUser }
+                val token = event.extra
+                if (token.isNotEmpty()) {
+                    // A device with unavailable Keystore can still use this
+                    // active session; don't strand the game on token-save failure.
+                    runCatching {
+                        account.save(name, token, event.detail.ifBlank { name }, event.image)
+                    }
                 }
+                connected = true
+                loadCurrentGame()
             }
-            connected = true
-            // The platform that picked the core also picks the RA console,
-            // so the emulator and the service always agree.
-            currentRom?.let { rom ->
-                client?.load(RomImportPolicy.retroAchievementsConsole(currentPlatform), rom)
+            // An unreachable service is waited for. A refused account leaves
+            // nothing to evaluate: the game runs untracked, the card says why.
+            "login_error" -> {
+                connected = false
+                if (event.extra == "offline") waitForNetwork(event)
+                else stage = HardcoreGate.Stage.UNTRACKED
             }
-        }
-        if (event.kind == "login_error") {
-            connected = false
-        }
-        if (event.kind == "hardcore_reset") {
-            // Required by rcheevos before Hardcore processing can resume:
-            // the game restarts from power-on, and so does the SDK's state.
-            val reset = runCatching { session.resetGame() }.isSuccess
-            if (!reset) {
-                hardcoreWanted = false
-                client?.setHardcore(false)
-                // The settings follow, so the next launch does not ask again.
-                main.post { if (!stopped) onEvent(AchievementClient.Event("hardcore_refused",
-                    "Mode Hardcore désactivé", "Le redémarrage du jeu a échoué.", "", "")) }
+            "game" -> {
+                stage = HardcoreGate.Stage.TRACKING
+                retryAttempt = 0
+                progressBaselinePending = true
+                // The game may have run a few frames before the SDK knew it
+                // (the barrier engages once the session starts): in Hardcore
+                // it starts over from power-on, as the SDK does.
+                if (client?.hardcore() == true) restartForHardcore()
             }
-            client?.reset()
-            progressBaselinePending = true
-            resetDuringTick = true
+            // Nothing to evaluate: the game runs without achievements, and says so.
+            "game_unknown", "game_error" -> {
+                stage = HardcoreGate.Stage.UNTRACKED
+                retryAttempt = 0
+                notice(event.title, event.detail)
+            }
+            "game_offline" -> waitForNetwork(event)
+            // Required by rcheevos before Hardcore processing can resume.
+            "hardcore_reset" -> restartForHardcore()
         }
-        hardcoreActive = client?.hardcore() ?: false
+        updateGate()
         // Indicator and leaderboard events can arrive every frame (a running
         // timer); they change no achievement state, so skip the snapshot copy.
         if (event.kind !in TRANSIENT_EVENTS) {
@@ -274,7 +312,13 @@ internal class AchievementsController(
         val c = client ?: return
         val processFrame = frame && connected && currentRom != null
         resetDuringTick = false
-        c.tick(processFrame)
+        try {
+            c.tick(processFrame)
+        } catch (error: Exception) {
+            // The caller logs it; Hardcore cannot go on without this frame.
+            frameEvaluationFailed()
+            throw error
+        }
         val now = System.nanoTime() / 1_000_000L
         if (processFrame && progressBaselinePending && !resetDuringTick) {
             // The first evaluated frame initializes Measured values. They
@@ -289,6 +333,88 @@ internal class AchievementsController(
             lastSnapshotMs = now
             publish(c.snapshot())
         }
+        // Last: signing in again replaces the client used above.
+        if (stage == HardcoreGate.Stage.WAITING_NETWORK && framesOnHold && now >= retryAtMs) retryConnection()
+    }
+
+    /** The platform that picked the core also picks the RA console, so both agree. */
+    private fun loadCurrentGame() {
+        val rom = currentRom
+        if (rom == null) {
+            stage = HardcoreGate.Stage.IDLE
+            return
+        }
+        stage = HardcoreGate.Stage.LOADING
+        client?.load(RomImportPolicy.retroAchievementsConsole(currentPlatform), rom)
+    }
+
+    /**
+     * The service is out of reach, which is not a refusal: Hardcore holds the
+     * game and tries again, Softcore plays on. Said once per wait.
+     */
+    private fun waitForNetwork(event: AchievementClient.Event) {
+        if (retryAttempt == 0) {
+            if (hardcoreWanted && currentRom != null) notice("Mode Hardcore en attente",
+                "RetroAchievements ne répond pas : la partie reprend dès sa réponse. " +
+                    "Désactivez le Hardcore pour jouer hors ligne.")
+            else if (event.kind == "game_offline") notice(event.title, event.detail)
+        }
+        stage = HardcoreGate.Stage.WAITING_NETWORK
+        retryAtMs = System.nanoTime() / 1_000_000L + HardcoreGate.retryDelayMillis(retryAttempt++)
+    }
+
+    private fun retryConnection() {
+        if (connected) {
+            loadCurrentGame()
+        } else {
+            val identity = account.read()
+            if (identity != null) start(identity.username, identity.token, true)
+            else stage = HardcoreGate.Stage.IDLE
+        }
+        updateGate()
+    }
+
+    /**
+     * The game restarts from power-on, and so does the SDK's state: rcheevos
+     * requires it before Hardcore evaluates a game. If the game cannot
+     * restart, Hardcore is left.
+     */
+    private fun restartForHardcore() {
+        if (runCatching { session.resetGame() }.isFailure) leaveHardcore("Le redémarrage du jeu a échoué.")
+        client?.reset()
+        progressBaselinePending = true
+        resetDuringTick = true
+    }
+
+    /** A failure Hardcore cannot go on with: back to Softcore, and the settings follow. */
+    private fun leaveHardcore(detail: String) {
+        if (!hardcoreWanted && client?.hardcore() != true) return
+        hardcoreWanted = false
+        client?.setHardcore(false)
+        updateGate()
+        // The settings follow, so the next launch does not ask again.
+        main.post { if (!stopped) onEvent(AchievementClient.Event("hardcore_refused",
+            "Mode Hardcore désactivé", detail, "", "")) }
+    }
+
+    /** The SDK could not evaluate a frame: said once, and Hardcore cannot go on without it. */
+    private fun frameEvaluationFailed() {
+        leaveHardcore("L'évaluation des succès a échoué.")
+        if (evaluationFailureReported) return
+        evaluationFailureReported = true
+        notice("Succès RetroAchievements interrompus",
+            "Une erreur empêche l'évaluation des succès de cette partie.")
+    }
+
+    private fun notice(title: String, detail: String) {
+        main.post { if (!stopped) onEvent(AchievementClient.Event("notice", title, detail, "", "")) }
+    }
+
+    /** Publishes the barrier and the state-load lock after a change of mode or stage. */
+    private fun updateGate() {
+        hardcoreActive = client?.hardcore() ?: false
+        session.stateLoadLocked = hardcoreWanted || hardcoreActive
+        framesOnHold = HardcoreGate.holdFrames(hardcoreWanted, stage)
     }
 
     private fun publish(snapshot: RetroSnapshot) {
