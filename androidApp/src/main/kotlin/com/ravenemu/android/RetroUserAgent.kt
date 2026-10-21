@@ -6,7 +6,7 @@ import android.os.Build
 /**
  * The one User-Agent sent to RetroAchievements and its image server: product
  * and numeric version, system, emulation engine and achievement SDK, e.g.
- * "RavenEmu/0.1.0 (Android 14; arm64-v8a) RavenCore/0.7.1 rcheevos/12.5".
+ * "RavenEmu/0.2.0 (Android 14; arm64-v8a) RavenCore/0.8.0 rcheevos/12.5".
  * The versions come from the build itself, never from a copied constant.
  */
 internal object RetroUserAgent {

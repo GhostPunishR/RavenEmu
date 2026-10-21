@@ -37,6 +37,6 @@ internal object NativeAchievementsBridge {
     external fun canPause(handle: Long): Boolean
     /** The SDK's User-Agent clause, e.g. "rcheevos/12.5". */
     external fun sdkVersion(): String
-    /** RavenCore's version, e.g. "0.7.1" (defined in bridge_jni.cpp). */
+    /** RavenCore's version, e.g. "0.8.0" (defined in bridge_jni.cpp). */
     external fun engineVersion(): String
 }

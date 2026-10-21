@@ -57,7 +57,7 @@ La CI produit aussi `ravenemu-ios-simulator` : une application pour simulateur, 
 
 ## Liaison RavenCore
 
-La configuration [native/CMakeLists.txt](native/CMakeLists.txt) récupère RavenCore au commit `241f56c3564ca1389813753d5c13dd931771fe40` : base 0.7.1 avec correction RTC Pokémon, API C `ravenemu_*` avec le câble link `ravenemu_link_*`. Les états sont au format GB/GBC 11 et GBA 16 ; le format GBA 16 relit les formats 15, 14, 13, 12 et 11. Le SDK rcheevos est épinglé séparément au commit `1433173220a7eaede6a9ed7a18e94117be1821e0`.
+La configuration [native/CMakeLists.txt](native/CMakeLists.txt) récupère RavenCore au commit `9fd041c6bc0b2a49357c93dd5fae707395c44d63` (version 0.8.0), API C `ravenemu_*` avec le câble link `ravenemu_link_*`. Les états sont au format GB/GBC 11 et GBA 16 ; le format GBA 16 relit les formats 15, 14, 13, 12 et 11. Le SDK rcheevos est épinglé séparément au commit `1433173220a7eaede6a9ed7a18e94117be1821e0`.
 
 Le test hôte vérifie la liaison, la création des trois systèmes, une frame et de l'audio synthétiques ainsi que l'enregistrement/rechargement d'un état :
 

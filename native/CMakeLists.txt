@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 3.22.1)
 project(RavenEmuNative LANGUAGES C CXX)
 
 # Lock the emulator engines AND public C interface to a reviewed source commit.
-# RavenCore 0.7.1 + post-release RTC fix (upstream PR #28): detect Pokémon
-# RTC drivers without the Seiko marker; fix GPIO protocol and RTC calendar.
+# RavenCore 0.8.0 (tag v0.8.0): complete GB/GBC RetroAchievements memory map
+# (banked ROM window, I/O registers) and the Pokémon RTC detection of #28.
 # C API version 0 and state formats GB/GBC 11, GBA 16 are unchanged.
 # GBA still reads formats 15 through 11. Battery RTC keeps its 16-byte layout.
 # Old states created without RTC may not load once the cartridge gains RTC;
@@ -14,7 +14,7 @@ set(RAVENEMU_BUILD_LIBRETRO OFF CACHE BOOL "" FORCE)
 set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(ravencore
     GIT_REPOSITORY https://github.com/GhostPunishR/RavenCore.git
-    GIT_TAG 241f56c3564ca1389813753d5c13dd931771fe40
+    GIT_TAG 9fd041c6bc0b2a49357c93dd5fae707395c44d63
     GIT_SHALLOW FALSE
 )
 FetchContent_MakeAvailable(ravencore)

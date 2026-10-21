@@ -1,6 +1,6 @@
 # Installation
 
-Cette page concerne RavenEmu **v0.1.0 - bêta**, Android 8.0 et plus. Aucun binaire iOS signé n'est distribué.
+Cette page concerne RavenEmu **v0.2.0 - bêta**, Android 8.0 et plus. Aucun binaire iOS signé n'est distribué.
 
 1. Ouvrez les [préversions Android](https://github.com/GhostPunishR/RavenEmu/releases) et choisissez la bêta au numéro le plus élevé.
 2. Dans les fichiers de la préversion, téléchargez `ravenemu-beta.apk`.
@@ -12,7 +12,7 @@ Aucun compte GitHub ni extraction ZIP nécessaire. Chaque CI réussie de `main` 
 | --- | --- |
 | Nom affiché | RavenEmu |
 | Identifiant Android | `com.ravenemu.preview` |
-| Version | 0.1.0 - Bêta |
+| Version | 0.2.0 - Bêta |
 | Signature | Certificat de distribution conservé entre les préversions |
 
 Les nouvelles bêtas signées s'installent par-dessus les précédentes et conservent les données. Si vous venez d'un ancien APK avec un autre certificat, une première désinstallation peut être nécessaire : exportez d'abord vos sauvegardes ZIP ou `.sav`, puis réimportez les ROM correspondantes et les sauvegardes. Les archives historiques restent acceptées. Une ancienne préversion ne peut pas remplacer une plus récente sans désinstallation.

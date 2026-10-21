@@ -1,6 +1,12 @@
 # Journal des modifications de RavenEmu
 
-## Non publié
+## v0.2.0 - bêta - 2026-10-21
+
+Deuxième bêta. Elle épingle RavenCore 0.8.0 et prépare le mode Hardcore de RetroAchievements, qui reste verrouillé en attendant la validation du service.
+
+### RavenCore
+
+- RavenCore épinglé à la version 0.8.0, commit `9fd041c6bc0b2a49357c93dd5fae707395c44d63`. La carte mémoire RetroAchievements de la Game Boy et de la Game Boy Color est complète : la banque de ROM paginée (0x4000-0x7FFF) et les registres d'E/S (0xFF00-0xFF7F) sont lus comme par le CPU, et un succès qui les lit n'est plus signalé non pris en charge. API C (version 0) et formats d'états (GB/GBC 11, GBA 16) inchangés.
 
 ### Ajouté
 
