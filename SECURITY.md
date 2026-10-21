@@ -4,7 +4,7 @@
 
 | Version | Prise en charge |
 | --- | --- |
-| Branche `main` et bêta v0.1.0 | Oui, version de développement |
+| Branche `main` et bêta v0.2.0 | Oui, version de développement |
 | Anciennes préversions | Non maintenues dans ce dépôt |
 
 Le canal actuel publie l'APK `ravenemu-android-beta` depuis GitHub Actions, avec une signature Debug de build. Il ne constitue pas une version stable ni une distribution iOS signée. Voir [RELEASING.md](RELEASING.md).

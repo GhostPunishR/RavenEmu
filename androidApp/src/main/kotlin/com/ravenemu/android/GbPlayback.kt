@@ -20,6 +20,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToLong
 
+/** How long the emulation loop sleeps between idle ticks while the Hardcore barrier holds. */
+private const val HOLD_TICK_NANOS = 50_000_000L
+
 /**
  * Picture, sound and measurements of the running game. [run] drives the
  * emulation on its dedicated thread; the Compose state below is written from
@@ -89,7 +92,27 @@ internal class GbPlayback(
                 val pacer = GbFramePacer(periodNanos)
                 pacer.reset(System.nanoTime())
                 var lastBatteryCheckNanos = System.nanoTime()
+                var held = false
+                var retroFailureLogged = false
                 while (isActive) {
+                    // Hardcore barrier: no frame before RetroAchievements knows
+                    // the game. Idle ticks carry the sign-in and identification.
+                    if (retro.framesOnHold) {
+                        held = true
+                        try {
+                            retro.idle()
+                        } catch (error: Exception) {
+                            if (!retroFailureLogged) Log.w("RavenEmuRetro", "rcheevos idle tick failed", error)
+                            retroFailureLogged = true
+                        }
+                        LockSupport.parkNanos(HOLD_TICK_NANOS)
+                        continue
+                    }
+                    if (held) {
+                        // The wait is not lateness: no catch-up burst after it.
+                        held = false
+                        pacer.reset(System.nanoTime())
+                    }
                     try {
                         // A late frame is still emulated and heard;
                         // only its image is skipped (see GbFramePacer).
@@ -131,7 +154,9 @@ internal class GbPlayback(
                         try {
                             retro.frame()
                         } catch (error: Exception) {
-                            Log.w("RavenEmuRetro", "rcheevos frame unavailable", error)
+                            // The controller tells the player and leaves Hardcore; one log per run.
+                            if (!retroFailureLogged) Log.w("RavenEmuRetro", "rcheevos frame unavailable", error)
+                            retroFailureLogged = true
                         }
                         val now = System.nanoTime()
                         if (now - lastBatteryCheckNanos >= 5_000_000_000L) {

@@ -146,24 +146,40 @@ std::string login_failure(int result, const char* message) {
             (reason.empty() ? std::string("identifiant ou mot de passe incorrect.") : reason);
     return "Connexion impossible : " + (reason.empty() ? std::string("vérifiez vos identifiants et le réseau.") : reason);
 }
+// No answer, or not one from the service: the network, not the account or the game.
+bool unreachable(int result) { return result == RC_NO_RESPONSE || result == RC_INVALID_JSON; }
+// A refused login carries "refused" in its fourth column, an unreachable service "offline":
+// Hardcore leaves on the first and waits for the second.
 void logged_in(int result, const char* message, rc_client_t* rc, void*) {
     auto& c = client(rc);
     if (result == RC_OK) {
         const auto* user = rc_client_get_user_info(rc);
         c.event("login", user->username, user->display_name, user->token, user_image(user).c_str());
-    } else c.event("login_error", login_failure(result, message).c_str());
+    } else c.event("login_error", login_failure(result, message).c_str(), "", unreachable(result) ? "offline" : "refused");
 }
-void loaded(int result, const char*, rc_client_t* rc, void*) {
+// Four outcomes the frontend treats apart: a game to track, a ROM the service
+// does not know (nothing to track), a service out of reach (try again) and a
+// refusal (the game cannot be tracked in this session).
+void loaded(int result, const char* message, rc_client_t* rc, void*) {
     auto& c = client(rc);
     const auto* game = rc_client_get_game_info(rc);
-    if (result == RC_OK && game) {
+    if (result == RC_OK && game && game->id) {
         rc_client_user_game_summary_t summary{};
         rc_client_get_user_game_summary(rc, &summary);
         auto detail = std::to_string(summary.num_core_achievements) + " succès";
         if (summary.num_unsupported_achievements) detail += " • " + std::to_string(summary.num_unsupported_achievements) + " non pris en charge";
         c.event("game", game->title, detail.c_str());
+    } else if (result == RC_ABORTED) {
+        // Superseded by unload_game or another load: nothing to report.
+    } else if (result == RC_NO_GAME_LOADED || result == RC_OK) {
+        c.event("game_unknown", "ROM non reconnue par RetroAchievements", "Aucun succès pour ce fichier.");
+    } else if (unreachable(result)) {
+        c.event("game_offline", "RetroAchievements ne répond pas", "Recherche des succès à réessayer.");
+    } else {
+        const auto reason = server_text(message);
+        c.event("game_error", "Succès indisponibles pour ce jeu",
+            reason.empty() ? "RetroAchievements a refusé de charger ses succès." : reason.c_str());
     }
-    else c.event("game_error", "Succès indisponibles pour cette ROM, ou connexion impossible.");
 }
 void event_handler(const rc_client_event_t* event, rc_client_t* rc) {
     auto& c = client(rc);
@@ -426,6 +442,12 @@ JNIEXPORT jboolean JNICALL JNI_RA(hardcore)(JNIEnv*, jclass, jlong h) {
 // ("hardcore_reset"): the frontend must then reset the game.
 JNIEXPORT void JNICALL JNI_RA(setHardcore)(JNIEnv*, jclass, jlong h, jboolean enabled) {
     rc_client_set_hardcore_enabled(client(h).rc, enabled ? 1 : 0);
+}
+// "rcheevos/12.5": the SDK's own User-Agent clause.
+JNIEXPORT jstring JNICALL JNI_RA(sdkVersion)(JNIEnv* env, jclass) {
+    char clause[64]{};
+    rc_client_get_user_agent_clause(nullptr, clause, sizeof(clause));
+    return env->NewStringUTF(clause);
 }
 JNIEXPORT jboolean JNICALL JNI_RA(canPause)(JNIEnv*, jclass, jlong h) {
     return rc_client_can_pause(client(h).rc, nullptr) ? JNI_TRUE : JNI_FALSE;

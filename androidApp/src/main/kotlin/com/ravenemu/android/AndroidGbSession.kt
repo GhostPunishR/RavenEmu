@@ -173,7 +173,15 @@ class AndroidGbSession(private val resolver: ContentResolver, filesDir: File) : 
         Log.d(TAG, "Save state slot ${slot + 1} stored for ROM ${key.take(12)}")
     }
 
+    /**
+     * Set by RetroAchievements while Hardcore is wanted or running: then no
+     * save state is loaded. Checked again next to the native restore, under
+     * its lock, so a mode change cannot slip between the check and the load.
+     */
+    @Volatile internal var stateLoadLocked = false
+
     fun loadStateSlot(slot: Int = 0) = synchronized(saveLock) {
+        RetroHardcorePolicy.requireStateLoadAllowed(stateLoadLocked)
         val key = synchronized(lock) {
             check(!closed) { "La session a été fermée." }
             activeRomKey ?: error("Aucun jeu chargé.")
@@ -182,6 +190,7 @@ class AndroidGbSession(private val resolver: ContentResolver, filesDir: File) : 
             ?: error("Emplacement ${slot + 1} vide.")
         synchronized(lock) {
             check(!closed && activeRomKey == key) { "La ROM active a changé." }
+            RetroHardcorePolicy.requireStateLoadAllowed(stateLoadLocked)
             val core = active ?: error("Aucun jeu chargé.")
             for (button in heldButtons) core.button(button.nativeCode, false)
             heldButtons.clear()

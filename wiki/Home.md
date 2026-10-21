@@ -33,7 +33,7 @@ La compatibilité GBC/GBA, les performances sur téléphone et les déblocages R
 
 ## Version et données
 
-La version initiale de ce dépôt est **v0.1.0 - bêta**. Le [changelog](https://github.com/GhostPunishR/RavenEmu/blob/main/CHANGELOG.md) décrit son contenu complet. L'identifiant Android reste `com.ravenemu.preview` ; le déplacement ne change pas les clés de stockage. Une mise à jour d'APK exige aussi le même certificat de signature : exportez vos sauvegardes avant une désinstallation.
+La version actuelle de ce dépôt est **v0.2.0 - bêta**, après la version initiale v0.1.0 - bêta. Le [changelog](https://github.com/GhostPunishR/RavenEmu/blob/main/CHANGELOG.md) décrit son contenu complet. L'identifiant Android reste `com.ravenemu.preview` ; le déplacement ne change pas les clés de stockage. Une mise à jour d'APK exige aussi le même certificat de signature : exportez vos sauvegardes avant une désinstallation.
 
 ## Liens officiels
 

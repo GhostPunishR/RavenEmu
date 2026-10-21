@@ -17,7 +17,7 @@ Une première connexion propre à cette application est nécessaire : le jeton d
 
 ## Console et identification
 
-L'intégration transmet au SDK la console du jeu : Game Boy, Game Boy Color ou Game Boy Advance. La ROM est utilisée **localement** pour son identification. Un jeu modifié, une région ou une révision différente peut ne pas être reconnu.
+L'intégration transmet au SDK la console du jeu : Game Boy, Game Boy Color ou Game Boy Advance. La ROM est utilisée **localement** pour son identification. Un jeu modifié, une région ou une révision différente peut ne pas être reconnu. Le lancement distingue un jeu reconnu, une ROM inconnue du service, un serveur qui ne répond pas et un refus du serveur, avec sa raison.
 
 Le SDK observe la mémoire fournie par l'API C de RavenCore. Les restaurations d'état réinitialisent les conditions temporaires des succès.
 
@@ -53,11 +53,19 @@ La consultation fonctionne en Softcore. Les tentatives et soumissions officielle
 
 ## Préparation du mode Hardcore
 
-Le verrou `HardcoreAvailability.APPROVED` reste à `false`. Le réglage ne peut pas activer ce mode tant que RavenEmu n'a pas été validé par RetroAchievements. L'identifiant HTTP est `RavenEmu/0.1.0-beta (Android) rcheevos/12.5.0` ; le guide officiel demande une version numérique et une validation par [RAdmin](https://retroachievements.org/messages/create?to=RAdmin).
+Le verrou `HardcoreAvailability.APPROVED` reste à `false`. Le réglage ne peut pas activer ce mode tant que RavenEmu n'a pas été validé par RetroAchievements ([RAdmin](https://retroachievements.org/messages/create?to=RAdmin)).
 
-Le code prépare le redémarrage demandé par le SDK à l'activation, refuse le chargement d'un état sur le thread du SDK pour éviter une course avec un changement de mode, autorise toujours l'enregistrement des états et respecte `rc_client_can_pause` pour le menu. Si le redémarrage échoue, le Hardcore est désactivé. Les fonctions de triche, rewind et ralenti ne sont pas proposées dans cette application.
+L'identifiant HTTP (User-Agent) est composé à partir du build, sans version recopiée à la main, par exemple `RavenEmu/0.2.0 (Android 14; arm64-v8a) RavenCore/0.8.0 rcheevos/12.5` : version numérique de l'application, version d'Android et architecture, version du moteur et clause du SDK. Le même identifiant est envoyé au serveur d'images. Le nom du client, `RavenEmu`, est aussi celui de la version PC : le format reste à confirmer avec RAdmin.
 
-Avant de lever ce verrou, il reste à tester sur appareil le cycle complet d'activation/redémarrage, les pauses, le refus de restauration, un déblocage reconnu en Hardcore sur le site et une soumission de classement, puis obtenir la validation externe. Les tests synthétiques et de politique ne remplacent pas ces essais. Le lecteur à deux n'évalue pas les succès ; iOS reste à raccorder.
+Ce que le code fait déjà en Hardcore :
+- **Barrière de démarrage.** Le jeu n'avance pas tant que le compte n'est pas connecté et que la ROM n'est pas identifiée ; le SDK continue d'être servi pendant l'attente. Dès que le jeu est reconnu, il redémarre depuis l'allumage, comme le demande le SDK, pour effacer les quelques images éventuellement jouées avant.
+- **Réseau absent.** Une connexion ou une identification sans réponse du serveur n'est pas un refus : le jeu reste en attente et l'application réessaie (5 s, puis 10, 20, 40 et 60 s au plus). Un message le dit une fois et propose de désactiver le Hardcore pour jouer hors ligne.
+- **ROM inconnue ou refus du serveur.** Rien ne peut être évalué : le jeu tourne sans succès et un message en donne la raison. Le réglage Hardcore est conservé.
+- **Défaillance critique.** Si le redémarrage du jeu échoue ou si le SDK ne peut pas évaluer une image, le Hardcore est quitté explicitement et le réglage repasse en Softcore.
+- **États.** Le chargement d'un état est refusé dès que le Hardcore est demandé ou actif, par la session de jeu elle-même, juste avant la restauration native et sous son verrou : un changement de mode ne peut pas se glisser entre la vérification et le chargement. L'enregistrement d'un état reste possible.
+- **Pause.** Le menu respecte `rc_client_can_pause`. Les fonctions de triche, rewind et ralenti ne sont pas proposées dans cette application.
+
+Avant de lever ce verrou, il reste à tester sur appareil le cycle complet d'activation/redémarrage, la barrière de démarrage (en ligne, hors ligne, ROM inconnue), les pauses, le refus de restauration, un déblocage reconnu en Hardcore sur le site et une soumission de classement, puis obtenir la validation externe. Les tests synthétiques et de politique ne remplacent pas ces essais. Le lecteur à deux n'évalue pas les succès ; iOS reste à raccorder.
 
 Références : [User-Agent et validation](https://github.com/RetroAchievements/rcheevos/wiki/rc_client-integration#user-agent-header), [Hardcore et restrictions](https://github.com/RetroAchievements/rcheevos/wiki/rc_client-integration#enabling-hardcore), [notification de jeu terminé](https://github.com/RetroAchievements/rcheevos/wiki/rc_client-integration#mastery-notification).
 

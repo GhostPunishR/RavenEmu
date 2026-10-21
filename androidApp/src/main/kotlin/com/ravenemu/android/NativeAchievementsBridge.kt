@@ -35,4 +35,8 @@ internal object NativeAchievementsBridge {
     external fun hardcore(handle: Long): Boolean
     /** Records a pause when it returns true (Hardcore pause limits). */
     external fun canPause(handle: Long): Boolean
+    /** The SDK's User-Agent clause, e.g. "rcheevos/12.5". */
+    external fun sdkVersion(): String
+    /** RavenCore's version, e.g. "0.8.0" (defined in bridge_jni.cpp). */
+    external fun engineVersion(): String
 }

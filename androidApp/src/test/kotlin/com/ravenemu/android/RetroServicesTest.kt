@@ -63,6 +63,16 @@ class RetroServicesTest {
         assertTrue(RetroHardcorePolicy.enabled(true, approved = true))
         RetroHardcorePolicy.requireStateLoadAllowed(false)
         assertFailsWith<IllegalStateException> { RetroHardcorePolicy.requireStateLoadAllowed(true) }
-        assertTrue(Regex("RavenEmu/\\d+\\.\\d+\\.\\d+.* rcheevos/.*").matches(RetroHardcorePolicy.USER_AGENT))
+    }
+
+    @Test fun `le user-agent donne des versions numeriques, celles du build`() {
+        assertEquals("RavenEmu/0.1.0 (Android 14; arm64-v8a) RavenCore/0.7.1 rcheevos/12.5",
+            RetroUserAgent.build("0.1.0 - Bêta", "14", "arm64-v8a", "0.7.1", "rcheevos/12.5"))
+        // Sans bibliothèque native (tests), les parties moteur sont omises, jamais inventées.
+        assertEquals("RavenEmu/1.2.3 (Android 15)", RetroUserAgent.build("v1.2.3", "15", "", "", ""))
+        assertEquals("RavenEmu/0.0.0 (Android)", RetroUserAgent.build("Bêta", "", "", "", ""))
+        // Un en-tête HTTP n'accepte que l'ASCII imprimable ; la partie système garde ses parenthèses.
+        assertEquals("RavenEmu/0.1.0 (Android 16 Baklava; x86_64) RavenCore/0.7.1 rcheevos/12.5",
+            RetroUserAgent.build("0.1.0", "16 (Baklava)", "x86_64\n", "0.7.1", "rcheevos/12.5"))
     }
 }

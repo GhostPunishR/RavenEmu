@@ -6,7 +6,7 @@
 
 Émulateur open source **Game Boy, Game Boy Color et Game Boy Advance**, propulsé par les moteurs [RavenCore](https://github.com/GhostPunishR/RavenCore).
 
-**v0.1.0 - bêta · Android 8.0 et plus.** La première intégration iOS (import, lecteur, audio et sauvegardes) est [en validation](iosApp/README.md) ; aucune version iPhone signée n’est distribuée.
+**v0.2.0 - bêta · Android 8.0 et plus.** La première intégration iOS (import, lecteur, audio et sauvegardes) est [en validation](iosApp/README.md) ; aucune version iPhone signée n’est distribuée.
 
 [Télécharger la bêta Android](https://github.com/GhostPunishR/RavenEmu/releases) · [Site officiel](https://ghostpunishr.github.io/RavenEmu/) · [Documentation](wiki/Home.md) · [Changelog](CHANGELOG.md) · [Signaler un problème](https://github.com/GhostPunishR/RavenEmu/issues)
 

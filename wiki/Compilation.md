@@ -31,4 +31,4 @@ La CI construit aussi l'application Xcode complète et exécute les XCTest sur s
 
 ## RavenCore
 
-Le commit `241f56c3564ca1389813753d5c13dd931771fe40` est épinglé dans `native/CMakeLists.txt` : RavenCore 0.7.1 avec correction RTC Pokémon et son API C `ravenemu_*`. Voir [la passerelle native](https://github.com/GhostPunishR/RavenEmu/blob/main/native/README.md).
+Le commit `9fd041c6bc0b2a49357c93dd5fae707395c44d63` est épinglé dans `native/CMakeLists.txt` : RavenCore 0.8.0 et son API C `ravenemu_*`. Voir [la passerelle native](https://github.com/GhostPunishR/RavenEmu/blob/main/native/README.md).

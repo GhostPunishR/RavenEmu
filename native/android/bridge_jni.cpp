@@ -110,6 +110,11 @@ JNIEXPORT jstring JNICALL
 Java_com_ravenemu_android_NativeCore_nativeLastError(JNIEnv* env, jobject) {
     return env->NewStringUTF(ravenemu_last_error());
 }
+// Declared by NativeAchievementsBridge: the engine version in the User-Agent.
+JNIEXPORT jstring JNICALL
+Java_com_ravenemu_android_NativeAchievementsBridge_engineVersion(JNIEnv* env, jclass) {
+    return env->NewStringUTF(ravenemu_version());
+}
 JNIEXPORT jint JNICALL
 Java_com_ravenemu_android_NativeCore_nativeStateSize(JNIEnv*, jobject, jlong pointer) {
     const auto n = ravenemu_state_size(handle(pointer));

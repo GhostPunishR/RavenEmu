@@ -35,7 +35,7 @@ android {
         targetSdk = 35
         versionCode = providers.environmentVariable("RAVENEMU_VERSION_CODE")
             .orElse("1").get().toInt()
-        versionName = "0.1.0 - Bêta"
+        versionName = "0.2.0 - Bêta"
     }
     buildTypes {
         // Non-debuggable beta; CI applies the persistent distribution
