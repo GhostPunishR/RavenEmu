@@ -81,6 +81,12 @@ internal class AchievementsController(
     }
 
     suspend fun retry() = withContext(dispatcher) {
+        // A tracked game keeps its session: the SDK reconnects by itself, and
+        // a new session would restart the game in Hardcore.
+        if (!stopped && connected && stage == HardcoreGate.Stage.TRACKING) {
+            client?.let { publish(it.snapshot()) }
+            return@withContext
+        }
         if (!stopped) {
             retryAttempt = 0
             val identity = account.read()
@@ -229,25 +235,36 @@ internal class AchievementsController(
 
     private fun start(username: String, secret: String, token: Boolean) {
         client?.close()
+        client = null
         progressBaselinePending = false
         connected = false
         evaluationFailureReported = false
         currentUser = username
-        val fresh = AchievementClient(
-            readMemory = { address, count -> session.readAchievementMemory(address, count) },
-            // Each client gets a fresh lease. Sign-out permanently revokes
-            // old clients, including HTTP callbacks still finishing late.
-            journal = AwardJournal(applicationContext),
-            account = username,
-            userAgent = RetroUserAgent.of(applicationContext),
-            onEvent = { event -> handleEvent(event) },
-        )
-        client = fresh
-        // Before the game loads, so switching it on needs no reset.
-        fresh.setHardcore(hardcoreWanted)
-        stage = HardcoreGate.Stage.SIGNING_IN
-        updateGate()
-        fresh.login(username, secret, token)
+        try {
+            val fresh = AchievementClient(
+                readMemory = { address, count -> session.readAchievementMemory(address, count) },
+                // Each client gets a fresh lease. Sign-out permanently revokes
+                // old clients, including HTTP callbacks still finishing late.
+                journal = AwardJournal(applicationContext),
+                account = username,
+                userAgent = RetroUserAgent.of(applicationContext),
+                onEvent = { event -> handleEvent(event) },
+            )
+            client = fresh
+            // Before the game loads, so switching it on needs no reset.
+            fresh.setHardcore(hardcoreWanted)
+            stage = HardcoreGate.Stage.SIGNING_IN
+            updateGate()
+            fresh.login(username, secret, token)
+        } catch (error: Exception) {
+            // No sign-in in flight: nothing would ever lift the barrier.
+            client?.close()
+            client = null
+            stage = HardcoreGate.Stage.UNTRACKED
+            leaveHardcore("Le client RetroAchievements n'a pas pu démarrer.")
+            updateGate()
+            throw error
+        }
         publish(RetroSnapshot(status = "Connexion en cours…", busy = true))
         // Never retain the plaintext password; it is needed only for this
         // immediate native SDK call. The account saves only the returned token.
@@ -414,7 +431,7 @@ internal class AchievementsController(
     private fun updateGate() {
         hardcoreActive = client?.hardcore() ?: false
         session.stateLoadLocked = hardcoreWanted || hardcoreActive
-        framesOnHold = HardcoreGate.holdFrames(hardcoreWanted, stage)
+        framesOnHold = HardcoreGate.holdFrames(hardcoreWanted, currentRom != null, stage)
     }
 
     private fun publish(snapshot: RetroSnapshot) {

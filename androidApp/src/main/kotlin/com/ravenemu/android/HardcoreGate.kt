@@ -21,8 +21,9 @@ internal object HardcoreGate {
         UNTRACKED,
     }
 
-    fun holdFrames(hardcoreWanted: Boolean, stage: Stage): Boolean =
-        hardcoreWanted &&
+    /** Only a running game is held, so without one nothing waits or retries. */
+    fun holdFrames(hardcoreWanted: Boolean, gameRunning: Boolean, stage: Stage): Boolean =
+        hardcoreWanted && gameRunning &&
             (stage == Stage.SIGNING_IN || stage == Stage.LOADING || stage == Stage.WAITING_NETWORK)
 
     /** Wait before retry number [attempt] (from 0): 5 s, doubled each time, at most 60 s. */
