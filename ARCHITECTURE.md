@@ -22,6 +22,26 @@ Android utilise `NativeCore.kt` et `native/android/bridge_jni.cpp`. Swift utilis
 
 RetroAchievements utilise le SDK officiel rcheevos, également épinglé par SHA, et le pont maintenu dans `native/android/`.
 
+## Câble link sans fil (Android)
+
+Deux téléphones du même réseau local se relient par le câble distant de RavenCore (`ravenemu_remote_link_*`, [docs/remote_link.md de RavenCore](https://github.com/GhostPunishR/RavenCore/blob/main/docs/remote_link.md)). RavenCore échange les données du câble ; l'application les transporte et décide quand brancher.
+
+| Pièce | Rôle |
+| --- | --- |
+| `NativeRemoteLink.kt` | Le câble natif rattaché au jeu en cours ; `AndroidGbSession` le crée et le détruit entre deux images. |
+| `WirelessLink.kt` | Décide de tout, sur un seul fil : recherche, choix, liaison, pause, débranchement. |
+| `WirelessLinkDiscovery.kt` | Annonce et recherche DNS-SD (`NsdManager`, service `_ravenemulink._tcp`). |
+| `WirelessLinkConnection.kt` | Une connexion TCP : un fil lit, un autre écrit, battement de cœur. |
+| `WirelessLinkProtocol.kt` | Trames, messages de contrôle et règle de choix, testés sur la JVM. |
+
+- **Quand.** `ravenemu_link_wanted` dit si le jeu s'est servi de son port link dans les trois dernières secondes. Tant que c'est le cas (plus dix secondes de marge), le téléphone s'annonce et cherche. Le reste du temps, il n'annonce rien.
+- **Qui.** Un seul partenaire compatible (même version, même famille de consoles) : le téléphone au plus petit identifiant l'appelle. Plusieurs : le joueur choisit. Deux connexions entre les mêmes téléphones : les deux côtés gardent celle qu'a ouverte le plus petit identifiant, qui est aussi le joueur 0 (parent GBA).
+- **Trames TCP.** `[canal u8][taille u8][contenu]`. Canal 0 : les messages de RavenCore, tels quels. Canal 1 : présentation (version, famille, identifiant, pause, modèle, jeu), pause, battement de cœur (chaque seconde sans autre envoi) et départ (avec ou sans refus). Cinq secondes sans rien recevoir ferment la connexion.
+- **Fils.** RavenCore envoie depuis le fil d'émulation : l'envoi ne fait que remplir une file. Les messages reçus vont au câble natif depuis le fil de lecture, puis un fil de service les fait lire à la console entre deux images, ou pendant une pause, sous le verrou de la session.
+- **Une image peut attendre l'autre console.** Le fil de l'interface ne prend donc plus le verrou natif : les boutons s'appliquent avant l'image suivante, les caractéristiques du jeu sont gardées à part, et la sauvegarde de `onPause` abandonne après 300 ms. `onStop` débranche le câble, ce qui libère une image en attente, puis sauvegarde.
+- **Pause.** Le menu du jeu, ou une interruption, envoie une pause à l'autre téléphone tant que le câble sert. Celui-ci n'avance plus d'image, mais sa console répond toujours aux transferts.
+- **Interdits.** Charger un état est refusé tant que le câble est branché, dans l'interface et dans la session.
+
 ## Contrats à préserver
 
 - Les moteurs ignorent l'interface et les services des plateformes.

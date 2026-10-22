@@ -29,6 +29,7 @@ Le sélecteur de documents permet de choisir explicitement fichiers et dossiers.
 | RetroAchievements | Connexion volontaire au compte tiers | Informations de compte/session, identification du jeu et succès prévus par le SDK ; le service reçoit aussi l'adresse IP |
 | Images RetroAchievements | Utilisation du profil et des badges | Requêtes HTTPS d'images et informations techniques de connexion ; images en cache |
 | Jaquettes Libretro | Option « Jaquettes en ligne », désactivée par défaut | Adresse IP et noms des images demandées, pouvant révéler des jeux de la bibliothèque ; aucune ROM ni sauvegarde envoyée |
+| Câble link sans fil | Option activée par défaut ; seulement quand le jeu se sert de son câble | Sur le réseau local uniquement : modèle du téléphone, console et identifiant aléatoire annoncés ; au téléphone relié, nom du jeu et données du câble. Aucun serveur |
 
 Le mot de passe RetroAchievements n'est pas conservé ; le jeton est chiffré sur l'appareil. Pour les hôtes contactés, la conservation, les nouvelles tentatives et la déconnexion, référez-vous à la politique complète.
 

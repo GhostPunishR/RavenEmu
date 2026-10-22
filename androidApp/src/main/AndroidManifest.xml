@@ -1,9 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Public Libretro boxart requests; no ROM, SRAM or savestate is sent. -->
+    <!-- Public Libretro boxart requests (no ROM, SRAM or savestate is sent),
+         and the wireless link cable between two phones on the same network. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Rumble cartridges (GB MBC5 Rumble, Drill Dozer, WarioWare: Twisted!). -->
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Wireless link cable: Wi-Fi kept at low latency while two phones are
+         linked (WifiLock). Discovery (NsdManager) and TCP need only INTERNET. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <application
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"

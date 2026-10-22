@@ -33,6 +33,7 @@ internal class AndroidSettingsStore(context: Context) {
         retroPopupPosition = prefs.getString("retro_popup_position", "top") ?: "top",
         retroPopupSeconds = prefs.getInt("retro_popup_seconds", 5),
         retroProgressSeconds = prefs.getInt("retro_progress_seconds", 2),
+        wirelessLink = prefs.getBoolean("wireless_link", true),
     ).normalized()
 
     fun write(settings: Settings) {
@@ -62,6 +63,7 @@ internal class AndroidSettingsStore(context: Context) {
             .putString("retro_popup_position", safe.retroPopupPosition)
             .putInt("retro_popup_seconds", safe.retroPopupSeconds)
             .putInt("retro_progress_seconds", safe.retroProgressSeconds)
+            .putBoolean("wireless_link", safe.wirelessLink)
             .apply()
     }
 }

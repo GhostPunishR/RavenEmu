@@ -1,6 +1,6 @@
 # Politique de confidentialité de RavenEmu
 
-Date d’entrée en vigueur : 13 octobre 2026
+Date d’entrée en vigueur : 22 octobre 2026
 
 ## Champ d’application
 
@@ -44,6 +44,14 @@ La nouvelle version multiplateforme de RavenEmu peut chercher les jaquettes manq
 Une fois activée, l’application télécharge l’index public des jaquettes de chaque console présente dans la bibliothèque (Game Boy, Game Boy Color, Game Boy Advance), puis l’image correspondant au nom de fichier de chaque jeu sans jaquette. Ce service reçoit donc les informations d’une connexion HTTPS, dont l’adresse IP de l’appareil, et, à travers les images demandées, le nom des jeux de la bibliothèque. Aucune ROM, empreinte, sauvegarde ni aucun état n’est envoyé. Les jaquettes sont conservées sur l’appareil. Les jeux absents de l’index ne sont pas recherchés de nouveau ; désactiver puis réactiver l’option relance la recherche.
 
 Les images ainsi obtenues sont la propriété de leurs ayants droit ; RavenEmu ne les distribue pas et ne les inclut pas dans l’application.
+
+## Câble link sans fil (Android)
+
+Le câble link sans fil relie deux téléphones du même réseau local. Il est activé par défaut et se désactive dans Réglages → Général → Câble link. Il ne passe par aucun serveur : les échanges restent sur le réseau local, d’un téléphone à l’autre.
+
+- **Annonce.** Seulement pendant que le jeu en cours se sert de son câble link, l’application s’annonce sur le réseau local (DNS-SD/mDNS) et cherche les autres téléphones. L’annonce indique le modèle du téléphone, la famille de console (Game Boy ou Game Boy Advance), la version du protocole et un identifiant tiré au hasard à chaque lancement de l’application. Elle n’indique ni le jeu, ni le compte, ni aucun fichier. Les appareils du même réseau peuvent la voir.
+- **Liaison.** Une fois deux téléphones reliés, chacun envoie à l’autre le modèle du téléphone et le nom de son fichier de jeu, affichés dans le menu du jeu, puis les données du câble link émulé. Aucune ROM, sauvegarde ni aucun état n’est envoyé.
+- **Fin.** Rien n’est conservé après la liaison. L’annonce s’arrête quand le jeu ne se sert plus du câble, quand l’application passe en arrière-plan ou quand le réglage est désactivé.
 
 ## Accès aux fichiers
 

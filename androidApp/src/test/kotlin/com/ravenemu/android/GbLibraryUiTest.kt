@@ -30,9 +30,10 @@ class GbLibraryUiTest {
     private val retroUi = RetroAchievementsUi(context, session, scope)
     private val romLibrary = GbRomLibrary(File(context.filesDir, "gb-library"), context.contentResolver)
     private val operations = LibraryOperationGate()
+    private val wireless = WirelessLink(context, session)
     private val player = GbPlayerUi(
         session, playback, linkSession, LinkPlayback(context, linkSession),
-        GbStateSlotsUi(context, session, playback, scope), retroUi.retro, scope,
+        GbStateSlotsUi(context, session, playback, scope), retroUi.retro, wireless, scope,
     ) { true }
     private val library = GbLibraryUi(
         context, context.contentResolver, romLibrary,
@@ -44,6 +45,7 @@ class GbLibraryUiTest {
     fun close() {
         scope.cancel()
         retroUi.retro.close()
+        wireless.close()
         session.close()
         linkSession.close()
     }

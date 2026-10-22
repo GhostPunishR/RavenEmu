@@ -18,6 +18,34 @@ jlong to_long(ravenemu_bridge* pointer) {
 ravenemu_link* link(jlong pointer) {
     return reinterpret_cast<ravenemu_link*>(static_cast<std::uintptr_t>(pointer));
 }
+
+// Câble vers un autre appareil : RavenCore remet chaque message à l'objet
+// Kotlin, qui l'envoie sur le réseau. Appelé par le fil d'émulation ou par
+// celui qui branche le câble.
+struct RemoteLink {
+    JavaVM* vm = nullptr;
+    jobject sink = nullptr;  // référence globale
+    jmethodID send = nullptr;
+    ravenemu_remote_link* cable = nullptr;
+};
+RemoteLink* remote(jlong pointer) {
+    return reinterpret_cast<RemoteLink*>(static_cast<std::uintptr_t>(pointer));
+}
+void send_to_kotlin(void* user, const uint8_t* message, size_t size) {
+    auto* link = static_cast<RemoteLink*>(user);
+    // Toujours un fil Java, déjà attaché à la machine virtuelle.
+    JNIEnv* env = nullptr;
+    if (link->vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) return;
+    auto bytes = env->NewByteArray(static_cast<jsize>(size));
+    if (bytes) {
+        env->SetByteArrayRegion(bytes, 0, static_cast<jsize>(size), reinterpret_cast<const jbyte*>(message));
+        env->CallVoidMethod(link->sink, link->send, bytes);
+        if (env->ExceptionCheck()) env->ExceptionClear();
+        env->DeleteLocalRef(bytes);
+    } else if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+    }
+}
 }
 
 extern "C" {
@@ -270,5 +298,70 @@ Java_com_ravenemu_android_NativeLink_nativeFrame(
 JNIEXPORT jstring JNICALL
 Java_com_ravenemu_android_NativeLink_nativeLastError(JNIEnv* env, jobject) {
     return env->NewStringUTF(ravenemu_last_error());
+}
+
+// Le jeu se sert de son port link : le câble sans fil cherche un partenaire.
+JNIEXPORT jboolean JNICALL
+Java_com_ravenemu_android_NativeCore_nativeLinkWanted(JNIEnv*, jobject, jlong pointer) {
+    return ravenemu_link_wanted(handle(pointer)) ? JNI_TRUE : JNI_FALSE;
+}
+
+// Câble link vers la console d'un autre appareil.
+JNIEXPORT jlong JNICALL
+Java_com_ravenemu_android_NativeRemoteLink_nativeCreate(
+    JNIEnv* env, jobject, jlong core, jint player, jobject sink
+) {
+    if (!sink) return 0;
+    auto type = env->GetObjectClass(sink);
+    const auto send = env->GetMethodID(type, "send", "([B)V");
+    env->DeleteLocalRef(type);
+    if (!send) {
+        env->ExceptionClear();
+        return 0;
+    }
+    auto* link = new RemoteLink();
+    env->GetJavaVM(&link->vm);
+    link->sink = env->NewGlobalRef(sink);
+    link->send = send;
+    link->cable = ravenemu_remote_link_create(handle(core), player, send_to_kotlin, link);
+    if (!link->cable) {
+        env->DeleteGlobalRef(link->sink);
+        delete link;
+        return 0;
+    }
+    return static_cast<jlong>(reinterpret_cast<std::uintptr_t>(link));
+}
+JNIEXPORT void JNICALL
+Java_com_ravenemu_android_NativeRemoteLink_nativeDestroy(JNIEnv* env, jobject, jlong pointer) {
+    auto* link = remote(pointer);
+    if (!link) return;
+    ravenemu_remote_link_destroy(link->cable);
+    env->DeleteGlobalRef(link->sink);
+    delete link;
+}
+JNIEXPORT jboolean JNICALL
+Java_com_ravenemu_android_NativeRemoteLink_nativeReceive(JNIEnv* env, jobject, jlong pointer, jbyteArray message) {
+    auto* link = remote(pointer);
+    if (!link || !message) return JNI_FALSE;
+    const auto size = env->GetArrayLength(message);
+    // Un message du protocole tient en 14 octets.
+    if (size <= 0 || size > 64) return JNI_FALSE;
+    uint8_t bytes[64];
+    env->GetByteArrayRegion(message, 0, size, reinterpret_cast<jbyte*>(bytes));
+    return ravenemu_remote_link_receive(link->cable, bytes, static_cast<size_t>(size)) ? JNI_TRUE : JNI_FALSE;
+}
+JNIEXPORT void JNICALL
+Java_com_ravenemu_android_NativeRemoteLink_nativeSetConnected(JNIEnv*, jobject, jlong pointer, jboolean connected) {
+    if (auto* link = remote(pointer)) ravenemu_remote_link_set_connected(link->cable, connected ? 1 : 0);
+}
+JNIEXPORT jint JNICALL
+Java_com_ravenemu_android_NativeRemoteLink_nativeState(JNIEnv*, jobject, jlong pointer) {
+    auto* link = remote(pointer);
+    return link ? ravenemu_remote_link_state(link->cable) : RAVENEMU_REMOTE_UNPLUGGED;
+}
+JNIEXPORT jboolean JNICALL
+Java_com_ravenemu_android_NativeRemoteLink_nativeService(JNIEnv*, jobject, jlong pointer) {
+    auto* link = remote(pointer);
+    return link && ravenemu_remote_link_service(link->cable) ? JNI_TRUE : JNI_FALSE;
 }
 } // extern C

@@ -11,22 +11,38 @@ import com.ravenemu.shared.RomImportPolicy
 import java.io.ByteArrayOutputStream
 import java.io.Closeable
 import java.io.File
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
 
 /**
  * Owns one GB, GBC or GBA emulation core for the current Activity; the
  * file and its header pick which one (see [RomImportPolicy.platformOf]).
  * ROMs are selected on demand; battery-backed game saves survive process restarts.
  * Native state is always protected by lock, while disk writes use saveLock.
+ *
+ * With the wireless link cable, a frame can wait for the other device's
+ * console (see [NativeRemoteLink]). The UI thread therefore never waits for
+ * the native lock: buttons are applied before the next frame, the game's
+ * fixed traits are kept aside, and a lifecycle save may give up.
  */
 class AndroidGbSession(private val resolver: ContentResolver, filesDir: File) : Closeable {
-    private val lock = Any()
-    private val saveLock = Any()
+    private val lock = ReentrantLock()
+    private val saveLock = ReentrantLock()
     private val batteryStore = GbBatteryStore(File(filesDir, "gb-battery"))
     private val stateStore = GbSaveStateStore(File(filesDir, "gb-states"))
-    private var closed = false
+    @Volatile private var closed = false
     private var active: NativeCore? = null
     private var activeRomKey: String? = null
     private val heldButtons = mutableSetOf<GbButton>()
+    // Buttons the UI wants held, one bit per GbButton, applied before each frame.
+    private val wantedButtons = AtomicInteger(0)
+    // Fixed for a loaded game: read without waiting for a running frame.
+    private class Traits(val fps: Double, val audioRate: Int, val sensors: Int)
+    @Volatile private var traits: Traits? = null
+    // Wireless cable of the running game; created and destroyed between frames.
+    @Volatile private var remote: NativeRemoteLink? = null
 
     /** Must be called off the UI thread. */
     fun load(uri: Uri): LoadedGameInfo {
@@ -50,7 +66,7 @@ class AndroidGbSession(private val resolver: ContentResolver, filesDir: File) : 
         val replacement = NativeCore(NativeCore.systemFor(platform))
         var transferred = false
         try {
-            return synchronized(saveLock) {
+            return saveLock.withLock {
                 // Flush the previous game BEFORE reading this ROM's save: a
                 // re-import of the same ROM must not load a stale snapshot.
                 saveBatteryIfDirtyLocked()
@@ -62,12 +78,16 @@ class AndroidGbSession(private val resolver: ContentResolver, filesDir: File) : 
                     width = replacement.width,
                     height = replacement.height,
                 )
-                synchronized(lock) {
+                val fixed = Traits(replacement.fps, replacement.audioRate, replacement.sensors())
+                lock.withLock {
                     check(!closed) { "La session a été fermée." }
                     val previous = active
+                    dropRemoteLocked()
                     heldButtons.clear()
+                    wantedButtons.set(0)
                     active = replacement
                     activeRomKey = romKey
+                    traits = fixed
                     transferred = true
                     previous?.close()
                 }
@@ -83,23 +103,37 @@ class AndroidGbSession(private val resolver: ContentResolver, filesDir: File) : 
      * the generation persisted. No disk IO runs while holding the native lock.
      * Safe to call from a periodic IO worker, ROM replacement, or lifecycle.
      */
-    fun saveBatteryIfDirty(): Boolean = synchronized(saveLock) {
+    fun saveBatteryIfDirty(): Boolean = saveLock.withLock {
         saveBatteryIfDirtyLocked()
     }
 
-    private fun saveBatteryIfDirtyLocked(): Boolean {
-        val pending = synchronized(lock) {
-            if (closed) return@synchronized null
-            val core = active ?: return@synchronized null
-            val key = activeRomKey ?: return@synchronized null
-            if (!core.batteryDirty()) return@synchronized null
-            val snapshot = core.batterySnapshotWithGeneration() ?: return@synchronized null
+    /**
+     * The same, giving up after [waitMillis] if a frame holds the console:
+     * for the UI thread, while a frame may wait for the wireless partner.
+     */
+    fun saveBatteryIfDirty(waitMillis: Long): Boolean {
+        if (!saveLock.tryLock(waitMillis, TimeUnit.MILLISECONDS)) return false
+        try {
+            return saveBatteryIfDirtyLocked(waitMillis)
+        } finally {
+            saveLock.unlock()
+        }
+    }
+
+    private fun saveBatteryIfDirtyLocked(waitMillis: Long? = null): Boolean {
+        val pending = withNativeLock(waitMillis) {
+            if (closed) return@withNativeLock null
+            val core = active ?: return@withNativeLock null
+            val key = activeRomKey ?: return@withNativeLock null
+            if (!core.batteryDirty()) return@withNativeLock null
+            val snapshot = core.batterySnapshotWithGeneration() ?: return@withNativeLock null
             Triple(core, key, snapshot)
         } ?: return false
 
         val (core, key, snapshot) = pending
         batteryStore.write(key, snapshot.bytes)
-        synchronized(lock) {
+        // Not acknowledged when the console stays busy: saved again later.
+        withNativeLock(waitMillis) {
             if (!closed && active === core) {
                 core.acknowledgeBattery(snapshot.generation)
             }
@@ -108,56 +142,73 @@ class AndroidGbSession(private val resolver: ContentResolver, filesDir: File) : 
         return true
     }
 
+    // The native lock, or null after [waitMillis] when a frame keeps it.
+    private inline fun <T> withNativeLock(waitMillis: Long?, block: () -> T): T? {
+        if (waitMillis == null) return lock.withLock(block)
+        if (!lock.tryLock(waitMillis, TimeUnit.MILLISECONDS)) return null
+        try {
+            return block()
+        } finally {
+            lock.unlock()
+        }
+    }
+
     /**
      * Release a matching cached core BEFORE installing externally imported
      * saves. Otherwise its stale in-memory battery RAM could be auto-saved on
      * the next ROM launch or lifecycle event, overwriting the imported .sav.
      * The next user launch recreates the core from the imported save files.
      */
-    fun releaseForSaveImport(romKey: String) = synchronized(saveLock) {
+    fun releaseForSaveImport(romKey: String) = saveLock.withLock {
         saveBatteryIfDirtyLocked()
-        synchronized(lock) {
+        lock.withLock {
             check(!closed) { "La session a été fermée." }
             if (activeRomKey == romKey) {
+                dropRemoteLocked()
                 for (button in heldButtons) active?.button(button.nativeCode, false)
                 heldButtons.clear()
+                wantedButtons.set(0)
                 active?.close()
                 active = null
                 activeRomKey = null
+                traits = null
             }
         }
     }
 
     /** No load or autosave may recreate/write stale SRAM during installation. */
-    fun importSave(romKey: String, install: () -> Unit) = synchronized(saveLock) {
+    fun importSave(romKey: String, install: () -> Unit) = saveLock.withLock {
         releaseForSaveImport(romKey)
         install()
     }
 
     /** Read-only RetroAchievements memory; do not clock the emulated bus. */
-    fun readAchievementMemory(address: Int, count: Int): ByteArray = synchronized(lock) {
-        if (closed || address < 0 || count <= 0 || count > 0x58000) return@synchronized ByteArray(0)
-        val native = active ?: return@synchronized ByteArray(0)
+    fun readAchievementMemory(address: Int, count: Int): ByteArray = lock.withLock {
+        if (closed || address < 0 || count <= 0 || count > 0x58000) return@withLock ByteArray(0)
+        val native = active ?: return@withLock ByteArray(0)
         val bytes = ByteArray(count)
         val read = native.readAchievementMemory(address, bytes)
         if (read == count) bytes else bytes.copyOf(read)
     }
 
     /** Power-cycle the running game (Hardcore requires it when switched on). */
-    fun resetGame() = synchronized(lock) {
+    fun resetGame() = lock.withLock {
         check(!closed) { "La session a été fermée." }
-        val core = active ?: return@synchronized
+        val core = active ?: return@withLock
         for (button in heldButtons) core.button(button.nativeCode, false)
         heldButtons.clear()
+        wantedButtons.set(0)
         core.reset()
     }
 
     /** Serialize state operations with both emulation and battery saves. */
-    fun saveStateSlot(slot: Int = 0, preview: ByteArray? = null) = synchronized(saveLock) {
-        val (key, state) = synchronized(lock) {
+    fun saveStateSlot(slot: Int = 0, preview: ByteArray? = null) = saveLock.withLock {
+        val (key, state) = lock.withLock {
             check(!closed) { "La session a été fermée." }
             val core = active ?: error("Aucun jeu chargé.")
             val key = activeRomKey ?: error("Aucune ROM active.")
+            // Buttons released by the game menu are released in the state too.
+            applyButtons(core)
             key to core.saveState()
         }
         // Write the state before the optional thumbnail, so a preview cannot
@@ -180,28 +231,31 @@ class AndroidGbSession(private val resolver: ContentResolver, filesDir: File) : 
      */
     @Volatile internal var stateLoadLocked = false
 
-    fun loadStateSlot(slot: Int = 0) = synchronized(saveLock) {
+    fun loadStateSlot(slot: Int = 0) = saveLock.withLock {
         RetroHardcorePolicy.requireStateLoadAllowed(stateLoadLocked)
-        val key = synchronized(lock) {
+        val key = lock.withLock {
             check(!closed) { "La session a été fermée." }
             activeRomKey ?: error("Aucun jeu chargé.")
         }
         val state = stateStore.read(key, slot)
             ?: error("Emplacement ${slot + 1} vide.")
-        synchronized(lock) {
+        lock.withLock {
             check(!closed && activeRomKey == key) { "La ROM active a changé." }
             RetroHardcorePolicy.requireStateLoadAllowed(stateLoadLocked)
+            // The other console would not follow: the exchange in progress would break.
+            check(remote == null) { "Câble sans fil relié : chargement d'état impossible." }
             val core = active ?: error("Aucun jeu chargé.")
             for (button in heldButtons) core.button(button.nativeCode, false)
             heldButtons.clear()
+            wantedButtons.set(0)
             core.loadState(state)
         }
         Log.d(TAG, "Save state slot ${slot + 1} restored for ROM ${key.take(12)}")
     }
 
     /** Only deletes the selected slot; cartridge SRAM is kept untouched. */
-    fun deleteStateSlot(slot: Int) = synchronized(saveLock) {
-        val key = synchronized(lock) {
+    fun deleteStateSlot(slot: Int) = saveLock.withLock {
+        val key = lock.withLock {
             check(!closed) { "La session a été fermée." }
             activeRomKey ?: error("Aucun jeu chargé.")
         }
@@ -209,8 +263,8 @@ class AndroidGbSession(private val resolver: ContentResolver, filesDir: File) : 
         Log.d(TAG, "Save state slot ${slot + 1} deleted for ROM ${key.take(12)}")
     }
 
-    internal fun listStateSlots(): List<GbSlotSummary> = synchronized(saveLock) {
-        val key = synchronized(lock) {
+    internal fun listStateSlots(): List<GbSlotSummary> = saveLock.withLock {
+        val key = lock.withLock {
             check(!closed) { "La session a été fermée." }
             activeRomKey ?: error("Aucun jeu chargé.")
         }
@@ -220,60 +274,106 @@ class AndroidGbSession(private val resolver: ContentResolver, filesDir: File) : 
     /**
      * Advance exactly one frame, then drain interleaved stereo PCM16 from the
      * same native handle under one lock. No second emulation clock is started.
-     * The latest [sensors] readings reach the core just before the frame.
-     * Returns null if no ROM is active.
+     * The buttons and the latest [sensors] readings reach the core just before
+     * the frame. Returns null if no ROM is active.
      */
     internal fun nextFrameWithAudioInto(
         pixels: IntArray, audio: ShortArray, sensors: CartridgeSensors? = null,
     ): Int? =
-        synchronized(lock) {
+        lock.withLock {
             check(!closed) { "La session a été fermée." }
-            val core = active ?: return@synchronized null
+            val core = active ?: return@withLock null
+            applyButtons(core)
             sensors?.applyTo(core)
             core.frameInto(pixels)
             rumbleActive = core.rumbleActive()
+            linkWanted = core.linkWanted()
             core.readAudioInto(audio)
         }
+
+    // Under the native lock: the buttons the UI wants, before a frame or a state.
+    private fun applyButtons(core: NativeCore) {
+        val wanted = wantedButtons.get()
+        for (button in GbButton.entries) {
+            val pressed = (wanted and (1 shl button.ordinal)) != 0
+            if ((button in heldButtons) == pressed) continue
+            core.button(button.nativeCode, pressed)
+            if (pressed) heldButtons.add(button) else heldButtons.remove(button)
+        }
+    }
+
+    /** The game used its link port in the last seconds (after the last frame). */
+    @Volatile var linkWanted: Boolean = false
+        private set
+
+    /**
+     * Plugs a wireless cable into the running game, `player` 0 being the GBA
+     * parent. Null without a game, or for a console without a remote cable.
+     */
+    internal fun attachRemoteLink(player: Int, sink: NativeRemoteLink.Sink): NativeRemoteLink? = lock.withLock {
+        if (closed) return@withLock null
+        val core = active ?: return@withLock null
+        dropRemoteLocked()
+        runCatching { NativeRemoteLink(core, player, sink) }
+            .onFailure { Log.w(TAG, "Wireless link cable refused", it) }
+            .getOrNull()
+            ?.also { remote = it }
+    }
+
+    /** Unplugs [link] (a frame waiting for the partner returns at once), then frees it. */
+    internal fun detachRemoteLink(link: NativeRemoteLink) {
+        link.setConnected(false)
+        lock.withLock {
+            if (remote === link) remote = null
+            link.close()
+        }
+    }
+
+    /**
+     * Unplugs the wireless cable from any thread, without waiting for the
+     * console: a frame waiting for the partner returns at once.
+     */
+    internal fun unplugRemoteLink() {
+        remote?.setConnected(false)
+    }
+
+    /** Between frames or during a pause: answers the partner's transfers. */
+    internal fun serviceRemoteLink() {
+        lock.withLock { remote?.service() }
+    }
+
+    // A new or no game: its wireless cable goes with the old one.
+    private fun dropRemoteLocked() {
+        remote?.close()
+        remote = null
+        linkWanted = false
+    }
 
     /** The cartridge motor's state after the last frame (see NativeCore). */
     @Volatile var rumbleActive: Boolean = false
         private set
 
     /** Sensors of the loaded cartridge (NativeCore.SENSOR_* flags), 0 without a game. */
-    fun cartridgeSensors(): Int = synchronized(lock) {
-        if (closed) 0 else active?.sensors() ?: 0
-    }
+    fun cartridgeSensors(): Int = if (closed) 0 else traits?.sensors ?: 0
 
-    fun refreshRateHz(): Double? = synchronized(lock) {
-        if (closed) null else active?.fps
-    }
+    fun refreshRateHz(): Double? = if (closed) null else traits?.fps
 
-    fun audioRateHz(): Int? = synchronized(lock) {
-        if (closed) null else active?.audioRate
-    }
+    fun audioRateHz(): Int? = if (closed) null else traits?.audioRate
 
     /**
-     * Input is ordered on the UI thread and serialized with native frames.
-     * The bridge requires all operations on one native handle to be serialized.
+     * Input is ordered on the UI thread and reaches the core before the next
+     * frame, as it did when the UI waited for the running one to end.
      */
-    fun setButton(button: GbButton, pressed: Boolean): Boolean = synchronized(lock) {
-        if (closed) return@synchronized false
-        val core = active ?: return@synchronized false
-        if ((button in heldButtons) == pressed) return@synchronized true
-        core.button(button.nativeCode, pressed)
-        if (pressed) heldButtons.add(button) else heldButtons.remove(button)
-        true
+    fun setButton(button: GbButton, pressed: Boolean): Boolean {
+        if (closed) return false
+        val bit = 1 shl button.ordinal
+        wantedButtons.updateAndGet { if (pressed) it or bit else it and bit.inv() }
+        return true
     }
 
     /** Prevent stuck buttons after screen exit, app pause or cancelled touches. */
     fun releaseAllButtons() {
-        synchronized(lock) {
-            if (!closed) {
-                val core = active
-                for (button in heldButtons) core?.button(button.nativeCode, false)
-            }
-            heldButtons.clear()
-        }
+        wantedButtons.set(0)
     }
 
     private fun displayName(uri: Uri): String {
@@ -313,18 +413,22 @@ class AndroidGbSession(private val resolver: ContentResolver, filesDir: File) : 
     }
 
     override fun close() {
-        synchronized(saveLock) {
+        unplugRemoteLink()
+        saveLock.withLock {
             try {
                 saveBatteryIfDirtyLocked()
             } catch (error: Exception) {
                 Log.e(TAG, "Failed to persist battery on session close", error)
             } finally {
-                synchronized(lock) {
+                lock.withLock {
                     closed = true
+                    dropRemoteLocked()
                     heldButtons.clear()
+                    wantedButtons.set(0)
                     active?.close()
                     active = null
                     activeRomKey = null
+                    traits = null
                 }
             }
         }

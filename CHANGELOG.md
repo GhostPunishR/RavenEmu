@@ -2,10 +2,27 @@
 
 ## Non publié
 
+### Ajouté
+
+- **Câble link sans fil entre deux téléphones.** Deux téléphones Android sur le même réseau Wi-Fi se relient comme par un câble link, sans rien lancer.
+  - Quand le jeu se sert de son port link, RavenEmu cherche un autre téléphone dont le jeu en fait autant. S'il n'y en a qu'un, le câble se branche seul ; s'il y en a plusieurs, RavenEmu demande lequel relier.
+  - Consoles : Game Boy et Game Boy Color entre elles, Game Boy Advance entre elles, à deux joueurs.
+  - Le lecteur affiche **Câble relié à** ou **Câble débranché**. Le menu du jeu met aussi l'autre jeu en pause (**Partenaire en pause**) tant que le câble sert, et propose **Débrancher**.
+  - Charger un état instantané est impossible tant que le câble est branché.
+  - Le câble se débranche quand l'autre téléphone quitte son jeu, passe en arrière-plan ou perd le réseau, et se rebranche seul ensuite.
+  - Réglage **Paramètres → Général → Câble link sans fil**, activé par défaut. Le téléphone ne s'annonce sur le réseau local que pendant que le jeu se sert du câble, sans jamais indiquer le jeu. Aucun serveur n'intervient ; voir la [politique de confidentialité](PRIVACY.md).
+  - Voir [Jouer à deux](wiki/Jouer-a-deux.md).
+
+### RavenCore
+
+- Épinglé provisoirement sur le commit `2d506dd6f5f22663ab01aa361356572b67bf843a` de la [PR #31](https://github.com/GhostPunishR/RavenCore/pull/31) (future 0.9.0), qui ajoute le câble distant (`ravenemu_remote_link_*`) et `ravenemu_link_wanted`. API C toujours en version 0 (ajouts seulement) ; formats d'états inchangés (GB/GBC 11, GBA 16).
+
 ### Modifié
 
 - RetroAchievements : les notifications prennent le style du PC. Le badge descend du haut de l'écran (ou monte du bas), puis un bandeau s'ouvre de part et d'autre avec un en-tête et le titre en grand. Il reste affiché, puis se replie dans le badge, qui repart. Un succès débloqué ou un jeu terminé a un cadre et un en-tête dorés.
 - RetroAchievements : au lancement d'un jeu reconnu, le bandeau montre l'icône du jeu, son titre et le nombre de succès disponibles. Si l'image n'arrive pas dans les 2 secondes, une étoile la remplace.
+- Commandes : les boutons touchés et la manette atteignent le jeu juste avant l'image suivante, sans attendre la fin de l'image en cours. Le résultat en jeu est le même ; c'est ce qui permet à une image d'attendre l'autre téléphone sans bloquer l'interface.
+- Sauvegarde batterie : en plus de la mise en pause de l'application, elle est faite à son passage en arrière-plan.
 - RetroAchievements : le son des succès devient un court carillon, le même que sur PC. Quatre notes montantes sont créées par RavenEmu, sans fichier son. Le carillon est mélangé au son du jeu : il suit son volume, se coupe avec lui et s'arrête avec la pause. Il remplace le bip du canal des notifications, que le mode silencieux coupait. Il est activé par défaut ; **Son des succès** le coupe.
 
 ## v0.2.0 - bêta - 2026-10-21

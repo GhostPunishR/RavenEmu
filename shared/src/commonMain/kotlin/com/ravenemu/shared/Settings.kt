@@ -11,6 +11,7 @@ data class SettingsCapabilities(
     val haptics: Boolean = true,
     val diagnostics: Boolean = true,
     val audioStartupFade: Boolean = true,
+    val wirelessLink: Boolean = true,
 )
 
 /**
@@ -67,6 +68,11 @@ data class Settings(
     val retroPopupPosition: String = "top",
     val retroPopupSeconds: Int = 5,
     val retroProgressSeconds: Int = 2,
+    /**
+     * Câble link sans fil : quand le jeu se sert de son port link, le
+     * téléphone cherche un autre RavenEmu sur le même réseau Wi-Fi et s'y relie.
+     */
+    val wirelessLink: Boolean = true,
 ) {
     fun normalized(): Settings = copy(
         audioVolume = audioVolume.coerceIn(0, 100),

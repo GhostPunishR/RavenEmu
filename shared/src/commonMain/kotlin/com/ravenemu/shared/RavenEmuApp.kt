@@ -112,6 +112,10 @@ fun RavenEmuApp(
     onControllerModeChange: ((Boolean) -> Unit)? = null,
     /** Bumped by the host to open the game menu (controller's Home key). */
     gameMenuRequests: Int = 0,
+    /** Android: the wireless link cable between two phones (see WirelessLinkView). */
+    wirelessLink: WirelessLinkView = WirelessLinkView(),
+    onWirelessLinkChoice: ((Long?) -> Unit)? = null,
+    onWirelessUnplug: (() -> Unit)? = null,
     deltaSkins: List<DeltaSkinEntry> = emptyList(),
     onImportSkin: (() -> Unit)? = null,
     onToggleSkin: ((String) -> Unit)? = null,
@@ -279,6 +283,9 @@ fun RavenEmuApp(
                     controllerMode = controllerMode,
                     onControllerModeChange = onControllerModeChange,
                     gameMenuRequests = gameMenuRequests,
+                    wirelessLink = wirelessLink,
+                    onWirelessLinkChoice = onWirelessLinkChoice,
+                    onWirelessUnplug = onWirelessUnplug,
                     onBack = {
                         onStopVideo?.invoke()
                         screen = RavenScreen.LIBRARY

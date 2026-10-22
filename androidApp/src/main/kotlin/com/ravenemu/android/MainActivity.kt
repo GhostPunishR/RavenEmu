@@ -40,6 +40,8 @@ class MainActivity : ComponentActivity() {
     // Two games side by side, joined by a virtual link cable.
     private lateinit var linkSession: AndroidLinkSession
     private lateinit var linkPlayback: LinkPlayback
+    // The single game's wireless cable, to another phone on the same network.
+    private lateinit var wireless: WirelessLink
     private var linkInputEnabled = false
     private var retroController: AchievementsController? = null
     private var foreground by mutableStateOf(false)
@@ -90,6 +92,11 @@ class MainActivity : ComponentActivity() {
         else gameSession.setButton(button, pressed)
     }
 
+    override fun onStart() {
+        super.onStart()
+        wireless.setVisible(true)
+    }
+
     override fun onResume() {
         super.onResume()
         foreground = true
@@ -104,14 +111,30 @@ class MainActivity : ComponentActivity() {
         gamepad.reset()
         // A lifecycle stop can terminate the process soon after this callback;
         // commit changed SRAM before returning rather than relying on a job.
+        // A frame may wait for the wireless partner: onStop saves after
+        // unplugging if the console stays busy here.
+        saveGames(waitMillis = PAUSE_SAVE_WAIT_MILLIS)
+        super.onPause()
+    }
+
+    override fun onStop() {
+        // In the background, the wireless cable comes out: the partner's game
+        // shows its own link error rather than waiting for this one.
+        gameSession.unplugRemoteLink()
+        wireless.setVisible(false)
+        saveGames(waitMillis = null)
+        super.onStop()
+    }
+
+    private fun saveGames(waitMillis: Long?) {
         try {
-            gameSession.saveBatteryIfDirty()
+            if (waitMillis == null) gameSession.saveBatteryIfDirty()
+            else gameSession.saveBatteryIfDirty(waitMillis)
             linkSession.saveBatteriesIfDirty()
         } catch (error: Exception) {
             Log.e("RavenEmuSaves", "Cannot save game on pause", error)
             Toast.makeText(this, "Échec de la sauvegarde du jeu", Toast.LENGTH_LONG).show()
         }
-        super.onPause()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -131,6 +154,7 @@ class MainActivity : ComponentActivity() {
         playback = GbPlayback(applicationContext, gameSession)
         linkSession = AndroidLinkSession(filesDir)
         linkPlayback = LinkPlayback(applicationContext, linkSession)
+        wireless = WirelessLink(applicationContext, gameSession)
 
         setContent {
             val settingsStore = remember { AndroidSettingsStore(applicationContext) }
@@ -168,7 +192,7 @@ class MainActivity : ComponentActivity() {
             }
             val retro = retroUi.retro
             val player = remember {
-                GbPlayerUi(gameSession, playback, linkSession, linkPlayback, slots, retro, scope) { foreground }
+                GbPlayerUi(gameSession, playback, linkSession, linkPlayback, slots, retro, wireless, scope) { foreground }
             }
             val library = remember {
                 GbLibraryUi(
@@ -232,8 +256,12 @@ class MainActivity : ComponentActivity() {
                 retroIndicators = retroUi.retroIndicators,
                 retroProgress = retroUi.retroProgress,
                 hardcoreAvailable = HardcoreAvailability.APPROVED,
-                // Hardcore forbids restoring a save state (saving stays allowed).
-                stateLoadAllowed = !retroUi.retroSnapshot.hardcore,
+                // Hardcore forbids restoring a save state (saving stays allowed),
+                // and so does the wireless cable: the partner would not follow.
+                stateLoadAllowed = !retroUi.retroSnapshot.hardcore && !wireless.linked,
+                wirelessLink = wireless.view,
+                onWirelessLinkChoice = { id -> wireless.choose(id) },
+                onWirelessUnplug = { wireless.unplug() },
                 onRequestGameMenu = { requestGameMenu(retro) },
                 onRetroLogin = { username, password -> retroUi.login(username, password) },
                 onRetroDisconnect = { retroUi.disconnect() },
@@ -396,8 +424,14 @@ class MainActivity : ComponentActivity() {
         playback.activeAudio?.stopNow()
         linkPlayback.activeAudio?.stopNow()
         retroController?.close()
+        wireless.close()
         gameSession.close()
         linkSession.close()
         super.onDestroy()
+    }
+
+    private companion object {
+        // The UI thread gives a busy console this long before onStop saves.
+        const val PAUSE_SAVE_WAIT_MILLIS = 300L
     }
 }

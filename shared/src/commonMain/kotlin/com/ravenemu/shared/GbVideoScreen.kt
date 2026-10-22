@@ -104,6 +104,9 @@ internal fun GbVideoScreen(
     controllerMode: Boolean,
     onControllerModeChange: ((Boolean) -> Unit)?,
     gameMenuRequests: Int,
+    wirelessLink: WirelessLinkView = WirelessLinkView(),
+    onWirelessLinkChoice: ((Long?) -> Unit)? = null,
+    onWirelessUnplug: (() -> Unit)? = null,
     onBack: () -> Unit,
 ) {
     var gameMenuOpen by remember { mutableStateOf(false) }
@@ -139,6 +142,7 @@ internal fun GbVideoScreen(
             GamePicture(frame, error, platform)
             RetroOverlays(retroIndicators, retroNotice, retroNoticeBadge, retroNoticeVisible,
                 retroProgress, retroProgress?.let { retroImages[it.badgeUrl] }, settings.retroPopupPosition)
+            WirelessLinkOverlay(wirelessLink)
         }
     } else Column(Modifier.fillMaxSize().background(Color.Black)) {
         PlayerTopBar(
@@ -156,6 +160,7 @@ internal fun GbVideoScreen(
                 skinControls(frame) { setGameMenu(true) }
                 RetroOverlays(retroIndicators, retroNotice, retroNoticeBadge, retroNoticeVisible,
                     retroProgress, retroProgress?.let { retroImages[it.badgeUrl] }, settings.retroPopupPosition)
+                WirelessLinkOverlay(wirelessLink)
             }
         } else {
             // Pin the picture to the top of its available area rather than
@@ -177,6 +182,7 @@ internal fun GbVideoScreen(
                 GamePicture(frame, error, platform)
                 RetroOverlays(retroIndicators, retroNotice, retroNoticeBadge, retroNoticeVisible,
                     retroProgress, retroProgress?.let { retroImages[it.badgeUrl] }, settings.retroPopupPosition)
+                WirelessLinkOverlay(wirelessLink)
             }
             if (onButtonChange != null && !touchControlsVisible) {
                 Text(
@@ -239,6 +245,7 @@ internal fun GbVideoScreen(
                     if (onControllerModeChange != null) {
                         ControllerModeSwitch(controllerMode, onControllerModeChange)
                     }
+                    WirelessLinkMenuRow(wirelessLink, onWirelessUnplug)
                     Text("Partie en pause · 4 emplacements de sauvegarde",
                         color = RavenMuted, fontSize = 12.sp)
                     StateSlotSwitcher(stateSlots, selectedSlot) { selectedSlot = it }
@@ -282,6 +289,7 @@ internal fun GbVideoScreen(
             }
         }
     }
+    if (onWirelessLinkChoice != null) WirelessLinkChooser(wirelessLink, onWirelessLinkChoice)
     val action = confirmation
     if (action != null) {
         StateConfirmationDialog(
