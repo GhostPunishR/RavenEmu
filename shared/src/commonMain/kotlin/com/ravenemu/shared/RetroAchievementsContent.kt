@@ -74,93 +74,26 @@ fun RetroAchievementsContent(
         Text(snapshot.status, fontSize = 12.sp, color = raMuted)
 
         if (snapshot.username.isBlank()) {
-            Text("Connectez votre compte pour obtenir les succès officiels pendant vos parties Game Boy, Game Boy Color et Game Boy Advance. Mode normal (Softcore).",
-                color = raMuted, fontSize = 13.sp)
-            OutlinedTextField(
-                value = username,
-                onValueChange = { username = it.take(80) },
-                label = { Text("Nom d'utilisateur") },
-                singleLine = true, modifier = Modifier.fillMaxWidth(),
-                enabled = !loginBusy,
-            )
-            OutlinedTextField(
-                value = password,
-                onValueChange = { password = it },
-                label = { Text("Mot de passe") },
-                visualTransformation = PasswordVisualTransformation(),
-                singleLine = true, modifier = Modifier.fillMaxWidth(),
-                enabled = !loginBusy,
-            )
-            Button(
-                onClick = {
+            RetroLoginForm(
+                username = username,
+                onUsernameChange = { username = it.take(80) },
+                password = password,
+                onPasswordChange = { password = it },
+                loginBusy = loginBusy,
+                loginAvailable = onLogin != null,
+                onSubmit = {
                     onLogin?.invoke(username.trim(), password)
                     password = "" // never retain credentials in the UI
                 },
-                enabled = !loginBusy && username.isNotBlank() && password.isNotBlank()
-                    && onLogin != null,
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = raAccent, contentColor = Color(0xFF0B0C12)),
-            ) { Text(if (loginBusy) "Connexion…" else "Se connecter") }
-            Text("Le mot de passe n'est pas enregistré. Seul le jeton est conservé, chiffré sur cet appareil.",
-                color = raMuted, fontSize = 11.sp)
+            )
         } else {
-            Column(
-                Modifier.fillMaxWidth()
-                    .background(raSurface, RoundedCornerShape(14.dp))
-                    .padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    val avatar = images[snapshot.avatarUrl]
-                    if (avatar != null) {
-                        Image(avatar, "Avatar RetroAchievements",
-                            Modifier.size(58.dp), contentScale = ContentScale.Fit)
-                    }
-                    Column {
-                        Text(snapshot.displayName.ifBlank { snapshot.username },
-                            color = raText, fontSize = 17.sp,
-                            fontWeight = FontWeight.SemiBold)
-                        Text("@${snapshot.username}", color = raMuted, fontSize = 12.sp)
-                    }
-                }
-                Text("Softcore : ${snapshot.softcorePoints} points  ·  Hardcore : ${snapshot.hardcorePoints} points",
-                    color = raAccent, fontSize = 12.sp)
-                if (snapshot.gameTitle.isNotBlank()) {
-                    HorizontalDivider(color = Color(0xFF3C4052))
-                    Text(snapshot.gameTitle, color = raText,
-                        fontSize = 15.sp, fontWeight = FontWeight.Medium)
-                    if (snapshot.richPresence.isNotBlank()) Text(snapshot.richPresence, color = raMuted, fontSize = 12.sp)
-                    Text("${snapshot.unlockedCount}/${snapshot.totalCount} succès  ·  ${snapshot.unlockedPoints}/${snapshot.totalPoints} points",
-                        color = raMuted, fontSize = 12.sp)
-                } else {
-                    Text("Aucun jeu reconnu pour le moment.",
-                        color = raMuted, fontSize = 12.sp)
-                }
-            }
+            RetroAccountSummary(snapshot, images[snapshot.avatarUrl])
             if (snapshot.pendingAwards > 0) Text(
                 "${snapshot.pendingAwards} déblocage(s) en attente sur cet appareil. La confirmation du serveur est nécessaire.",
                 color = raAccent, fontSize = 12.sp)
             if (snapshot.syncWarning) Text("Le stockage sécurisé des déblocages est indisponible ou plein. Gardez le jeu ouvert jusqu'à la synchronisation.",
                 color = Color(0xFFFF928B), fontSize = 12.sp)
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                OutlinedButton(
-                    modifier = Modifier.weight(1f),
-                    onClick = { onRetry?.invoke() },
-                    enabled = !loginBusy && onRetry != null,
-                ) { Text("Réessayer", fontSize = 12.sp) }
-                OutlinedButton(
-                    modifier = Modifier.weight(1f),
-                    onClick = { onDisconnect?.invoke() },
-                    enabled = !loginBusy && onDisconnect != null,
-                ) { Text("Déconnexion", fontSize = 12.sp) }
-            }
+            RetroAccountActions(loginBusy, onRetry, onDisconnect)
             if (snapshot.entries.isNotEmpty()) {
                 Text("Succès du jeu", color = raText, fontWeight = FontWeight.SemiBold)
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -182,47 +115,7 @@ fun RetroAchievementsContent(
                 val items = retroAchievementList(snapshot.entries, query, filter, sort)
                 if (items.isEmpty()) Text("Aucun succès ne correspond à cette recherche.", color = raMuted)
                 for (achievement in items.take(visibleCount)) {
-                    Column(
-                        Modifier.fillMaxWidth()
-                            .background(raSurface.copy(alpha = 0.65f), RoundedCornerShape(10.dp))
-                            .clickable { selected = achievement }
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
-                        verticalArrangement = Arrangement.spacedBy(3.dp),
-                    ) {
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            val badge = images[achievement.badgeUrl]
-                            if (badge != null) {
-                                Image(badge, "Badge du succès",
-                                    Modifier.size(42.dp), contentScale = ContentScale.Fit)
-                            } else {
-                                // Same footprint while the badge loads or if it
-                                // is unavailable: titles stay aligned.
-                                Box(Modifier.size(42.dp)
-                                    .background(raMuted.copy(alpha = 0.18f), RoundedCornerShape(6.dp)))
-                            }
-                            Text(achievement.title, modifier = Modifier.weight(1f),
-                                color = raText, fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium,
-                                maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            Spacer(Modifier.width(6.dp))
-                            Text("${achievement.points} pts", color = raAccent, fontSize = 11.sp)
-                        }
-                        Text(
-                            when {
-                                achievement.sync != RetroSync.NONE -> achievement.sync.label
-                                achievement.unlocked -> "Débloqué"
-                                achievement.state == 3 -> "Non pris en charge"
-                                achievement.progress.isNotBlank() -> achievement.progress
-                                else -> "Verrouillé"
-                            },
-                            color = raMuted, fontSize = 11.sp,
-                        )
-                        if (achievement.unlockedDate.isNotBlank()) Text(achievement.unlockedDate, color = raMuted, fontSize = 11.sp)
-                    }
+                    RetroAchievementRow(achievement, images[achievement.badgeUrl]) { selected = achievement }
                 }
                 if (items.size > visibleCount) {
                     TextButton(onClick = { visibleCount += 15 }) {
@@ -232,30 +125,8 @@ fun RetroAchievementsContent(
                 }
                 selected?.let { previous ->
                     val achievement = snapshot.entries.firstOrNull { it.id == previous.id } ?: previous
-                    androidx.compose.material3.AlertDialog(
-                        onDismissRequest = { selected = null },
-                        title = { Text(achievement.title) },
-                        text = {
-                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                images[achievement.badgeUrl]?.let { badge ->
-                                    Image(badge, "Badge du succès",
-                                        Modifier.size(88.dp), contentScale = ContentScale.Fit)
-                                }
-                                Text(achievement.description +
-                                    "\n\n${achievement.points} points · " +
-                                    (if (achievement.sync != RetroSync.NONE) achievement.sync.label else if (achievement.unlocked) "Débloqué" else "À obtenir") +
-                                    (if (achievement.unlockedDate.isBlank()) "" else "\n${achievement.unlockedDate}"))
-                            }
-                        },
-                        confirmButton = {
-                            TextButton(onClick = { selected = null }) { Text("Fermer") }
-                        },
-                        dismissButton = {
-                            TextButton(onClick = {
-                                onOpenLink?.invoke("https://retroachievements.org/achievement/${achievement.id}")
-                            }) { Text("Voir sur le site") }
-                        },
-                    )
+                    RetroAchievementDialog(achievement, images[achievement.badgeUrl], onClose = { selected = null },
+                        onOpenLink = onOpenLink)
                 }
             }
         }
@@ -267,4 +138,179 @@ fun RetroAchievementsContent(
         Text((if (snapshot.hardcore) "Mode Hardcore" else "Mode Softcore") + " · SDK officiel rcheevos 12.5.0",
             color = raMuted, fontSize = 11.sp)
     }
+}
+
+@Composable
+private fun RetroLoginForm(
+    username: String,
+    onUsernameChange: (String) -> Unit,
+    password: String,
+    onPasswordChange: (String) -> Unit,
+    loginBusy: Boolean,
+    loginAvailable: Boolean,
+    onSubmit: () -> Unit,
+) {
+    Text("Connectez votre compte pour obtenir les succès officiels pendant vos parties Game Boy, Game Boy Color et Game Boy Advance. Mode normal (Softcore).",
+        color = raMuted, fontSize = 13.sp)
+    OutlinedTextField(
+        value = username,
+        onValueChange = onUsernameChange,
+        label = { Text("Nom d'utilisateur") },
+        singleLine = true, modifier = Modifier.fillMaxWidth(),
+        enabled = !loginBusy,
+    )
+    OutlinedTextField(
+        value = password,
+        onValueChange = onPasswordChange,
+        label = { Text("Mot de passe") },
+        visualTransformation = PasswordVisualTransformation(),
+        singleLine = true, modifier = Modifier.fillMaxWidth(),
+        enabled = !loginBusy,
+    )
+    Button(
+        onClick = onSubmit,
+        enabled = !loginBusy && username.isNotBlank() && password.isNotBlank()
+            && loginAvailable,
+        modifier = Modifier.fillMaxWidth(),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = raAccent, contentColor = Color(0xFF0B0C12)),
+    ) { Text(if (loginBusy) "Connexion…" else "Se connecter") }
+    Text("Le mot de passe n'est pas enregistré. Seul le jeton est conservé, chiffré sur cet appareil.",
+        color = raMuted, fontSize = 11.sp)
+}
+
+/** The account, its points, and the game being played. */
+@Composable
+private fun RetroAccountSummary(snapshot: RetroSnapshot, avatar: ImageBitmap?) {
+    Column(
+        Modifier.fillMaxWidth()
+            .background(raSurface, RoundedCornerShape(14.dp))
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            if (avatar != null) {
+                Image(avatar, "Avatar RetroAchievements",
+                    Modifier.size(58.dp), contentScale = ContentScale.Fit)
+            }
+            Column {
+                Text(snapshot.displayName.ifBlank { snapshot.username },
+                    color = raText, fontSize = 17.sp,
+                    fontWeight = FontWeight.SemiBold)
+                Text("@${snapshot.username}", color = raMuted, fontSize = 12.sp)
+            }
+        }
+        Text("Softcore : ${snapshot.softcorePoints} points  ·  Hardcore : ${snapshot.hardcorePoints} points",
+            color = raAccent, fontSize = 12.sp)
+        if (snapshot.gameTitle.isNotBlank()) {
+            HorizontalDivider(color = Color(0xFF3C4052))
+            Text(snapshot.gameTitle, color = raText,
+                fontSize = 15.sp, fontWeight = FontWeight.Medium)
+            if (snapshot.richPresence.isNotBlank()) Text(snapshot.richPresence, color = raMuted, fontSize = 12.sp)
+            Text("${snapshot.unlockedCount}/${snapshot.totalCount} succès  ·  ${snapshot.unlockedPoints}/${snapshot.totalPoints} points",
+                color = raMuted, fontSize = 12.sp)
+        } else {
+            Text("Aucun jeu reconnu pour le moment.",
+                color = raMuted, fontSize = 12.sp)
+        }
+    }
+}
+
+@Composable
+private fun RetroAccountActions(loginBusy: Boolean, onRetry: (() -> Unit)?, onDisconnect: (() -> Unit)?) {
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        OutlinedButton(
+            modifier = Modifier.weight(1f),
+            onClick = { onRetry?.invoke() },
+            enabled = !loginBusy && onRetry != null,
+        ) { Text("Réessayer", fontSize = 12.sp) }
+        OutlinedButton(
+            modifier = Modifier.weight(1f),
+            onClick = { onDisconnect?.invoke() },
+            enabled = !loginBusy && onDisconnect != null,
+        ) { Text("Déconnexion", fontSize = 12.sp) }
+    }
+}
+
+@Composable
+private fun RetroAchievementRow(achievement: AchievementEntry, badge: ImageBitmap?, onClick: () -> Unit) {
+    Column(
+        Modifier.fillMaxWidth()
+            .background(raSurface.copy(alpha = 0.65f), RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            if (badge != null) {
+                Image(badge, "Badge du succès",
+                    Modifier.size(42.dp), contentScale = ContentScale.Fit)
+            } else {
+                // Same footprint while the badge loads or if it
+                // is unavailable: titles stay aligned.
+                Box(Modifier.size(42.dp)
+                    .background(raMuted.copy(alpha = 0.18f), RoundedCornerShape(6.dp)))
+            }
+            Text(achievement.title, modifier = Modifier.weight(1f),
+                color = raText, fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Spacer(Modifier.width(6.dp))
+            Text("${achievement.points} pts", color = raAccent, fontSize = 11.sp)
+        }
+        Text(
+            when {
+                achievement.sync != RetroSync.NONE -> achievement.sync.label
+                achievement.unlocked -> "Débloqué"
+                achievement.state == 3 -> "Non pris en charge"
+                achievement.progress.isNotBlank() -> achievement.progress
+                else -> "Verrouillé"
+            },
+            color = raMuted, fontSize = 11.sp,
+        )
+        if (achievement.unlockedDate.isNotBlank()) Text(achievement.unlockedDate, color = raMuted, fontSize = 11.sp)
+    }
+}
+
+@Composable
+private fun RetroAchievementDialog(
+    achievement: AchievementEntry,
+    badge: ImageBitmap?,
+    onClose: () -> Unit,
+    onOpenLink: ((String) -> Unit)?,
+) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onClose,
+        title = { Text(achievement.title) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (badge != null) {
+                    Image(badge, "Badge du succès",
+                        Modifier.size(88.dp), contentScale = ContentScale.Fit)
+                }
+                Text(achievement.description +
+                    "\n\n${achievement.points} points · " +
+                    (if (achievement.sync != RetroSync.NONE) achievement.sync.label else if (achievement.unlocked) "Débloqué" else "À obtenir") +
+                    (if (achievement.unlockedDate.isBlank()) "" else "\n${achievement.unlockedDate}"))
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onClose) { Text("Fermer") }
+        },
+        dismissButton = {
+            TextButton(onClick = {
+                onOpenLink?.invoke("https://retroachievements.org/achievement/${achievement.id}")
+            }) { Text("Voir sur le site") }
+        },
+    )
 }

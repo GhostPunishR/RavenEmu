@@ -12,6 +12,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.BoxWithConstraintsScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -135,74 +136,19 @@ internal fun GbVideoScreen(
                 ) { setGameMenu(true) },
             contentAlignment = Alignment.Center,
         ) {
-            val aspect = if (frame != null && frame.height > 0) {
-                frame.width.toFloat() / frame.height
-            } else if (platform == GamePlatform.GBA) 240f / 160f else 160f / 144f
-            val pictureHeight = minOf(maxHeight, maxWidth / aspect)
-            if (frame != null) {
-                Image(
-                    bitmap = frame,
-                    contentDescription = "Image du jeu ${platformLabel(platform)}",
-                    modifier = Modifier.width(pictureHeight * aspect).height(pictureHeight),
-                    contentScale = ContentScale.Fit,
-                    filterQuality = FilterQuality.None,
-                )
-            } else {
-                Text(
-                    if (error == null) "Préparation de l'image du jeu..." else error,
-                    color = if (error == null) RavenMuted else RavenDanger,
-                    modifier = Modifier.padding(20.dp),
-                    textAlign = TextAlign.Center,
-                )
-            }
+            GamePicture(frame, error, platform)
             RetroOverlays(retroIndicators, retroNotice, retroNoticeBadge, retroNoticeVisible,
                 retroProgress, retroProgress?.let { retroImages[it.badgeUrl] }, settings.retroPopupPosition)
         }
     } else Column(Modifier.fillMaxSize().background(Color.Black)) {
-        Row(
-            Modifier.fillMaxWidth().height(48.dp).background(RavenBackground),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
-                RavenIcon(RavenGlyph.BACK, RavenText)
-            }
-            Text(
-                title,
-                color = RavenText,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                fontSize = 16.sp,
-                modifier = Modifier.weight(1f),
-            )
-            if (onExportAudioDiagnostics != null || onSaveState != null || onLoadState != null) {
-                IconButton(
-                    onClick = { setGameMenu(true) },
-                    modifier = Modifier.size(48.dp),
-                ) {
-                    RavenIcon(RavenGlyph.MORE, RavenText)
-                }
-            }
-        }
+        PlayerTopBar(
+            title = title,
+            menuAvailable = onExportAudioDiagnostics != null || onSaveState != null || onLoadState != null,
+            onBack = onBack,
+            onMenu = { setGameMenu(true) },
+        )
         // The debug bar is optional; enabled by default for the RavenEmu preview.
-        if (settings.showDiagnostics) Row(
-            modifier = Modifier.fillMaxWidth().height(32.dp)
-                .background(RavenSurface).padding(horizontal = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(
-                "FPS ${metrics?.let { oneDecimal(it.actualFps) } ?: "--"}",
-                color = RavenText, fontSize = 11.sp, maxLines = 1,
-            )
-            Text(
-                "Moteur ${metrics?.let { oneDecimal(it.coreMs) } ?: "--"} ms",
-                color = RavenText, fontSize = 10.sp, maxLines = 1,
-            )
-            Text(
-                "Conv. ${metrics?.let { oneDecimal(it.conversionMs) } ?: "--"} ms",
-                color = RavenText, fontSize = 10.sp, maxLines = 1,
-            )
-        }
+        if (settings.showDiagnostics) DiagnosticsBar(metrics)
         if (skinControls != null) {
             // A Delta skin draws the whole controller and places the game
             // picture itself; its menu button opens the game menu.
@@ -228,28 +174,7 @@ internal fun GbVideoScreen(
                     },
                 contentAlignment = Alignment.TopCenter,
             ) {
-                // 160x144 on GB/GBC, 240x160 on GBA: follow the core's frame.
-                val aspect = if (frame != null && frame.height > 0) {
-                    frame.width.toFloat() / frame.height
-                } else if (platform == GamePlatform.GBA) 240f / 160f else 160f / 144f
-                val pictureHeight = minOf(maxHeight, maxWidth / aspect)
-                val pictureWidth = pictureHeight * aspect
-                if (frame != null) {
-                    Image(
-                        bitmap = frame,
-                        contentDescription = "Image du jeu ${platformLabel(platform)}",
-                        modifier = Modifier.width(pictureWidth).height(pictureHeight),
-                        contentScale = ContentScale.Fit,
-                        filterQuality = FilterQuality.None,
-                    )
-                } else {
-                    Text(
-                        if (error == null) "Préparation de l'image du jeu..." else error,
-                        color = if (error == null) RavenMuted else RavenDanger,
-                        modifier = Modifier.padding(20.dp),
-                        textAlign = TextAlign.Center,
-                    )
-                }
+                GamePicture(frame, error, platform)
                 RetroOverlays(retroIndicators, retroNotice, retroNoticeBadge, retroNoticeVisible,
                     retroProgress, retroProgress?.let { retroImages[it.badgeUrl] }, settings.retroPopupPosition)
             }
@@ -302,194 +227,327 @@ internal fun GbVideoScreen(
                         onOpenLink = onOpenLink,
                     )
                 } else {
-                Text("Menu du jeu", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-                if (onRetroLogin != null) {
-                    RetroAccountCard(
-                        snapshot = retroSnapshot,
-                        avatar = retroImages[retroSnapshot.avatarUrl],
-                        onClick = { retroPanelOpen = true },
-                    )
-                }
-                Text(title, color = RavenSecondary, fontSize = 13.sp)
-                if (onControllerModeChange != null) {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text("Mode manette", color = RavenText, fontSize = 15.sp)
-                            Text("Paysage plein écran, sans commandes tactiles. Touchez l'écran " +
-                                "ou le bouton Home de la manette pour revenir à ce menu.",
-                                color = RavenMuted, fontSize = 12.sp, lineHeight = 16.sp)
-                        }
-                        Spacer(Modifier.width(12.dp))
-                        Switch(checked = controllerMode, onCheckedChange = onControllerModeChange)
+                    Text("Menu du jeu", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                    if (onRetroLogin != null) {
+                        RetroAccountCard(
+                            snapshot = retroSnapshot,
+                            avatar = retroImages[retroSnapshot.avatarUrl],
+                            onClick = { retroPanelOpen = true },
+                        )
                     }
-                }
-                Text("Partie en pause · 4 emplacements de sauvegarde",
-                    color = RavenMuted, fontSize = 12.sp)
-                // Compact switcher: only the selected slot is expanded.
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    for (index in 0 until 4) {
-                        val occupied = stateSlots.firstOrNull { it.index == index }?.occupied == true
-                        val active = selectedSlot == index
-                        Box(
-                            Modifier.weight(1f).height(44.dp)
-                                .background(
-                                    if (active) RavenAccent else Color(0xFF292A38),
-                                    RoundedCornerShape(12.dp),
-                                )
-                                .clickable { selectedSlot = index },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                                Text("${index + 1}",
-                                    color = if (active) RavenBackground else RavenText,
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Bold)
-                                if (occupied) {
-                                    Box(Modifier.size(5.dp).background(
-                                        if (active) RavenBackground else RavenAccent, CircleShape))
-                                }
-                            }
-                        }
+                    Text(title, color = RavenSecondary, fontSize = 13.sp)
+                    if (onControllerModeChange != null) {
+                        ControllerModeSwitch(controllerMode, onControllerModeChange)
                     }
-                }
-                if (stateSlotsLoading) {
-                    Row(
-                        Modifier.fillMaxWidth().height(96.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center,
-                    ) {
-                        CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                        Spacer(Modifier.width(12.dp))
-                        Text("Chargement des emplacements…", color = RavenMuted, fontSize = 12.sp)
+                    Text("Partie en pause · 4 emplacements de sauvegarde",
+                        color = RavenMuted, fontSize = 12.sp)
+                    StateSlotSwitcher(stateSlots, selectedSlot) { selectedSlot = it }
+                    if (stateSlotsLoading) {
+                        StateSlotsLoading()
+                    } else {
+                        val entry = stateSlots.firstOrNull { it.index == selectedSlot }
+                        val occupied = entry?.occupied == true
+                        StateSlotCard(
+                            slot = selectedSlot,
+                            entry = entry,
+                            saveEnabled = !stateOperationBusy && onSaveState != null,
+                            loadEnabled = occupied && stateLoadAllowed && !stateOperationBusy &&
+                                onLoadState != null,
+                            deleteEnabled = occupied && !stateOperationBusy && onDeleteState != null,
+                            onSave = {
+                                if (occupied) confirmation = selectedSlot to "overwrite"
+                                else onSaveState?.invoke(selectedSlot)
+                            },
+                            onLoad = {
+                                onLoadState?.invoke(selectedSlot)
+                                setGameMenu(false)
+                            },
+                            onDelete = { confirmation = selectedSlot to "delete" },
+                        )
                     }
-                } else {
-                    val entry = stateSlots.firstOrNull { it.index == selectedSlot }
-                    val occupied = entry?.occupied == true
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF202230)),
-                        shape = RoundedCornerShape(14.dp),
+                    if (onExportAudioDiagnostics != null) {
+                        OutlinedButton(
+                            onClick = onExportAudioDiagnostics,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { Text("Exporter le diagnostic audio") }
+                    }
+                    Button(
+                        onClick = { setGameMenu(false) },
                         modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Column(
-                            Modifier.fillMaxWidth().padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            ) {
-                                Box(
-                                    Modifier.width(94.dp).height(84.dp)
-                                        .clip(RoundedCornerShape(9.dp))
-                                        .background(Color(0xFF10111B))
-                                        .border(1.dp, RavenOutline, RoundedCornerShape(9.dp)),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    if (entry?.thumbnail != null) {
-                                        Image(entry.thumbnail,
-                                            "Aperçu de l'emplacement ${selectedSlot + 1}",
-                                            Modifier.fillMaxSize(),
-                                            contentScale = ContentScale.Fit,
-                                            filterQuality = FilterQuality.None)
-                                    } else {
-                                        Text("GB", color = RavenMuted, fontSize = 16.sp)
-                                    }
-                                }
-                                Column(
-                                    Modifier.weight(1f),
-                                    verticalArrangement = Arrangement.spacedBy(5.dp),
-                                ) {
-                                    Text("Emplacement ${selectedSlot + 1}",
-                                        color = RavenText, fontWeight = FontWeight.SemiBold,
-                                        fontSize = 15.sp)
-                                    Text(entry?.savedAt ?: "Vide",
-                                        color = RavenMuted, fontSize = 12.sp)
-                                }
-                            }
-                            Row(
-                                Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            ) {
-                                FilledTonalButton(
-                                    modifier = Modifier.weight(1f),
-                                    enabled = !stateOperationBusy && onSaveState != null,
-                                    onClick = {
-                                        if (occupied) confirmation = selectedSlot to "overwrite"
-                                        else onSaveState?.invoke(selectedSlot)
-                                    },
-                                ) { Text("Sauver", fontSize = 12.sp) }
-                                OutlinedButton(
-                                    modifier = Modifier.weight(1f),
-                                    enabled = occupied && stateLoadAllowed && !stateOperationBusy &&
-                                        onLoadState != null,
-                                    onClick = {
-                                        onLoadState?.invoke(selectedSlot)
-                                        setGameMenu(false)
-                                    },
-                                ) { Text("Charger", fontSize = 12.sp) }
-                                OutlinedButton(
-                                    modifier = Modifier.weight(1f),
-                                    enabled = occupied && !stateOperationBusy && onDeleteState != null,
-                                    onClick = { confirmation = selectedSlot to "delete" },
-                                ) { Text("Supprimer", fontSize = 11.sp) }
-                            }
-                        }
-                    }
-                }
-                if (onExportAudioDiagnostics != null) {
-                    OutlinedButton(
-                        onClick = onExportAudioDiagnostics,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) { Text("Exporter le diagnostic audio") }
-                }
-                Button(
-                    onClick = { setGameMenu(false) },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = RavenAccent, contentColor = RavenBackground,
-                    ),
-                ) { Text("Reprendre le jeu") }
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = RavenAccent, contentColor = RavenBackground,
+                        ),
+                    ) { Text("Reprendre le jeu") }
                 }
             }
         }
     }
     val action = confirmation
     if (action != null) {
-        val index = action.first
-        val deleting = action.second == "delete"
-        AlertDialog(
-            onDismissRequest = { confirmation = null },
-            title = { Text(if (deleting) "Supprimer la sauvegarde ?" else "Écraser la sauvegarde ?") },
-            text = {
-                Text(
-                    if (deleting)
-                        "Supprimer définitivement l'emplacement ${index + 1} ? La sauvegarde classique du jeu restera intacte."
-                    else
-                        "Remplacer l'état de l'emplacement ${index + 1} par la partie actuelle ? Cette action est irréversible."
-                )
+        StateConfirmationDialog(
+            slot = action.first,
+            deleting = action.second == "delete",
+            busy = stateOperationBusy,
+            onConfirm = { index, deleting ->
+                confirmation = null
+                if (deleting) onDeleteState?.invoke(index)
+                else onSaveState?.invoke(index)
             },
-            confirmButton = {
-                TextButton(
-                    enabled = !stateOperationBusy,
-                    onClick = {
-                        confirmation = null
-                        if (deleting) onDeleteState?.invoke(index)
-                        else onSaveState?.invoke(index)
-                    },
-                ) { Text(if (deleting) "Supprimer" else "Écraser") }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmation = null }) { Text("Annuler") }
-            },
-            containerColor = RavenSurface,
-            titleContentColor = RavenText,
-            textContentColor = RavenSecondary,
+            onDismiss = { confirmation = null },
         )
     }
+}
+
+/** The game picture, as large as the box allows at the core's aspect. */
+@Composable
+private fun BoxWithConstraintsScope.GamePicture(frame: ImageBitmap?, error: String?, platform: GamePlatform) {
+    // 160x144 on GB/GBC, 240x160 on GBA: follow the core's frame.
+    val aspect = if (frame != null && frame.height > 0) {
+        frame.width.toFloat() / frame.height
+    } else if (platform == GamePlatform.GBA) 240f / 160f else 160f / 144f
+    val pictureHeight = minOf(maxHeight, maxWidth / aspect)
+    val pictureWidth = pictureHeight * aspect
+    if (frame != null) {
+        Image(
+            bitmap = frame,
+            contentDescription = "Image du jeu ${platformLabel(platform)}",
+            modifier = Modifier.width(pictureWidth).height(pictureHeight),
+            contentScale = ContentScale.Fit,
+            filterQuality = FilterQuality.None,
+        )
+    } else {
+        Text(
+            if (error == null) "Préparation de l'image du jeu..." else error,
+            color = if (error == null) RavenMuted else RavenDanger,
+            modifier = Modifier.padding(20.dp),
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+@Composable
+private fun PlayerTopBar(title: String, menuAvailable: Boolean, onBack: () -> Unit, onMenu: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().height(48.dp).background(RavenBackground),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
+            RavenIcon(RavenGlyph.BACK, RavenText)
+        }
+        Text(
+            title,
+            color = RavenText,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            fontSize = 16.sp,
+            modifier = Modifier.weight(1f),
+        )
+        if (menuAvailable) {
+            IconButton(
+                onClick = onMenu,
+                modifier = Modifier.size(48.dp),
+            ) {
+                RavenIcon(RavenGlyph.MORE, RavenText)
+            }
+        }
+    }
+}
+
+@Composable
+private fun DiagnosticsBar(metrics: GbVideoMetrics?) {
+    Row(
+        modifier = Modifier.fillMaxWidth().height(32.dp)
+            .background(RavenSurface).padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            "FPS ${metrics?.let { oneDecimal(it.actualFps) } ?: "--"}",
+            color = RavenText, fontSize = 11.sp, maxLines = 1,
+        )
+        Text(
+            "Moteur ${metrics?.let { oneDecimal(it.coreMs) } ?: "--"} ms",
+            color = RavenText, fontSize = 10.sp, maxLines = 1,
+        )
+        Text(
+            "Conv. ${metrics?.let { oneDecimal(it.conversionMs) } ?: "--"} ms",
+            color = RavenText, fontSize = 10.sp, maxLines = 1,
+        )
+    }
+}
+
+@Composable
+private fun ControllerModeSwitch(controllerMode: Boolean, onChange: (Boolean) -> Unit) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text("Mode manette", color = RavenText, fontSize = 15.sp)
+            Text("Paysage plein écran, sans commandes tactiles. Touchez l'écran " +
+                "ou le bouton Home de la manette pour revenir à ce menu.",
+                color = RavenMuted, fontSize = 12.sp, lineHeight = 16.sp)
+        }
+        Spacer(Modifier.width(12.dp))
+        Switch(checked = controllerMode, onCheckedChange = onChange)
+    }
+}
+
+/** Compact switcher: only the selected slot is expanded. */
+@Composable
+private fun StateSlotSwitcher(stateSlots: List<GbStateSlot>, selectedSlot: Int, onSelect: (Int) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        for (index in 0 until 4) {
+            val occupied = stateSlots.firstOrNull { it.index == index }?.occupied == true
+            val active = selectedSlot == index
+            Box(
+                Modifier.weight(1f).height(44.dp)
+                    .background(
+                        if (active) RavenAccent else Color(0xFF292A38),
+                        RoundedCornerShape(12.dp),
+                    )
+                    .clickable { onSelect(index) },
+                contentAlignment = Alignment.Center,
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Text("${index + 1}",
+                        color = if (active) RavenBackground else RavenText,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold)
+                    if (occupied) {
+                        Box(Modifier.size(5.dp).background(
+                            if (active) RavenBackground else RavenAccent, CircleShape))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StateSlotsLoading() {
+    Row(
+        Modifier.fillMaxWidth().height(96.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
+    ) {
+        CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+        Spacer(Modifier.width(12.dp))
+        Text("Chargement des emplacements…", color = RavenMuted, fontSize = 12.sp)
+    }
+}
+
+/** The selected slot: its preview, its date and what can be done with it. */
+@Composable
+private fun StateSlotCard(
+    slot: Int,
+    entry: GbStateSlot?,
+    saveEnabled: Boolean,
+    loadEnabled: Boolean,
+    deleteEnabled: Boolean,
+    onSave: () -> Unit,
+    onLoad: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF202230)),
+        shape = RoundedCornerShape(14.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            Modifier.fillMaxWidth().padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Box(
+                    Modifier.width(94.dp).height(84.dp)
+                        .clip(RoundedCornerShape(9.dp))
+                        .background(Color(0xFF10111B))
+                        .border(1.dp, RavenOutline, RoundedCornerShape(9.dp)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (entry?.thumbnail != null) {
+                        Image(entry.thumbnail,
+                            "Aperçu de l'emplacement ${slot + 1}",
+                            Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Fit,
+                            filterQuality = FilterQuality.None)
+                    } else {
+                        Text("GB", color = RavenMuted, fontSize = 16.sp)
+                    }
+                }
+                Column(
+                    Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(5.dp),
+                ) {
+                    Text("Emplacement ${slot + 1}",
+                        color = RavenText, fontWeight = FontWeight.SemiBold,
+                        fontSize = 15.sp)
+                    Text(entry?.savedAt ?: "Vide",
+                        color = RavenMuted, fontSize = 12.sp)
+                }
+            }
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                FilledTonalButton(
+                    modifier = Modifier.weight(1f),
+                    enabled = saveEnabled,
+                    onClick = onSave,
+                ) { Text("Sauver", fontSize = 12.sp) }
+                OutlinedButton(
+                    modifier = Modifier.weight(1f),
+                    enabled = loadEnabled,
+                    onClick = onLoad,
+                ) { Text("Charger", fontSize = 12.sp) }
+                OutlinedButton(
+                    modifier = Modifier.weight(1f),
+                    enabled = deleteEnabled,
+                    onClick = onDelete,
+                ) { Text("Supprimer", fontSize = 11.sp) }
+            }
+        }
+    }
+}
+
+/** Asks before a slot is overwritten or deleted. */
+@Composable
+private fun StateConfirmationDialog(
+    slot: Int,
+    deleting: Boolean,
+    busy: Boolean,
+    onConfirm: (slot: Int, deleting: Boolean) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (deleting) "Supprimer la sauvegarde ?" else "Écraser la sauvegarde ?") },
+        text = {
+            Text(
+                if (deleting)
+                    "Supprimer définitivement l'emplacement ${slot + 1} ? La sauvegarde classique du jeu restera intacte."
+                else
+                    "Remplacer l'état de l'emplacement ${slot + 1} par la partie actuelle ? Cette action est irréversible."
+            )
+        },
+        confirmButton = {
+            TextButton(
+                enabled = !busy,
+                onClick = { onConfirm(slot, deleting) },
+            ) { Text(if (deleting) "Supprimer" else "Écraser") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Annuler") }
+        },
+        containerColor = RavenSurface,
+        titleContentColor = RavenText,
+        textContentColor = RavenSecondary,
+    )
 }
 
 internal fun oneDecimal(value: Double): String =

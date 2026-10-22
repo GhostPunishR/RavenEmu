@@ -29,19 +29,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import com.ravenemu.android.deltaskin.DeltaSkinControllerConfiguration
 import com.ravenemu.android.deltaskin.DeltaSkinPlayer
-import com.ravenemu.android.deltaskin.DeltaSkins
-import com.ravenemu.shared.DeltaSkinEntry
-import com.ravenemu.shared.GameEntry
-import com.ravenemu.shared.GbFolderImportSummary
 import com.ravenemu.shared.GbButton
-import com.ravenemu.shared.LoadedGameInfo
 import com.ravenemu.shared.RavenEmuApp
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
     private lateinit var gameSession: AndroidGbSession
@@ -151,90 +142,18 @@ class MainActivity : ComponentActivity() {
             val covers = remember {
                 GbCoversUi(applicationContext, filesDir, contentResolver, romLibrary, scope)
             }
-            var libraryGames by remember { mutableStateOf(emptyList<GameEntry>()) }
-            var activeGameId by remember { mutableStateOf<String?>(null) }
-            // Each refresh from the library menu searches the missing covers again.
-            var libraryRefreshes by remember { mutableStateOf(0) }
-            // Games and covers as stored; throws when the index cannot be read.
-            suspend fun reloadLibrary() {
-                val (games, coverImages) = withContext(Dispatchers.IO) {
-                    val entries = romLibrary.list()
-                    val pictures = entries.mapNotNull { entry ->
-                        try {
-                            covers.coverStore.read(entry.id)?.asImageBitmap()?.let { entry.id to it }
-                        } catch (error: Exception) {
-                            Log.w("RavenEmuLibrary", "Cannot read cover for ${entry.id.take(12)}", error)
-                            null
-                        }
-                    }.toMap()
-                    entries.map { GameEntry(it.id, it.filename, it.platform) } to pictures
-                }
-                libraryGames = games
-                covers.libraryCovers = coverImages
-            }
-            LaunchedEffect(romLibrary) {
-                try {
-                    reloadLibrary()
-                } catch (error: Exception) {
-                    Log.e("RavenEmuLibrary", "Cannot open library index", error)
-                }
-            }
-            // Only run a cover search when the user enabled it, and then only
-            // when the library changes, an excluded ROM is explicitly
-            // re-enabled or the library is refreshed. Recomposition/video
-            // frames never initiate network calls.
-            LaunchedEffect(libraryGames, covers.ignoredAutoCovers, userSettings.onlineCovers, libraryRefreshes) {
-                covers.fillMissingOnline(libraryGames, userSettings.onlineCovers)
-            }
             val appVersion = remember {
                 runCatching {
                     packageManager.getPackageInfo(packageName, 0).versionName
                 }.getOrNull() ?: "0.1.0 - Bêta"
             }
-            var loadedGame by remember { mutableStateOf<LoadedGameInfo?>(null) }
-            var loading by remember { mutableStateOf(false) }
-            var importError by remember { mutableStateOf<String?>(null) }
-            var folderImportProgress by remember { mutableStateOf<String?>(null) }
-            var folderImportSummary by remember { mutableStateOf<GbFolderImportSummary?>(null) }
             val saveTransfers = remember {
                 GbSaveTransfersUi(
                     applicationContext, contentResolver, gameSession, linkSession, libraryOperations,
                     romLibrary, saveTransfer, scope,
                 )
             }
-            var videoEnabled by remember { mutableStateOf(false) }
-            // Linked pair: both games loaded, then playing on the link screen.
-            var linkedGames by remember { mutableStateOf(emptyList<LoadedGameInfo>()) }
-            var linkEnabled by remember { mutableStateOf(false) }
-            var linkFocus by remember { mutableStateOf(0) }
             val slots = remember { GbStateSlotsUi(applicationContext, gameSession, playback, scope) }
-            var pausedForGameMenu by remember { mutableStateOf(false) }
-            // Controller mode: landscape and full screen while a game runs.
-            var controllerMode by remember { mutableStateOf(false) }
-            val controllerLayout = controllerMode && videoEnabled
-            LaunchedEffect(controllerLayout) {
-                requestedOrientation = if (controllerLayout) {
-                    ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-                } else {
-                    ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-                }
-                WindowCompat.getInsetsController(window, window.decorView).apply {
-                    if (controllerLayout) {
-                        systemBarsBehavior =
-                            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-                        hide(WindowInsetsCompat.Type.systemBars())
-                    } else {
-                        show(WindowInsetsCompat.Type.systemBars())
-                    }
-                }
-            }
-            // The controller reaches the game only while it runs on screen.
-            SideEffect {
-                val accepts = (videoEnabled && !pausedForGameMenu) || linkEnabled
-                if (!accepts && gamepadInputEnabled) gamepad.reset()
-                gamepadInputEnabled = accepts
-                linkInputEnabled = linkEnabled
-            }
             val retroUi = remember {
                 RetroAchievementsUi(applicationContext, gameSession, scope, playSound = {
                     (playback.activeAudio ?: linkPlayback.activeAudio)?.playChime()
@@ -248,199 +167,44 @@ class MainActivity : ComponentActivity() {
                 }
             }
             val retro = retroUi.retro
-            LaunchedEffect(retroUi.retroSnapshot.avatarUrl,
-                retroUi.retroSnapshot.entries.map { it.badgeUrl }.distinct()) {
-                retroUi.loadImages()
+            val player = remember {
+                GbPlayerUi(gameSession, playback, linkSession, linkPlayback, slots, retro, scope) { foreground }
             }
-            // Effective only once RetroAchievements approved the app.
-            LaunchedEffect(retro, userSettings.retroHardcore) {
-                runCatching { retro.setHardcore(userSettings.retroHardcore) }
-                    .onFailure { Log.w("RavenEmuRetro", "Hardcore switch failed", it) }
+            val library = remember {
+                GbLibraryUi(
+                    applicationContext, contentResolver, romLibrary, covers, gameSession, linkSession,
+                    retro, player, libraryOperations, scope,
+                )
             }
-            LaunchedEffect(retro) { retroUi.restore() }
-            LaunchedEffect(retroUi.retroProgress?.badgeUrl) { retroUi.loadProgressBadge() }
+            val skins = remember { DeltaSkinsUi(applicationContext, scope) }
+
+            library.Effects(userSettings.onlineCovers)
+            ControllerLayout(player.controllerLayout)
+            // The controller reaches the game only while it runs on screen.
+            val acceptsController = player.acceptsController
+            val linkInput = player.linkEnabled
+            SideEffect {
+                if (!acceptsController && gamepadInputEnabled) gamepad.reset()
+                gamepadInputEnabled = acceptsController
+                linkInputEnabled = linkInput
+            }
+            retroUi.Effects(userSettings.retroHardcore, player, foreground)
             SideEffect { retroUi.configure(userSettings) }
-            LaunchedEffect(videoEnabled, foreground) {
-                if (videoEnabled && foreground) retroUi.showUnlocks() else retroUi.hidePopups()
-            }
-            LaunchedEffect(videoEnabled, foreground) {
-                if (videoEnabled && foreground) retroUi.showProgress()
-                else retroUi.hideProgress()
-            }
-            LaunchedEffect(retro, videoEnabled, pausedForGameMenu, foreground) {
-                retroUi.tickWhile { !videoEnabled || pausedForGameMenu || !foreground }
-            }
+            player.Effects(library.loadedGame, userSettings, foreground)
+            skins.Effects(library.loadedGame?.platform, userSettings.haptics)
+
             val exportAudio = rememberLauncherForActivityResult(
                 contract = ActivityResultContracts.CreateDocument("text/plain"),
-            ) { uri ->
-                if (uri != null) {
-                    try {
-                        contentResolver.openOutputStream(uri)?.use { stream ->
-                            stream.write(playback.lastAudioReport.toByteArray(Charsets.UTF_8))
-                        } ?: Log.e("RavenEmuAudio", "Unable to open diagnostic destination")
-                    } catch (error: Exception) {
-                        Log.e("RavenEmuAudio", "Unable to save audio report", error)
-                    }
-                }
-            }
-
-            LaunchedEffect(
-                videoEnabled, loadedGame, foreground,
-                slots.restoringState, slots.stateRevision, pausedForGameMenu,
-            ) {
-                if (!videoEnabled || loadedGame == null) {
-                    playback.frame = null
-                    playback.videoMetrics = null
-                    return@LaunchedEffect
-                }
-                // Keep the last image visible behind the ROM-style menu sheet.
-                // A game menu pauses both the native clock and AudioTrack,
-                // preventing UI interaction from building an audio backlog.
-                if (!foreground || slots.restoringState || pausedForGameMenu) return@LaunchedEffect
-                val currentGame = loadedGame ?: return@LaunchedEffect
-                playback.run(currentGame, userSettings, retro, scope)
-            }
-
-            LaunchedEffect(linkEnabled, linkedGames, foreground) {
-                if (!linkEnabled || linkedGames.size != 2) {
-                    linkPlayback.clear()
-                    return@LaunchedEffect
-                }
-                // In the background, the last pictures stay and the clock stops.
-                if (!foreground) return@LaunchedEffect
-                linkPlayback.run(linkedGames, userSettings, scope)
-            }
-
-            // OpenDocumentTree grants temporary read access to just the
-            // chosen folder. All accepted ROMs are copied to app-private
-            // storage; no broad storage permission or persisted URI required.
+            ) { uri -> if (uri != null) writeAudioReport(uri) }
             val folderPicker = rememberLauncherForActivityResult(
                 contract = ActivityResultContracts.OpenDocumentTree(),
-            ) { uri ->
-                if (uri != null && !loading && !videoEnabled && !linkEnabled) {
-                    val operation = libraryOperations.tryAcquire()
-                        ?: return@rememberLauncherForActivityResult
-                    loading = true
-                    importError = null
-                    folderImportSummary = null
-                    folderImportProgress = "Analyse du dossier…"
-                    scope.launch {
-                        try {
-                            val (result, entries) = withContext(Dispatchers.IO) {
-                                val imported = GbFolderImporter(contentResolver, romLibrary)
-                                    .importTree(uri) { scanned ->
-                                        if (scanned == 1 || scanned % 5 == 0) {
-                                            scope.launch {
-                                                folderImportProgress =
-                                                    "Importation du dossier… $scanned ROM examinées"
-                                            }
-                                        }
-                                    }
-                                imported to romLibrary.list().map {
-                                    GameEntry(it.id, it.filename, it.platform)
-                                }
-                            }
-                            libraryGames = entries
-                            folderImportSummary = GbFolderImportSummary(
-                                added = result.added,
-                                duplicate = result.duplicate,
-                                invalid = result.invalid,
-                                unreadable = result.unreadable,
-                                otherFiles = result.otherFiles,
-                                scannedFolders = result.folders,
-                                limited = result.limited,
-                            )
-                        } catch (error: Exception) {
-                            Log.e("RavenEmuFolder", "Folder ROM import failed", error)
-                            importError = "Importation du dossier impossible : " +
-                                (error.message ?: "erreur inconnue")
-                            // Even a partial import already committed its
-                            // valid ROMs. Refresh the library in that case.
-                            libraryGames = withContext(Dispatchers.IO) {
-                                romLibrary.list().map {
-                                    GameEntry(it.id, it.filename, it.platform)
-                                }
-                            }
-                        } finally {
-                            folderImportProgress = null
-                            loading = false
-                            operation.close()
-                        }
-                    }
-                }
-            }
-
-            // Delta skins: installed list, and the skin of the running game.
-            val deltaSkins = remember { DeltaSkins(applicationContext) }
-            var skinEntries by remember { mutableStateOf(emptyList<DeltaSkinEntry>()) }
-            var skinConfiguration by remember { mutableStateOf<DeltaSkinControllerConfiguration?>(null) }
-            fun refreshSkins() {
-                scope.launch {
-                    skinEntries = runCatching { withContext(Dispatchers.IO) { deltaSkins.entries() } }
-                        .onFailure { Log.w("RavenEmuSkins", "Cannot list skins", it) }
-                        .getOrDefault(emptyList())
-                }
-            }
-            LaunchedEffect(Unit) { refreshSkins() }
-            LaunchedEffect(loadedGame?.platform, skinEntries, userSettings.haptics) {
-                val platform = loadedGame?.platform
-                skinConfiguration = if (platform == null) null else runCatching {
-                    withContext(Dispatchers.IO) { deltaSkins.configuration(platform, userSettings.haptics) }
-                }.getOrNull()
-            }
-            val skinPicker = rememberLauncherForActivityResult(
-                contract = ActivityResultContracts.OpenDocument(),
-            ) { uri ->
-                if (uri != null) scope.launch {
-                    val message = runCatching { withContext(Dispatchers.IO) { deltaSkins.import(uri) } }
-                        .getOrElse { "Importation du skin impossible" }
-                    Toast.makeText(applicationContext, message, Toast.LENGTH_LONG).show()
-                    refreshSkins()
-                }
-            }
-
-            val activeSkin = skinConfiguration
-
+            ) { uri -> library.importFolder(uri) }
             val documentPicker = rememberLauncherForActivityResult(
                 contract = ActivityResultContracts.OpenDocument(),
-            ) { uri ->
-                if (uri != null && !loading && !videoEnabled && !linkEnabled) {
-                    val operation = libraryOperations.tryAcquire()
-                        ?: return@rememberLauncherForActivityResult
-                    loading = true
-                    importError = null
-                    scope.launch {
-                        try {
-                            val (info, stored, rom) = withContext(Dispatchers.IO) {
-                                // A pair just left behind writes its saves first.
-                                linkSession.unload()
-                                val (name, bytes) = romLibrary.readSelected(uri)
-                                // Validate with native RavenGB before indexing the cartridge.
-                                val info = gameSession.loadBytes(name, bytes)
-                                val stored = romLibrary.add(name, bytes)
-                                Triple(info, stored, bytes)
-                            }
-                            loadedGame = info
-                            activeGameId = stored.id
-                            try { retro.selectRom(rom, info.platform) }
-                            catch (error: Exception) {
-                                Log.w("RavenEmuRetro", "RA identify failed after import", error)
-                            }
-                            libraryGames = withContext(Dispatchers.IO) {
-                                romLibrary.list().map {
-                                    GameEntry(it.id, it.filename, it.platform)
-                                }
-                            }
-                        } catch (exception: Exception) {
-                            importError = exception.message ?: "Échec du chargement de la ROM."
-                        } finally {
-                            loading = false
-                            operation.close()
-                        }
-                    }
-                }
-            }
-
+            ) { uri -> library.importRom(uri) }
+            skins.skinPicker = rememberLauncherForActivityResult(
+                contract = ActivityResultContracts.OpenDocument(),
+            ) { uri -> skins.import(uri) }
             covers.coverPicker = rememberLauncherForActivityResult(
                 contract = ActivityResultContracts.OpenDocument(),
             ) { uri -> covers.saveChosen(uri) }
@@ -452,7 +216,11 @@ class MainActivity : ComponentActivity() {
             ) { uri -> saveTransfers.writeBattery(uri) }
             saveTransfers.importSavePicker = rememberLauncherForActivityResult(
                 contract = ActivityResultContracts.OpenDocument(),
-            ) { uri -> saveTransfers.reviewImport(uri, libraryGames) }
+            ) { uri -> saveTransfers.reviewImport(uri, library.games) }
+
+            val activeSkin = skins.configuration
+            // A save slot acts on the game only while it is loaded and on screen.
+            fun playing() = library.loadedGame != null && player.videoEnabled
 
             RavenEmuApp(
                 retroSnapshot = retroUi.retroSnapshot,
@@ -466,15 +234,7 @@ class MainActivity : ComponentActivity() {
                 hardcoreAvailable = HardcoreAvailability.APPROVED,
                 // Hardcore forbids restoring a save state (saving stays allowed).
                 stateLoadAllowed = !retroUi.retroSnapshot.hardcore,
-                onRequestGameMenu = {
-                    retro.requestPause().also { allowed ->
-                        if (!allowed) Toast.makeText(
-                            applicationContext,
-                            "Mode Hardcore : pause indisponible pour le moment.",
-                            Toast.LENGTH_SHORT,
-                        ).show()
-                    }
-                },
+                onRequestGameMenu = { requestGameMenu(retro) },
                 onRetroLogin = { username, password -> retroUi.login(username, password) },
                 onRetroDisconnect = { retroUi.disconnect() },
                 onRetroRetry = { retroUi.retry() },
@@ -485,265 +245,81 @@ class MainActivity : ComponentActivity() {
                     settingsStore.write(userSettings)
                 },
                 appVersion = appVersion,
-                onOpenLink = { url ->
-                    try {
-                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                            .addCategory(Intent.CATEGORY_BROWSABLE))
-                    } catch (error: Exception) {
-                        Log.e("RavenEmuSettings", "Cannot open information link", error)
-                        Toast.makeText(
-                            applicationContext, "Impossible d'ouvrir le lien",
-                            Toast.LENGTH_LONG,
-                        ).show()
-                    }
-                },
+                onOpenLink = ::openLink,
                 onImportRom = {
                     if (!libraryOperations.isBusy()) documentPicker.launch(arrayOf("*/*"))
                 },
                 onImportFolder = {
-                    if (!libraryOperations.isBusy() && !videoEnabled && !linkEnabled) folderPicker.launch(null)
+                    if (!libraryOperations.isBusy() && !player.open) folderPicker.launch(null)
                 },
-                onRefreshLibrary = refresh@{
-                    if (loading || videoEnabled || linkEnabled) return@refresh
-                    val operation = libraryOperations.tryAcquire() ?: return@refresh
-                    loading = true
-                    importError = null
-                    folderImportProgress = "Actualisation de la bibliothèque…"
-                    scope.launch {
-                        try {
-                            reloadLibrary()
-                            // Games the cover index did not know are searched again.
-                            covers.forgetUnmatched()
-                            libraryRefreshes++
-                            val count = libraryGames.size
-                            Toast.makeText(applicationContext,
-                                "Bibliothèque actualisée : $count ${if (count > 1) "jeux" else "jeu"}",
-                                Toast.LENGTH_SHORT).show()
-                        } catch (error: Exception) {
-                            Log.e("RavenEmuLibrary", "Library refresh failed", error)
-                            importError = "Actualisation impossible : " +
-                                (error.message ?: "erreur inconnue")
-                        } finally {
-                            folderImportProgress = null
-                            loading = false
-                            operation.close()
-                        }
-                    }
-                },
-                folderImportProgress = folderImportProgress,
-                folderImportSummary = folderImportSummary,
-                onDismissFolderImportSummary = { folderImportSummary = null },
-                loadedGame = loadedGame,
-                libraryGames = libraryGames,
+                onRefreshLibrary = { library.refresh() },
+                folderImportProgress = library.folderImportProgress,
+                folderImportSummary = library.folderImportSummary,
+                onDismissFolderImportSummary = { library.dismissFolderImportSummary() },
+                loadedGame = library.loadedGame,
+                libraryGames = library.games,
                 saveTransferBusy = saveTransfers.saveTransferBusy,
                 saveImportReview = saveTransfers.saveImportReview,
                 onCancelSaveImport = { saveTransfers.cancelImport() },
                 onConfirmSaveImport = {
-                    saveTransfers.confirmImport(playerOpen = videoEnabled || linkEnabled) { romKey ->
-                        if (activeGameId == romKey) {
-                            activeGameId = null
-                            loadedGame = null
-                        }
+                    saveTransfers.confirmImport(playerOpen = player.open) { romKey ->
+                        library.forgetLoaded(romKey)
                     }
                 },
                 onExportAllSaves = {
-                    saveTransfers.exportAllSaves(libraryGames, playerOpen = videoEnabled || linkEnabled)
+                    saveTransfers.exportAllSaves(library.games, playerOpen = player.open)
                 },
                 onExportBatterySave = { id, format ->
-                    saveTransfers.exportBatterySave(id, format, libraryGames, playerOpen = videoEnabled || linkEnabled)
+                    saveTransfers.exportBatterySave(id, format, library.games, playerOpen = player.open)
                 },
                 onImportGameSave = { id ->
-                    saveTransfers.importGameSave(id, libraryGames, playerOpen = videoEnabled || linkEnabled)
+                    saveTransfers.importGameSave(id, library.games, playerOpen = player.open)
                 },
                 libraryCovers = covers.libraryCovers,
                 coverBusy = covers.coverBusy || covers.autoCoverLoading,
-                onChooseCover = { id -> covers.choose(id, libraryGames) },
-                onRemoveCover = { id -> covers.remove(id, libraryGames) },
-                onLaunchLibraryGame = launchGame@{ id, onReady ->
-                    if (!loading && !videoEnabled && !linkEnabled) {
-                        val operation = libraryOperations.tryAcquire() ?: return@launchGame
-                        loading = true
-                        importError = null
-                        scope.launch {
-                            try {
-                                if (activeGameId != id || loadedGame == null) {
-                                    val entry = libraryGames.firstOrNull { it.id == id }
-                                        ?: error("Ce jeu n'est plus dans la bibliothèque.")
-                                    val (result, rom) = withContext(Dispatchers.IO) {
-                                        // A pair just left behind writes its saves first.
-                                        linkSession.unload()
-                                        val rom = romLibrary.readRom(id)
-                                        gameSession.loadBytes(entry.title, rom) to rom
-                                    }
-                                    loadedGame = result
-                                    activeGameId = id
-                                    try { retro.selectRom(rom, result.platform) }
-                                    catch (error: Exception) {
-                                        Log.w("RavenEmuRetro", "RA identify failed on launch", error)
-                                    }
-                                }
-                                onReady()
-                            } catch (error: Exception) {
-                                Log.e("RavenEmuLibrary", "Cannot load stored GB ROM", error)
-                                importError = error.message ?: "Impossible de lancer ce jeu."
-                            } finally {
-                                loading = false
-                                operation.close()
-                            }
-                        }
-                    }
+                onChooseCover = { id -> covers.choose(id, library.games) },
+                onRemoveCover = { id -> covers.remove(id, library.games) },
+                onLaunchLibraryGame = { id, onReady -> library.launch(id, onReady) },
+                importBusy = library.loading,
+                importError = library.importError,
+                onLaunchLinkedGames = { firstId, secondId, onReady ->
+                    library.launchLinked(firstId, secondId, onReady)
                 },
-                importBusy = loading,
-                importError = importError,
-                onLaunchLinkedGames = launchLinked@{ firstId, secondId, onReady ->
-                    if (!loading && !videoEnabled && !linkEnabled) {
-                        val operation = libraryOperations.tryAcquire() ?: return@launchLinked
-                        loading = true
-                        importError = null
-                        scope.launch {
-                            try {
-                                val ids = listOf(firstId, secondId)
-                                val entries = ids.map { id ->
-                                    libraryGames.firstOrNull { it.id == id }
-                                        ?: error("Ce jeu n'est plus dans la bibliothèque.")
-                                }
-                                val infos = withContext(Dispatchers.IO) {
-                                    val roms = entries.map { it.title to romLibrary.readRom(it.id) }
-                                    // A game held by the single player writes its save and
-                                    // leaves memory: only one copy of a save may run at once.
-                                    for (id in ids) gameSession.releaseForSaveImport(id)
-                                    linkSession.load(roms)
-                                }
-                                if (activeGameId in ids) {
-                                    activeGameId = null
-                                    loadedGame = null
-                                }
-                                linkedGames = infos
-                                linkFocus = 0
-                                onReady()
-                            } catch (error: Exception) {
-                                Log.e("RavenEmuLink", "Cannot load linked games", error)
-                                importError = error.message ?: "Impossible de relier ces jeux."
-                            } finally {
-                                loading = false
-                                operation.close()
-                            }
-                        }
-                    }
-                },
-                onStartLinked = { linkEnabled = true },
-                onStopLinked = {
-                    linkPlayback.activeAudio?.stopNow()
-                    linkSession.releaseAllButtons()
-                    linkEnabled = false
-                    linkedGames = emptyList()
-                    linkPlayback.clear()
-                    // Only this pair: a new one may be loaded before the job runs.
-                    val pair = linkSession.pairId
-                    scope.launch(Dispatchers.IO) {
-                        try {
-                            linkSession.unload(pair)
-                        } catch (error: Exception) {
-                            // The pair stays in memory; the next pause or launch retries.
-                            Log.e("RavenEmuSaves", "Battery save on link exit failed", error)
-                        }
-                    }
-                },
-                linkedGames = linkedGames,
+                onStartLinked = { player.startLinked() },
+                onStopLinked = { player.stopLinked() },
+                linkedGames = player.linkedGames,
                 linkFrames = listOf(linkPlayback.firstFrame, linkPlayback.secondFrame),
-                linkFocus = linkFocus,
-                onLinkFocus = { index ->
-                    linkSession.setFocus(index)
-                    linkFocus = index
-                },
+                linkFocus = player.linkFocus,
+                onLinkFocus = { index -> player.focusLinked(index) },
                 linkError = linkPlayback.error,
                 linkMetrics = linkPlayback.metrics,
-                onStartVideo = {
-                    videoEnabled = true
-                    // The game's RetroAchievements session lives while the player is open.
-                    scope.launch {
-                        try { retro.resumeGame() }
-                        catch (error: Exception) {
-                            Log.w("RavenEmuRetro", "RA game session could not start", error)
-                        }
-                    }
-                },
-                onStopVideo = {
-                    scope.launch {
-                        try { retro.leaveGame() }
-                        catch (error: Exception) {
-                            Log.w("RavenEmuRetro", "RA game session could not end", error)
-                        }
-                    }
-                    playback.activeAudio?.stopNow()
-                    gameSession.releaseAllButtons()
-                    videoEnabled = false
-                    pausedForGameMenu = false
-                    playback.frame = null
-                    playback.videoMetrics = null
-                    playback.audioStatus = null
-                    scope.launch(Dispatchers.IO) {
-                        try {
-                            gameSession.saveBatteryIfDirty()
-                        } catch (error: Exception) {
-                            Log.e("RavenEmuSaves", "Battery save on player exit failed", error)
-                        }
-                    }
-                },
+                onStartVideo = { player.startVideo() },
+                onStopVideo = { player.stopVideo() },
                 skinControls = if (activeSkin == null) null else @Composable { image: ImageBitmap?, openMenu: () -> Unit ->
                     val configuration: DeltaSkinControllerConfiguration = activeSkin
                     DeltaSkinPlayer(
                         configuration = configuration,
                         frame = image,
-                        onButtons = { changes ->
-                            if (videoEnabled && foreground && !pausedForGameMenu) {
-                                for (button in changes.released) gameSession.setButton(button, false)
-                                for (button in changes.pressed) gameSession.setButton(button, true)
-                            }
-                        },
+                        onButtons = { changes -> player.setSkinButtons(changes) },
                         onMenu = openMenu,
                         onError = { code ->
-                            Log.w("RavenEmuSkins", "Skin fallback: $code")
-                            val platform = loadedGame?.platform
-                            scope.launch(Dispatchers.IO) {
-                                if (platform != null) deltaSkins.fallback(platform, configuration.skinSha256)
-                            }
-                            skinConfiguration = null
+                            skins.fallBack(code, library.loadedGame?.platform, configuration)
                             gameSession.releaseAllButtons()
-                            Toast.makeText(applicationContext,
-                                "Skin invalide : commandes classiques restaurées",
-                                Toast.LENGTH_LONG).show()
-                            refreshSkins()
                         },
                     )
                 },
-                deltaSkins = skinEntries,
-                onImportSkin = { skinPicker.launch(arrayOf("*/*")) },
-                onToggleSkin = { id ->
-                    scope.launch {
-                        runCatching { withContext(Dispatchers.IO) { deltaSkins.toggle(id) } }
-                        refreshSkins()
-                    }
-                },
-                onDeleteSkin = { id ->
-                    scope.launch {
-                        runCatching { withContext(Dispatchers.IO) { deltaSkins.delete(id) } }
-                        Toast.makeText(applicationContext, "Skin supprimé", Toast.LENGTH_SHORT).show()
-                        refreshSkins()
-                    }
-                },
+                deltaSkins = skins.entries,
+                onImportSkin = { skins.skinPicker.launch(arrayOf("*/*")) },
+                onToggleSkin = { id -> skins.toggle(id) },
+                onDeleteSkin = { id -> skins.delete(id) },
                 touchControlsVisible = !gamepadInUse,
-                controllerMode = controllerMode,
-                onControllerModeChange = { controllerMode = it },
+                controllerMode = player.controllerMode,
+                onControllerModeChange = { player.controllerMode = it },
                 gameMenuRequests = gameMenuRequests,
                 // Touching the screen brings the touch controls back.
                 onScreenTouch = { gamepadInUse = false },
                 onButtonChange = { button: GbButton, pressed: Boolean ->
-                    if (linkEnabled && foreground) {
-                        linkSession.setButton(button, pressed)
-                    } else if (videoEnabled && foreground && !pausedForGameMenu) {
-                        gameSession.setButton(button, pressed)
-                    }
+                    player.setTouchButton(button, pressed)
                 },
                 videoFrame = playback.frame,
                 videoError = playback.videoError,
@@ -752,31 +328,67 @@ class MainActivity : ComponentActivity() {
                     playback.lastAudioReport = playback.activeAudio?.exportReport() ?: playback.lastAudioReport
                     exportAudio.launch("ravenemu-audio-diagnostic.txt")
                 },
-                onGameMenuVisibilityChange = { open ->
-                    if (open) {
-                        slots.refreshSlots()
-                        // Preserve a useful report before closing the track.
-                        playback.activeAudio?.let {
-                            playback.lastAudioReport = it.exportReport()
-                            it.stopNow()
-                        }
-                        gameSession.releaseAllButtons()
-                    }
-                    pausedForGameMenu = open
-                },
+                onGameMenuVisibilityChange = { open -> player.setGameMenuVisible(open) },
                 stateSlots = slots.stateSlots,
                 stateSlotsLoading = slots.stateSlotsLoading,
                 stateOperationBusy = slots.stateOperationBusy,
-                onSaveState = { slot ->
-                    slots.save(slot, playing = loadedGame != null && videoEnabled)
-                },
-                onLoadState = { slot ->
-                    slots.load(slot, playing = loadedGame != null && videoEnabled, retro)
-                },
-                onDeleteState = { slot ->
-                    slots.delete(slot, playing = loadedGame != null && videoEnabled)
-                },
+                onSaveState = { slot -> slots.save(slot, playing = playing()) },
+                onLoadState = { slot -> slots.load(slot, playing = playing(), retro) },
+                onDeleteState = { slot -> slots.delete(slot, playing = playing()) },
             )
+        }
+    }
+
+    // Controller mode: landscape and full screen while a game runs.
+    @Composable
+    private fun ControllerLayout(enabled: Boolean) {
+        LaunchedEffect(enabled) {
+            requestedOrientation = if (enabled) {
+                ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            } else {
+                ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            }
+            WindowCompat.getInsetsController(window, window.decorView).apply {
+                if (enabled) {
+                    systemBarsBehavior =
+                        WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                    hide(WindowInsetsCompat.Type.systemBars())
+                } else {
+                    show(WindowInsetsCompat.Type.systemBars())
+                }
+            }
+        }
+    }
+
+    private fun requestGameMenu(retro: AchievementsController): Boolean =
+        retro.requestPause().also { allowed ->
+            if (!allowed) Toast.makeText(
+                applicationContext,
+                "Mode Hardcore : pause indisponible pour le moment.",
+                Toast.LENGTH_SHORT,
+            ).show()
+        }
+
+    private fun openLink(url: String) {
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                .addCategory(Intent.CATEGORY_BROWSABLE))
+        } catch (error: Exception) {
+            Log.e("RavenEmuSettings", "Cannot open information link", error)
+            Toast.makeText(
+                applicationContext, "Impossible d'ouvrir le lien",
+                Toast.LENGTH_LONG,
+            ).show()
+        }
+    }
+
+    private fun writeAudioReport(uri: Uri) {
+        try {
+            contentResolver.openOutputStream(uri)?.use { stream ->
+                stream.write(playback.lastAudioReport.toByteArray(Charsets.UTF_8))
+            } ?: Log.e("RavenEmuAudio", "Unable to open diagnostic destination")
+        } catch (error: Exception) {
+            Log.e("RavenEmuAudio", "Unable to save audio report", error)
         }
     }
 
