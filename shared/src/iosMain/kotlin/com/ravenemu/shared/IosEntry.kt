@@ -74,7 +74,7 @@ class IosHost {
             batteryFormats = listOf(BatteryFileFormat.SAV),
             onImportGameSave = { transferBusy = true; actions?.importBattery(it) },
             settings = settings,
-            settingsCapabilities = SettingsCapabilities(onlineCovers = false, cartridgeHardware = false, deltaSkins = false, haptics = false, diagnostics = false, audioStartupFade = false),
+            settingsCapabilities = SettingsCapabilities(onlineCovers = false, cartridgeHardware = false, deltaSkins = false, haptics = false, diagnostics = false, audioStartupFade = false, wirelessLink = false),
             onSettingsChange = { updated ->
                 settings = updated.normalized(); writeSettings(settings)
                 actions?.configureAudio(settings.audioEnabled, settings.audioVolume)

@@ -167,7 +167,11 @@ private fun HomePage(retroAvailable: Boolean, capabilities: SettingsCapabilities
             onOpen(Page.RETRO)
         }
     }
-    CategoryRow("Général", if (capabilities.onlineCovers) "Pause, jaquettes et diagnostics" else "Pause automatique") { onOpen(Page.GENERAL) }
+    CategoryRow("Général", when {
+        capabilities.wirelessLink && capabilities.onlineCovers -> "Pause, câble link, jaquettes et diagnostics"
+        capabilities.onlineCovers -> "Pause, jaquettes et diagnostics"
+        else -> "Pause automatique"
+    }) { onOpen(Page.GENERAL) }
     CategoryRow("Audio", "Son du jeu et volume") { onOpen(Page.AUDIO) }
     CategoryRow("Vidéo", "Couleurs, correction LCD, luminosité et contraste") { onOpen(Page.VIDEO) }
     CategoryRow("Interface", if (capabilities.cartridgeHardware) "Vibrations, capteurs, commandes, style et Skin Delta" else "Commandes tactiles et style") { onOpen(Page.INTERFACE) }
@@ -222,6 +226,15 @@ private fun GeneralPage(settings: Settings, capabilities: SettingsCapabilities, 
         "Pause automatique",
         "Le jeu et son audio sont suspendus lorsque RavenEmu passe en arrière-plan ou lorsque le panneau de jeu est ouvert. Ce comportement est fixe pour protéger la partie.",
     )
+    if (capabilities.wirelessLink) {
+        GroupTitle("Câble link")
+        SettingSwitch(
+            "Câble link sans fil",
+            "Quand un jeu se sert de son câble link, RavenEmu cherche un autre téléphone sur le même réseau Wi-Fi et s'y relie tout seul. Le téléphone ne s'annonce sur le réseau local que pendant ce temps.",
+            settings.wirelessLink,
+            editable,
+        ) { update(settings.copy(wirelessLink = it)) }
+    }
     if (capabilities.onlineCovers) {
         GroupTitle("Bibliothèque")
         SettingSwitch(

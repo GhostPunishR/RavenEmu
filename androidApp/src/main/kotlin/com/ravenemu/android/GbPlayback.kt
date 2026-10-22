@@ -21,7 +21,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToLong
 
-/** How long the emulation loop sleeps between idle ticks while the Hardcore barrier holds. */
+/** How long the emulation loop sleeps between idle ticks while a barrier holds. */
 private const val HOLD_TICK_NANOS = 50_000_000L
 
 /**
@@ -44,12 +44,17 @@ internal class GbPlayback(
     private val cartridgeRumble by lazy { CartridgeRumble(context) }
     private val cartridgeSensors by lazy { CartridgeSensors(context) }
 
-    /** Plays [currentGame] until cancelled, then releases its audio, rumble and sensors. */
+    /**
+     * Plays [currentGame] until cancelled, then releases its audio, rumble and
+     * sensors. No frame runs while [partnerPaused]: the wireless link partner
+     * has its game menu open.
+     */
     suspend fun run(
         currentGame: LoadedGameInfo,
         playbackSettings: Settings,
         retro: AchievementsController,
         scope: CoroutineScope,
+        partnerPaused: () -> Boolean = { false },
     ) {
         videoMetrics = null
 
@@ -60,7 +65,7 @@ internal class GbPlayback(
         // while it plays: the game menu and the background stop this run.
         val sensorKinds = gameSession.cartridgeSensors()
         val sensors = if (sensorKinds != 0) cartridgeSensors else null
-        val loop = EmulationLoop(currentGame, playbackSettings, retro, scope, targetFps, sensors)
+        val loop = EmulationLoop(currentGame, playbackSettings, retro, scope, targetFps, sensors, partnerPaused)
 
         try {
             sensors?.start(sensorKinds, playbackSettings)
@@ -106,6 +111,7 @@ internal class GbPlayback(
         private val scope: CoroutineScope,
         targetFps: Double,
         private val sensors: CartridgeSensors?,
+        private val partnerPaused: () -> Boolean,
     ) {
         private val periodNanos = (1_000_000_000.0 / targetFps).roundToLong()
         private val stats = GbVideoMetricsAccumulator(targetFps)
@@ -136,6 +142,13 @@ internal class GbPlayback(
                         if (!retroFailureLogged) Log.w("RavenEmuRetro", "rcheevos idle tick failed", error)
                         retroFailureLogged = true
                     }
+                    LockSupport.parkNanos(HOLD_TICK_NANOS)
+                    continue
+                }
+                // The wireless link partner's game menu is open; the link
+                // still answers it meanwhile (see WirelessLink).
+                if (partnerPaused()) {
+                    held = true
                     LockSupport.parkNanos(HOLD_TICK_NANOS)
                     continue
                 }

@@ -25,7 +25,7 @@ La compatibilité GBC/GBA, les performances sur téléphone et les déblocages R
 - [Bibliothèque et ROM](https://github.com/GhostPunishR/RavenEmu/blob/main/wiki/Bibliotheque-et-ROM.md)
 - [Consoles et compatibilité](https://github.com/GhostPunishR/RavenEmu/blob/main/wiki/Consoles-et-compatibilite.md)
 - [Matrice des tests de jeux](https://github.com/GhostPunishR/RavenEmu/blob/main/wiki/Compatibilite-des-jeux.md)
-- [Jouer à deux sur un téléphone (câble link)](https://github.com/GhostPunishR/RavenEmu/blob/main/wiki/Jouer-a-deux.md)
+- [Jouer à deux (câble link), sur un téléphone ou entre deux téléphones](https://github.com/GhostPunishR/RavenEmu/blob/main/wiki/Jouer-a-deux.md)
 - [RetroAchievements](https://github.com/GhostPunishR/RavenEmu/blob/main/wiki/RetroAchievements.md)
 - [Dépannage](https://github.com/GhostPunishR/RavenEmu/blob/main/wiki/Depannage.md)
 - [Compilation](https://github.com/GhostPunishR/RavenEmu/blob/main/wiki/Compilation.md), [Architecture](https://github.com/GhostPunishR/RavenEmu/blob/main/wiki/Architecture.md) et [Contribution](https://github.com/GhostPunishR/RavenEmu/blob/main/wiki/Contribution.md)

@@ -26,6 +26,7 @@ internal class GbPlayerUi(
     private val linkPlayback: LinkPlayback,
     private val slots: GbStateSlotsUi,
     private val retro: AchievementsController,
+    private val wireless: WirelessLink,
     private val scope: CoroutineScope,
     private val isForeground: () -> Boolean,
 ) {
@@ -70,8 +71,16 @@ internal class GbPlayerUi(
             // A game menu pauses both the native clock and AudioTrack,
             // preventing UI interaction from building an audio backlog.
             if (!foreground || slots.restoringState || pausedForGameMenu) return@LaunchedEffect
-            playback.run(game, settings, retro, scope)
+            playback.run(game, settings, retro, scope) { wireless.partnerPaused }
         }
+
+        // The wireless cable follows the single game on screen; the linked
+        // pair has its own cable.
+        LaunchedEffect(videoEnabled, game, settings.wirelessLink) {
+            wireless.setGame(if (videoEnabled) game else null, settings.wirelessLink)
+        }
+        val stopped = !foreground || slots.restoringState || pausedForGameMenu
+        LaunchedEffect(stopped) { wireless.setPaused(stopped) }
 
         LaunchedEffect(linkEnabled, linkedGames, foreground) {
             if (!linkEnabled || linkedGames.size != 2) {

@@ -129,7 +129,13 @@ class NativeCore(system: Int) : AutoCloseable {
         check(nativeAcknowledgeBattery(requireOpen(), generation)) { nativeLastError() }
     }
 
-    /** Native handle, for [NativeLink] only: the link cable joins two handles. */
+    /**
+     * The game used its link port in the last seconds (a transfer asked for or
+     * awaited, a GBA in multiplayer mode): a wireless partner is welcome.
+     */
+    fun linkWanted(): Boolean = nativeLinkWanted(requireOpen())
+
+    /** Native handle, for [NativeLink] and [NativeRemoteLink]: a cable joins handles. */
     internal val nativeHandle: Long get() = requireOpen()
 
     private fun requireOpen(): Long = pointer.also {
@@ -172,6 +178,7 @@ class NativeCore(system: Int) : AutoCloseable {
     private external fun nativeAcknowledgeBattery(pointer: Long, generation: Long): Boolean
     private external fun nativeBatterySize(pointer: Long): Int
     private external fun nativeCopyBattery(pointer: Long, output: ByteArray): Boolean
+    private external fun nativeLinkWanted(pointer: Long): Boolean
     private external fun nativeLastError(): String
 
     companion object {
