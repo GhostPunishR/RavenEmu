@@ -158,19 +158,22 @@ class RetroAchievementsUiTest {
         var played = 0
         val soundUi = RetroAchievementsUi(context, session, scope, playSound = { played++ })
         try {
-            soundUi.configure(Settings(retroPopupSound = true, retroPopupSeconds = 2))
+            val settings = Settings(retroPopupSound = true, retroPopupSeconds = 2)
+            soundUi.configure(settings)
             soundUi.handleEvent(AchievementClient.Event("completed", "Synthetic", "10/10", "", ""))
             val job = scope.launch { soundUi.showUnlocks() }
             shadowOf(Looper.getMainLooper()).idle()
             assertEquals(1, played)
             shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(3))
-            soundUi.configure(Settings(retroPopupSound = false))
+            // Only mute the chime: keep the same banner duration for the queue.
+            soundUi.configure(settings.copy(retroPopupSound = false))
             soundUi.handleEvent(AchievementClient.Event("achievement", "Second", "", "5", ""))
             Snapshot.sendApplyNotifications()
             shadowOf(Looper.getMainLooper()).idle()
+            assertEquals("Second", soundUi.retroNotice?.title)
             assertEquals(1, played)
             // A game that starts shows its banner without chiming.
-            soundUi.configure(Settings(retroPopupSound = true, retroPopupSeconds = 2))
+            soundUi.configure(settings)
             soundUi.handleEvent(AchievementClient.Event("game", "Synthetic game", "3 succès", "3", ""))
             Snapshot.sendApplyNotifications()
             shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(3))
