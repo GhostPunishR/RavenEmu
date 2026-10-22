@@ -90,20 +90,10 @@ fun SettingsScreen(
         onSettingsChange?.invoke(updated.normalized())
     }
     Column(Modifier.fillMaxSize().background(Background)) {
-        Row(
-            Modifier.fillMaxWidth().height(54.dp).background(Surface),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            IconButton(
-                onClick = {
-                    if (openDocument != null) openDocument = null
-                    else if (page == Page.HOME || aboutOnly) onBack()
-                    else page = Page.HOME
-                },
-                modifier = Modifier.size(48.dp),
-            ) { Text("‹", color = TextMain, fontSize = 30.sp) }
-            Text(openDocument?.title ?: page.label, color = TextMain, fontSize = 20.sp,
-                fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        SettingsTopBar(openDocument?.title ?: page.label) {
+            if (openDocument != null) openDocument = null
+            else if (page == Page.HOME || aboutOnly) onBack()
+            else page = Page.HOME
         }
         Column(
             Modifier.fillMaxSize().verticalScroll(scroll)
@@ -111,21 +101,9 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             val reading = openDocument
+            val editable = onSettingsChange != null
             if (reading != null) DocumentReader(reading) else when (page) {
-                Page.HOME -> {
-                    if (onRetroLogin != null) {
-                        CategoryRow("RetroAchievements", "Compte, succès et progression") {
-                            page = Page.RETRO
-                        }
-                    }
-                    CategoryRow("Général", if (capabilities.onlineCovers) "Pause, jaquettes et diagnostics" else "Pause automatique") { page = Page.GENERAL }
-                    CategoryRow("Audio", "Son du jeu et volume") { page = Page.AUDIO }
-                    CategoryRow("Vidéo", "Couleurs, correction LCD, luminosité et contraste") { page = Page.VIDEO }
-                    CategoryRow("Interface", if (capabilities.cartridgeHardware) "Vibrations, capteurs, commandes, style et Skin Delta" else "Commandes tactiles et style") { page = Page.INTERFACE }
-                    CategoryRow("À propos", "Version, auteur, confidentialité et licences") {
-                        page = Page.ABOUT
-                    }
-                }
+                Page.HOME -> HomePage(onRetroLogin != null, capabilities) { page = it }
                 Page.RETRO -> {
                     RetroAchievementsContent(
                         snapshot = retroSnapshot,
@@ -137,228 +115,16 @@ fun SettingsScreen(
                         onLeaderboard = onRetroLeaderboard,
                         onOpenLink = onOpenLink,
                     )
-                    GroupTitle("Notifications RetroAchievements")
-                    SettingSwitch("Déblocages et bilan", "Afficher les succès obtenus et le jeu terminé.",
-                        settings.retroUnlockPopups, onSettingsChange != null) {
-                        update(settings.copy(retroUnlockPopups = it))
-                    }
-                    SettingSwitch("Progression des succès", "Afficher les hausses mesurées à tour de rôle.",
-                        settings.retroProgressPopups, onSettingsChange != null) {
-                        update(settings.copy(retroProgressPopups = it))
-                    }
-                    SettingSwitch("Son des succès", "Un court carillon, créé par RavenEmu, joué avec le son du jeu pour chaque succès et le jeu terminé.",
-                        settings.retroPopupSound, onSettingsChange != null) {
-                        update(settings.copy(retroPopupSound = it))
-                    }
-                    ChoiceRow("Popups en haut", settings.retroPopupPosition == "top", onSettingsChange != null) {
-                        update(settings.copy(retroPopupPosition = "top"))
-                    }
-                    ChoiceRow("Popups en bas", settings.retroPopupPosition == "bottom", onSettingsChange != null) {
-                        update(settings.copy(retroPopupPosition = "bottom"))
-                    }
-                    SettingSlider("Durée des déblocages", "${settings.retroPopupSeconds} s", settings.retroPopupSeconds,
-                        2..10, onSettingsChange != null) { update(settings.copy(retroPopupSeconds = it)) }
-                    SettingSlider("Durée des progressions", "${settings.retroProgressSeconds} s", settings.retroProgressSeconds,
-                        1..5, onSettingsChange != null) { update(settings.copy(retroProgressSeconds = it)) }
-                    if (!hardcoreAvailable) SettingDescription("Mode Hardcore indisponible",
-                        "L'activation attend la validation de RavenEmu par RetroAchievements. Le mode Softcore reste disponible.")
-                    if (hardcoreAvailable) {
-                        GroupTitle("Mode Hardcore")
-                        SettingSwitch(
-                            "Mode Hardcore",
-                            "Succès comptés en Hardcore. Le chargement des sauvegardes d'état est désactivé et les pauses sont limitées. L'activer redémarre le jeu en cours.",
-                            settings.retroHardcore,
-                            onSettingsChange != null,
-                        ) { update(settings.copy(retroHardcore = it)) }
-                    }
+                    RetroSettings(settings, hardcoreAvailable, editable, update)
                 }
-                Page.GENERAL -> {
-                    GroupTitle("Émulation")
-                    SettingDescription(
-                        "Pause automatique",
-                        "Le jeu et son audio sont suspendus lorsque RavenEmu passe en arrière-plan ou lorsque le panneau de jeu est ouvert. Ce comportement est fixe pour protéger la partie.",
-                    )
-                    if (capabilities.onlineCovers) {
-                        GroupTitle("Bibliothèque")
-                        SettingSwitch(
-                            "Jaquettes en ligne",
-                            "Cherche les jaquettes manquantes sur thumbnails.libretro.com. Ce serveur tiers reçoit le nom des jeux de la bibliothèque et l'adresse IP de l'appareil.",
-                            settings.onlineCovers,
-                            onSettingsChange != null,
-                        ) { update(settings.copy(onlineCovers = it)) }
-                    }
-                    if (capabilities.diagnostics) {
-                        GroupTitle("Diagnostic")
-                        SettingSwitch(
-                            "Afficher les performances",
-                            "FPS, temps du moteur et conversion vidéo dans le lecteur.",
-                            settings.showDiagnostics,
-                            onSettingsChange != null,
-                        ) { update(settings.copy(showDiagnostics = it)) }
-                        Text("Le diagnostic audio reste exportable depuis le menu du jeu.",
-                            color = Muted, fontSize = 12.sp)
-                    }
-                }
-                Page.AUDIO -> {
-                    GroupTitle("Son du jeu")
-                    SettingSwitch(
-                        "Activer le son",
-                        "Conserve l'horloge d'émulation et coupe uniquement la sortie audio.",
-                        settings.audioEnabled,
-                        onSettingsChange != null,
-                    ) { update(settings.copy(audioEnabled = it)) }
-                    SettingSlider(
-                        "Volume", "${settings.audioVolume} %",
-                        settings.audioVolume, 0..100,
-                        settings.audioEnabled && onSettingsChange != null,
-                    ) { update(settings.copy(audioVolume = it)) }
-                    if (capabilities.audioStartupFade) Text("Le fondu de démarrage de 180 ms reste inchangé.",
-                        color = Muted, fontSize = 12.sp)
-                }
-                Page.VIDEO -> {
-                    GroupTitle("Écran")
-                    SettingDescription(
-                        "Profil de couleurs",
-                        "Original préserve les couleurs actuelles ; DMG simule un LCD vert ; Pocket utilise le gris. Ces profils ne concernent que les jeux Game Boy : les jeux Game Boy Color et Game Boy Advance gardent toujours leurs couleurs.",
-                    )
-                    ChoiceRow("Original", settings.videoPalette == "original",
-                        onSettingsChange != null) {
-                        update(settings.copy(videoPalette = "original"))
-                    }
-                    ChoiceRow("DMG vert", settings.videoPalette == "dmg",
-                        onSettingsChange != null) {
-                        update(settings.copy(videoPalette = "dmg"))
-                    }
-                    ChoiceRow("Pocket gris", settings.videoPalette == "pocket",
-                        onSettingsChange != null) {
-                        update(settings.copy(videoPalette = "pocket"))
-                    }
-                    GroupTitle("Correction des couleurs LCD")
-                    SettingSwitch(
-                        "Game Boy Color",
-                        "Atténue les couleurs très vives pour retrouver l'aspect plus mat de l'écran d'origine.",
-                        settings.lcdCorrectionGbc,
-                        onSettingsChange != null,
-                    ) { update(settings.copy(lcdCorrectionGbc = it)) }
-                    SettingSwitch(
-                        "Game Boy Advance",
-                        "Même correction, réglée à part pour la Game Boy Advance.",
-                        settings.lcdCorrectionGba,
-                        onSettingsChange != null,
-                    ) { update(settings.copy(lcdCorrectionGba = it)) }
-                    GroupTitle("Ajustements")
-                    SettingSlider("Luminosité", "${settings.videoBrightness}",
-                        settings.videoBrightness, -50..50, onSettingsChange != null) {
-                        update(settings.copy(videoBrightness = it))
-                    }
-                    SettingSlider("Contraste", "${settings.videoContrast} %",
-                        settings.videoContrast, 50..150, onSettingsChange != null) {
-                        update(settings.copy(videoContrast = it))
-                    }
-                    TextButton(onClick = {
-                        update(settings.copy(
-                            videoPalette = "original", videoBrightness = 0, videoContrast = 100,
-                            lcdCorrectionGbc = false, lcdCorrectionGba = false,
-                        ))
-                    }, enabled = onSettingsChange != null) {
-                        Text("Rétablir l'affichage d'origine", color = Accent)
-                    }
-                }
+                Page.GENERAL -> GeneralPage(settings, capabilities, editable, update)
+                Page.AUDIO -> AudioPage(settings, capabilities, editable, update)
+                Page.VIDEO -> VideoPage(settings, editable, update)
                 Page.INTERFACE -> {
-                    GroupTitle("Commandes tactiles")
-                    if (capabilities.haptics) {
-                        SettingSwitch(
-                            "Retour haptique",
-                            "Petite vibration à la pression des boutons.",
-                            settings.haptics,
-                            onSettingsChange != null,
-                        ) { update(settings.copy(haptics = it)) }
-                    }
-                    if (capabilities.cartridgeHardware) {
-                        SettingSwitch(
-                            "Vibration de la cartouche",
-                            "Fait vibrer le téléphone avec les jeux équipés d'un moteur de vibration (Drill Dozer, WarioWare: Twisted!, cartouches Game Boy Rumble).",
-                            settings.cartridgeRumble,
-                            onSettingsChange != null,
-                        ) { update(settings.copy(cartridgeRumble = it)) }
-                    }
-                    SettingSlider(
-                        "Taille des commandes", "${settings.controlsScale} %",
-                        settings.controlsScale, 80..115, onSettingsChange != null,
-                    ) { update(settings.copy(controlsScale = it)) }
-                    SettingSlider(
-                        "Espacement vertical", "${settings.controlsGap} dp",
-                        settings.controlsGap, 20..80, onSettingsChange != null,
-                    ) { update(settings.copy(controlsGap = it)) }
-                    GroupTitle("Style des boutons")
-                    ChoiceRow("Classique (défaut)", settings.controlsStyle == "classic",
-                        onSettingsChange != null) {
-                        update(settings.copy(controlsStyle = "classic"))
-                    }
-                    ChoiceRow("Contraste élevé", settings.controlsStyle == "contrast",
-                        onSettingsChange != null) {
-                        update(settings.copy(controlsStyle = "contrast"))
-                    }
-                    Text("Le déplacement libre des boutons sera ajouté plus tard.",
-                        color = Muted, fontSize = 12.sp)
-                    TextButton(onClick = {
-                        update(settings.copy(
-                            haptics = false, controlsScale = 100,
-                            controlsGap = 46, controlsStyle = "classic",
-                        ))
-                    }, enabled = onSettingsChange != null) {
-                        Text("Réinitialiser les commandes", color = Accent)
-                    }
-                    if (capabilities.cartridgeHardware) {
-                        GroupTitle("Capteurs de la cartouche")
-                        SettingSwitch(
-                            "Capteurs du téléphone",
-                            "Le gyroscope, l'inclinaison et la lumière du téléphone remplacent ceux de la cartouche : WarioWare: Twisted!, Yoshi Topsy-Turvy, Kirby Tilt 'n' Tumble, Boktai.",
-                            settings.cartridgeSensors,
-                            onSettingsChange != null,
-                        ) { update(settings.copy(cartridgeSensors = it)) }
-                        SettingSwitch(
-                            "Soleil automatique (Boktai)",
-                            "Le capteur de lumière du téléphone règle le soleil : il faut la lumière du jour, celle d'une pièce ne suffit pas. Sans ce capteur, le niveau ci-dessous s'applique.",
-                            settings.solarLightAuto,
-                            onSettingsChange != null && settings.cartridgeSensors,
-                        ) { update(settings.copy(solarLightAuto = it)) }
-                        SettingSlider(
-                            "Soleil (Boktai)", "${settings.solarLightLevel} %",
-                            settings.solarLightLevel, 0..100,
-                            onSettingsChange != null && !(settings.cartridgeSensors && settings.solarLightAuto),
-                        ) { update(settings.copy(solarLightLevel = (it + 5) / 10 * 10)) }
-                    }
+                    ControlsPage(settings, capabilities, editable, update)
                     if (capabilities.deltaSkins) {
-                        GroupTitle("Skin Delta")
-                        Text(
-                            "RavenEmu lit les skins au format .deltaskin, en portrait. Ce projet n'est ni affilié à Delta, ni approuvé par ses auteurs : aucun skin n'est fourni, vous importez les vôtres.",
-                            color = Muted, fontSize = 12.sp,
-                        )
-                        TextButton(onClick = { onImportSkin?.invoke() }, enabled = onImportSkin != null) {
-                            Text("Importer un fichier .deltaskin", color = Accent)
-                        }
-                        if (deltaSkins.isEmpty()) {
-                            Text("Aucun skin installé : commandes classiques.", color = Muted, fontSize = 12.sp)
-                        }
-                        for (skin in deltaSkins) {
-                            Row(
-                                Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                    Text(skin.name, color = TextMain, fontSize = 14.sp,
-                                        fontWeight = FontWeight.Medium)
-                                    Text(skin.console + if (skin.selected) " · utilisé" else "",
-                                        color = if (skin.selected) Accent else Muted, fontSize = 12.sp)
-                                }
-                                TextButton(onClick = { onToggleSkin?.invoke(skin.id) }, enabled = onToggleSkin != null) {
-                                    Text(if (skin.selected) "Retirer" else "Utiliser", color = Accent, fontSize = 13.sp)
-                                }
-                                TextButton(onClick = { skinToDelete = skin }, enabled = onDeleteSkin != null) {
-                                    Text("Supprimer", color = Muted, fontSize = 13.sp)
-                                }
-                            }
+                        DeltaSkinsSection(deltaSkins, onImportSkin, onToggleSkin, onDeleteSkin != null) {
+                            skinToDelete = it
                         }
                     }
                 }
@@ -372,19 +138,301 @@ fun SettingsScreen(
         }
     }
     skinToDelete?.let { skin ->
-        AlertDialog(
-            onDismissRequest = { skinToDelete = null },
-            title = { Text("Supprimer ce skin ?") },
-            text = { Text("${skin.name} sera supprimé de l'appareil. Les commandes classiques reviennent s'il était utilisé.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    onDeleteSkin?.invoke(skin.id)
-                    skinToDelete = null
-                }) { Text("Supprimer") }
-            },
-            dismissButton = { TextButton(onClick = { skinToDelete = null }) { Text("Annuler") } },
-        )
+        DeleteSkinDialog(skin, onConfirm = {
+            onDeleteSkin?.invoke(skin.id)
+            skinToDelete = null
+        }, onDismiss = { skinToDelete = null })
     }
+}
+
+@Composable
+private fun SettingsTopBar(title: String, onBack: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().height(54.dp).background(Surface),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButton(
+            onClick = onBack,
+            modifier = Modifier.size(48.dp),
+        ) { Text("‹", color = TextMain, fontSize = 30.sp) }
+        Text(title, color = TextMain, fontSize = 20.sp,
+            fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+@Composable
+private fun HomePage(retroAvailable: Boolean, capabilities: SettingsCapabilities, onOpen: (Page) -> Unit) {
+    if (retroAvailable) {
+        CategoryRow("RetroAchievements", "Compte, succès et progression") {
+            onOpen(Page.RETRO)
+        }
+    }
+    CategoryRow("Général", if (capabilities.onlineCovers) "Pause, jaquettes et diagnostics" else "Pause automatique") { onOpen(Page.GENERAL) }
+    CategoryRow("Audio", "Son du jeu et volume") { onOpen(Page.AUDIO) }
+    CategoryRow("Vidéo", "Couleurs, correction LCD, luminosité et contraste") { onOpen(Page.VIDEO) }
+    CategoryRow("Interface", if (capabilities.cartridgeHardware) "Vibrations, capteurs, commandes, style et Skin Delta" else "Commandes tactiles et style") { onOpen(Page.INTERFACE) }
+    CategoryRow("À propos", "Version, auteur, confidentialité et licences") {
+        onOpen(Page.ABOUT)
+    }
+}
+
+/** How RetroAchievements notifies, and Hardcore once the app is approved. */
+@Composable
+private fun RetroSettings(settings: Settings, hardcoreAvailable: Boolean, editable: Boolean, update: (Settings) -> Unit) {
+    GroupTitle("Notifications RetroAchievements")
+    SettingSwitch("Déblocages et bilan", "Afficher les succès obtenus et le jeu terminé.",
+        settings.retroUnlockPopups, editable) {
+        update(settings.copy(retroUnlockPopups = it))
+    }
+    SettingSwitch("Progression des succès", "Afficher les hausses mesurées à tour de rôle.",
+        settings.retroProgressPopups, editable) {
+        update(settings.copy(retroProgressPopups = it))
+    }
+    SettingSwitch("Son des succès", "Un court carillon, créé par RavenEmu, joué avec le son du jeu pour chaque succès et le jeu terminé.",
+        settings.retroPopupSound, editable) {
+        update(settings.copy(retroPopupSound = it))
+    }
+    ChoiceRow("Popups en haut", settings.retroPopupPosition == "top", editable) {
+        update(settings.copy(retroPopupPosition = "top"))
+    }
+    ChoiceRow("Popups en bas", settings.retroPopupPosition == "bottom", editable) {
+        update(settings.copy(retroPopupPosition = "bottom"))
+    }
+    SettingSlider("Durée des déblocages", "${settings.retroPopupSeconds} s", settings.retroPopupSeconds,
+        2..10, editable) { update(settings.copy(retroPopupSeconds = it)) }
+    SettingSlider("Durée des progressions", "${settings.retroProgressSeconds} s", settings.retroProgressSeconds,
+        1..5, editable) { update(settings.copy(retroProgressSeconds = it)) }
+    if (!hardcoreAvailable) SettingDescription("Mode Hardcore indisponible",
+        "L'activation attend la validation de RavenEmu par RetroAchievements. Le mode Softcore reste disponible.")
+    if (hardcoreAvailable) {
+        GroupTitle("Mode Hardcore")
+        SettingSwitch(
+            "Mode Hardcore",
+            "Succès comptés en Hardcore. Le chargement des sauvegardes d'état est désactivé et les pauses sont limitées. L'activer redémarre le jeu en cours.",
+            settings.retroHardcore,
+            editable,
+        ) { update(settings.copy(retroHardcore = it)) }
+    }
+}
+
+@Composable
+private fun GeneralPage(settings: Settings, capabilities: SettingsCapabilities, editable: Boolean, update: (Settings) -> Unit) {
+    GroupTitle("Émulation")
+    SettingDescription(
+        "Pause automatique",
+        "Le jeu et son audio sont suspendus lorsque RavenEmu passe en arrière-plan ou lorsque le panneau de jeu est ouvert. Ce comportement est fixe pour protéger la partie.",
+    )
+    if (capabilities.onlineCovers) {
+        GroupTitle("Bibliothèque")
+        SettingSwitch(
+            "Jaquettes en ligne",
+            "Cherche les jaquettes manquantes sur thumbnails.libretro.com. Ce serveur tiers reçoit le nom des jeux de la bibliothèque et l'adresse IP de l'appareil.",
+            settings.onlineCovers,
+            editable,
+        ) { update(settings.copy(onlineCovers = it)) }
+    }
+    if (capabilities.diagnostics) {
+        GroupTitle("Diagnostic")
+        SettingSwitch(
+            "Afficher les performances",
+            "FPS, temps du moteur et conversion vidéo dans le lecteur.",
+            settings.showDiagnostics,
+            editable,
+        ) { update(settings.copy(showDiagnostics = it)) }
+        Text("Le diagnostic audio reste exportable depuis le menu du jeu.",
+            color = Muted, fontSize = 12.sp)
+    }
+}
+
+@Composable
+private fun AudioPage(settings: Settings, capabilities: SettingsCapabilities, editable: Boolean, update: (Settings) -> Unit) {
+    GroupTitle("Son du jeu")
+    SettingSwitch(
+        "Activer le son",
+        "Conserve l'horloge d'émulation et coupe uniquement la sortie audio.",
+        settings.audioEnabled,
+        editable,
+    ) { update(settings.copy(audioEnabled = it)) }
+    SettingSlider(
+        "Volume", "${settings.audioVolume} %",
+        settings.audioVolume, 0..100,
+        settings.audioEnabled && editable,
+    ) { update(settings.copy(audioVolume = it)) }
+    if (capabilities.audioStartupFade) Text("Le fondu de démarrage de 180 ms reste inchangé.",
+        color = Muted, fontSize = 12.sp)
+}
+
+@Composable
+private fun VideoPage(settings: Settings, editable: Boolean, update: (Settings) -> Unit) {
+    GroupTitle("Écran")
+    SettingDescription(
+        "Profil de couleurs",
+        "Original préserve les couleurs actuelles ; DMG simule un LCD vert ; Pocket utilise le gris. Ces profils ne concernent que les jeux Game Boy : les jeux Game Boy Color et Game Boy Advance gardent toujours leurs couleurs.",
+    )
+    ChoiceRow("Original", settings.videoPalette == "original",
+        editable) {
+        update(settings.copy(videoPalette = "original"))
+    }
+    ChoiceRow("DMG vert", settings.videoPalette == "dmg",
+        editable) {
+        update(settings.copy(videoPalette = "dmg"))
+    }
+    ChoiceRow("Pocket gris", settings.videoPalette == "pocket",
+        editable) {
+        update(settings.copy(videoPalette = "pocket"))
+    }
+    GroupTitle("Correction des couleurs LCD")
+    SettingSwitch(
+        "Game Boy Color",
+        "Atténue les couleurs très vives pour retrouver l'aspect plus mat de l'écran d'origine.",
+        settings.lcdCorrectionGbc,
+        editable,
+    ) { update(settings.copy(lcdCorrectionGbc = it)) }
+    SettingSwitch(
+        "Game Boy Advance",
+        "Même correction, réglée à part pour la Game Boy Advance.",
+        settings.lcdCorrectionGba,
+        editable,
+    ) { update(settings.copy(lcdCorrectionGba = it)) }
+    GroupTitle("Ajustements")
+    SettingSlider("Luminosité", "${settings.videoBrightness}",
+        settings.videoBrightness, -50..50, editable) {
+        update(settings.copy(videoBrightness = it))
+    }
+    SettingSlider("Contraste", "${settings.videoContrast} %",
+        settings.videoContrast, 50..150, editable) {
+        update(settings.copy(videoContrast = it))
+    }
+    TextButton(onClick = {
+        update(settings.copy(
+            videoPalette = "original", videoBrightness = 0, videoContrast = 100,
+            lcdCorrectionGbc = false, lcdCorrectionGba = false,
+        ))
+    }, enabled = editable) {
+        Text("Rétablir l'affichage d'origine", color = Accent)
+    }
+}
+
+/** Touch controls, their style, and the cartridge hardware the phone stands in for. */
+@Composable
+private fun ControlsPage(settings: Settings, capabilities: SettingsCapabilities, editable: Boolean, update: (Settings) -> Unit) {
+    GroupTitle("Commandes tactiles")
+    if (capabilities.haptics) {
+        SettingSwitch(
+            "Retour haptique",
+            "Petite vibration à la pression des boutons.",
+            settings.haptics,
+            editable,
+        ) { update(settings.copy(haptics = it)) }
+    }
+    if (capabilities.cartridgeHardware) {
+        SettingSwitch(
+            "Vibration de la cartouche",
+            "Fait vibrer le téléphone avec les jeux équipés d'un moteur de vibration (Drill Dozer, WarioWare: Twisted!, cartouches Game Boy Rumble).",
+            settings.cartridgeRumble,
+            editable,
+        ) { update(settings.copy(cartridgeRumble = it)) }
+    }
+    SettingSlider(
+        "Taille des commandes", "${settings.controlsScale} %",
+        settings.controlsScale, 80..115, editable,
+    ) { update(settings.copy(controlsScale = it)) }
+    SettingSlider(
+        "Espacement vertical", "${settings.controlsGap} dp",
+        settings.controlsGap, 20..80, editable,
+    ) { update(settings.copy(controlsGap = it)) }
+    GroupTitle("Style des boutons")
+    ChoiceRow("Classique (défaut)", settings.controlsStyle == "classic",
+        editable) {
+        update(settings.copy(controlsStyle = "classic"))
+    }
+    ChoiceRow("Contraste élevé", settings.controlsStyle == "contrast",
+        editable) {
+        update(settings.copy(controlsStyle = "contrast"))
+    }
+    Text("Le déplacement libre des boutons sera ajouté plus tard.",
+        color = Muted, fontSize = 12.sp)
+    TextButton(onClick = {
+        update(settings.copy(
+            haptics = false, controlsScale = 100,
+            controlsGap = 46, controlsStyle = "classic",
+        ))
+    }, enabled = editable) {
+        Text("Réinitialiser les commandes", color = Accent)
+    }
+    if (capabilities.cartridgeHardware) {
+        GroupTitle("Capteurs de la cartouche")
+        SettingSwitch(
+            "Capteurs du téléphone",
+            "Le gyroscope, l'inclinaison et la lumière du téléphone remplacent ceux de la cartouche : WarioWare: Twisted!, Yoshi Topsy-Turvy, Kirby Tilt 'n' Tumble, Boktai.",
+            settings.cartridgeSensors,
+            editable,
+        ) { update(settings.copy(cartridgeSensors = it)) }
+        SettingSwitch(
+            "Soleil automatique (Boktai)",
+            "Le capteur de lumière du téléphone règle le soleil : il faut la lumière du jour, celle d'une pièce ne suffit pas. Sans ce capteur, le niveau ci-dessous s'applique.",
+            settings.solarLightAuto,
+            editable && settings.cartridgeSensors,
+        ) { update(settings.copy(solarLightAuto = it)) }
+        SettingSlider(
+            "Soleil (Boktai)", "${settings.solarLightLevel} %",
+            settings.solarLightLevel, 0..100,
+            editable && !(settings.cartridgeSensors && settings.solarLightAuto),
+        ) { update(settings.copy(solarLightLevel = (it + 5) / 10 * 10)) }
+    }
+}
+
+@Composable
+private fun DeltaSkinsSection(
+    deltaSkins: List<DeltaSkinEntry>,
+    onImportSkin: (() -> Unit)?,
+    onToggleSkin: ((String) -> Unit)?,
+    deleteEnabled: Boolean,
+    onDelete: (DeltaSkinEntry) -> Unit,
+) {
+    GroupTitle("Skin Delta")
+    Text(
+        "RavenEmu lit les skins au format .deltaskin, en portrait. Ce projet n'est ni affilié à Delta, ni approuvé par ses auteurs : aucun skin n'est fourni, vous importez les vôtres.",
+        color = Muted, fontSize = 12.sp,
+    )
+    TextButton(onClick = { onImportSkin?.invoke() }, enabled = onImportSkin != null) {
+        Text("Importer un fichier .deltaskin", color = Accent)
+    }
+    if (deltaSkins.isEmpty()) {
+        Text("Aucun skin installé : commandes classiques.", color = Muted, fontSize = 12.sp)
+    }
+    for (skin in deltaSkins) {
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(skin.name, color = TextMain, fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium)
+                Text(skin.console + if (skin.selected) " · utilisé" else "",
+                    color = if (skin.selected) Accent else Muted, fontSize = 12.sp)
+            }
+            TextButton(onClick = { onToggleSkin?.invoke(skin.id) }, enabled = onToggleSkin != null) {
+                Text(if (skin.selected) "Retirer" else "Utiliser", color = Accent, fontSize = 13.sp)
+            }
+            TextButton(onClick = { onDelete(skin) }, enabled = deleteEnabled) {
+                Text("Supprimer", color = Muted, fontSize = 13.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun DeleteSkinDialog(skin: DeltaSkinEntry, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Supprimer ce skin ?") },
+        text = { Text("${skin.name} sera supprimé de l'appareil. Les commandes classiques reviennent s'il était utilisé.") },
+        confirmButton = {
+            TextButton(onClick = onConfirm) { Text("Supprimer") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Annuler") } },
+    )
 }
 
 @Composable
