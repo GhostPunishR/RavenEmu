@@ -3,6 +3,8 @@ package com.ravenemu.android
 import android.content.Context
 import android.os.SystemClock
 import android.util.Log
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -72,6 +74,34 @@ internal class RetroAchievementsUi(
 
     /** Hardcore was switched off by the app (the game could not restart): the settings follow. */
     var onHardcoreRefused: () -> Unit = {}
+
+    /**
+     * Badges, Hardcore and the session restored at launch; the popups while
+     * a game shows in the foreground, the SDK ticking on its own otherwise.
+     */
+    @Composable
+    fun Effects(hardcore: Boolean, player: GbPlayerUi, foreground: Boolean) {
+        LaunchedEffect(retroSnapshot.avatarUrl, retroSnapshot.entries.map { it.badgeUrl }.distinct()) {
+            loadImages()
+        }
+        // Effective only once RetroAchievements approved the app.
+        LaunchedEffect(retro, hardcore) {
+            runCatching { retro.setHardcore(hardcore) }
+                .onFailure { Log.w("RavenEmuRetro", "Hardcore switch failed", it) }
+        }
+        LaunchedEffect(retro) { restore() }
+        LaunchedEffect(retroProgress?.badgeUrl) { loadProgressBadge() }
+        LaunchedEffect(player.videoEnabled, foreground) {
+            if (player.videoEnabled && foreground) showUnlocks() else hidePopups()
+        }
+        LaunchedEffect(player.videoEnabled, foreground) {
+            if (player.videoEnabled && foreground) showProgress()
+            else hideProgress()
+        }
+        LaunchedEffect(retro, player.videoEnabled, player.pausedForGameMenu, foreground) {
+            tickWhile { !player.gameRunning }
+        }
+    }
 
     fun configure(settings: Settings) {
         preferences = settings.normalized()
