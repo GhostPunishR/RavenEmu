@@ -97,7 +97,7 @@ fun RavenEmuApp(
     onRetroDisconnect: (() -> Unit)? = null,
     onRetroRetry: (() -> Unit)? = null,
     onRetroLeaderboard: ((Int, Boolean) -> Unit)? = null,
-    retroNotice: String? = null,
+    retroNotice: RetroBanner? = null,
     retroNoticeBadge: ImageBitmap? = null,
     retroNoticeVisible: Boolean = retroNotice != null,
     retroIndicators: List<String> = emptyList(),

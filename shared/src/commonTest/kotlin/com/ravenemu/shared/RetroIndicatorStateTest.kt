@@ -44,13 +44,25 @@ class RetroIndicatorStateTest {
 
     @Test
     fun popupTextsForUnlocksLeaderboardsAndNotices() {
-        assertEquals("Succès débloqué · Badge (10 pts)", RetroNoticeText.of("achievement", "Badge", "desc", "10"))
-        assertEquals("Classement envoyé · Speedrun", RetroNoticeText.of("leaderboard_submitted", "Speedrun", "desc", "4"))
-        assertEquals("Erreur RetroAchievements\nLe serveur a refusé.",
+        assertEquals(RetroBanner("Succès débloqué · 10 points", "Badge", award = true),
+            RetroNoticeText.of("achievement", "Badge", "desc", "10"))
+        assertEquals("Succès débloqué · 1 point", RetroNoticeText.of("achievement", "Badge", "", "1")?.heading)
+        assertEquals(RetroBanner("Classement envoyé", "Speedrun"), RetroNoticeText.of("leaderboard_submitted", "Speedrun", "desc", "4"))
+        assertEquals(RetroBanner("Erreur RetroAchievements", "Le serveur a refusé."),
             RetroNoticeText.of("notice", "Erreur RetroAchievements", "Le serveur a refusé.", ""))
-        assertEquals("Mode Hardcore désactivé\nLe redémarrage du jeu a échoué.",
+        assertEquals(RetroBanner("Mode Hardcore désactivé", "Le redémarrage du jeu a échoué."),
             RetroNoticeText.of("hardcore_refused", "Mode Hardcore désactivé", "Le redémarrage du jeu a échoué.", ""))
         assertNull(RetroNoticeText.of("login", "user", "", "token"))
         assertNull(RetroNoticeText.of("tracker_show", "x", "", ""))
+    }
+
+    @Test
+    fun aGameThatStartsShowsWhatItOffersWithoutChiming() {
+        assertEquals(RetroBanner("42 succès disponibles", "Synthetic game"),
+            RetroNoticeText.of("game", "Synthetic game", "42 succès", "42"))
+        assertEquals("1 succès disponible", RetroNoticeText.of("game", "G", "", "1")?.heading)
+        assertEquals("Aucun succès disponible", RetroNoticeText.of("game", "G", "", "0")?.heading)
+        assertEquals("Succès disponibles", RetroNoticeText.of("game", "G", "", "")?.heading)
+        assertFalse(RetroNoticeText.of("game", "G", "", "3")!!.award)
     }
 }

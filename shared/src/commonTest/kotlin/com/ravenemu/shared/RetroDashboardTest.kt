@@ -17,10 +17,10 @@ class RetroDashboardTest {
     }
 
     @Test fun completionAndScoreboardMessagesPreserveTheSdkResults() {
-        assertEquals("Jeu terminé · Synthetic\nJoueur · 10/10 succès · 50 points",
+        assertEquals(RetroBanner("Jeu terminé", "Synthetic", award = true),
             RetroNoticeText.of("completed", "Synthetic", "Joueur · 10/10 succès · 50 points", ""))
-        assertEquals("Jeu maîtrisé · Synthetic\nJoueur", RetroNoticeText.of("mastered", "Synthetic", "Joueur", ""))
-        assertEquals("Classement terminé · Course\nScore : 12.34 · Rang : 2/10",
+        assertEquals(RetroBanner("Jeu maîtrisé", "Synthetic", award = true), RetroNoticeText.of("mastered", "Synthetic", "Joueur", ""))
+        assertEquals(RetroBanner("Classement terminé · Course", "Score : 12.34 · Rang : 2/10"),
             RetroNoticeText.of("leaderboard_scoreboard", "Course", "Score : 12.34 · Rang : 2/10", "7"))
     }
 

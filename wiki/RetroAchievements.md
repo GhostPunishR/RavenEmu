@@ -39,9 +39,13 @@ Chaque succès distingue **débloqué localement**, **en attente d'envoi** et **
 
 Les demandes légitimes du SDK restent dans le journal chiffré jusqu'à confirmation, à raison d'une entrée par succès : chaque nouvelle tentative du SDK remplace la précédente. À la connexion suivante au même compte, elles sont retentées ; une tentative confirmée retire toutes celles du même succès. Une erreur de stockage affiche un avertissement : garder le jeu ouvert jusqu'à la synchronisation. Se déconnecter explicitement efface ce journal local.
 
+## Bandeau des succès
+
+Comme sur PC, chaque notification est un bandeau centré. Le badge descend du haut de l'écran (ou monte du bas), puis le bandeau s'ouvre de part et d'autre avec un en-tête et le titre en grand. À la fin, il se replie dans le badge, qui repart. Un succès débloqué ou un jeu terminé a un cadre et un en-tête dorés. Au lancement d'un jeu reconnu, le bandeau montre l'icône du jeu et le nombre de succès disponibles. Les progressions gardent leur carte, sous le bandeau.
+
 ## Réglages des notifications
 
-Dans **Paramètres → RetroAchievements**, les popups de déblocage et de fin de jeu et ceux de progression ont des interrupteurs distincts. Leur position peut être en haut ou en bas. La durée des déblocages va de 2 à 10 secondes, celle des progressions de 1 à 5 secondes ; les nouvelles durées s'appliquent aux prochains tours. Le son des succès est facultatif, généré localement et désactivé par défaut. Les erreurs et avis de connexion ne sont pas masqués par l'interrupteur des succès.
+Dans **Paramètres → RetroAchievements**, les popups de déblocage et de fin de jeu et ceux de progression ont des interrupteurs distincts. Leur position peut être en haut ou en bas. La durée des déblocages va de 2 à 10 secondes, celle des progressions de 1 à 5 secondes ; les nouvelles durées s'appliquent aux prochains tours. **Son des succès**, activé par défaut, joue un court carillon créé par RavenEmu, mélangé au son du jeu et à son volume. Les erreurs et avis de connexion ne sont pas masqués par l'interrupteur des succès.
 
 Une fin de jeu affiche son image, le compte, le nombre de succès et les points. **Jeu terminé** correspond au Softcore ; **Jeu maîtrisé** est réservé au Hardcore. Ce bilan suit l'événement du SDK et ne garantit pas à lui seul la synchronisation de tous les succès : consulter aussi les états d'envoi.
 

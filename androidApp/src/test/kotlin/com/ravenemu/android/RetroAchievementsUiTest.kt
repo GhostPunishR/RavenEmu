@@ -169,6 +169,13 @@ class RetroAchievementsUiTest {
             Snapshot.sendApplyNotifications()
             shadowOf(Looper.getMainLooper()).idle()
             assertEquals(1, played)
+            // A game that starts shows its banner without chiming.
+            soundUi.configure(Settings(retroPopupSound = true, retroPopupSeconds = 2))
+            soundUi.handleEvent(AchievementClient.Event("game", "Synthetic game", "3 succès", "3", ""))
+            Snapshot.sendApplyNotifications()
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(3))
+            assertEquals("3 succès disponibles", soundUi.retroNotice?.heading)
+            assertEquals(1, played)
             job.cancel()
         } finally { soundUi.retro.close() }
     }
@@ -197,9 +204,9 @@ class RetroAchievementsUiTest {
         ui.handleEvent(AchievementClient.Event("offline", "Hors ligne", "", "", ""))
         Snapshot.sendApplyNotifications()
         shadowOf(Looper.getMainLooper()).idle()
-        assertEquals("Hors ligne", ui.retroNotice)
+        assertEquals("Hors ligne", ui.retroNotice?.heading)
         ui.configure(Settings(retroUnlockPopups = false))
-        assertEquals("Hors ligne", ui.retroNotice)
+        assertEquals("Hors ligne", ui.retroNotice?.heading)
         job.cancel()
     }
 
@@ -210,14 +217,14 @@ class RetroAchievementsUiTest {
         ui.handleEvent(AchievementClient.Event("completed", "Synthetic", "first · 10/10", "", ""))
         Snapshot.sendApplyNotifications()
         shadowOf(Looper.getMainLooper()).idle()
-        assertTrue(ui.retroNotice.orEmpty().contains("Synthetic"))
+        assertEquals("Synthetic", ui.retroNotice?.title)
         ui.updateSnapshot(RetroSnapshot(username = "second", gameId = 1))
         assertNull(ui.retroNotice)
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(6))
         ui.handleEvent(AchievementClient.Event("achievement", "Nouveau", "", "5", ""))
         Snapshot.sendApplyNotifications()
         shadowOf(Looper.getMainLooper()).idle()
-        assertTrue(ui.retroNotice.orEmpty().contains("Nouveau"))
+        assertEquals("Nouveau", ui.retroNotice?.title)
         job.cancel()
     }
 

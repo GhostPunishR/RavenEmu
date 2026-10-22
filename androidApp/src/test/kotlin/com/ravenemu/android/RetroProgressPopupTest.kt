@@ -18,6 +18,7 @@ import androidx.compose.ui.text.TextLayoutResult
 import com.ravenemu.shared.GameEntry
 import com.ravenemu.shared.GamePlatform
 import com.ravenemu.shared.RavenEmuApp
+import com.ravenemu.shared.RetroBanner
 import com.ravenemu.shared.RetroProgress
 import org.junit.Rule
 import org.junit.Test
@@ -34,7 +35,8 @@ import kotlin.test.assertFalse
 class RetroProgressPopupTest {
     @get:Rule val compose = createComposeRule()
     private val progress = mutableStateOf<RetroProgress?>(null)
-    private val notice = mutableStateOf<String?>(null)
+    private val notice = mutableStateOf<RetroBanner?>(null)
+    private val noticeBadge = mutableStateOf<ImageBitmap?>(null)
     private val images = mutableStateOf<Map<String, ImageBitmap>>(emptyMap())
 
     @Test
@@ -76,13 +78,26 @@ class RetroProgressPopupTest {
         openPlayer()
         compose.runOnIdle {
             progress.value = RetroProgress("Collection", "4/10", "")
-            notice.value = "Succès débloqué · Victoire (5 pts)"
+            notice.value = RetroBanner("Succès débloqué · 5 points", "Victoire", award = true)
         }
         compose.onNodeWithText("4/10", substring = true).assertIsDisplayed()
-        compose.onNodeWithText("Succès débloqué · Victoire (5 pts)").assertIsDisplayed()
+        compose.onNodeWithText("Succès débloqué · 5 points").assertIsDisplayed()
+        compose.onNodeWithText("Victoire").assertIsDisplayed()
         compose.runOnIdle { notice.value = null }
-        compose.onNodeWithText("Succès débloqué · Victoire (5 pts)").assertDoesNotExist()
+        compose.onNodeWithText("Victoire").assertDoesNotExist()
         compose.onNodeWithText("4/10", substring = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun `le bandeau d'un jeu qui demarre montre son icone, sinon l'etoile`() {
+        openPlayer()
+        compose.runOnIdle { notice.value = RetroBanner("12 succès disponibles", "Jeu de test - Version Démo") }
+        compose.onNodeWithText("12 succès disponibles").assertIsDisplayed()
+        compose.onNodeWithText("Jeu de test - Version Démo").assertIsDisplayed()
+        compose.onNodeWithText("★").assertIsDisplayed()
+        compose.runOnIdle { noticeBadge.value = ImageBitmap(64, 64) }
+        compose.onNodeWithContentDescription("Badge du bandeau").assertIsDisplayed()
+        compose.onNodeWithText("★").assertDoesNotExist()
     }
 
     @Test
@@ -120,6 +135,7 @@ class RetroProgressPopupTest {
                 controllerMode = controllerMode,
                 retroProgress = progress.value,
                 retroNotice = notice.value,
+                retroNoticeBadge = noticeBadge.value,
                 retroImages = images.value,
                 skinControls = if (skin) ({ _, _ -> Box(Modifier.fillMaxSize()) }) else null,
             )

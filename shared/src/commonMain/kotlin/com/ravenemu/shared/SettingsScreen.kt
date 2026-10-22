@@ -146,7 +146,7 @@ fun SettingsScreen(
                         settings.retroProgressPopups, onSettingsChange != null) {
                         update(settings.copy(retroProgressPopups = it))
                     }
-                    SettingSwitch("Son des notifications", "Un signal discret pour les succès et le jeu terminé.",
+                    SettingSwitch("Son des succès", "Un court carillon, créé par RavenEmu, joué avec le son du jeu pour chaque succès et le jeu terminé.",
                         settings.retroPopupSound, onSettingsChange != null) {
                         update(settings.copy(retroPopupSound = it))
                     }

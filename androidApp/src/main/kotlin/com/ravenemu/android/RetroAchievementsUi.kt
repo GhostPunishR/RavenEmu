@@ -10,6 +10,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import com.ravenemu.shared.RetroBanner
+import com.ravenemu.shared.RetroBannerMotion
 import com.ravenemu.shared.RetroIndicatorState
 import com.ravenemu.shared.RetroNoticeText
 import com.ravenemu.shared.RetroProgress
@@ -37,7 +39,8 @@ internal class RetroAchievementsUi(
     applicationContext: Context,
     gameSession: AndroidGbSession,
     private val scope: CoroutineScope,
-    private val playSound: () -> Unit = RetroNotificationSound::play,
+    /** The unlock chime; the activity plays it through the running game's audio. */
+    private val playSound: () -> Unit = {},
     private val nowMillis: () -> Long = SystemClock::uptimeMillis,
 ) {
     var retroSnapshot by mutableStateOf(RetroSnapshot())
@@ -46,7 +49,7 @@ internal class RetroAchievementsUi(
         private set
     var retroBusy by mutableStateOf(false)
         private set
-    var retroNotice by mutableStateOf<String?>(null)
+    var retroNotice by mutableStateOf<RetroBanner?>(null)
         private set
     var retroNoticeBadge by mutableStateOf<ImageBitmap?>(null)
         private set
@@ -136,11 +139,10 @@ internal class RetroAchievementsUi(
             retroIndicatorState.update(event.kind, event.extra, event.title, event.detail, event.image)
             retroIndicators = retroIndicatorState.labels
         }
-        val popup = RetroNoticeText.of(event.kind, event.title, event.detail, event.extra)
-        val award = event.kind in setOf("achievement", "completed", "mastered")
-        if (popup != null && (!award || preferences.retroUnlockPopups) && retroUnlocks.size < MAX_QUEUED_UNLOCKS) {
-            val badge = if (award) event.image else ""
-            retroUnlocks.add(RetroPopup(popup, badge, award))
+        // Unlocks and completed games show their badge, a game that starts its icon.
+        val banner = RetroNoticeText.of(event.kind, event.title, event.detail, event.extra)
+        if (banner != null && (!banner.award || preferences.retroUnlockPopups) && retroUnlocks.size < MAX_QUEUED_UNLOCKS) {
+            retroUnlocks.add(RetroPopup(banner, event.image))
         }
         if (event.kind == "login_error" || event.kind == "login") {
             retroBusy = false
@@ -220,8 +222,8 @@ internal class RetroAchievementsUi(
     }
 
     /**
-     * One popup at a time, each for the same duration. The badge is
-     * fetched before the popup opens, so it never changes size while
+     * One banner at a time, each for the same duration, its motion included.
+     * The badge is fetched before the banner opens, so it never changes while
      * shown; after 2 s without it, the star stands in.
      */
     suspend fun showUnlocks() {
@@ -242,14 +244,14 @@ internal class RetroAchievementsUi(
             if (retroUnlocks.firstOrNull() !== unlock) continue
             currentPopup = unlock
             retroNoticeBadge = badge
-            retroNotice = unlock.text
+            retroNotice = unlock.banner
             retroNoticeVisible = true
             if (unlock.award && preferences.retroPopupSound) playSound()
-            delay(preferences.retroPopupSeconds * 1000L - 200L)
+            delay(preferences.retroPopupSeconds * 1000L - RetroBannerMotion.EXIT_MILLIS)
             if (retroUnlocks.firstOrNull() !== unlock) continue
-            // Fade out with the same content, then clear it.
+            // Fold and leave with the same content, then clear it.
             retroNoticeVisible = false
-            delay(400)
+            delay(RetroBannerMotion.EXIT_MILLIS + 50L)
             if (retroUnlocks.firstOrNull() === unlock) {
                 hideNotice()
                 retroUnlocks.removeAt(0)
@@ -320,4 +322,6 @@ private const val MAX_RETRO_IMAGES = 600
 /** A burst beyond this is not worth minutes of popups; the list keeps them all. */
 private const val MAX_QUEUED_UNLOCKS = 20
 
-private class RetroPopup(val text: String, val badgeUrl: String, val award: Boolean)
+private class RetroPopup(val banner: RetroBanner, val badgeUrl: String) {
+    val award: Boolean get() = banner.award
+}

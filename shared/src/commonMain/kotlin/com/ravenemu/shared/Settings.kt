@@ -62,7 +62,8 @@ data class Settings(
     val retroHardcore: Boolean = false,
     val retroUnlockPopups: Boolean = true,
     val retroProgressPopups: Boolean = true,
-    val retroPopupSound: Boolean = false,
+    /** The unlock chime, played with the game's sound; on by default, as on the PC. */
+    val retroPopupSound: Boolean = true,
     val retroPopupPosition: String = "top",
     val retroPopupSeconds: Int = 5,
     val retroProgressSeconds: Int = 2,

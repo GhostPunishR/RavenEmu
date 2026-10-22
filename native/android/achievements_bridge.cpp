@@ -168,7 +168,9 @@ void loaded(int result, const char* message, rc_client_t* rc, void*) {
         rc_client_get_user_game_summary(rc, &summary);
         auto detail = std::to_string(summary.num_core_achievements) + " succès";
         if (summary.num_unsupported_achievements) detail += " • " + std::to_string(summary.num_unsupported_achievements) + " non pris en charge";
-        c.event("game", game->title, detail.c_str());
+        // The count and the game's icon make the banner of a game that starts.
+        c.event("game", game->title, detail.c_str(), std::to_string(summary.num_core_achievements).c_str(),
+                game_image(game).c_str());
     } else if (result == RC_ABORTED) {
         // Superseded by unload_game or another load: nothing to report.
     } else if (result == RC_NO_GAME_LOADED || result == RC_OK) {

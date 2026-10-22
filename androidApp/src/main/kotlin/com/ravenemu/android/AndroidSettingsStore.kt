@@ -28,7 +28,8 @@ internal class AndroidSettingsStore(context: Context) {
         retroHardcore = prefs.getBoolean("retro_hardcore", false),
         retroUnlockPopups = prefs.getBoolean("retro_unlock_popups", true),
         retroProgressPopups = prefs.getBoolean("retro_progress_popups", true),
-        retroPopupSound = prefs.getBoolean("retro_popup_sound", false),
+        // A new key: the former notification beep was off by default, the chime is on.
+        retroPopupSound = prefs.getBoolean("retro_unlock_chime", true),
         retroPopupPosition = prefs.getString("retro_popup_position", "top") ?: "top",
         retroPopupSeconds = prefs.getInt("retro_popup_seconds", 5),
         retroProgressSeconds = prefs.getInt("retro_progress_seconds", 2),
@@ -57,7 +58,7 @@ internal class AndroidSettingsStore(context: Context) {
             .putBoolean("retro_hardcore", safe.retroHardcore)
             .putBoolean("retro_unlock_popups", safe.retroUnlockPopups)
             .putBoolean("retro_progress_popups", safe.retroProgressPopups)
-            .putBoolean("retro_popup_sound", safe.retroPopupSound)
+            .putBoolean("retro_unlock_chime", safe.retroPopupSound)
             .putString("retro_popup_position", safe.retroPopupPosition)
             .putInt("retro_popup_seconds", safe.retroPopupSeconds)
             .putInt("retro_progress_seconds", safe.retroProgressSeconds)

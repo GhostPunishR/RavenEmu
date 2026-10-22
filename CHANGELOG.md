@@ -1,5 +1,13 @@
 # Journal des modifications de RavenEmu
 
+## Non publié
+
+### Modifié
+
+- RetroAchievements : les notifications prennent le style du PC. Le badge descend du haut de l'écran (ou monte du bas), puis un bandeau s'ouvre de part et d'autre avec un en-tête et le titre en grand. Il reste affiché, puis se replie dans le badge, qui repart. Un succès débloqué ou un jeu terminé a un cadre et un en-tête dorés.
+- RetroAchievements : au lancement d'un jeu reconnu, le bandeau montre l'icône du jeu, son titre et le nombre de succès disponibles. Si l'image n'arrive pas dans les 2 secondes, une étoile la remplace.
+- RetroAchievements : le son des succès devient un court carillon, le même que sur PC. Quatre notes montantes sont créées par RavenEmu, sans fichier son. Le carillon est mélangé au son du jeu : il suit son volume, se coupe avec lui et s'arrête avec la pause. Il remplace le bip du canal des notifications, que le mode silencieux coupait. Il est activé par défaut ; **Son des succès** le coupe.
+
 ## v0.2.0 - bêta - 2026-10-21
 
 Deuxième bêta. Elle épingle RavenCore 0.8.0 et prépare le mode Hardcore de RetroAchievements, qui reste verrouillé en attendant la validation du service.

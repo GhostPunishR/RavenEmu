@@ -18,3 +18,5 @@ internal val RavenSecondary = Color(0xFFCBC4DC)
 internal val RavenMuted = Color(0xFFAAA2BC)
 internal val RavenOutline = Color(0xFF3C4052)
 internal val RavenDanger = Color(0xFFFF928B)
+/** Unlocks and completed games, as on the PC banner. */
+internal val RavenGold = Color(0xFFF4C152)
