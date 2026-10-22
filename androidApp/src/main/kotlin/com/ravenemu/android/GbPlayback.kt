@@ -15,6 +15,7 @@ import java.util.concurrent.locks.LockSupport
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -55,147 +56,181 @@ internal class GbPlayback(
         videoError = null
         audioStatus = null
         val targetFps = (gameSession.refreshRateHz() ?: 59.7).coerceIn(1.0, 120.0)
-        val periodNanos = (1_000_000_000.0 / targetFps).roundToLong()
-        val stats = GbVideoMetricsAccumulator(targetFps)
-        val pixels = IntArray(currentGame.width * currentGame.height)
-        // More than one GB frame of interleaved stereo, reused per frame.
-        val samples = ShortArray(4096)
-        val images = GbFrameBitmaps(currentGame.width, currentGame.height)
-        var output: AndroidGbAudioOutput? = null
         // Only a cartridge with sensors listens to the phone's, and only
         // while it plays: the game menu and the background stop this run.
         val sensorKinds = gameSession.cartridgeSensors()
         val sensors = if (sensorKinds != 0) cartridgeSensors else null
+        val loop = EmulationLoop(currentGame, playbackSettings, retro, scope, targetFps, sensors)
 
         try {
             sensors?.start(sensorKinds, playbackSettings)
-            try {
-                val rate = gameSession.audioRateHz()
-                    ?: throw IllegalStateException("Aucune piste audio GB active.")
-                output = AndroidGbAudioOutput(
-                    context, rate, targetFps,
-                    playbackSettings.audioEnabled, playbackSettings.audioVolume,
-                )
-                activeAudio = output
-                lastAudioReport = "Session audio démarrée; diagnostic en cours.\n"
-                audioStatus = "Audio GB optimisé (préversion)"
-            } catch (error: Exception) {
-                audioStatus = "Audio indisponible : ${error.message ?: "Erreur AudioTrack"}"
-            }
+            loop.output = openAudio(targetFps, playbackSettings)
 
             // The whole loop runs on the dedicated emulation thread
             // (see GbEmulationThread): no per-frame round trip to the
             // UI thread, nanosecond pacing, and late frames are caught
             // up rather than dropped, so the audio never starves.
-            withContext(gbEmulationDispatcher) {
-                val rumble = if (playbackSettings.cartridgeRumble) cartridgeRumble else null
-                val pacer = GbFramePacer(periodNanos)
-                pacer.reset(System.nanoTime())
-                var lastBatteryCheckNanos = System.nanoTime()
-                var held = false
-                var retroFailureLogged = false
-                while (isActive) {
-                    // Hardcore barrier: no frame before RetroAchievements knows
-                    // the game. Idle ticks carry the sign-in and identification.
-                    if (retro.framesOnHold) {
-                        held = true
-                        try {
-                            retro.idle()
-                        } catch (error: Exception) {
-                            if (!retroFailureLogged) Log.w("RavenEmuRetro", "rcheevos idle tick failed", error)
-                            retroFailureLogged = true
-                        }
-                        LockSupport.parkNanos(HOLD_TICK_NANOS)
-                        continue
-                    }
-                    if (held) {
-                        // The wait is not lateness: no catch-up burst after it.
-                        held = false
-                        pacer.reset(System.nanoTime())
-                    }
-                    try {
-                        // A late frame is still emulated and heard;
-                        // only its image is skipped (see GbFramePacer).
-                        val renderVideo = pacer.shouldRender(System.nanoTime())
-                        val nativeStart = System.nanoTime()
-                        val sampleCount =
-                            gameSession.nextFrameWithAudioInto(pixels, samples, sensors) ?: break
-                        val nativeElapsed = System.nanoTime() - nativeStart
-                        // One non-blocking audio submission per frame.
-                        val sink = output
-                        if (sink != null) {
-                            try {
-                                sink.submit(samples, sampleCount)
-                            } catch (error: Exception) {
-                                sink.stopNow()
-                                audioStatus = "Audio interrompu : ${error.message ?: "Sortie audio interrompue"}"
-                                if (activeAudio === sink) activeAudio = null
-                                lastAudioReport = sink.exportReport()
-                                sink.close()
-                                output = null
-                            }
-                        }
-                        if (rumble != null) {
-                            if (gameSession.rumbleActive) rumble.pulse() else rumble.release()
-                        }
-                        var conversionNanos = 0L
-                        if (renderVideo) {
-                            val conversionStart = System.nanoTime()
-                            GbDisplayFilter.apply(
-                                pixels, playbackSettings, currentGame.platform,
-                            )
-                            frame = images.publish(pixels)
-                            conversionNanos = System.nanoTime() - conversionStart
-                        }
-
-                        // The official SDK evaluates each emulated frame
-                        // using observational reads, on its dedicated
-                        // thread. Network requests never block this call.
-                        try {
-                            retro.frame()
-                        } catch (error: Exception) {
-                            // The controller tells the player and leaves Hardcore; one log per run.
-                            if (!retroFailureLogged) Log.w("RavenEmuRetro", "rcheevos frame unavailable", error)
-                            retroFailureLogged = true
-                        }
-                        val now = System.nanoTime()
-                        if (now - lastBatteryCheckNanos >= 5_000_000_000L) {
-                            lastBatteryCheckNanos = now
-                            scope.launch(Dispatchers.IO) {
-                                try {
-                                    gameSession.saveBatteryIfDirty()
-                                } catch (error: Exception) {
-                                    Log.e("RavenEmuSaves", "Battery autosave failed", error)
-                                }
-                            }
-                        }
-                        val sample = stats.record(now, nativeElapsed, conversionNanos)
-                        if (sample != null) {
-                            videoMetrics = sample
-                            output?.let {
-                                it.recordVideo(sample.actualFps, sample.coreMs, sample.conversionMs)
-                                lastAudioReport = it.exportReport()
-                                Log.d("RavenEmuAudio", it.diagnostics())
-                            }
-                        }
-                    } catch (cancelled: CancellationException) {
-                        throw cancelled
-                    } catch (error: Exception) {
-                        videoError = error.message ?: "Erreur de rendu Game Boy."
-                        frame = null
-                        break
-                    }
-
-                    val wait = pacer.nextWaitNanos(System.nanoTime())
-                    if (wait > 0) LockSupport.parkNanos(wait)
-                }
-            }
+            withContext(gbEmulationDispatcher) { loop.emulate() }
         } finally {
             sensors?.stop()
             cartridgeRumble.stop()
+            val output = loop.output
             if (activeAudio === output) activeAudio = null
             output?.let { lastAudioReport = it.exportReport() }
             output?.close()
+        }
+    }
+
+    /** The audio track of the run, or null when the core or AudioTrack has none. */
+    private fun openAudio(targetFps: Double, playbackSettings: Settings): AndroidGbAudioOutput? = try {
+        val rate = gameSession.audioRateHz()
+            ?: throw IllegalStateException("Aucune piste audio GB active.")
+        AndroidGbAudioOutput(
+            context, rate, targetFps,
+            playbackSettings.audioEnabled, playbackSettings.audioVolume,
+        ).also { output ->
+            activeAudio = output
+            lastAudioReport = "Session audio démarrée; diagnostic en cours.\n"
+            audioStatus = "Audio GB optimisé (préversion)"
+        }
+    } catch (error: Exception) {
+        audioStatus = "Audio indisponible : ${error.message ?: "Erreur AudioTrack"}"
+        null
+    }
+
+    /** One run of a game on the emulation thread: its buffers, pacing and audio. */
+    private inner class EmulationLoop(
+        private val game: LoadedGameInfo,
+        private val settings: Settings,
+        private val retro: AchievementsController,
+        private val scope: CoroutineScope,
+        targetFps: Double,
+        private val sensors: CartridgeSensors?,
+    ) {
+        private val periodNanos = (1_000_000_000.0 / targetFps).roundToLong()
+        private val stats = GbVideoMetricsAccumulator(targetFps)
+        private val pixels = IntArray(game.width * game.height)
+        // More than one GB frame of interleaved stereo, reused per frame.
+        private val samples = ShortArray(4096)
+        private val images = GbFrameBitmaps(game.width, game.height)
+        /** Dropped when the track fails; whatever remains is closed after the run. */
+        var output: AndroidGbAudioOutput? = null
+        private var rumble: CartridgeRumble? = null
+        private var lastBatteryCheckNanos = 0L
+        private var retroFailureLogged = false
+
+        suspend fun emulate() {
+            rumble = if (settings.cartridgeRumble) cartridgeRumble else null
+            val pacer = GbFramePacer(periodNanos)
+            pacer.reset(System.nanoTime())
+            lastBatteryCheckNanos = System.nanoTime()
+            var held = false
+            while (currentCoroutineContext().isActive) {
+                // Hardcore barrier: no frame before RetroAchievements knows
+                // the game. Idle ticks carry the sign-in and identification.
+                if (retro.framesOnHold) {
+                    held = true
+                    try {
+                        retro.idle()
+                    } catch (error: Exception) {
+                        if (!retroFailureLogged) Log.w("RavenEmuRetro", "rcheevos idle tick failed", error)
+                        retroFailureLogged = true
+                    }
+                    LockSupport.parkNanos(HOLD_TICK_NANOS)
+                    continue
+                }
+                if (held) {
+                    // The wait is not lateness: no catch-up burst after it.
+                    held = false
+                    pacer.reset(System.nanoTime())
+                }
+                try {
+                    // A late frame is still emulated and heard;
+                    // only its image is skipped (see GbFramePacer).
+                    val renderVideo = pacer.shouldRender(System.nanoTime())
+                    if (!step(renderVideo)) break
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (error: Exception) {
+                    videoError = error.message ?: "Erreur de rendu Game Boy."
+                    frame = null
+                    break
+                }
+
+                val wait = pacer.nextWaitNanos(System.nanoTime())
+                if (wait > 0) LockSupport.parkNanos(wait)
+            }
+        }
+
+        /** Emulates, plays and (when [renderVideo]) shows one frame; false once the core stops. */
+        private suspend fun step(renderVideo: Boolean): Boolean {
+            val nativeStart = System.nanoTime()
+            val sampleCount =
+                gameSession.nextFrameWithAudioInto(pixels, samples, sensors) ?: return false
+            val nativeElapsed = System.nanoTime() - nativeStart
+            submitAudio(sampleCount)
+            rumble?.let { if (gameSession.rumbleActive) it.pulse() else it.release() }
+            val conversionNanos = if (renderVideo) showFrame() else 0L
+
+            // The official SDK evaluates each emulated frame
+            // using observational reads, on its dedicated
+            // thread. Network requests never block this call.
+            try {
+                retro.frame()
+            } catch (error: Exception) {
+                // The controller tells the player and leaves Hardcore; one log per run.
+                if (!retroFailureLogged) Log.w("RavenEmuRetro", "rcheevos frame unavailable", error)
+                retroFailureLogged = true
+            }
+            val now = System.nanoTime()
+            autosaveBattery(now)
+            recordMetrics(now, nativeElapsed, conversionNanos)
+            return true
+        }
+
+        /** One non-blocking audio submission per frame; a failing track is dropped. */
+        private fun submitAudio(sampleCount: Int) {
+            val sink = output ?: return
+            try {
+                sink.submit(samples, sampleCount)
+            } catch (error: Exception) {
+                sink.stopNow()
+                audioStatus = "Audio interrompu : ${error.message ?: "Sortie audio interrompue"}"
+                if (activeAudio === sink) activeAudio = null
+                lastAudioReport = sink.exportReport()
+                sink.close()
+                output = null
+            }
+        }
+
+        /** Publishes the picture; returns the time its conversion took. */
+        private fun showFrame(): Long {
+            val conversionStart = System.nanoTime()
+            GbDisplayFilter.apply(pixels, settings, game.platform)
+            frame = images.publish(pixels)
+            return System.nanoTime() - conversionStart
+        }
+
+        private fun autosaveBattery(now: Long) {
+            if (now - lastBatteryCheckNanos < 5_000_000_000L) return
+            lastBatteryCheckNanos = now
+            scope.launch(Dispatchers.IO) {
+                try {
+                    gameSession.saveBatteryIfDirty()
+                } catch (error: Exception) {
+                    Log.e("RavenEmuSaves", "Battery autosave failed", error)
+                }
+            }
+        }
+
+        private fun recordMetrics(now: Long, nativeElapsed: Long, conversionNanos: Long) {
+            val sample = stats.record(now, nativeElapsed, conversionNanos) ?: return
+            videoMetrics = sample
+            output?.let {
+                it.recordVideo(sample.actualFps, sample.coreMs, sample.conversionMs)
+                lastAudioReport = it.exportReport()
+                Log.d("RavenEmuAudio", it.diagnostics())
+            }
         }
     }
 }
