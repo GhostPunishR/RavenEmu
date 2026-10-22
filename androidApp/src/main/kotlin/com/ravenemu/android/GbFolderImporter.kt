@@ -1,6 +1,7 @@
 package com.ravenemu.android
 
 import android.content.ContentResolver
+import android.database.Cursor
 import android.net.Uri
 import android.provider.DocumentsContract
 import android.util.Log
@@ -37,25 +38,55 @@ internal class GbFolderImporter(
     fun importTree(treeUri: Uri, onProgress: (Int) -> Unit = {}): Result {
         val rootId = DocumentsContract.getTreeDocumentId(treeUri)
         require(rootId.isNotEmpty()) { "Dossier Android invalide." }
-        val seenDirectories = hashSetOf(rootId)
-        val existing = library.list().mapTo(hashSetOf()) { it.id }
-        val pending = ArrayDeque<PendingDirectory>()
-        pending.add(PendingDirectory(rootId, 0))
+        return TreeImport(treeUri, rootId, onProgress).run()
+    }
 
-        var added = 0
-        var duplicate = 0
-        var invalid = 0
-        var unreadable = 0
-        var otherFiles = 0
-        var folders = 0
-        var entriesSeen = 0
-        var candidatesSeen = 0
-        var bytesProcessed = 0L
-        var limited = false
+    /** One import: the folders left to read, the counts so far and the limits used. */
+    private inner class TreeImport(
+        private val treeUri: Uri,
+        rootId: String,
+        private val onProgress: (Int) -> Unit,
+    ) {
+        private val seenDirectories = hashSetOf(rootId)
+        private val existing = library.list().mapTo(hashSetOf()) { it.id }
+        private val pending = ArrayDeque<PendingDirectory>().apply { add(PendingDirectory(rootId, 0)) }
 
-        mainLoop@ while (pending.isNotEmpty()) {
-            val dir = pending.removeFirst()
-            folders++
+        private var added = 0
+        private var duplicate = 0
+        private var invalid = 0
+        private var unreadable = 0
+        private var otherFiles = 0
+        private var folders = 0
+        private var entriesSeen = 0
+        private var candidatesSeen = 0
+        private var bytesProcessed = 0L
+        private var limited = false
+
+        fun run(): Result {
+            while (pending.isNotEmpty()) {
+                val dir = pending.removeFirst()
+                folders++
+                val cursor = openChildren(dir) ?: continue
+                val more = try {
+                    readEntries(cursor, dir)
+                } finally {
+                    cursor.close()
+                }
+                if (!more) break
+            }
+            return Result(
+                added = added,
+                duplicate = duplicate,
+                invalid = invalid,
+                unreadable = unreadable,
+                otherFiles = otherFiles,
+                folders = folders,
+                limited = limited,
+            )
+        }
+
+        /** The entries of [dir]; null skips an unreadable subfolder, but the chosen folder must open. */
+        private fun openChildren(dir: PendingDirectory): Cursor? {
             val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(
                 treeUri, dir.documentId,
             )
@@ -65,119 +96,117 @@ internal class GbFolderImporter(
                 DocumentsContract.Document.COLUMN_MIME_TYPE,
                 DocumentsContract.Document.COLUMN_SIZE,
             )
-            val cursor = try {
+            return try {
                 resolver.query(childrenUri, columns, null, null, null)
                     ?: throw IllegalStateException("Le dossier n'est pas accessible.")
             } catch (error: Exception) {
                 if (dir.depth == 0) throw error
                 unreadable++
                 Log.w(TAG, "Failed to inspect a subdirectory", error)
-                continue
-            }
-            try {
-                while (cursor.moveToNext()) {
-                    entriesSeen++
-                    if (entriesSeen > MAX_ENTRIES) {
-                        limited = true
-                        break@mainLoop
-                    }
-                    val id = cursor.getString(0) ?: continue
-                    val name = cursor.getString(1) ?: continue
-                    val mime = cursor.getString(2) ?: ""
-                    val size = if (cursor.isNull(3)) null else cursor.getLong(3)
-                    if (mime == DocumentsContract.Document.MIME_TYPE_DIR) {
-                        if (id in seenDirectories) continue
-                        if (!GbFolderImportPolicy.mayDescend(dir.depth, seenDirectories.size)) {
-                            limited = true
-                            continue
-                        }
-                        seenDirectories.add(id)
-                        pending.add(PendingDirectory(id, dir.depth + 1))
-                        continue
-                    }
-                    if (!GbFolderImportPolicy.isRomFilename(name)) {
-                        otherFiles++
-                        continue
-                    }
-                    candidatesSeen++
-                    if (candidatesSeen > MAX_ROM_CANDIDATES ||
-                        existing.size >= MAX_GAMES ||
-                        bytesProcessed >= MAX_TOTAL_ROM_BYTES) {
-                        limited = true
-                        break@mainLoop
-                    }
-                    if (!GbFolderImportPolicy.isSupportedSize(size)) {
-                        invalid++
-                        onProgress(candidatesSeen)
-                        continue
-                    }
-                    val uri = DocumentsContract.buildDocumentUriUsingTree(treeUri, id)
-                    val rom = try {
-                        resolver.openInputStream(uri)?.use { input ->
-                            readBounded(input, RomImportPolicy.maxRomBytes)
-                        } ?: error("Impossible de lire la ROM.")
-                    } catch (error: Exception) {
-                        unreadable++
-                        Log.w(TAG, "Unable to read candidate ROM", error)
-                        onProgress(candidatesSeen)
-                        continue
-                    }
-                    if (rom.isEmpty()) {
-                        invalid++
-                        onProgress(candidatesSeen)
-                        continue
-                    }
-                    bytesProcessed += rom.size
-                    if (bytesProcessed > MAX_TOTAL_ROM_BYTES) {
-                        limited = true
-                        break@mainLoop
-                    }
-                    val key = GbBatteryStore.keyForRom(rom)
-                    if (key in existing) {
-                        duplicate++
-                        onProgress(candidatesSeen)
-                        continue
-                    }
-                    try {
-                        // The validation core is intentionally separate from the
-                        // active game session. No battery/save state is loaded.
-                        val system = NativeCore.systemFor(RomImportPolicy.platformOf(name, rom))
-                        NativeCore(system).use { native ->
-                            native.load(rom)
-                        }
-                    } catch (error: Exception) {
-                        invalid++
-                        Log.w(TAG, "Native core rejected a ROM", error)
-                        onProgress(candidatesSeen)
-                        continue
-                    }
-                    try {
-                        library.add(name, rom)
-                        existing.add(key)
-                        added++
-                    } catch (error: Exception) {
-                        unreadable++
-                        Log.e(TAG, "Unable to store validated ROM", error)
-                        // Insufficient private storage should not repeatedly
-                        // attempt further additions to the same full device.
-                        limited = true
-                        break@mainLoop
-                    }
-                    onProgress(candidatesSeen)
-                }
-            } finally {
-                cursor.close()
+                null
             }
         }
-        return Result(
-            added = added,
-            duplicate = duplicate,
-            invalid = invalid,
-            unreadable = unreadable,
-            otherFiles = otherFiles,
-            folders = folders,
-            limited = limited,
-        )
+
+        /** Queues the subfolders of [dir] and imports its ROMs; false once a limit stops the import. */
+        private fun readEntries(cursor: Cursor, dir: PendingDirectory): Boolean {
+            while (cursor.moveToNext()) {
+                entriesSeen++
+                if (entriesSeen > MAX_ENTRIES) {
+                    limited = true
+                    return false
+                }
+                val id = cursor.getString(0) ?: continue
+                val name = cursor.getString(1) ?: continue
+                val mime = cursor.getString(2) ?: ""
+                val size = if (cursor.isNull(3)) null else cursor.getLong(3)
+                if (mime == DocumentsContract.Document.MIME_TYPE_DIR) {
+                    if (id in seenDirectories) continue
+                    if (!GbFolderImportPolicy.mayDescend(dir.depth, seenDirectories.size)) {
+                        limited = true
+                        continue
+                    }
+                    seenDirectories.add(id)
+                    pending.add(PendingDirectory(id, dir.depth + 1))
+                    continue
+                }
+                if (!GbFolderImportPolicy.isRomFilename(name)) {
+                    otherFiles++
+                    continue
+                }
+                if (!importCandidate(id, name, size)) return false
+            }
+            return true
+        }
+
+        /** Reads, validates and stores one ROM; false once a limit stops the import. */
+        private fun importCandidate(id: String, name: String, size: Long?): Boolean {
+            candidatesSeen++
+            if (candidatesSeen > MAX_ROM_CANDIDATES ||
+                existing.size >= MAX_GAMES ||
+                bytesProcessed >= MAX_TOTAL_ROM_BYTES) {
+                limited = true
+                return false
+            }
+            if (!GbFolderImportPolicy.isSupportedSize(size)) {
+                invalid++
+                onProgress(candidatesSeen)
+                return true
+            }
+            val uri = DocumentsContract.buildDocumentUriUsingTree(treeUri, id)
+            val rom = try {
+                resolver.openInputStream(uri)?.use { input ->
+                    readBounded(input, RomImportPolicy.maxRomBytes)
+                } ?: error("Impossible de lire la ROM.")
+            } catch (error: Exception) {
+                unreadable++
+                Log.w(TAG, "Unable to read candidate ROM", error)
+                onProgress(candidatesSeen)
+                return true
+            }
+            if (rom.isEmpty()) {
+                invalid++
+                onProgress(candidatesSeen)
+                return true
+            }
+            bytesProcessed += rom.size
+            if (bytesProcessed > MAX_TOTAL_ROM_BYTES) {
+                limited = true
+                return false
+            }
+            val key = GbBatteryStore.keyForRom(rom)
+            if (key in existing) {
+                duplicate++
+                onProgress(candidatesSeen)
+                return true
+            }
+            try {
+                // The validation core is intentionally separate from the
+                // active game session. No battery/save state is loaded.
+                val system = NativeCore.systemFor(RomImportPolicy.platformOf(name, rom))
+                NativeCore(system).use { native ->
+                    native.load(rom)
+                }
+            } catch (error: Exception) {
+                invalid++
+                Log.w(TAG, "Native core rejected a ROM", error)
+                onProgress(candidatesSeen)
+                return true
+            }
+            try {
+                library.add(name, rom)
+                existing.add(key)
+                added++
+            } catch (error: Exception) {
+                unreadable++
+                Log.e(TAG, "Unable to store validated ROM", error)
+                // Insufficient private storage should not repeatedly
+                // attempt further additions to the same full device.
+                limited = true
+                return false
+            }
+            onProgress(candidatesSeen)
+            return true
+        }
     }
 
     private fun readBounded(input: InputStream, maxBytes: Int): ByteArray {
