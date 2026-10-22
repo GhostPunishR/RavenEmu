@@ -15,7 +15,7 @@
 
 ### RavenCore
 
-- Épinglé provisoirement sur le commit `2d506dd6f5f22663ab01aa361356572b67bf843a` de la [PR #31](https://github.com/GhostPunishR/RavenCore/pull/31) (future 0.9.0), qui ajoute le câble distant (`ravenemu_remote_link_*`) et `ravenemu_link_wanted`. API C toujours en version 0 (ajouts seulement) ; formats d'états inchangés (GB/GBC 11, GBA 16).
+- RavenCore épinglé à la version 0.9.0, commit `54912ad94220f9f2d2a8cd2b07389807741eff3b` ([#31](https://github.com/GhostPunishR/RavenCore/pull/31)) : câble distant (`ravenemu_remote_link_*`) et `ravenemu_link_wanted`. API C toujours en version 0 (ajouts seulement) ; formats d'états inchangés (GB/GBC 11, GBA 16).
 
 ### Modifié
 
