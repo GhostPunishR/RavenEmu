@@ -3,6 +3,8 @@ package com.ravenemu.android
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.click
+import androidx.compose.ui.test.isToggleable
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -36,15 +38,13 @@ class WirelessLinkUiTest {
     private var unplugged = 0
 
     @Test
-    fun `le bandeau du cable s'affiche quelques secondes`() {
+    fun `le bandeau du cable suit l'hote`() {
         openPlayer()
-        compose.mainClock.autoAdvance = false
         compose.runOnIdle { view.value = view.value.copy(banner = "Câble relié à Pixel 7") }
-        compose.mainClock.advanceTimeBy(100)
         compose.onNodeWithText("Câble relié à Pixel 7").assertIsDisplayed()
-        compose.mainClock.advanceTimeBy(4_500)
+        // WirelessLink le retire après quelques secondes.
+        compose.runOnIdle { view.value = view.value.copy(banner = null) }
         compose.onNodeWithText("Câble relié à Pixel 7").assertDoesNotExist()
-        compose.mainClock.autoAdvance = true
     }
 
     @Test
@@ -94,7 +94,9 @@ class WirelessLinkUiTest {
                 aboutOnly = false, onBack = {})
         }
         compose.onNodeWithText("Général").performScrollTo().performTouchInput { click() }
-        compose.onNodeWithText("Câble link sans fil").performScrollTo().assertIsDisplayed().performClick()
+        compose.onNodeWithText("Câble link sans fil").performScrollTo().assertIsDisplayed()
+        // Le premier interrupteur de la page Général est celui du câble.
+        compose.onAllNodes(isToggleable()).onFirst().performClick()
         assertFalse(settings.wirelessLink)
         compose.runOnIdle { capabilities.value = SettingsCapabilities(wirelessLink = false) }
         compose.onNodeWithText("Câble link sans fil").assertDoesNotExist()

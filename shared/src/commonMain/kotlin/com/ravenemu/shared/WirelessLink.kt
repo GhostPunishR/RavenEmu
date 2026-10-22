@@ -14,11 +14,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -26,7 +21,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.delay
 
 /**
  * Ce que le lecteur montre du câble link sans fil : sur Android, deux
@@ -34,7 +28,7 @@ import kotlinx.coroutines.delay
  * de son port link. L'hôte décide de tout ; le lecteur ne fait qu'afficher.
  */
 data class WirelessLinkView(
-    /** Une ligne montrée quelques secondes à chaque changement, ou null. */
+    /** Une ligne sur l'image du jeu ; l'hôte la retire après quelques secondes. */
     val banner: String? = null,
     /** Plusieurs téléphones attendent : le joueur en choisit un. */
     val choices: List<WirelessLinkChoice> = emptyList(),
@@ -51,14 +45,6 @@ data class WirelessLinkChoice(val id: Long, val label: String)
 /** Le bandeau passager et la pause imposée par le partenaire, sur l'image du jeu. */
 @Composable
 internal fun BoxScope.WirelessLinkOverlay(view: WirelessLinkView) {
-    var shown by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(view.banner) {
-        shown = view.banner
-        if (view.banner != null) {
-            delay(4_000)
-            shown = null
-        }
-    }
     if (view.partnerPaused) {
         Box(
             Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.55f)),
@@ -72,7 +58,7 @@ internal fun BoxScope.WirelessLinkOverlay(view: WirelessLinkView) {
             )
         }
     }
-    shown?.let { line ->
+    view.banner?.let { line ->
         Text(
             line,
             Modifier.align(Alignment.TopCenter).padding(top = 10.dp, start = 12.dp, end = 12.dp)

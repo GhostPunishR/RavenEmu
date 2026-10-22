@@ -102,6 +102,8 @@ internal class WirelessLink(
     private var chosen: Long? = null
     private var choices: List<WirelessLinkPolicy.Peer> = emptyList()
     private var banner: String? = null
+    // Chaque bandeau reste quelques secondes ; un plus récent le remplace.
+    private var bannerShown = 0
     private var ticker: ScheduledFuture<*>? = null
     private var closed = false
 
@@ -295,8 +297,8 @@ internal class WirelessLink(
                 evaluate()
             }
         }).also { it.start(family, ownId, device, socket.localPort) }
-        // Annoncée une fois par jeu ; ensuite, le bandeau dit relié ou débranché.
-        if (banner == null) banner = "Câble link : recherche d'un autre téléphone…"
+        // Pas par-dessus « Câble débranché » : la recherche reprend aussitôt.
+        if (banner == null) showBanner("Câble link : recherche d'un autre téléphone…")
     }
 
     private fun stopSearch() {
@@ -451,7 +453,7 @@ internal class WirelessLink(
         closePending()
         runCatching { wifiLock?.acquire() }
         linked = true
-        banner = "Câble relié à ${hello.device}"
+        showBanner("Câble relié à ${hello.device}")
         Log.i(TAG, "Wireless link cable plugged (player $player)")
     }
 
@@ -471,7 +473,7 @@ internal class WirelessLink(
         pauseSent = false
         runCatching { wifiLock?.release() }
         linked = false
-        if (!quiet) banner = "Câble débranché"
+        if (!quiet) showBanner("Câble débranché")
         Log.i(TAG, "Wireless link cable unplugged ($ending)")
     }
 
@@ -482,6 +484,20 @@ internal class WirelessLink(
         if (wanted == pauseSent) return
         pauseSent = wanted
         linkedTo.connection.sendControl(WirelessLinkProtocol.Pause(wanted))
+    }
+
+    private fun showBanner(text: String) {
+        banner = text
+        val shown = ++bannerShown
+        try {
+            executor.schedule({
+                if (bannerShown == shown) {
+                    banner = null
+                    publish()
+                }
+            }, BANNER_MILLIS, TimeUnit.MILLISECONDS)
+        } catch (_: java.util.concurrent.RejectedExecutionException) {
+        }
     }
 
     private fun cool(id: Long) {
@@ -544,5 +560,6 @@ internal class WirelessLink(
         // Le cœur garde le signal trois secondes ; la recherche, un peu plus.
         const val SEARCH_GRACE_NANOS = 10_000_000_000L
         const val COOLDOWN_NANOS = 3_000_000_000L
+        const val BANNER_MILLIS = 4_000L
     }
 }
