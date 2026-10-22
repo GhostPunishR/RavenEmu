@@ -236,7 +236,9 @@ class MainActivity : ComponentActivity() {
                 linkInputEnabled = linkEnabled
             }
             val retroUi = remember {
-                RetroAchievementsUi(applicationContext, gameSession, scope).also {
+                RetroAchievementsUi(applicationContext, gameSession, scope, playSound = {
+                    (playback.activeAudio ?: linkPlayback.activeAudio)?.playChime()
+                }).also {
                     retroController = it.retro
                     // A refused Hardcore stays off: the next launch must not ask again.
                     it.onHardcoreRefused = {

@@ -55,6 +55,9 @@ class AndroidGbAudioOutput(
     private val fadeFrames = (outputRate * 180 / 1000).coerceAtLeast(1) // smooth 180 ms startup fade after silence
     private var rampFrame = 0
     private var closed = false
+    // The unlock chime rides on the game's own samples: same track, volume and pauses.
+    private val effects = SoundMixer()
+    private val chime by lazy { unlockChime(outputRate) }
 
     init {
         require(sampleRateHz in 8000..192000) { "Fréquence audio native invalide." }
@@ -127,6 +130,7 @@ class AndroidGbAudioOutput(
                 governor.rateScale,
             )
             fadeIn(resampled, produced)
+            effects.mix(resampled, produced)
             if (!firstSoundRecorded && produced > 0 && resampled.take(produced).any { it.toInt() != 0 }) {
                 firstSoundRecorded = true
                 firstNonzeroBlock = startupBlocks
@@ -165,6 +169,13 @@ class AndroidGbAudioOutput(
                 lastLoggedSecond = second
                 record("t=${second}s written=$writtenFrames played=${track.playbackHeadPosition.toLong() and MASK_32} underruns=${track.underrunCount} pendingPCM=${queue.size / CHANNELS} dropped=${droppedSamples / CHANNELS} state=${track.playState}")
             }
+        }
+    }
+
+    /** Plays the unlock chime over the game's next samples; a new chime restarts it. */
+    fun playChime() {
+        synchronized(lock) {
+            if (!closed) effects.play(chime)
         }
     }
 

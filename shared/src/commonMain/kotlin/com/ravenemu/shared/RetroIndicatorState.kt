@@ -49,22 +49,48 @@ class RetroIndicatorState {
     }
 }
 
-/** One-off RetroAchievements messages for the popup, or null for other kinds. */
+/**
+ * One RetroAchievements banner: a heading line over a larger title line. An
+ * award (an unlock, a completed or mastered game) is drawn in gold and chimes.
+ */
+data class RetroBanner(val heading: String, val title: String, val award: Boolean = false)
+
+/** One-off RetroAchievements messages for the banner, or null for other kinds. */
 object RetroNoticeText {
-    fun of(kind: String, title: String, detail: String, extra: String): String? {
-        val headline = when (kind) {
-            "achievement" -> "Succès débloqué · $title ($extra pts)"
-            "leaderboard_started" -> "Classement commencé · $title"
-            "leaderboard_failed" -> "Classement annulé · $title"
-            "leaderboard_submitted" -> "Classement envoyé · $title"
-            "leaderboard_scoreboard" -> "Classement terminé · $title"
-            "completed" -> "Jeu terminé · $title"
-            "mastered" -> "Jeu maîtrisé · $title"
-            "notice", "offline", "online", "hardcore_reset", "hardcore_refused" -> title
-            else -> return null
-        }
-        // An unlock's description is long; the popup keeps it to the title.
-        val body = if (kind == "achievement" || (kind.startsWith("leaderboard_") && kind != "leaderboard_scoreboard")) "" else detail
-        return listOf(headline, body).filter { it.isNotBlank() }.joinToString("\n")
+    fun of(kind: String, title: String, detail: String, extra: String): RetroBanner? = when (kind) {
+        "achievement" -> RetroBanner("Succès débloqué · ${points(extra)}", title, award = true)
+        "completed" -> RetroBanner("Jeu terminé", title, award = true)
+        "mastered" -> RetroBanner("Jeu maîtrisé", title, award = true)
+        // A game that starts: its icon, its title and what it offers.
+        "game" -> RetroBanner(available(extra), title)
+        "leaderboard_started" -> RetroBanner("Classement commencé", title)
+        "leaderboard_failed" -> RetroBanner("Classement annulé", title)
+        "leaderboard_submitted" -> RetroBanner("Classement envoyé", title)
+        "leaderboard_scoreboard" -> RetroBanner("Classement terminé · $title", detail)
+        "notice", "offline", "online", "hardcore_reset", "hardcore_refused" -> RetroBanner(title, detail)
+        else -> null
     }
+
+    private fun points(extra: String): String {
+        val count = extra.toIntOrNull() ?: return "$extra points"
+        return if (count > 1) "$count points" else "$count point"
+    }
+
+    private fun available(extra: String): String = when (val count = extra.toIntOrNull()) {
+        null -> "Succès disponibles"
+        0 -> "Aucun succès disponible"
+        1 -> "1 succès disponible"
+        else -> "$count succès disponibles"
+    }
+}
+
+/**
+ * The banner's motion, as on the PC: the badge drops in, then the band opens
+ * on both sides of it; at the end it folds back into the badge, which leaves.
+ */
+object RetroBannerMotion {
+    const val DROP_MILLIS = 300
+    const val UNFOLD_MILLIS = 350
+    const val ENTER_MILLIS = DROP_MILLIS + UNFOLD_MILLIS
+    const val EXIT_MILLIS = UNFOLD_MILLIS + DROP_MILLIS
 }

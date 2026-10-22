@@ -185,22 +185,25 @@ static std::vector<std::string> load_outcome(int status, const char* body) {
     rc_client_idle(c->rc);
     std::vector<std::string> kinds;
     for (std::size_t i = 0; i + 5 < c->events.size(); i += 6)
-        if (c->events[i].rfind("game", 0) == 0) kinds.insert(kinds.end(), {c->events[i], c->events[i + 1], c->events[i + 2]});
+        if (c->events[i].rfind("game", 0) == 0)
+            kinds.insert(kinds.end(), {c->events[i], c->events[i + 1], c->events[i + 2], c->events[i + 3], c->events[i + 4]});
     close_session(c);
     return kinds;
 }
 static void load_outcomes() {
     const auto known = load_outcome(200,
         R"({"Success":true,"GameId":1234,"Title":"Synthetic game","ConsoleId":4,"ImageIconUrl":"https://media.retroachievements.org/Images/000001.png","RichPresenceGameId":1234,"RichPresencePatch":"","Sets":[{"AchievementSetId":1111,"GameId":1234,"Title":null,"Type":"core","ImageIconUrl":"https://media.retroachievements.org/Images/000001.png","Achievements":[{"ID":5501,"Title":"Last one","Description":"Synthetic","Flags":3,"Points":5,"MemAddr":"0xH0001=3","Author":"Test","BadgeName":"00234","Created":1367266583,"Modified":1376929305}],"Leaderboards":[]}]})");
-    require(known.size() == 3 && known[0] == "game" && known[1] == "Synthetic game", "known game");
+    require(known.size() == 5 && known[0] == "game" && known[1] == "Synthetic game", "known game");
+    // The banner of a game that starts: its achievement count and its icon.
+    require(known[3] == "1" && known[4] == "https://media.retroachievements.org/Images/000001.png", "game count and icon");
     const auto unknown = load_outcome(404, R"({"Success":false,"Error":"Unknown game","Code":"not_found","Status":404})");
-    require(unknown.size() == 3 && unknown[0] == "game_unknown", "unknown ROM");
+    require(unknown.size() == 5 && unknown[0] == "game_unknown", "unknown ROM");
     const auto offline = load_outcome(-2, "");
-    require(offline.size() == 3 && offline[0] == "game_offline", "service out of reach");
+    require(offline.size() == 5 && offline[0] == "game_offline", "service out of reach");
     const auto garbled = load_outcome(502, "<html>Bad gateway</html>");
-    require(garbled.size() == 3 && garbled[0] == "game_offline", "an answer that is not the service's");
+    require(garbled.size() == 5 && garbled[0] == "game_offline", "an answer that is not the service's");
     const auto refused = load_outcome(403, R"({"Success":false,"Error":"Access denied for this game","Code":"access_denied","Status":403})");
-    require(refused.size() == 3 && refused[0] == "game_error" && refused[2] == "Access denied for this game", "refusal reason");
+    require(refused.size() == 5 && refused[0] == "game_error" && refused[2] == "Access denied for this game", "refusal reason");
 }
 
 int main() {

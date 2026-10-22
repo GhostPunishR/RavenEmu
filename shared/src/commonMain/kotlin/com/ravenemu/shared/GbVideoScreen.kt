@@ -92,7 +92,7 @@ internal fun GbVideoScreen(
     onRetroRetry: (() -> Unit)?,
     onRetroLeaderboard: ((Int, Boolean) -> Unit)?,
     onOpenLink: ((String) -> Unit)?,
-    retroNotice: String?,
+    retroNotice: RetroBanner?,
     retroNoticeBadge: ImageBitmap?,
     retroNoticeVisible: Boolean,
     retroIndicators: List<String>,

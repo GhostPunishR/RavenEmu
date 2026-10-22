@@ -1,5 +1,8 @@
 package com.ravenemu.shared
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
@@ -12,34 +15,43 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.roundToInt
 
 /**
  * RetroAchievements overlays of the player: challenge and tracker lines at
- * the bottom; at the top, the one-at-a-time popup and, under it, the
- * measured progress of an achievement, both with the achievement's badge.
+ * the bottom; at the top, the one-at-a-time banner (as on the PC) and, under
+ * it, the measured progress of an achievement with the achievement's badge.
  * Shared by the classic layout and Delta skins.
  */
 @Composable
 internal fun BoxScope.RetroOverlays(
     retroIndicators: List<String>,
-    retroNotice: String?,
+    retroNotice: RetroBanner?,
     retroNoticeBadge: ImageBitmap?,
     retroNoticeVisible: Boolean,
     retroProgress: RetroProgress?,
@@ -61,11 +73,21 @@ internal fun BoxScope.RetroOverlays(
             }
         }
     }
-    val noticeAlpha by animateFloatAsState(
-        if (retroNotice != null && retroNoticeVisible) 1f else 0f,
-        animationSpec = tween(durationMillis = 300),
-        label = "retroNotice",
-    )
+    // The banner's badge drops in, then the band unfolds; the reverse to leave.
+    val drop = remember { Animatable(0f) }
+    val unfold = remember { Animatable(0f) }
+    val entering = retroNotice != null && retroNoticeVisible
+    LaunchedEffect(retroNotice, entering) {
+        if (entering) {
+            drop.snapTo(0f)
+            unfold.snapTo(0f)
+            drop.animateTo(1f, tween(RetroBannerMotion.DROP_MILLIS, easing = BannerEaseOut))
+            unfold.animateTo(1f, tween(RetroBannerMotion.UNFOLD_MILLIS, easing = FastOutSlowInEasing))
+        } else {
+            unfold.animateTo(0f, tween(RetroBannerMotion.UNFOLD_MILLIS, easing = FastOutSlowInEasing))
+            drop.animateTo(0f, tween(RetroBannerMotion.DROP_MILLIS, easing = BannerEaseOut))
+        }
+    }
     // Kept while fading out, so the card leaves with its last content.
     // Plain holder, not state: it only follows the parameters.
     val held = remember { HeldProgress() }
@@ -78,7 +100,7 @@ internal fun BoxScope.RetroOverlays(
         animationSpec = tween(durationMillis = 300),
         label = "retroProgress",
     )
-    val showNotice = retroNotice != null && noticeAlpha > 0f
+    val showNotice = retroNotice != null && (entering || drop.value > 0f)
     val progress = held.progress
     val showProgress = progress != null && progressAlpha > 0f
     if (!showNotice && !showProgress) return
@@ -89,13 +111,72 @@ internal fun BoxScope.RetroOverlays(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         if (showNotice) {
-            RetroPopupCard(retroNotice.orEmpty().substringBefore('\n'), retroNoticeBadge, noticeAlpha,
-                detail = retroNotice.orEmpty().substringAfter('\n', ""), detailLines = 2)
+            RetroBannerView(retroNotice, retroNoticeBadge, drop.value, unfold.value,
+                fromBottom = popupPosition == "bottom")
         }
         if (showProgress && progress != null) {
             RetroPopupCard("Progression · ${progress.title}", held.badge, progressAlpha,
                 detail = progress.detail)
         }
+    }
+}
+
+private val BannerEaseOut = CubicBezierEasing(0.33f, 1f, 0.68f, 1f)
+
+/**
+ * The banner, as on the PC: a badge square, then a band beside it with the
+ * heading over the title. [drop] brings the badge from the screen's edge,
+ * [unfold] uncovers the text; the banner stays centered all along. An award
+ * has a gold frame and heading.
+ */
+@Composable
+private fun RetroBannerView(banner: RetroBanner, badge: ImageBitmap?, drop: Float, unfold: Float, fromBottom: Boolean) {
+    val shape = RoundedCornerShape(10.dp)
+    val frame = if (banner.award) RavenGold else RavenOutline
+    Row(
+        Modifier.graphicsLayer {
+            translationY = (1f - drop) * (BANNER_SIZE + 24.dp).toPx() * (if (fromBottom) 1f else -1f)
+        }
+            .shadow(6.dp, shape)
+            .background(RavenBackground.copy(alpha = 0.94f), shape)
+            .height(BANNER_SIZE),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        // The badge fills its square, or the star stands in.
+        Box(
+            Modifier.padding(5.dp).size(BANNER_SIZE - 10.dp).clip(RoundedCornerShape(7.dp))
+                .background(RavenSurface).border(2.dp, frame, RoundedCornerShape(7.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (badge != null) {
+                Image(badge, "Badge du bandeau", Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            } else {
+                Text("★", color = if (banner.award) RavenGold else RavenAccent, fontSize = 24.sp)
+            }
+        }
+        // The text is uncovered as the band unfolds, never drawn past it.
+        Box(Modifier.clipToBounds().unfoldWidth(unfold)) {
+            Column(Modifier.padding(start = 8.dp, end = 16.dp).widthIn(max = 420.dp)) {
+                if (banner.heading.isNotBlank()) {
+                    Text(banner.heading, color = if (banner.award) RavenGold else RavenSecondary, fontSize = 12.sp,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                if (banner.title.isNotBlank()) {
+                    Text(banner.title, color = RavenText, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+        }
+    }
+}
+
+private val BANNER_SIZE = 56.dp
+
+/** Lays the content out whole but keeps only [fraction] of its width. */
+private fun Modifier.unfoldWidth(fraction: Float) = layout { measurable, constraints ->
+    val placeable = measurable.measure(constraints.copy(minWidth = 0))
+    layout((placeable.width * fraction.coerceIn(0f, 1f)).roundToInt(), placeable.height) {
+        placeable.placeRelative(0, 0)
     }
 }
 
@@ -105,9 +186,8 @@ private class HeldProgress {
 }
 
 /**
- * One RetroAchievements popup: the achievement's badge, or the star when it
- * is not available (offline, or a notice without achievement), then the text.
- * Fixed badge slot: the popup keeps the same size either way.
+ * The progress card: the achievement's badge, or the star when it is not
+ * available, then the text. Fixed badge slot: the card keeps the same size.
  */
 @Composable
 private fun RetroPopupCard(text: String, badge: ImageBitmap?, alpha: Float, detail: String = "", detailLines: Int = 1) {
