@@ -2,9 +2,11 @@ cmake_minimum_required(VERSION 3.22.1)
 project(RavenEmuNative LANGUAGES C CXX)
 
 # Lock the emulator engines AND public C interface to a reviewed source commit.
-# RavenCore 0.9.0 (merge of RavenCore PR #31): remote link cable to another
-# device (ravenemu_remote_link_*) and ravenemu_link_wanted, on top of 0.8.0's
-# complete GB/GBC RetroAchievements memory map.
+# RavenCore 0.10.0 (RavenCore PR #32): remote link cable protocol 2, where the
+# console that does not clock a transfer waits until its game has handled the
+# previous one (Pokémon trades), on top of 0.9.0's remote link cable
+# (ravenemu_remote_link_*, ravenemu_link_wanted) and 0.8.0's complete GB/GBC
+# RetroAchievements memory map.
 # C API version 0 (additions only) and state formats GB/GBC 11, GBA 16 are unchanged.
 # GBA still reads formats 15 through 11. Battery RTC keeps its 16-byte layout.
 # Old states created without RTC may not load once the cartridge gains RTC;
@@ -15,7 +17,7 @@ set(RAVENEMU_BUILD_LIBRETRO OFF CACHE BOOL "" FORCE)
 set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(ravencore
     GIT_REPOSITORY https://github.com/GhostPunishR/RavenCore.git
-    GIT_TAG 54912ad94220f9f2d2a8cd2b07389807741eff3b
+    GIT_TAG cbdd7886b66f7ce3ee049e2e253d9ee239da96de
     GIT_SHALLOW FALSE
 )
 FetchContent_MakeAvailable(ravencore)
