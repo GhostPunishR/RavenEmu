@@ -69,4 +69,4 @@ Lorsqu'un ancien jeu GB est reclassé comme GBC d'après son en-tête, sa sauveg
 
 La première session iOS raccorde la sauvegarde batterie, quatre emplacements d'état sans miniature et l'import/export `.sav` avec Fichiers. Le ZIP n'y est pas encore proposé ; les essais sur appareil restent à effectuer. Avant de désinstaller Android, vérifiez vos exports et gardez-les hors du stockage privé de RavenEmu. Ne publiez pas vos sauvegardes personnelles dans une issue.
 
-Sources : [transfert de sauvegardes](https://github.com/GhostPunishR/RavenEmu/blob/main/androidApp/src/main/kotlin/com/ravenemu/android/GbSaveTransfer.kt) et [gestion des emplacements](https://github.com/GhostPunishR/RavenEmu/blob/main/androidApp/src/main/kotlin/com/ravenemu/android/GbSaveStateStore.kt).
+Sources : [transfert de sauvegardes](https://github.com/GhostPunishR/RavenEmu/blob/main/androidApp/src/main/kotlin/com/ravenemu/android/saves/GbSaveTransfer.kt) et [gestion des emplacements](https://github.com/GhostPunishR/RavenEmu/blob/main/androidApp/src/main/kotlin/com/ravenemu/android/saves/GbSaveStateStore.kt).

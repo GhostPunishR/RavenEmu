@@ -14,6 +14,26 @@ RavenEmu partage une interface Compose Multiplatform entre Android et iOS. Le pr
 
 `settings.gradle.kts` inclut `shared`, `androidApp` et `policy`. Toutes les commandes Gradle partent de la racine. Les documents `TERMS.md`, `PRIVACY.md` et `LICENSE` y sont lus pour générer les textes légaux intégrés au module partagé.
 
+## Organisation de `androidApp/`
+
+Les sources Kotlin sont rangées par rôle sous `com.ravenemu.android`, les tests en miroir :
+
+| Paquet | Rôle |
+| --- | --- |
+| (racine) | `MainActivity`, seule à la racine : son nom complet est l'identité de l'application pour le lanceur Android. |
+| `engine` | Le moteur natif (`NativeCore`) et la session de jeu (`AndroidGbSession`, `GbButtonLatch`). |
+| `player` | Le lecteur à l'écran : boucle d'émulation, cadence, manette, vibration et capteurs de cartouche. |
+| `audio` | Sortie son, rééchantillonnage, carillon des succès. |
+| `library` | Bibliothèque, import de ROM et de dossiers, jaquettes. |
+| `saves` | Sauvegardes de cartouche, états instantanés, transferts `.sav`/`.srm`/ZIP. |
+| `retro` | RetroAchievements : compte, SDK rcheevos, Hardcore, journal hors ligne. |
+| `link` | Deux jeux sur un téléphone, reliés par un câble local. |
+| `wireless` | Câble link sans fil entre deux téléphones. |
+| `settings` | Préférences Android. |
+| `deltaskin` | Skins de contrôleur Delta. |
+
+Les classes à fonctions natives (`NativeCore`, `NativeLink`, `NativeRemoteLink`, `NativeAchievementsBridge`) donnent leur paquet aux symboles JNI de `native/android/` : `Java_com_ravenemu_android_<paquet>_<Classe>_<fonction>`. `AndroidPolicyTest` vérifie que chaque fonction `external` a son symbole, et inversement.
+
 ## Frontière native
 
 La [configuration CMake](native/CMakeLists.txt) épingle RavenCore au commit `54912ad94220f9f2d2a8cd2b07389807741eff3b` (version 0.9.0) et à son API C aux noms `ravenemu_*`. Mettre à jour le dépôt RavenCore ne modifie pas automatiquement cette révision.
@@ -28,7 +48,7 @@ Deux téléphones du même réseau local se relient par le câble distant de Rav
 
 | Pièce | Rôle |
 | --- | --- |
-| `NativeRemoteLink.kt` | Le câble natif rattaché au jeu en cours ; `AndroidGbSession` le crée et le détruit entre deux images. |
+| `NativeRemoteLink.kt` | Le câble natif rattaché au jeu en cours ; `AndroidGbSession` le crée et le détruit entre deux images. Ces fichiers sont dans le paquet `wireless`. |
 | `WirelessLink.kt` | Décide de tout, sur un seul fil : recherche, choix, liaison, pause, débranchement. |
 | `WirelessLinkDiscovery.kt` | Annonce et recherche DNS-SD (`NsdManager`, service `_ravenemulink._tcp`). |
 | `WirelessLinkConnection.kt` | Une connexion TCP : un fil lit, un autre écrit, battement de cœur. |
