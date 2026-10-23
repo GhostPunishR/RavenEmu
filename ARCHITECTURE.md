@@ -56,7 +56,7 @@ Les classes à fonctions natives (`NativeCore`, `NativeLink`, `NativeRemoteLink`
 
 ## Frontière native
 
-La [configuration CMake](native/CMakeLists.txt) épingle RavenCore au commit `2dcfef7cf8dfce860c3adedea3c82e2b0773c063` (version 0.10.0) et à son API C aux noms `ravenemu_*`. Mettre à jour le dépôt RavenCore ne modifie pas automatiquement cette révision.
+La [configuration CMake](native/CMakeLists.txt) épingle RavenCore au commit `abe53ae06ccdbdba283427ac1b1e961ddd58f64d` (version 0.11.0) et à son API C aux noms `ravenemu_*`. Mettre à jour le dépôt RavenCore ne modifie pas automatiquement cette révision.
 
 Android utilise `NativeCore.kt` et `native/android/bridge_jni.cpp`. Swift utilise `RavenNativeCore.swift` et `native/apple/module.modulemap`. Les deux passent par la même API C : ROM, pixels ARGB8888, audio PCM16, boutons, mémoire et sauvegardes. Le header est celui du SDK RavenCore épinglé, utilisé tel quel. Libretro n'est pas l'interface d'émulation de l'application ; son catalogue de jaquettes reste un service facultatif.
 
@@ -64,7 +64,7 @@ RetroAchievements utilise le SDK officiel rcheevos, également épinglé par SHA
 
 ## Câble link sans fil (Android)
 
-Deux téléphones du même réseau local se relient par le câble distant de RavenCore (`ravenemu_remote_link_*`, [docs/remote_link.md de RavenCore](https://github.com/GhostPunishR/RavenCore/blob/2dcfef7cf8dfce860c3adedea3c82e2b0773c063/docs/remote_link.md)). RavenCore échange les données du câble ; l'application les transporte et décide quand brancher.
+Deux téléphones du même réseau local se relient par le câble distant de RavenCore (`ravenemu_remote_link_*`, [docs/remote_link.md de RavenCore](https://github.com/GhostPunishR/RavenCore/blob/abe53ae06ccdbdba283427ac1b1e961ddd58f64d/docs/remote_link.md)). RavenCore échange les données du câble ; l'application les transporte et décide quand brancher.
 
 | Pièce | Rôle |
 | --- | --- |
