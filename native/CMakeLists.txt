@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.22.1)
 project(RavenEmuNative LANGUAGES C CXX)
 
 # Lock the emulator engines AND public C interface to a reviewed source commit.
-# RavenCore 0.11.0: the GBA console that does not clock keeps the clocking one's
+# RavenCore 0.11.0 (merge of RavenCore PR #33): the GBA console that does not clock keeps the clocking one's
 # pace on a slow network (Pokémon trades over Wi-Fi). Protocol 2 as in 0.10.0,
 # where it waits until its game has handled the previous transfer, on top of
 # 0.9.0's remote link cable
@@ -18,7 +18,7 @@ set(RAVENEMU_BUILD_LIBRETRO OFF CACHE BOOL "" FORCE)
 set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(ravencore
     GIT_REPOSITORY https://github.com/GhostPunishR/RavenCore.git
-    GIT_TAG 01a4aaacc7bf69ae0885c14d522f45ad139be321
+    GIT_TAG abe53ae06ccdbdba283427ac1b1e961ddd58f64d
     GIT_SHALLOW FALSE
 )
 FetchContent_MakeAvailable(ravencore)
