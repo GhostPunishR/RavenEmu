@@ -52,4 +52,4 @@ L'import, la sélection et le rendu portrait des skins `.deltaskin` sont intégr
 
 La pause automatique est fixe : le jeu et le son sont suspendus en arrière-plan et pendant l'ouverture du panneau de jeu. Elle n'est pas désactivable dans les paramètres.
 
-Source : [réglages partagés](https://github.com/GhostPunishR/RavenEmu/blob/main/shared/src/commonMain/kotlin/com/ravenemu/shared/SettingsScreen.kt).
+Source : [réglages partagés](https://github.com/GhostPunishR/RavenEmu/blob/main/shared/src/commonMain/kotlin/com/ravenemu/shared/settings/SettingsScreen.kt).

@@ -14,6 +14,46 @@ RavenEmu partage une interface Compose Multiplatform entre Android et iOS. Le pr
 
 `settings.gradle.kts` inclut `shared`, `androidApp` et `policy`. Toutes les commandes Gradle partent de la racine. Les documents `TERMS.md`, `PRIVACY.md` et `LICENSE` y sont lus pour générer les textes légaux intégrés au module partagé.
 
+## Organisation de `shared/`
+
+L'interface commune suit le même découpage sous `com.ravenemu.shared`, les tests en miroir :
+
+| Paquet | Rôle |
+| --- | --- |
+| (racine) | `RavenEmuApp`, l'écran d'entrée, et sur iOS `IosEntry` (les classes que Swift appelle). |
+| `theme` | Couleurs, glyphes et icônes. |
+| `library` | Catalogue (`GamePlatform`, `GameEntry`), import de ROM, écrans et dialogues de la bibliothèque. |
+| `player` | Écran de jeu, commandes tactiles, images et mesures. |
+| `audio` | File PCM. |
+| `saves` | Emplacements d'état, revue d'import de sauvegarde. |
+| `retro` | Écrans et état de RetroAchievements. |
+| `link` | Deux jeux reliés sur un téléphone. |
+| `wireless` | Affichage du câble sans fil. |
+| `settings` | Préférences (`Settings`), leur écran, entrées des skins Delta. |
+| `about` | À propos, documents légaux et licences ; `LegalTexts` y est généré par `:shared:generateLegalTexts`. |
+
+Swift voit les classes Kotlin sous leur seul nom, sans paquet : ranger les paquets ne change pas l'API vue d'iOS.
+
+## Organisation de `androidApp/`
+
+Les sources Kotlin sont rangées par rôle sous `com.ravenemu.android`, les tests en miroir :
+
+| Paquet | Rôle |
+| --- | --- |
+| (racine) | `MainActivity`, seule à la racine : son nom complet est l'identité de l'application pour le lanceur Android. |
+| `engine` | Le moteur natif (`NativeCore`) et la session de jeu (`AndroidGbSession`, `GbButtonLatch`). |
+| `player` | Le lecteur à l'écran : boucle d'émulation, cadence, manette, vibration et capteurs de cartouche. |
+| `audio` | Sortie son, rééchantillonnage, carillon des succès. |
+| `library` | Bibliothèque, import de ROM et de dossiers, jaquettes. |
+| `saves` | Sauvegardes de cartouche, états instantanés, transferts `.sav`/`.srm`/ZIP. |
+| `retro` | RetroAchievements : compte, SDK rcheevos, Hardcore, journal hors ligne. |
+| `link` | Deux jeux sur un téléphone, reliés par un câble local. |
+| `wireless` | Câble link sans fil entre deux téléphones. |
+| `settings` | Préférences Android. |
+| `deltaskin` | Skins de contrôleur Delta. |
+
+Les classes à fonctions natives (`NativeCore`, `NativeLink`, `NativeRemoteLink`, `NativeAchievementsBridge`) donnent leur paquet aux symboles JNI de `native/android/` : `Java_com_ravenemu_android_<paquet>_<Classe>_<fonction>`. `AndroidPolicyTest` vérifie que chaque fonction `external` a son symbole, et inversement.
+
 ## Frontière native
 
 La [configuration CMake](native/CMakeLists.txt) épingle RavenCore au commit `54912ad94220f9f2d2a8cd2b07389807741eff3b` (version 0.9.0) et à son API C aux noms `ravenemu_*`. Mettre à jour le dépôt RavenCore ne modifie pas automatiquement cette révision.
@@ -28,13 +68,15 @@ Deux téléphones du même réseau local se relient par le câble distant de Rav
 
 | Pièce | Rôle |
 | --- | --- |
-| `NativeRemoteLink.kt` | Le câble natif rattaché au jeu en cours ; `AndroidGbSession` le crée et le détruit entre deux images. |
+| `NativeRemoteLink.kt` | Le câble natif rattaché au jeu en cours ; `AndroidGbSession` le crée et le détruit entre deux images. Ces fichiers sont dans le paquet `wireless`. |
 | `WirelessLink.kt` | Décide de tout, sur un seul fil : recherche, choix, liaison, pause, débranchement. |
 | `WirelessLinkDiscovery.kt` | Annonce et recherche DNS-SD (`NsdManager`, service `_ravenemulink._tcp`). |
 | `WirelessLinkConnection.kt` | Une connexion TCP : un fil lit, un autre écrit, battement de cœur. |
 | `WirelessLinkProtocol.kt` | Trames, messages de contrôle et règle de choix, testés sur la JVM. |
 
-- **Quand.** `ravenemu_link_wanted` dit si le jeu s'est servi de son port link dans les trois dernières secondes. Tant que c'est le cas (plus dix secondes de marge), le téléphone s'annonce et cherche. Le reste du temps, il n'annonce rien.
+- **Quand.** `ravenemu_link_wanted` dit si le jeu s'est servi de son port link dans les trois dernières secondes. Tant que c'est le cas (plus dix secondes de marge), le téléphone s'annonce et cherche. Le reste du temps, il n'annonce rien. Réglage coupé, aucune vérification ne tourne.
+- **Découverte.** Sur Android 14 et plus, chaque téléphone trouvé est suivi par `registerServiceInfoCallback` (adresses, attributs, départ). Avant, `resolveService` résout un service à la fois.
+- **Android 17.** En ciblant le SDK 37, l'accès au réseau local devient la permission `ACCESS_LOCAL_NETWORK` : `LocalNetworkAccess` la fait demander une fois par jeu, quand le jeu veut se relier. En ciblant moins, INTERNET suffit et Google demande de ne pas la déclarer ; `AndroidPolicyTest` impose la déclaration exactement à partir du SDK 37.
 - **Qui.** Un seul partenaire compatible (même version, même famille de consoles) : le téléphone au plus petit identifiant l'appelle. Plusieurs : le joueur choisit. Deux connexions entre les mêmes téléphones : les deux côtés gardent celle qu'a ouverte le plus petit identifiant, qui est aussi le joueur 0 (parent GBA).
 - **Trames TCP.** `[canal u8][taille u8][contenu]`. Canal 0 : les messages de RavenCore, tels quels. Canal 1 : présentation (version, famille, identifiant, pause, modèle, jeu), pause, battement de cœur (chaque seconde sans autre envoi) et départ (avec ou sans refus). Cinq secondes sans rien recevoir ferment la connexion.
 - **Fils.** RavenCore envoie depuis le fil d'émulation : l'envoi ne fait que remplir une file. Les messages reçus vont au câble natif depuis le fil de lecture, puis un fil de service les fait lire à la console entre deux images, ou pendant une pause, sous le verrou de la session.

@@ -2,8 +2,8 @@ package com.ravenemu.android.deltaskin
 
 import android.content.Context
 import android.net.Uri
-import com.ravenemu.shared.DeltaSkinEntry
-import com.ravenemu.shared.GamePlatform
+import com.ravenemu.shared.settings.DeltaSkinEntry
+import com.ravenemu.shared.library.GamePlatform
 
 /**
  * Delta skins for the multiplatform app: import, list, delete, and the skin

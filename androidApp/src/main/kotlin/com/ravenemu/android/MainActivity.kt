@@ -31,8 +31,28 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
 import com.ravenemu.android.deltaskin.DeltaSkinControllerConfiguration
 import com.ravenemu.android.deltaskin.DeltaSkinPlayer
-import com.ravenemu.shared.GbButton
+import com.ravenemu.shared.player.GbButton
 import com.ravenemu.shared.RavenEmuApp
+import com.ravenemu.android.deltaskin.DeltaSkinsUi
+import com.ravenemu.android.engine.AndroidGbSession
+import com.ravenemu.android.library.GbCoversUi
+import com.ravenemu.android.library.GbLibraryUi
+import com.ravenemu.android.library.GbRomLibrary
+import com.ravenemu.android.library.LibraryOperationGate
+import com.ravenemu.android.link.AndroidLinkSession
+import com.ravenemu.android.link.LinkPlayback
+import com.ravenemu.android.player.GamepadMapper
+import com.ravenemu.android.player.GbPlayback
+import com.ravenemu.android.player.GbPlayerUi
+import com.ravenemu.android.retro.AchievementsController
+import com.ravenemu.android.retro.HardcoreAvailability
+import com.ravenemu.android.retro.RetroAchievementsUi
+import com.ravenemu.android.saves.GbSaveTransfer
+import com.ravenemu.android.saves.GbSaveTransfersUi
+import com.ravenemu.android.saves.GbStateSlotsUi
+import com.ravenemu.android.settings.AndroidSettingsStore
+import com.ravenemu.android.wireless.LocalNetworkAccess
+import com.ravenemu.android.wireless.WirelessLink
 
 class MainActivity : ComponentActivity() {
     private lateinit var gameSession: AndroidGbSession
@@ -226,6 +246,14 @@ class MainActivity : ComponentActivity() {
             val documentPicker = rememberLauncherForActivityResult(
                 contract = ActivityResultContracts.OpenDocument(),
             ) { uri -> library.importRom(uri) }
+            // Android 17 : le câble sans fil demande l'accès au réseau local.
+            val localNetwork = rememberLauncherForActivityResult(
+                contract = ActivityResultContracts.RequestPermission(),
+            ) { granted -> wireless.onLocalNetworkPermission(granted) }
+            val localNetworkRequest = wireless.localNetworkRequest
+            LaunchedEffect(localNetworkRequest) {
+                if (localNetworkRequest) localNetwork.launch(LocalNetworkAccess.PERMISSION)
+            }
             skins.skinPicker = rememberLauncherForActivityResult(
                 contract = ActivityResultContracts.OpenDocument(),
             ) { uri -> skins.import(uri) }

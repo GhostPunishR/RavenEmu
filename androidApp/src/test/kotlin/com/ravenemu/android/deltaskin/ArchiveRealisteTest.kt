@@ -1,6 +1,6 @@
 package com.ravenemu.android.deltaskin
 
-import com.ravenemu.shared.GbButton
+import com.ravenemu.shared.player.GbButton
 import java.io.File
 import java.nio.charset.StandardCharsets
 import kotlin.test.Test

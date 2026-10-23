@@ -20,6 +20,14 @@ import platform.Foundation.NSData
 import platform.Foundation.NSUserDefaults
 import platform.UIKit.UIViewController
 import platform.posix.memcpy
+import com.ravenemu.shared.library.GameEntry
+import com.ravenemu.shared.library.GamePlatform
+import com.ravenemu.shared.library.LoadedGameInfo
+import com.ravenemu.shared.saves.BatteryFileFormat
+import com.ravenemu.shared.saves.GbStateSlot
+import com.ravenemu.shared.settings.GbDisplayFilter
+import com.ravenemu.shared.settings.Settings
+import com.ravenemu.shared.settings.SettingsCapabilities
 
 /** Main-thread UI callbacks. Swift serializes all native work on its own queue. */
 interface IosHostActions {

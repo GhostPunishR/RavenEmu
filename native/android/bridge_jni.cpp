@@ -50,15 +50,15 @@ void send_to_kotlin(void* user, const uint8_t* message, size_t size) {
 
 extern "C" {
 JNIEXPORT jlong JNICALL
-Java_com_ravenemu_android_NativeCore_nativeCreate(JNIEnv*, jobject, jint system) {
+Java_com_ravenemu_android_engine_NativeCore_nativeCreate(JNIEnv*, jobject, jint system) {
     return to_long(ravenemu_create(system));
 }
 JNIEXPORT void JNICALL
-Java_com_ravenemu_android_NativeCore_nativeDestroy(JNIEnv*, jobject, jlong pointer) {
+Java_com_ravenemu_android_engine_NativeCore_nativeDestroy(JNIEnv*, jobject, jlong pointer) {
     ravenemu_destroy(handle(pointer));
 }
 JNIEXPORT jboolean JNICALL
-Java_com_ravenemu_android_NativeCore_nativeLoad(
+Java_com_ravenemu_android_engine_NativeCore_nativeLoad(
     JNIEnv* env, jobject, jlong pointer, jbyteArray rom, jbyteArray battery
 ) {
     if (!rom) return JNI_FALSE;
@@ -81,23 +81,23 @@ Java_com_ravenemu_android_NativeCore_nativeLoad(
     return ok ? JNI_TRUE : JNI_FALSE;
 }
 JNIEXPORT jint JNICALL
-Java_com_ravenemu_android_NativeCore_nativeWidth(JNIEnv*, jobject, jlong pointer) {
+Java_com_ravenemu_android_engine_NativeCore_nativeWidth(JNIEnv*, jobject, jlong pointer) {
     return ravenemu_video_width(handle(pointer));
 }
 JNIEXPORT jint JNICALL
-Java_com_ravenemu_android_NativeCore_nativeHeight(JNIEnv*, jobject, jlong pointer) {
+Java_com_ravenemu_android_engine_NativeCore_nativeHeight(JNIEnv*, jobject, jlong pointer) {
     return ravenemu_video_height(handle(pointer));
 }
 JNIEXPORT jdouble JNICALL
-Java_com_ravenemu_android_NativeCore_nativeFps(JNIEnv*, jobject, jlong pointer) {
+Java_com_ravenemu_android_engine_NativeCore_nativeFps(JNIEnv*, jobject, jlong pointer) {
     return ravenemu_video_fps(handle(pointer));
 }
 JNIEXPORT jint JNICALL
-Java_com_ravenemu_android_NativeCore_nativeAudioRate(JNIEnv*, jobject, jlong pointer) {
+Java_com_ravenemu_android_engine_NativeCore_nativeAudioRate(JNIEnv*, jobject, jlong pointer) {
     return ravenemu_audio_rate(handle(pointer));
 }
 JNIEXPORT jboolean JNICALL
-Java_com_ravenemu_android_NativeCore_nativeFrame(
+Java_com_ravenemu_android_engine_NativeCore_nativeFrame(
     JNIEnv* env, jobject, jlong pointer, jintArray output
 ) {
     if (!output) return JNI_FALSE;
@@ -111,7 +111,7 @@ Java_com_ravenemu_android_NativeCore_nativeFrame(
     return ok ? JNI_TRUE : JNI_FALSE;
 }
 JNIEXPORT jint JNICALL
-Java_com_ravenemu_android_NativeCore_nativeReadAudio(
+Java_com_ravenemu_android_engine_NativeCore_nativeReadAudio(
     JNIEnv* env, jobject, jlong pointer, jshortArray output
 ) {
     if (!output) return 0;
@@ -125,31 +125,31 @@ Java_com_ravenemu_android_NativeCore_nativeReadAudio(
     return static_cast<jint>(count);
 }
 JNIEXPORT jboolean JNICALL
-Java_com_ravenemu_android_NativeCore_nativeButton(
+Java_com_ravenemu_android_engine_NativeCore_nativeButton(
     JNIEnv*, jobject, jlong pointer, jint button, jboolean down
 ) {
     return ravenemu_set_button(handle(pointer), button, down == JNI_TRUE) ? JNI_TRUE : JNI_FALSE;
 }
 JNIEXPORT jboolean JNICALL
-Java_com_ravenemu_android_NativeCore_nativeReset(JNIEnv*, jobject, jlong pointer) {
+Java_com_ravenemu_android_engine_NativeCore_nativeReset(JNIEnv*, jobject, jlong pointer) {
     return ravenemu_reset(handle(pointer)) ? JNI_TRUE : JNI_FALSE;
 }
 JNIEXPORT jstring JNICALL
-Java_com_ravenemu_android_NativeCore_nativeLastError(JNIEnv* env, jobject) {
+Java_com_ravenemu_android_engine_NativeCore_nativeLastError(JNIEnv* env, jobject) {
     return env->NewStringUTF(ravenemu_last_error());
 }
 // Declared by NativeAchievementsBridge: the engine version in the User-Agent.
 JNIEXPORT jstring JNICALL
-Java_com_ravenemu_android_NativeAchievementsBridge_engineVersion(JNIEnv* env, jclass) {
+Java_com_ravenemu_android_retro_NativeAchievementsBridge_engineVersion(JNIEnv* env, jclass) {
     return env->NewStringUTF(ravenemu_version());
 }
 JNIEXPORT jint JNICALL
-Java_com_ravenemu_android_NativeCore_nativeStateSize(JNIEnv*, jobject, jlong pointer) {
+Java_com_ravenemu_android_engine_NativeCore_nativeStateSize(JNIEnv*, jobject, jlong pointer) {
     const auto n = ravenemu_state_size(handle(pointer));
     return n <= static_cast<size_t>(std::numeric_limits<jint>::max()) ? static_cast<jint>(n) : 0;
 }
 JNIEXPORT jboolean JNICALL
-Java_com_ravenemu_android_NativeCore_nativeSaveState(
+Java_com_ravenemu_android_engine_NativeCore_nativeSaveState(
     JNIEnv* env, jobject, jlong pointer, jbyteArray output
 ) {
     if (!output) return JNI_FALSE;
@@ -161,7 +161,7 @@ Java_com_ravenemu_android_NativeCore_nativeSaveState(
     return ok ? JNI_TRUE : JNI_FALSE;
 }
 JNIEXPORT jboolean JNICALL
-Java_com_ravenemu_android_NativeCore_nativeLoadState(
+Java_com_ravenemu_android_engine_NativeCore_nativeLoadState(
     JNIEnv* env, jobject, jlong pointer, jbyteArray input
 ) {
     if (!input) return JNI_FALSE;
@@ -173,37 +173,37 @@ Java_com_ravenemu_android_NativeCore_nativeLoadState(
     return ok ? JNI_TRUE : JNI_FALSE;
 }
 JNIEXPORT jboolean JNICALL
-Java_com_ravenemu_android_NativeCore_nativeRumbleActive(JNIEnv*, jobject, jlong pointer) {
+Java_com_ravenemu_android_engine_NativeCore_nativeRumbleActive(JNIEnv*, jobject, jlong pointer) {
     return ravenemu_rumble_active(handle(pointer)) ? JNI_TRUE : JNI_FALSE;
 }
 JNIEXPORT jint JNICALL
-Java_com_ravenemu_android_NativeCore_nativeSensors(JNIEnv*, jobject, jlong pointer) {
+Java_com_ravenemu_android_engine_NativeCore_nativeSensors(JNIEnv*, jobject, jlong pointer) {
     return ravenemu_sensors(handle(pointer));
 }
 JNIEXPORT jboolean JNICALL
-Java_com_ravenemu_android_NativeCore_nativeSetSolarLight(
+Java_com_ravenemu_android_engine_NativeCore_nativeSetSolarLight(
     JNIEnv*, jobject, jlong pointer, jint level
 ) {
     return ravenemu_set_solar_light(handle(pointer), level) ? JNI_TRUE : JNI_FALSE;
 }
 JNIEXPORT jboolean JNICALL
-Java_com_ravenemu_android_NativeCore_nativeSetRotation(
+Java_com_ravenemu_android_engine_NativeCore_nativeSetRotation(
     JNIEnv*, jobject, jlong pointer, jint speed
 ) {
     return ravenemu_set_rotation(handle(pointer), speed) ? JNI_TRUE : JNI_FALSE;
 }
 JNIEXPORT jboolean JNICALL
-Java_com_ravenemu_android_NativeCore_nativeSetTilt(
+Java_com_ravenemu_android_engine_NativeCore_nativeSetTilt(
     JNIEnv*, jobject, jlong pointer, jint x, jint y
 ) {
     return ravenemu_set_tilt(handle(pointer), x, y) ? JNI_TRUE : JNI_FALSE;
 }
 JNIEXPORT jboolean JNICALL
-Java_com_ravenemu_android_NativeCore_nativeBatteryDirty(JNIEnv*, jobject, jlong pointer) {
+Java_com_ravenemu_android_engine_NativeCore_nativeBatteryDirty(JNIEnv*, jobject, jlong pointer) {
     return ravenemu_battery_dirty(handle(pointer)) ? JNI_TRUE : JNI_FALSE;
 }
 JNIEXPORT jboolean JNICALL
-Java_com_ravenemu_android_NativeCore_nativeCopyBatteryGeneration(
+Java_com_ravenemu_android_engine_NativeCore_nativeCopyBatteryGeneration(
     JNIEnv* env, jobject, jlong pointer, jbyteArray output, jlongArray generation_out
 ) {
     if (!output || !generation_out || env->GetArrayLength(generation_out) < 1) return JNI_FALSE;
@@ -220,19 +220,19 @@ Java_com_ravenemu_android_NativeCore_nativeCopyBatteryGeneration(
     return env->ExceptionCheck() ? JNI_FALSE : JNI_TRUE;
 }
 JNIEXPORT jboolean JNICALL
-Java_com_ravenemu_android_NativeCore_nativeAcknowledgeBattery(
+Java_com_ravenemu_android_engine_NativeCore_nativeAcknowledgeBattery(
     JNIEnv*, jobject, jlong pointer, jlong generation
 ) {
     return ravenemu_acknowledge_battery(
         handle(pointer), static_cast<std::uint64_t>(generation)) ? JNI_TRUE : JNI_FALSE;
 }
 JNIEXPORT jint JNICALL
-Java_com_ravenemu_android_NativeCore_nativeBatterySize(JNIEnv*, jobject, jlong pointer) {
+Java_com_ravenemu_android_engine_NativeCore_nativeBatterySize(JNIEnv*, jobject, jlong pointer) {
     const auto n = ravenemu_battery_size(handle(pointer));
     return n <= static_cast<size_t>(std::numeric_limits<jint>::max()) ? static_cast<jint>(n) : 0;
 }
 JNIEXPORT jboolean JNICALL
-Java_com_ravenemu_android_NativeCore_nativeCopyBattery(
+Java_com_ravenemu_android_engine_NativeCore_nativeCopyBattery(
     JNIEnv* env, jobject, jlong pointer, jbyteArray output
 ) {
     if (!output) return JNI_FALSE;
@@ -244,7 +244,7 @@ Java_com_ravenemu_android_NativeCore_nativeCopyBattery(
     return ok ? JNI_TRUE : JNI_FALSE;
 }
 JNIEXPORT jint JNICALL
-Java_com_ravenemu_android_NativeCore_nativeAchievementMemory(
+Java_com_ravenemu_android_engine_NativeCore_nativeAchievementMemory(
     JNIEnv* env, jobject, jlong pointer, jint address, jbyteArray output
 ) {
     if (!output || address < 0) return 0;
@@ -261,7 +261,7 @@ Java_com_ravenemu_android_NativeCore_nativeAchievementMemory(
 
 // Câble link entre les cœurs de deux jeux lancés côte à côte.
 JNIEXPORT jlong JNICALL
-Java_com_ravenemu_android_NativeLink_nativeCreate(JNIEnv* env, jobject, jlongArray handles) {
+Java_com_ravenemu_android_link_NativeLink_nativeCreate(JNIEnv* env, jobject, jlongArray handles) {
     if (!handles) return 0;
     const auto count = env->GetArrayLength(handles);
     std::vector<jlong> pointers(static_cast<std::size_t>(count));
@@ -272,11 +272,11 @@ Java_com_ravenemu_android_NativeLink_nativeCreate(JNIEnv* env, jobject, jlongArr
         ravenemu_link_create(bridges.data(), bridges.size())));
 }
 JNIEXPORT void JNICALL
-Java_com_ravenemu_android_NativeLink_nativeDestroy(JNIEnv*, jobject, jlong pointer) {
+Java_com_ravenemu_android_link_NativeLink_nativeDestroy(JNIEnv*, jobject, jlong pointer) {
     ravenemu_link_destroy(link(pointer));
 }
 JNIEXPORT jboolean JNICALL
-Java_com_ravenemu_android_NativeLink_nativeFrame(
+Java_com_ravenemu_android_link_NativeLink_nativeFrame(
     JNIEnv* env, jobject, jlong pointer, jintArray first, jintArray second
 ) {
     if (!first || !second) return JNI_FALSE;
@@ -296,19 +296,19 @@ Java_com_ravenemu_android_NativeLink_nativeFrame(
     return ok ? JNI_TRUE : JNI_FALSE;
 }
 JNIEXPORT jstring JNICALL
-Java_com_ravenemu_android_NativeLink_nativeLastError(JNIEnv* env, jobject) {
+Java_com_ravenemu_android_link_NativeLink_nativeLastError(JNIEnv* env, jobject) {
     return env->NewStringUTF(ravenemu_last_error());
 }
 
 // Le jeu se sert de son port link : le câble sans fil cherche un partenaire.
 JNIEXPORT jboolean JNICALL
-Java_com_ravenemu_android_NativeCore_nativeLinkWanted(JNIEnv*, jobject, jlong pointer) {
+Java_com_ravenemu_android_engine_NativeCore_nativeLinkWanted(JNIEnv*, jobject, jlong pointer) {
     return ravenemu_link_wanted(handle(pointer)) ? JNI_TRUE : JNI_FALSE;
 }
 
 // Câble link vers la console d'un autre appareil.
 JNIEXPORT jlong JNICALL
-Java_com_ravenemu_android_NativeRemoteLink_nativeCreate(
+Java_com_ravenemu_android_wireless_NativeRemoteLink_nativeCreate(
     JNIEnv* env, jobject, jlong core, jint player, jobject sink
 ) {
     if (!sink) return 0;
@@ -332,7 +332,7 @@ Java_com_ravenemu_android_NativeRemoteLink_nativeCreate(
     return static_cast<jlong>(reinterpret_cast<std::uintptr_t>(link));
 }
 JNIEXPORT void JNICALL
-Java_com_ravenemu_android_NativeRemoteLink_nativeDestroy(JNIEnv* env, jobject, jlong pointer) {
+Java_com_ravenemu_android_wireless_NativeRemoteLink_nativeDestroy(JNIEnv* env, jobject, jlong pointer) {
     auto* link = remote(pointer);
     if (!link) return;
     ravenemu_remote_link_destroy(link->cable);
@@ -340,7 +340,7 @@ Java_com_ravenemu_android_NativeRemoteLink_nativeDestroy(JNIEnv* env, jobject, j
     delete link;
 }
 JNIEXPORT jboolean JNICALL
-Java_com_ravenemu_android_NativeRemoteLink_nativeReceive(JNIEnv* env, jobject, jlong pointer, jbyteArray message) {
+Java_com_ravenemu_android_wireless_NativeRemoteLink_nativeReceive(JNIEnv* env, jobject, jlong pointer, jbyteArray message) {
     auto* link = remote(pointer);
     if (!link || !message) return JNI_FALSE;
     const auto size = env->GetArrayLength(message);
@@ -351,16 +351,16 @@ Java_com_ravenemu_android_NativeRemoteLink_nativeReceive(JNIEnv* env, jobject, j
     return ravenemu_remote_link_receive(link->cable, bytes, static_cast<size_t>(size)) ? JNI_TRUE : JNI_FALSE;
 }
 JNIEXPORT void JNICALL
-Java_com_ravenemu_android_NativeRemoteLink_nativeSetConnected(JNIEnv*, jobject, jlong pointer, jboolean connected) {
+Java_com_ravenemu_android_wireless_NativeRemoteLink_nativeSetConnected(JNIEnv*, jobject, jlong pointer, jboolean connected) {
     if (auto* link = remote(pointer)) ravenemu_remote_link_set_connected(link->cable, connected ? 1 : 0);
 }
 JNIEXPORT jint JNICALL
-Java_com_ravenemu_android_NativeRemoteLink_nativeState(JNIEnv*, jobject, jlong pointer) {
+Java_com_ravenemu_android_wireless_NativeRemoteLink_nativeState(JNIEnv*, jobject, jlong pointer) {
     auto* link = remote(pointer);
     return link ? ravenemu_remote_link_state(link->cable) : RAVENEMU_REMOTE_UNPLUGGED;
 }
 JNIEXPORT jboolean JNICALL
-Java_com_ravenemu_android_NativeRemoteLink_nativeService(JNIEnv*, jobject, jlong pointer) {
+Java_com_ravenemu_android_wireless_NativeRemoteLink_nativeService(JNIEnv*, jobject, jlong pointer) {
     auto* link = remote(pointer);
     return link && ravenemu_remote_link_service(link->cable) ? JNI_TRUE : JNI_FALSE;
 }

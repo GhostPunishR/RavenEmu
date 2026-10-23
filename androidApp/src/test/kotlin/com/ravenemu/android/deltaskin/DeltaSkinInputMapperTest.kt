@@ -1,6 +1,6 @@
 package com.ravenemu.android.deltaskin
 
-import com.ravenemu.shared.GbButton
+import com.ravenemu.shared.player.GbButton
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
