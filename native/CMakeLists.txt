@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.22.1)
 project(RavenEmuNative LANGUAGES C CXX)
 
 # Lock the emulator engines AND public C interface to a reviewed source commit.
-# RavenCore 0.10.0 (RavenCore PR #32): remote link cable protocol 2, where the
+# RavenCore 0.10.0 (merge of RavenCore PR #32): remote link cable protocol 2, where the
 # console that does not clock a transfer waits until its game has handled the
 # previous one (Pokémon trades), on top of 0.9.0's remote link cable
 # (ravenemu_remote_link_*, ravenemu_link_wanted) and 0.8.0's complete GB/GBC
@@ -17,7 +17,7 @@ set(RAVENEMU_BUILD_LIBRETRO OFF CACHE BOOL "" FORCE)
 set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(ravencore
     GIT_REPOSITORY https://github.com/GhostPunishR/RavenCore.git
-    GIT_TAG cbdd7886b66f7ce3ee049e2e253d9ee239da96de
+    GIT_TAG 2dcfef7cf8dfce860c3adedea3c82e2b0773c063
     GIT_SHALLOW FALSE
 )
 FetchContent_MakeAvailable(ravencore)

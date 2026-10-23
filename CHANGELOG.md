@@ -15,7 +15,7 @@
 
 ### RavenCore
 
-- RavenCore épinglé à la version 0.10.0, commit `cbdd7886b66f7ce3ee049e2e253d9ee239da96de` ([#32](https://github.com/GhostPunishR/RavenCore/pull/32)) : câble distant (`ravenemu_remote_link_*`, apporté par la 0.9.0, [#31](https://github.com/GhostPunishR/RavenCore/pull/31)) et `ravenemu_link_wanted`. La 0.10.0 corrige les échanges Pokémon par le câble sans fil, qui finissaient en « Erreur de communication » : le téléphone qui ne cadence pas attend que son jeu ait traité le transfert précédent. Le protocole du câble passe en version 2 : les deux téléphones doivent avoir cette version. API C toujours en version 0 ; formats d'états inchangés (GB/GBC 11, GBA 16).
+- RavenCore épinglé à la version 0.10.0, commit `2dcfef7cf8dfce860c3adedea3c82e2b0773c063` ([#32](https://github.com/GhostPunishR/RavenCore/pull/32)) : câble distant (`ravenemu_remote_link_*`, apporté par la 0.9.0, [#31](https://github.com/GhostPunishR/RavenCore/pull/31)) et `ravenemu_link_wanted`. La 0.10.0 corrige les échanges Pokémon par le câble sans fil, qui finissaient en « Erreur de communication » : le téléphone qui ne cadence pas attend que son jeu ait traité le transfert précédent. Le protocole du câble passe en version 2 : les deux téléphones doivent avoir cette version. API C toujours en version 0 ; formats d'états inchangés (GB/GBC 11, GBA 16).
 
 ### Modifié
 
