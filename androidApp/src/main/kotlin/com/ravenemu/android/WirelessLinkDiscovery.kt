@@ -37,9 +37,12 @@ internal class WirelessLinkDiscovery(
     private var registered = false
     private var discovering = false
     private var stopped = false
-    // NsdManager ne résout qu'un service à la fois avant Android 14.
+    // Avant Android 14 : une file, NsdManager ne résolvant qu'un service à la fois.
     private val toResolve = ArrayDeque<NsdServiceInfo>()
     private var resolving = false
+    // Android 14 et plus : NsdManager suit chaque téléphone trouvé (adresses,
+    // attributs, départ). Par nom de service ; des NsdManager.ServiceInfoCallback.
+    private val watched = HashMap<String, Any>()
 
     private val registration = object : NsdManager.RegistrationListener {
         override fun onServiceRegistered(info: NsdServiceInfo) = later {
@@ -66,12 +69,17 @@ internal class WirelessLinkDiscovery(
         override fun onStopDiscoveryFailed(type: String, error: Int) = Unit
         override fun onServiceFound(info: NsdServiceInfo) = later {
             if (stopped || info.serviceName == ownName) return@later
-            toResolve.removeAll { it.serviceName == info.serviceName }
-            toResolve.addLast(info)
-            resolveNext()
+            if (Build.VERSION.SDK_INT >= 34) {
+                watch(info)
+            } else {
+                toResolve.removeAll { it.serviceName == info.serviceName }
+                toResolve.addLast(info)
+                resolveNext()
+            }
         }
         override fun onServiceLost(info: NsdServiceInfo) = later {
             toResolve.removeAll { it.serviceName == info.serviceName }
+            if (Build.VERSION.SDK_INT >= 34) unwatch(info.serviceName)
             if (!stopped) listener.onPeer(info.serviceName, null)
         }
     }
@@ -112,6 +120,7 @@ internal class WirelessLinkDiscovery(
         if (stopped) return
         stopped = true
         toResolve.clear()
+        if (Build.VERSION.SDK_INT >= 34) for (name in watched.keys.toList()) unwatch(name)
         // Pas encore confirmées : retirées à leur confirmation.
         if (registered) unregister()
         if (discovering) stopDiscovery()
@@ -127,6 +136,41 @@ internal class WirelessLinkDiscovery(
         runCatching { nsd?.stopServiceDiscovery(discovery) }
     }
 
+    // Android 14 et plus.
+    private fun watch(info: NsdServiceInfo) {
+        if (Build.VERSION.SDK_INT < 34) return
+        val manager = nsd ?: return
+        val name = info.serviceName
+        if (name in watched) return
+        val callback = object : NsdManager.ServiceInfoCallback {
+            override fun onServiceInfoCallbackRegistrationFailed(error: Int) = later {
+                if (watched[name] === this) watched.remove(name)
+            }
+            override fun onServiceUpdated(info: NsdServiceInfo) = later {
+                if (!stopped && watched[name] === this) found(info)?.let { listener.onPeer(name, it) }
+            }
+            override fun onServiceLost() = later {
+                if (!stopped && watched[name] === this) listener.onPeer(name, null)
+            }
+            override fun onServiceInfoCallbackUnregistered() = Unit
+        }
+        watched[name] = callback
+        try {
+            // Les rappels repassent par later() : ils peuvent partir du fil de NsdManager.
+            manager.registerServiceInfoCallback(info, { it.run() }, callback)
+        } catch (error: RuntimeException) {
+            watched.remove(name)
+        }
+    }
+
+    // Android 14 et plus.
+    private fun unwatch(name: String) {
+        if (Build.VERSION.SDK_INT < 34) return
+        val callback = watched.remove(name) as? NsdManager.ServiceInfoCallback ?: return
+        runCatching { nsd?.unregisterServiceInfoCallback(callback) }
+    }
+
+    // Avant Android 14 : resolveService, une résolution à la fois.
     private fun resolveNext() {
         val manager = nsd ?: return
         if (resolving || stopped) return
@@ -144,7 +188,7 @@ internal class WirelessLinkDiscovery(
             }
         }
         try {
-            @Suppress("DEPRECATION")
+            @Suppress("DEPRECATION") // Remplacé par registerServiceInfoCallback à partir d'Android 14.
             manager.resolveService(next, callback)
         } catch (error: RuntimeException) {
             resolving = false

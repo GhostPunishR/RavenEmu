@@ -226,6 +226,14 @@ class MainActivity : ComponentActivity() {
             val documentPicker = rememberLauncherForActivityResult(
                 contract = ActivityResultContracts.OpenDocument(),
             ) { uri -> library.importRom(uri) }
+            // Android 17 : le câble sans fil demande l'accès au réseau local.
+            val localNetwork = rememberLauncherForActivityResult(
+                contract = ActivityResultContracts.RequestPermission(),
+            ) { granted -> wireless.onLocalNetworkPermission(granted) }
+            val localNetworkRequest = wireless.localNetworkRequest
+            LaunchedEffect(localNetworkRequest) {
+                if (localNetworkRequest) localNetwork.launch(LocalNetworkAccess.PERMISSION)
+            }
             skins.skinPicker = rememberLauncherForActivityResult(
                 contract = ActivityResultContracts.OpenDocument(),
             ) { uri -> skins.import(uri) }

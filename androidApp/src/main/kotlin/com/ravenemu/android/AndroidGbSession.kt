@@ -12,7 +12,6 @@ import java.io.ByteArrayOutputStream
 import java.io.Closeable
 import java.io.File
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
@@ -36,8 +35,8 @@ class AndroidGbSession(private val resolver: ContentResolver, filesDir: File) : 
     private var active: NativeCore? = null
     private var activeRomKey: String? = null
     private val heldButtons = mutableSetOf<GbButton>()
-    // Buttons the UI wants held, one bit per GbButton, applied before each frame.
-    private val wantedButtons = AtomicInteger(0)
+    // Buttons the UI wants, one bit per GbButton, applied before each frame.
+    private val buttons = GbButtonLatch()
     // Fixed for a loaded game: read without waiting for a running frame.
     private class Traits(val fps: Double, val audioRate: Int, val sensors: Int)
     @Volatile private var traits: Traits? = null
@@ -84,7 +83,7 @@ class AndroidGbSession(private val resolver: ContentResolver, filesDir: File) : 
                     val previous = active
                     dropRemoteLocked()
                     heldButtons.clear()
-                    wantedButtons.set(0)
+                    buttons.releaseAll()
                     active = replacement
                     activeRomKey = romKey
                     traits = fixed
@@ -167,7 +166,7 @@ class AndroidGbSession(private val resolver: ContentResolver, filesDir: File) : 
                 dropRemoteLocked()
                 for (button in heldButtons) active?.button(button.nativeCode, false)
                 heldButtons.clear()
-                wantedButtons.set(0)
+                buttons.releaseAll()
                 active?.close()
                 active = null
                 activeRomKey = null
@@ -197,7 +196,7 @@ class AndroidGbSession(private val resolver: ContentResolver, filesDir: File) : 
         val core = active ?: return@withLock
         for (button in heldButtons) core.button(button.nativeCode, false)
         heldButtons.clear()
-        wantedButtons.set(0)
+        buttons.releaseAll()
         core.reset()
     }
 
@@ -208,7 +207,7 @@ class AndroidGbSession(private val resolver: ContentResolver, filesDir: File) : 
             val core = active ?: error("Aucun jeu chargé.")
             val key = activeRomKey ?: error("Aucune ROM active.")
             // Buttons released by the game menu are released in the state too.
-            applyButtons(core)
+            applyButtons(core, buttons.current())
             key to core.saveState()
         }
         // Write the state before the optional thumbnail, so a preview cannot
@@ -247,7 +246,7 @@ class AndroidGbSession(private val resolver: ContentResolver, filesDir: File) : 
             val core = active ?: error("Aucun jeu chargé.")
             for (button in heldButtons) core.button(button.nativeCode, false)
             heldButtons.clear()
-            wantedButtons.set(0)
+            buttons.releaseAll()
             core.loadState(state)
         }
         Log.d(TAG, "Save state slot ${slot + 1} restored for ROM ${key.take(12)}")
@@ -283,7 +282,7 @@ class AndroidGbSession(private val resolver: ContentResolver, filesDir: File) : 
         lock.withLock {
             check(!closed) { "La session a été fermée." }
             val core = active ?: return@withLock null
-            applyButtons(core)
+            applyButtons(core, buttons.takeFrame())
             sensors?.applyTo(core)
             core.frameInto(pixels)
             rumbleActive = core.rumbleActive()
@@ -292,8 +291,7 @@ class AndroidGbSession(private val resolver: ContentResolver, filesDir: File) : 
         }
 
     // Under the native lock: the buttons the UI wants, before a frame or a state.
-    private fun applyButtons(core: NativeCore) {
-        val wanted = wantedButtons.get()
+    private fun applyButtons(core: NativeCore, wanted: Int) {
         for (button in GbButton.entries) {
             val pressed = (wanted and (1 shl button.ordinal)) != 0
             if ((button in heldButtons) == pressed) continue
@@ -362,18 +360,18 @@ class AndroidGbSession(private val resolver: ContentResolver, filesDir: File) : 
 
     /**
      * Input is ordered on the UI thread and reaches the core before the next
-     * frame, as it did when the UI waited for the running one to end.
+     * frame, as it did when the UI waited for the running one to end. A press
+     * shorter than a frame still lasts one frame (see GbButtonLatch).
      */
     fun setButton(button: GbButton, pressed: Boolean): Boolean {
         if (closed) return false
-        val bit = 1 shl button.ordinal
-        wantedButtons.updateAndGet { if (pressed) it or bit else it and bit.inv() }
+        buttons.set(1 shl button.ordinal, pressed)
         return true
     }
 
     /** Prevent stuck buttons after screen exit, app pause or cancelled touches. */
     fun releaseAllButtons() {
-        wantedButtons.set(0)
+        buttons.releaseAll()
     }
 
     private fun displayName(uri: Uri): String {
@@ -424,7 +422,7 @@ class AndroidGbSession(private val resolver: ContentResolver, filesDir: File) : 
                     closed = true
                     dropRemoteLocked()
                     heldButtons.clear()
-                    wantedButtons.set(0)
+                    buttons.releaseAll()
                     active?.close()
                     active = null
                     activeRomKey = null

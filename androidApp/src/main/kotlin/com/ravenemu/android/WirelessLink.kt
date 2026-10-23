@@ -57,6 +57,13 @@ internal class WirelessLink(
     @Volatile var partnerPaused = false
         private set
 
+    /**
+     * Android 17 : la recherche attend la permission d'accès au réseau local,
+     * que l'activité demande puis rend par [onLocalNetworkPermission].
+     */
+    var localNetworkRequest by mutableStateOf(false)
+        private set
+
     private val appContext = context.applicationContext
     private val ownId = SecureRandom().nextLong().let { if (it == 0L) 1L else it }
     private val device = Build.MODEL?.trim()?.takeIf { it.isNotEmpty() } ?: "Android"
@@ -105,6 +112,8 @@ internal class WirelessLink(
     // Chaque bandeau reste quelques secondes ; un plus récent le remplace.
     private var bannerShown = 0
     private var ticker: ScheduledFuture<*>? = null
+    // Une seule demande de permission réseau local par jeu.
+    private var localNetworkAsked = false
     private var closed = false
 
     private class Linked(
@@ -126,6 +135,7 @@ internal class WirelessLink(
             chosen = null
             banner = null
             lastWantedNanos = 0L
+            localNetworkAsked = false
             this.game = game
             family = when (game?.platform) {
                 GamePlatform.GB, GamePlatform.GBC -> WirelessLinkProtocol.FAMILY_GB
@@ -134,9 +144,12 @@ internal class WirelessLink(
             }
         }
         this.enabled = enabled
-        if (game != null && ticker == null) {
-            ticker = executor.scheduleWithFixedDelay(::tick, 0, TICK_MILLIS, TimeUnit.MILLISECONDS)
-        } else if (game == null) {
+        // Le réglage coupé, rien ne veille : aucune vérification pendant la partie.
+        if (game != null && enabled) {
+            if (ticker == null) {
+                ticker = executor.scheduleWithFixedDelay(::tick, 0, TICK_MILLIS, TimeUnit.MILLISECONDS)
+            }
+        } else {
             ticker?.cancel(false)
             ticker = null
         }
@@ -163,6 +176,13 @@ internal class WirelessLink(
             chosen = id
             dismissed -= id
         }
+        evaluate()
+    }
+
+    /** Réponse à [localNetworkRequest]. */
+    fun onLocalNetworkPermission(granted: Boolean) = post {
+        localNetworkRequest = false
+        if (!granted) showBanner("Câble link : accès au réseau local refusé")
         evaluate()
     }
 
@@ -245,6 +265,17 @@ internal class WirelessLink(
             return
         }
         if (!wanted() && pending.isEmpty() && connectingTo == null) {
+            stopSearch()
+            choices = emptyList()
+            publish()
+            return
+        }
+        if (!LocalNetworkAccess.granted(appContext)) {
+            // Demandée quand le jeu veut se relier, une fois par jeu.
+            if (!localNetworkAsked) {
+                localNetworkAsked = true
+                localNetworkRequest = true
+            }
             stopSearch()
             choices = emptyList()
             publish()
