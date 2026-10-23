@@ -31,4 +31,4 @@ La CI construit aussi l'application Xcode complète et exécute les XCTest sur s
 
 ## RavenCore
 
-Le commit `54912ad94220f9f2d2a8cd2b07389807741eff3b` est épinglé dans `native/CMakeLists.txt` : RavenCore 0.9.0 et son API C `ravenemu_*`. Voir [la passerelle native](https://github.com/GhostPunishR/RavenEmu/blob/main/native/README.md).
+Le commit `2dcfef7cf8dfce860c3adedea3c82e2b0773c063` est épinglé dans `native/CMakeLists.txt` : RavenCore 0.10.0 et son API C `ravenemu_*`. Voir [la passerelle native](https://github.com/GhostPunishR/RavenEmu/blob/main/native/README.md).

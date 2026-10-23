@@ -79,5 +79,6 @@ Deux téléphones seulement : les jeux Game Boy Advance à trois ou quatre joueu
 
 ### Limites
 
-- Chaque échange de données attend un aller-retour réseau. Sur un bon Wi-Fi, un échange Pokémon prend quelques secondes de plus. Un réseau lent ou chargé peut faire ralentir un jeu Game Boy Advance pendant les échanges.
-- À valider entre deux vrais téléphones : les échanges Pokémon des générations 1 et 2 (Game Boy et Game Boy Color) et 3 (Game Boy Advance).
+- Les deux téléphones doivent avoir une version récente de RavenEmu, avec le même câble : un téléphone resté sur une version plus ancienne ne se relie pas. Mettez à jour RavenEmu sur les deux.
+- Chaque échange de données attend un aller-retour réseau. Le téléphone qui mène l'échange ralentit pendant les transferts : mesuré sur un échange Pokémon Rubis ↔ Émeraude, il garde 60 images par seconde sans latence, environ 46 avec 2 ms d'aller-retour et 17 avec 6 ms. Le jeu attend lui-même l'autre téléphone, l'échange va au bout.
+- Validé entre deux consoles émulées reliées par le câble distant : un échange Pokémon Rubis ↔ Émeraude complet. À valider entre deux vrais téléphones, ainsi que les échanges Pokémon des générations 1 et 2 (Game Boy et Game Boy Color).
