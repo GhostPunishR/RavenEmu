@@ -10,9 +10,9 @@ import androidx.activity.compose.ManagedActivityResultLauncher
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import com.ravenemu.shared.BatteryFileFormat
-import com.ravenemu.shared.GameEntry
-import com.ravenemu.shared.GbSaveImportReview
+import com.ravenemu.shared.saves.BatteryFileFormat
+import com.ravenemu.shared.library.GameEntry
+import com.ravenemu.shared.saves.GbSaveImportReview
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch

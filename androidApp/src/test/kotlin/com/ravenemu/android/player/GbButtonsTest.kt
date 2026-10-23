@@ -1,7 +1,7 @@
 package com.ravenemu.android.player
 
-import com.ravenemu.shared.GbButton
-import com.ravenemu.shared.GbDpadHitTest
+import com.ravenemu.shared.player.GbButton
+import com.ravenemu.shared.player.GbDpadHitTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test

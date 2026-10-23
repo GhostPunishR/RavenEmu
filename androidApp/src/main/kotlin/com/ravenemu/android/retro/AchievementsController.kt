@@ -3,9 +3,9 @@ package com.ravenemu.android.retro
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
-import com.ravenemu.shared.GamePlatform
-import com.ravenemu.shared.RomImportPolicy
-import com.ravenemu.shared.RetroSnapshot
+import com.ravenemu.shared.library.GamePlatform
+import com.ravenemu.shared.library.RomImportPolicy
+import com.ravenemu.shared.retro.RetroSnapshot
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext

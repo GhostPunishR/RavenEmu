@@ -14,6 +14,26 @@ RavenEmu partage une interface Compose Multiplatform entre Android et iOS. Le pr
 
 `settings.gradle.kts` inclut `shared`, `androidApp` et `policy`. Toutes les commandes Gradle partent de la racine. Les documents `TERMS.md`, `PRIVACY.md` et `LICENSE` y sont lus pour générer les textes légaux intégrés au module partagé.
 
+## Organisation de `shared/`
+
+L'interface commune suit le même découpage sous `com.ravenemu.shared`, les tests en miroir :
+
+| Paquet | Rôle |
+| --- | --- |
+| (racine) | `RavenEmuApp`, l'écran d'entrée, et sur iOS `IosEntry` (les classes que Swift appelle). |
+| `theme` | Couleurs, glyphes et icônes. |
+| `library` | Catalogue (`GamePlatform`, `GameEntry`), import de ROM, écrans et dialogues de la bibliothèque. |
+| `player` | Écran de jeu, commandes tactiles, images et mesures. |
+| `audio` | File PCM. |
+| `saves` | Emplacements d'état, revue d'import de sauvegarde. |
+| `retro` | Écrans et état de RetroAchievements. |
+| `link` | Deux jeux reliés sur un téléphone. |
+| `wireless` | Affichage du câble sans fil. |
+| `settings` | Préférences (`Settings`), leur écran, entrées des skins Delta. |
+| `about` | À propos, documents légaux et licences ; `LegalTexts` y est généré par `:shared:generateLegalTexts`. |
+
+Swift voit les classes Kotlin sous leur seul nom, sans paquet : ranger les paquets ne change pas l'API vue d'iOS.
+
 ## Organisation de `androidApp/`
 
 Les sources Kotlin sont rangées par rôle sous `com.ravenemu.android`, les tests en miroir :

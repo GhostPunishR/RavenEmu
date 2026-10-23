@@ -1,6 +1,6 @@
 package com.ravenemu.android.saves
 
-import com.ravenemu.shared.BatteryFileFormat
+import com.ravenemu.shared.saves.BatteryFileFormat
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.security.MessageDigest

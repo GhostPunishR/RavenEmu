@@ -2,7 +2,7 @@ package com.ravenemu.android.library
 
 import android.graphics.Bitmap
 import android.util.Log
-import com.ravenemu.shared.GamePlatform
+import com.ravenemu.shared.library.GamePlatform
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.net.HttpURLConnection

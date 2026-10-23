@@ -1,6 +1,6 @@
 package com.ravenemu.android.library
 
-import com.ravenemu.shared.RomImportPolicy
+import com.ravenemu.shared.library.RomImportPolicy
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test

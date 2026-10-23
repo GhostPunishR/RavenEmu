@@ -1,6 +1,6 @@
 package com.ravenemu.android.engine
 
-import com.ravenemu.shared.GamePlatform
+import com.ravenemu.shared.library.GamePlatform
 
 /**
  * JNI adapter over RavenCore's pinned portable C ABI.

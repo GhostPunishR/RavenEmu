@@ -6,7 +6,7 @@ import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
 import android.util.Log
-import com.ravenemu.shared.GbPcmQueue
+import com.ravenemu.shared.audio.GbPcmQueue
 import java.util.Locale
 import kotlin.math.PI
 import kotlin.math.ceil

@@ -13,7 +13,6 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
-import com.ravenemu.shared.*
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -21,6 +20,14 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import kotlin.test.assertEquals
+import com.ravenemu.shared.retro.AchievementEntry
+import com.ravenemu.shared.retro.RetroAchievementsContent
+import com.ravenemu.shared.retro.RetroLeaderboard
+import com.ravenemu.shared.retro.RetroLeaderboardEntry
+import com.ravenemu.shared.retro.RetroLeaderboardView
+import com.ravenemu.shared.retro.RetroScoreboard
+import com.ravenemu.shared.retro.RetroSnapshot
+import com.ravenemu.shared.retro.RetroSync
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [36], qualifiers = "en-rUS-w320dp-h700dp-mdpi")

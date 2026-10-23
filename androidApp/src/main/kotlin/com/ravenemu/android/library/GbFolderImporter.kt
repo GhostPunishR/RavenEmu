@@ -5,7 +5,7 @@ import android.database.Cursor
 import android.net.Uri
 import android.provider.DocumentsContract
 import android.util.Log
-import com.ravenemu.shared.RomImportPolicy
+import com.ravenemu.shared.library.RomImportPolicy
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import com.ravenemu.android.engine.NativeCore

@@ -6,11 +6,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
-import com.ravenemu.shared.GbDisplayFilter
-import com.ravenemu.shared.GbVideoMetrics
-import com.ravenemu.shared.GbVideoMetricsAccumulator
-import com.ravenemu.shared.LoadedGameInfo
-import com.ravenemu.shared.Settings
+import com.ravenemu.shared.settings.GbDisplayFilter
+import com.ravenemu.shared.player.GbVideoMetrics
+import com.ravenemu.shared.player.GbVideoMetricsAccumulator
+import com.ravenemu.shared.library.LoadedGameInfo
+import com.ravenemu.shared.settings.Settings
 import java.util.concurrent.locks.LockSupport
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope

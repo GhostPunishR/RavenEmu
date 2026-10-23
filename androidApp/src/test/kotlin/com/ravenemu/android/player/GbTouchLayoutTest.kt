@@ -1,6 +1,6 @@
 package com.ravenemu.android.player
 
-import com.ravenemu.shared.GbTouchLayout
+import com.ravenemu.shared.player.GbTouchLayout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test

@@ -1,6 +1,6 @@
 package com.ravenemu.android.retro
 
-import com.ravenemu.shared.RetroSync
+import com.ravenemu.shared.retro.RetroSync
 import org.json.JSONObject
 
 /** Presentation only. Never grants an achievement or constructs an award. SDK-thread owned. */

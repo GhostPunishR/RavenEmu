@@ -2,10 +2,10 @@ package com.ravenemu.android.retro
 
 import android.os.Looper
 import androidx.compose.runtime.snapshots.Snapshot
-import com.ravenemu.shared.RetroProgress
-import com.ravenemu.shared.RetroSnapshot
-import com.ravenemu.shared.Settings
-import com.ravenemu.shared.AchievementEntry
+import com.ravenemu.shared.retro.RetroProgress
+import com.ravenemu.shared.retro.RetroSnapshot
+import com.ravenemu.shared.settings.Settings
+import com.ravenemu.shared.retro.AchievementEntry
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob

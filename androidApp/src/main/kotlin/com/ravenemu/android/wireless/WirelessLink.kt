@@ -7,10 +7,10 @@ import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import com.ravenemu.shared.GamePlatform
-import com.ravenemu.shared.LoadedGameInfo
-import com.ravenemu.shared.WirelessLinkChoice
-import com.ravenemu.shared.WirelessLinkView
+import com.ravenemu.shared.library.GamePlatform
+import com.ravenemu.shared.library.LoadedGameInfo
+import com.ravenemu.shared.wireless.WirelessLinkChoice
+import com.ravenemu.shared.wireless.WirelessLinkView
 import java.io.IOException
 import java.net.InetSocketAddress
 import java.net.ServerSocket

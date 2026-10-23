@@ -1,6 +1,6 @@
 package com.ravenemu.android.audio
 
-import com.ravenemu.shared.GbPcmQueue
+import com.ravenemu.shared.audio.GbPcmQueue
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows

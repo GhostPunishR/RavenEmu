@@ -7,7 +7,7 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.hardware.display.DisplayManager
 import android.view.Display
-import com.ravenemu.shared.Settings
+import com.ravenemu.shared.settings.Settings
 import kotlin.math.PI
 import kotlin.math.log10
 import kotlin.math.roundToInt

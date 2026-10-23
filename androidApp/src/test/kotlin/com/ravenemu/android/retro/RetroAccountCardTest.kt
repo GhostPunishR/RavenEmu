@@ -4,10 +4,10 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import com.ravenemu.shared.GameEntry
-import com.ravenemu.shared.GamePlatform
+import com.ravenemu.shared.library.GameEntry
+import com.ravenemu.shared.library.GamePlatform
 import com.ravenemu.shared.RavenEmuApp
-import com.ravenemu.shared.RetroSnapshot
+import com.ravenemu.shared.retro.RetroSnapshot
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith

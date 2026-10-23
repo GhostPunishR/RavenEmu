@@ -4,10 +4,10 @@ import android.content.ContentResolver
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.util.Log
-import com.ravenemu.shared.GamePlatform
-import com.ravenemu.shared.GbButton
-import com.ravenemu.shared.LoadedGameInfo
-import com.ravenemu.shared.RomImportPolicy
+import com.ravenemu.shared.library.GamePlatform
+import com.ravenemu.shared.player.GbButton
+import com.ravenemu.shared.library.LoadedGameInfo
+import com.ravenemu.shared.library.RomImportPolicy
 import java.io.ByteArrayOutputStream
 import java.io.Closeable
 import java.io.File

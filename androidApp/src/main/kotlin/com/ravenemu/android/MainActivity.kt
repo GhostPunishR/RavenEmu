@@ -31,7 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
 import com.ravenemu.android.deltaskin.DeltaSkinControllerConfiguration
 import com.ravenemu.android.deltaskin.DeltaSkinPlayer
-import com.ravenemu.shared.GbButton
+import com.ravenemu.shared.player.GbButton
 import com.ravenemu.shared.RavenEmuApp
 import com.ravenemu.android.deltaskin.DeltaSkinsUi
 import com.ravenemu.android.engine.AndroidGbSession

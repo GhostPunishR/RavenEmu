@@ -1,10 +1,10 @@
 package com.ravenemu.android.link
 
 import android.util.Log
-import com.ravenemu.shared.GbButton
-import com.ravenemu.shared.LinkCable
-import com.ravenemu.shared.LoadedGameInfo
-import com.ravenemu.shared.RomImportPolicy
+import com.ravenemu.shared.player.GbButton
+import com.ravenemu.shared.link.LinkCable
+import com.ravenemu.shared.library.LoadedGameInfo
+import com.ravenemu.shared.library.RomImportPolicy
 import java.io.Closeable
 import java.io.File
 import com.ravenemu.android.engine.NativeCore

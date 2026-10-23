@@ -1,6 +1,6 @@
 package com.ravenemu.android.retro
 
-import com.ravenemu.shared.RetroSync
+import com.ravenemu.shared.retro.RetroSync
 import org.junit.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse

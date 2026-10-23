@@ -11,9 +11,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.asImageBitmap
-import com.ravenemu.shared.GameEntry
-import com.ravenemu.shared.GbFolderImportSummary
-import com.ravenemu.shared.LoadedGameInfo
+import com.ravenemu.shared.library.GameEntry
+import com.ravenemu.shared.library.GbFolderImportSummary
+import com.ravenemu.shared.library.LoadedGameInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch

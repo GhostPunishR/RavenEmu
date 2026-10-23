@@ -1,9 +1,9 @@
 package com.ravenemu.android.library
 
-import com.ravenemu.shared.GameEntry
-import com.ravenemu.shared.GamePlatform
-import com.ravenemu.shared.LibraryNavigation
-import com.ravenemu.shared.LibraryPage
+import com.ravenemu.shared.library.GameEntry
+import com.ravenemu.shared.library.GamePlatform
+import com.ravenemu.shared.library.LibraryNavigation
+import com.ravenemu.shared.library.LibraryPage
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

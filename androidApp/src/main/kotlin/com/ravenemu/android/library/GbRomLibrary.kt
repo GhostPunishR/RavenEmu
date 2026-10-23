@@ -5,8 +5,8 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import android.util.AtomicFile
 import android.util.Log
-import com.ravenemu.shared.GamePlatform
-import com.ravenemu.shared.RomImportPolicy
+import com.ravenemu.shared.library.GamePlatform
+import com.ravenemu.shared.library.RomImportPolicy
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileNotFoundException

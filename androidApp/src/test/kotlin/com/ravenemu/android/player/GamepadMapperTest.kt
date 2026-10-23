@@ -1,7 +1,7 @@
 package com.ravenemu.android.player
 
 import android.view.KeyEvent
-import com.ravenemu.shared.GbButton
+import com.ravenemu.shared.player.GbButton
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull

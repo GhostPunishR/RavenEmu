@@ -1,6 +1,6 @@
 package com.ravenemu.android.player
 
-import com.ravenemu.shared.GbVideoFrame
+import com.ravenemu.shared.player.GbVideoFrame
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Test

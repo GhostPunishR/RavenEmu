@@ -1,12 +1,12 @@
 // Port of RavenEmu 0.8.1 RA client transport, keeping native rcheevos as sole award authority.
 package com.ravenemu.android.retro
 
-import com.ravenemu.shared.RetroSnapshot
-import com.ravenemu.shared.AchievementEntry
-import com.ravenemu.shared.RetroLeaderboard
-import com.ravenemu.shared.RetroLeaderboardEntry
-import com.ravenemu.shared.RetroLeaderboardView
-import com.ravenemu.shared.RetroScoreboard
+import com.ravenemu.shared.retro.RetroSnapshot
+import com.ravenemu.shared.retro.AchievementEntry
+import com.ravenemu.shared.retro.RetroLeaderboard
+import com.ravenemu.shared.retro.RetroLeaderboardEntry
+import com.ravenemu.shared.retro.RetroLeaderboardView
+import com.ravenemu.shared.retro.RetroScoreboard
 import java.text.DateFormat
 import java.util.Date
 

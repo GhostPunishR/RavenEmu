@@ -1,6 +1,6 @@
 package com.ravenemu.android.player
 
-import com.ravenemu.shared.GbVideoMetricsAccumulator
+import com.ravenemu.shared.player.GbVideoMetricsAccumulator
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows

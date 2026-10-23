@@ -6,9 +6,9 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
-import com.ravenemu.shared.Settings
-import com.ravenemu.shared.SettingsCapabilities
-import com.ravenemu.shared.SettingsScreen
+import com.ravenemu.shared.settings.Settings
+import com.ravenemu.shared.settings.SettingsCapabilities
+import com.ravenemu.shared.settings.SettingsScreen
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith

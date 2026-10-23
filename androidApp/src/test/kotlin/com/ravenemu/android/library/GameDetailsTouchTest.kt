@@ -9,9 +9,9 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
-import com.ravenemu.shared.BatteryFileFormat
-import com.ravenemu.shared.GameEntry
-import com.ravenemu.shared.GamePlatform
+import com.ravenemu.shared.saves.BatteryFileFormat
+import com.ravenemu.shared.library.GameEntry
+import com.ravenemu.shared.library.GamePlatform
 import com.ravenemu.shared.RavenEmuApp
 import org.junit.Rule
 import org.junit.Test

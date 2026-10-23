@@ -7,9 +7,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.ravenemu.android.deltaskin.DeltaSkinButtonChanges
-import com.ravenemu.shared.GbButton
-import com.ravenemu.shared.LoadedGameInfo
-import com.ravenemu.shared.Settings
+import com.ravenemu.shared.player.GbButton
+import com.ravenemu.shared.library.LoadedGameInfo
+import com.ravenemu.shared.settings.Settings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch

@@ -1,8 +1,8 @@
 package com.ravenemu.android.link
 
-import com.ravenemu.shared.GameEntry
-import com.ravenemu.shared.GamePlatform
-import com.ravenemu.shared.LinkCable
+import com.ravenemu.shared.library.GameEntry
+import com.ravenemu.shared.library.GamePlatform
+import com.ravenemu.shared.link.LinkCable
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

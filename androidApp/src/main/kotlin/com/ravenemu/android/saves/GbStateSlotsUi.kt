@@ -10,7 +10,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
-import com.ravenemu.shared.GbStateSlot
+import com.ravenemu.shared.saves.GbStateSlot
 import java.io.ByteArrayOutputStream
 import java.text.DateFormat
 import java.util.Date

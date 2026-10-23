@@ -1,7 +1,7 @@
 package com.ravenemu.android.player
 
 import android.view.KeyEvent
-import com.ravenemu.shared.GbButton
+import com.ravenemu.shared.player.GbButton
 
 /**
  * Physical controllers (Bluetooth or USB) and keyboards: Android key codes and

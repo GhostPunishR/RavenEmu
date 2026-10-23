@@ -10,8 +10,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import com.ravenemu.shared.DeltaSkinEntry
-import com.ravenemu.shared.GamePlatform
+import com.ravenemu.shared.settings.DeltaSkinEntry
+import com.ravenemu.shared.library.GamePlatform
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch

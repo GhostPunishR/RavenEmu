@@ -1,7 +1,7 @@
 package com.ravenemu.android.settings
 
 import android.content.Context
-import com.ravenemu.shared.Settings
+import com.ravenemu.shared.settings.Settings
 
 /** Private RavenEmu-only preferences: never reads or changes RavenEmu 0.8.1 settings. */
 internal class AndroidSettingsStore(context: Context) {

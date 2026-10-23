@@ -15,11 +15,11 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.text.TextLayoutResult
-import com.ravenemu.shared.GameEntry
-import com.ravenemu.shared.GamePlatform
+import com.ravenemu.shared.library.GameEntry
+import com.ravenemu.shared.library.GamePlatform
 import com.ravenemu.shared.RavenEmuApp
-import com.ravenemu.shared.RetroBanner
-import com.ravenemu.shared.RetroProgress
+import com.ravenemu.shared.retro.RetroBanner
+import com.ravenemu.shared.retro.RetroProgress
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith

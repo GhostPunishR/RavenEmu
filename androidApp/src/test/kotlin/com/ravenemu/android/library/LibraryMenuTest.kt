@@ -4,8 +4,8 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import com.ravenemu.shared.GameEntry
-import com.ravenemu.shared.GamePlatform
+import com.ravenemu.shared.library.GameEntry
+import com.ravenemu.shared.library.GamePlatform
 import com.ravenemu.shared.RavenEmuApp
 import org.junit.Rule
 import org.junit.Test
