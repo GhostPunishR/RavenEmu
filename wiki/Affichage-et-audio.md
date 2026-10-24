@@ -21,6 +21,16 @@ Les jeux GBC et GBA restent en couleur : les profils DMG vert et Pocket gris ne 
 
 Le lecteur respecte les dimensions fournies par le moteur et affiche l'image sans lissage : **160 × 144** pour GB/GBC, **240 × 160** pour GBA.
 
+## Fluidité
+
+La console affiche 59,73 images par seconde, et l'écran du téléphone bat le plus souvent à 60, 90 ou 120 Hz. Pour qu'un défilement reste net, chaque image du jeu doit rester à l'écran le même temps.
+
+- **Image calée sur l'écran.** Sur un écran à 60 Hz, le lecteur émule une image par rafraîchissement, et une image tous les deux rafraîchissements à 120 Hz. L'image est prête au milieu de l'intervalle entre deux rafraîchissements, le plus loin possible de chacun. Le jeu tourne alors 0,46 % plus vite que la console. Le son suit la même vitesse : l'écart de hauteur ne s'entend pas.
+- **Fréquence de l'écran.** Pendant une partie, RavenEmu demande une fréquence que la cadence du jeu divise juste. Il garde celle de l'écran si elle convient, sinon il prend la plus haute qui convient : 120 Hz plutôt que 90 Hz. Depuis Android 12, il ne choisit qu'une fréquence vers laquelle l'écran passe sans couper l'image. Hors du lecteur, le système reprend la main.
+- **Écran allumé.** Tant que le jeu tourne, l'écran ne se met pas en veille, même joué à la manette. Le menu du jeu ouvert, la veille reprend.
+
+Un écran qu'aucune fréquence ne cale (écart de plus de 5 %) garde l'ancienne cadence : le minuteur de la console, avec rattrapage des images en retard.
+
 ## Audio
 
 Dans **Paramètres → Audio**, activez ou coupez le son et réglez son volume de 0 à 100 %. Couper le son ne désactive pas l'horloge d'émulation.

@@ -20,6 +20,11 @@
 
 ### Modifié
 
+- **Image plus fluide**, d'après le calage sur l'écran de RetroArch, avec un code écrit pour RavenEmu. Avant, un minuteur à la cadence de la console (59,73 Hz) ne tombait jamais juste sur l'écran : une image restait affichée deux fois toutes les 3,7 s à 60 Hz, et l'image hésitait sans cesse à 90 Hz.
+  - Sur un écran à 60 Hz ou 120 Hz, le lecteur émule une image toutes les une ou deux synchronisations, calées sur l'écran (Choreographer). Le jeu tourne 0,46 % plus vite que la console, et le son suit cette vitesse.
+  - Pendant une partie, RavenEmu demande une fréquence d'écran adaptée : il garde celle de l'écran si elle convient, sinon il prend la plus haute qui convient (120 Hz plutôt que 90 Hz). Depuis Android 12, seulement une fréquence vers laquelle l'écran passe sans couper l'image.
+  - L'écran ne se met plus en veille tant que le jeu tourne, même joué à la manette.
+  - Les deux jeux reliés sur un même téléphone en profitent aussi. Voir [Affichage et audio](wiki/Affichage-et-audio.md#fluidité).
 - RetroAchievements : les notifications prennent le style du PC. Le badge descend du haut de l'écran (ou monte du bas), puis un bandeau s'ouvre de part et d'autre avec un en-tête et le titre en grand. Il reste affiché, puis se replie dans le badge, qui repart. Un succès débloqué ou un jeu terminé a un cadre et un en-tête dorés.
 - RetroAchievements : au lancement d'un jeu reconnu, le bandeau montre l'icône du jeu, son titre et le nombre de succès disponibles. Si l'image n'arrive pas dans les 2 secondes, une étoile la remplace.
 - Commandes : les boutons touchés et la manette atteignent le jeu juste avant l'image suivante, sans attendre la fin de l'image en cours. Le résultat en jeu est le même ; c'est ce qui permet à une image d'attendre l'autre téléphone sans bloquer l'interface.

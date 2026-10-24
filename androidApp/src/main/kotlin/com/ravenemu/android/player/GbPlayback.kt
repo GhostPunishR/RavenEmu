@@ -46,6 +46,7 @@ internal class GbPlayback(
     @Volatile var lastAudioReport: String = "Aucune session audio enregistrée.\n"
     private val cartridgeRumble by lazy { CartridgeRumble(context) }
     private val cartridgeSensors by lazy { CartridgeSensors(context) }
+    private val vsync by lazy { DisplayVsync(context) }
 
     /**
      * Plays [currentGame] until cancelled, then releases its audio, rumble and
@@ -72,6 +73,7 @@ internal class GbPlayback(
 
         try {
             sensors?.start(sensorKinds, playbackSettings)
+            vsync.start()
             loop.output = openAudio(targetFps, playbackSettings)
 
             // The whole loop runs on the dedicated emulation thread
@@ -80,6 +82,7 @@ internal class GbPlayback(
             // up rather than dropped, so the audio never starves.
             withContext(gbEmulationDispatcher) { loop.emulate() }
         } finally {
+            vsync.stop()
             sensors?.stop()
             cartridgeRumble.stop()
             val output = loop.output
@@ -173,7 +176,10 @@ internal class GbPlayback(
                     break
                 }
 
-                val wait = pacer.nextWaitNanos(System.nanoTime())
+                // On the display's beat when it allows (see DisplayCadence);
+                // the sound follows the game's speed.
+                val wait = pacer.nextWaitNanos(System.nanoTime(), vsync.timeNanos, vsync.periodNanos)
+                output?.speed = pacer.speed
                 if (wait > 0) LockSupport.parkNanos(wait)
             }
         }
