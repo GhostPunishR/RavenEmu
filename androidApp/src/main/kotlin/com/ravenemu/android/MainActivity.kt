@@ -415,7 +415,7 @@ class MainActivity : ComponentActivity() {
                 onUndoLoadState = { slots.undoLoad(playing = playing(), retro) },
                 // Shown as it runs: never while the wireless cable is linked.
                 fastForward = player.fastForward && !wireless.linked,
-                onFastForwardChange = { on -> player.setFastForward(on) },
+                onFastForwardChange = { on -> player.requestFastForward(on) },
                 onScreenshot = {
                     library.loadedGame?.let { game ->
                         GbScreenshot.capture(applicationContext, scope, playback.frame, game.filename)

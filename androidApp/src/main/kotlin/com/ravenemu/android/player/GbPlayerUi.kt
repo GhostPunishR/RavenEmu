@@ -170,11 +170,11 @@ internal class GbPlayerUi(
     }
 
     /** Only the single game on screen fast-forwards. */
-    fun setFastForward(on: Boolean) {
+    fun requestFastForward(on: Boolean) {
         fastForward = on && videoEnabled
     }
 
-    fun toggleFastForward() = setFastForward(!fastForward)
+    fun toggleFastForward() = requestFastForward(!fastForward)
 
     fun focusLinked(index: Int) {
         linkSession.setFocus(index)
