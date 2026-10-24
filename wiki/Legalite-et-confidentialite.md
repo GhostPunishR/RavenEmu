@@ -6,7 +6,7 @@ Cette page résume les informations du projet. Les documents officiels sont la [
 
 RavenEmu est distribué sous **GNU AGPL-3.0**. Consultez le texte de la licence et les avis du dépôt pour les conditions de réutilisation et de redistribution.
 
-Les moteurs C++20 sont maintenus dans RavenCore et écrits pour le projet à partir de documentation technique publique. Le SDK officiel rcheevos conserve sa licence MIT ; les autres composants conservent leurs avis de licence respectifs.
+Les moteurs C++20 sont maintenus dans RavenCore et écrits pour le projet à partir de documentation technique publique. Le SDK officiel rcheevos conserve sa licence MIT ; les autres composants conservent leurs avis de licence respectifs. Les couleurs des jeux Game Boy sur GBC viennent des tables de [The Cutting Room Floor](https://tcrf.net/Notes:Game_Boy_Color_Bootstrap_ROM), sous licence [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/), compilées dans RavenCore.
 
 Game Boy, Game Boy Color et Game Boy Advance sont des marques de Nintendo. RavenEmu n'est ni affilié à Nintendo, ni approuvé par Nintendo.
 

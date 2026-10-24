@@ -2,14 +2,15 @@ cmake_minimum_required(VERSION 3.22.1)
 project(RavenEmuNative LANGUAGES C CXX)
 
 # Lock the emulator engines AND public C interface to a reviewed source commit.
-# RavenCore 0.11.0 (merge of RavenCore PR #33): the GBA console that does not clock keeps the clocking one's
-# pace on a slow network (Pokémon trades over Wi-Fi). Protocol 2 as in 0.10.0,
-# where it waits until its game has handled the previous transfer, on top of
-# 0.9.0's remote link cable
-# (ravenemu_remote_link_*, ravenemu_link_wanted) and 0.8.0's complete GB/GBC
-# RetroAchievements memory map.
-# C API version 0 (additions only) and state formats GB/GBC 11, GBA 16 are unchanged.
-# GBA still reads formats 15 through 11. Battery RTC keeps its 16-byte layout.
+# RavenCore 0.14.0 (merge of RavenCore PR #36): C API cheats, the GBC of a GBA,
+# Game Boy game colors on a GBC and an optional real GBA BIOS (all unused by the
+# app so far), 0.13.0's MBC30 (Pocket Monsters Crystal) and the remote link
+# cable of 0.9.0 to 0.11.0 (protocol 2, the GBA that does not clock keeps the
+# other's pace; ravenemu_remote_link_*, ravenemu_link_wanted), plus 0.8.0's
+# complete GB/GBC RetroAchievements memory map.
+# C API version 0 (additions only). States: GB/GBC format 11, GBA format 17,
+# which ends with the BIOS used; GBA still reads formats 16 through 11.
+# Battery RTC keeps its 16-byte layout.
 # Old states created without RTC may not load once the cartridge gains RTC;
 # resume from the game's battery save instead (see native/README.md).
 # Keep the reviewed immutable commit SHA, not a movable branch/tag.
@@ -18,7 +19,7 @@ set(RAVENEMU_BUILD_LIBRETRO OFF CACHE BOOL "" FORCE)
 set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(ravencore
     GIT_REPOSITORY https://github.com/GhostPunishR/RavenCore.git
-    GIT_TAG abe53ae06ccdbdba283427ac1b1e961ddd58f64d
+    GIT_TAG 15675cc3af4f9b07f2e10cc5a7ca6234ea1c77cc
     GIT_SHALLOW FALSE
 )
 FetchContent_MakeAvailable(ravencore)

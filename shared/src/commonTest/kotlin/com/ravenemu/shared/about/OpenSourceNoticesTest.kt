@@ -23,6 +23,14 @@ class OpenSourceNoticesTest {
     }
 
     @Test
+    fun cuttingRoomFloorPalettesCarryTheirCcByAttribution() {
+        val text = notice("Palettes de la Game Boy Color").text
+        assertTrue("The Cutting Room Floor" in text)
+        assertTrue("https://creativecommons.org/licenses/by/3.0/" in text)
+        assertTrue("Modification" in text)
+    }
+
+    @Test
     fun everyNoticeLinksToItsProjectOverHttps() {
         for (notice in OpenSourceNotices.all) assertTrue(notice.url.startsWith("https://"), notice.name)
     }
