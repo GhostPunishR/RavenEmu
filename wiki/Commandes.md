@@ -40,13 +40,34 @@ Dans **Paramètres → Interface → Capteurs de la cartouche** :
 - **Soleil automatique (Boktai)** : le capteur de lumière règle le soleil. Comme sur la vraie cartouche, il faut la lumière du jour : l'éclairage d'une pièce ne donne rien ;
 - **Soleil (Boktai)** : niveau manuel de 0 à 100 %, utilisé quand le soleil automatique est coupé ou que le téléphone n'a pas de capteur de lumière.
 
-Comme sur la console, l'inclinaison a pour repère la gravité : posé à plat, le téléphone est au repos. Il n'y a pas encore de recentrage sur la position de jeu. Le déplacement libre des boutons et les profils avancés ne sont pas proposés. Le menu **⋮** du lecteur donne accès aux états, au diagnostic audio et à RetroAchievements.
+Comme sur la console, l'inclinaison a pour repère la gravité : posé à plat, le téléphone est au repos. Il n'y a pas encore de recentrage sur la position de jeu. Le déplacement libre des boutons et les profils avancés ne sont pas proposés. Le menu **⋮** du lecteur donne accès aux états, à l'avance rapide, à la capture d'écran, au diagnostic audio et à RetroAchievements.
 
 ## Manettes et skins
 
 Le lecteur accepte les touches et axes des manettes Android avec un mappage par défaut. L'utilisation d'une manette masque les commandes tactiles ; toucher l'écran les réaffiche. Aucun éditeur complet de mappage n'est annoncé.
 
-L'import, la sélection et le rendu portrait des skins `.deltaskin` sont intégrés. Voir [Skins de contrôleur](https://github.com/GhostPunishR/RavenEmu/blob/main/wiki/Skins-de-controleur.md). Aucune avance rapide n'est exposée dans les réglages actuels.
+L'import, la sélection et le rendu portrait des skins `.deltaskin` sont intégrés. Voir [Skins de contrôleur](https://github.com/GhostPunishR/RavenEmu/blob/main/wiki/Skins-de-controleur.md).
+
+## Avance rapide
+
+Le jeu tourne jusqu'à 4 fois plus vite que la console. Pour l'activer ou la couper :
+
+- le bouton **»** en haut du lecteur ;
+- l'interrupteur **Avance rapide** du menu **⋮** ;
+- le clic du stick droit d'une manette (R3), libre sur la console.
+
+Pendant l'avance rapide, **» ×4** s'affiche sur l'image. Seule la dernière image de chaque groupe de quatre est affichée et entendue : le son garde sa hauteur et passe par morceaux.
+
+L'avance rapide est permise en mode Hardcore de RetroAchievements. Elle reste sans effet tant que le câble sans fil est relié, car l'autre téléphone ne suivrait pas, ainsi que pour deux jeux reliés sur un même téléphone. Elle s'arrête en quittant le jeu. Les boutons `fastForward` des skins Delta ne sont pas encore pris en charge.
+
+## Retour arrière
+
+Maintenez le bouton **◀◀** en haut du lecteur, ou le clic du stick gauche d'une manette (L3), pour rejouer la partie à l'envers, image par image et sans le son. **◀◀ Retour arrière** s'affiche sur l'image, puis **Plus loin impossible** une fois la plus ancienne image gardée atteinte. En relâchant, la partie reprend de là.
+
+- Chaque image est gardée en mémoire native, en différences : environ 4,5 Ko par image pour un jeu GBA, jusqu'à 32 Mo, soit environ deux minutes de jeu GBA et davantage en GB et GBC. Les plus anciennes partent d'abord.
+- Le réglage **Paramètres → Interface → Retour arrière**, activé par défaut, le coupe et libère cette mémoire.
+- Indisponible en mode Hardcore de RetroAchievements et tant que le câble sans fil est relié. En Softcore, les images rejouées ne comptent pas pour les succès.
+- Il ne concerne pas deux jeux reliés sur un même téléphone.
 
 ## Pause
 

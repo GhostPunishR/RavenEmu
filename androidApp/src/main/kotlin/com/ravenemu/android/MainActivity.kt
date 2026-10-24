@@ -11,6 +11,9 @@ import android.view.MotionEvent
 import android.util.Log
 import android.widget.Toast
 import java.io.File
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
@@ -33,6 +36,8 @@ import com.ravenemu.android.deltaskin.DeltaSkinControllerConfiguration
 import com.ravenemu.android.deltaskin.DeltaSkinPlayer
 import com.ravenemu.shared.player.GbButton
 import com.ravenemu.shared.RavenEmuApp
+import com.ravenemu.shared.library.GamePlatform
+import com.ravenemu.shared.player.GbCheatsView
 import com.ravenemu.android.deltaskin.DeltaSkinsUi
 import com.ravenemu.android.engine.AndroidGbSession
 import com.ravenemu.android.library.GbCoversUi
@@ -41,15 +46,20 @@ import com.ravenemu.android.library.GbRomLibrary
 import com.ravenemu.android.library.LibraryOperationGate
 import com.ravenemu.android.link.AndroidLinkSession
 import com.ravenemu.android.link.LinkPlayback
+import com.ravenemu.android.player.GameWindow
 import com.ravenemu.android.player.GamepadMapper
 import com.ravenemu.android.player.GbPlayback
 import com.ravenemu.android.player.GbPlayerUi
+import com.ravenemu.android.player.GbScreenshot
 import com.ravenemu.android.retro.AchievementsController
 import com.ravenemu.android.retro.HardcoreAvailability
 import com.ravenemu.android.retro.RetroAchievementsUi
 import com.ravenemu.android.saves.GbSaveTransfer
 import com.ravenemu.android.saves.GbSaveTransfersUi
+import com.ravenemu.android.saves.GbCheatStore
+import com.ravenemu.android.saves.GbCheatsUi
 import com.ravenemu.android.saves.GbStateSlotsUi
+import com.ravenemu.android.saves.GbaBiosStore
 import com.ravenemu.android.settings.AndroidSettingsStore
 import com.ravenemu.android.wireless.LocalNetworkAccess
 import com.ravenemu.android.wireless.WirelessLink
@@ -64,6 +74,8 @@ class MainActivity : ComponentActivity() {
     private lateinit var wireless: WirelessLink
     private var linkInputEnabled = false
     private var retroController: AchievementsController? = null
+    // The player of setContent, for the controller keys handled here.
+    private var playerUi: GbPlayerUi? = null
     private var foreground by mutableStateOf(false)
     // Physical controller. Its events are taken only while the player accepts
     // input; elsewhere the D-pad keeps navigating the app as usual.
@@ -76,6 +88,17 @@ class MainActivity : ComponentActivity() {
     private fun handleGamepadKeyEvent(event: KeyEvent): Boolean {
         if (gamepadInputEnabled && foreground && event.keyCode == KeyEvent.KEYCODE_BUTTON_MODE) {
             if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) gameMenuRequests++
+            return true
+        }
+        // The right stick's click, free on the console, toggles fast forward;
+        // the left one, held, rewinds.
+        if (gamepadInputEnabled && foreground && event.keyCode == KeyEvent.KEYCODE_BUTTON_THUMBR) {
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) playerUi?.toggleFastForward()
+            return true
+        }
+        if (gamepadInputEnabled && foreground && event.keyCode == KeyEvent.KEYCODE_BUTTON_THUMBL) {
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) playerUi?.holdRewind(true)
+            if (event.action == KeyEvent.ACTION_UP) playerUi?.holdRewind(false)
             return true
         }
         if (gamepadInputEnabled && foreground && gamepad.handles(event.keyCode)) {
@@ -198,6 +221,11 @@ class MainActivity : ComponentActivity() {
                 )
             }
             val slots = remember { GbStateSlotsUi(applicationContext, gameSession, playback, scope) }
+            val cheats = remember {
+                GbCheatsUi(applicationContext, gameSession, GbCheatStore(File(filesDir, "gb-cheats")), scope)
+            }
+            val gbaBios = remember { GbaBiosStore(File(filesDir, "bios")) }
+            var gbaBiosInstalled by remember { mutableStateOf(gbaBios.bytes() != null) }
             val retroUi = remember {
                 RetroAchievementsUi(applicationContext, gameSession, scope, playSound = {
                     (playback.activeAudio ?: linkPlayback.activeAudio)?.playChime()
@@ -213,6 +241,7 @@ class MainActivity : ComponentActivity() {
             val retro = retroUi.retro
             val player = remember {
                 GbPlayerUi(gameSession, playback, linkSession, linkPlayback, slots, retro, wireless, scope) { foreground }
+                    .also { playerUi = it }
             }
             val library = remember {
                 GbLibraryUi(
@@ -223,7 +252,45 @@ class MainActivity : ComponentActivity() {
             val skins = remember { DeltaSkinsUi(applicationContext, scope) }
 
             library.Effects(userSettings.onlineCovers)
+            // Settings > Console: read by the session at each load; the colors change at once.
+            val console = remember(userSettings.gbInColor, userSettings.gbColors, userSettings.gbcOnGba,
+                userSettings.gbaBios, gbaBiosInstalled) {
+                AndroidGbSession.ConsoleOptions(
+                    gbInColor = userSettings.gbInColor,
+                    gbColors = userSettings.gbColors,
+                    gbcOnGba = userSettings.gbcOnGba,
+                    gbaBios = if (userSettings.gbaBios != 0) gbaBios.bytes() else null,
+                    skipBiosIntro = userSettings.gbaBios == 2,
+                )
+            }
+            SideEffect { gameSession.console = console }
+            LaunchedEffect(userSettings.gbInColor, userSettings.gbcOnGba, userSettings.gbaBios, gbaBiosInstalled) {
+                library.reloadOnNextLaunch()
+            }
+            LaunchedEffect(userSettings.gbColors) {
+                withContext(Dispatchers.IO) { gameSession.applyGbColors(userSettings.gbColors) }
+            }
+            // The running game's cheats, and a word when the real BIOS is wanted but missing.
+            LaunchedEffect(library.loadedGame, player.videoEnabled) {
+                val game = library.loadedGame.takeIf { player.videoEnabled }
+                cheats.open(game)
+                if (game?.platform == GamePlatform.GBA && userSettings.gbaBios != 0 && gbaBios.bytes() == null) {
+                    Toast.makeText(applicationContext,
+                        "Vrai BIOS GBA absent : RavenCore utilise le sien. Choisissez son fichier dans Paramètres → Console.",
+                        Toast.LENGTH_LONG).show()
+                }
+            }
             ControllerLayout(player.controllerLayout)
+            GameWindow(
+                window,
+                playing = player.open,
+                running = player.open && !player.pausedForGameMenu,
+                gameFps = when {
+                    player.videoEnabled && library.loadedGame != null -> gameSession.refreshRateHz()
+                    player.linkEnabled -> linkSession.refreshRateHz()
+                    else -> null
+                },
+            )
             // The controller reaches the game only while it runs on screen.
             val acceptsController = player.acceptsController
             val linkInput = player.linkEnabled
@@ -257,6 +324,20 @@ class MainActivity : ComponentActivity() {
             skins.skinPicker = rememberLauncherForActivityResult(
                 contract = ActivityResultContracts.OpenDocument(),
             ) { uri -> skins.import(uri) }
+            val biosPicker = rememberLauncherForActivityResult(
+                contract = ActivityResultContracts.OpenDocument(),
+            ) { uri ->
+                if (uri != null) scope.launch {
+                    val message = try {
+                        withContext(Dispatchers.IO) { gbaBios.install(contentResolver, uri) }
+                        "BIOS GBA installé"
+                    } catch (error: Exception) {
+                        error.message ?: "BIOS GBA non installé"
+                    }
+                    gbaBiosInstalled = gbaBios.bytes() != null
+                    Toast.makeText(applicationContext, message, Toast.LENGTH_LONG).show()
+                }
+            }
             covers.coverPicker = rememberLauncherForActivityResult(
                 contract = ActivityResultContracts.OpenDocument(),
             ) { uri -> covers.saveChosen(uri) }
@@ -368,6 +449,19 @@ class MainActivity : ComponentActivity() {
                 onImportSkin = { skins.skinPicker.launch(arrayOf("*/*")) },
                 onToggleSkin = { id -> skins.toggle(id) },
                 onDeleteSkin = { id -> skins.delete(id) },
+                gbaBiosInstalled = gbaBiosInstalled,
+                onChooseGbaBios = { biosPicker.launch(arrayOf("*/*")) },
+                onRemoveGbaBios = {
+                    gbaBios.remove()
+                    gbaBiosInstalled = false
+                },
+                cheats = GbCheatsView(
+                    cheats = cheats.cheats,
+                    allowed = !retroUi.retroSnapshot.hardcore,
+                    onAdd = { name, code -> cheats.add(name, code) },
+                    onToggle = { index -> cheats.toggle(index) },
+                    onDelete = { index -> cheats.delete(index) },
+                ),
                 touchControlsVisible = !gamepadInUse,
                 controllerMode = player.controllerMode,
                 onControllerModeChange = { player.controllerMode = it },
@@ -391,6 +485,23 @@ class MainActivity : ComponentActivity() {
                 onSaveState = { slot -> slots.save(slot, playing = playing()) },
                 onLoadState = { slot -> slots.load(slot, playing = playing(), retro) },
                 onDeleteState = { slot -> slots.delete(slot, playing = playing()) },
+                loadUndoable = slots.loadUndoable,
+                onUndoLoadState = { slots.undoLoad(playing = playing(), retro) },
+                // Shown as it runs: never while the wireless cable is linked.
+                fastForward = player.fastForward && !wireless.linked,
+                onFastForwardChange = { on -> player.requestFastForward(on) },
+                // Rewind is neither for Hardcore nor for the wireless cable.
+                rewinding = player.rewinding && userSettings.rewind && !wireless.linked &&
+                    !retroUi.retroSnapshot.hardcore,
+                rewindEnd = playback.rewindEnd,
+                onRewindHold = if (userSettings.rewind && !wireless.linked && !retroUi.retroSnapshot.hardcore) {
+                    { held -> player.holdRewind(held) }
+                } else null,
+                onScreenshot = {
+                    library.loadedGame?.let { game ->
+                        GbScreenshot.capture(applicationContext, scope, playback.frame, game.filename)
+                    }
+                },
             )
         }
     }

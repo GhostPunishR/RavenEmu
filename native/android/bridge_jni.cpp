@@ -1,8 +1,10 @@
 #include <jni.h>
 #include <ravenemu/bridge.h>
+#include "rewind.hpp"
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <span>
 #include <string>
 #include <limits>
@@ -31,6 +33,16 @@ struct RemoteLink {
 RemoteLink* remote(jlong pointer) {
     return reinterpret_cast<RemoteLink*>(static_cast<std::uintptr_t>(pointer));
 }
+
+// Retour arrière d'un jeu : ses états récents, et l'état de travail réutilisé.
+struct Rewind {
+    explicit Rewind(std::size_t budget) : buffer(budget) {}
+    ravenemu_android::RewindBuffer buffer;
+    std::vector<std::uint8_t> state;
+};
+Rewind* rewind(jlong pointer) {
+    return reinterpret_cast<Rewind*>(static_cast<std::uintptr_t>(pointer));
+}
 void send_to_kotlin(void* user, const uint8_t* message, size_t size) {
     auto* link = static_cast<RemoteLink*>(user);
     // Toujours un fil Java, déjà attaché à la machine virtuelle.
@@ -49,6 +61,58 @@ void send_to_kotlin(void* user, const uint8_t* message, size_t size) {
 }
 
 extern "C" {
+JNIEXPORT jlong JNICALL
+Java_com_ravenemu_android_engine_NativeRewind_nativeCreate(JNIEnv*, jobject, jlong budget) {
+    if (budget <= 0) return 0;
+    try {
+        return static_cast<jlong>(reinterpret_cast<std::uintptr_t>(new Rewind(static_cast<std::size_t>(budget))));
+    } catch (const std::exception&) {
+        return 0;
+    }
+}
+JNIEXPORT void JNICALL
+Java_com_ravenemu_android_engine_NativeRewind_nativeDestroy(JNIEnv*, jobject, jlong pointer) {
+    delete rewind(pointer);
+}
+// The core's state after a frame, kept as what changed since the one before.
+JNIEXPORT jboolean JNICALL
+Java_com_ravenemu_android_engine_NativeRewind_nativeKeep(JNIEnv*, jobject, jlong pointer, jlong core) {
+    auto* kept = rewind(pointer);
+    const auto size = ravenemu_state_size(handle(core));
+    if (!kept || size == 0) return JNI_FALSE;
+    try {
+        kept->state.resize(size);
+        if (!ravenemu_save_state(handle(core), kept->state.data(), size)) return JNI_FALSE;
+        kept->buffer.push(kept->state);
+        return JNI_TRUE;
+    } catch (const std::exception&) {
+        // Out of memory: start over rather than keep a broken chain.
+        kept->buffer.clear();
+        return JNI_FALSE;
+    }
+}
+// The core one frame back; false once no older frame is kept.
+JNIEXPORT jboolean JNICALL
+Java_com_ravenemu_android_engine_NativeRewind_nativeStepBack(JNIEnv*, jobject, jlong pointer, jlong core) {
+    auto* kept = rewind(pointer);
+    if (!kept) return JNI_FALSE;
+    try {
+        if (!kept->buffer.pop(kept->state)) return JNI_FALSE;
+        if (ravenemu_load_state(handle(core), kept->state.data(), kept->state.size())) return JNI_TRUE;
+    } catch (const std::exception&) {
+    }
+    kept->buffer.clear();
+    return JNI_FALSE;
+}
+JNIEXPORT void JNICALL
+Java_com_ravenemu_android_engine_NativeRewind_nativeClear(JNIEnv*, jobject, jlong pointer) {
+    if (auto* kept = rewind(pointer)) kept->buffer.clear();
+}
+JNIEXPORT jint JNICALL
+Java_com_ravenemu_android_engine_NativeRewind_nativeFrames(JNIEnv*, jobject, jlong pointer) {
+    const auto* kept = rewind(pointer);
+    return kept ? static_cast<jint>(std::min<std::size_t>(kept->buffer.frames(), std::numeric_limits<jint>::max())) : 0;
+}
 JNIEXPORT jlong JNICALL
 Java_com_ravenemu_android_engine_NativeCore_nativeCreate(JNIEnv*, jobject, jint system) {
     return to_long(ravenemu_create(system));
@@ -136,6 +200,11 @@ Java_com_ravenemu_android_engine_NativeCore_nativeReset(JNIEnv*, jobject, jlong 
 }
 JNIEXPORT jstring JNICALL
 Java_com_ravenemu_android_engine_NativeCore_nativeLastError(JNIEnv* env, jobject) {
+    return env->NewStringUTF(ravenemu_last_error());
+}
+// The same, from NativeCore's companion (no handle): a refused cheat's reason.
+JNIEXPORT jstring JNICALL
+Java_com_ravenemu_android_engine_NativeCore_nativeLastErrorStatic(JNIEnv* env, jclass) {
     return env->NewStringUTF(ravenemu_last_error());
 }
 // Declared by NativeAchievementsBridge: the engine version in the User-Agent.
@@ -304,6 +373,62 @@ Java_com_ravenemu_android_link_NativeLink_nativeLastError(JNIEnv* env, jobject) 
 JNIEXPORT jboolean JNICALL
 Java_com_ravenemu_android_engine_NativeCore_nativeLinkWanted(JNIEnv*, jobject, jlong pointer) {
     return ravenemu_link_wanted(handle(pointer)) ? JNI_TRUE : JNI_FALSE;
+}
+
+// Couleurs d'un jeu Game Boy sur une GBC (enum ravenemu_gbc_colors).
+JNIEXPORT jboolean JNICALL
+Java_com_ravenemu_android_engine_NativeCore_nativeSetGbcColors(JNIEnv*, jobject, jlong pointer, jint colors) {
+    return ravenemu_set_gbc_colors(handle(pointer), colors) ? JNI_TRUE : JNI_FALSE;
+}
+
+// Vrai BIOS GBA (16 Kio), ou celui de RavenCore quand bios est nul.
+JNIEXPORT jboolean JNICALL
+Java_com_ravenemu_android_engine_NativeCore_nativeSetGbaBios(
+    JNIEnv* env, jobject, jlong pointer, jbyteArray bios, jboolean skipIntro
+) {
+    if (!bios) return ravenemu_set_gba_bios(handle(pointer), nullptr, 0, 0) ? JNI_TRUE : JNI_FALSE;
+    auto* bytes = env->GetByteArrayElements(bios, nullptr);
+    if (!bytes) return JNI_FALSE;
+    const auto ok = ravenemu_set_gba_bios(handle(pointer), reinterpret_cast<const uint8_t*>(bytes),
+        static_cast<size_t>(env->GetArrayLength(bios)), skipIntro ? 1 : 0);
+    env->ReleaseByteArrayElements(bios, bytes, JNI_ABORT);
+    return ok ? JNI_TRUE : JNI_FALSE;
+}
+
+// Un code de triche utilisable pour cette console ; sinon la raison, en français,
+// dans nativeLastError.
+JNIEXPORT jboolean JNICALL
+Java_com_ravenemu_android_engine_NativeCore_nativeCheckCheat(JNIEnv* env, jclass, jint system, jstring code) {
+    if (!code) return JNI_FALSE;
+    const char* text = env->GetStringUTFChars(code, nullptr);
+    if (!text) return JNI_FALSE;
+    const auto ok = ravenemu_check_cheat(system, text);
+    env->ReleaseStringUTFChars(code, text);
+    return ok ? JNI_TRUE : JNI_FALSE;
+}
+
+// Remplace les codes actifs à partir de l'image suivante ; un tableau vide les retire.
+JNIEXPORT jboolean JNICALL
+Java_com_ravenemu_android_engine_NativeCore_nativeSetCheats(JNIEnv* env, jobject, jlong pointer, jobjectArray codes) {
+    const jsize count = codes ? env->GetArrayLength(codes) : 0;
+    std::vector<std::string> owned;
+    owned.reserve(static_cast<std::size_t>(count));
+    for (jsize i = 0; i < count; ++i) {
+        auto* code = static_cast<jstring>(env->GetObjectArrayElement(codes, i));
+        if (!code) return JNI_FALSE;
+        const char* text = env->GetStringUTFChars(code, nullptr);
+        if (!text) {
+            env->DeleteLocalRef(code);
+            return JNI_FALSE;
+        }
+        owned.emplace_back(text);
+        env->ReleaseStringUTFChars(code, text);
+        env->DeleteLocalRef(code);
+    }
+    std::vector<const char*> pointers;
+    pointers.reserve(owned.size());
+    for (const auto& code : owned) pointers.push_back(code.c_str());
+    return ravenemu_set_cheats(handle(pointer), pointers.data(), pointers.size()) ? JNI_TRUE : JNI_FALSE;
 }
 
 // Câble link vers la console d'un autre appareil.

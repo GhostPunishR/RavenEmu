@@ -44,8 +44,12 @@ internal class GbStateSlotsUi(
     /** Bumped after each restore attempt, so the player loop starts again. */
     var stateRevision by mutableStateOf(0)
         private set
+    /** The last state load can be undone (see [undoLoad]). */
+    var loadUndoable by mutableStateOf(false)
+        private set
 
     fun refreshSlots() {
+        loadUndoable = gameSession.loadUndoable
         stateSlotsLoading = true
         stateSlots = emptyList()
         scope.launch {
@@ -162,6 +166,39 @@ internal class GbStateSlotsUi(
                         Toast.LENGTH_LONG,
                     ).show()
                 } finally {
+                    loadUndoable = gameSession.loadUndoable
+                    stateRevision++
+                    restoringState = false
+                    stateOperationBusy = false
+                }
+            }
+        }
+    }
+
+    /** Puts the game back as it was before the last state load. */
+    fun undoLoad(playing: Boolean, retro: AchievementsController) {
+        if (retro.stateLoadLocked) {
+            Toast.makeText(applicationContext,
+                "Mode Hardcore : le chargement d'un état est désactivé.",
+                Toast.LENGTH_LONG).show()
+        } else if (!stateOperationBusy && playing) {
+            stateOperationBusy = true
+            restoringState = true
+            playback.activeAudio?.stopNow()
+            gameSession.releaseAllButtons()
+            scope.launch {
+                try {
+                    retro.undoLoadState()
+                    Toast.makeText(applicationContext, "Chargement annulé", Toast.LENGTH_SHORT).show()
+                } catch (error: Exception) {
+                    Log.e("RavenEmuSaves", "Undo load failed", error)
+                    Toast.makeText(
+                        applicationContext,
+                        "Annulation impossible : ${error.message ?: "erreur inconnue"}",
+                        Toast.LENGTH_LONG,
+                    ).show()
+                } finally {
+                    loadUndoable = gameSession.loadUndoable
                     stateRevision++
                     restoringState = false
                     stateOperationBusy = false

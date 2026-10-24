@@ -48,6 +48,7 @@ import com.ravenemu.shared.library.SearchField
 import com.ravenemu.shared.link.LinkCable
 import com.ravenemu.shared.link.LinkPlayerScreen
 import com.ravenemu.shared.player.GbButton
+import com.ravenemu.shared.player.GbCheatsView
 import com.ravenemu.shared.player.GbVideoMetrics
 import com.ravenemu.shared.player.GbVideoScreen
 import com.ravenemu.shared.retro.RetroBanner
@@ -151,6 +152,20 @@ fun RavenEmuApp(
     wirelessLink: WirelessLinkView = WirelessLinkView(),
     onWirelessLinkChoice: ((Long?) -> Unit)? = null,
     onWirelessUnplug: (() -> Unit)? = null,
+    fastForward: Boolean = false,
+    onFastForwardChange: ((Boolean) -> Unit)? = null,
+    rewinding: Boolean = false,
+    rewindEnd: Boolean = false,
+    onRewindHold: ((Boolean) -> Unit)? = null,
+    onScreenshot: (() -> Unit)? = null,
+    loadUndoable: Boolean = false,
+    onUndoLoadState: (() -> Unit)? = null,
+    /** Android: the running game's cheats (see GbCheatsView). */
+    cheats: GbCheatsView? = null,
+    /** Android: Settings > Console, the player's GBA BIOS. */
+    gbaBiosInstalled: Boolean = false,
+    onChooseGbaBios: (() -> Unit)? = null,
+    onRemoveGbaBios: (() -> Unit)? = null,
     deltaSkins: List<DeltaSkinEntry> = emptyList(),
     onImportSkin: (() -> Unit)? = null,
     onToggleSkin: ((String) -> Unit)? = null,
@@ -279,6 +294,9 @@ fun RavenEmuApp(
                     onImportSkin = onImportSkin,
                     onToggleSkin = onToggleSkin,
                     onDeleteSkin = onDeleteSkin,
+                    gbaBiosInstalled = gbaBiosInstalled,
+                    onChooseGbaBios = onChooseGbaBios,
+                    onRemoveGbaBios = onRemoveGbaBios,
                     onBack = { screen = RavenScreen.LIBRARY },
                 )
                 RavenScreen.PLAYER -> GbVideoScreen(
@@ -321,6 +339,15 @@ fun RavenEmuApp(
                     wirelessLink = wirelessLink,
                     onWirelessLinkChoice = onWirelessLinkChoice,
                     onWirelessUnplug = onWirelessUnplug,
+                    fastForward = fastForward,
+                    onFastForwardChange = onFastForwardChange,
+                    rewinding = rewinding,
+                    rewindEnd = rewindEnd,
+                    onRewindHold = onRewindHold,
+                    onScreenshot = onScreenshot,
+                    loadUndoable = loadUndoable,
+                    onUndoLoadState = onUndoLoadState,
+                    cheats = cheats,
                     onBack = {
                         onStopVideo?.invoke()
                         screen = RavenScreen.LIBRARY

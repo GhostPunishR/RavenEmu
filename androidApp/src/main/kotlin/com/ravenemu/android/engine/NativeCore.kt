@@ -135,6 +135,33 @@ class NativeCore(system: Int) : AutoCloseable {
      */
     fun linkWanted(): Boolean = nativeLinkWanted(requireOpen())
 
+    /**
+     * Colors of a Game Boy game on a GBC handle: [GBC_COLORS_AUTO] (the boot
+     * ROM's choice for the game) or one of the 13 button combinations, 1 to
+     * 13. Applied at once, kept across loads and states.
+     */
+    fun setGbcColors(colors: Int) {
+        check(nativeSetGbcColors(requireOpen(), colors)) { nativeLastError() }
+    }
+
+    /**
+     * A GBA BIOS dumped from a console (16384 bytes) instead of RavenCore's,
+     * from the next load or reset; null goes back to RavenCore's. The real
+     * BIOS plays its boot animation unless [skipIntro].
+     */
+    fun setGbaBios(bios: ByteArray?, skipIntro: Boolean) {
+        check(nativeSetGbaBios(requireOpen(), bios, skipIntro)) { nativeLastError() }
+    }
+
+    /**
+     * The active cheats from the next frame, each one entry of one or more
+     * lines; empty removes them all. Kept across loads and states, never
+     * stored in a state.
+     */
+    fun setCheats(codes: List<String>) {
+        check(nativeSetCheats(requireOpen(), codes.toTypedArray())) { nativeLastError() }
+    }
+
     /** Native handle, for [NativeLink] and [NativeRemoteLink]: a cable joins handles. */
     internal val nativeHandle: Long get() = requireOpen()
 
@@ -179,12 +206,21 @@ class NativeCore(system: Int) : AutoCloseable {
     private external fun nativeBatterySize(pointer: Long): Int
     private external fun nativeCopyBattery(pointer: Long, output: ByteArray): Boolean
     private external fun nativeLinkWanted(pointer: Long): Boolean
+    private external fun nativeSetGbcColors(pointer: Long, colors: Int): Boolean
+    private external fun nativeSetGbaBios(pointer: Long, bios: ByteArray?, skipIntro: Boolean): Boolean
+    private external fun nativeSetCheats(pointer: Long, codes: Array<String>): Boolean
     private external fun nativeLastError(): String
 
     companion object {
         const val GB = 0
         const val GBC = 1
         const val GBA = 2
+        /** The GBC inside a GBA: GB and GBC games, started as on a GBA (Zelda Oracle, Shantae). */
+        const val GBC_ON_GBA = 3
+
+        /** The boot ROM's colors for each Game Boy game (see [setGbcColors]). */
+        const val GBC_COLORS_AUTO = 0
+        const val GBA_BIOS_SIZE = 16384
 
         // Same values as enum ravenemu_sensor in RavenCore's bridge.h.
         const val SENSOR_SOLAR = 1
@@ -196,6 +232,25 @@ class NativeCore(system: Int) : AutoCloseable {
             GamePlatform.GBC -> GBC
             GamePlatform.GBA -> GBA
         }
+
+        /**
+         * The console that runs a game: a Game Boy game on a GBC when
+         * [gbInColor], and the GBC of a GBA when [gbcOnGba]. A state only
+         * loads on the console that took it.
+         */
+        fun modelFor(platform: GamePlatform, gbInColor: Boolean, gbcOnGba: Boolean): Int = when {
+            platform == GamePlatform.GBA -> GBA
+            platform == GamePlatform.GB && !gbInColor -> GB
+            gbcOnGba -> GBC_ON_GBA
+            else -> GBC
+        }
+
+        /** Null when [code] is a usable cheat for [platform]'s games, otherwise the reason, in French. */
+        fun cheatError(platform: GamePlatform, code: String): String? =
+            if (nativeCheckCheat(systemFor(platform), code)) null else nativeLastErrorStatic()
+
+        @JvmStatic private external fun nativeCheckCheat(system: Int, code: String): Boolean
+        @JvmStatic private external fun nativeLastErrorStatic(): String
 
         init { System.loadLibrary("ravenemu_android") }
     }

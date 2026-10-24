@@ -51,14 +51,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.floor
 import kotlin.math.roundToInt
 import com.ravenemu.shared.library.GamePlatform
 import com.ravenemu.shared.library.platformLabel
@@ -131,10 +134,20 @@ internal fun GbVideoScreen(
     wirelessLink: WirelessLinkView = WirelessLinkView(),
     onWirelessLinkChoice: ((Long?) -> Unit)? = null,
     onWirelessUnplug: (() -> Unit)? = null,
+    fastForward: Boolean = false,
+    onFastForwardChange: ((Boolean) -> Unit)? = null,
+    rewinding: Boolean = false,
+    rewindEnd: Boolean = false,
+    onRewindHold: ((Boolean) -> Unit)? = null,
+    onScreenshot: (() -> Unit)? = null,
+    loadUndoable: Boolean = false,
+    onUndoLoadState: (() -> Unit)? = null,
+    cheats: GbCheatsView? = null,
     onBack: () -> Unit,
 ) {
     var gameMenuOpen by remember { mutableStateOf(false) }
     var retroPanelOpen by remember { mutableStateOf(false) }
+    var cheatsPanelOpen by remember { mutableStateOf(false) }
     var selectedSlot by remember { mutableStateOf(0) }
     var confirmation by remember { mutableStateOf<Pair<Int, String>?>(null) }
     fun setGameMenu(open: Boolean) {
@@ -163,7 +176,8 @@ internal fun GbVideoScreen(
                 ) { setGameMenu(true) },
             contentAlignment = Alignment.Center,
         ) {
-            GamePicture(frame, error, platform)
+            GamePicture(frame, error, platform, settings.integerScale)
+            SpeedBadge(fastForward, rewinding, rewindEnd, Modifier.align(Alignment.TopStart))
             RetroOverlays(retroIndicators, retroNotice, retroNoticeBadge, retroNoticeVisible,
                 retroProgress, retroProgress?.let { retroImages[it.badgeUrl] }, settings.retroPopupPosition)
             WirelessLinkOverlay(wirelessLink)
@@ -174,6 +188,10 @@ internal fun GbVideoScreen(
             menuAvailable = onExportAudioDiagnostics != null || onSaveState != null || onLoadState != null,
             onBack = onBack,
             onMenu = { setGameMenu(true) },
+            fastForward = fastForward,
+            onFastForward = onFastForwardChange?.let { change -> { change(!fastForward) } },
+            rewinding = rewinding,
+            onRewindHold = onRewindHold,
         )
         // The debug bar is optional; enabled by default for the RavenEmu preview.
         if (settings.showDiagnostics) DiagnosticsBar(metrics)
@@ -182,6 +200,7 @@ internal fun GbVideoScreen(
             // picture itself; its menu button opens the game menu.
             Box(Modifier.fillMaxWidth().weight(1f).background(Color.Black)) {
                 skinControls(frame) { setGameMenu(true) }
+                SpeedBadge(fastForward, rewinding, rewindEnd, Modifier.align(Alignment.TopStart))
                 RetroOverlays(retroIndicators, retroNotice, retroNoticeBadge, retroNoticeVisible,
                     retroProgress, retroProgress?.let { retroImages[it.badgeUrl] }, settings.retroPopupPosition)
                 WirelessLinkOverlay(wirelessLink)
@@ -203,7 +222,8 @@ internal fun GbVideoScreen(
                     },
                 contentAlignment = Alignment.TopCenter,
             ) {
-                GamePicture(frame, error, platform)
+                GamePicture(frame, error, platform, settings.integerScale)
+                SpeedBadge(fastForward, rewinding, rewindEnd, Modifier.align(Alignment.TopStart))
                 RetroOverlays(retroIndicators, retroNotice, retroNoticeBadge, retroNoticeVisible,
                     retroProgress, retroProgress?.let { retroImages[it.badgeUrl] }, settings.retroPopupPosition)
                 WirelessLinkOverlay(wirelessLink)
@@ -242,7 +262,9 @@ internal fun GbVideoScreen(
                     .padding(start = 18.dp, end = 18.dp, bottom = 28.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                if (retroPanelOpen) {
+                if (cheatsPanelOpen && cheats != null) {
+                    CheatsPanel(cheats) { cheatsPanelOpen = false }
+                } else if (retroPanelOpen) {
                     TextButton(onClick = { retroPanelOpen = false }) {
                         Text("‹ Retour au menu du jeu", color = RavenAccent)
                     }
@@ -269,6 +291,7 @@ internal fun GbVideoScreen(
                     if (onControllerModeChange != null) {
                         ControllerModeSwitch(controllerMode, onControllerModeChange)
                     }
+                    if (onFastForwardChange != null) FastForwardSwitch(fastForward, onFastForwardChange)
                     WirelessLinkMenuRow(wirelessLink, onWirelessUnplug)
                     Text("Partie en pause · 4 emplacements de sauvegarde",
                         color = RavenMuted, fontSize = 12.sp)
@@ -295,6 +318,24 @@ internal fun GbVideoScreen(
                             },
                             onDelete = { confirmation = selectedSlot to "delete" },
                         )
+                    }
+                    if (onUndoLoadState != null && loadUndoable && stateLoadAllowed) {
+                        OutlinedButton(
+                            onClick = {
+                                onUndoLoadState()
+                                setGameMenu(false)
+                            },
+                            enabled = !stateOperationBusy,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { Text("Annuler le chargement") }
+                    }
+                    if (cheats != null) CheatsMenuButton(cheats) { cheatsPanelOpen = true }
+                    if (onScreenshot != null) {
+                        OutlinedButton(
+                            onClick = onScreenshot,
+                            enabled = frame != null,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { Text("Capture d'écran") }
                     }
                     if (onExportAudioDiagnostics != null) {
                         OutlinedButton(
@@ -332,12 +373,22 @@ internal fun GbVideoScreen(
 
 /** The game picture, as large as the box allows at the core's aspect. */
 @Composable
-private fun BoxWithConstraintsScope.GamePicture(frame: ImageBitmap?, error: String?, platform: GamePlatform) {
+private fun BoxWithConstraintsScope.GamePicture(
+    frame: ImageBitmap?, error: String?, platform: GamePlatform, integer: Boolean = false,
+) {
     // 160x144 on GB/GBC, 240x160 on GBA: follow the core's frame.
     val aspect = if (frame != null && frame.height > 0) {
         frame.width.toFloat() / frame.height
     } else if (platform == GamePlatform.GBA) 240f / 160f else 160f / 144f
-    val pictureHeight = minOf(maxHeight, maxWidth / aspect)
+    var pictureHeight = minOf(maxHeight, maxWidth / aspect)
+    if (integer && frame != null && frame.width > 0 && frame.height > 0) {
+        // A whole number of screen pixels per game pixel, when the screen holds it once.
+        val density = LocalDensity.current
+        val factor = with(density) {
+            floor(minOf(maxWidth.toPx() / frame.width, maxHeight.toPx() / frame.height))
+        }
+        if (factor >= 1f) pictureHeight = with(density) { (frame.height * factor).toDp() }
+    }
     val pictureWidth = pictureHeight * aspect
     if (frame != null) {
         Image(
@@ -358,7 +409,16 @@ private fun BoxWithConstraintsScope.GamePicture(frame: ImageBitmap?, error: Stri
 }
 
 @Composable
-private fun PlayerTopBar(title: String, menuAvailable: Boolean, onBack: () -> Unit, onMenu: () -> Unit) {
+private fun PlayerTopBar(
+    title: String,
+    menuAvailable: Boolean,
+    onBack: () -> Unit,
+    onMenu: () -> Unit,
+    fastForward: Boolean = false,
+    onFastForward: (() -> Unit)? = null,
+    rewinding: Boolean = false,
+    onRewindHold: ((Boolean) -> Unit)? = null,
+) {
     Row(
         Modifier.fillMaxWidth().height(48.dp).background(RavenBackground),
         verticalAlignment = Alignment.CenterVertically,
@@ -374,6 +434,16 @@ private fun PlayerTopBar(title: String, menuAvailable: Boolean, onBack: () -> Un
             fontSize = 16.sp,
             modifier = Modifier.weight(1f),
         )
+        if (onRewindHold != null) HoldToRewind(rewinding, onRewindHold)
+        if (onFastForward != null) {
+            IconButton(
+                onClick = onFastForward,
+                modifier = Modifier.size(48.dp)
+                    .semantics { contentDescription = if (fastForward) "Arrêter l'avance rapide" else "Avance rapide" },
+            ) {
+                RavenIcon(RavenGlyph.FAST_FORWARD, if (fastForward) RavenAccent else RavenText)
+            }
+        }
         if (menuAvailable) {
             IconButton(
                 onClick = onMenu,

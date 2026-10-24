@@ -49,6 +49,27 @@ class AndroidGbSession(private val resolver: ContentResolver, filesDir: File) : 
     // Wireless cable of the running game; created and destroyed between frames.
     @Volatile private var remote: NativeRemoteLink? = null
 
+    /**
+     * How the next games start (Settings > Console), read at each load. A
+     * state only loads on the console that took it.
+     */
+    class ConsoleOptions(
+        val gbInColor: Boolean = false,
+        /** 0 the boot ROM's colors for each game, 1 to 13 a button combination. */
+        val gbColors: Int = NativeCore.GBC_COLORS_AUTO,
+        val gbcOnGba: Boolean = false,
+        /** The player's GBA BIOS (16 KiB), or null for RavenCore's. */
+        val gbaBios: ByteArray? = null,
+        val skipBiosIntro: Boolean = false,
+    )
+    @Volatile var console = ConsoleOptions()
+
+    // The game runs on a GBC that colors it: its colors can change while it runs.
+    private var colorable = false
+    // The cheats the player turned on, and those the console runs (under [lock]).
+    private var wantedCheats: List<String> = emptyList()
+    private var runningCheats: List<String> = emptyList()
+
     /** Must be called off the UI thread. */
     fun load(uri: Uri): LoadedGameInfo {
         val filename = displayName(uri)
@@ -68,7 +89,10 @@ class AndroidGbSession(private val resolver: ContentResolver, filesDir: File) : 
         }
         val romKey = GbBatteryStore.keyForRom(bytes)
         val platform = RomImportPolicy.platformOf(filename, bytes)
-        val replacement = NativeCore(NativeCore.systemFor(platform))
+        val options = console
+        val model = NativeCore.modelFor(platform, options.gbInColor, options.gbcOnGba)
+        val replacement = NativeCore(model)
+        val inColor = platform == GamePlatform.GB && model != NativeCore.GB
         var transferred = false
         try {
             return saveLock.withLock {
@@ -76,6 +100,11 @@ class AndroidGbSession(private val resolver: ContentResolver, filesDir: File) : 
                 // re-import of the same ROM must not load a stale snapshot.
                 saveBatteryIfDirtyLocked()
                 val savedBattery = batteryStore.read(romKey)
+                if (inColor) replacement.setGbcColors(options.gbColors)
+                // Read at load: set before it.
+                options.gbaBios?.takeIf { platform == GamePlatform.GBA }?.let { bios ->
+                    replacement.setGbaBios(bios, options.skipBiosIntro)
+                }
                 replacement.load(bytes, savedBattery)
                 val result = LoadedGameInfo(
                     filename = filename,
@@ -93,6 +122,8 @@ class AndroidGbSession(private val resolver: ContentResolver, filesDir: File) : 
                     active = replacement
                     activeRomKey = romKey
                     traits = fixed
+                    colorable = inColor
+                    forgetGameLocked()
                     transferred = true
                     previous?.close()
                 }
@@ -177,6 +208,7 @@ class AndroidGbSession(private val resolver: ContentResolver, filesDir: File) : 
                 active = null
                 activeRomKey = null
                 traits = null
+                forgetGameLocked()
             }
         }
     }
@@ -236,6 +268,82 @@ class AndroidGbSession(private val resolver: ContentResolver, filesDir: File) : 
      */
     @Volatile internal var stateLoadLocked = false
 
+    // The game as it was just before the last state load (under [lock]).
+    private var undoState: ByteArray? = null
+    private var undoCore: NativeCore? = null
+
+    /** A state was loaded, and the game as it was before can come back. */
+    @Volatile var loadUndoable = false
+        private set
+
+    private fun forgetUndoLocked() {
+        undoState = null
+        undoCore = null
+        loadUndoable = false
+    }
+
+    // Another game, or none: its undo, its rewound frames and its cheats go.
+    private fun forgetGameLocked() {
+        forgetUndoLocked()
+        rewind?.close()
+        rewind = null
+        wantedCheats = emptyList()
+        runningCheats = emptyList()
+    }
+
+    /** The Game Boy colors of a game running on a GBC, at once. */
+    fun applyGbColors(colors: Int) = lock.withLock {
+        if (colorable) active?.setGbcColors(colors)
+    }
+
+    /** The cheats to run from the next frame: never in Hardcore, whatever is asked. */
+    fun setCheats(codes: List<String>) = lock.withLock {
+        wantedCheats = codes.toList()
+    }
+
+    // Under the native lock, before a frame: the cheats follow the list and the mode.
+    private fun syncCheatsLocked(core: NativeCore) {
+        val wanted = if (stateLoadLocked) emptyList() else wantedCheats
+        if (wanted == runningCheats) return
+        runningCheats = wanted
+        try {
+            core.setCheats(wanted)
+        } catch (error: IllegalStateException) {
+            Log.w(TAG, "Cheats refused", error)
+        }
+    }
+
+    /** The key of the running game's saves and cheats, or null. */
+    fun currentRomKey(): String? = lock.withLock { activeRomKey }
+
+    // The last frames of the running game, to play it backwards (under [lock]).
+    private var rewind: NativeRewind? = null
+
+    /** Rewind is not for Hardcore, nor with the wireless cable: the partner would not follow. */
+    private fun rewindAllowedLocked() = !stateLoadLocked && remote == null
+
+    /** Frees the rewound frames, when the setting is turned off. */
+    fun clearRewind() = lock.withLock {
+        rewind?.close()
+        rewind = null
+    }
+
+    /**
+     * One frame back: the state before, then that frame run again for its
+     * picture, its sound read and silenced. Returns the samples to play (in
+     * silence), or null once nothing older is kept or rewind is not allowed.
+     */
+    internal fun rewindFrameInto(pixels: IntArray, audio: ShortArray): Int? =
+        lock.withLock {
+            check(!closed) { "La session a été fermée." }
+            val core = active ?: return@withLock null
+            val kept = rewind ?: return@withLock null
+            if (!rewindAllowedLocked() || !kept.stepBack(core)) return@withLock null
+            core.frameInto(pixels)
+            rumbleActive = false
+            core.readAudioInto(audio).also { count -> audio.fill(0, 0, count) }
+        }
+
     fun loadStateSlot(slot: Int = 0) = saveLock.withLock {
         RetroHardcorePolicy.requireStateLoadAllowed(stateLoadLocked)
         val key = lock.withLock {
@@ -253,9 +361,31 @@ class AndroidGbSession(private val resolver: ContentResolver, filesDir: File) : 
             for (button in heldButtons) core.button(button.nativeCode, false)
             heldButtons.clear()
             buttons.releaseAll()
+            // Kept in memory only: a load by mistake can be undone.
+            val before = core.saveState()
             core.loadState(state)
+            undoState = before
+            undoCore = core
+            loadUndoable = true
         }
         Log.d(TAG, "Save state slot ${slot + 1} restored for ROM ${key.take(12)}")
+    }
+
+    /** Puts the game back as it was before the last state load, under the same rules. */
+    fun undoLoadState() = saveLock.withLock {
+        lock.withLock {
+            check(!closed) { "La session a été fermée." }
+            RetroHardcorePolicy.requireStateLoadAllowed(stateLoadLocked)
+            check(remote == null) { "Câble sans fil relié : chargement d'état impossible." }
+            val core = active ?: error("Aucun jeu chargé.")
+            val state = undoState?.takeIf { undoCore === core } ?: error("Aucun chargement à annuler.")
+            for (button in heldButtons) core.button(button.nativeCode, false)
+            heldButtons.clear()
+            buttons.releaseAll()
+            core.loadState(state)
+            forgetUndoLocked()
+        }
+        Log.d(TAG, "State load undone")
     }
 
     /** Only deletes the selected slot; cartridge SRAM is kept untouched. */
@@ -284,15 +414,21 @@ class AndroidGbSession(private val resolver: ContentResolver, filesDir: File) : 
      */
     internal fun nextFrameWithAudioInto(
         pixels: IntArray, audio: ShortArray, sensors: CartridgeSensors? = null,
+        keepForRewind: Boolean = false,
     ): Int? =
         lock.withLock {
             check(!closed) { "La session a été fermée." }
             val core = active ?: return@withLock null
             applyButtons(core, buttons.takeFrame())
             sensors?.applyTo(core)
+            syncCheatsLocked(core)
             core.frameInto(pixels)
             rumbleActive = core.rumbleActive()
             linkWanted = core.linkWanted()
+            if (keepForRewind && rewindAllowedLocked()) {
+                val kept = rewind ?: NativeRewind(NativeRewind.BUDGET_BYTES).also { rewind = it }
+                kept.keep(core)
+            }
             core.readAudioInto(audio)
         }
 
@@ -433,6 +569,7 @@ class AndroidGbSession(private val resolver: ContentResolver, filesDir: File) : 
                     active = null
                     activeRomKey = null
                     traits = null
+                    forgetGameLocked()
                 }
             }
         }

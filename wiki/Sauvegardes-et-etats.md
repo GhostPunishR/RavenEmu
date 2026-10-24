@@ -23,8 +23,28 @@ Dans le menu **⋮** du lecteur, chaque jeu dispose de **quatre emplacements**, 
 
 - Enregistrer dans un emplacement déjà occupé demande confirmation.
 - Charger un état reprend la partie et renouvelle la sortie audio.
+- **Annuler le chargement** remet la partie telle qu'elle était juste avant le dernier chargement, si un état a été chargé par erreur. La partie d'avant n'est gardée qu'en mémoire, jusqu'au chargement suivant ou au changement de jeu. Les mêmes règles que pour un chargement s'appliquent : rien en Hardcore, ni pendant le câble sans fil.
 - Supprimer un emplacement demande confirmation et ne supprime pas le fichier batterie de la cartouche.
 - Une miniature absente ou illisible ne doit pas empêcher le chargement de l'état.
+
+## Codes de triche
+
+**Codes de triche**, dans le menu **⋮**, garde une liste de codes par jeu. Chaque code s'active, se désactive ou se supprime ; un nouveau code est vérifié par RavenCore, qui affiche la raison d'un refus.
+
+- Game Boy et Game Boy Color : Game Genie (`ABC-DEF-GHI` ou `ABC-DEF`) et GameShark (8 chiffres, comme `010238CD`).
+- Game Boy Advance : Codebreaker non chiffré (`XAAAAAAA YYYY`), GameShark v1/v2 et Action Replay v3 (`XXXXXXXX YYYYYYYY`) tels que l'appareil les affiche.
+- Un code de plusieurs lignes s'écrit d'un bloc. Les codes actifs s'appliquent dès l'image suivante, ne sont jamais enregistrés dans un état, et ne tournent pas en mode Hardcore.
+
+La liste est gardée dans le stockage privé de l'application, au format de RavenEmu PC (une ligne par code : `1`, nom et code séparés par des tabulations).
+
+## Captures d'écran
+
+**Capture d'écran**, dans le menu **⋮**, enregistre l'image du jeu en PNG, telle que le lecteur la montre (couleurs et corrections comprises). Elle est agrandie quatre fois sans lissage : 960 × 640 pour la GBA, 640 × 576 pour la GB et la GBC. Le nom du fichier reprend celui du jeu, avec la date et l'heure.
+
+- Depuis Android 10, la capture va dans la galerie, dossier **Images/RavenEmu**, sans demander d'autorisation.
+- Sur Android 8 et 9, la galerie demanderait une autorisation : la capture reste dans le dossier Images propre à RavenEmu (`Android/data/…/files/Pictures/RavenEmu`), supprimé avec l'application.
+
+La capture est permise en Hardcore.
 
 L'emplacement 1 conserve le chemin historique `.slot0.state` des premières préversions de cette nouvelle application. Cela ne garantit pas la compatibilité des états ancienne application.
 

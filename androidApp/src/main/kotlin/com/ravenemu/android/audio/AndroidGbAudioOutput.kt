@@ -59,6 +59,15 @@ class AndroidGbAudioOutput(
     private val effects = SoundMixer()
     private val chime by lazy { unlockChime(outputRate) }
 
+    /**
+     * Vitesse du jeu par rapport à la console, écrite par la boucle de jeu :
+     * au-dessus de un quand l'image est calée sur un écran un peu plus rapide
+     * (60 Hz pour 59,73 images par seconde). Le jeu produit alors d'autant plus
+     * d'échantillons par seconde ; le rééchantillonneur les parcourt d'autant
+     * plus vite, et le remplissage de la sortie ne dérive pas.
+     */
+    @Volatile var speed: Double = 1.0
+
     init {
         require(sampleRateHz in 8000..192000) { "Fréquence audio native invalide." }
         require(videoRateHz > 0.0 && videoRateHz.isFinite()) { "Cadence GB invalide." }
@@ -121,13 +130,14 @@ class AndroidGbAudioOutput(
             if (startupBlocks < 12 ||
                 (firstNonzeroBlock >= 0 && startupBlocks <= firstNonzeroBlock + 20)
             ) logPcm("native", samples, count)
-            val needed = resampler.maxOutput(count, correctionForDrift())
+            val rateScale = correctionForDrift() * speed
+            val needed = resampler.maxOutput(count, rateScale)
             if (needed > resampled.size) resampled = ShortArray(needed)
             val produced = resampler.resample(
                 samples,
                 count,
                 resampled,
-                governor.rateScale,
+                rateScale,
             )
             fadeIn(resampled, produced)
             effects.mix(resampled, produced)

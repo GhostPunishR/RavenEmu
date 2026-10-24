@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
 import com.ravenemu.shared.settings.GbDisplayFilter
+import com.ravenemu.shared.settings.GbFrameBlender
 import com.ravenemu.shared.player.GbVideoMetrics
 import com.ravenemu.shared.player.GbVideoMetricsAccumulator
 import com.ravenemu.shared.library.LoadedGameInfo
@@ -21,6 +22,7 @@ import kotlinx.coroutines.withContext
 import kotlin.math.roundToLong
 import com.ravenemu.android.audio.AndroidGbAudioOutput
 import com.ravenemu.android.player.GbFrameBitmaps
+import com.ravenemu.android.player.DisplayVsync
 import com.ravenemu.android.player.GbFramePacer
 import com.ravenemu.android.player.gbEmulationDispatcher
 
@@ -40,6 +42,7 @@ internal class LinkPlayback(
     var metrics by mutableStateOf<GbVideoMetrics?>(null)
     @Volatile var activeAudio: AndroidGbAudioOutput? = null
         private set
+    private val vsync by lazy { DisplayVsync(context) }
 
     fun clear() {
         firstFrame = null
@@ -62,8 +65,11 @@ internal class LinkPlayback(
         val discarded = ShortArray(4096)
         val firstImages = GbFrameBitmaps(first.width, first.height)
         val secondImages = GbFrameBitmaps(second.width, second.height)
+        val firstBlender = GbFrameBlender()
+        val secondBlender = GbFrameBlender()
         var output: AndroidGbAudioOutput? = null
         try {
+            vsync.start()
             try {
                 val rate = session.audioRateHz() ?: throw IllegalStateException("Aucune piste audio active.")
                 output = AndroidGbAudioOutput(
@@ -102,9 +108,11 @@ internal class LinkPlayback(
                             val conversionStart = System.nanoTime()
                             if (session.focus == 0) {
                                 GbDisplayFilter.apply(firstPixels, settings, first.platform)
+                                firstBlender.apply(firstPixels, settings.frameBlending)
                                 firstFrame = firstImages.publish(firstPixels)
                             } else {
                                 GbDisplayFilter.apply(secondPixels, settings, second.platform)
+                                secondBlender.apply(secondPixels, settings.frameBlending)
                                 secondFrame = secondImages.publish(secondPixels)
                             }
                             conversionNanos = System.nanoTime() - conversionStart
@@ -128,11 +136,13 @@ internal class LinkPlayback(
                         clear()
                         break
                     }
-                    val wait = pacer.nextWaitNanos(System.nanoTime())
+                    val wait = pacer.nextWaitNanos(System.nanoTime(), vsync.timeNanos, vsync.periodNanos)
+                    output?.speed = pacer.speed
                     if (wait > 0) LockSupport.parkNanos(wait)
                 }
             }
         } finally {
+            vsync.stop()
             if (activeAudio === output) activeAudio = null
             output?.close()
         }
