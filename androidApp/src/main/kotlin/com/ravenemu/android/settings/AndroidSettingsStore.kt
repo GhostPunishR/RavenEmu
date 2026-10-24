@@ -21,6 +21,9 @@ internal class AndroidSettingsStore(context: Context) {
         onlineCovers = prefs.getBoolean("online_covers", false),
         lcdCorrectionGbc = prefs.getBoolean("lcd_correction_gbc", false),
         lcdCorrectionGba = prefs.getBoolean("lcd_correction_gba", false),
+        frameBlending = prefs.getString("frame_blending", "off") ?: "off",
+        integerScale = prefs.getBoolean("integer_scale", false),
+        rewind = prefs.getBoolean("rewind", true),
         cartridgeRumble = prefs.getBoolean("cartridge_rumble", true),
         cartridgeSensors = prefs.getBoolean("cartridge_sensors", true),
         solarLightAuto = prefs.getBoolean("solar_light_auto", true),
@@ -52,6 +55,9 @@ internal class AndroidSettingsStore(context: Context) {
             .putBoolean("online_covers", safe.onlineCovers)
             .putBoolean("lcd_correction_gbc", safe.lcdCorrectionGbc)
             .putBoolean("lcd_correction_gba", safe.lcdCorrectionGba)
+            .putString("frame_blending", safe.frameBlending)
+            .putBoolean("integer_scale", safe.integerScale)
+            .putBoolean("rewind", safe.rewind)
             .putBoolean("cartridge_rumble", safe.cartridgeRumble)
             .putBoolean("cartridge_sensors", safe.cartridgeSensors)
             .putBoolean("solar_light_auto", safe.solarLightAuto)

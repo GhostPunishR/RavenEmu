@@ -51,6 +51,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.semantics.contentDescription
@@ -60,6 +61,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.floor
 import kotlin.math.roundToInt
 import com.ravenemu.shared.library.GamePlatform
 import com.ravenemu.shared.library.platformLabel
@@ -134,6 +136,9 @@ internal fun GbVideoScreen(
     onWirelessUnplug: (() -> Unit)? = null,
     fastForward: Boolean = false,
     onFastForwardChange: ((Boolean) -> Unit)? = null,
+    rewinding: Boolean = false,
+    rewindEnd: Boolean = false,
+    onRewindHold: ((Boolean) -> Unit)? = null,
     onScreenshot: (() -> Unit)? = null,
     loadUndoable: Boolean = false,
     onUndoLoadState: (() -> Unit)? = null,
@@ -169,8 +174,8 @@ internal fun GbVideoScreen(
                 ) { setGameMenu(true) },
             contentAlignment = Alignment.Center,
         ) {
-            GamePicture(frame, error, platform)
-            if (fastForward) FastForwardBadge(Modifier.align(Alignment.TopStart))
+            GamePicture(frame, error, platform, settings.integerScale)
+            SpeedBadge(fastForward, rewinding, rewindEnd, Modifier.align(Alignment.TopStart))
             RetroOverlays(retroIndicators, retroNotice, retroNoticeBadge, retroNoticeVisible,
                 retroProgress, retroProgress?.let { retroImages[it.badgeUrl] }, settings.retroPopupPosition)
             WirelessLinkOverlay(wirelessLink)
@@ -183,6 +188,8 @@ internal fun GbVideoScreen(
             onMenu = { setGameMenu(true) },
             fastForward = fastForward,
             onFastForward = onFastForwardChange?.let { change -> { change(!fastForward) } },
+            rewinding = rewinding,
+            onRewindHold = onRewindHold,
         )
         // The debug bar is optional; enabled by default for the RavenEmu preview.
         if (settings.showDiagnostics) DiagnosticsBar(metrics)
@@ -191,7 +198,7 @@ internal fun GbVideoScreen(
             // picture itself; its menu button opens the game menu.
             Box(Modifier.fillMaxWidth().weight(1f).background(Color.Black)) {
                 skinControls(frame) { setGameMenu(true) }
-                if (fastForward) FastForwardBadge(Modifier.align(Alignment.TopStart))
+                SpeedBadge(fastForward, rewinding, rewindEnd, Modifier.align(Alignment.TopStart))
                 RetroOverlays(retroIndicators, retroNotice, retroNoticeBadge, retroNoticeVisible,
                     retroProgress, retroProgress?.let { retroImages[it.badgeUrl] }, settings.retroPopupPosition)
                 WirelessLinkOverlay(wirelessLink)
@@ -213,8 +220,8 @@ internal fun GbVideoScreen(
                     },
                 contentAlignment = Alignment.TopCenter,
             ) {
-                GamePicture(frame, error, platform)
-                if (fastForward) FastForwardBadge(Modifier.align(Alignment.TopStart))
+                GamePicture(frame, error, platform, settings.integerScale)
+                SpeedBadge(fastForward, rewinding, rewindEnd, Modifier.align(Alignment.TopStart))
                 RetroOverlays(retroIndicators, retroNotice, retroNoticeBadge, retroNoticeVisible,
                     retroProgress, retroProgress?.let { retroImages[it.badgeUrl] }, settings.retroPopupPosition)
                 WirelessLinkOverlay(wirelessLink)
@@ -361,12 +368,22 @@ internal fun GbVideoScreen(
 
 /** The game picture, as large as the box allows at the core's aspect. */
 @Composable
-private fun BoxWithConstraintsScope.GamePicture(frame: ImageBitmap?, error: String?, platform: GamePlatform) {
+private fun BoxWithConstraintsScope.GamePicture(
+    frame: ImageBitmap?, error: String?, platform: GamePlatform, integer: Boolean = false,
+) {
     // 160x144 on GB/GBC, 240x160 on GBA: follow the core's frame.
     val aspect = if (frame != null && frame.height > 0) {
         frame.width.toFloat() / frame.height
     } else if (platform == GamePlatform.GBA) 240f / 160f else 160f / 144f
-    val pictureHeight = minOf(maxHeight, maxWidth / aspect)
+    var pictureHeight = minOf(maxHeight, maxWidth / aspect)
+    if (integer && frame != null && frame.width > 0 && frame.height > 0) {
+        // A whole number of screen pixels per game pixel, when the screen holds it once.
+        val density = LocalDensity.current
+        val factor = with(density) {
+            floor(minOf(maxWidth.toPx() / frame.width, maxHeight.toPx() / frame.height))
+        }
+        if (factor >= 1f) pictureHeight = with(density) { (frame.height * factor).toDp() }
+    }
     val pictureWidth = pictureHeight * aspect
     if (frame != null) {
         Image(
@@ -394,6 +411,8 @@ private fun PlayerTopBar(
     onMenu: () -> Unit,
     fastForward: Boolean = false,
     onFastForward: (() -> Unit)? = null,
+    rewinding: Boolean = false,
+    onRewindHold: ((Boolean) -> Unit)? = null,
 ) {
     Row(
         Modifier.fillMaxWidth().height(48.dp).background(RavenBackground),
@@ -410,6 +429,7 @@ private fun PlayerTopBar(
             fontSize = 16.sp,
             modifier = Modifier.weight(1f),
         )
+        if (onRewindHold != null) HoldToRewind(rewinding, onRewindHold)
         if (onFastForward != null) {
             IconButton(
                 onClick = onFastForward,

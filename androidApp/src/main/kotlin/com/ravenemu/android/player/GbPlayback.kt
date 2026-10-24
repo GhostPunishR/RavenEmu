@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
 import com.ravenemu.shared.settings.GbDisplayFilter
+import com.ravenemu.shared.settings.GbFrameBlender
 import com.ravenemu.shared.player.FAST_FORWARD_SPEED
 import com.ravenemu.shared.player.GbVideoMetrics
 import com.ravenemu.shared.player.GbVideoMetricsAccumulator
@@ -47,6 +48,12 @@ internal class GbPlayback(
     @Volatile var lastAudioReport: String = "Aucune session audio enregistrée.\n"
     /** Fast forward, written by the player screen (see GbPlayerUi). */
     @Volatile var fastForward = false
+    /** Each frame is kept for rewind (the setting, outside Hardcore and the wireless cable). */
+    @Volatile var rewindEnabled = false
+    /** Rewind held, written by the player screen. */
+    @Volatile var rewinding = false
+    /** The rewind reached the oldest frame kept. */
+    var rewindEnd by mutableStateOf(false)
     private val cartridgeRumble by lazy { CartridgeRumble(context) }
     private val cartridgeSensors by lazy { CartridgeSensors(context) }
     private val vsync by lazy { DisplayVsync(context) }
@@ -128,11 +135,13 @@ internal class GbPlayback(
         // More than one GB frame of interleaved stereo, reused per frame.
         private val samples = ShortArray(4096)
         private val images = GbFrameBitmaps(game.width, game.height)
+        private val blender = GbFrameBlender()
         /** Dropped when the track fails; whatever remains is closed after the run. */
         var output: AndroidGbAudioOutput? = null
         private var rumble: CartridgeRumble? = null
         private var lastBatteryCheckNanos = 0L
         private var retroFailureLogged = false
+        private var lastSampleCount = 0
 
         suspend fun emulate() {
             rumble = if (settings.cartridgeRumble) cartridgeRumble else null
@@ -170,17 +179,22 @@ internal class GbPlayback(
                     // A late frame is still emulated and heard;
                     // only its image is skipped (see GbFramePacer).
                     val renderVideo = pacer.shouldRender(System.nanoTime())
-                    // Fast forward runs several frames in one period. Only the
-                    // last is shown and heard: the sound keeps its pitch and
-                    // its pace, in pieces, and the audio queue stays fed.
-                    val frames = if (fastForward) FAST_FORWARD_SPEED else 1
-                    var running = true
-                    for (index in 1..frames) {
-                        val last = index == frames
-                        running = step(renderVideo && last, sound = last)
+                    if (rewinding && rewindEnabled) {
+                        stepBack(renderVideo)
+                    } else {
+                        if (rewindEnd) rewindEnd = false
+                        // Fast forward runs several frames in one period. Only the
+                        // last is shown and heard: the sound keeps its pitch and
+                        // its pace, in pieces, and the audio queue stays fed.
+                        val frames = if (fastForward) FAST_FORWARD_SPEED else 1
+                        var running = true
+                        for (index in 1..frames) {
+                            val last = index == frames
+                            running = step(renderVideo && last, sound = last)
+                            if (!running) break
+                        }
                         if (!running) break
                     }
-                    if (!running) break
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (error: Exception) {
@@ -204,8 +218,10 @@ internal class GbPlayback(
         private suspend fun step(renderVideo: Boolean, sound: Boolean = true): Boolean {
             val nativeStart = System.nanoTime()
             val sampleCount =
-                gameSession.nextFrameWithAudioInto(pixels, samples, sensors) ?: return false
+                gameSession.nextFrameWithAudioInto(pixels, samples, sensors, keepForRewind = rewindEnabled)
+                    ?: return false
             val nativeElapsed = System.nanoTime() - nativeStart
+            lastSampleCount = sampleCount
             if (sound) submitAudio(sampleCount)
             rumble?.let { if (gameSession.rumbleActive) it.pulse() else it.release() }
             val conversionNanos = if (renderVideo) showFrame() else 0L
@@ -224,6 +240,31 @@ internal class GbPlayback(
             autosaveBattery(now)
             recordMetrics(now, nativeElapsed, conversionNanos)
             return true
+        }
+
+        /**
+         * One frame back, shown, in silence: the audio queue stays fed. At the
+         * oldest frame kept, the picture stays. RetroAchievements does not count
+         * rewound frames; its network keeps going.
+         */
+        private suspend fun stepBack(renderVideo: Boolean) {
+            val count = gameSession.rewindFrameInto(pixels, samples)
+            if (count == null) {
+                if (!rewindEnd) rewindEnd = true
+                samples.fill(0, 0, lastSampleCount)
+                submitAudio(lastSampleCount)
+            } else {
+                if (rewindEnd) rewindEnd = false
+                submitAudio(count)
+                if (renderVideo) showFrame()
+            }
+            rumble?.release()
+            try {
+                retro.idle()
+            } catch (error: Exception) {
+                if (!retroFailureLogged) Log.w("RavenEmuRetro", "rcheevos idle tick failed", error)
+                retroFailureLogged = true
+            }
         }
 
         /** One non-blocking audio submission per frame; a failing track is dropped. */
@@ -245,6 +286,7 @@ internal class GbPlayback(
         private fun showFrame(): Long {
             val conversionStart = System.nanoTime()
             GbDisplayFilter.apply(pixels, settings, game.platform)
+            blender.apply(pixels, settings.frameBlending)
             frame = images.publish(pixels)
             return System.nanoTime() - conversionStart
         }

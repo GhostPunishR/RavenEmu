@@ -102,7 +102,7 @@ jobs:
       - name: Configurer le test de liaison C
         run: cmake -S native -B native/build-host -DCMAKE_BUILD_TYPE=Release -DRAVENEMU_BRIDGE_TESTS=ON
       - name: Construire le test
-        run: cmake --build native/build-host --target ravenemu_bridge_smoke ravenemu_achievements_smoke --parallel 2
+        run: cmake --build native/build-host --target ravenemu_bridge_smoke ravenemu_achievements_smoke ravenemu_rewind_test --parallel 2
       - name: Exécuter le test de liaison et de sauvegarde
         run: ctest --test-dir native/build-host --output-on-failure
 

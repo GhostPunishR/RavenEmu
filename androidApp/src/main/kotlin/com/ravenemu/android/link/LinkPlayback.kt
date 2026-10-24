@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
 import com.ravenemu.shared.settings.GbDisplayFilter
+import com.ravenemu.shared.settings.GbFrameBlender
 import com.ravenemu.shared.player.GbVideoMetrics
 import com.ravenemu.shared.player.GbVideoMetricsAccumulator
 import com.ravenemu.shared.library.LoadedGameInfo
@@ -64,6 +65,8 @@ internal class LinkPlayback(
         val discarded = ShortArray(4096)
         val firstImages = GbFrameBitmaps(first.width, first.height)
         val secondImages = GbFrameBitmaps(second.width, second.height)
+        val firstBlender = GbFrameBlender()
+        val secondBlender = GbFrameBlender()
         var output: AndroidGbAudioOutput? = null
         try {
             vsync.start()
@@ -105,9 +108,11 @@ internal class LinkPlayback(
                             val conversionStart = System.nanoTime()
                             if (session.focus == 0) {
                                 GbDisplayFilter.apply(firstPixels, settings, first.platform)
+                                firstBlender.apply(firstPixels, settings.frameBlending)
                                 firstFrame = firstImages.publish(firstPixels)
                             } else {
                                 GbDisplayFilter.apply(secondPixels, settings, second.platform)
+                                secondBlender.apply(secondPixels, settings.frameBlending)
                                 secondFrame = secondImages.publish(secondPixels)
                             }
                             conversionNanos = System.nanoTime() - conversionStart

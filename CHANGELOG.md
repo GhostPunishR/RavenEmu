@@ -5,6 +5,9 @@
 ### Ajouté
 
 - **Avance rapide**, d'après RetroArch, avec un code écrit pour RavenEmu : jusqu'à 4 fois la vitesse de la console. Bouton **»** en haut du lecteur, interrupteur dans le menu **⋮**, ou clic du stick droit d'une manette. **» ×4** s'affiche sur l'image ; le son garde sa hauteur et passe par morceaux. Permise en Hardcore, sans effet pendant le câble sans fil. Voir [Commandes](wiki/Commandes.md#avance-rapide).
+- **Retour arrière**, d'après RetroArch, avec un code écrit pour RavenEmu : maintenez **◀◀** en haut du lecteur, ou le clic du stick gauche d'une manette. Les états des dernières images sont gardés en différences dans la mémoire native (environ 4,5 Ko par image GBA, 32 Mo au plus). Réglage **Paramètres → Commandes → Retour arrière**, activé par défaut. Indisponible en Hardcore et pendant le câble sans fil. Voir [Commandes](wiki/Commandes.md#retour-arrière).
+- **Mélange d'images** (**Paramètres → Vidéo**) : mélange de deux images ou rémanence, pour les jeux qui comptent sur la lenteur de l'écran d'origine. Même calcul que sur RavenEmu PC.
+- **Pixels entiers** (**Paramètres → Vidéo**) : l'image prend un multiple entier de sa taille.
 - **Capture d'écran** dans le menu **⋮** : l'image du jeu en PNG, agrandie quatre fois sans lissage, dans **Images/RavenEmu** (Android 10 et plus, sans autorisation) ou dans le dossier Images de l'application (Android 8 et 9).
 - **Annuler le chargement** dans le menu **⋮** : la partie revient telle qu'elle était juste avant le dernier chargement d'état. Gardée en mémoire seulement ; mêmes règles que le chargement (ni Hardcore, ni câble sans fil).
 - **Câble link sans fil entre deux téléphones.** Deux téléphones Android sur le même réseau Wi-Fi se relient comme par un câble link, sans rien lancer.

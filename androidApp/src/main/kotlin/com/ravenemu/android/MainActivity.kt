@@ -82,9 +82,15 @@ class MainActivity : ComponentActivity() {
             if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) gameMenuRequests++
             return true
         }
-        // The right stick's click, free on the console, toggles fast forward.
+        // The right stick's click, free on the console, toggles fast forward;
+        // the left one, held, rewinds.
         if (gamepadInputEnabled && foreground && event.keyCode == KeyEvent.KEYCODE_BUTTON_THUMBR) {
             if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) playerUi?.toggleFastForward()
+            return true
+        }
+        if (gamepadInputEnabled && foreground && event.keyCode == KeyEvent.KEYCODE_BUTTON_THUMBL) {
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) playerUi?.holdRewind(true)
+            if (event.action == KeyEvent.ACTION_UP) playerUi?.holdRewind(false)
             return true
         }
         if (gamepadInputEnabled && foreground && gamepad.handles(event.keyCode)) {
@@ -416,6 +422,13 @@ class MainActivity : ComponentActivity() {
                 // Shown as it runs: never while the wireless cable is linked.
                 fastForward = player.fastForward && !wireless.linked,
                 onFastForwardChange = { on -> player.requestFastForward(on) },
+                // Rewind is neither for Hardcore nor for the wireless cable.
+                rewinding = player.rewinding && userSettings.rewind && !wireless.linked &&
+                    !retroUi.retroSnapshot.hardcore,
+                rewindEnd = playback.rewindEnd,
+                onRewindHold = if (userSettings.rewind && !wireless.linked && !retroUi.retroSnapshot.hardcore) {
+                    { held -> player.holdRewind(held) }
+                } else null,
                 onScreenshot = {
                     library.loadedGame?.let { game ->
                         GbScreenshot.capture(applicationContext, scope, playback.frame, game.filename)

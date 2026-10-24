@@ -23,6 +23,9 @@ class SettingsTest {
         assertTrue(defaults.cartridgeSensors, "Les capteurs de cartouche sont actifs par défaut")
         assertTrue(defaults.solarLightAuto)
         assertEquals(50, defaults.solarLightLevel)
+        assertEquals("off", defaults.frameBlending, "Le mélange d'images est coupé par défaut")
+        assertFalse(defaults.integerScale)
+        assertTrue(defaults.rewind, "Le retour arrière est disponible par défaut")
 
         val frame = intArrayOf(0xff102030.toInt(), 0xff8899aa.toInt())
         val reference = frame.copyOf()
@@ -49,6 +52,7 @@ class SettingsTest {
             audioVolume = 150, videoPalette = "unsupported",
             videoBrightness = -200, videoContrast = 400,
             controlsScale = 900, controlsGap = -5, controlsStyle = "unknown",
+            frameBlending = "blur",
         ).normalized()
         assertEquals(100, settings.audioVolume)
         assertEquals("original", settings.videoPalette)
@@ -57,6 +61,7 @@ class SettingsTest {
         assertEquals(115, settings.controlsScale)
         assertEquals(20, settings.controlsGap)
         assertEquals("classic", settings.controlsStyle)
+        assertEquals("off", settings.frameBlending)
     }
 
     @Test

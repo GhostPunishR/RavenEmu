@@ -314,6 +314,27 @@ private fun VideoPage(settings: Settings, editable: Boolean, update: (Settings) 
         settings.lcdCorrectionGba,
         editable,
     ) { update(settings.copy(lcdCorrectionGba = it)) }
+    GroupTitle("Mélange d'images")
+    SettingDescription(
+        "Rémanence de l'écran",
+        "Certains jeux font clignoter un objet d'une image à l'autre pour le rendre transparent, en comptant sur la lenteur de l'écran d'origine (F-Zero, Castlevania). Le mélange le montre transparent ; la rémanence laisse une traîne.",
+    )
+    ChoiceRow("Désactivé (défaut)", settings.frameBlending == "off", editable) {
+        update(settings.copy(frameBlending = "off"))
+    }
+    ChoiceRow("Mélange de deux images", settings.frameBlending == "mix", editable) {
+        update(settings.copy(frameBlending = "mix"))
+    }
+    ChoiceRow("Rémanence", settings.frameBlending == "ghosting", editable) {
+        update(settings.copy(frameBlending = "ghosting"))
+    }
+    GroupTitle("Taille de l'image")
+    SettingSwitch(
+        "Pixels entiers",
+        "L'image prend un multiple entier de sa taille : tous les pixels sont identiques, avec des bords noirs autour. Sans effet avec un skin Delta.",
+        settings.integerScale,
+        editable,
+    ) { update(settings.copy(integerScale = it)) }
     GroupTitle("Ajustements")
     SettingSlider("Luminosité", "${settings.videoBrightness}",
         settings.videoBrightness, -50..50, editable) {
@@ -327,6 +348,7 @@ private fun VideoPage(settings: Settings, editable: Boolean, update: (Settings) 
         update(settings.copy(
             videoPalette = "original", videoBrightness = 0, videoContrast = 100,
             lcdCorrectionGbc = false, lcdCorrectionGba = false,
+            frameBlending = "off", integerScale = false,
         ))
     }, enabled = editable) {
         Text("Rétablir l'affichage d'origine", color = Accent)
@@ -372,6 +394,13 @@ private fun ControlsPage(settings: Settings, capabilities: SettingsCapabilities,
     }
     Text("Le déplacement libre des boutons sera ajouté plus tard.",
         color = Muted, fontSize = 12.sp)
+    GroupTitle("Retour arrière")
+    SettingSwitch(
+        "Retour arrière",
+        "Maintenez le bouton ◀◀ en haut du lecteur, ou le clic du stick gauche de la manette, pour rejouer les dernières minutes à l'envers. Garde jusqu'à 32 Mo d'images. Indisponible en mode Hardcore et pendant le câble sans fil.",
+        settings.rewind,
+        editable,
+    ) { update(settings.copy(rewind = it)) }
     TextButton(onClick = {
         update(settings.copy(
             haptics = false, controlsScale = 100,

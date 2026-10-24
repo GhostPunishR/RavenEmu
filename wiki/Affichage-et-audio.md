@@ -15,11 +15,14 @@ Dans **Paramètres → Vidéo** :
 | Correction des couleurs LCD : Game Boy Advance | Même correction, réglée à part pour la Game Boy Advance |
 | Luminosité | Ajustement de -50 à +50 |
 | Contraste | Ajustement de 50 à 150 % |
-| Rétablir l'affichage d'origine | Original, corrections LCD coupées, luminosité 0 et contraste 100 % |
+| Mélange d'images : mélange de deux images | Chaque image est mélangée à la précédente : un objet qui clignote d'une image à l'autre paraît transparent, comme sur l'écran d'origine (F-Zero, Castlevania) |
+| Mélange d'images : rémanence | Garde 3/8 de l'image affichée avant : une traîne plus marquée |
+| Pixels entiers | L'image prend un multiple entier de sa taille : tous les pixels sont identiques, avec des bords noirs autour |
+| Rétablir l'affichage d'origine | Original, corrections LCD et mélange coupés, pixels entiers coupés, luminosité 0 et contraste 100 % |
 
 Les jeux GBC et GBA restent en couleur : les profils DMG vert et Pocket gris ne les concernent pas. La correction LCD, désactivée par défaut, ne touche jamais un jeu Game Boy. Luminosité et contraste s'appliquent aux trois consoles.
 
-Le lecteur respecte les dimensions fournies par le moteur et affiche l'image sans lissage : **160 × 144** pour GB/GBC, **240 × 160** pour GBA.
+Le lecteur respecte les dimensions fournies par le moteur et affiche l'image sans lissage : **160 × 144** pour GB/GBC, **240 × 160** pour GBA. Le mélange d'images s'applique après les couleurs et la correction LCD, aussi aux deux jeux reliés sur un même téléphone ; les pixels entiers ne changent rien avec un skin Delta, qui place lui-même l'image.
 
 ## Fluidité
 

@@ -93,7 +93,7 @@ class AndroidGbSession(private val resolver: ContentResolver, filesDir: File) : 
                     active = replacement
                     activeRomKey = romKey
                     traits = fixed
-                    forgetUndoLocked()
+                    forgetGameLocked()
                     transferred = true
                     previous?.close()
                 }
@@ -178,7 +178,7 @@ class AndroidGbSession(private val resolver: ContentResolver, filesDir: File) : 
                 active = null
                 activeRomKey = null
                 traits = null
-                forgetUndoLocked()
+                forgetGameLocked()
             }
         }
     }
@@ -252,6 +252,41 @@ class AndroidGbSession(private val resolver: ContentResolver, filesDir: File) : 
         loadUndoable = false
     }
 
+    // Another game, or none: its undo and its rewound frames go.
+    private fun forgetGameLocked() {
+        forgetUndoLocked()
+        rewind?.close()
+        rewind = null
+    }
+
+    // The last frames of the running game, to play it backwards (under [lock]).
+    private var rewind: NativeRewind? = null
+
+    /** Rewind is not for Hardcore, nor with the wireless cable: the partner would not follow. */
+    private fun rewindAllowedLocked() = !stateLoadLocked && remote == null
+
+    /** Frees the rewound frames, when the setting is turned off. */
+    fun clearRewind() = lock.withLock {
+        rewind?.close()
+        rewind = null
+    }
+
+    /**
+     * One frame back: the state before, then that frame run again for its
+     * picture, its sound read and silenced. Returns the samples to play (in
+     * silence), or null once nothing older is kept or rewind is not allowed.
+     */
+    internal fun rewindFrameInto(pixels: IntArray, audio: ShortArray): Int? =
+        lock.withLock {
+            check(!closed) { "La session a été fermée." }
+            val core = active ?: return@withLock null
+            val kept = rewind ?: return@withLock null
+            if (!rewindAllowedLocked() || !kept.stepBack(core)) return@withLock null
+            core.frameInto(pixels)
+            rumbleActive = false
+            core.readAudioInto(audio).also { count -> audio.fill(0, 0, count) }
+        }
+
     fun loadStateSlot(slot: Int = 0) = saveLock.withLock {
         RetroHardcorePolicy.requireStateLoadAllowed(stateLoadLocked)
         val key = lock.withLock {
@@ -322,6 +357,7 @@ class AndroidGbSession(private val resolver: ContentResolver, filesDir: File) : 
      */
     internal fun nextFrameWithAudioInto(
         pixels: IntArray, audio: ShortArray, sensors: CartridgeSensors? = null,
+        keepForRewind: Boolean = false,
     ): Int? =
         lock.withLock {
             check(!closed) { "La session a été fermée." }
@@ -331,6 +367,10 @@ class AndroidGbSession(private val resolver: ContentResolver, filesDir: File) : 
             core.frameInto(pixels)
             rumbleActive = core.rumbleActive()
             linkWanted = core.linkWanted()
+            if (keepForRewind && rewindAllowedLocked()) {
+                val kept = rewind ?: NativeRewind(NativeRewind.BUDGET_BYTES).also { rewind = it }
+                kept.keep(core)
+            }
             core.readAudioInto(audio)
         }
 
@@ -471,7 +511,7 @@ class AndroidGbSession(private val resolver: ContentResolver, filesDir: File) : 
                     active = null
                     activeRomKey = null
                     traits = null
-                    forgetUndoLocked()
+                    forgetGameLocked()
                 }
             }
         }

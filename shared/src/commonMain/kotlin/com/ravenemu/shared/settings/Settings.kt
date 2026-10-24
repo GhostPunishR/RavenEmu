@@ -45,6 +45,17 @@ data class Settings(
      */
     val lcdCorrectionGbc: Boolean = false,
     val lcdCorrectionGba: Boolean = false,
+    /**
+     * Frame blending: "off", "mix" (each image averaged with the one before)
+     * or "ghosting" (a trail of the images before). Some games flicker an
+     * object every other frame to make it transparent, counting on the
+     * slow LCD (see [GbFrameBlender]).
+     */
+    val frameBlending: String = "off",
+    /** The picture at a whole multiple of its size: every pixel the same, borders around. */
+    val integerScale: Boolean = false,
+    /** Each frame is kept so that the game can play backwards (not in Hardcore). */
+    val rewind: Boolean = true,
     /** Rumble cartridges drive the phone's vibrator. */
     val cartridgeRumble: Boolean = true,
     /**
@@ -78,6 +89,7 @@ data class Settings(
     fun normalized(): Settings = copy(
         audioVolume = audioVolume.coerceIn(0, 100),
         videoPalette = videoPalette.takeIf { it in listOf("original", "dmg", "pocket") } ?: "original",
+        frameBlending = frameBlending.takeIf { it in listOf("off", "mix", "ghosting") } ?: "off",
         videoBrightness = videoBrightness.coerceIn(-50, 50),
         videoContrast = videoContrast.coerceIn(50, 150),
         controlsScale = controlsScale.coerceIn(80, 115),
@@ -154,5 +166,42 @@ object GbDisplayFilter {
     /** Reflective LCD gamma 1.15: darkens the mid tones a little. */
     private val LCD_GAMMA = IntArray(256) { v ->
         (255.0 * (v / 255.0).pow(1.15)).roundToInt().coerceIn(0, 255)
+    }
+}
+
+/**
+ * Frame blending, after [GbDisplayFilter], as on RavenEmu PC. "mix" averages
+ * each image with the one before: an object shown every other frame comes
+ * out half transparent, as the console's slow LCD showed it. "ghosting"
+ * keeps 3/8 of the image shown before, a longer trail. One instance per
+ * running game: it remembers the image before.
+ */
+class GbFrameBlender {
+    private var mode = "off"
+    private var history = IntArray(0)
+
+    fun apply(pixels: IntArray, mode: String) {
+        if (mode != this.mode) {
+            this.mode = mode
+            history = IntArray(0)
+        }
+        if (mode == "off") return
+        if (history.size != pixels.size) {
+            history = pixels.copyOf()
+            return
+        }
+        val mix = mode == "mix"
+        for (index in pixels.indices) {
+            val now = pixels[index]
+            val before = history[index]
+            var blended = -0x1000000
+            for (shift in 0..16 step 8) {
+                val a = (now ushr shift) and 255
+                val b = (before ushr shift) and 255
+                blended = blended or ((if (mix) (a + b + 1) / 2 else (a * 5 + b * 3 + 4) / 8) shl shift)
+            }
+            pixels[index] = blended
+            history[index] = if (mix) now else blended
+        }
     }
 }

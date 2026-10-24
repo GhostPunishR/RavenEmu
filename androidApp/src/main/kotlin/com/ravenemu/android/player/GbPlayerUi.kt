@@ -14,6 +14,7 @@ import com.ravenemu.shared.settings.Settings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.ravenemu.android.engine.AndroidGbSession
 import com.ravenemu.android.link.AndroidLinkSession
 import com.ravenemu.android.link.LinkPlayback
@@ -52,6 +53,9 @@ internal class GbPlayerUi(
     var controllerMode by mutableStateOf(false)
     /** Fast forward of the single game, from the top bar, its menu or the controller. */
     var fastForward by mutableStateOf(false)
+        private set
+    /** Rewind held: the ◀◀ button of the top bar or the controller's left stick click. */
+    var rewinding by mutableStateOf(false)
         private set
 
     /** A game or a linked pair is on screen: the library waits. */
@@ -94,6 +98,17 @@ internal class GbPlayerUi(
         // A wireless partner would not keep up: the game runs at its pace then.
         val fastForwardOn = fastForward && !wireless.linked
         SideEffect { playback.fastForward = fastForwardOn }
+        // Rewind neither: the session also refuses it in Hardcore.
+        val rewindOn = settings.rewind && !wireless.linked
+        val rewindHeld = rewinding && rewindOn
+        SideEffect {
+            playback.rewindEnabled = rewindOn
+            playback.rewinding = rewindHeld
+        }
+        LaunchedEffect(settings.rewind) {
+            // Turned off: the frames kept go at once.
+            if (!settings.rewind) withContext(Dispatchers.IO) { gameSession.clearRewind() }
+        }
 
         LaunchedEffect(linkEnabled, linkedGames, foreground) {
             if (!linkEnabled || linkedGames.size != 2) {
@@ -129,6 +144,7 @@ internal class GbPlayerUi(
         videoEnabled = false
         pausedForGameMenu = false
         fastForward = false
+        rewinding = false
         playback.frame = null
         playback.videoMetrics = null
         playback.audioStatus = null
@@ -175,6 +191,11 @@ internal class GbPlayerUi(
     }
 
     fun toggleFastForward() = requestFastForward(!fastForward)
+
+    /** Rewind while [held], the single game only. */
+    fun holdRewind(held: Boolean) {
+        rewinding = held && videoEnabled
+    }
 
     fun focusLinked(index: Int) {
         linkSession.setFocus(index)

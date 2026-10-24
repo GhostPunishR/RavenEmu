@@ -15,7 +15,7 @@ import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 
-internal enum class RavenGlyph { SETTINGS, ADD, MORE, SEARCH, BACK, FAST_FORWARD }
+internal enum class RavenGlyph { SETTINGS, ADD, MORE, SEARCH, BACK, FAST_FORWARD, REWIND }
 
 /* Vector icons render consistently on Android and iOS without system glyphs. */
 @Composable
@@ -67,13 +67,16 @@ internal fun RavenIcon(icon: RavenGlyph, tint: Color) {
                         strokeWidth = line)
                 }
             }
-            RavenGlyph.FAST_FORWARD -> {
-                // Two triangles pointing right, side by side.
-                for (left in listOf(.14f, .48f)) {
+            RavenGlyph.FAST_FORWARD, RavenGlyph.REWIND -> {
+                // Two triangles side by side, pointing right or left.
+                val forward = icon == RavenGlyph.FAST_FORWARD
+                for (base in listOf(.14f, .48f)) {
+                    val back = if (forward) base else base + .38f
+                    val tip = if (forward) base + .38f else base
                     drawPath(Path().apply {
-                        moveTo(size.width * left, size.height * .24f)
-                        lineTo(size.width * (left + .38f), cy)
-                        lineTo(size.width * left, size.height * .76f)
+                        moveTo(size.width * back, size.height * .24f)
+                        lineTo(size.width * tip, cy)
+                        lineTo(size.width * back, size.height * .76f)
                         close()
                     }, tint)
                 }
