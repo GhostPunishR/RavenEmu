@@ -54,6 +54,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -131,6 +132,11 @@ internal fun GbVideoScreen(
     wirelessLink: WirelessLinkView = WirelessLinkView(),
     onWirelessLinkChoice: ((Long?) -> Unit)? = null,
     onWirelessUnplug: (() -> Unit)? = null,
+    fastForward: Boolean = false,
+    onFastForwardChange: ((Boolean) -> Unit)? = null,
+    onScreenshot: (() -> Unit)? = null,
+    loadUndoable: Boolean = false,
+    onUndoLoadState: (() -> Unit)? = null,
     onBack: () -> Unit,
 ) {
     var gameMenuOpen by remember { mutableStateOf(false) }
@@ -164,6 +170,7 @@ internal fun GbVideoScreen(
             contentAlignment = Alignment.Center,
         ) {
             GamePicture(frame, error, platform)
+            if (fastForward) FastForwardBadge(Modifier.align(Alignment.TopStart))
             RetroOverlays(retroIndicators, retroNotice, retroNoticeBadge, retroNoticeVisible,
                 retroProgress, retroProgress?.let { retroImages[it.badgeUrl] }, settings.retroPopupPosition)
             WirelessLinkOverlay(wirelessLink)
@@ -174,6 +181,8 @@ internal fun GbVideoScreen(
             menuAvailable = onExportAudioDiagnostics != null || onSaveState != null || onLoadState != null,
             onBack = onBack,
             onMenu = { setGameMenu(true) },
+            fastForward = fastForward,
+            onFastForward = onFastForwardChange?.let { change -> { change(!fastForward) } },
         )
         // The debug bar is optional; enabled by default for the RavenEmu preview.
         if (settings.showDiagnostics) DiagnosticsBar(metrics)
@@ -182,6 +191,7 @@ internal fun GbVideoScreen(
             // picture itself; its menu button opens the game menu.
             Box(Modifier.fillMaxWidth().weight(1f).background(Color.Black)) {
                 skinControls(frame) { setGameMenu(true) }
+                if (fastForward) FastForwardBadge(Modifier.align(Alignment.TopStart))
                 RetroOverlays(retroIndicators, retroNotice, retroNoticeBadge, retroNoticeVisible,
                     retroProgress, retroProgress?.let { retroImages[it.badgeUrl] }, settings.retroPopupPosition)
                 WirelessLinkOverlay(wirelessLink)
@@ -204,6 +214,7 @@ internal fun GbVideoScreen(
                 contentAlignment = Alignment.TopCenter,
             ) {
                 GamePicture(frame, error, platform)
+                if (fastForward) FastForwardBadge(Modifier.align(Alignment.TopStart))
                 RetroOverlays(retroIndicators, retroNotice, retroNoticeBadge, retroNoticeVisible,
                     retroProgress, retroProgress?.let { retroImages[it.badgeUrl] }, settings.retroPopupPosition)
                 WirelessLinkOverlay(wirelessLink)
@@ -269,6 +280,7 @@ internal fun GbVideoScreen(
                     if (onControllerModeChange != null) {
                         ControllerModeSwitch(controllerMode, onControllerModeChange)
                     }
+                    if (onFastForwardChange != null) FastForwardSwitch(fastForward, onFastForwardChange)
                     WirelessLinkMenuRow(wirelessLink, onWirelessUnplug)
                     Text("Partie en pause · 4 emplacements de sauvegarde",
                         color = RavenMuted, fontSize = 12.sp)
@@ -295,6 +307,23 @@ internal fun GbVideoScreen(
                             },
                             onDelete = { confirmation = selectedSlot to "delete" },
                         )
+                    }
+                    if (onUndoLoadState != null && loadUndoable && stateLoadAllowed) {
+                        OutlinedButton(
+                            onClick = {
+                                onUndoLoadState()
+                                setGameMenu(false)
+                            },
+                            enabled = !stateOperationBusy,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { Text("Annuler le chargement") }
+                    }
+                    if (onScreenshot != null) {
+                        OutlinedButton(
+                            onClick = onScreenshot,
+                            enabled = frame != null,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { Text("Capture d'écran") }
                     }
                     if (onExportAudioDiagnostics != null) {
                         OutlinedButton(
@@ -358,7 +387,14 @@ private fun BoxWithConstraintsScope.GamePicture(frame: ImageBitmap?, error: Stri
 }
 
 @Composable
-private fun PlayerTopBar(title: String, menuAvailable: Boolean, onBack: () -> Unit, onMenu: () -> Unit) {
+private fun PlayerTopBar(
+    title: String,
+    menuAvailable: Boolean,
+    onBack: () -> Unit,
+    onMenu: () -> Unit,
+    fastForward: Boolean = false,
+    onFastForward: (() -> Unit)? = null,
+) {
     Row(
         Modifier.fillMaxWidth().height(48.dp).background(RavenBackground),
         verticalAlignment = Alignment.CenterVertically,
@@ -374,6 +410,15 @@ private fun PlayerTopBar(title: String, menuAvailable: Boolean, onBack: () -> Un
             fontSize = 16.sp,
             modifier = Modifier.weight(1f),
         )
+        if (onFastForward != null) {
+            IconButton(
+                onClick = onFastForward,
+                modifier = Modifier.size(48.dp)
+                    .semantics { contentDescription = if (fastForward) "Arrêter l'avance rapide" else "Avance rapide" },
+            ) {
+                RavenIcon(RavenGlyph.FAST_FORWARD, if (fastForward) RavenAccent else RavenText)
+            }
+        }
         if (menuAvailable) {
             IconButton(
                 onClick = onMenu,

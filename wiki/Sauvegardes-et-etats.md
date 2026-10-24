@@ -23,8 +23,18 @@ Dans le menu **⋮** du lecteur, chaque jeu dispose de **quatre emplacements**, 
 
 - Enregistrer dans un emplacement déjà occupé demande confirmation.
 - Charger un état reprend la partie et renouvelle la sortie audio.
+- **Annuler le chargement** remet la partie telle qu'elle était juste avant le dernier chargement, si un état a été chargé par erreur. La partie d'avant n'est gardée qu'en mémoire, jusqu'au chargement suivant ou au changement de jeu. Les mêmes règles que pour un chargement s'appliquent : rien en Hardcore, ni pendant le câble sans fil.
 - Supprimer un emplacement demande confirmation et ne supprime pas le fichier batterie de la cartouche.
 - Une miniature absente ou illisible ne doit pas empêcher le chargement de l'état.
+
+## Captures d'écran
+
+**Capture d'écran**, dans le menu **⋮**, enregistre l'image du jeu en PNG, telle que le lecteur la montre (couleurs et corrections comprises). Elle est agrandie quatre fois sans lissage : 960 × 640 pour la GBA, 640 × 576 pour la GB et la GBC. Le nom du fichier reprend celui du jeu, avec la date et l'heure.
+
+- Depuis Android 10, la capture va dans la galerie, dossier **Images/RavenEmu**, sans demander d'autorisation.
+- Sur Android 8 et 9, la galerie demanderait une autorisation : la capture reste dans le dossier Images propre à RavenEmu (`Android/data/…/files/Pictures/RavenEmu`), supprimé avec l'application.
+
+La capture est permise en Hardcore.
 
 L'emplacement 1 conserve le chemin historique `.slot0.state` des premières préversions de cette nouvelle application. Cela ne garantit pas la compatibilité des états ancienne application.
 

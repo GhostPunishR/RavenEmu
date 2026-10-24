@@ -8,13 +8,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 
-internal enum class RavenGlyph { SETTINGS, ADD, MORE, SEARCH, BACK }
+internal enum class RavenGlyph { SETTINGS, ADD, MORE, SEARCH, BACK, FAST_FORWARD }
 
 /* Vector icons render consistently on Android and iOS without system glyphs. */
 @Composable
@@ -64,6 +65,17 @@ internal fun RavenIcon(icon: RavenGlyph, tint: Color) {
                         Offset(cx + x * size.minDimension * .44f,
                             cy + y * size.minDimension * .44f),
                         strokeWidth = line)
+                }
+            }
+            RavenGlyph.FAST_FORWARD -> {
+                // Two triangles pointing right, side by side.
+                for (left in listOf(.14f, .48f)) {
+                    drawPath(Path().apply {
+                        moveTo(size.width * left, size.height * .24f)
+                        lineTo(size.width * (left + .38f), cy)
+                        lineTo(size.width * left, size.height * .76f)
+                        close()
+                    }, tint)
                 }
             }
         }

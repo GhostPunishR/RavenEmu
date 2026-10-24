@@ -3,6 +3,7 @@ package com.ravenemu.android.player
 import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -49,6 +50,9 @@ internal class GbPlayerUi(
         private set
     // Controller mode: landscape and full screen while a game runs.
     var controllerMode by mutableStateOf(false)
+    /** Fast forward of the single game, from the top bar, its menu or the controller. */
+    var fastForward by mutableStateOf(false)
+        private set
 
     /** A game or a linked pair is on screen: the library waits. */
     val open: Boolean get() = videoEnabled || linkEnabled
@@ -87,6 +91,9 @@ internal class GbPlayerUi(
         }
         val stopped = !foreground || slots.restoringState || pausedForGameMenu
         LaunchedEffect(stopped) { wireless.setPaused(stopped) }
+        // A wireless partner would not keep up: the game runs at its pace then.
+        val fastForwardOn = fastForward && !wireless.linked
+        SideEffect { playback.fastForward = fastForwardOn }
 
         LaunchedEffect(linkEnabled, linkedGames, foreground) {
             if (!linkEnabled || linkedGames.size != 2) {
@@ -121,6 +128,7 @@ internal class GbPlayerUi(
         gameSession.releaseAllButtons()
         videoEnabled = false
         pausedForGameMenu = false
+        fastForward = false
         playback.frame = null
         playback.videoMetrics = null
         playback.audioStatus = null
@@ -160,6 +168,13 @@ internal class GbPlayerUi(
             }
         }
     }
+
+    /** Only the single game on screen fast-forwards. */
+    fun setFastForward(on: Boolean) {
+        fastForward = on && videoEnabled
+    }
+
+    fun toggleFastForward() = setFastForward(!fastForward)
 
     fun focusLinked(index: Int) {
         linkSession.setFocus(index)

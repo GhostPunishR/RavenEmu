@@ -45,6 +45,7 @@ import com.ravenemu.android.player.GameWindow
 import com.ravenemu.android.player.GamepadMapper
 import com.ravenemu.android.player.GbPlayback
 import com.ravenemu.android.player.GbPlayerUi
+import com.ravenemu.android.player.GbScreenshot
 import com.ravenemu.android.retro.AchievementsController
 import com.ravenemu.android.retro.HardcoreAvailability
 import com.ravenemu.android.retro.RetroAchievementsUi
@@ -65,6 +66,8 @@ class MainActivity : ComponentActivity() {
     private lateinit var wireless: WirelessLink
     private var linkInputEnabled = false
     private var retroController: AchievementsController? = null
+    // The player of setContent, for the controller keys handled here.
+    private var playerUi: GbPlayerUi? = null
     private var foreground by mutableStateOf(false)
     // Physical controller. Its events are taken only while the player accepts
     // input; elsewhere the D-pad keeps navigating the app as usual.
@@ -77,6 +80,11 @@ class MainActivity : ComponentActivity() {
     private fun handleGamepadKeyEvent(event: KeyEvent): Boolean {
         if (gamepadInputEnabled && foreground && event.keyCode == KeyEvent.KEYCODE_BUTTON_MODE) {
             if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) gameMenuRequests++
+            return true
+        }
+        // The right stick's click, free on the console, toggles fast forward.
+        if (gamepadInputEnabled && foreground && event.keyCode == KeyEvent.KEYCODE_BUTTON_THUMBR) {
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) playerUi?.toggleFastForward()
             return true
         }
         if (gamepadInputEnabled && foreground && gamepad.handles(event.keyCode)) {
@@ -214,6 +222,7 @@ class MainActivity : ComponentActivity() {
             val retro = retroUi.retro
             val player = remember {
                 GbPlayerUi(gameSession, playback, linkSession, linkPlayback, slots, retro, wireless, scope) { foreground }
+                    .also { playerUi = it }
             }
             val library = remember {
                 GbLibraryUi(
@@ -402,6 +411,16 @@ class MainActivity : ComponentActivity() {
                 onSaveState = { slot -> slots.save(slot, playing = playing()) },
                 onLoadState = { slot -> slots.load(slot, playing = playing(), retro) },
                 onDeleteState = { slot -> slots.delete(slot, playing = playing()) },
+                loadUndoable = slots.loadUndoable,
+                onUndoLoadState = { slots.undoLoad(playing = playing(), retro) },
+                // Shown as it runs: never while the wireless cable is linked.
+                fastForward = player.fastForward && !wireless.linked,
+                onFastForwardChange = { on -> player.setFastForward(on) },
+                onScreenshot = {
+                    library.loadedGame?.let { game ->
+                        GbScreenshot.capture(applicationContext, scope, playback.frame, game.filename)
+                    }
+                },
             )
         }
     }

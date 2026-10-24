@@ -151,6 +151,11 @@ fun RavenEmuApp(
     wirelessLink: WirelessLinkView = WirelessLinkView(),
     onWirelessLinkChoice: ((Long?) -> Unit)? = null,
     onWirelessUnplug: (() -> Unit)? = null,
+    fastForward: Boolean = false,
+    onFastForwardChange: ((Boolean) -> Unit)? = null,
+    onScreenshot: (() -> Unit)? = null,
+    loadUndoable: Boolean = false,
+    onUndoLoadState: (() -> Unit)? = null,
     deltaSkins: List<DeltaSkinEntry> = emptyList(),
     onImportSkin: (() -> Unit)? = null,
     onToggleSkin: ((String) -> Unit)? = null,
@@ -321,6 +326,11 @@ fun RavenEmuApp(
                     wirelessLink = wirelessLink,
                     onWirelessLinkChoice = onWirelessLinkChoice,
                     onWirelessUnplug = onWirelessUnplug,
+                    fastForward = fastForward,
+                    onFastForwardChange = onFastForwardChange,
+                    onScreenshot = onScreenshot,
+                    loadUndoable = loadUndoable,
+                    onUndoLoadState = onUndoLoadState,
                     onBack = {
                         onStopVideo?.invoke()
                         screen = RavenScreen.LIBRARY

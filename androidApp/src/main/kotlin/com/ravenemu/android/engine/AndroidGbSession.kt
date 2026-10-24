@@ -93,6 +93,7 @@ class AndroidGbSession(private val resolver: ContentResolver, filesDir: File) : 
                     active = replacement
                     activeRomKey = romKey
                     traits = fixed
+                    forgetUndoLocked()
                     transferred = true
                     previous?.close()
                 }
@@ -177,6 +178,7 @@ class AndroidGbSession(private val resolver: ContentResolver, filesDir: File) : 
                 active = null
                 activeRomKey = null
                 traits = null
+                forgetUndoLocked()
             }
         }
     }
@@ -236,6 +238,20 @@ class AndroidGbSession(private val resolver: ContentResolver, filesDir: File) : 
      */
     @Volatile internal var stateLoadLocked = false
 
+    // The game as it was just before the last state load (under [lock]).
+    private var undoState: ByteArray? = null
+    private var undoCore: NativeCore? = null
+
+    /** A state was loaded, and the game as it was before can come back. */
+    @Volatile var loadUndoable = false
+        private set
+
+    private fun forgetUndoLocked() {
+        undoState = null
+        undoCore = null
+        loadUndoable = false
+    }
+
     fun loadStateSlot(slot: Int = 0) = saveLock.withLock {
         RetroHardcorePolicy.requireStateLoadAllowed(stateLoadLocked)
         val key = lock.withLock {
@@ -253,9 +269,31 @@ class AndroidGbSession(private val resolver: ContentResolver, filesDir: File) : 
             for (button in heldButtons) core.button(button.nativeCode, false)
             heldButtons.clear()
             buttons.releaseAll()
+            // Kept in memory only: a load by mistake can be undone.
+            val before = core.saveState()
             core.loadState(state)
+            undoState = before
+            undoCore = core
+            loadUndoable = true
         }
         Log.d(TAG, "Save state slot ${slot + 1} restored for ROM ${key.take(12)}")
+    }
+
+    /** Puts the game back as it was before the last state load, under the same rules. */
+    fun undoLoadState() = saveLock.withLock {
+        lock.withLock {
+            check(!closed) { "La session a été fermée." }
+            RetroHardcorePolicy.requireStateLoadAllowed(stateLoadLocked)
+            check(remote == null) { "Câble sans fil relié : chargement d'état impossible." }
+            val core = active ?: error("Aucun jeu chargé.")
+            val state = undoState?.takeIf { undoCore === core } ?: error("Aucun chargement à annuler.")
+            for (button in heldButtons) core.button(button.nativeCode, false)
+            heldButtons.clear()
+            buttons.releaseAll()
+            core.loadState(state)
+            forgetUndoLocked()
+        }
+        Log.d(TAG, "State load undone")
     }
 
     /** Only deletes the selected slot; cartridge SRAM is kept untouched. */
@@ -433,6 +471,7 @@ class AndroidGbSession(private val resolver: ContentResolver, filesDir: File) : 
                     active = null
                     activeRomKey = null
                     traits = null
+                    forgetUndoLocked()
                 }
             }
         }

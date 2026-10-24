@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
 import com.ravenemu.shared.settings.GbDisplayFilter
+import com.ravenemu.shared.player.FAST_FORWARD_SPEED
 import com.ravenemu.shared.player.GbVideoMetrics
 import com.ravenemu.shared.player.GbVideoMetricsAccumulator
 import com.ravenemu.shared.library.LoadedGameInfo
@@ -44,6 +45,8 @@ internal class GbPlayback(
     @Volatile var activeAudio: AndroidGbAudioOutput? = null
         private set
     @Volatile var lastAudioReport: String = "Aucune session audio enregistrée.\n"
+    /** Fast forward, written by the player screen (see GbPlayerUi). */
+    @Volatile var fastForward = false
     private val cartridgeRumble by lazy { CartridgeRumble(context) }
     private val cartridgeSensors by lazy { CartridgeSensors(context) }
     private val vsync by lazy { DisplayVsync(context) }
@@ -167,7 +170,17 @@ internal class GbPlayback(
                     // A late frame is still emulated and heard;
                     // only its image is skipped (see GbFramePacer).
                     val renderVideo = pacer.shouldRender(System.nanoTime())
-                    if (!step(renderVideo)) break
+                    // Fast forward runs several frames in one period. Only the
+                    // last is shown and heard: the sound keeps its pitch and
+                    // its pace, in pieces, and the audio queue stays fed.
+                    val frames = if (fastForward) FAST_FORWARD_SPEED else 1
+                    var running = true
+                    for (index in 1..frames) {
+                        val last = index == frames
+                        running = step(renderVideo && last, sound = last)
+                        if (!running) break
+                    }
+                    if (!running) break
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (error: Exception) {
@@ -184,13 +197,16 @@ internal class GbPlayback(
             }
         }
 
-        /** Emulates, plays and (when [renderVideo]) shows one frame; false once the core stops. */
-        private suspend fun step(renderVideo: Boolean): Boolean {
+        /**
+         * Emulates one frame, plays its sound when [sound] and shows it when
+         * [renderVideo]; false once the core stops.
+         */
+        private suspend fun step(renderVideo: Boolean, sound: Boolean = true): Boolean {
             val nativeStart = System.nanoTime()
             val sampleCount =
                 gameSession.nextFrameWithAudioInto(pixels, samples, sensors) ?: return false
             val nativeElapsed = System.nanoTime() - nativeStart
-            submitAudio(sampleCount)
+            if (sound) submitAudio(sampleCount)
             rumble?.let { if (gameSession.rumbleActive) it.pulse() else it.release() }
             val conversionNanos = if (renderVideo) showFrame() else 0L
 

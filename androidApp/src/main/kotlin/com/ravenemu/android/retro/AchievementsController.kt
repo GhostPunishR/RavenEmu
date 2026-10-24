@@ -211,6 +211,13 @@ internal class AchievementsController(
         resetProgress()
     }
 
+    /** The game back as before the last state load: the SDK starts over from it too. */
+    suspend fun undoLoadState() = withContext(dispatcher) {
+        check(!stopped)
+        session.undoLoadState()
+        resetProgress()
+    }
+
     /**
      * The game menu pauses the game. In Hardcore the SDK limits how often a
      * game may pause; it records the pause when it allows it. Blocks the
