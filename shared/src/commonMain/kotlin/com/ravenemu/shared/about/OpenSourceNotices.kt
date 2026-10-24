@@ -23,6 +23,13 @@ object OpenSourceNotices {
             text = MIT_RCHEEVOS,
         ),
         OpenSourceNotice(
+            name = "Palettes de la Game Boy Color, The Cutting Room Floor",
+            usage = "Couleurs des jeux Game Boy sur GBC, compilées avec RavenCore",
+            license = "Licence CC BY 3.0",
+            url = "https://tcrf.net/Notes:Game_Boy_Color_Bootstrap_ROM",
+            text = CC_BY_TCRF_PALETTES,
+        ),
+        OpenSourceNotice(
             name = "Kotlin, kotlinx, AndroidX et Compose Multiplatform",
             usage = "Langage, bibliothèques et interface de l'application",
             license = "Licence Apache 2.0",
@@ -54,6 +61,15 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE."""
+
+// Attribution required by CC BY 3.0, as in RavenCore's NOTICE.md.
+private const val CC_BY_TCRF_PALETTES = """Les tables de couleurs que la boot ROM de la Game Boy Color donne à chaque jeu Game Boy, et celles des combinaisons de touches tenues pendant son logo, reprennent les données de The Cutting Room Floor, « Notes:Game Boy Color Bootstrap ROM » (révision 2183057) :
+https://tcrf.net/Notes:Game_Boy_Color_Bootstrap_ROM
+
+Licence : Creative Commons Attribution 3.0 Unported (CC BY 3.0)
+https://creativecommons.org/licenses/by/3.0/
+
+Modification : couleurs converties de leur RGB 24 bits au RGB555 de la console. Ces tables sont compilées dans RavenCore (cores/gb/src/ppu/compatibility_palettes.hpp)."""
 
 private const val APACHE_2_0 = """Apache License
 Version 2.0, January 2004
