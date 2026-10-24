@@ -26,6 +26,9 @@ class SettingsTest {
         assertEquals("off", defaults.frameBlending, "Le mélange d'images est coupé par défaut")
         assertFalse(defaults.integerScale)
         assertTrue(defaults.rewind, "Le retour arrière est disponible par défaut")
+        assertFalse(defaults.gbInColor || defaults.gbcOnGba, "Chaque jeu tourne sur sa propre console par défaut")
+        assertEquals(0, defaults.gbColors)
+        assertEquals(0, defaults.gbaBios, "Le BIOS de RavenCore par défaut")
 
         val frame = intArrayOf(0xff102030.toInt(), 0xff8899aa.toInt())
         val reference = frame.copyOf()
@@ -52,7 +55,7 @@ class SettingsTest {
             audioVolume = 150, videoPalette = "unsupported",
             videoBrightness = -200, videoContrast = 400,
             controlsScale = 900, controlsGap = -5, controlsStyle = "unknown",
-            frameBlending = "blur",
+            frameBlending = "blur", gbColors = 99, gbaBios = 5,
         ).normalized()
         assertEquals(100, settings.audioVolume)
         assertEquals("original", settings.videoPalette)
@@ -62,6 +65,9 @@ class SettingsTest {
         assertEquals(20, settings.controlsGap)
         assertEquals("classic", settings.controlsStyle)
         assertEquals("off", settings.frameBlending)
+        assertEquals(GB_COLORS.lastIndex, settings.gbColors)
+        assertEquals(2, settings.gbaBios)
+        assertEquals(14, GB_COLORS.size, "The boot ROM's colors, then the 13 RavenCore combinations")
     }
 
     @Test

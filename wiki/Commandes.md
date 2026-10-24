@@ -65,7 +65,7 @@ L'avance rapide est permise en mode Hardcore de RetroAchievements. Elle reste sa
 Maintenez le bouton **◀◀** en haut du lecteur, ou le clic du stick gauche d'une manette (L3), pour rejouer la partie à l'envers, image par image et sans le son. **◀◀ Retour arrière** s'affiche sur l'image, puis **Plus loin impossible** une fois la plus ancienne image gardée atteinte. En relâchant, la partie reprend de là.
 
 - Chaque image est gardée en mémoire native, en différences : environ 4,5 Ko par image pour un jeu GBA, jusqu'à 32 Mo, soit environ deux minutes de jeu GBA et davantage en GB et GBC. Les plus anciennes partent d'abord.
-- Le réglage **Paramètres → Commandes → Retour arrière**, activé par défaut, le coupe et libère cette mémoire.
+- Le réglage **Paramètres → Interface → Retour arrière**, activé par défaut, le coupe et libère cette mémoire.
 - Indisponible en mode Hardcore de RetroAchievements et tant que le câble sans fil est relié. En Softcore, les images rejouées ne comptent pas pour les succès.
 - Il ne concerne pas deux jeux reliés sur un même téléphone.
 

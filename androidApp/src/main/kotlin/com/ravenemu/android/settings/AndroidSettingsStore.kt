@@ -24,6 +24,10 @@ internal class AndroidSettingsStore(context: Context) {
         frameBlending = prefs.getString("frame_blending", "off") ?: "off",
         integerScale = prefs.getBoolean("integer_scale", false),
         rewind = prefs.getBoolean("rewind", true),
+        gbInColor = prefs.getBoolean("gb_in_color", false),
+        gbColors = prefs.getInt("gb_colors", 0),
+        gbcOnGba = prefs.getBoolean("gbc_on_gba", false),
+        gbaBios = prefs.getInt("gba_bios", 0),
         cartridgeRumble = prefs.getBoolean("cartridge_rumble", true),
         cartridgeSensors = prefs.getBoolean("cartridge_sensors", true),
         solarLightAuto = prefs.getBoolean("solar_light_auto", true),
@@ -58,6 +62,10 @@ internal class AndroidSettingsStore(context: Context) {
             .putString("frame_blending", safe.frameBlending)
             .putBoolean("integer_scale", safe.integerScale)
             .putBoolean("rewind", safe.rewind)
+            .putBoolean("gb_in_color", safe.gbInColor)
+            .putInt("gb_colors", safe.gbColors)
+            .putBoolean("gbc_on_gba", safe.gbcOnGba)
+            .putInt("gba_bios", safe.gbaBios)
             .putBoolean("cartridge_rumble", safe.cartridgeRumble)
             .putBoolean("cartridge_sensors", safe.cartridgeSensors)
             .putBoolean("solar_light_auto", safe.solarLightAuto)

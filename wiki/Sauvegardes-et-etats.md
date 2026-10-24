@@ -27,6 +27,16 @@ Dans le menu **⋮** du lecteur, chaque jeu dispose de **quatre emplacements**, 
 - Supprimer un emplacement demande confirmation et ne supprime pas le fichier batterie de la cartouche.
 - Une miniature absente ou illisible ne doit pas empêcher le chargement de l'état.
 
+## Codes de triche
+
+**Codes de triche**, dans le menu **⋮**, garde une liste de codes par jeu. Chaque code s'active, se désactive ou se supprime ; un nouveau code est vérifié par RavenCore, qui affiche la raison d'un refus.
+
+- Game Boy et Game Boy Color : Game Genie (`ABC-DEF-GHI` ou `ABC-DEF`) et GameShark (8 chiffres, comme `010238CD`).
+- Game Boy Advance : Codebreaker non chiffré (`XAAAAAAA YYYY`), GameShark v1/v2 et Action Replay v3 (`XXXXXXXX YYYYYYYY`) tels que l'appareil les affiche.
+- Un code de plusieurs lignes s'écrit d'un bloc. Les codes actifs s'appliquent dès l'image suivante, ne sont jamais enregistrés dans un état, et ne tournent pas en mode Hardcore.
+
+La liste est gardée dans le stockage privé de l'application, au format de RavenEmu PC (une ligne par code : `1`, nom et code séparés par des tabulations).
+
 ## Captures d'écran
 
 **Capture d'écran**, dans le menu **⋮**, enregistre l'image du jeu en PNG, telle que le lecteur la montre (couleurs et corrections comprises). Elle est agrandie quatre fois sans lissage : 960 × 640 pour la GBA, 640 × 576 pour la GB et la GBC. Le nom du fichier reprend celui du jeu, avec la date et l'heure.

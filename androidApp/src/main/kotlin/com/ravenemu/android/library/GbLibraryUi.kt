@@ -207,10 +207,19 @@ internal class GbLibraryUi(
         }
     }
 
+    // Settings > Console changed: the next launch loads its game afresh.
+    private var reloadNext = false
+
+    /** The console options take effect at the next launch, even of the game already loaded. */
+    fun reloadOnNextLaunch() {
+        reloadNext = true
+    }
+
     /** Loads the stored game [id] unless it already is, then [onReady]. */
     fun launch(id: String, onReady: () -> Unit) = exclusive {
         try {
-            if (activeGameId != id || loadedGame == null) {
+            if (activeGameId != id || loadedGame == null || reloadNext) {
+                reloadNext = false
                 val entry = games.firstOrNull { it.id == id }
                     ?: error("Ce jeu n'est plus dans la bibliothèque.")
                 val (result, rom) = withContext(Dispatchers.IO) {

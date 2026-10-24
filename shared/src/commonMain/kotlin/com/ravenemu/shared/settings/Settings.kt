@@ -13,6 +13,11 @@ data class SettingsCapabilities(
     val diagnostics: Boolean = true,
     val audioStartupFade: Boolean = true,
     val wirelessLink: Boolean = true,
+    /** Settings > Console: Game Boy colors, GBC of a GBA, real GBA BIOS. */
+    val console: Boolean = true,
+    /** Frame blending and rewind, which the host's player runs. */
+    val frameBlending: Boolean = true,
+    val rewind: Boolean = true,
 )
 
 /**
@@ -56,6 +61,14 @@ data class Settings(
     val integerScale: Boolean = false,
     /** Each frame is kept so that the game can play backwards (not in Hardcore). */
     val rewind: Boolean = true,
+    /** Game Boy games run on a Game Boy Color, which colors them. */
+    val gbInColor: Boolean = false,
+    /** Their colors: 0 the boot ROM's choice for each game, 1 to 13 a button combination (see [GB_COLORS]). */
+    val gbColors: Int = 0,
+    /** GB and GBC games on the GBC inside a Game Boy Advance (Zelda Oracle, Shantae extras). */
+    val gbcOnGba: Boolean = false,
+    /** GBA BIOS: 0 RavenCore's, 1 the player's real BIOS, 2 the real one without its animation. */
+    val gbaBios: Int = 0,
     /** Rumble cartridges drive the phone's vibrator. */
     val cartridgeRumble: Boolean = true,
     /**
@@ -96,11 +109,23 @@ data class Settings(
         controlsGap = controlsGap.coerceIn(20, 80),
         controlsStyle = controlsStyle.takeIf { it in listOf("classic", "contrast") } ?: "classic",
         solarLightLevel = solarLightLevel.coerceIn(0, 100),
+        gbColors = gbColors.coerceIn(0, GB_COLORS.lastIndex),
+        gbaBios = gbaBios.coerceIn(0, 2),
         retroPopupPosition = retroPopupPosition.takeIf { it in listOf("top", "bottom") } ?: "top",
         retroPopupSeconds = retroPopupSeconds.coerceIn(2, 10),
         retroProgressSeconds = retroProgressSeconds.coerceIn(1, 5),
     )
 }
+
+/**
+ * The colors a Game Boy game can get on a Game Boy Color, in RavenCore's
+ * order: the boot ROM's choice, then the combinations held during its logo.
+ */
+val GB_COLORS = listOf(
+    "Celles de la boot ROM, jeu par jeu", "Gris", "Haut : brun", "A + Haut : rouge", "B + Haut : sépia",
+    "Gauche : bleu", "A + Gauche : bleu-violet", "B + Gauche : gris", "Bas : pastel", "A + Bas : jaune et rouge",
+    "B + Bas : jaune et brun", "Droite : vert et rouge", "A + Droite : vert et bleu", "B + Droite : négatif",
+)
 
 /** Apply an optional display treatment after the native GB/GBC/GBA frame. */
 object GbDisplayFilter {

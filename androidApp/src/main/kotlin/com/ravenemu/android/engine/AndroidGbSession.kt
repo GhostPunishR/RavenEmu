@@ -49,6 +49,27 @@ class AndroidGbSession(private val resolver: ContentResolver, filesDir: File) : 
     // Wireless cable of the running game; created and destroyed between frames.
     @Volatile private var remote: NativeRemoteLink? = null
 
+    /**
+     * How the next games start (Settings > Console), read at each load. A
+     * state only loads on the console that took it.
+     */
+    class ConsoleOptions(
+        val gbInColor: Boolean = false,
+        /** 0 the boot ROM's colors for each game, 1 to 13 a button combination. */
+        val gbColors: Int = NativeCore.GBC_COLORS_AUTO,
+        val gbcOnGba: Boolean = false,
+        /** The player's GBA BIOS (16 KiB), or null for RavenCore's. */
+        val gbaBios: ByteArray? = null,
+        val skipBiosIntro: Boolean = false,
+    )
+    @Volatile var console = ConsoleOptions()
+
+    // The game runs on a GBC that colors it: its colors can change while it runs.
+    private var colorable = false
+    // The cheats the player turned on, and those the console runs (under [lock]).
+    private var wantedCheats: List<String> = emptyList()
+    private var runningCheats: List<String> = emptyList()
+
     /** Must be called off the UI thread. */
     fun load(uri: Uri): LoadedGameInfo {
         val filename = displayName(uri)
@@ -68,7 +89,10 @@ class AndroidGbSession(private val resolver: ContentResolver, filesDir: File) : 
         }
         val romKey = GbBatteryStore.keyForRom(bytes)
         val platform = RomImportPolicy.platformOf(filename, bytes)
-        val replacement = NativeCore(NativeCore.systemFor(platform))
+        val options = console
+        val model = NativeCore.modelFor(platform, options.gbInColor, options.gbcOnGba)
+        val replacement = NativeCore(model)
+        val inColor = platform == GamePlatform.GB && model != NativeCore.GB
         var transferred = false
         try {
             return saveLock.withLock {
@@ -76,6 +100,11 @@ class AndroidGbSession(private val resolver: ContentResolver, filesDir: File) : 
                 // re-import of the same ROM must not load a stale snapshot.
                 saveBatteryIfDirtyLocked()
                 val savedBattery = batteryStore.read(romKey)
+                if (inColor) replacement.setGbcColors(options.gbColors)
+                // Read at load: set before it.
+                options.gbaBios?.takeIf { platform == GamePlatform.GBA }?.let { bios ->
+                    replacement.setGbaBios(bios, options.skipBiosIntro)
+                }
                 replacement.load(bytes, savedBattery)
                 val result = LoadedGameInfo(
                     filename = filename,
@@ -93,6 +122,7 @@ class AndroidGbSession(private val resolver: ContentResolver, filesDir: File) : 
                     active = replacement
                     activeRomKey = romKey
                     traits = fixed
+                    colorable = inColor
                     forgetGameLocked()
                     transferred = true
                     previous?.close()
@@ -252,12 +282,39 @@ class AndroidGbSession(private val resolver: ContentResolver, filesDir: File) : 
         loadUndoable = false
     }
 
-    // Another game, or none: its undo and its rewound frames go.
+    // Another game, or none: its undo, its rewound frames and its cheats go.
     private fun forgetGameLocked() {
         forgetUndoLocked()
         rewind?.close()
         rewind = null
+        wantedCheats = emptyList()
+        runningCheats = emptyList()
     }
+
+    /** The Game Boy colors of a game running on a GBC, at once. */
+    fun applyGbColors(colors: Int) = lock.withLock {
+        if (colorable) active?.setGbcColors(colors)
+    }
+
+    /** The cheats to run from the next frame: never in Hardcore, whatever is asked. */
+    fun setCheats(codes: List<String>) = lock.withLock {
+        wantedCheats = codes.toList()
+    }
+
+    // Under the native lock, before a frame: the cheats follow the list and the mode.
+    private fun syncCheatsLocked(core: NativeCore) {
+        val wanted = if (stateLoadLocked) emptyList() else wantedCheats
+        if (wanted == runningCheats) return
+        runningCheats = wanted
+        try {
+            core.setCheats(wanted)
+        } catch (error: IllegalStateException) {
+            Log.w(TAG, "Cheats refused", error)
+        }
+    }
+
+    /** The key of the running game's saves and cheats, or null. */
+    fun currentRomKey(): String? = lock.withLock { activeRomKey }
 
     // The last frames of the running game, to play it backwards (under [lock]).
     private var rewind: NativeRewind? = null
@@ -364,6 +421,7 @@ class AndroidGbSession(private val resolver: ContentResolver, filesDir: File) : 
             val core = active ?: return@withLock null
             applyButtons(core, buttons.takeFrame())
             sensors?.applyTo(core)
+            syncCheatsLocked(core)
             core.frameInto(pixels)
             rumbleActive = core.rumbleActive()
             linkWanted = core.linkWanted()

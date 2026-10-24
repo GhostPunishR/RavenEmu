@@ -142,10 +142,12 @@ internal fun GbVideoScreen(
     onScreenshot: (() -> Unit)? = null,
     loadUndoable: Boolean = false,
     onUndoLoadState: (() -> Unit)? = null,
+    cheats: GbCheatsView? = null,
     onBack: () -> Unit,
 ) {
     var gameMenuOpen by remember { mutableStateOf(false) }
     var retroPanelOpen by remember { mutableStateOf(false) }
+    var cheatsPanelOpen by remember { mutableStateOf(false) }
     var selectedSlot by remember { mutableStateOf(0) }
     var confirmation by remember { mutableStateOf<Pair<Int, String>?>(null) }
     fun setGameMenu(open: Boolean) {
@@ -260,7 +262,9 @@ internal fun GbVideoScreen(
                     .padding(start = 18.dp, end = 18.dp, bottom = 28.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                if (retroPanelOpen) {
+                if (cheatsPanelOpen && cheats != null) {
+                    CheatsPanel(cheats) { cheatsPanelOpen = false }
+                } else if (retroPanelOpen) {
                     TextButton(onClick = { retroPanelOpen = false }) {
                         Text("‹ Retour au menu du jeu", color = RavenAccent)
                     }
@@ -325,6 +329,7 @@ internal fun GbVideoScreen(
                             modifier = Modifier.fillMaxWidth(),
                         ) { Text("Annuler le chargement") }
                     }
+                    if (cheats != null) CheatsMenuButton(cheats) { cheatsPanelOpen = true }
                     if (onScreenshot != null) {
                         OutlinedButton(
                             onClick = onScreenshot,

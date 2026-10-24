@@ -28,9 +28,19 @@ Un `.gb` peut donc apparaître dans la page GBC. Les profils DMG vert et Pocket 
 
 Lors de la reclassification des anciennes importations de cette nouvelle version, la sauvegarde de cartouche reste associée au hash. Un état enregistré sur GB ne se recharge pas automatiquement sur GBC. Voir [Sauvegardes et états](https://github.com/GhostPunishR/RavenEmu/blob/main/wiki/Sauvegardes-et-etats.md).
 
+## Paramètres → Console
+
+Ces options sont prises en compte au lancement du jeu, sauf les couleurs, qui changent aussitôt. Elles ne concernent pas deux jeux reliés sur un même téléphone.
+
+- **Jeux Game Boy en couleurs** : les jeux Game Boy tournent sur une Game Boy Color, qui les colore. Par défaut, ce sont les couleurs que sa boot ROM choisit pour chaque jeu (Pokémon Rouge en rouge, Bleu en bleu…) ; on peut aussi choisir le gris ou l'une des 12 combinaisons de touches que l'on tenait pendant le logo de la console.
+- **Game Boy Color d'une Game Boy Advance** : la GBC intégrée à une Game Boy Advance. Des jeux comme Zelda Oracle ou Shantae débloquent alors leurs bonus.
+- **BIOS GBA** : celui de RavenCore (par défaut), ou le vrai BIOS de votre console, avec ou sans son animation de démarrage. Choisissez son fichier (16 Kio exactement) avec **Choisir le fichier du BIOS** : RavenEmu en garde une copie privée. Aucun BIOS n'est fourni. S'il manque, un message le dit au lancement et RavenCore utilise le sien.
+
+Un état ne se recharge que sur la console qui l'a pris : même mode (Game Boy, Game Boy Color ou GBC d'une GBA) et même BIOS. Les succès RetroAchievements gardent la console d'origine du jeu, quel que soit le matériel émulé ; ces options restent permises en Hardcore.
+
 ## Game Boy Advance
 
-Le lecteur accepte jusqu'à 32 Mio, adapte les dimensions de l'image et affiche L/R. Le type de sauvegarde et l'horloge de cartouche sont détectés par RavenCore. Aucun fichier BIOS externe n'est demandé à l'utilisateur par ce lecteur.
+Le lecteur accepte jusqu'à 32 Mio, adapte les dimensions de l'image et affiche L/R. Le type de sauvegarde et l'horloge de cartouche sont détectés par RavenCore. Aucun fichier BIOS n'est nécessaire : le vrai BIOS reste facultatif (voir ci-dessus).
 
 Une ROM acceptée et un build réussi ne garantissent pas une partie jouable ou une performance suffisante.
 

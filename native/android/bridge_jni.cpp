@@ -202,6 +202,11 @@ JNIEXPORT jstring JNICALL
 Java_com_ravenemu_android_engine_NativeCore_nativeLastError(JNIEnv* env, jobject) {
     return env->NewStringUTF(ravenemu_last_error());
 }
+// The same, from NativeCore's companion (no handle): a refused cheat's reason.
+JNIEXPORT jstring JNICALL
+Java_com_ravenemu_android_engine_NativeCore_nativeLastErrorStatic(JNIEnv* env, jclass) {
+    return env->NewStringUTF(ravenemu_last_error());
+}
 // Declared by NativeAchievementsBridge: the engine version in the User-Agent.
 JNIEXPORT jstring JNICALL
 Java_com_ravenemu_android_retro_NativeAchievementsBridge_engineVersion(JNIEnv* env, jclass) {
@@ -368,6 +373,62 @@ Java_com_ravenemu_android_link_NativeLink_nativeLastError(JNIEnv* env, jobject) 
 JNIEXPORT jboolean JNICALL
 Java_com_ravenemu_android_engine_NativeCore_nativeLinkWanted(JNIEnv*, jobject, jlong pointer) {
     return ravenemu_link_wanted(handle(pointer)) ? JNI_TRUE : JNI_FALSE;
+}
+
+// Couleurs d'un jeu Game Boy sur une GBC (enum ravenemu_gbc_colors).
+JNIEXPORT jboolean JNICALL
+Java_com_ravenemu_android_engine_NativeCore_nativeSetGbcColors(JNIEnv*, jobject, jlong pointer, jint colors) {
+    return ravenemu_set_gbc_colors(handle(pointer), colors) ? JNI_TRUE : JNI_FALSE;
+}
+
+// Vrai BIOS GBA (16 Kio), ou celui de RavenCore quand bios est nul.
+JNIEXPORT jboolean JNICALL
+Java_com_ravenemu_android_engine_NativeCore_nativeSetGbaBios(
+    JNIEnv* env, jobject, jlong pointer, jbyteArray bios, jboolean skipIntro
+) {
+    if (!bios) return ravenemu_set_gba_bios(handle(pointer), nullptr, 0, 0) ? JNI_TRUE : JNI_FALSE;
+    auto* bytes = env->GetByteArrayElements(bios, nullptr);
+    if (!bytes) return JNI_FALSE;
+    const auto ok = ravenemu_set_gba_bios(handle(pointer), reinterpret_cast<const uint8_t*>(bytes),
+        static_cast<size_t>(env->GetArrayLength(bios)), skipIntro ? 1 : 0);
+    env->ReleaseByteArrayElements(bios, bytes, JNI_ABORT);
+    return ok ? JNI_TRUE : JNI_FALSE;
+}
+
+// Un code de triche utilisable pour cette console ; sinon la raison, en français,
+// dans nativeLastError.
+JNIEXPORT jboolean JNICALL
+Java_com_ravenemu_android_engine_NativeCore_nativeCheckCheat(JNIEnv* env, jclass, jint system, jstring code) {
+    if (!code) return JNI_FALSE;
+    const char* text = env->GetStringUTFChars(code, nullptr);
+    if (!text) return JNI_FALSE;
+    const auto ok = ravenemu_check_cheat(system, text);
+    env->ReleaseStringUTFChars(code, text);
+    return ok ? JNI_TRUE : JNI_FALSE;
+}
+
+// Remplace les codes actifs à partir de l'image suivante ; un tableau vide les retire.
+JNIEXPORT jboolean JNICALL
+Java_com_ravenemu_android_engine_NativeCore_nativeSetCheats(JNIEnv* env, jobject, jlong pointer, jobjectArray codes) {
+    const jsize count = codes ? env->GetArrayLength(codes) : 0;
+    std::vector<std::string> owned;
+    owned.reserve(static_cast<std::size_t>(count));
+    for (jsize i = 0; i < count; ++i) {
+        auto* code = static_cast<jstring>(env->GetObjectArrayElement(codes, i));
+        if (!code) return JNI_FALSE;
+        const char* text = env->GetStringUTFChars(code, nullptr);
+        if (!text) {
+            env->DeleteLocalRef(code);
+            return JNI_FALSE;
+        }
+        owned.emplace_back(text);
+        env->ReleaseStringUTFChars(code, text);
+        env->DeleteLocalRef(code);
+    }
+    std::vector<const char*> pointers;
+    pointers.reserve(owned.size());
+    for (const auto& code : owned) pointers.push_back(code.c_str());
+    return ravenemu_set_cheats(handle(pointer), pointers.data(), pointers.size()) ? JNI_TRUE : JNI_FALSE;
 }
 
 // Câble link vers la console d'un autre appareil.

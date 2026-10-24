@@ -58,6 +58,7 @@ private enum class Page(val label: String) {
     GENERAL("Général"),
     AUDIO("Audio"),
     VIDEO("Vidéo"),
+    CONSOLE("Console"),
     INTERFACE("Interface"),
     ABOUT("À propos"),
 }
@@ -82,6 +83,9 @@ fun SettingsScreen(
     onImportSkin: (() -> Unit)? = null,
     onToggleSkin: ((String) -> Unit)? = null,
     onDeleteSkin: ((String) -> Unit)? = null,
+    gbaBiosInstalled: Boolean = false,
+    onChooseGbaBios: (() -> Unit)? = null,
+    onRemoveGbaBios: (() -> Unit)? = null,
     aboutOnly: Boolean,
     onBack: () -> Unit,
 ) {
@@ -126,7 +130,8 @@ fun SettingsScreen(
                 }
                 Page.GENERAL -> GeneralPage(settings, capabilities, editable, update)
                 Page.AUDIO -> AudioPage(settings, capabilities, editable, update)
-                Page.VIDEO -> VideoPage(settings, editable, update)
+                Page.VIDEO -> VideoPage(settings, capabilities, editable, update)
+                Page.CONSOLE -> ConsolePage(settings, editable, update, gbaBiosInstalled, onChooseGbaBios, onRemoveGbaBios)
                 Page.INTERFACE -> {
                     ControlsPage(settings, capabilities, editable, update)
                     if (capabilities.deltaSkins) {
@@ -180,8 +185,11 @@ private fun HomePage(retroAvailable: Boolean, capabilities: SettingsCapabilities
         else -> "Pause automatique"
     }) { onOpen(Page.GENERAL) }
     CategoryRow("Audio", "Son du jeu et volume") { onOpen(Page.AUDIO) }
-    CategoryRow("Vidéo", "Couleurs, correction LCD, luminosité et contraste") { onOpen(Page.VIDEO) }
-    CategoryRow("Interface", if (capabilities.cartridgeHardware) "Vibrations, capteurs, commandes, style et Skin Delta" else "Commandes tactiles et style") { onOpen(Page.INTERFACE) }
+    CategoryRow("Vidéo", "Couleurs, correction LCD, mélange d'images, taille, luminosité et contraste") { onOpen(Page.VIDEO) }
+    if (capabilities.console) {
+        CategoryRow("Console", "Jeux Game Boy en couleurs, GBC d'une GBA, BIOS GBA") { onOpen(Page.CONSOLE) }
+    }
+    CategoryRow("Interface", if (capabilities.cartridgeHardware) "Vibrations, capteurs, commandes, retour arrière, style et Skin Delta" else "Commandes tactiles, retour arrière et style") { onOpen(Page.INTERFACE) }
     CategoryRow("À propos", "Version, auteur, confidentialité et licences") {
         onOpen(Page.ABOUT)
     }
@@ -283,7 +291,7 @@ private fun AudioPage(settings: Settings, capabilities: SettingsCapabilities, ed
 }
 
 @Composable
-private fun VideoPage(settings: Settings, editable: Boolean, update: (Settings) -> Unit) {
+private fun VideoPage(settings: Settings, capabilities: SettingsCapabilities, editable: Boolean, update: (Settings) -> Unit) {
     GroupTitle("Écran")
     SettingDescription(
         "Profil de couleurs",
@@ -314,20 +322,7 @@ private fun VideoPage(settings: Settings, editable: Boolean, update: (Settings) 
         settings.lcdCorrectionGba,
         editable,
     ) { update(settings.copy(lcdCorrectionGba = it)) }
-    GroupTitle("Mélange d'images")
-    SettingDescription(
-        "Rémanence de l'écran",
-        "Certains jeux font clignoter un objet d'une image à l'autre pour le rendre transparent, en comptant sur la lenteur de l'écran d'origine (F-Zero, Castlevania). Le mélange le montre transparent ; la rémanence laisse une traîne.",
-    )
-    ChoiceRow("Désactivé (défaut)", settings.frameBlending == "off", editable) {
-        update(settings.copy(frameBlending = "off"))
-    }
-    ChoiceRow("Mélange de deux images", settings.frameBlending == "mix", editable) {
-        update(settings.copy(frameBlending = "mix"))
-    }
-    ChoiceRow("Rémanence", settings.frameBlending == "ghosting", editable) {
-        update(settings.copy(frameBlending = "ghosting"))
-    }
+    if (capabilities.frameBlending) FrameBlendingChoice(settings, editable, update)
     GroupTitle("Taille de l'image")
     SettingSwitch(
         "Pixels entiers",
@@ -352,6 +347,91 @@ private fun VideoPage(settings: Settings, editable: Boolean, update: (Settings) 
         ))
     }, enabled = editable) {
         Text("Rétablir l'affichage d'origine", color = Accent)
+    }
+}
+
+/** Mixing each image with the one before, for games that count on the slow LCD. */
+@Composable
+private fun FrameBlendingChoice(settings: Settings, editable: Boolean, update: (Settings) -> Unit) {
+    GroupTitle("Mélange d'images")
+    SettingDescription(
+        "Rémanence de l'écran",
+        "Certains jeux font clignoter un objet d'une image à l'autre pour le rendre transparent, en comptant sur la lenteur de l'écran d'origine (F-Zero, Castlevania). Le mélange le montre transparent ; la rémanence laisse une traîne.",
+    )
+    ChoiceRow("Désactivé (défaut)", settings.frameBlending == "off", editable) {
+        update(settings.copy(frameBlending = "off"))
+    }
+    ChoiceRow("Mélange de deux images", settings.frameBlending == "mix", editable) {
+        update(settings.copy(frameBlending = "mix"))
+    }
+    ChoiceRow("Rémanence", settings.frameBlending == "ghosting", editable) {
+        update(settings.copy(frameBlending = "ghosting"))
+    }
+}
+
+/** Holding ◀◀ plays the game backwards; off, the frames kept are freed. */
+@Composable
+private fun RewindSwitch(settings: Settings, editable: Boolean, update: (Settings) -> Unit) {
+    GroupTitle("Retour arrière")
+    SettingSwitch(
+        "Retour arrière",
+        "Maintenez le bouton ◀◀ en haut du lecteur, ou le clic du stick gauche de la manette, pour rejouer les dernières minutes à l'envers. Garde jusqu'à 32 Mo d'images. Indisponible en mode Hardcore et pendant le câble sans fil.",
+        settings.rewind,
+        editable,
+    ) { update(settings.copy(rewind = it)) }
+}
+
+/**
+ * The console that runs the games: Game Boy games on a GBC and their colors,
+ * the GBC of a GBA, and the GBA BIOS. All taken at the game's launch, except
+ * the colors, which change at once.
+ */
+@Composable
+private fun ConsolePage(
+    settings: Settings, editable: Boolean, update: (Settings) -> Unit,
+    gbaBiosInstalled: Boolean, onChooseGbaBios: (() -> Unit)?, onRemoveGbaBios: (() -> Unit)?,
+) {
+    GroupTitle("Game Boy et Game Boy Color")
+    SettingSwitch(
+        "Jeux Game Boy en couleurs",
+        "Les jeux Game Boy tournent sur une Game Boy Color, qui leur donne des couleurs : celles que sa boot ROM choisit pour chaque jeu (Pokémon Rouge en rouge, Bleu en bleu…), ou celles choisies ci-dessous. Un état pris dans l'autre mode ne se recharge pas. Pris en compte au lancement du jeu.",
+        settings.gbInColor,
+        editable,
+    ) { update(settings.copy(gbInColor = it)) }
+    SettingDescription(
+        "Couleurs des jeux Game Boy",
+        "Les combinaisons sont celles que l'on tenait pendant le logo de la console. Changées aussitôt, même en jeu.",
+    )
+    GB_COLORS.forEachIndexed { index, label ->
+        ChoiceRow(label, settings.gbColors == index, editable && settings.gbInColor) {
+            update(settings.copy(gbColors = index))
+        }
+    }
+    SettingSwitch(
+        "Game Boy Color d'une Game Boy Advance",
+        "La GBC intégrée à une Game Boy Advance : des jeux comme Zelda Oracle ou Shantae débloquent alors leurs bonus. Un état pris avec l'autre console ne se recharge pas. Pris en compte au lancement du jeu.",
+        settings.gbcOnGba,
+        editable,
+    ) { update(settings.copy(gbcOnGba = it)) }
+    GroupTitle("Game Boy Advance")
+    SettingDescription(
+        "BIOS",
+        "RavenCore répond lui-même aux appels du BIOS. Le vrai BIOS, celui de votre console, joue son animation de démarrage (sauf si vous la sautez) : choisissez son fichier (16 Kio), aucun BIOS n'est fourni. Un état ne se recharge qu'avec le BIOS qui l'a créé. Pris en compte au lancement du jeu.",
+    )
+    ChoiceRow("BIOS de RavenCore (défaut)", settings.gbaBios == 0, editable) { update(settings.copy(gbaBios = 0)) }
+    ChoiceRow("Vrai BIOS", settings.gbaBios == 1, editable) { update(settings.copy(gbaBios = 1)) }
+    ChoiceRow("Vrai BIOS, sans animation", settings.gbaBios == 2, editable) { update(settings.copy(gbaBios = 2)) }
+    Text(
+        if (gbaBiosInstalled) "Fichier du BIOS : installé" else "Fichier du BIOS : absent",
+        color = if (gbaBiosInstalled) TextMain else Muted, fontSize = 13.sp,
+    )
+    if (onChooseGbaBios != null) {
+        TextButton(onClick = onChooseGbaBios, enabled = editable) {
+            Text(if (gbaBiosInstalled) "Remplacer le fichier du BIOS" else "Choisir le fichier du BIOS", color = Accent)
+        }
+    }
+    if (gbaBiosInstalled && onRemoveGbaBios != null) {
+        TextButton(onClick = onRemoveGbaBios, enabled = editable) { Text("Retirer le fichier du BIOS", color = Muted) }
     }
 }
 
@@ -394,13 +474,7 @@ private fun ControlsPage(settings: Settings, capabilities: SettingsCapabilities,
     }
     Text("Le déplacement libre des boutons sera ajouté plus tard.",
         color = Muted, fontSize = 12.sp)
-    GroupTitle("Retour arrière")
-    SettingSwitch(
-        "Retour arrière",
-        "Maintenez le bouton ◀◀ en haut du lecteur, ou le clic du stick gauche de la manette, pour rejouer les dernières minutes à l'envers. Garde jusqu'à 32 Mo d'images. Indisponible en mode Hardcore et pendant le câble sans fil.",
-        settings.rewind,
-        editable,
-    ) { update(settings.copy(rewind = it)) }
+    if (capabilities.rewind) RewindSwitch(settings, editable, update)
     TextButton(onClick = {
         update(settings.copy(
             haptics = false, controlsScale = 100,
