@@ -41,6 +41,7 @@ import com.ravenemu.android.library.GbRomLibrary
 import com.ravenemu.android.library.LibraryOperationGate
 import com.ravenemu.android.link.AndroidLinkSession
 import com.ravenemu.android.link.LinkPlayback
+import com.ravenemu.android.player.GameWindow
 import com.ravenemu.android.player.GamepadMapper
 import com.ravenemu.android.player.GbPlayback
 import com.ravenemu.android.player.GbPlayerUi
@@ -224,6 +225,16 @@ class MainActivity : ComponentActivity() {
 
             library.Effects(userSettings.onlineCovers)
             ControllerLayout(player.controllerLayout)
+            GameWindow(
+                window,
+                playing = player.open,
+                running = player.open && !player.pausedForGameMenu,
+                gameFps = when {
+                    player.videoEnabled && library.loadedGame != null -> gameSession.refreshRateHz()
+                    player.linkEnabled -> linkSession.refreshRateHz()
+                    else -> null
+                },
+            )
             // The controller reaches the game only while it runs on screen.
             val acceptsController = player.acceptsController
             val linkInput = player.linkEnabled

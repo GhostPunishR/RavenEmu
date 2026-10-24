@@ -21,6 +21,7 @@ import kotlinx.coroutines.withContext
 import kotlin.math.roundToLong
 import com.ravenemu.android.audio.AndroidGbAudioOutput
 import com.ravenemu.android.player.GbFrameBitmaps
+import com.ravenemu.android.player.DisplayVsync
 import com.ravenemu.android.player.GbFramePacer
 import com.ravenemu.android.player.gbEmulationDispatcher
 
@@ -40,6 +41,7 @@ internal class LinkPlayback(
     var metrics by mutableStateOf<GbVideoMetrics?>(null)
     @Volatile var activeAudio: AndroidGbAudioOutput? = null
         private set
+    private val vsync by lazy { DisplayVsync(context) }
 
     fun clear() {
         firstFrame = null
@@ -64,6 +66,7 @@ internal class LinkPlayback(
         val secondImages = GbFrameBitmaps(second.width, second.height)
         var output: AndroidGbAudioOutput? = null
         try {
+            vsync.start()
             try {
                 val rate = session.audioRateHz() ?: throw IllegalStateException("Aucune piste audio active.")
                 output = AndroidGbAudioOutput(
@@ -128,11 +131,13 @@ internal class LinkPlayback(
                         clear()
                         break
                     }
-                    val wait = pacer.nextWaitNanos(System.nanoTime())
+                    val wait = pacer.nextWaitNanos(System.nanoTime(), vsync.timeNanos, vsync.periodNanos)
+                    output?.speed = pacer.speed
                     if (wait > 0) LockSupport.parkNanos(wait)
                 }
             }
         } finally {
+            vsync.stop()
             if (activeAudio === output) activeAudio = null
             output?.close()
         }
