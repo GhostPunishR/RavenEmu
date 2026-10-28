@@ -56,3 +56,17 @@ Le module distinct `androidNative/` raccorde Java/JNI, les cores Libretro ARM64\
   64 MiB. Aucune migration ni sauvegarde du catalogue existant n'est effectuée.
 - Validation matérielle encore requise : démarrage d'une ROM de test libre,
   couleurs et orientation, pause/reprise, contrôleurs et performance.
+
+## Troisième tranche : audio et sauvegardes natives
+
+- Pilote AAudio en C (PCM16 stéréo), tampon circulaire non bloquant ;
+  rééchantillonnage linéaire du taux Libretro vers le taux de sortie AAudio.
+- Extension de l'interface C Libretro : SRAM (`retro_get_memory_data`),
+  sérialisation et désérialisation, tests du chemin aller-retour sur un faux core.
+- Écriture atomique de la SRAM dans l'espace privé du module de test, identité
+  SHA-256 fondée sur la ROM et le système ; autosauvegarde environ toutes les
+  30 secondes, aux pauses et aux changements de ROM.
+- Boutons d'état instantané manuel ; aucune migration automatique des anciennes
+  données de RavenEmu, aucun jeu ni BIOS livré.
+- À valider : tests instrumentés AAudio, latence, état sur reprise et crash,
+  compatibilité des états GB/GBC/GBA, contrôle mémoire et tests sur appareil.
