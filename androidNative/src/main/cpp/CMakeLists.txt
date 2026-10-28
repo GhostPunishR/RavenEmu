@@ -6,6 +6,10 @@ set(RAVEN_FRONTEND_TESTS OFF CACHE BOOL "" FORCE)
 # Use exactly the same RavenCore commit and Libretro frontend as host tests.
 add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../../../../frontend"
                  "${CMAKE_CURRENT_BINARY_DIR}/raven_frontend")
+# FetchContent declares ravencore in the frontend subdirectory. Look up the
+# populated path in this parent directory (directory variables are scoped).
+include(FetchContent)
+FetchContent_GetProperties(ravencore)
 
 add_library(raven_android SHARED bridge.c)
 target_compile_features(raven_android PRIVATE c_std_11)
