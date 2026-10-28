@@ -48,6 +48,19 @@ void raven_frontend_set_callbacks(raven_frontend *host,
 int raven_frontend_load_rom(raven_frontend *host, const void *rom,
                             size_t size, const char *path);
 int raven_frontend_run_frame(raven_frontend *host);
+/* Battery SRAM is owned by the loaded core. Access only on the emulation
+ * thread, after load_game and before unload_game. Zero size means no battery. */
+size_t raven_frontend_battery_size(const raven_frontend *host);
+int raven_frontend_read_battery(const raven_frontend *host,
+                                void *dst, size_t size);
+int raven_frontend_restore_battery(raven_frontend *host,
+                                   const void *src, size_t size);
+
+/* Optional quick-save snapshot; format/version is core-specific. */
+size_t raven_frontend_state_size(const raven_frontend *host);
+int raven_frontend_save_state(raven_frontend *host, void *dst, size_t size);
+int raven_frontend_load_state(raven_frontend *host,
+                              const void *src, size_t size);
 void raven_frontend_unload(raven_frontend *host);
 void raven_frontend_close_core(raven_frontend *host);
 int raven_frontend_get_info(const raven_frontend *host, raven_core_info *out);
