@@ -16,6 +16,8 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
+import java.io.IOException;
+
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.util.Locale;
@@ -37,6 +39,8 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
     private TextView status;
     private int width = 1, height = 1, buttons;
     private long nextFrameNanos;
+    private long nextBatterySaveNanos;
+    private String activeSaveKey;
 
     @Override
     public void onCreate(Bundle state) {
@@ -58,9 +62,19 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
         status = new TextView(this);
         status.setTextColor(0xffffffff);
         status.setShadowLayer(3f, 1f, 1f, 0xff000000);
-        status.setText("Prévisualisation C / Libretro — audio non disponible");
+        status.setText("Prévisualisation C / Libretro — audio AAudio + sauvegardes");
         status.setPadding(10, 6, 10, 6);
         header.addView(status);
+        LinearLayout saveActions = new LinearLayout(this);
+        Button quickSave = new Button(this);
+        quickSave.setText("Sauver état");
+        quickSave.setOnClickListener(view -> quickSave());
+        Button quickLoad = new Button(this);
+        quickLoad.setText("Charger état");
+        quickLoad.setOnClickListener(view -> quickLoad());
+        saveActions.addView(quickSave, new LinearLayout.LayoutParams(0, -2, 1));
+        saveActions.addView(quickLoad, new LinearLayout.LayoutParams(0, -2, 1));
+        header.addView(saveActions);
         FrameLayout.LayoutParams headerParams = new FrameLayout.LayoutParams(-1, -2, Gravity.TOP);
         root.addView(header, headerParams);
 
@@ -147,17 +161,34 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
         io.execute(() -> {
             try {
                 byte[] rom = readRom(uri);
+                String saveKey = SaveRepository.keyFor(system, rom);
+                byte[] battery = SaveRepository.read(getFilesDir(), saveKey, "srm");
                 if (disposed.get()) return;
                 String nativeDir = getApplicationInfo().nativeLibraryDir;
                 String dataDir = getFilesDir().getAbsolutePath();
                 surface.queueEvent(() -> {
                     if (disposed.get()) return;
+                    try {
+                        persistBattery();
+                    } catch (IOException error) {
+                        postStatus("Ancienne sauvegarde non écrite : " + error.getMessage());
+                        return;
+                    }
                     String failure = NativeBridge.openRom(nativeDir, dataDir, system, rom, name);
-                    nextFrameNanos = 0;
+                    if (failure == null) {
+                        activeSaveKey = saveKey;
+                        if (battery != null && !NativeBridge.restoreBattery(battery))
+                            failure = "Format SRAM incompatible ; sauvegarde conservée";
+                        nextFrameNanos = 0;
+                        nextBatterySaveNanos = 0;
+                    } else {
+                        activeSaveKey = null;
+                    }
+                    final String result = failure;
                     runOnUiThread(() -> {
-                        if (!disposed.get()) status.setText(failure == null
+                        if (!disposed.get()) status.setText(result == null
                                 ? "Core " + system.toUpperCase(Locale.ROOT) + " chargé : " + name
-                                : "Échec : " + failure);
+                                : "Info : " + result);
                     });
                 });
             } catch (Exception error) {
@@ -193,6 +224,55 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
         }
     }
 
+    private void postStatus(String message) {
+        runOnUiThread(() -> {
+            if (!disposed.get()) status.setText(message);
+        });
+    }
+
+    private void persistBattery() throws IOException {
+        if (activeSaveKey == null) return;
+        byte[] battery = NativeBridge.saveBattery();
+        if (battery != null)
+            SaveRepository.write(getFilesDir(), activeSaveKey, "srm", battery);
+    }
+
+    private void quickSave() {
+        surface.queueEvent(() -> {
+            if (activeSaveKey == null) {
+                postStatus("Charge un jeu avant de sauvegarder un état");
+                return;
+            }
+            try {
+                byte[] state = NativeBridge.saveState();
+                if (state == null) throw new IOException("État indisponible");
+                SaveRepository.write(getFilesDir(), activeSaveKey, "state", state);
+                persistBattery();
+                postStatus("État enregistré");
+            } catch (IOException error) {
+                postStatus("Sauvegarde impossible : " + error.getMessage());
+            }
+        });
+    }
+
+    private void quickLoad() {
+        surface.queueEvent(() -> {
+            if (activeSaveKey == null) {
+                postStatus("Charge un jeu avant de restaurer un état");
+                return;
+            }
+            try {
+                byte[] state = SaveRepository.read(getFilesDir(), activeSaveKey, "state");
+                if (state == null) throw new IOException("Aucun état enregistré");
+                if (!NativeBridge.restoreState(state))
+                    throw new IOException("Format de l'état incompatible");
+                postStatus("État restauré");
+            } catch (IOException error) {
+                postStatus("Restauration impossible : " + error.getMessage());
+            }
+        });
+    }
+
     @Override
     public void onSurfaceCreated(GL10 gl, EGLConfig config) {
         NativeBridge.initGl();
@@ -212,6 +292,14 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
         boolean advance = now >= nextFrameNanos;
         if (advance) nextFrameNanos = now + 16_666_667L;
         NativeBridge.drawFrame(width, height, advance);
+        if (advance && activeSaveKey != null && now >= nextBatterySaveNanos) {
+            nextBatterySaveNanos = now + 30_000_000_000L;
+            try {
+                persistBattery();
+            } catch (IOException error) {
+                postStatus("Sauvegarde automatique : " + error.getMessage());
+            }
+        }
     }
 
     private int keyMask(int keyCode) {
@@ -250,18 +338,28 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
 
     @Override protected void onResume() {
         super.onResume();
-        if (surface != null) surface.onResume();
+        if (surface != null) {
+            surface.onResume();
+            surface.queueEvent(() -> NativeBridge.setAudioEnabled(true));
+        }
     }
 
     @Override protected void onPause() {
+        // Wait for the GL/emulator thread to stop before touching session data.
         if (surface != null) surface.onPause();
+        NativeBridge.setAudioEnabled(false);
+        try {
+            persistBattery();
+        } catch (IOException error) {
+            postStatus("Sauvegarde impossible : " + error.getMessage());
+        }
         super.onPause();
     }
 
     @Override protected void onDestroy() {
         disposed.set(true);
-        io.shutdownNow();
-        // onPause stopped the GL thread before the native session is destroyed.
+        io.shutdown();
+        // The emulation thread was already suspended by GLSurfaceView.onPause.
         if (surface != null) surface.onPause();
         NativeBridge.closeRom();
         super.onDestroy();
