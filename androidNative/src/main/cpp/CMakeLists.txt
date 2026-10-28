@@ -11,9 +11,10 @@ add_library(raven_android SHARED bridge.c)
 target_compile_features(raven_android PRIVATE c_std_11)
 target_link_libraries(raven_android PRIVATE raven_frontend GLESv2 log)
 target_include_directories(raven_android PRIVATE
-    "${CMAKE_CURRENT_LIST_DIR}/../../../../frontend/include")
+    "${CMAKE_CURRENT_LIST_DIR}/../../../../frontend/include"
+    "${ravencore_SOURCE_DIR}/libretro/include")
 add_dependencies(raven_android
     ravenemu_gb_libretro ravenemu_gbc_libretro ravenemu_gba_libretro)
 
-# Android package includes all four shared libraries (the three cores and
-# lib r a v e n _ a n d r o i d). The cores are dynamically opened via dlopen.
+# Gradle explicitly packages the JNI library and three Libretro core .so files.
+# The frontend finds them through ApplicationInfo.nativeLibraryDir and dlopen.
