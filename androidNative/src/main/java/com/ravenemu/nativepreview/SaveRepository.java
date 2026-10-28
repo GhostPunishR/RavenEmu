@@ -2,6 +2,7 @@ package com.ravenemu.nativepreview;
 
 import android.util.AtomicFile;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -46,21 +47,23 @@ final class SaveRepository {
 
     static byte[] read(File files, String key, String extension) throws IOException {
         File path = storage(files, key, extension);
-        if (!path.exists()) return null;
+        // AtomicFile may recover the previous .bak after an interrupted write.
+        if (!path.exists() && !new File(path.getPath() + ".bak").exists())
+            return null;
         long limit = "srm".equals(extension) ? BATTERY_LIMIT : STATE_LIMIT;
-        if (path.length() <= 0 || path.length() > limit)
-            throw new IOException("Sauvegarde invalide ou trop volumineuse");
         AtomicFile atomic = new AtomicFile(path);
-        try (InputStream input = atomic.openRead()) {
-            byte[] bytes = new byte[(int)path.length()];
-            int total = 0;
-            while (total < bytes.length) {
-                int read = input.read(bytes, total, bytes.length - total);
-                if (read < 0) throw new IOException("Fichier de sauvegarde tronqué");
-                total += read;
+        try (InputStream input = atomic.openRead();
+             ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            byte[] chunk = new byte[16 * 1024];
+            int count;
+            while ((count = input.read(chunk)) != -1) {
+                if (output.size() > limit - count)
+                    throw new IOException("Sauvegarde trop volumineuse");
+                output.write(chunk, 0, count);
             }
-            if (input.read() != -1) throw new IOException("Taille sauvegarde modifiée");
-            return bytes;
+            if (output.size() == 0)
+                throw new IOException("Fichier de sauvegarde vide");
+            return output.toByteArray();
         }
     }
 
