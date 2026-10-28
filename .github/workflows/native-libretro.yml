@@ -17,6 +17,10 @@ on:
       - '.github/workflows/native-libretro.yml'
   workflow_dispatch:
 
+concurrency:
+  group: native-libretro-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
