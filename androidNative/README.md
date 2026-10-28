@@ -1,0 +1,51 @@
+# RavenEmu Android Native Preview (Java + C + Libretro)
+
+This is an **independent experimental Android application** that does not
+replace the released RavenEmu beta. Application ID: `com.ravenemu.nativepreview`.
+Requires Android 8.0+ and an **ARM64** phone (arm64-v8a).
+
+## Architecture
+
+- `MainActivity.java`: Java Activity, SAF document picker, touch controls,
+  GL thread scheduler and the lifecycle.
+- `NativeBridge.java`: typed JNI entry points (only `setButtons` is
+  allowed on the UI thread; all other emulation calls use the GL thread).
+- `src/main/cpp/bridge.c`: Libretro session management, frame conversion to
+  RGBA8888, OpenGL ES 2 texture drawing, atomic joypad input.
+- `../frontend/`: C Libretro host, reused without code duplication.
+- `GhostPunishR/RavenCore`: the pinned C++20 cores, compiled as three
+  independent `.so` files.
+
+## Build
+
+```bash
+./gradlew :androidNative:assembleDebug --stacktrace
+```
+
+APK: `androidNative/build/outputs/apk/debug/androidNative-debug.apk`.
+
+The build should package `libraven_android.so`,
+`ravenemu_gb_libretro.so`, `ravenemu_gbc_libretro.so` and
+`ravenemu_gba_libretro.so`. They are compiled for ARM64 only.
+
+Launch **RavenEmu Native (Test)**, select a personally provided
+`.gb`, `.gbc` or `.gba` file with the Android file picker, then
+use the on-screen buttons or a mapped physical gamepad.
+No ROM or BIOS is bundled; no broad storage permission is requested.
+
+## Current limits (intentional)
+
+This is an integration prototype, not a release candidate.
+- Sound is silently discarded until the native audio driver is added.
+- No save persistence (battery and save states), no RetroAchievements, no
+  wireless/local link cable and no Delta skins yet.
+- A 60 Hz best-effort loop is used instead of the precise core FPS and audio
+  clock. The GLSurfaceView is continuous, and may run at display refresh speed.
+- Video is OpenGL ES 2 on a native C texture path; it is not the final shader,
+  overlay, menu, or renderer architecture.
+- `RavenCore` still owns game emulation; no engine source has been duplicated.
+- Only one Libretro core instance may exist at once.
+- The Android APK and gameplay have to be validated on physical hardware;
+  passing CI shows only that it compiled.
+
+The existing `androidApp/`, `iosApp/`, app ID and saves are untouched.
