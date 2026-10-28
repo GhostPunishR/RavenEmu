@@ -4,10 +4,10 @@ Première tranche du nouveau frontend **C + Libretro**. Ce dossier est indépend
 du lecteur Kotlin actuel : il ne remplace ni les APK signés, ni la cible iOS.
 
 - `src/libretro_host.c` : charge dynamiquement un core Libretro, établit les callbacks
-  de vidéo, audio et commandes, charge une ROM en mémoire et exécute des images.
+  de vidéo, audio et commandes, charge une ROM en mémoire, exécute des images,\n  expose la SRAM et la sérialisation des états.
 - `include/ravenemu/frontend.h` : API stable côté application (sans dépendre des
   détails de l'ABI Libretro dans les en-têtes publics).
-- `tests/` : faux core Libretro et test d'intégration du chargeur.
+- `tests/` : faux core Libretro et tests d'intégration, dont l'aller-retour\n  SRAM/save-state et le chargement des trois vrais cores.
 - `CMakeLists.txt` : reprend le SHA épinglé de RavenCore et active ses trois
   bibliothèques Libretro. Le projet historique `native/` reste inchangé.
 
@@ -31,11 +31,12 @@ pas que le jeu fonctionne sur Android.
 
 ## Limitations voulues de cette tranche
 
-Un seul core actif (les callbacks Libretro sont process-global). Les options
-personnalisées, le rendu GPU, les périphériques réels, RetroAchievements,
-l'audio Android, les sauvegardes persistantes, les systèmes de fichiers Android
-et le link cable seront raccordés par étapes. La couche JNI Java et la
-migration des données restent à effectuer.
+Un seul core actif (les callbacks Libretro sont process-global).
+Le frontend C de ce dossier ne réalise pas lui-même les écritures de fichiers
+ni le rendu graphique : les pilotes Android C/AAudio/GLES2, le JNI Java et
+le stockage atomique par ROM vivent dans [androidNative/](../androidNative/).
+Les options Libretro avancées, RetroAchievements, les fonctions link,
+le rendu final et la migration des données historiques restent à réaliser.
 
 Les buffers vidéo/PCM appartiennent aux cores. Ils doivent être copiés ou
 consommés synchroniquement dans les callbacks. Ne jamais garder leurs pointeurs.
