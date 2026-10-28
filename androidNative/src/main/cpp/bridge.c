@@ -3,6 +3,7 @@
 #include <android/log.h>
 #include <libretro.h>
 #include <ravenemu/frontend.h>
+#include "native_audio.h"
 
 #include <stdatomic.h>
 #include <stdint.h>
@@ -139,10 +140,8 @@ static void on_video(const raven_video_frame *frame, void *userdata) {
 }
 
 static void on_audio(const int16_t *samples, size_t count, void *userdata) {
-    /* Native audio driver is deliberately a separate upcoming stage. */
-    (void)samples;
-    (void)count;
     (void)userdata;
+    raven_audio_write(samples, count);
 }
 
 static int16_t on_input(unsigned port, unsigned device, unsigned index,
@@ -206,6 +205,7 @@ Java_com_ravenemu_nativepreview_NativeBridge_openRom(
         result = failure(env, "Out of memory");
         goto done;
     }
+    raven_audio_close();
     clear_frame();
     if (!raven_frontend_open_core(session, library_path, files, files)) {
         result = failure(env, raven_frontend_last_error(session));
@@ -220,7 +220,15 @@ Java_com_ravenemu_nativepreview_NativeBridge_openRom(
     }
     int loaded = raven_frontend_load_rom(session, bytes, (size_t)size, name);
     (*env)->ReleaseByteArrayElements(env, rom, bytes, JNI_ABORT);
-    if (!loaded) result = failure(env, raven_frontend_last_error(session));
+    if (!loaded) {
+        result = failure(env, raven_frontend_last_error(session));
+    } else {
+        raven_core_info info = {0};
+        if (raven_frontend_get_info(session, &info) && info.sample_rate > 0 &&
+            !raven_audio_open(info.sample_rate)) {
+            LOGE("Audio output unavailable; running game without sound");
+        }
+    }
 
 done:
     (*env)->ReleaseStringUTFChars(env, lib_dir, lib);
@@ -283,11 +291,85 @@ Java_com_ravenemu_nativepreview_NativeBridge_drawFrame(
     glDisableVertexAttribArray((GLuint)attribute_uv);
 }
 
+/* A limit on JNI allocations; Libretro save RAM/state sizes are untrusted. */
+#define MAX_BATTERY_BYTES (1024u * 1024u)
+#define MAX_STATE_BYTES (16u * 1024u * 1024u)
+
+JNIEXPORT jbyteArray JNICALL
+Java_com_ravenemu_nativepreview_NativeBridge_saveBattery(JNIEnv *env, jclass clazz) {
+    (void)clazz;
+    size_t size = raven_frontend_battery_size(session);
+    if (!size || size > MAX_BATTERY_BYTES) return NULL;
+    jbyteArray bytes = (*env)->NewByteArray(env, (jsize)size);
+    if (!bytes) return NULL;
+    void *temp = malloc(size);
+    if (!temp) return NULL;
+    if (!raven_frontend_read_battery(session, temp, size)) {
+        free(temp);
+        return NULL;
+    }
+    (*env)->SetByteArrayRegion(env, bytes, 0, (jsize)size, (const jbyte *)temp);
+    free(temp);
+    return bytes;
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_ravenemu_nativepreview_NativeBridge_restoreBattery(
+    JNIEnv *env, jclass clazz, jbyteArray saved) {
+    (void)clazz;
+    if (!saved) return JNI_FALSE;
+    jsize size = (*env)->GetArrayLength(env, saved);
+    if (size <= 0 || (size_t)size > MAX_BATTERY_BYTES ||
+        (size_t)size != raven_frontend_battery_size(session)) return JNI_FALSE;
+    jbyte *bytes = (*env)->GetByteArrayElements(env, saved, NULL);
+    if (!bytes) return JNI_FALSE;
+    int restored = raven_frontend_restore_battery(session, bytes, (size_t)size);
+    (*env)->ReleaseByteArrayElements(env, saved, bytes, JNI_ABORT);
+    return restored ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT jbyteArray JNICALL
+Java_com_ravenemu_nativepreview_NativeBridge_saveState(JNIEnv *env, jclass clazz) {
+    (void)clazz;
+    size_t size = raven_frontend_state_size(session);
+    if (!size || size > MAX_STATE_BYTES) return NULL;
+    jbyteArray bytes = (*env)->NewByteArray(env, (jsize)size);
+    if (!bytes) return NULL;
+    void *temp = malloc(size);
+    if (!temp) return NULL;
+    int saved = raven_frontend_save_state(session, temp, size);
+    if (saved) (*env)->SetByteArrayRegion(env, bytes, 0, (jsize)size, (const jbyte *)temp);
+    free(temp);
+    return saved ? bytes : NULL;
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_ravenemu_nativepreview_NativeBridge_restoreState(
+    JNIEnv *env, jclass clazz, jbyteArray saved) {
+    (void)clazz;
+    if (!saved) return JNI_FALSE;
+    jsize size = (*env)->GetArrayLength(env, saved);
+    if (size <= 0 || (size_t)size > MAX_STATE_BYTES) return JNI_FALSE;
+    jbyte *bytes = (*env)->GetByteArrayElements(env, saved, NULL);
+    if (!bytes) return JNI_FALSE;
+    int result = raven_frontend_load_state(session, bytes, (size_t)size);
+    (*env)->ReleaseByteArrayElements(env, saved, bytes, JNI_ABORT);
+    return result ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT void JNICALL
+Java_com_ravenemu_nativepreview_NativeBridge_setAudioEnabled(
+    JNIEnv *env, jclass clazz, jboolean enabled) {
+    (void)env; (void)clazz;
+    raven_audio_set_running(enabled == JNI_TRUE);
+}
+
 JNIEXPORT void JNICALL
 Java_com_ravenemu_nativepreview_NativeBridge_closeRom(
     JNIEnv *env, jclass clazz) {
     (void)env;
     (void)clazz;
+    raven_audio_close();
     if (session) {
         raven_frontend_destroy(session);
         session = NULL;
