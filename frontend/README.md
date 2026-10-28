@@ -15,7 +15,7 @@ du lecteur Kotlin actuel : il ne remplace ni les APK signés, ni la cible iOS.
 
 ```sh
 cmake -S frontend -B build/native-frontend -DCMAKE_BUILD_TYPE=Release
-cmake --build build/native-frontend --target raven_frontend_test raven_frontend_fake_core
+cmake --build build/native-frontend --target raven_frontend_test raven_frontend_fake_core raven_frontend_real_core_test
 ctest --test-dir build/native-frontend --output-on-failure
 ```
 
@@ -26,7 +26,7 @@ cmake --build build/native-frontend --target ravenemu_gb_libretro ravenemu_gbc_l
 ```
 
 Un core est une bibliothèque partagée (`.so`) et doit être chargé par un frontend.
-Le test vérifie les callbacks et le chargement d'une fausse ROM ; il ne prétend
+Les tests vérifient les callbacks, le chargement d'une fausse ROM et l'ouverture des trois vrais cores ; il ne prétend
 pas que le jeu fonctionne sur Android.
 
 ## Limitations voulues de cette tranche
