@@ -1,0 +1,38 @@
+name: Native Libretro migration
+
+on:
+  push:
+    branches:
+      - migration/native-libretro
+    paths:
+      - 'frontend/**'
+      - 'docs/MIGRATION_NATIVE.md'
+      - '.github/workflows/native-libretro.yml'
+  pull_request:
+    paths:
+      - 'frontend/**'
+      - 'docs/MIGRATION_NATIVE.md'
+      - '.github/workflows/native-libretro.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: C frontend and RavenCore Libretro builds
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Configure CMake
+        run: cmake -S frontend -B build/native-frontend -DCMAKE_BUILD_TYPE=Release
+      - name: Build frontend, test core and RavenCore adapters
+        run: |
+          cmake --build build/native-frontend --parallel 2 --target \
+            raven_frontend_test raven_frontend_fake_core \
+            ravenemu_gb_libretro ravenemu_gbc_libretro ravenemu_gba_libretro
+      - name: Run frontend smoke tests
+        run: ctest --test-dir build/native-frontend --output-on-failure
