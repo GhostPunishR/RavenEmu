@@ -57,3 +57,23 @@ void retro_run(void) {
     if (video) video(pixels, 2, 2, 2 * sizeof(uint32_t));
     if (audio_batch) audio_batch(samples, 2);
 }
+
+/* Fixed-size test battery and state, to verify C frontend round-trips. */
+static unsigned char save_ram[4] = {1, 2, 3, 4};
+void *retro_get_memory_data(unsigned id) {
+    return id == RETRO_MEMORY_SAVE_RAM && loaded ? save_ram : NULL;
+}
+size_t retro_get_memory_size(unsigned id) {
+    return id == RETRO_MEMORY_SAVE_RAM && loaded ? sizeof(save_ram) : 0;
+}
+size_t retro_serialize_size(void) { return loaded ? sizeof(save_ram) : 0; }
+bool retro_serialize(void *buffer, size_t size) {
+    if (!loaded || !buffer || size != sizeof(save_ram)) return false;
+    memcpy(buffer, save_ram, size);
+    return true;
+}
+bool retro_unserialize(const void *buffer, size_t size) {
+    if (!loaded || !buffer || size != sizeof(save_ram)) return false;
+    memcpy(save_ram, buffer, size);
+    return true;
+}
