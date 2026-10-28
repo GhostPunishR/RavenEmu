@@ -22,6 +22,11 @@ typedef struct raven_core_api {
     bool (*load_game)(const struct retro_game_info *);
     void (*unload_game)(void);
     void (*run)(void);
+    void *(*get_memory_data)(unsigned);
+    size_t (*get_memory_size)(unsigned);
+    size_t (*serialize_size)(void);
+    bool (*serialize)(void *, size_t);
+    bool (*unserialize)(const void *, size_t);
 } raven_core_api;
 
 struct raven_frontend {
@@ -235,6 +240,11 @@ int raven_frontend_open_core(raven_frontend *host, const char *library_path,
     RESOLVE(load_game);
     RESOLVE(unload_game);
     RESOLVE(run);
+    RESOLVE(get_memory_data);
+    RESOLVE(get_memory_size);
+    RESOLVE(serialize_size);
+    RESOLVE(serialize);
+    RESOLVE(unserialize);
 #undef RESOLVE
     if (host->api.api_version() != RETRO_API_VERSION) {
         set_error(host, "Incompatible Libretro API version");
@@ -290,6 +300,57 @@ int raven_frontend_run_frame(raven_frontend *host) {
         return 0;
     }
     host->api.run();
+    return 1;
+}
+
+size_t raven_frontend_battery_size(const raven_frontend *host) {
+    if (!host || !host->loaded || active != host) return 0;
+    return host->api.get_memory_size(RETRO_MEMORY_SAVE_RAM);
+}
+
+int raven_frontend_read_battery(const raven_frontend *host,
+                                void *dst, size_t size) {
+    size_t expected = raven_frontend_battery_size(host);
+    if (!expected || !dst || expected != size) return 0;
+    const void *data = host->api.get_memory_data(RETRO_MEMORY_SAVE_RAM);
+    if (!data) return 0;
+    memcpy(dst, data, expected);
+    return 1;
+}
+
+int raven_frontend_restore_battery(raven_frontend *host,
+                                   const void *src, size_t size) {
+    const size_t expected = raven_frontend_battery_size(host);
+    if (!expected || !src || expected != size) {
+        set_error(host, "Battery SRAM size mismatch");
+        return 0;
+    }
+    void *data = host->api.get_memory_data(RETRO_MEMORY_SAVE_RAM);
+    if (!data) {
+        set_error(host, "Core does not expose writable battery SRAM");
+        return 0;
+    }
+    memcpy(data, src, expected);
+    return 1;
+}
+
+size_t raven_frontend_state_size(const raven_frontend *host) {
+    if (!host || !host->loaded || active != host) return 0;
+    return host->api.serialize_size();
+}
+
+int raven_frontend_save_state(raven_frontend *host, void *dst, size_t size) {
+    size_t expected = raven_frontend_state_size(host);
+    if (!expected || !dst || size != expected) return 0;
+    return host->api.serialize(dst, size) ? 1 : 0;
+}
+
+int raven_frontend_load_state(raven_frontend *host, const void *src, size_t size) {
+    if (!host || !host->loaded || active != host || !src || !size) return 0;
+    if (!host->api.unserialize(src, size)) {
+        set_error(host, "Core rejected save-state data");
+        return 0;
+    }
     return 1;
 }
 
