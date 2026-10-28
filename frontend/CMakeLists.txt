@@ -31,4 +31,12 @@ if(RAVEN_FRONTEND_TESTS AND NOT ANDROID)
     target_link_libraries(raven_frontend_test PRIVATE raven_frontend)
     add_test(NAME raven_frontend_smoke COMMAND raven_frontend_test
              $<TARGET_FILE:raven_frontend_fake_core>)
+    add_executable(raven_frontend_real_core_test tests/test_real_cores.c)
+    target_link_libraries(raven_frontend_real_core_test PRIVATE raven_frontend)
+    add_dependencies(raven_frontend_real_core_test
+        ravenemu_gb_libretro ravenemu_gbc_libretro ravenemu_gba_libretro)
+    add_test(NAME raven_frontend_real_cores COMMAND raven_frontend_real_core_test
+        $<TARGET_FILE:ravenemu_gb_libretro>
+        $<TARGET_FILE:ravenemu_gbc_libretro>
+        $<TARGET_FILE:ravenemu_gba_libretro>)
 endif()
