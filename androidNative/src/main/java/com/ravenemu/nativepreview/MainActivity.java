@@ -40,7 +40,7 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
     private int width = 1, height = 1, buttons;
     private long nextFrameNanos;
     private long nextBatterySaveNanos;
-    private String activeSaveKey;
+    private volatile String activeSaveKey;
 
     @Override
     public void onCreate(Bundle state) {
@@ -175,10 +175,14 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
                         return;
                     }
                     String failure = NativeBridge.openRom(nativeDir, dataDir, system, rom, name);
+                    if (failure == null && battery != null &&
+                        !NativeBridge.restoreBattery(battery)) {
+                        // Never overwrite a save whose format this core rejects.
+                        NativeBridge.closeRom();
+                        failure = "SRAM incompatible : fichier conservé sans écrasement";
+                    }
                     if (failure == null) {
                         activeSaveKey = saveKey;
-                        if (battery != null && !NativeBridge.restoreBattery(battery))
-                            failure = "Format SRAM incompatible ; sauvegarde conservée";
                         nextFrameNanos = 0;
                         nextBatterySaveNanos = 0;
                     } else {
