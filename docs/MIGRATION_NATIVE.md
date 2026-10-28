@@ -42,4 +42,17 @@ RetroArch Plus, sans remplacer les moteurs maison RavenCore.
 
 `frontend/` constitue la première implantation autonome du chargeur.
 La CI de cette branche teste cette brique sans modifier la CI de production.
-L'intégration dans le package Android n'est pas encore raccordée.
+Le module distinct `androidNative/` raccorde Java/JNI, les cores Libretro ARM64\net un premier rendu natif OpenGL ES 2, sans modifier `androidApp/`.\nLa sortie audio, les sauvegardes persistantes et les services de la version\nbêta ne sont pas encore raccordés. Voir [androidNative/README.md](../androidNative/README.md).
+
+## Deuxième tranche : prévisualisation Android
+
+- `:androidNative:assembleDebug` compile un APK au nom de package distinct
+  `com.ravenemu.nativepreview`, ARM64 uniquement ; la CI doit vérifier la présence
+  des quatre bibliothèques natives.
+- Java n'assure que le cycle de vie Android, le sélecteur de documents et les
+  boutons. Les callbacks Libretro et la conversion/présentation des frames GLES2
+  sont dans le code C. Les moteurs restent les trois DLL Libretro de RavenCore.
+- L'import est limité aux fichiers demandés par l'utilisateur, avec plafond de
+  64 MiB. Aucune migration ni sauvegarde du catalogue existant n'est effectuée.
+- Validation matérielle encore requise : démarrage d'une ROM de test libre,
+  couleurs et orientation, pause/reprise, contrôleurs et performance.
