@@ -58,8 +58,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-      - name: Assemble ARM64 native APK
-        run: ./gradlew :androidNative:assembleDebug --stacktrace
+      - name: Assemble ARM64 native APK and run Java save tests
+        run: ./gradlew :androidNative:assembleDebug :androidNative:testDebugUnitTest --stacktrace
       - name: Inspect APK native libraries
         run: |
           python3 - <<'PY'
