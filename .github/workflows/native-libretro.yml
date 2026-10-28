@@ -6,6 +6,8 @@ on:
       - migration/native-libretro
     paths:
       - 'frontend/**'
+      - 'androidNative/**'
+      - 'settings.gradle.kts'
       - 'docs/MIGRATION_NATIVE.md'
       - '.github/workflows/native-libretro.yml'
   pull_request:
@@ -36,3 +38,43 @@ jobs:
             ravenemu_gb_libretro ravenemu_gbc_libretro ravenemu_gba_libretro
       - name: Run frontend smoke tests
         run: ctest --test-dir build/native-frontend --output-on-failure
+
+  android:
+    name: ARM64 Java/JNI/OpenGL preview APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
+      - name: Setup Java 21
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Assemble ARM64 native APK
+        run: ./gradlew :androidNative:assembleDebug --stacktrace
+      - name: Inspect APK native libraries
+        run: |
+          python3 - <<'PY'
+          import zipfile, pathlib
+          apk = pathlib.Path('androidNative/build/outputs/apk/debug/androidNative-debug.apk')
+          required = {'libraven_android.so', 'ravenemu_gb_libretro.so',
+                      'ravenemu_gbc_libretro.so', 'ravenemu_gba_libretro.so'}
+          with zipfile.ZipFile(apk) as z:
+              found = {path.split('/')[-1] for path in z.namelist()
+                       if path.startswith('lib/arm64-v8a/') and path.endswith('.so')}
+          missing = required - found
+          print('Packaged ARM64 libraries:', sorted(found))
+          if missing:
+              raise SystemExit(f'Missing ARM64 libraries: {sorted(missing)}')
+          PY
+      - name: Upload debug preview APK
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ravenemu-android-native-arm64-debug
+          path: androidNative/build/outputs/apk/debug/androidNative-debug.apk
+          if-no-files-found: error
+          retention-days: 7
