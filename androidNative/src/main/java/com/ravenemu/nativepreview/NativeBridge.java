@@ -27,5 +27,10 @@ final class NativeBridge {
 
     static native void drawFrame(int surfaceWidth, int surfaceHeight, boolean advance);
     static native void setButtons(int buttons);
+    static native byte[] saveBattery();
+    static native boolean restoreBattery(byte[] battery);
+    static native byte[] saveState();
+    static native boolean restoreState(byte[] state);
+    static native void setAudioEnabled(boolean enabled);
     static native void closeRom();
 }
