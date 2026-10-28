@@ -1,0 +1,59 @@
+#ifndef RAVENEMU_FRONTEND_H
+#define RAVENEMU_FRONTEND_H
+
+#include <stddef.h>
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* First native frontend slice: one active Libretro instance per process.
+ * The pointers delivered to callbacks are valid only during the callback. */
+typedef struct raven_frontend raven_frontend;
+
+typedef struct raven_video_frame {
+    const void *pixels;  /* NULL means duplicate the previous frame. */
+    unsigned width;
+    unsigned height;
+    size_t pitch;
+    unsigned pixel_format;  /* Libretro retro_pixel_format enum. */
+} raven_video_frame;
+
+typedef struct raven_frontend_callbacks {
+    void (*video)(const raven_video_frame *frame, void *userdata);
+    void (*audio)(const int16_t *stereo_samples, size_t frames, void *userdata);
+    int16_t (*input)(unsigned port, unsigned device, unsigned index,
+                     unsigned id, void *userdata);
+    void *userdata;
+} raven_frontend_callbacks;
+
+typedef struct raven_core_info {
+    const char *name;       /* Owned by the loaded core, valid until close. */
+    const char *version;
+    const char *extensions;
+    unsigned width;
+    unsigned height;
+    double fps;
+    double sample_rate;
+} raven_core_info;
+
+raven_frontend *raven_frontend_create(void);
+void raven_frontend_destroy(raven_frontend *host);
+int raven_frontend_open_core(raven_frontend *host, const char *library_path,
+                            const char *system_directory, const char *save_directory);
+void raven_frontend_set_callbacks(raven_frontend *host,
+                                  const raven_frontend_callbacks *callbacks);
+/* The ROM is copied by the host and kept alive until unload. */
+int raven_frontend_load_rom(raven_frontend *host, const void *rom,
+                            size_t size, const char *path);
+int raven_frontend_run_frame(raven_frontend *host);
+void raven_frontend_unload(raven_frontend *host);
+void raven_frontend_close_core(raven_frontend *host);
+int raven_frontend_get_info(const raven_frontend *host, raven_core_info *out);
+const char *raven_frontend_last_error(const raven_frontend *host);
+
+#ifdef __cplusplus
+}
+#endif
+#endif
