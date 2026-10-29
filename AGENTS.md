@@ -11,6 +11,18 @@
 > tout en remplaçant progressivement sa couche d'exécution par une architecture
 > native de type frontend Libretro.
 
+## Protection du README officiel et du logo — règle permanente
+
+**Interdiction pour les agents (y compris CorvusSoftware, Codex et les agents CI) de modifier, régénérer, reformater, déplacer ou remplacer ces fichiers sans demande explicite du propriétaire ciblant précisément cette action :**
+
+- `README.md` : présentation officielle publiée du dépôt ; **intouchable pendant la migration**.
+- `README_RELEASE.md` : maquette du README après migration ; préparer une seule fois sur demande du propriétaire, puis **ne pas actualiser automatiquement**, même lors des changements de version, badge, workflow ou fonctionnalités.
+- `assets/brand/ravenemu-logo.webp` : visuel officiel de référence ; ne pas recadrer, retoucher, convertir ou substituer sans validation explicite.
+
+**La fin technique de la migration ne constitue PAS une autorisation de publication.** Les agents ne doivent jamais copier `README_RELEASE.md` vers `README.md`, activer les affirmations de parité, créer une release ou modifier le logo de leur propre initiative. La décision finale et toute mise à jour du README appartiennent exclusivement à GhostPunishR.
+
+Lorsqu'une tâche nécessite un changement de documentation, modifier les documents techniques concernés (`docs/`, `CHANGELOG.md`, `BUILDING.md`, etc.) **sans toucher aux README protégés** ; signaler au propriétaire les ajustements de README éventuellement nécessaires. Le fichier `.github/CODEOWNERS` réclame une revue du propriétaire ; son effet bloquant dépend de l'activation des règles de protection de branche GitHub.
+
 ## Règle obligatoire : architecture finale
 
 **Tous les agents, y compris après la fin de la migration, doivent respecter
