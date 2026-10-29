@@ -126,6 +126,9 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
                 key("START", NativeBridge.START)));
         FrameLayout.LayoutParams bottom = new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM);
         root.addView(controls, bottom);
+        // Reserve actual status bar, cutout, nav buttons and keyboard space.
+        // Android 15 edge-to-edge would otherwise overlay the toolbar/footer.
+        SystemBarInsets.install(this, root);
         setContentView(root);
         // The RavenEmu-style Java library selects a private ROM; only JNI/C
         // executes it, preserving the Java -> C -> RavenCore C++ architecture.
