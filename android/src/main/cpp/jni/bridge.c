@@ -106,7 +106,7 @@ static jstring failure(JNIEnv *env, const char *error) {
 }
 
 JNIEXPORT void JNICALL
-Java_com_ravenemu_app_NativeBridge_initGl(
+Java_com_ravenemu_app_bridge_NativeBridge_initGl(
     JNIEnv *env, jclass clazz) {
     (void)env;
     (void)clazz;
@@ -116,7 +116,7 @@ Java_com_ravenemu_app_NativeBridge_initGl(
 }
 
 JNIEXPORT jstring JNICALL
-Java_com_ravenemu_app_NativeBridge_openRom(
+Java_com_ravenemu_app_bridge_NativeBridge_openRom(
     JNIEnv *env, jclass clazz, jstring lib_dir, jstring files_dir,
     jstring core_name, jbyteArray rom, jstring filename) {
     (void)clazz;
@@ -193,7 +193,7 @@ done:
 }
 
 JNIEXPORT void JNICALL
-Java_com_ravenemu_app_NativeBridge_setButtons(
+Java_com_ravenemu_app_bridge_NativeBridge_setButtons(
     JNIEnv *env, jclass clazz, jint mask) {
     (void)env;
     (void)clazz;
@@ -201,7 +201,7 @@ Java_com_ravenemu_app_NativeBridge_setButtons(
 }
 
 JNIEXPORT void JNICALL
-Java_com_ravenemu_app_NativeBridge_clearButtons(
+Java_com_ravenemu_app_bridge_NativeBridge_clearButtons(
     JNIEnv *env, jclass clazz) {
     (void)env;
     (void)clazz;
@@ -209,7 +209,7 @@ Java_com_ravenemu_app_NativeBridge_clearButtons(
 }
 
 JNIEXPORT jint JNICALL
-Java_com_ravenemu_app_NativeBridge_drawFrame(
+Java_com_ravenemu_app_bridge_NativeBridge_drawFrame(
     JNIEnv *env, jclass clazz, jint surface_width, jint surface_height,
     jboolean advance) {
     (void)env;
@@ -242,7 +242,7 @@ Java_com_ravenemu_app_NativeBridge_drawFrame(
 }
 
 JNIEXPORT void JNICALL
-Java_com_ravenemu_app_NativeBridge_setPaused(
+Java_com_ravenemu_app_bridge_NativeBridge_setPaused(
     JNIEnv *env, jclass clazz, jboolean paused) {
     (void)env; (void)clazz;
     const int next_paused = paused == JNI_TRUE;
@@ -253,7 +253,7 @@ Java_com_ravenemu_app_NativeBridge_setPaused(
 }
 
 JNIEXPORT void JNICALL
-Java_com_ravenemu_app_NativeBridge_setPlaybackOptions(
+Java_com_ravenemu_app_bridge_NativeBridge_setPlaybackOptions(
     JNIEnv *env, jclass clazz, jboolean audio_enabled, jint audio_volume,
     jboolean integer_scale, jint brightness, jint contrast) {
     (void)env; (void)clazz;
@@ -262,7 +262,7 @@ Java_com_ravenemu_app_NativeBridge_setPlaybackOptions(
 }
 
 JNIEXPORT jstring JNICALL
-Java_com_ravenemu_app_NativeBridge_stateCompatibility(JNIEnv *env, jclass clazz) {
+Java_com_ravenemu_app_bridge_NativeBridge_stateCompatibility(JNIEnv *env, jclass clazz) {
     (void)clazz;
     raven_core_info info = {0};
     if (!raven_frontend_get_info(session, &info) || !info.name || !info.version) return NULL;
@@ -278,7 +278,7 @@ Java_com_ravenemu_app_NativeBridge_stateCompatibility(JNIEnv *env, jclass clazz)
 #define MAX_STATE_BYTES (16u * 1024u * 1024u)
 
 JNIEXPORT jbyteArray JNICALL
-Java_com_ravenemu_app_NativeBridge_saveBattery(JNIEnv *env, jclass clazz) {
+Java_com_ravenemu_app_bridge_NativeBridge_saveBattery(JNIEnv *env, jclass clazz) {
     (void)clazz;
     size_t size = raven_frontend_battery_size(session);
     if (!size || size > MAX_BATTERY_BYTES) return NULL;
@@ -296,7 +296,7 @@ Java_com_ravenemu_app_NativeBridge_saveBattery(JNIEnv *env, jclass clazz) {
 }
 
 JNIEXPORT jboolean JNICALL
-Java_com_ravenemu_app_NativeBridge_restoreBattery(
+Java_com_ravenemu_app_bridge_NativeBridge_restoreBattery(
     JNIEnv *env, jclass clazz, jbyteArray saved) {
     (void)clazz;
     if (!saved) return JNI_FALSE;
@@ -311,7 +311,7 @@ Java_com_ravenemu_app_NativeBridge_restoreBattery(
 }
 
 JNIEXPORT jbyteArray JNICALL
-Java_com_ravenemu_app_NativeBridge_saveState(JNIEnv *env, jclass clazz) {
+Java_com_ravenemu_app_bridge_NativeBridge_saveState(JNIEnv *env, jclass clazz) {
     (void)clazz;
     size_t size = raven_frontend_state_size(session);
     if (!size || size > MAX_STATE_BYTES) return NULL;
@@ -326,7 +326,7 @@ Java_com_ravenemu_app_NativeBridge_saveState(JNIEnv *env, jclass clazz) {
 }
 
 JNIEXPORT jboolean JNICALL
-Java_com_ravenemu_app_NativeBridge_restoreState(
+Java_com_ravenemu_app_bridge_NativeBridge_restoreState(
     JNIEnv *env, jclass clazz, jbyteArray saved) {
     (void)clazz;
     if (!saved) return JNI_FALSE;
@@ -344,7 +344,7 @@ Java_com_ravenemu_app_NativeBridge_restoreState(
 }
 
 JNIEXPORT jintArray JNICALL
-Java_com_ravenemu_app_NativeBridge_capturePreview(JNIEnv *env, jclass clazz) {
+Java_com_ravenemu_app_bridge_NativeBridge_capturePreview(JNIEnv *env, jclass clazz) {
     (void)clazz;
     if (!preview_valid || !image_ready || image_width <= 0 || image_height <= 0) return NULL;
     uint32_t *pixels = malloc(RAVEN_PREVIEW_CAPACITY * sizeof(*pixels));
@@ -358,14 +358,14 @@ Java_com_ravenemu_app_NativeBridge_capturePreview(JNIEnv *env, jclass clazz) {
 }
 
 JNIEXPORT void JNICALL
-Java_com_ravenemu_app_NativeBridge_setAudioEnabled(
+Java_com_ravenemu_app_bridge_NativeBridge_setAudioEnabled(
     JNIEnv *env, jclass clazz, jboolean enabled) {
     (void)env; (void)clazz;
     raven_audio_set_running(enabled == JNI_TRUE);
 }
 
 JNIEXPORT void JNICALL
-Java_com_ravenemu_app_NativeBridge_closeRom(
+Java_com_ravenemu_app_bridge_NativeBridge_closeRom(
     JNIEnv *env, jclass clazz) {
     (void)env;
     (void)clazz;

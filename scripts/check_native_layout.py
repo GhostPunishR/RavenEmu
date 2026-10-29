@@ -5,8 +5,8 @@ from pathlib import Path
 root = Path(__file__).resolve().parent.parent
 required = [
     "frontend/src/libretro_host.c",
-    "android/src/main/java/com/ravenemu/app/HomeActivity.java",
-    "android/src/main/java/com/ravenemu/app/PlayerActivity.java",
+    "android/src/main/java/com/ravenemu/app/ui/library/HomeActivity.java",
+    "android/src/main/java/com/ravenemu/app/ui/player/PlayerActivity.java",
     "android/src/main/cpp/jni/bridge.c",
     "android/src/main/cpp/hardware/audio/audio_pipeline.c",
     "android/src/main/cpp/hardware/audio/aaudio/aaudio_driver.c",
@@ -25,10 +25,13 @@ for legacy in ["androidNative", "third_party"]:
 source = root / "android/src/main/java/com/ravenemu/app"
 for file in source.rglob("*.java"):
     content = file.read_text(encoding="utf-8")
-    if not content.startswith("package com.ravenemu.app;"):
-        raise SystemExit(f"Unexpected Java namespace: {file}")
+    if file.parent == source:
+        raise SystemExit(f"Java file must be in a feature subpackage: {file}")
+    expected = "com.ravenemu.app." + ".".join(file.parent.relative_to(source).parts)
+    if not content.startswith("package " + expected + ";"):
+        raise SystemExit(f"Unexpected Java namespace in {file}; expected {expected}")
 bridge = (root / "android/src/main/cpp/jni/bridge.c").read_text(encoding="utf-8")
-if "Java_com_ravenemu_nativepreview_" in bridge:
+if "Java_com_ravenemu_app_bridge_NativeBridge_" not in bridge or "Java_com_ravenemu_app_NativeBridge_" in bridge:
     raise SystemExit("Outdated JNI package prefix")
 gradle = (root / "android/build.gradle.kts").read_text(encoding="utf-8")
 if 'namespace = "com.ravenemu.app"' not in gradle or 'applicationId = "com.ravenemu.dev"' not in gradle:

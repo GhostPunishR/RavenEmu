@@ -355,3 +355,19 @@ The existing `androidApp/`, `iosApp/`, app ID and saves are untouched.
 - `../../legal/attributions/` : provenance des sources adaptées.
 
 L'identifiant de développement est `com.ravenemu.dev`, distinct de la bêta et de l'ancienne prévisualisation. Les données privées de l'ancienne prévisualisation ne sont ni migrées ni supprimées automatiquement.
+
+## Sous-packages Java
+
+Les sources Java sont organisées en vrais packages sous `src/main/java/com/ravenemu/app/` :
+
+- `ui/library/` : accueil, liste/grille et présentation des jeux ;
+- `ui/common/` : composant de fiche glissante partagé ;
+- `ui/player/` : écran de lecture, contrôles et menu de pause ;
+- `ui/settings/` : réglages et écran des licences ;
+- `data/library/` : ROMs, jaquettes et métadonnées ;
+- `data/saves/` : sauvegardes SRAM, états et miniatures ;
+- `settings/` : modèle et persistance des préférences de lecture ;
+- `bridge/` : contrat JNI Java ;
+- `platform/` : adaptation aux insets Android.
+
+Les tests JVM reflètent les mêmes packages. Le manifeste déclare les classes d'activités avec leurs sous-packages ; le pont C utilise le préfixe JNI correspondant à `bridge.NativeBridge`.
