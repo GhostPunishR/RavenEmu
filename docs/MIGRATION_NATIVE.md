@@ -138,3 +138,20 @@ Le module distinct `androidNative/` raccorde Java/JNI, les cores Libretro ARM64\
   présenter ces écrans comme identiques tant que ce n'est pas validé.
 - Les `.gradle.kts` existants sont uniquement les scripts de build du dépôt,
   pas une implémentation d'interface ou de logique d'émulation.
+
+## Huitième tranche : respect des barres du téléphone
+
+- Capture d'appareil : la barre d'état (heure, réseau, batterie) empiétait sur
+  la barre supérieure « Tous les jeux » et le pied de page était masqué par
+  la navigation Android à trois boutons.
+- `SystemBarInsets.java` protège `NativeHomeActivity.java` et le lecteur
+  `MainActivity.java` en réservant les insets `systemBars`, `displayCutout`
+  et `ime` sur Android 11+, ainsi que les insets historiques sur Android 8–10.
+- Le frontend C/GLES2 dessine maintenant à l'intérieur de la zone du lecteur
+  en respectant les marges parent ; les commandes tactiles restent au-dessus
+  de la barre de navigation du système.
+- Tests JVM : barres statut/navigation, navigation paysage + encoche, clavier,
+  calcul idempotent, valeurs incorrectes.
+- À tester visuellement sur téléphone : navigation par gestes / 3 boutons,
+  portrait/paysage, écran avec encoche, recherche avec clavier.
+- Aucune source Kotlin/Compose ajoutée au module Android natif.
