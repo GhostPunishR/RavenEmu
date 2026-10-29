@@ -29,13 +29,19 @@ Requires Android 8.0+ and an **ARM64** phone (arm64-v8a).
 
 APK: `androidNative/build/outputs/apk/debug/androidNative-debug.apk`.
 
-Run `./gradlew :androidNative:testDebugUnitTest` for identity/path tests.\n\nThe build should package `libraven_android.so`,
+Run `./gradlew :androidNative:testDebugUnitTest` for identity/path tests.
+
+The build should package `libraven_android.so`,
 `ravenemu_gb_libretro.so`, `ravenemu_gbc_libretro.so` and
 `ravenemu_gba_libretro.so`. They are compiled for ARM64 only.
 
 Launch **RavenEmu Native (Test)** and use **Importer ROM** to copy your
 `.gb`, `.gbc` or `.gba` into the app's private library. **Bibliothèque**
-reopens previously imported games, including after relaunching the app.\nThe library dialog offers **text search** (filenames and cartridge titles,\naccent-insensitive), **GB/GBC/GBA filtering** and sorting by name or system.\nLong-press an entry to see the cartridge header title, ROM size and SHA-256.\nHeader metadata is read locally without any online API.
+reopens previously imported games, including after relaunching the app.
+The library dialog offers **text search** (filenames and cartridge titles,
+accent-insensitive), **GB/GBC/GBA filtering** and sorting by name or system.
+Long-press an entry to see the cartridge header title, ROM size and SHA-256.
+Header metadata is read locally without any online API.
 **Menu C** displays the native pause menu above the game. Move with UP/DOWN
 (on-screen or on a gamepad) and activate with A; use the library action to open
 the accessible Android list. The Android document picker remains native to
