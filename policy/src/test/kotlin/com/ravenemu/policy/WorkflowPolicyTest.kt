@@ -35,11 +35,11 @@ class WorkflowPolicyTest {
                     ((Regex("""(^|[\s;&|])(\./)?gradlew(\.bat)?\s""").containsMatchIn(code) &&
                         Regex("""(?:^|\s)(?:-p|--project-dir)(?:=|\s+)""").containsMatchIn(code)) ||
                         (Regex("""\bcmake\b""").containsMatchIn(code) &&
-                            !Regex("""\bcmake\s+(?:-S\s+native\b|--build\s+native/build-host\b)""").containsMatchIn(code)))
+                            !Regex("""\bcmake\s+(?:-S\s+(?:native|frontend)\b|--build\s+(?:native/build-host|build/native-frontend)\b)""").containsMatchIn(code)))
             }.map { (index, line) -> "${file.name}:${index + 1}: ${line.trim()}" }
         }
         assertEquals(emptyList(), fautes,
-            "Les workflows doivent utiliser le Gradle racine et le pont native/")
+            "Les workflows doivent utiliser le Gradle racine et les builds CMake native/ ou frontend/")
     }
 
     @Test
