@@ -102,3 +102,20 @@ Le module distinct `androidNative/` raccorde Java/JNI, les cores Libretro ARM64\
   du tri ; la compilation ARM64 et la politique du dépôt restent vérifiées.
 - Jaquettes et recherches de métadonnées en ligne restent hors périmètre ;
   les téléphones physiques doivent encore valider navigation et performance.
+
+## Sixième tranche : jaquettes locales et bibliothèque illustrée
+
+- Sélection d'une image par l'utilisateur depuis le sélecteur SAF Android ;
+  aucune source distante ni jaquette propriétaire intégrée.
+- Décodage borné : fichier source inférieur ou égal à 8 MiB, dimensions
+  comprises entre 16 et 4096 px et 16 Mpixels au maximum ; normalisation en
+  PNG de 512 px de côté au plus avec écriture atomique, dans le dossier privé
+  `native-library/covers/` identifié uniquement par SHA-256 de la ROM.
+- Liste Android désormais illustrée par miniatures décodées hors UI et mises
+  en cache avec une limite de 32 images. Les jeux sans jaquette restent
+  accessibles avec leur titre et leur console.
+- Appui long sur un jeu pour importer/remplacer ou supprimer la jaquette ;
+  cette opération ne modifie ni les ROMs, ni les fichiers de sauvegarde.
+- Tests JVM des identités de fichiers, chemins et facteurs d'échantillonnage.
+  Le décodage image, les permissions et la reprise d'Activity demandent encore
+  des tests instrumentés puis sur appareil physique.
