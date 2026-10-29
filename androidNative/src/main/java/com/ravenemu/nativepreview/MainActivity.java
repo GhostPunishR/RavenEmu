@@ -2,6 +2,13 @@ package com.ravenemu.nativepreview;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.text.Editable;
+import android.text.TextWatcher;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
+import android.widget.EditText;
+import android.widget.ListView;
+import android.widget.Spinner;
 import android.content.Intent;
 import android.database.Cursor;
 import android.net.Uri;
@@ -164,12 +171,7 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
             data == null || data.getData() == null) return;
         Uri uri = data.getData();
         String name = getDisplayName(uri);
-        String lower = name.toLowerCase(Locale.ROOT);
-        String system;
-        if (lower.endsWith(".gbc")) system = "gbc";
-        else if (lower.endsWith(".gba")) system = "gba";
-        else if (lower.endsWith(".gb") || lower.endsWith(".sgb")) system = "gb";
-        else {
+        if (RomLibrary.detectSystem(name) == null) {
             status.setText("Extension non compatible : choisissez .gb, .gbc ou .gba");
             return;
         }
@@ -191,20 +193,112 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
             try {
                 List<RomLibrary.Entry> entries = RomLibrary.list(getFilesDir());
                 runOnUiThread(() -> {
-                    if (disposed.get()) return;
-                    String[] labels = new String[entries.size()];
-                    for (int i = 0; i < entries.size(); i++) labels[i] = entries.get(i).label();
-                    new AlertDialog.Builder(this)
-                        .setTitle(entries.isEmpty() ? "Bibliothèque vide" : "Jeux importés")
-                        .setItems(labels, (dialog, index) -> loadFromLibrary(entries.get(index)))
-                        .setPositiveButton("Importer", (dialog, index) -> pickRom())
-                        .setNegativeButton("Fermer", null)
-                        .show();
+                    if (!disposed.get()) showLibraryDialog(entries);
                 });
             } catch (Exception error) {
                 postStatus("Bibliothèque indisponible : " + error.getMessage());
             }
         });
+    }
+
+    /** Accessible Android game-picker dialog; the in-game pause menu is C. */
+    private void showLibraryDialog(List<RomLibrary.Entry> entries) {
+        int inset = (int)(16 * getResources().getDisplayMetrics().density);
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(inset, 0, inset, 0);
+
+        EditText search = new EditText(this);
+        search.setSingleLine(true);
+        search.setHint("Rechercher un jeu ou titre de cartouche");
+        layout.addView(search, new LinearLayout.LayoutParams(-1, -2));
+
+        LinearLayout controls = new LinearLayout(this);
+        Spinner systemFilter = new Spinner(this);
+        String[] systems = {"Toutes", "GB", "GBC", "GBA"};
+        ArrayAdapter<String> systemsAdapter = new ArrayAdapter<>(
+                this, android.R.layout.simple_spinner_item, systems);
+        systemsAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        systemFilter.setAdapter(systemsAdapter);
+        controls.addView(systemFilter, new LinearLayout.LayoutParams(0, -2, 1));
+
+        Spinner sortFilter = new Spinner(this);
+        String[] sorts = {"Titre A-Z", "Titre Z-A", "Console"};
+        ArrayAdapter<String> sortsAdapter = new ArrayAdapter<>(
+                this, android.R.layout.simple_spinner_item, sorts);
+        sortsAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        sortFilter.setAdapter(sortsAdapter);
+        controls.addView(sortFilter, new LinearLayout.LayoutParams(0, -2, 1));
+        layout.addView(controls, new LinearLayout.LayoutParams(-1, -2));
+
+        TextView count = new TextView(this);
+        layout.addView(count);
+        ListView games = new ListView(this);
+        List<RomLibrary.Entry> shown = new java.util.ArrayList<>();
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(
+                this, android.R.layout.simple_list_item_1, new java.util.ArrayList<>());
+        games.setAdapter(adapter);
+        int listHeight = (int)(330 * getResources().getDisplayMetrics().density);
+        layout.addView(games, new LinearLayout.LayoutParams(-1, listHeight));
+
+        Runnable refresh = () -> {
+            String system = systemFilter.getSelectedItemPosition() == 0
+                    ? "" : systems[systemFilter.getSelectedItemPosition()].toLowerCase(Locale.ROOT);
+            RomLibrary.SortOrder sort = sortFilter.getSelectedItemPosition() == 1
+                    ? RomLibrary.SortOrder.TITLE_DESC
+                    : sortFilter.getSelectedItemPosition() == 2
+                    ? RomLibrary.SortOrder.SYSTEM : RomLibrary.SortOrder.TITLE_ASC;
+            shown.clear();
+            shown.addAll(RomLibrary.query(entries, search.getText().toString(), system, sort));
+            adapter.clear();
+            for (RomLibrary.Entry entry : shown) adapter.add(entry.label());
+            adapter.notifyDataSetChanged();
+            count.setText(shown.isEmpty() ? "Aucun jeu correspondant"
+                    : shown.size() + " jeu(x) sur " + entries.size());
+        };
+
+        search.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
+                refresh.run();
+            }
+            @Override public void afterTextChanged(Editable s) {}
+        });
+        AdapterView.OnItemSelectedListener selector = new AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(AdapterView<?> parent, View view,
+                                                 int position, long id) { refresh.run(); }
+            @Override public void onNothingSelected(AdapterView<?> parent) { refresh.run(); }
+        };
+        systemFilter.setOnItemSelectedListener(selector);
+        sortFilter.setOnItemSelectedListener(selector);
+        refresh.run();
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Bibliothèque · " + entries.size() + " jeu(x)")
+                .setView(layout)
+                .setPositiveButton("Importer une ROM", (d, which) -> pickRom())
+                .setNegativeButton("Fermer", null)
+                .create();
+        games.setOnItemClickListener((parent, view, position, id) -> {
+            RomLibrary.Entry chosen = shown.get(position);
+            dialog.dismiss();
+            loadFromLibrary(chosen);
+        });
+        games.setOnItemLongClickListener((parent, view, position, id) -> {
+            RomLibrary.Entry chosen = shown.get(position);
+            String cartridge = chosen.cartridgeTitle.isEmpty()
+                    ? "Non disponible" : chosen.cartridgeTitle;
+            new AlertDialog.Builder(this)
+                    .setTitle(chosen.title)
+                    .setMessage("Console : " + chosen.system.toUpperCase(Locale.ROOT)
+                            + "\nTitre cartouche : " + cartridge
+                            + "\nTaille : " + chosen.size + " octets"
+                            + "\nSHA-256 : " + chosen.key)
+                    .setPositiveButton("Fermer", null)
+                    .show();
+            return true;
+        });
+        dialog.show();
     }
 
     private void loadFromLibrary(RomLibrary.Entry entry) {
