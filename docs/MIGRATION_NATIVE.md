@@ -119,3 +119,22 @@ Le module distinct `androidNative/` raccorde Java/JNI, les cores Libretro ARM64\
 - Tests JVM des identités de fichiers, chemins et facteurs d'échantillonnage.
   Le décodage image, les permissions et la reprise d'Activity demandent encore
   des tests instrumentés puis sur appareil physique.
+
+## Septième tranche : fidélité à l'interface RavenEmu sans Kotlin
+
+- Exigence explicite : **aucun code applicatif Kotlin ou Compose** dans le
+  module `androidNative`. Le début d'intégration de
+  `NativeHomeActivity.kt` et ses dépendances Compose a été annulé.
+- Nouveau `NativeHomeActivity.java` comme lanceur : reprise des couleurs
+  exactes de `RavenColors.kt` (sans dépendance Kotlin), barre supérieure
+  réglages / titre / ajouter / options, recherche, grille/liste de jaquettes,
+  pages GB/GBC/GBA, pied de page et fiche jeu avec bouton « Jouer ».
+- `RavenLibraryAdapter.java` affiche la grille et la liste en Java, avec
+  lecture asynchrone des jaquettes ; le lecteur JNI est ouvert via la clé
+  SHA-256 d'une ROM importée et conserve sa couche native C / C++20.
+- `MainActivity.java` reprend la barre du jeu et les couleurs d'origine.
+- La parité complète reste à réaliser pour les réglages, les skins Delta,
+  les options du menu de pause et les contrôles détaillés ; ne pas
+  présenter ces écrans comme identiques tant que ce n'est pas validé.
+- Les `.gradle.kts` existants sont uniquement les scripts de build du dépôt,
+  pas une implémentation d'interface ou de logique d'émulation.
