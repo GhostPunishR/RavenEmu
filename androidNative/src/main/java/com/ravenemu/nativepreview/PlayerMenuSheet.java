@@ -2,7 +2,9 @@ package com.ravenemu.nativepreview;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.graphics.Bitmap;
 import android.graphics.Typeface;
+import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.StateListDrawable;
@@ -10,6 +12,8 @@ import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
 import android.widget.Button;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import androidx.core.widget.NestedScrollView;
@@ -18,13 +22,14 @@ import java.util.Locale;
 
 /** Java Views counterpart of the beta's pause menu and four state slots.
  * Rendering and confirmations only: all core and file operations belong to
- * the listener. State thumbnails are not ported yet; the preview stays empty. */
+ * the listener. Preview bitmaps are decoded on the storage executor. */
 final class PlayerMenuSheet {
     interface Listener {
         void onSave(int slot);
         void onLoad(int slot);
         void onDelete(int slot);
         void onDismiss();
+        default void onUndo() {}
     }
 
     private static final int CARD = 0xff202230;
@@ -34,11 +39,14 @@ final class PlayerMenuSheet {
     private final GameDetailsSheet dialog;
     private final Button[] choices = new Button[StateSlotRepository.SLOT_COUNT];
     private final TextView slotTitle, savedAt, warning, operationMessage;
-    private final Button save, load, delete;
+    private final Button save, load, delete, undo;
+    private final ImageView previewImage;
+    private final TextView previewBadge;
+    private Bitmap[] previews;
     private StateSlotRepository.Slot[] slots;
     private AlertDialog confirmation;
     private int selectedSlot;
-    private boolean busy;
+    private boolean busy, undoAvailable;
 
     PlayerMenuSheet(Activity owner, String title, int selectedSlot, Listener listener) {
         this.owner = owner;
@@ -85,13 +93,21 @@ final class PlayerMenuSheet {
         LinearLayout summary = new LinearLayout(owner);
         summary.setGravity(Gravity.CENTER_VERTICAL);
         String system = RomLibrary.detectSystem(title);
-        TextView preview = text(system == null ? "—" : system.toUpperCase(Locale.ROOT),
+        FrameLayout preview = new FrameLayout(owner);
+        previewBadge = text(system == null ? "—" : system.toUpperCase(Locale.ROOT),
                 16, NativeHomeActivity.MUTED);
-        preview.setGravity(Gravity.CENTER);
+        previewBadge.setGravity(Gravity.CENTER);
         preview.setContentDescription("Aperçu de sauvegarde indisponible");
         GradientDrawable frame = shape(0xff10111b, 9);
         frame.setStroke(dp(1), NativeHomeActivity.OUTLINE);
         preview.setBackground(frame);
+        preview.setClipToOutline(true);
+        preview.addView(previewBadge, new FrameLayout.LayoutParams(-1, -1));
+        previewImage = new ImageView(owner);
+        previewImage.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        previewImage.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        previewImage.setVisibility(View.GONE);
+        preview.addView(previewImage, new FrameLayout.LayoutParams(-1, -1));
         summary.addView(preview, new LinearLayout.LayoutParams(dp(94), dp(84)));
         LinearLayout description = column();
         description.setPadding(dp(12), 0, 0, 0);
@@ -120,6 +136,11 @@ final class PlayerMenuSheet {
         operationMessage.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
         operationMessage.setVisibility(View.GONE);
         add(content, operationMessage, 8);
+        undo = button("Annuler le chargement", 14);
+        undo.setOnClickListener(view -> {
+            if (!busy && undoAvailable && dialog.isShowing()) begin(listener::onUndo);
+        });
+        add(content, undo, 12);
         save.setOnClickListener(view -> requestSave());
         load.setOnClickListener(view -> requestLoad());
         delete.setOnClickListener(view -> requestDelete());
@@ -155,6 +176,17 @@ final class PlayerMenuSheet {
     boolean isShowing() { return dialog.isShowing(); }
     int getSelectedSlot() { return selectedSlot; }
 
+    void setUndoAvailable(boolean available) {
+        undoAvailable = available;
+        refresh();
+    }
+
+    /** The caller owns these bitmaps; never recycle an image still in a view. */
+    void setPreviews(Bitmap[] previews) {
+        this.previews = previews == null ? null : previews.clone();
+        refresh();
+    }
+
     void showMessage(String message) {
         operationMessage.setText(message);
         operationMessage.setVisibility(View.VISIBLE);
@@ -163,6 +195,7 @@ final class PlayerMenuSheet {
     void render(StateSlotRepository.Slot[] slots, boolean busy) {
         dismissConfirmation();
         this.slots = slots == null ? null : slots.clone();
+        previews = null;
         this.busy = busy;
         if (busy) operationMessage.setVisibility(View.GONE);
         refresh();
@@ -188,6 +221,22 @@ final class PlayerMenuSheet {
             choices[i].setAlpha(busy ? .5f : 1f);
         }
         StateSlotRepository.Slot entry = slot(selectedSlot);
+        Bitmap bitmap = entry != null && entry.occupied && entry.error == null && previews != null
+                && selectedSlot < previews.length ? previews[selectedSlot] : null;
+        if (bitmap != null && bitmap.isRecycled()) bitmap = null;
+        if (bitmap == null) {
+            previewImage.setImageDrawable(null);
+            previewImage.setVisibility(View.GONE);
+            previewBadge.setVisibility(View.VISIBLE);
+        } else {
+            BitmapDrawable drawable = new BitmapDrawable(owner.getResources(), bitmap);
+            drawable.setFilterBitmap(false);
+            previewImage.setImageDrawable(drawable);
+            previewImage.setVisibility(View.VISIBLE);
+            previewBadge.setVisibility(View.GONE);
+        }
+        ((View) previewImage.getParent()).setContentDescription(bitmap == null
+                ? "Aperçu de sauvegarde indisponible" : "Aperçu de l'emplacement " + (selectedSlot + 1));
         slotTitle.setText("Emplacement " + (selectedSlot + 1));
         savedAt.setText(entry == null ? "Chargement des emplacements…"
                 : !entry.occupied ? "Vide" : entry.savedAt <= 0 ? "Date inconnue"
@@ -201,6 +250,8 @@ final class PlayerMenuSheet {
         enabled(save, !busy && entry != null);
         enabled(load, !busy && entry != null && entry.occupied && (entry.compatible || entry.legacy));
         enabled(delete, !busy && entry != null && entry.occupied);
+        undo.setVisibility(undoAvailable ? View.VISIBLE : View.GONE);
+        enabled(undo, undoAvailable && !busy);
     }
 
     private boolean ready() { return !busy && dialog.isShowing() && slot(selectedSlot) != null; }

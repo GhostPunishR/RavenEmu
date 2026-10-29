@@ -23,9 +23,10 @@ import java.util.Arrays;
 final class StateSlotRepository {
     static final int SLOT_COUNT = 4;
     private static final int MAX_STATE = 16 * 1024 * 1024;
+    private static final int MAX_THUMBNAIL = 256 * 1024;
     private static final int MAX_COMPATIBILITY = 1024;
     private static final long MAGIC = 0x5241565354415445L; // RAVSTATE
-    private static final int VERSION = 1;
+    private static final int VERSION = 2;
     private static final int DELETED = 0, SAVED = 1;
 
     static final class Slot {
@@ -34,15 +35,23 @@ final class StateSlotRepository {
         final long savedAt;
         /** Null for readable slots; an invalid file remains visible/deletable. */
         final String error;
+        /** Optional encoded preview; decoding and dimension checks belong to UI storage work. */
+        final byte[] thumbnail;
 
         Slot(int index, boolean occupied, boolean compatible, boolean legacy,
              long savedAt, String error) {
+            this(index, occupied, compatible, legacy, savedAt, error, null);
+        }
+
+        Slot(int index, boolean occupied, boolean compatible, boolean legacy,
+             long savedAt, String error, byte[] thumbnail) {
             this.index = index;
             this.occupied = occupied;
             this.compatible = compatible;
             this.legacy = legacy;
             this.savedAt = savedAt;
             this.error = error;
+            this.thumbnail = thumbnail == null ? null : thumbnail.clone();
         }
     }
 
@@ -50,12 +59,13 @@ final class StateSlotRepository {
         final boolean deleted;
         final String compatibility;
         final long savedAt;
-        final byte[] payload;
-        Record(boolean deleted, String compatibility, long savedAt, byte[] payload) {
+        final byte[] payload, thumbnail;
+        Record(boolean deleted, String compatibility, long savedAt, byte[] payload, byte[] thumbnail) {
             this.deleted = deleted;
             this.compatibility = compatibility;
             this.savedAt = savedAt;
             this.payload = payload;
+            this.thumbnail = thumbnail;
         }
     }
 
@@ -71,7 +81,7 @@ final class StateSlotRepository {
                     Record record = readRecord(path, key, false);
                     slots[index] = new Slot(index, !record.deleted,
                             !record.deleted && compatibility.equals(record.compatibility),
-                            false, record.deleted ? 0 : record.savedAt, null);
+                            false, record.deleted ? 0 : record.savedAt, null, record.thumbnail);
                 } else if (index == 0 && exists(legacyPath(files, key))) {
                     File legacy = legacyPath(files, key);
                     readLegacy(legacy, false);
@@ -103,17 +113,25 @@ final class StateSlotRepository {
 
     static void write(File files, String key, int slot, String compatibility, byte[] state)
             throws IOException {
+        write(files, key, slot, compatibility, state, null);
+    }
+
+    static void write(File files, String key, int slot, String compatibility, byte[] state,
+                      byte[] thumbnail) throws IOException {
         byte[] encodedCompatibility = validateCompatibility(compatibility);
         File path = path(files, key, slot);
         if (state == null || state.length == 0 || state.length > MAX_STATE)
             throw new IOException("Taille d'état invalide");
-        writeRecord(path, key, encodedCompatibility, state, false);
+        if (thumbnail != null && thumbnail.length > MAX_THUMBNAIL)
+            throw new IOException("Miniature trop volumineuse");
+        writeRecord(path, key, encodedCompatibility, state,
+                thumbnail == null ? new byte[0] : thumbnail, false);
     }
 
     /** Explicit deletion writes a durable tombstone; an older quick-save
      * cannot reappear, and SRAM/other slots/legacy source stay unchanged. */
     static void delete(File files, String key, int slot) throws IOException {
-        writeRecord(path(files, key, slot), key, new byte[0], new byte[0], true);
+        writeRecord(path(files, key, slot), key, new byte[0], new byte[0], new byte[0], true);
     }
 
     private static File path(File files, String key, int slot) {
@@ -153,8 +171,10 @@ final class StateSlotRepository {
 
     private static Record readRecord(File path, String key, boolean retainPayload) throws IOException {
         try (DataInputStream input = new DataInputStream(new AtomicFile(path).openRead())) {
-            if (input.readLong() != MAGIC || input.readInt() != VERSION)
+            if (input.readLong() != MAGIC)
                 throw new IOException("Format d'état inconnu");
+            int version = input.readInt();
+            if (version != 1 && version != VERSION) throw new IOException("Format d'état inconnu");
             int kind = input.readUnsignedByte();
             if (kind != DELETED && kind != SAVED) throw new IOException("Type d'état invalide");
             byte[] identity = new byte[64];
@@ -195,9 +215,32 @@ final class StateSlotRepository {
                 if (payload != null) System.arraycopy(chunk, 0, payload, offset, count);
                 offset += count;
             }
-            if (input.read() != -1 || !MessageDigest.isEqual(expectedHash, digest.digest()))
+            if (!MessageDigest.isEqual(expectedHash, digest.digest()))
                 throw new IOException("État corrompu");
-            return new Record(kind == DELETED, compatibility, savedAt, payload);
+            byte[] thumbnail = null;
+            if (version == 1) {
+                if (input.read() != -1) throw new IOException("État corrompu");
+            } else thumbnail = readThumbnail(input);
+            return new Record(kind == DELETED, compatibility, savedAt, payload,
+                    kind == DELETED ? null : thumbnail);
+        }
+    }
+
+    /** Preview damage cannot invalidate an already verified game payload.
+     * Bound the allocation before reading any optional trailer bytes. */
+    private static byte[] readThumbnail(DataInputStream input) {
+        try {
+            int size = input.readInt();
+            if (size < 0 || size > MAX_THUMBNAIL) return null;
+            byte[] thumbnail = new byte[size];
+            input.readFully(thumbnail);
+            byte[] checksum = new byte[32];
+            input.readFully(checksum);
+            if (input.read() != -1 || !MessageDigest.isEqual(checksum, sha256().digest(thumbnail)))
+                return null;
+            return size == 0 ? null : thumbnail;
+        } catch (IOException damagedPreview) {
+            return null;
         }
     }
 
@@ -219,8 +262,9 @@ final class StateSlotRepository {
     }
 
     private static void writeRecord(File path, String key, byte[] compatibility,
-                                    byte[] payload, boolean deleted) throws IOException {
+                                    byte[] payload, byte[] thumbnail, boolean deleted) throws IOException {
         byte[] checksum = sha256().digest(payload);
+        byte[] thumbnailChecksum = sha256().digest(thumbnail);
         File folder = path.getParentFile();
         if (!folder.isDirectory() && !folder.mkdirs())
             throw new IOException("Impossible de créer le dossier des états");
@@ -238,6 +282,9 @@ final class StateSlotRepository {
             output.writeInt(payload.length);
             output.write(checksum);
             output.write(payload);
+            output.writeInt(thumbnail.length);
+            output.write(thumbnail);
+            output.write(thumbnailChecksum);
             output.flush();
             atomic.finishWrite(stream);
         } catch (IOException | RuntimeException failure) {

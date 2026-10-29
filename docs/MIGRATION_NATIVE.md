@@ -232,3 +232,31 @@ Voir [androidNative/README.md](../androidNative/README.md).
   chargement réussi, réglages, RA et link restent des écarts de parité.
   La rotation restaure panneau/emplacement et SRAM, sans promettre la
   continuité automatique de l'état CPU exact du jeu.
+
+## Douzième tranche : miniatures d'états et annulation du chargement
+
+- La carte d'emplacement Java affiche la miniature enregistrée avec son état,
+  centrée, au bon ratio et sans filtrage. Une image absente/illisible conserve
+  le badge console ; les changements d'emplacement et de liste invalident
+  l'ancien aperçu pour ne pas montrer celui d'une autre sauvegarde.
+- Capture native C bornée à 160 pixels de côté depuis le tampon vidéo RGBA,
+  sur le fil GL. Encodage PNG, vérification des dimensions et décodage sur
+  l'exécuteur de stockage, sans lecture de framebuffer GLES. Une restauration
+  invalide la capture jusqu'au prochain callback vidéo frais du core.
+- Enveloppe d'état v2 : charge utile et image sont remplacées atomiquement dans
+  le même fichier. L'image optionnelle est bornée à 256 Kio, avec une empreinte
+  indépendante ; une image endommagée ne rend pas l'état valide inutilisable.
+  Les enveloppes v1, marqueurs et anciens quick-saves restent lisibles sans
+  migration automatique. L'identité de compatibilité du core reste inchangée.
+- « Annuler le chargement » restaure le point capturé avant le dernier
+  chargement réussi, pour la session/ROM/core courants. Un seul point borné
+  est conservé en mémoire et consommé après réussite ; un échec tente le retour
+  à la partie courante. La fermeture/recréation ou le changement de ROM
+  invalident ce point, sans modifier les fichiers d'emplacements.
+- Pause cumulée, doubles appuis, arrière-plan, fermeture du lecteur et
+  génération du panneau restent protégés pendant chargement/annulation.
+  Tests C de pixels/dimensions/ratios et tests Java des formats, images,
+  commandes du panneau et parcours du lecteur sont intégrés à la CI.
+- Validation physique encore requise avant bascule. Réglages, RA/link,
+  hôte iOS natif et continuité CPU exacte après rotation restent des écarts
+  de parité documentés ; aucune donnée de la bêta n'est lue ou migrée.

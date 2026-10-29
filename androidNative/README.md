@@ -23,8 +23,8 @@ utilisé par le dépôt ; aucune source Kotlin ou Compose n'est ajoutée au
 nouveau module.
 
 La bibliothèque Java restaure déjà les écrans centraux, mais ce n'est **pas
-encore une parité visuelle totale** : les miniatures d'états, les réglages et
-les fonctions avancées du menu doivent encore être raccordés.
+encore une parité visuelle totale** : les réglages et les fonctions avancées
+du menu doivent encore être raccordés et le rendu validé sur téléphone.
 
 ## Calibrage sur les barres du téléphone
 
@@ -102,6 +102,7 @@ conclure à une parité avec la bêta.
 - `StateSlotRepository.java`: versioned atomic state slots, ROM/core identity
   and SHA-256 validation; disk access stays on the storage executor shared
   between player Activities, so a recreated player reads after prior writes.
+- `StatePreview.java`: bounded PNG encoding/decoding on the storage executor.
 - `NativeBridge.java`: typed JNI entry points; `setButtons` and `clearButtons`
   update atomic input from the UI. Core calls use the GL thread while running;
   lifecycle cleanup accesses the session only after that thread is paused.
@@ -109,6 +110,8 @@ conclure à une parité avec la bêta.
   RGBA8888, OpenGL ES 2 texture drawing, atomic joypad input.
 - `src/main/cpp/native_input.c`: held/pending input masks and one stable
   joypad snapshot per emulated frame.
+- `src/main/cpp/native_preview.c`: bounded RGBA-to-ARGB frame copy for state
+  thumbnails, with nearest-neighbor downscaling and preserved aspect ratio.
 - The C bridge gates emulated frames and native audio together during pause;
   the Java sheet supplies the RavenEmu presentation instead of the prototype's
   pixel-font menu. Core capture/restore still uses the GL/emulation thread.
@@ -168,11 +171,28 @@ de compatibilité inconnue. L'enregistrer à nouveau crée une enveloppe version
 Supprimer cet emplacement le masque avec un marqueur atomique ; le fichier
 historique reste intact et ne réapparaît pas. Aucun fichier bêta n'est lu.
 
-Les miniatures d'états, l'annulation d'un chargement réussi et les autres
-options avancées du menu ne sont pas encore portées. La carte affiche un
-badge console en attendant les captures. La recréation restaure le panneau
-et le numéro d'emplacement ; le redémarrage du jeu repose encore sur la SRAM,
-pas sur une restauration automatique de son état CPU exact.
+La carte montre désormais une **miniature du jeu au moment de la sauvegarde**,
+centrée et sans filtrage des pixels. La capture C copie au plus 160×160 pixels
+depuis la dernière image du core ; l'encodage/décodage PNG reste sur le fil de
+stockage. Les nouveaux fichiers d'états (enveloppe v2) enregistrent ensemble
+état et image lors d'un remplacement atomique. Les fichiers v1 restent lisibles
+sans réécriture à l'ouverture. L'image est optionnelle, bornée à 256 Kio et
+vérifiée séparément : sa corruption n'empêche pas de charger un état valide.
+Sans image disponible, la carte garde son badge console. Après restauration,
+une nouvelle miniature attend une image fraîche du core pour éviter d'utiliser
+les pixels de la partie précédente.
+
+Après un chargement réussi, **Annuler le chargement** revient à l'état courant
+capturé juste avant le dernier chargement. Un seul point est gardé en mémoire,
+pour la même ROM et le même core, puis consommé après une annulation réussie.
+Si l'annulation échoue, le lecteur tente de rétablir la partie courante et
+garde le point d'annulation pour une nouvelle tentative. Les fichiers des
+emplacements et la SRAM ne sont pas supprimés par cette action. Le point est
+abandonné à la fermeture/recréation du lecteur ou au changement de ROM.
+
+Les autres options avancées du menu restent à porter. La recréation restaure
+le panneau et le numéro d'emplacement ; le redémarrage du jeu repose encore
+sur la SRAM, pas sur une restauration automatique de son état CPU exact.
 No ROM or BIOS is bundled; no broad storage permission is requested.
 
 ## Current limits (intentional)

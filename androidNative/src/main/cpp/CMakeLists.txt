@@ -11,7 +11,7 @@ add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../../../../frontend"
 include(FetchContent)
 FetchContent_GetProperties(ravencore)
 
-add_library(raven_android SHARED bridge.c native_audio.c native_input.c)
+add_library(raven_android SHARED bridge.c native_audio.c native_input.c native_preview.c)
 target_compile_features(raven_android PRIVATE c_std_11)
 target_link_libraries(raven_android PRIVATE raven_frontend GLESv2 aaudio log m)
 target_include_directories(raven_android PRIVATE

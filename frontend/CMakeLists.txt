@@ -36,6 +36,15 @@ if(RAVEN_FRONTEND_TESTS AND NOT ANDROID)
         target_compile_options(raven_native_input_test PRIVATE -Wall -Wextra -Wpedantic)
     endif()
     add_test(NAME raven_native_input COMMAND raven_native_input_test)
+    add_executable(raven_native_preview_test
+        "${CMAKE_CURRENT_LIST_DIR}/../androidNative/src/test/cpp/test_native_preview.c"
+        "${native_input_dir}/native_preview.c")
+    target_compile_features(raven_native_preview_test PRIVATE c_std_11)
+    target_include_directories(raven_native_preview_test PRIVATE "${native_input_dir}")
+    if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(raven_native_preview_test PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+    add_test(NAME raven_native_preview COMMAND raven_native_preview_test)
     add_library(raven_frontend_fake_core SHARED tests/fake_core.c)
     target_include_directories(raven_frontend_fake_core PRIVATE
         ${ravencore_SOURCE_DIR}/libretro/include)

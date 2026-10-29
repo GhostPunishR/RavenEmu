@@ -151,7 +151,9 @@ public final class MainActivityTest {
         StateSlotRepository.write(files, key, 0, COMPATIBILITY, new byte[]{22});
         try (RandomAccessFile damaged = new RandomAccessFile(new File(files,
                 "native-saves/" + key + "-slot0.state"), "rw")) {
-            damaged.seek(damaged.length() - 1);
+            // V2 ends in an optional preview hash. Damage the actual core
+            // payload so this still tests rejection before deserialization.
+            damaged.seek(8 + 4 + 1 + 64 + 2 + COMPATIBILITY.getBytes(java.nio.charset.StandardCharsets.UTF_8).length + 8 + 4 + 32);
             damaged.write(23);
         }
         menuButton("Charger").performClick();
@@ -272,6 +274,82 @@ public final class MainActivityTest {
         assertTrue(FakeNative.paused);
     }
 
+    @Test public void saveCapturesAPreviewAndSavingWithoutAFrameStillKeepsTheState() throws Exception {
+        MainActivity activity = loaded();
+        openMenu(activity);
+        menuButton("Sauver").performClick();
+        pump(activity);
+        StateSlotRepository.Slot saved = StateSlotRepository.list(files, key, COMPATIBILITY)[0];
+        android.graphics.Bitmap preview = StatePreview.decode(saved.thumbnail);
+        assertNotNull(preview);
+        assertEquals(0xffff0000, preview.getPixel(0, 0));
+        choice(1).performClick();
+        FakeNative.preview = null;
+        FakeNative.state = new byte[]{80};
+        menuButton("Sauver").performClick();
+        pump(activity);
+        assertNull(StateSlotRepository.list(files, key, COMPATIBILITY)[1].thumbnail);
+        assertArrayEquals(new byte[]{80}, StateSlotRepository.read(files, key, 1, COMPATIBILITY));
+    }
+
+    @Test public void undoRestoresTheStateBeforeTheMostRecentSuccessfulLoadOnlyOnce() throws Exception {
+        MainActivity activity = loaded();
+        FakeNative.state = new byte[]{81};
+        StateSlotRepository.write(files, key, 0, COMPATIBILITY, new byte[]{82});
+        openMenu(activity);
+        menuButton("Charger").performClick(); pump(activity);
+        FakeNative.state = new byte[]{83};
+        StateSlotRepository.write(files, key, 1, COMPATIBILITY, new byte[]{84});
+        openMenu(activity);
+        choice(1).performClick(); menuButton("Charger").performClick(); pump(activity);
+        assertArrayEquals(new byte[]{84}, FakeNative.state);
+        openMenu(activity);
+        menuButton("Annuler le chargement").performClick(); pump(activity);
+        assertArrayEquals(new byte[]{83}, FakeNative.state);
+        assertFalse(menu(activity).isShowing());
+        openMenu(activity);
+        View undo = menuButton("Annuler le chargement");
+        assertEquals(View.GONE, undo.getVisibility());
+        assertArrayEquals(new byte[]{84}, StateSlotRepository.read(files, key, 1, COMPATIBILITY));
+    }
+
+    @Test public void failedUndoRollsBackCurrentProgressAndRemainsRetryable() throws Exception {
+        MainActivity activity = loaded();
+        FakeNative.state = new byte[]{85};
+        StateSlotRepository.write(files, key, 0, COMPATIBILITY, new byte[]{86});
+        openMenu(activity); menuButton("Charger").performClick(); pump(activity);
+        FakeNative.state = new byte[]{87};
+        openMenu(activity);
+        FakeNative.failRestores = 1;
+        menuButton("Annuler le chargement").performClick(); pump(activity);
+        assertArrayEquals(new byte[]{87}, FakeNative.state);
+        assertTrue(FakeNative.paused);
+        assertTrue(menu(activity).isShowing());
+        assertTrue(menuButton("Annuler le chargement").isEnabled());
+        menuButton("Annuler le chargement").performClick(); pump(activity);
+        assertArrayEquals(new byte[]{85}, FakeNative.state);
+    }
+
+    @Test public void backgroundUndoDoesNotConsumeTheUndoPointAndRecreationClearsIt() throws Exception {
+        ActivityController<MainActivity> controller = open(null);
+        MainActivity activity = controller.get();
+        activity.onWindowFocusChanged(true); pump(activity);
+        FakeNative.state = new byte[]{88};
+        StateSlotRepository.write(files, key, 0, COMPATIBILITY, new byte[]{89});
+        openMenu(activity); menuButton("Charger").performClick(); pump(activity);
+        openMenu(activity); menuButton("Annuler le chargement").performClick();
+        controller.pause(); pump(activity);
+        assertArrayEquals(new byte[]{89}, FakeNative.state);
+        assertEquals(1, FakeNative.restoreAttempts.size());
+        controller.resume(); activity.onWindowFocusChanged(true); pump(activity);
+        assertTrue(menuButton("Annuler le chargement").isEnabled());
+        Bundle saved = new Bundle();
+        controller.saveInstanceState(saved).pause().stop().destroy(); activities.remove(controller);
+        MainActivity recreated = open(saved).get();
+        recreated.onWindowFocusChanged(true); pump(recreated);
+        assertEquals(View.GONE, menuButton("Annuler le chargement").getVisibility());
+    }
+
     @Test public void recreatedActivityKeepsTheOpenMenuAndSelectedSlot() throws Exception {
         ActivityController<MainActivity> first = open(null);
         first.get().onWindowFocusChanged(true);
@@ -384,11 +462,13 @@ public final class MainActivityTest {
     @Implements(value = NativeBridge.class, isInAndroidSdk = false)
     public static class FakeNative {
         static byte[] state, battery;
+        static int[] preview;
         static final List<byte[]> restoreAttempts = new ArrayList<>(), restoredBatteries = new ArrayList<>();
         static int opens, failRestores;
         static boolean closed, paused, lastAdvance;
         static void reset() {
             state = new byte[]{1, 2}; battery = new byte[]{3, 4};
+            preview = new int[]{2, 1, 0xffff0000, 0xff00ff00};
             restoreAttempts.clear(); restoredBatteries.clear();
             opens = failRestores = 0; closed = lastAdvance = false; paused = true;
         }
@@ -400,6 +480,9 @@ public final class MainActivityTest {
         }
         @Implementation protected static String stateCompatibility() { requireGl(); return COMPATIBILITY; }
         @Implementation protected static byte[] saveState() { requireGl(); return state.clone(); }
+        @Implementation protected static int[] capturePreview() {
+            requireGl(); return preview == null ? null : preview.clone();
+        }
         @Implementation protected static byte[] saveBattery() { return closed ? null : battery.clone(); }
         @Implementation protected static boolean restoreBattery(byte[] value) {
             requireGl(); restoredBatteries.add(value.clone()); battery = value.clone(); return true;

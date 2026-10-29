@@ -2,6 +2,7 @@ package com.ravenemu.nativepreview;
 
 import android.app.Activity;
 import android.content.res.Configuration;
+import android.graphics.Bitmap;
 import android.opengl.GLSurfaceView;
 import android.os.Bundle;
 import android.view.Gravity;
@@ -42,6 +43,24 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
     private PlayerPauseState pauseState;
     private PlayerMenuSheet playerMenu;
     private StateSlotRepository.Slot[] stateSlots;
+    private Bitmap[] statePreviews = new Bitmap[StateSlotRepository.SLOT_COUNT];
+    private volatile UndoState undoState;
+
+    private static final class UndoState {
+        final String key, compatibility;
+        final byte[] snapshot;
+        UndoState(String key, String compatibility, byte[] snapshot) {
+            this.key = key; this.compatibility = compatibility; this.snapshot = snapshot;
+        }
+    }
+
+    private static final class SlotBatch {
+        final StateSlotRepository.Slot[] slots;
+        final Bitmap[] previews;
+        SlotBatch(StateSlotRepository.Slot[] slots, Bitmap[] previews) {
+            this.slots = slots; this.previews = previews;
+        }
+    }
     private boolean slotBusy, restoreMenu;
     private int selectedSlot;
     private final Object ioGate = new Object();
@@ -185,6 +204,7 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
                 String dataDir = getFilesDir().getAbsolutePath();
                 queueRomLoad(() -> {
                     if (disposed.get()) return;
+                    undoState = null;
                     String failure = NativeBridge.openRom(nativeDir, dataDir,
                             entry.system, rom, entry.title);
                     if (failure == null && battery != null &&
@@ -254,6 +274,7 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
                     @Override public void onSave(int slot) { operateSlot(slot, 0); }
                     @Override public void onLoad(int slot) { operateSlot(slot, 1); }
                     @Override public void onDelete(int slot) { operateSlot(slot, 2); }
+                    @Override public void onUndo() { undoLastLoad(); }
                     @Override public void onDismiss() {
                         if (generation != menuGeneration) return;
                         selectedSlot = playerMenu.getSelectedSlot();
@@ -262,7 +283,8 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
                     }
                 });
         stateSlots = null;
-        playerMenu.render(null, slotBusy);
+        statePreviews = new Bitmap[StateSlotRepository.SLOT_COUNT];
+        renderPlayerMenu();
         playerMenu.show();
         refreshSlots();
     }
@@ -272,11 +294,12 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
         if (key == null || compatibility == null) return;
         submitIo(() -> {
             try {
-                StateSlotRepository.Slot[] loaded = StateSlotRepository.list(getFilesDir(), key, compatibility);
+                SlotBatch loaded = readSlotBatch(key, compatibility);
                 runOnUiThread(() -> {
                     if (disposed.get() || !key.equals(activeSaveKey)) return;
-                    stateSlots = loaded;
-                    if (playerMenu != null && playerMenu.isShowing()) playerMenu.render(loaded, slotBusy);
+                    stateSlots = loaded.slots;
+                    statePreviews = loaded.previews;
+                    renderPlayerMenu();
                 });
             } catch (IOException error) { finishSlotOperation("Emplacements indisponibles : " + error.getMessage(), null); }
         });
@@ -292,21 +315,25 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
         selectedSlot = slot;
         slotBusy = true;
         pauseState.operation(true);
-        playerMenu.render(stateSlots, true);
+        renderPlayerMenu();
         if (action == 0) {
             surface.queueEvent(() -> {
                 if (!slotSessionAvailable(key, compatibility)) return;
                 byte[] snapshot = NativeBridge.saveState();
                 byte[] battery = NativeBridge.saveBattery();
+                int[] preview = NativeBridge.capturePreview();
                 if (snapshot == null) { finishSlotOperation("État indisponible", null); return; }
                 submitIo(() -> {
                     try {
-                        StateSlotRepository.write(getFilesDir(), key, slot, compatibility, snapshot);
+                        byte[] thumbnail = null;
                         String message = "Emplacement " + (slot + 1) + " enregistré";
+                        try { thumbnail = StatePreview.encode(preview); }
+                        catch (IOException error) { message += " · aperçu indisponible"; }
+                        StateSlotRepository.write(getFilesDir(), key, slot, compatibility, snapshot, thumbnail);
                         try { SaveRepository.write(getFilesDir(), key, "srm", battery); }
                         catch (IOException error) { message += " · SRAM non écrite : " + error.getMessage(); }
                         finishSlotOperation(message,
-                                StateSlotRepository.list(getFilesDir(), key, compatibility));
+                                readSlotBatch(key, compatibility));
                     } catch (IOException error) { finishSlotOperation("Sauvegarde impossible : " + error.getMessage(), null); }
                 });
             });
@@ -315,42 +342,86 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
                 if (action == 2) {
                     StateSlotRepository.delete(getFilesDir(), key, slot);
                     finishSlotOperation("Emplacement " + (slot + 1) + " supprimé",
-                            StateSlotRepository.list(getFilesDir(), key, compatibility));
+                            readSlotBatch(key, compatibility));
                 } else {
                     byte[] snapshot = StateSlotRepository.read(getFilesDir(), key, slot, compatibility);
                     if (snapshot == null) throw new IOException("Emplacement vide");
-                    surface.queueEvent(() -> {
-                        if (!slotSessionAvailable(key, compatibility)) return;
-                        byte[] previous = NativeBridge.saveState();
-                        if (previous == null) {
-                            finishSlotOperation("Chargement annulé : état courant non récupérable", null);
-                            return;
-                        }
-                        boolean restored = NativeBridge.restoreState(snapshot);
-                        if (!restored && !NativeBridge.restoreState(previous)) {
-                            NativeBridge.closeRom();
-                            activeSaveKey = stateCompatibility = null;
-                            finishSlotOperation("Jeu arrêté après échec de restauration ; SRAM conservée", null);
-                            runOnUiThread(() -> {
-                                if (disposed.get()) return;
-                                if (playerMenu != null) playerMenu.dismiss();
-                                android.widget.Toast.makeText(this,
-                                        "Jeu arrêté après échec de restauration ; SRAM conservée",
-                                        android.widget.Toast.LENGTH_LONG).show();
-                                finish();
-                            });
-                            return;
-                        }
-                        finishSlotOperation(restored ? "Emplacement " + (slot + 1) + " chargé"
-                                : "État incompatible : fichier conservé", null);
-                        // Keep the sheet and game paused after a failed restore.
-                        if (restored) runOnUiThread(() -> {
-                            if (!disposed.get() && playerMenu == requestingMenu &&
-                                    menuGeneration == requestingGeneration) requestingMenu.dismiss();
-                        });
-                    });
+                    surface.queueEvent(() -> applyState(key, compatibility, snapshot, false,
+                            "Emplacement " + (slot + 1) + " chargé", requestingMenu, requestingGeneration));
                 }
             } catch (IOException error) { finishSlotOperation("Opération impossible : " + error.getMessage(), null); }
+        });
+    }
+
+    private SlotBatch readSlotBatch(String key, String compatibility) throws IOException {
+        StateSlotRepository.Slot[] slots = StateSlotRepository.list(getFilesDir(), key, compatibility);
+        Bitmap[] previews = new Bitmap[StateSlotRepository.SLOT_COUNT];
+        for (StateSlotRepository.Slot slot : slots) {
+            previews[slot.index] = StatePreview.decode(slot.thumbnail);
+        }
+        return new SlotBatch(slots, previews);
+    }
+
+    private boolean canUndo() {
+        UndoState undo = undoState;
+        return undo != null && undo.key.equals(activeSaveKey) &&
+                undo.compatibility.equals(stateCompatibility);
+    }
+
+    private void renderPlayerMenu() {
+        if (playerMenu == null) return;
+        playerMenu.render(stateSlots, slotBusy);
+        playerMenu.setPreviews(statePreviews);
+        playerMenu.setUndoAvailable(canUndo());
+    }
+
+    private void undoLastLoad() {
+        if (disposed.get() || slotBusy || !canUndo()) { renderPlayerMenu(); return; }
+        UndoState undo = undoState;
+        final PlayerMenuSheet requestingMenu = playerMenu;
+        final int generation = menuGeneration;
+        slotBusy = true;
+        pauseState.operation(true);
+        renderPlayerMenu();
+        surface.queueEvent(() -> applyState(undo.key, undo.compatibility, undo.snapshot,
+                true, "Chargement annulé", requestingMenu, generation));
+    }
+
+    /** Both load and undo keep a rollback snapshot until the core accepts
+     * the requested state. Only a successful load replaces the undo point. */
+    private void applyState(String key, String compatibility, byte[] snapshot,
+                            boolean undoing, String message,
+                            PlayerMenuSheet requestingMenu, int generation) {
+        if (!slotSessionAvailable(key, compatibility)) return;
+        byte[] previous = NativeBridge.saveState();
+        if (previous == null) {
+            finishSlotOperation((undoing ? "Annulation impossible" : "Chargement annulé")
+                    + " : état courant non récupérable", null);
+            return;
+        }
+        boolean restored = NativeBridge.restoreState(snapshot);
+        if (!restored && !NativeBridge.restoreState(previous)) {
+            NativeBridge.closeRom();
+            undoState = null;
+            activeSaveKey = stateCompatibility = null;
+            finishSlotOperation("Jeu arrêté après échec de restauration ; SRAM conservée", null);
+            runOnUiThread(() -> {
+                if (disposed.get()) return;
+                if (playerMenu != null) playerMenu.dismiss();
+                android.widget.Toast.makeText(this,
+                        "Jeu arrêté après échec de restauration ; SRAM conservée",
+                        android.widget.Toast.LENGTH_LONG).show();
+                finish();
+            });
+            return;
+        }
+        if (restored) undoState = undoing ? null : new UndoState(key, compatibility, previous);
+        finishSlotOperation(restored ? message : undoing
+                ? "Annulation impossible : partie courante conservée"
+                : "État incompatible : fichier conservé", null);
+        if (restored) runOnUiThread(() -> {
+            if (!disposed.get() && playerMenu == requestingMenu &&
+                    menuGeneration == generation) requestingMenu.dismiss();
         });
     }
 
@@ -363,14 +434,14 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
         return true;
     }
 
-    private void finishSlotOperation(String message, StateSlotRepository.Slot[] updated) {
+    private void finishSlotOperation(String message, SlotBatch updated) {
         runOnUiThread(() -> {
             if (disposed.get()) return;
             slotBusy = false;
             pauseState.operation(false);
-            if (updated != null) stateSlots = updated;
+            if (updated != null) { stateSlots = updated.slots; statePreviews = updated.previews; }
             if (playerMenu != null && playerMenu.isShowing()) {
-                playerMenu.render(stateSlots, false);
+                renderPlayerMenu();
                 playerMenu.showMessage(message);
             }
             status.setText(message);
@@ -508,6 +579,8 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
             disposed.set(true);
         }
         pendingRomLoad = null;
+        undoState = null;
+        statePreviews = new Bitmap[StateSlotRepository.SLOT_COUNT];
         if (playerMenu != null) playerMenu.dismiss();
         // The emulation thread was already suspended by GLSurfaceView.onPause.
         if (surface != null) surface.onPause();

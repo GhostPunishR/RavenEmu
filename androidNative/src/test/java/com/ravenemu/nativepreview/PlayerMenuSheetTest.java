@@ -3,6 +3,8 @@ package com.ravenemu.nativepreview;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Dialog;
+import android.graphics.Bitmap;
+import android.graphics.drawable.BitmapDrawable;
 import android.os.Looper;
 import android.os.SystemClock;
 import android.view.KeyEvent;
@@ -10,6 +12,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
+import android.widget.ImageView;
 import androidx.core.widget.NestedScrollView;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -191,6 +194,64 @@ public final class PlayerMenuSheetTest {
         assertEquals(1, dismissed);
     }
 
+    @Test public void previewsFollowSelectionWithoutFilteringAndNeverOutliveARefresh() {
+        open(0);
+        StateSlotRepository.Slot[] entries = empty();
+        entries[0] = occupied(0, true, false);
+        entries[1] = occupied(1, true, false);
+        entries[3] = new StateSlotRepository.Slot(3, true, false, false, 1, "Damaged state");
+        Bitmap first = Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888);
+        Bitmap second = Bitmap.createBitmap(2, 1, Bitmap.Config.ARGB_8888);
+        sheet.render(entries, false);
+        sheet.setPreviews(new Bitmap[]{first, second, first, first});
+        ImageView image = image();
+        assertEquals(ImageView.ScaleType.FIT_CENTER, image.getScaleType());
+        assertEquals(View.VISIBLE, image.getVisibility());
+        BitmapDrawable shown = (BitmapDrawable) image.getDrawable();
+        assertSame(first, shown.getBitmap());
+        assertFalse(shown.getPaint().isFilterBitmap());
+        choice(1).performClick();
+        assertSame(second, ((BitmapDrawable) image.getDrawable()).getBitmap());
+        assertEquals("Aperçu de l'emplacement 2", ((View)image.getParent()).getContentDescription());
+        choice(2).performClick();
+        assertEquals("An empty slot must not show a supplied stale bitmap", View.GONE, image.getVisibility());
+        choice(3).performClick();
+        assertEquals("A corrupt state must not show a supplied stale bitmap", View.GONE, image.getVisibility());
+        choice(0).performClick();
+        sheet.render(entries, false);
+        assertNull(image.getDrawable());
+        assertEquals(View.GONE, image.getVisibility());
+        assertEquals("Aperçu de sauvegarde indisponible", ((View)image.getParent()).getContentDescription());
+        assertFalse("Sheet does not own/recycle caller bitmaps", first.isRecycled());
+        first.recycle(); second.recycle();
+    }
+
+    @Test public void undoOnlyAppearsWhenAvailableAndRunsOnceUntilOperationFinishes() {
+        open(0);
+        sheet.render(empty(), false);
+        assertEquals(View.GONE, button("Annuler le chargement").getVisibility());
+        sheet.setUndoAvailable(true);
+        assertEquals(View.VISIBLE, button("Annuler le chargement").getVisibility());
+        sheet.render(empty(), true);
+        assertFalse(button("Annuler le chargement").isEnabled());
+        button("Annuler le chargement").performClick();
+        assertTrue(actions.isEmpty());
+        sheet.render(empty(), false);
+        Dialog dialog = ShadowDialog.getLatestDialog();
+        layout(dialog, 320, 568);
+        assertTrue(button("Annuler le chargement").requestFocusFromTouch());
+        dialog.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_BUTTON_A));
+        dialog.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_BUTTON_A));
+        button("Annuler le chargement").performClick();
+        assertEquals(List.of("undo"), actions);
+        assertFalse(button("Annuler le chargement").isEnabled());
+        sheet.render(empty(), false);
+        sheet.setUndoAvailable(false);
+        assertEquals(View.GONE, button("Annuler le chargement").getVisibility());
+        button("Annuler le chargement").performClick();
+        assertEquals(List.of("undo"), actions);
+    }
+
     @Test @Config(qualifiers = "en-rUS-w568dp-h320dp-land-mdpi")
     public void resumeRemainsScrollableAndRespondsToOneTouchOnAShortScreen() {
         open(0);
@@ -222,6 +283,7 @@ public final class PlayerMenuSheetTest {
             @Override public void onLoad(int slot) { actions.add("load:" + slot); }
             @Override public void onDelete(int slot) { actions.add("delete:" + slot); }
             @Override public void onDismiss() { dismissed++; }
+            @Override public void onUndo() { actions.add("undo"); }
         });
         sheet.show();
     }
@@ -263,6 +325,11 @@ public final class PlayerMenuSheetTest {
                         .startsWith("Emplacement " + (index + 1) + ","));
         assertNotNull(result);
         return result;
+    }
+    private ImageView image() {
+        Dialog dialog = ShadowDialog.getShownDialogs().stream().filter(Dialog::isShowing)
+                .filter(d -> !(d instanceof AlertDialog)).findFirst().get();
+        return (ImageView)find(dialog.getWindow().getDecorView(), view -> view instanceof ImageView);
     }
     private static View find(View view, java.util.function.Predicate<View> predicate) {
         if (predicate.test(view)) return view;

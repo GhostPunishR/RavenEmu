@@ -5,6 +5,7 @@
 #include <ravenemu/frontend.h>
 #include "native_audio.h"
 #include "native_input.h"
+#include "native_preview.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -23,6 +24,7 @@ static uint8_t *rgba_pixels;
 static size_t rgba_capacity;
 static int image_width, image_height;
 static int image_dirty, image_ready;
+static int preview_valid;
 static GLuint program, texture, vertex_shader, fragment_shader;
 static GLint attribute_position, attribute_uv, uniform_texture;
 
@@ -139,6 +141,7 @@ static void on_video(const raven_video_frame *frame, void *userdata) {
     image_width = (int)w;
     image_height = (int)h;
     image_ready = image_dirty = 1;
+    preview_valid = 1;
 }
 
 static void on_audio(const int16_t *samples, size_t count, void *userdata) {
@@ -155,6 +158,7 @@ static int16_t on_input(unsigned port, unsigned device, unsigned index,
 
 static void clear_frame(void) {
     image_ready = image_dirty = 0;
+    preview_valid = 0;
     image_width = image_height = 0;
 }
 
@@ -392,8 +396,25 @@ Java_com_ravenemu_nativepreview_NativeBridge_restoreState(
     jbyte *bytes = (*env)->GetByteArrayElements(env, saved, NULL);
     if (!bytes) return JNI_FALSE;
     int result = raven_frontend_load_state(session, bytes, (size_t)size);
+    // Keep displaying the previous frame, but never attach its pixels to a
+    // restored state until the core has supplied a fresh video callback.
+    preview_valid = 0;
     (*env)->ReleaseByteArrayElements(env, saved, bytes, JNI_ABORT);
     return result ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT jintArray JNICALL
+Java_com_ravenemu_nativepreview_NativeBridge_capturePreview(JNIEnv *env, jclass clazz) {
+    (void)clazz;
+    if (!preview_valid || !image_ready || image_width <= 0 || image_height <= 0) return NULL;
+    uint32_t *pixels = malloc(RAVEN_PREVIEW_CAPACITY * sizeof(*pixels));
+    if (!pixels) return NULL;
+    size_t count = raven_preview_argb(rgba_pixels, rgba_capacity,
+        (unsigned)image_width, (unsigned)image_height, pixels, RAVEN_PREVIEW_CAPACITY);
+    jintArray result = count ? (*env)->NewIntArray(env, (jsize)count) : NULL;
+    if (result) (*env)->SetIntArrayRegion(env, result, 0, (jsize)count, (const jint *)pixels);
+    free(pixels);
+    return result;
 }
 
 JNIEXPORT void JNICALL

@@ -40,6 +40,8 @@ final class NativeBridge {
     static native byte[] saveBattery();
     static native boolean restoreBattery(byte[] battery);
     static native byte[] saveState();
+    /** GL thread: bounded width/height/ARGB copy, or null without a fresh frame. */
+    static native int[] capturePreview();
     static native boolean restoreState(byte[] state);
     static native void setAudioEnabled(boolean enabled);
     static native void closeRom();
