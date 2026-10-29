@@ -2,7 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application android:allowBackup="false"
         android:label="RavenEmu Native (Test)"
-        android:theme="@android:style/Theme.Material.NoActionBar"
+        android:theme="@style/RavenEmuNativeTheme"
         android:usesCleartextTraffic="false">
         <activity android:name=".NativeHomeActivity"
             android:exported="true"
@@ -12,8 +12,8 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <!-- Experimental JNI video player, launched by the shared Compose
-             game-details screen. It is not a second launcher. -->
+        <!-- Experimental JNI video player, launched from the Java RavenEmu-style
+             library game-details sheet. It is not a second launcher. -->
         <activity android:name=".MainActivity"
             android:exported="false"
             android:screenOrientation="unspecified"/>
