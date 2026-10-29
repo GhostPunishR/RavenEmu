@@ -238,12 +238,15 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
         ArrayAdapter<String> adapter = new ArrayAdapter<>(
                 this, android.R.layout.simple_list_item_1, new java.util.ArrayList<>());
         games.setAdapter(adapter);
-        int listHeight = (int)(330 * getResources().getDisplayMetrics().density);
+        int preferredHeight = (int)(330 * getResources().getDisplayMetrics().density);
+        int listHeight = Math.min(preferredHeight,
+                Math.max(100, getResources().getDisplayMetrics().heightPixels / 2));
         layout.addView(games, new LinearLayout.LayoutParams(-1, listHeight));
 
         Runnable refresh = () -> {
-            String system = systemFilter.getSelectedItemPosition() == 0
-                    ? "" : systems[systemFilter.getSelectedItemPosition()].toLowerCase(Locale.ROOT);
+            int systemPosition = systemFilter.getSelectedItemPosition();
+            String system = systemPosition <= 0 || systemPosition >= systems.length
+                    ? "" : systems[systemPosition].toLowerCase(Locale.ROOT);
             RomLibrary.SortOrder sort = sortFilter.getSelectedItemPosition() == 1
                     ? RomLibrary.SortOrder.TITLE_DESC
                     : sortFilter.getSelectedItemPosition() == 2
