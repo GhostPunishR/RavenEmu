@@ -13,6 +13,8 @@ on:
   pull_request:
     paths:
       - 'frontend/**'
+      - 'androidNative/**'
+      - 'settings.gradle.kts'
       - 'docs/MIGRATION_NATIVE.md'
       - '.github/workflows/native-libretro.yml'
   workflow_dispatch:
@@ -71,8 +73,8 @@ jobs:
               raise SystemExit('Kotlin/Compose integration forbidden in androidNative')
           print('Java + native C/C++ architecture validated')
           PY
-      - name: Assemble ARM64 native APK and run Java save tests
-        run: ./gradlew :androidNative:assembleDebug :androidNative:testDebugUnitTest --stacktrace
+      - name: Assemble ARM64 native APK, run Java tests and lint
+        run: ./gradlew :androidNative:assembleDebug :androidNative:testDebugUnitTest :androidNative:lintDebug --stacktrace
       - name: Inspect APK native libraries
         run: |
           python3 - <<'PY'

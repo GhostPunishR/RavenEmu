@@ -2,7 +2,8 @@
 <resources>
     <!-- Color tokens taken from shared/theme/RavenColors.kt (the existing app).
          Java UI in androidNative deliberately does not use Kotlin or Compose. -->
-    <style name="RavenEmuNativeTheme" parent="android:style/Theme.Material.NoActionBar">
+    <style name="RavenEmuNativeTheme" parent="RavenEmuNativeTheme.Base" />
+    <style name="RavenEmuNativeTheme.Base" parent="android:style/Theme.Material.NoActionBar">
         <item name="android:colorAccent">#A78BFA</item>
         <item name="android:colorBackground">#0B0C12</item>
         <item name="android:windowBackground">#0B0C12</item>
@@ -11,6 +12,5 @@
         <item name="android:statusBarColor">#000000</item>
         <item name="android:navigationBarColor">#000000</item>
         <item name="android:windowLightStatusBar">false</item>
-        <item name="android:windowLightNavigationBar">false</item>
     </style>
 </resources>

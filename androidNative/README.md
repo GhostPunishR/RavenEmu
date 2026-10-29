@@ -45,6 +45,15 @@ l'application. Des tests JVM valident cette géométrie. Les tests visuels
 restent à effectuer en navigation **3 boutons** et **gestuelle**, portrait et
 paysage, sur appareil physique.
 
+Le décor de fenêtre est créé avant l'accès au contrôleur d'insets Android
+30+, y compris avant `setContentView`. La recherche, la console sélectionnée,
+le mode grille/liste et la cible d'une jaquette choisie dans Fichiers sont
+conservés lors d'une recréation d'Activity. Un import déjà commencé peut finir
+d'écrire dans le catalogue privé après fermeture, sans relancer l'exécuteur
+de l'ancien écran. La fiche de jeu est défilable pour les écrans bas en paysage.
+Les tests Java Robolectric couvrent ces parcours ; ils ne remplacent pas
+la validation visuelle sur téléphone, notamment avec une grande police.
+
 ## Architecture
 - `NativeHomeActivity.java` : écran bibliothèque d'accueil et navigation en Java.
 - `RavenLibraryAdapter.java` : grille/liste de jaquettes selon le style RavenEmu.
@@ -79,7 +88,9 @@ paysage, sur appareil physique.
 
 APK: `androidNative/build/outputs/apk/debug/androidNative-debug.apk`.
 
-Run `./gradlew :androidNative:testDebugUnitTest` for identity/path tests.
+Run `./gradlew :androidNative:testDebugUnitTest` for identity/path, insets and
+Activity recreation/import tests. The test SDK is resolved through Gradle;
+the application remains Java-only, without Compose or `:shared`.
 
 The build should package `libraven_android.so`,
 `ravenemu_gb_libretro.so`, `ravenemu_gbc_libretro.so` and
@@ -117,8 +128,9 @@ This is an integration prototype, not a release candidate.
 - Saves and the newly imported ROM library are **isolated** from the original
   RavenEmu beta. Automatic import of that beta's ROMs and saves is not
   implemented. Storage is private; removing the test application deletes it.
-- Library UI uses an accessible searchable Android dialog (file selection remains Android
-  SAF); the pause menu state, pixel-font rendering and navigation are native C.
+- The Java home screen uses the RavenEmu-style grid/list. The player also
+  offers a searchable Android library dialog; file selection remains Android
+  SAF. The pause menu state, pixel-font rendering and navigation are native C.
 - No RetroAchievements, wireless/local link cable or Delta skins yet.
 - Cover images must be manually selected by the user from local documents.
   Import is limited to 8 MiB and 4096 x 4096 input, decoded into 512 px PNG

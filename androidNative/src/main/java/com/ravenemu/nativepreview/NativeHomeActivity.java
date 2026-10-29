@@ -20,6 +20,7 @@ import android.widget.FrameLayout;
 import android.widget.GridView;
 import android.widget.LinearLayout;
 import android.widget.PopupMenu;
+import android.widget.ScrollView;
 import android.widget.TextView;
 
 import java.io.ByteArrayOutputStream;
@@ -67,6 +68,12 @@ public final class NativeHomeActivity extends Activity {
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
+        if (state != null) {
+            searchText = state.getString("library.search", "");
+            selectedPage = state.getString("library.page", "");
+            listMode = state.getBoolean("library.list");
+            selectedCoverKey = state.getString("library.cover");
+        }
         getWindow().setStatusBarColor(Color.BLACK);
         getWindow().setNavigationBarColor(Color.BLACK);
         createLibrary();
@@ -117,6 +124,8 @@ public final class NativeHomeActivity extends Activity {
 
         heading = text("Tous les jeux", 20, TEXT);
         heading.setGravity(Gravity.CENTER);
+        heading.setSingleLine(true);
+        heading.setEllipsize(android.text.TextUtils.TruncateAt.END);
         heading.setTypeface(null, android.graphics.Typeface.BOLD);
         FrameLayout.LayoutParams center = new FrameLayout.LayoutParams(-1, -1);
         center.leftMargin = dp(100);
@@ -142,6 +151,8 @@ public final class NativeHomeActivity extends Activity {
         search.setHintTextColor(MUTED);
         search.setTextSize(15);
         search.setHint("⌕  Rechercher un jeu");
+        search.setContentDescription("Rechercher un jeu");
+        search.setText(searchText);
         search.setPadding(dp(12), 0, dp(12), 0);
         search.setBackground(shape(SURFACE, 14, getResources().getDisplayMetrics().density));
         LinearLayout.LayoutParams field = new LinearLayout.LayoutParams(-1, dp(44));
@@ -187,6 +198,7 @@ public final class NativeHomeActivity extends Activity {
     }
 
     private void reload() {
+        if (destroyed) return;
         io.execute(() -> {
             try {
                 List<RomLibrary.Entry> loaded = RomLibrary.list(getFilesDir());
@@ -324,8 +336,11 @@ public final class NativeHomeActivity extends Activity {
         playParams.topMargin = dp(16);
         panel.addView(play, playParams);
 
+        // Keep every action reachable in landscape and with large system text.
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(panel);
         AlertDialog dialog = new AlertDialog.Builder(this)
-                .setView(panel)
+                .setView(scroll)
                 .setNegativeButton("Fermer", null)
                 .create();
         play.setOnClickListener(view -> {
@@ -462,6 +477,14 @@ public final class NativeHomeActivity extends Activity {
             android.widget.Toast.makeText(this, message,
                     android.widget.Toast.LENGTH_LONG).show();
         });
+    }
+
+    @Override protected void onSaveInstanceState(Bundle state) {
+        super.onSaveInstanceState(state);
+        state.putString("library.search", searchText);
+        state.putString("library.page", selectedPage);
+        state.putBoolean("library.list", listMode);
+        state.putString("library.cover", selectedCoverKey);
     }
 
     @Override protected void onDestroy() {

@@ -34,6 +34,9 @@ final class SystemBarInsets {
     /** Must be called before setContentView, once per Activity root. */
     static void install(Activity activity, View root) {
         Window window = activity.getWindow();
+        // install runs before setContentView: create the decor before asking
+        // PhoneWindow for its insets controller (API 30+).
+        View decor = window.getDecorView();
         window.setStatusBarColor(0xff000000);
         window.setNavigationBarColor(0xff000000);
         if (Build.VERSION.SDK_INT >= 29) {
@@ -49,7 +52,6 @@ final class SystemBarInsets {
             }
         } else {
             // Consistent edge-to-edge measurement on Android 8-10, too.
-            View decor = window.getDecorView();
             decor.setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE |
                     View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN |
                     View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);

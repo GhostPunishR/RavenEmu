@@ -42,7 +42,11 @@ RetroArch Plus, sans remplacer les moteurs maison RavenCore.
 
 `frontend/` constitue la première implantation autonome du chargeur.
 La CI de cette branche teste cette brique sans modifier la CI de production.
-Le module distinct `androidNative/` raccorde Java/JNI, les cores Libretro ARM64\net un premier rendu natif OpenGL ES 2, sans modifier `androidApp/`.\nLa sortie audio, les sauvegardes persistantes et les services de la version\nbêta ne sont pas encore raccordés. Voir [androidNative/README.md](../androidNative/README.md).
+Le module distinct `androidNative/` raccorde Java/JNI, les cores Libretro ARM64
+et un premier rendu natif OpenGL ES 2, sans modifier `androidApp/`.
+L'audio AAudio, les sauvegardes privées et la bibliothèque ont été ajoutés
+par les tranches suivantes. Les services avancés de la bêta restent à porter.
+Voir [androidNative/README.md](../androidNative/README.md).
 
 ## Deuxième tranche : prévisualisation Android
 
@@ -155,3 +159,19 @@ Le module distinct `androidNative/` raccorde Java/JNI, les cores Libretro ARM64\
 - À tester visuellement sur téléphone : navigation par gestes / 3 boutons,
   portrait/paysage, écran avec encoche, recherche avec clavier.
 - Aucune source Kotlin/Compose ajoutée au module Android natif.
+
+## Neuvième tranche : recréation de la bibliothèque et contrôles de régression
+
+- Création du décor de fenêtre avant le contrôleur d'insets (Android 30+),
+  pour ouvrir l'Activity avant `setContentView` sans accès à un décor absent.
+- Recherche, console, grille/liste et cible du sélecteur de jaquette restaurées
+  lors de la recréation de l'Activity ; le retour SAF garde le bon jeu.
+- Un import terminé après la fermeture ne soumet plus un rechargement à
+  l'exécuteur arrêté de l'ancien écran. Les données déjà importées sont conservées.
+- Fiche de jeu défilable en paysage et titre de bibliothèque sur une seule ligne.
+- Tests d'Activity en Java avec Robolectric, sans Kotlin applicatif, Compose
+  ou dépendance `:shared`. Le workflow de migration est aussi déclenché pour
+  une PR qui ne modifie que `androidNative/` ou `settings.gradle.kts`.
+- Tests visuels physiques, grandes polices, encoches et navigation par gestes
+  ou trois boutons restent à effectuer. La fiche n'est pas encore une
+  reproduction complète du panneau glissant de la bêta.
