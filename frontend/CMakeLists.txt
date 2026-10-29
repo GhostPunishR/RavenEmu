@@ -67,6 +67,20 @@ if(RAVEN_FRONTEND_TESTS AND NOT ANDROID)
     target_include_directories(raven_native_video_test PRIVATE "${native_input_dir}"
         "${CMAKE_CURRENT_LIST_DIR}/../androidNative/src/test/cpp/fake_gles2")
     add_test(NAME raven_native_video COMMAND raven_native_video_test)
+    option(RAVEN_VIDEO_PIXEL_TESTS "Exercise the GLES shader with software EGL" OFF)
+    if(RAVEN_VIDEO_PIXEL_TESTS)
+        find_package(Python3 REQUIRED COMPONENTS Interpreter)
+        find_library(RAVEN_PIXEL_GL NAMES GLESv2 GL libGL.so.1 REQUIRED)
+        find_library(RAVEN_PIXEL_EGL NAMES EGL libEGL.so.1 REQUIRED)
+        add_library(raven_native_video_pixels SHARED "${native_input_dir}/native_video.c")
+        target_compile_features(raven_native_video_pixels PRIVATE c_std_11)
+        target_include_directories(raven_native_video_pixels PRIVATE
+            "${CMAKE_CURRENT_LIST_DIR}/../androidNative/src/test/cpp/fake_gles2")
+        target_link_libraries(raven_native_video_pixels PRIVATE "${RAVEN_PIXEL_GL}")
+        add_test(NAME raven_native_video_pixels COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_LIST_DIR}/../scripts/test_native_video_pixels.py"
+            $<TARGET_FILE:raven_native_video_pixels> --egl "${RAVEN_PIXEL_EGL}" --gl "${RAVEN_PIXEL_GL}")
+    endif()
     if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
         target_compile_options(raven_native_audio_test PRIVATE -Wall -Wextra -Wpedantic)
         target_compile_options(raven_native_video_test PRIVATE -Wall -Wextra -Wpedantic)

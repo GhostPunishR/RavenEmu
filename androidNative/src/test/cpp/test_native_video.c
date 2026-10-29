@@ -15,6 +15,8 @@ static GLenum error_code;
 static GLuint next_name = 1;
 static GLint viewport[4], unpack_alignment, mag_filter, min_filter, wrap_s, wrap_t;
 static GLfloat uv[8];
+static GLfloat brightness_value, contrast_value;
+static int uniform_calls;
 static uint8_t rgba[240 * 160 * 4];
 
 GLuint glCreateShader(GLenum type) { UNUSED(type); return next_name++; }
@@ -30,7 +32,11 @@ void glGetProgramiv(GLuint program, GLenum pname, GLint *params) { UNUSED(progra
 GLint glGetAttribLocation(GLuint program, const GLchar *name) {
     UNUSED(program); return locations_ok ? (!strcmp(name, "VertexCoord") ? 0 : 1) : -1;
 }
-GLint glGetUniformLocation(GLuint program, const GLchar *name) { UNUSED(program); UNUSED(name); return locations_ok ? 2 : -1; }
+GLint glGetUniformLocation(GLuint program, const GLchar *name) {
+    UNUSED(program);
+    if (!locations_ok) return -1;
+    return !strcmp(name, "Brightness") ? 4 : !strcmp(name, "Contrast") ? 5 : 2;
+}
 void glGetIntegerv(GLenum pname, GLint *data) { UNUSED(pname); *data = texture_limit; }
 void glGenTextures(GLsizei n, GLuint *textures) { for (int i = 0; i < n; i++) textures[i] = next_name++; }
 void glDeleteShader(GLuint shader) { UNUSED(shader); delete_shader_calls++; }
@@ -64,6 +70,11 @@ void glClear(GLbitfield mask) { UNUSED(mask); clear_calls++; }
 void glViewport(GLint x, GLint y, GLsizei width, GLsizei height) { viewport[0]=x; viewport[1]=y; viewport[2]=width; viewport[3]=height; }
 void glUseProgram(GLuint program) { UNUSED(program); }
 void glUniform1i(GLint location, GLint value) { UNUSED(location); UNUSED(value); }
+void glUniform1f(GLint location, GLfloat value) {
+    uniform_calls++;
+    if (location == 4) brightness_value = value;
+    if (location == 5) contrast_value = value;
+}
 void glUniformMatrix4fv(GLint location, GLsizei count, GLboolean transpose, const GLfloat *value) {
     UNUSED(location); UNUSED(count); UNUSED(transpose); UNUSED(value);
 }
@@ -80,6 +91,7 @@ void glDisableVertexAttribArray(GLuint index) { UNUSED(index); }
 static void counters(void) {
     image_calls = sub_calls = draw_calls = clear_calls = 0;
     delete_shader_calls = delete_program_calls = delete_texture_calls = 0;
+    uniform_calls = 0;
     error_code = GL_NO_ERROR;
     memset(viewport, 0, sizeof(viewport));
 }
@@ -89,6 +101,7 @@ static void fresh(void) {
     texture_limit = 2048;
     fail_image = fail_sub = 0;
     counters();
+    raven_video_set_options(0, 0, 100);
     raven_video_init_gl();
     counters();
 }
@@ -180,10 +193,41 @@ static int viewport_extremes_do_not_overflow(void) {
     return 0;
 }
 
+static int persistent_options_use_uniforms_and_integer_viewports(void) {
+    fresh();
+    raven_video_draw(rgba, 240, 160, 1, 600, 600);
+    CHECK(brightness_value == 0.f && contrast_value == 100.f);
+    CHECK(image_calls == 1 && sub_calls == 0 && uniform_calls == 2);
+    raven_video_set_options(1, 20, 75);
+    CHECK(uniform_calls == 2); // Setter is safe before a GL context is current.
+    raven_video_draw(rgba, 240, 160, 0, 600, 600);
+    CHECK(viewport[0] == 60 && viewport[1] == 140 && viewport[2] == 480 && viewport[3] == 320);
+    CHECK(brightness_value == 20.f && contrast_value == 75.f);
+    CHECK(image_calls == 1 && sub_calls == 0 && draw_calls == 2);
+    // Below native size, integer scale falls back to fitting rather than crop.
+    raven_video_draw(rgba, 240, 160, 0, 120, 100);
+    CHECK(viewport[0] == 0 && viewport[1] == 10 && viewport[2] == 120 && viewport[3] == 80);
+    raven_video_reset();
+    raven_video_init_gl();
+    raven_video_draw(rgba, 240, 160, 0, 600, 600);
+    CHECK(viewport[2] == 480 && viewport[3] == 320);
+    CHECK(brightness_value == 20.f && contrast_value == 75.f);
+    raven_video_set_options(1, INT_MIN, INT_MAX);
+    raven_video_draw(rgba, 240, 160, 0, 600, 600);
+    CHECK(brightness_value == -50.f && contrast_value == 150.f);
+    raven_video_set_options(0, INT_MAX, INT_MIN);
+    raven_video_draw(rgba, 240, 160, 0, 600, 600);
+    CHECK(brightness_value == 50.f && contrast_value == 50.f);
+    CHECK(viewport[2] == 600 && viewport[3] == 400);
+    CHECK(image_calls == 2 && sub_calls == 0);
+    return 0;
+}
+
 int main(void) {
     if (allocation_updates_and_duplicate() || resize_and_context_lifecycle() ||
             invalid_frames_and_limits_clear_without_old_image() ||
-            shader_failures_and_upload_failures_retry() || viewport_extremes_do_not_overflow()) return 1;
-    puts("RetroArch GLES subset: upload reuse, context/reset, bounds, errors and aspect passed");
+            shader_failures_and_upload_failures_retry() || viewport_extremes_do_not_overflow() ||
+            persistent_options_use_uniforms_and_integer_viewports()) return 1;
+    puts("RetroArch GLES subset: upload reuse, context/reset, bounds, errors, aspect and settings passed");
     return 0;
 }

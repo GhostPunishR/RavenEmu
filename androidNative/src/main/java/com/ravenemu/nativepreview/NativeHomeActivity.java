@@ -408,6 +408,12 @@ public final class NativeHomeActivity extends Activity {
                         "Interface", "À propos"}, (dialog, index) -> {
                     String[] sections = {"Général", "Audio", "Vidéo", "Console",
                             "Interface", "À propos"};
+                    if (index == 1 || index == 2) {
+                        startActivity(new Intent(this, PlaybackSettingsActivity.class)
+                                .putExtra(PlaybackSettingsActivity.EXTRA_PAGE,
+                                        index == 1 ? PlaybackSettingsActivity.AUDIO : PlaybackSettingsActivity.VIDEO));
+                        return;
+                    }
                     AlertDialog.Builder section = new AlertDialog.Builder(this)
                         .setTitle(sections[index])
                         .setMessage(index == 5

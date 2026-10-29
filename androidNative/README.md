@@ -268,6 +268,50 @@ n'est pas encore asservie à l'horloge du périphérique audio, et ne change pas
 la fréquence de l'écran Android. Les changements de timing Libretro pendant
 une partie restent à prendre en charge ; la fréquence est lue au chargement.
 
+## Réglages audio et vidéo persistants
+
+La bibliothèque ouvre les pages **Audio** et **Vidéo** depuis Paramètres.
+Le menu de pause propose aussi **Paramètres audio et vidéo** ; le retour au
+lecteur conserve la pause du panneau jusqu'à « Reprendre le jeu ».
+Les pages Java reprennent la barre, les groupes, libellés et couleurs de la
+bêta pour les cinq réglages raccordés :
+
+- **Activer le son** et **Volume** (0–100 %) : couper le son conserve la
+  cadence d'émulation. Le volume choisi reste mémorisé quand le son est coupé.
+- **Pixels entiers** : plus grand multiple entier qui tient dans la surface,
+  centré ; si même 1× ne tient pas, retour au cadrage proportionnel sans rognage.
+- **Luminosité** (−50 à +50) et **Contraste** (50–150 %) : formule de la bêta
+  appliquée dans le shader, sans nouveau traitement CPU des images ni transfert
+  de texture pour un changement de réglage seul.
+
+« Rétablir l'affichage d'origine » remet seulement les trois valeurs vidéo
+à leurs défauts, sans changer le son. Les préférences privées de la
+prévisualisation sont conservées après recréation/redémarrage ; aucune
+préférence de la bêta n'est lue. Les valeurs invalides sont bornées et les
+types incorrects reviennent au défaut du champ concerné.
+
+Le lecteur recharge les préférences à la reprise et les applique sur GL
+avant de retirer la pause de premier plan. Mute et gain restent distincts
+de cette pause. Un changement audio purge les anciens échantillons de la
+file logicielle ; les échantillons déjà soumis au périphérique peuvent
+encore finir de jouer. Les miniatures d'états gardent les pixels bruts du core.
+
+Les tests C simulés vérifient gain, silence, purges, concurrence et géométrie.
+Le test **GLES logiciel réel** compare aussi les pixels du shader à la formule
+de la bêta, avec image d'origine exacte et tolérance d'un niveau pour les
+ajustements. Sur les GPU limités à `mediump`, une légère différence d'arrondi
+reste possible. Sur un hôte avec Python 3, EGL et OpenGL/Mesa :
+
+```sh
+cmake -S frontend -B build/native-frontend -DRAVEN_VIDEO_PIXEL_TESTS=ON
+cmake --build build/native-frontend --target raven_native_video_pixels
+ctest --test-dir build/native-frontend -R raven_native_video_pixels --output-on-failure
+```
+
+Ce test est activé dans la CI native. Il ne remplace pas les essais de son,
+de rendu et de navigation sur téléphone. Profils DMG/Pocket, correction LCD,
+mélange d'images et autres pages de paramètres restent à porter.
+
 ## Current limits (intentional)
 
 This is an integration prototype, not a release candidate.

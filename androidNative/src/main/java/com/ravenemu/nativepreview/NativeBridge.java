@@ -37,6 +37,9 @@ final class NativeBridge {
     static native void clearButtons();
     /** GL thread: pause emulation and audio together, without drawing a menu. */
     static native void setPaused(boolean paused);
+    /** GL owner: output preferences, independent of the lifecycle pause gate. */
+    static native void setPlaybackOptions(boolean audioEnabled, int audioVolume,
+                                          boolean integerScale, int brightness, int contrast);
     /** Pinned core revision + Libretro core identity, for private state slots. */
     static native String stateCompatibility();
     static native byte[] saveBattery();

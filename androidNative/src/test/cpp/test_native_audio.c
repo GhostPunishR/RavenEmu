@@ -58,6 +58,7 @@ int __android_log_print(int p, const char *tag, const char *message, ...) { (voi
 static void consume(int16_t *out, int frames) { callback(&fake_stream, callback_user, out, frames); }
 static void defaults(void) {
     raven_audio_close();
+    raven_audio_set_output(1, 100);
     native_rate = 48000; format = AAUDIO_FORMAT_PCM_I16; channels = 2;
     burst = 192; buffer_capacity = buffer_size = 4096;
     start_error = starts = pauses = closes = waits = stuck = 0;
@@ -132,6 +133,48 @@ static int bounded_queue_wrap_and_stop(void) {
     return 1;
 }
 
+static int output_gain_mute_pause_and_reopen(void) {
+    defaults(); CHECK(raven_audio_open(48000));
+    const int16_t constant[] = {1000, -1000, 1000, -1000, 1000, -1000};
+    int16_t out[8];
+    raven_audio_write(constant, 3); // Pending old gain must not leak forward.
+    raven_audio_set_output(1, 50);
+    raven_audio_write(constant, 3); consume(out, 3);
+    for (int i = 0; i < 3; ++i) CHECK(out[i * 2] == 500 && out[i * 2 + 1] == -500);
+    const int before_starts = starts, before_pauses = pauses;
+    raven_audio_write(constant, 3);
+    raven_audio_set_output(0, 50);
+    raven_audio_write(constant, 3); consume(out, 3);
+    for (int i = 0; i < 6; ++i) CHECK(out[i] == 0);
+    CHECK(raven_aaudio_running() && starts == before_starts && pauses == before_pauses);
+    raven_audio_set_running(0);
+    raven_audio_set_output(1, 50); // Output preference cannot resume lifecycle.
+    CHECK(!raven_aaudio_running() && starts == before_starts);
+    raven_audio_write(constant, 3); consume(out, 3);
+    for (int i = 0; i < 6; ++i) CHECK(out[i] == 0);
+    raven_audio_set_running(1);
+    raven_audio_write(constant, 3); consume(out, 3);
+    CHECK(out[0] == 500 && out[1] == -500);
+    raven_audio_close(); CHECK(raven_audio_open(48000));
+    raven_audio_write(constant, 3); consume(out, 3);
+    CHECK(out[0] == 500 && out[1] == -500); // Preference survives stream reopen.
+    raven_audio_set_output(1, 0); raven_audio_write(constant, 3); consume(out, 3);
+    for (int i = 0; i < 6; ++i) CHECK(out[i] == 0);
+    raven_audio_set_output(1, -200); raven_audio_write(constant, 3); consume(out, 3);
+    for (int i = 0; i < 6; ++i) CHECK(out[i] == 0);
+    raven_audio_set_output(1, 1000); raven_audio_write(constant, 3); consume(out, 3);
+    CHECK(out[0] == 1000 && out[1] == -1000);
+
+    raven_audio_close(); CHECK(raven_audio_open(48000));
+    raven_audio_set_output(1, 50);
+    const int16_t extremes[] = {32767, -32768, 1001, -1001, -1, 1, 0, 0};
+    raven_audio_write(extremes, 4); consume(out, 4);
+    CHECK(out[0] == 16384 && out[1] == -16384);
+    CHECK(out[2] == 501 && out[3] == -501);
+    CHECK(out[4] == -1 && out[5] == 1 && out[6] == 0 && out[7] == 0);
+    return 1;
+}
+
 static _Atomic int consumer_stop;
 static int consumer_bad;
 static size_t consumer_samples;
@@ -142,7 +185,8 @@ static void *concurrent_consumer(void *unused) {
         consume(out, 128);
         for (int i = 0; i < 128; ++i) {
             if (!((out[i * 2] == 0 && out[i * 2 + 1] == 0) ||
-                    (out[i * 2] == 1000 && out[i * 2 + 1] == -1000))) consumer_bad = 1;
+                    (out[i * 2] == 1000 && out[i * 2 + 1] == -1000) ||
+                    (out[i * 2] == 500 && out[i * 2 + 1] == -500))) consumer_bad = 1;
             if (out[i * 2]) consumer_samples++;
         }
         sched_yield();
@@ -158,6 +202,7 @@ static int producer_and_callback_run_concurrently(void) {
     for (int i = 0; i < 64; ++i) { samples[i * 2] = 1000; samples[i * 2 + 1] = -1000; }
     for (int i = 0; i < 4096; ++i) {
         if (i % 32 == 0) { raven_audio_set_running(0); raven_audio_set_running(1); }
+        if (i % 16 == 0) raven_audio_set_output((i / 16) % 3 != 0, (i / 16) % 2 ? 50 : 100);
         raven_audio_write(samples, 64);
         sched_yield();
     }
@@ -170,9 +215,10 @@ static int producer_and_callback_run_concurrently(void) {
 int main(void) {
     int okay = open_and_device_negotiation() && rates_chunks_and_silence() &&
         pause_discards_old_audio_without_erasing_fresh_samples() && bounded_queue_wrap_and_stop() &&
+        output_gain_mute_pause_and_reopen() &&
         producer_and_callback_run_concurrently();
     raven_audio_close();
     if (!okay) return 1;
-    puts("AAudio subset: 5 host scenarios passed (negotiation, resampling, pause, bounds, SPSC)");
+    puts("AAudio subset: 6 scenarios passed (negotiation, resampling, pause, bounds, output settings, SPSC)");
     return 0;
 }

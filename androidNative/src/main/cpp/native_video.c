@@ -33,6 +33,8 @@
  * Texture geometry/retry bookkeeping and viewport fitting are new adapter
  * code distributed with this module under GPL-3.0-or-later. RavenEmu's other
  * modules keep their existing licenses; this is not the RetroArch frontend.
+ * RavenEmu additions, 2026-10-29: integer-size viewport and shader-only
+ * brightness/contrast controls; no new upstream source is imported.
  */
 
 #include "native_video.h"
@@ -44,13 +46,16 @@
 
 static GLuint program, texture;
 static GLint vertex_coord, tex_coord, texture_uniform, mvp_uniform;
+static GLint brightness_uniform, contrast_uniform;
 static unsigned texture_width, texture_height;
 static GLint max_texture_edge;
 static int upload_pending = 1;
+static int integer_scale, brightness, contrast = 100;
 
 /* Stock opaque shaders from the pinned RetroArch sources above. The GLSL
  * wrapper is replaced with explicit GLES precision, without the unrelated
- * derivatives extension. Color is unused and may be optimized out. */
+ * derivatives extension. RavenEmu extends the fragment with colour controls;
+ * default values retain the stock opaque output. Color is unused. */
 static const char *stock_vertex =
     "attribute vec2 TexCoord;\n"
     "attribute vec2 VertexCoord;\n"
@@ -63,16 +68,27 @@ static const char *stock_vertex =
     "}\n";
 static const char *stock_fragment =
     "uniform sampler2D Texture;\n"
+    "uniform float Brightness;\n"
+    "uniform float Contrast;\n"
     "varying vec2 tex_coord;\n"
     "void main() {\n"
-    "  gl_FragColor = vec4(texture2D(Texture, tex_coord).rgb, 1.0);\n"
+    "  vec3 color = texture2D(Texture, tex_coord).rgb;\n"
+    "  if (Brightness != 0.0 || Contrast != 100.0) {\n"
+    "    vec3 bytes = floor(color * 255.0 + 0.5);\n"
+    "    vec3 delta = (bytes - 128.0) * (Contrast / 100.0);\n"
+    "    delta = sign(delta) * floor(abs(delta) + 0.0001);\n"
+    "    color = clamp(delta + 128.0 + Brightness * 2.0, 0.0, 255.0) / 255.0;\n"
+    "  }\n"
+    "  gl_FragColor = vec4(color, 1.0);\n"
     "}\n";
 
 /* Adapted from gl_glsl_compile_shader: no aliases, shader-cache or version
  * negotiation because this adapter has a single fixed GLES2 stock shader. */
 static int compile_stage(GLuint shader, const char *body) {
     GLint status;
-    const char *source[] = {"precision mediump float;\n", body};
+    const char *source[] = {
+        "#ifdef GL_FRAGMENT_PRECISION_HIGH\nprecision highp float;\n"
+        "#else\nprecision mediump float;\n#endif\n", body};
     glShaderSource(shader, 2, source, NULL);
     glCompileShader(shader);
     glGetShaderiv(shader, GL_COMPILE_STATUS, &status);
@@ -99,7 +115,10 @@ static int create_pipeline(void) {
     tex_coord = glGetAttribLocation(next_program, "TexCoord");
     texture_uniform = glGetUniformLocation(next_program, "Texture");
     mvp_uniform = glGetUniformLocation(next_program, "MVPMatrix");
-    if (vertex_coord < 0 || tex_coord < 0 || texture_uniform < 0 || mvp_uniform < 0) goto error;
+    brightness_uniform = glGetUniformLocation(next_program, "Brightness");
+    contrast_uniform = glGetUniformLocation(next_program, "Contrast");
+    if (vertex_coord < 0 || tex_coord < 0 || texture_uniform < 0 || mvp_uniform < 0 ||
+            brightness_uniform < 0 || contrast_uniform < 0) goto error;
     glGetIntegerv(GL_MAX_TEXTURE_SIZE, &max_texture_edge);
     if (max_texture_edge <= 0) goto error;
     glGenTextures(1, &next_texture);
@@ -121,6 +140,12 @@ error:
 void raven_video_reset(void) {
     texture_width = texture_height = 0;
     upload_pending = 1;
+}
+
+void raven_video_set_options(int next_integer_scale, int next_brightness, int next_contrast) {
+    integer_scale = !!next_integer_scale;
+    brightness = next_brightness < -50 ? -50 : next_brightness > 50 ? 50 : next_brightness;
+    contrast = next_contrast < 50 ? 50 : next_contrast > 150 ? 150 : next_contrast;
 }
 
 void raven_video_init_gl(void) {
@@ -176,6 +201,12 @@ void raven_video_draw(const uint8_t *rgba, unsigned width, unsigned height,
         w = (int)((int64_t)h * width / height);
     else
         h = (int)((int64_t)w * height / width);
+    if (integer_scale) {
+        unsigned scale = (unsigned)surface_width / width;
+        const unsigned vertical_scale = (unsigned)surface_height / height;
+        if (vertical_scale < scale) scale = vertical_scale;
+        if (scale) { w = (int)(width * scale); h = (int)(height * scale); }
+    }
     if (w < 1) w = 1;
     if (h < 1) h = 1;
     glViewport((surface_width - w) / 2, (surface_height - h) / 2, w, h);
@@ -185,6 +216,8 @@ void raven_video_draw(const uint8_t *rgba, unsigned width, unsigned height,
                                 0.f,0.f,1.f,0.f, 0.f,0.f,0.f,1.f};
     glUseProgram(program);
     glUniform1i(texture_uniform, 0);
+    glUniform1f(brightness_uniform, (GLfloat)brightness);
+    glUniform1f(contrast_uniform, (GLfloat)contrast);
     glUniformMatrix4fv(mvp_uniform, 1, GL_FALSE, identity);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glEnableVertexAttribArray((GLuint)vertex_coord);

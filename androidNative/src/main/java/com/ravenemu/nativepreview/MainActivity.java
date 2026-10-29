@@ -1,6 +1,7 @@
 package com.ravenemu.nativepreview;
 
 import android.app.Activity;
+import android.content.Intent;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.opengl.GLSurfaceView;
@@ -65,6 +66,7 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
     private final Object ioGate = new Object();
     private int menuGeneration;
     private Runnable pendingRomLoad;
+    private boolean settingsLaunching;
 
     @Override
     public void onCreate(Bundle state) {
@@ -274,6 +276,12 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
                     @Override public void onLoad(int slot) { operateSlot(slot, 1); }
                     @Override public void onDelete(int slot) { operateSlot(slot, 2); }
                     @Override public void onUndo() { undoLastLoad(); }
+                    @Override public void onSettings() {
+                        if (!disposed.get() && foreground && !slotBusy && !settingsLaunching) {
+                            settingsLaunching = true;
+                            startActivity(new Intent(MainActivity.this, PlaybackSettingsActivity.class));
+                        }
+                    }
                     @Override public void onDismiss() {
                         if (generation != menuGeneration) return;
                         selectedSlot = playerMenu.getSelectedSlot();
@@ -542,9 +550,20 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
     @Override protected void onResume() {
         super.onResume();
         foreground = true;
+        settingsLaunching = false;
         if (surface != null) surface.onResume();
+        applyPlaybackSettings();
         if (pauseState != null) pauseState.foreground(true);
         dispatchRomLoad();
+    }
+
+    private void applyPlaybackSettings() {
+        final PlaybackSettings settings = PlaybackSettings.load(this);
+        if (surface != null) surface.queueEvent(() -> {
+            if (disposed.get() || !foreground) return;
+            NativeBridge.setPlaybackOptions(settings.audioEnabled, settings.audioVolume,
+                    settings.integerScale, settings.brightness, settings.contrast);
+        });
     }
 
     @Override protected void onPause() {

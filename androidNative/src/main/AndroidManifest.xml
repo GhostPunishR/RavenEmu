@@ -5,6 +5,8 @@
         android:theme="@style/RavenEmuNativeTheme"
         android:usesCleartextTraffic="false">
         <activity android:name=".ThirdPartyLicensesActivity" android:exported="false"/>
+        <activity android:name=".PlaybackSettingsActivity" android:exported="false"
+            android:enableOnBackInvokedCallback="true"/>
         <activity android:name=".NativeHomeActivity"
             android:exported="true"
             android:screenOrientation="unspecified">

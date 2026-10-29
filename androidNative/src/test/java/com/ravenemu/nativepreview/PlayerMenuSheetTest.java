@@ -276,6 +276,18 @@ public final class PlayerMenuSheetTest {
         assertEquals(1, dismissed);
     }
 
+    @Test public void settingsKeepThePanelOpenAndAreBlockedDuringSlotOperations() {
+        open(0);
+        sheet.render(empty(), false);
+        text("Paramètres audio et vidéo").performClick();
+        assertEquals(java.util.Collections.singletonList("settings"), actions);
+        assertTrue(sheet.isShowing());
+        sheet.render(empty(), true);
+        assertFalse(text("Paramètres audio et vidéo").isEnabled());
+        text("Paramètres audio et vidéo").performClick();
+        assertEquals(1, actions.size());
+    }
+
     private void open(int selected) {
         activity = Robolectric.buildActivity(Activity.class).setup().visible();
         sheet = new PlayerMenuSheet(activity.get(), "Jeu de test.gba", selected, new PlayerMenuSheet.Listener() {
@@ -284,6 +296,7 @@ public final class PlayerMenuSheetTest {
             @Override public void onDelete(int slot) { actions.add("delete:" + slot); }
             @Override public void onDismiss() { dismissed++; }
             @Override public void onUndo() { actions.add("undo"); }
+            @Override public void onSettings() { actions.add("settings"); }
         });
         sheet.show();
     }

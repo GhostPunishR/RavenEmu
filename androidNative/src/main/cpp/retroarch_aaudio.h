@@ -16,6 +16,8 @@ int raven_aaudio_open(int *sample_rate);
 int raven_aaudio_running(void);
 void raven_aaudio_push(int16_t left, int16_t right);
 void raven_aaudio_set_running(int running);
+/* Publish a consumer-owned purge without changing the stream's run state. */
+void raven_aaudio_flush(void);
 void raven_aaudio_close(void);
 
 #endif

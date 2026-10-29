@@ -252,6 +252,15 @@ Java_com_ravenemu_nativepreview_NativeBridge_setPaused(
     raven_audio_set_running(!playback_paused);
 }
 
+JNIEXPORT void JNICALL
+Java_com_ravenemu_nativepreview_NativeBridge_setPlaybackOptions(
+    JNIEnv *env, jclass clazz, jboolean audio_enabled, jint audio_volume,
+    jboolean integer_scale, jint brightness, jint contrast) {
+    (void)env; (void)clazz;
+    raven_audio_set_output(audio_enabled == JNI_TRUE, audio_volume);
+    raven_video_set_options(integer_scale == JNI_TRUE, brightness, contrast);
+}
+
 JNIEXPORT jstring JNICALL
 Java_com_ravenemu_nativepreview_NativeBridge_stateCompatibility(JNIEnv *env, jclass clazz) {
     (void)clazz;

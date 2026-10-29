@@ -33,6 +33,9 @@ Adaptation des sous-ensembles de pilotes au frontend et au cycle de vie
 RavenEmu : GhostPunishR, 29 octobre 2026. Les avis de copyright, licences
 et modifications sont également conservés dans les fichiers concernés.
 Le rééchantillonnage propre à RavenEmu reste distinct de ces emprunts.
+RavenEmu ajoute le réglage de gain/mute, la purge logicielle à leur changement,
+le cadrage en pixels entiers et les ajustements de luminosité/contraste.
+Ces adaptations conservent les licences indiquées dans leurs fichiers.
 Les sources correspondantes et scripts de construction de cette version
 sont accessibles par le bouton Sources et accompagnent l’APK de test.
 

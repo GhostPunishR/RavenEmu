@@ -11,6 +11,7 @@ on:
       - 'docs/MIGRATION_NATIVE.md'
       - 'third_party/retroarch/**'
       - 'scripts/*native_sources.py'
+      - 'scripts/test_native_video_pixels.py'
       - '.github/workflows/native-libretro.yml'
   pull_request:
     paths:
@@ -20,6 +21,7 @@ on:
       - 'docs/MIGRATION_NATIVE.md'
       - 'third_party/retroarch/**'
       - 'scripts/*native_sources.py'
+      - 'scripts/test_native_video_pixels.py'
       - '.github/workflows/native-libretro.yml'
   workflow_dispatch:
 
@@ -40,12 +42,13 @@ jobs:
         with:
           persist-credentials: false
       - name: Configure CMake
-        run: cmake -S frontend -B build/native-frontend -DCMAKE_BUILD_TYPE=Release
+        run: cmake -S frontend -B build/native-frontend -DCMAKE_BUILD_TYPE=Release -DRAVEN_VIDEO_PIXEL_TESTS=ON
       - name: Build frontend, test core and RavenCore adapters
         run: |
           cmake --build build/native-frontend --parallel 2 --target \
             raven_frontend_test raven_frontend_fake_core raven_frontend_real_core_test \
             raven_frame_clock_test \
+            raven_native_video_pixels \
             raven_native_input_test raven_native_preview_test raven_native_audio_test raven_native_video_test \
             ravenemu_gb_libretro ravenemu_gbc_libretro ravenemu_gba_libretro
       - name: Run frontend smoke tests

@@ -30,6 +30,7 @@ final class PlayerMenuSheet {
         void onDelete(int slot);
         void onDismiss();
         default void onUndo() {}
+        default void onSettings() {}
     }
 
     private static final int CARD = 0xff202230;
@@ -39,7 +40,7 @@ final class PlayerMenuSheet {
     private final GameDetailsSheet dialog;
     private final Button[] choices = new Button[StateSlotRepository.SLOT_COUNT];
     private final TextView slotTitle, savedAt, warning, operationMessage;
-    private final Button save, load, delete, undo;
+    private final Button save, load, delete, undo, settings;
     private final ImageView previewImage;
     private final TextView previewBadge;
     private Bitmap[] previews;
@@ -149,6 +150,11 @@ final class PlayerMenuSheet {
         resume.setBackground(buttonBackground(NativeHomeActivity.ACCENT));
         resume.setOnClickListener(view -> dismiss());
         add(content, resume, 12);
+        settings = button("Paramètres audio et vidéo", 14);
+        settings.setOnClickListener(view -> {
+            if (!busy && dialog.isShowing()) listener.onSettings();
+        });
+        add(content, settings, 12);
         NestedScrollView scroll = new NestedScrollView(owner);
         scroll.addView(content);
         dialog.setContentView(scroll);
@@ -252,6 +258,7 @@ final class PlayerMenuSheet {
         enabled(delete, !busy && entry != null && entry.occupied);
         undo.setVisibility(undoAvailable ? View.VISIBLE : View.GONE);
         enabled(undo, undoAvailable && !busy);
+        enabled(settings, !busy);
     }
 
     private boolean ready() { return !busy && dialog.isShowing() && slot(selectedSlot) != null; }

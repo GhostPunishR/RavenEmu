@@ -25,6 +25,7 @@
  * with a bounded C11 queue. The emulation producer never waits for room.
  * Lifecycle purges are executed by the consumer, which alone owns its cursor.
  * No RetroArch resampler, multichannel, AC3 or device-selection code is used.
+ * RavenEmu output preference changes also use the consumer-owned purge.
  */
 #include "retroarch_aaudio.h"
 
@@ -186,6 +187,10 @@ int raven_aaudio_open(int *sample_rate) {
 }
 
 int raven_aaudio_running(void) { return stream && running; }
+
+void raven_aaudio_flush(void) {
+    if (stream) publish_control(running);
+}
 
 void raven_aaudio_set_running(int active) {
     active = !!active;

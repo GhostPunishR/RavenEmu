@@ -320,3 +320,35 @@ pas de code de planification RetroArch. Les appels au core restent sérialisés
 sur GL. Ce jalon ne fournit ni synchronisation sur l'horloge audio ni réglages
 vidéo avancés, et ne remplace pas les mesures FPS/latence et les tests de
 sessions sur appareil. La bêta et ses données restent inchangées.
+
+## Quinzième tranche : réglages audio et vidéo persistants
+
+- Pages Java Audio/Vidéo avec les groupes, libellés et couleurs de la bêta,
+  barres Android protégées, défilement et restauration de la navigation.
+  Accès par la bibliothèque et le menu de pause ; le retour des paramètres
+  ne ferme pas ce menu et ne reprend pas la partie avant l'action dédiée.
+- Préférences propres à la prévisualisation : son activé, volume 0–100 %,
+  pixels entiers, luminosité −50..50 et contraste 50–150 %. Lecture cohérente,
+  bornes, récupération par champ des types corrompus, enregistrement lors
+  d'une interaction seulement. Le reset vidéo conserve les réglages audio.
+- Application JNI sur GL au retour au premier plan, avant retrait de sa
+  raison de pause, avec gardes arrière-plan/destruction. Le gain PCM est
+  indépendant de la pause ; les changements purgent la file logicielle sans
+  arrêter l'émulation ni écrire le curseur de lecture du callback audio.
+  Le tampon matériel déjà soumis peut finir de jouer.
+- Réglages vidéo dans le pilote GLES2 existant : pixels entiers avec repli
+  au cadrage proportionnel si 1× ne tient pas, luminosité/contraste selon la
+  formule de la bêta, par uniforms. La texture reste réutilisée ; le défaut
+  conserve directement l'image d'origine. Les miniatures restent brutes.
+- Tests Java de persistance, types invalides, commandes, navigation, insets
+  et retour dans une partie en pause. Tests C de gain signé, mute, purges,
+  reprises et concurrence ; tests simulés de viewport/uniforms et test de
+  pixels par contexte GLES logiciel réel, activé en CI.
+
+Les shaders et adaptations des pilotes conservent leurs notices GPL ;
+les nouvelles pages et préférences relèvent de l'AGPL RavenEmu. Les profils
+de couleurs, corrections LCD, mélange d'images et autres réglages sont encore
+des écarts de parité, ainsi que les services RA/link/skins et l'hôte iOS natif.
+Le chemin shader `mediump` peut présenter une petite différence d'arrondi
+selon le GPU. Les validations sur téléphone restent nécessaires avant bascule.
+Aucune préférence, sauvegarde ou donnée de la bêta n'est lue ou modifiée.

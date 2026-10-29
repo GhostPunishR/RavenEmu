@@ -30,6 +30,11 @@ Un rafraîchissement sans image nouvelle réutilise la texture. Le filtrage
 nearest, le cadrage centré et l'orientation sont conservés. Les pixels CPU
 restent accessibles aux miniatures d'états. Les échecs GL sont retentés.
 
+RavenEmu ajoute à cet adaptateur le cadrage en pixels entiers et les uniforms
+luminosité/contraste, ainsi que la purge logicielle lors d'un changement de
+gain ou de mute dans l'adaptateur audio. Ces modifications restent sous la
+licence indiquée dans chaque fichier ; elles ne sont pas attribuées à l'amont.
+
 Le frontend, la boucle d'émulation et les menus restent ceux de RavenEmu ;
 RavenCore reste le moteur GB/GBC/GBA. Les resamplers sinc, les presets de
 shaders, la sélection de périphériques, la reconnexion audio automatique,

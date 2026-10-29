@@ -68,6 +68,7 @@ void glClear(GLbitfield mask);
 void glViewport(GLint x, GLint y, GLsizei width, GLsizei height);
 void glUseProgram(GLuint program);
 void glUniform1i(GLint location, GLint value);
+void glUniform1f(GLint location, GLfloat value);
 void glUniformMatrix4fv(GLint location, GLsizei count, GLboolean transpose, const GLfloat *value);
 void glBindBuffer(GLenum target, GLuint buffer);
 void glEnableVertexAttribArray(GLuint index);

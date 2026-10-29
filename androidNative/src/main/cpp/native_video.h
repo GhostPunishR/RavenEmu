@@ -8,6 +8,11 @@
  * previous context handles must not be deleted in the new context. */
 void raven_video_init_gl(void);
 
+/* GL owner only, no immediate GL calls. Preferences survive reset/context
+ * changes. Integer scaling falls back to aspect-fit below native size.
+ * Brightness is clamped to -50..50, contrast to 50..150 (percent). */
+void raven_video_set_options(int integer_scale, int brightness, int contrast);
+
 /* rgba is tightly packed, top-first RGBA8888, with width*height*4 bytes.
  * dirty announces new CPU pixels; identical frames still redraw but do not
  * upload. Allocation/upload failures retain a retry even after dirty clears.

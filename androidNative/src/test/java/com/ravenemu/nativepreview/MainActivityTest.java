@@ -51,6 +51,8 @@ public final class MainActivityTest {
 
     @Before public void setUp() throws Exception {
         FakeNative.reset();
+        RuntimeEnvironment.getApplication().getSharedPreferences(PlaybackSettings.PREFERENCES, 0)
+                .edit().clear().commit();
         files = RuntimeEnvironment.getApplication().getFilesDir();
         key = RomLibrary.importRom(files, "Libre.gb", new byte[0x180]).key;
     }
@@ -76,6 +78,47 @@ public final class MainActivityTest {
         activity.onWindowFocusChanged(true);
         pump(activity);
         assertEquals(1, FakeNative.opens);
+    }
+
+    @Test public void playbackPreferencesApplyOnGlAndReturnFromSettingsKeepsTheMenuPaused() throws Exception {
+        new PlaybackSettings(false, 27, true, -12, 130).save(RuntimeEnvironment.getApplication());
+        ActivityController<MainActivity> controller = open(null);
+        MainActivity activity = controller.get();
+        activity.onWindowFocusChanged(true); pump(activity);
+        assertFalse(FakeNative.appliedSettings.audioEnabled);
+        assertEquals(27, FakeNative.appliedSettings.audioVolume);
+        assertTrue(FakeNative.appliedSettings.integerScale);
+        assertEquals(-12, FakeNative.appliedSettings.brightness);
+        assertEquals(130, FakeNative.appliedSettings.contrast);
+        openMenu(activity);
+        menuButton("Paramètres audio et vidéo").performClick();
+        menuButton("Paramètres audio et vidéo").performClick();
+        Intent intent = shadowOf(activity).getNextStartedActivity();
+        assertEquals(PlaybackSettingsActivity.class.getName(), intent.getComponent().getClassName());
+        assertNull("A repeated tap must not stack settings activities", shadowOf(activity).getNextStartedActivity());
+        assertTrue(menu(activity).isShowing());
+        controller.pause();
+        new PlaybackSettings(true, 61, false, 7, 80).save(activity);
+        controller.resume(); activity.onWindowFocusChanged(true); pump(activity);
+        assertEquals(61, FakeNative.appliedSettings.audioVolume);
+        assertEquals(7, FakeNative.appliedSettings.brightness);
+        assertEquals(80, FakeNative.appliedSettings.contrast);
+        assertTrue(FakeNative.appliedSettings.audioEnabled);
+        assertTrue("Settings return must preserve the menu's pause reason", FakeNative.paused);
+        assertTrue(menu(activity).isShowing());
+        menuButton("Reprendre le jeu").performClick(); pump(activity);
+        assertFalse(FakeNative.paused);
+    }
+
+    @Test public void delayedPlaybackPreferenceCommandCannotRunAfterPauseOrDestruction() throws Exception {
+        ActivityController<MainActivity> controller = open(null);
+        controller.pause();
+        gl(controller.get()).drain();
+        assertEquals(0, FakeNative.settingsApplies);
+        controller.resume();
+        controller.pause().stop().destroy(); activities.remove(controller);
+        gl(controller.get()).drain();
+        assertEquals(0, FakeNative.settingsApplies);
     }
 
     @Test public void nativePacingOwnsEveryDrawAndAutosaveWaitsForAnExecutedCoreFrame() throws Exception {
@@ -483,12 +526,15 @@ public final class MainActivityTest {
         static int opens, failRestores;
         static boolean closed, paused, lastAdvance;
         static int framesToAdvance, draws, batteryReads;
+        static int settingsApplies;
+        static PlaybackSettings appliedSettings;
         static void reset() {
             state = new byte[]{1, 2}; battery = new byte[]{3, 4};
             preview = new int[]{2, 1, 0xffff0000, 0xff00ff00};
             restoreAttempts.clear(); restoredBatteries.clear();
             opens = failRestores = 0; closed = lastAdvance = false; paused = true;
             framesToAdvance = 1; draws = batteryReads = 0;
+            settingsApplies = 0; appliedSettings = null;
         }
         private static void requireGl() { assertTrue("Core operation must use the queued GL boundary", QueuedGl.executing); }
         @Implementation protected static void __staticInitializer__() {}
@@ -511,6 +557,11 @@ public final class MainActivityTest {
             state = value.clone(); return true;
         }
         @Implementation protected static void setPaused(boolean value) { requireGl(); paused = value; }
+        @Implementation protected static void setPlaybackOptions(boolean audioEnabled, int volume,
+                boolean integerScale, int brightness, int contrast) {
+            requireGl(); settingsApplies++;
+            appliedSettings = new PlaybackSettings(audioEnabled, volume, integerScale, brightness, contrast);
+        }
         @Implementation protected static void setButtons(int mask) {}
         @Implementation protected static void clearButtons() {}
         @Implementation protected static void setAudioEnabled(boolean enabled) {}
