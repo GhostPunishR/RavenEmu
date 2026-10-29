@@ -86,13 +86,15 @@ final class RavenLibraryAdapter extends BaseAdapter {
         TextView title;
         TextView secondary;
         String key;
+        boolean mode;
     }
 
     @Override public View getView(int index, View old, ViewGroup parent) {
         final RomLibrary.Entry entry = games.get(index);
         final Holder h;
-        if (old == null || !Boolean.valueOf(listMode).equals(old.getTag(android.R.id.toggle))) {
+        if (old == null || ((Holder)old.getTag()).mode != listMode) {
             h = new Holder();
+            h.mode = listMode;
             LinearLayout column = new LinearLayout(context);
             column.setOrientation(listMode ? LinearLayout.HORIZONTAL : LinearLayout.VERTICAL);
             column.setGravity(listMode ? Gravity.CENTER_VERTICAL : Gravity.TOP | Gravity.CENTER_HORIZONTAL);
@@ -147,7 +149,6 @@ final class RavenLibraryAdapter extends BaseAdapter {
 
             old = column;
             old.setTag(h);
-            old.setTag(android.R.id.toggle, Boolean.valueOf(listMode));
         } else h = (Holder)old.getTag();
 
         h.key = entry.key;
