@@ -9,10 +9,21 @@
 >
 > **La migration préserve le design et le frontend propres à RavenEmu.**
 > Des portions des pilotes AAudio/GLES2 de RetroArch sont adaptées avec
-> [leurs licences et attributions](third_party/retroarch/README.md).
+> [leurs licences et attributions](legal/attributions/retroarch.md).
 > Elle adopte le modèle frontend
 > natif + ABI Libretro tout en préservant **RavenCore, l'interface RavenEmu,
 > les sauvegardes, les utilisateurs et les fonctions déjà présentes**.
+
+## Organisation effective de la branche de migration
+
+- `frontend/` : frontend C et ABI Libretro, indépendant des pilotes matériels.
+- `android/` : code applicatif Java sous `com.ravenemu.app` et adaptateur JNI dans `src/main/cpp/jni/`.
+- `android/src/main/cpp/hardware/` : pilotes AAudio, GLES2 et entrées.
+- `android/src/main/cpp/media/` : capture des miniatures d'états.
+- `tests/hardware/` : tests unitaires des pilotes natifs, séparés de `frontend/tests/`.
+- `legal/attributions/` : notices de provenance des sources externes adaptées, conservées avec leurs licences.
+
+L'APK de développement `com.ravenemu.dev` reste indépendant de la bêta. L'ancienne installation expérimentale conserve ses données privées sans migration automatique. Le changement d'identifiant ne vaut pas accord pour publier ou remplacer la bêta.
 
 ## 1. Principes immuables à la fin de la migration
 
@@ -94,16 +105,16 @@ mécanisme explicite de transition.
 | --- | --- |
 | `frontend/include/` | **Contrat public C** stable, paramètres et résultats documentés ; versionner l'ABI avant évolution cassante |
 | `frontend/src/` | Hôte Libretro C, chargement dynamique, sessions, sérialisation, callbacks, erreurs, synchronisation |
-| `androidNative/src/main/java/` | UI Android **Java**, bibliothèque, gestion fichiers, permissions, états de navigation et cycle de vie |
-| `androidNative/src/main/cpp/` | Pont **JNI**, rendu natif, audio AAudio, commandes et intégration des cores |
-| `androidNative/src/main/res/` | Thème, icônes et ressources fidèles à RavenEmu ; adaptation aux densités et insets système |
+| `android/src/main/java/` | UI Android **Java**, bibliothèque, gestion fichiers, permissions, états de navigation et cycle de vie |
+| `android/src/main/cpp/` | Pont **JNI**, rendu natif, audio AAudio, commandes et intégration des cores |
+| `android/src/main/res/` | Thème, icônes et ressources fidèles à RavenEmu ; adaptation aux densités et insets système |
 | `RavenCore` (dépôt indépendant) | Cores **C++20** GB/GBC/GBA, adaptés à l'ABI Libretro, révisions immuables et licences suivies |
 | `iosApp/` et adaptateur iOS | Application iPhone à préserver ; après portage validé, hôte plateforme utilisant le même frontend C |
 | `androidApp/`, `shared/`, `native/` | **Référence et application bêta historique** pendant la migration ; suppression/remplacement seulement sur décision explicite après parité |
 | `policy/` et `.github/workflows/` | Tests des frontières, de l'architecture, de la compilation et de la compatibilité |
 | `docs/MIGRATION_NATIVE.md` | État des jalons et tests restant à faire, **pas** une autre architecture finale |
 
-Les noms de répertoires `androidNative/` et `frontend/` sont ceux de la
+Les noms de répertoires `android/` et `frontend/` sont ceux de la
 branche de migration ; une réorganisation de publication est possible
 **uniquement après** validation de la parité et préservation de la bêta.
 La cible est définie par la séparation des responsabilités, non par une
@@ -158,7 +169,7 @@ renommée prématurée des dossiers.
 
 ## 6. Stockage, identité et garanties des sauvegardes
 
-- Pendant le développement, `com.ravenemu.nativepreview` est **isolé**
+- Pendant le développement, `com.ravenemu.dev` est **isolé**
   de la bêta `com.ravenemu.preview`. Ne jamais accéder à ses données
   privées ni renommer implicitement son application ID.
 - Index et ROMs privés par jeu : nom de fichier strictement validé,

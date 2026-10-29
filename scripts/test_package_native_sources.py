@@ -142,7 +142,7 @@ class SourceBundleTest(unittest.TestCase):
             self.build()
 
     def test_finds_actual_arm64_checkout_and_omits_tracked_build_outputs(self):
-        cache = self.repository / "androidNative/.cxx/Debug/test/arm64-v8a/CMakeCache.txt"
+        cache = self.repository / "android/.cxx/Debug/test/arm64-v8a/CMakeCache.txt"
         cache.parent.mkdir(parents=True)
         cache.write_text(f"RavenCore_SOURCE_DIR:STATIC={self.core}\n")
         build = self.repository / "build/generated.c"

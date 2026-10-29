@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application android:allowBackup="false"
+        android:label="RavenEmu Dev"
+        android:theme="@style/RavenEmuNativeTheme"
+        android:usesCleartextTraffic="false">
+        <activity android:name=".LicensesActivity" android:exported="false"/>
+        <activity android:name=".PlaybackSettingsActivity" android:exported="false"
+            android:enableOnBackInvokedCallback="true"/>
+        <activity android:name=".HomeActivity"
+            android:exported="true"
+            android:screenOrientation="unspecified">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <!-- Experimental JNI video player, launched from the Java RavenEmu-style
+             library game-details sheet. It is not a second launcher. -->
+        <activity android:name=".PlayerActivity"
+            android:exported="false"
+            android:screenOrientation="unspecified"/>
+    </application>
+</manifest>

@@ -4,7 +4,7 @@
 > `migration/native-libretro`. **Lire d'abord
 > [ARCHITECTURE.md](ARCHITECTURE.md), contrat final et source de vérité
 > obligatoire**, puis [docs/MIGRATION_NATIVE.md](docs/MIGRATION_NATIVE.md)
-> et [androidNative/README.md](androidNative/README.md).
+> et [android/README.md](android/README.md).
 >
 > **Ne pas confondre migration technique et refonte de RavenEmu.** Le résultat
 > recherché conserve **l'identité, l'interface, les jeux et les données de RavenEmu**
@@ -45,7 +45,7 @@ les sections **1 à 8** en tête du document sont le contrat normatif.
   pour l'image, le son et les entrées.
 - Le frontend C reste propre à RavenEmu. Le portage ciblé autorisé des pilotes
   AAudio et GLES2 reprend désormais des portions de RetroArch : voir
-  [leur provenance et leurs licences](third_party/retroarch/README.md).
+  [leur provenance et leurs licences](legal/attributions/retroarch.md).
   Ne pas présenter ces portions comme le frontend complet de RetroArch.
   Tout nouvel emprunt exige une vérification de licence, la conservation
   des copyrights et des attributions, ainsi que les sources correspondantes.
@@ -67,7 +67,7 @@ les sections **1 à 8** en tête du document sont le contrat normatif.
 | Vidéo / audio / commandes | **C natif** et pilotes Android | GLES, AAudio, contrôleurs et autres pilotes natifs |
 | iOS | À conserver et adapter par étapes | Ne pas casser le projet existant ni annoncer une parité fictive |
 
-**Aucun code applicatif Kotlin ni Compose dans `androidNative/`.**
+**Aucun code applicatif Kotlin ni Compose dans `android/`.**
 Ne pas introduire de fichiers `.kt`, de plugin Compose ni de dépendance
 `:shared` pour reproduire l'interface. Les fichiers `.gradle.kts` sont des
 **scripts de configuration Gradle**, et non une autorisation à écrire
@@ -103,8 +103,8 @@ restent inchangées et peuvent être **consultées comme références visuelles*
   via la PR brouillon **#39**. Ne pas fusionner, modifier `main` ou lancer
   une publication sans demande explicite.
 - Garder la bêta (`androidApp/`, `shared/`, `iosApp/`, `native/`)
-  opérationnelle. Le module de prévisualisation est **`androidNative/`**
-  et utilise l'identifiant indépendant **`com.ravenemu.nativepreview`**.
+  opérationnelle. Le module de prévisualisation est **`android/`**
+  et utilise l'identifiant indépendant **`com.ravenemu.dev`**.
 - Ne pas lire, migrer, effacer ou écraser automatiquement les ROMs,
   sauvegardes, paramètres ou autres données de la bêta. Toute migration
   de données doit être explicite, réversible et testée.
@@ -133,7 +133,7 @@ restent inchangées et peuvent être **consultées comme références visuelles*
 ## État et périmètre actuel
 
 Le frontend C est dans `frontend/`. L'application native expérimentale
-est dans `androidNative/` : écrans Java, JNI, rendu GLES2, AAudio,
+est dans `android/` : écrans Java, JNI, rendu GLES2, AAudio,
 bibliothèque GB/GBC/GBA, sauvegardes et jaquettes locales. Ce sont des
 **jalons de migration**, pas une substitution de la bêta. Les fonctions
 avancées, les réglages complets, le rendu parfaitement identique et la

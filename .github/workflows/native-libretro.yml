@@ -6,20 +6,24 @@ on:
       - migration/native-libretro
     paths:
       - 'frontend/**'
-      - 'androidNative/**'
+      - 'android/**'
+      - 'tests/hardware/**'
+      - 'scripts/check_native_layout.py'
       - 'settings.gradle.kts'
       - 'docs/MIGRATION_NATIVE.md'
-      - 'third_party/retroarch/**'
+      - 'legal/attributions/**'
       - 'scripts/*native_sources.py'
       - 'scripts/test_native_video_pixels.py'
       - '.github/workflows/native-libretro.yml'
   pull_request:
     paths:
       - 'frontend/**'
-      - 'androidNative/**'
+      - 'android/**'
+      - 'tests/hardware/**'
+      - 'scripts/check_native_layout.py'
       - 'settings.gradle.kts'
       - 'docs/MIGRATION_NATIVE.md'
-      - 'third_party/retroarch/**'
+      - 'legal/attributions/**'
       - 'scripts/*native_sources.py'
       - 'scripts/test_native_video_pixels.py'
       - '.github/workflows/native-libretro.yml'
@@ -44,7 +48,7 @@ jobs:
       - name: Install software GLES test dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends -y libegl1-mesa-dev libgl1-mesa-dev libgl1-mesa-dri
+          sudo apt-get install --no-install-recommends -y libegl-dev libgles-dev libgl1-mesa-dri
       - name: Configure CMake
         run: cmake -S frontend -B build/native-frontend -DCMAKE_BUILD_TYPE=Release -DRAVEN_VIDEO_PIXEL_TESTS=ON
       - name: Build frontend, test core and RavenCore adapters
@@ -59,7 +63,7 @@ jobs:
         run: ctest --test-dir build/native-frontend --output-on-failure
 
   android:
-    name: ARM64 Java/JNI/OpenGL preview APK
+    name: ARM64 Java/JNI/OpenGL development APK
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -73,21 +77,23 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+      - name: Validate RavenEmu source layout
+        run: python3 scripts/check_native_layout.py
       - name: Enforce Java/C/C++ only in the migrated app
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          source = Path('androidNative/src')
+          source = Path('android/src')
           kotlin = list(source.rglob('*.kt')) + list(source.rglob('*.kts'))
           if kotlin:
-              raise SystemExit('Kotlin source forbidden in androidNative: ' + str(kotlin))
-          build = Path('androidNative/build.gradle.kts').read_text()
+              raise SystemExit('Kotlin source forbidden in android: ' + str(kotlin))
+          build = Path('android/build.gradle.kts').read_text()
           if 'kotlin.plugin.compose' in build or 'project(":shared")' in build:
-              raise SystemExit('Kotlin/Compose integration forbidden in androidNative')
+              raise SystemExit('Kotlin/Compose integration forbidden in android')
           print('Java + native C/C++ architecture validated')
           PY
       - name: Assemble ARM64 native APK, run Java tests and lint
-        run: ./gradlew :androidNative:assembleDebug :androidNative:testDebugUnitTest :androidNative:lintDebug :androidNative:collectDebugCorrespondingSources --stacktrace
+        run: ./gradlew :android:assembleDebug :android:testDebugUnitTest :android:lintDebug :android:collectDebugCorrespondingSources --stacktrace
       - name: Verify and package corresponding sources
         run: |
           python3 scripts/test_package_native_sources.py
@@ -96,7 +102,7 @@ jobs:
         run: |
           python3 - <<'PY'
           import zipfile, pathlib
-          apk = pathlib.Path('androidNative/build/outputs/apk/debug/androidNative-debug.apk')
+          apk = pathlib.Path('android/build/outputs/apk/debug/android-debug.apk')
           required = {'libraven_android.so', 'ravenemu_gb_libretro.so',
                       'ravenemu_gbc_libretro.so', 'ravenemu_gba_libretro.so'}
           with zipfile.ZipFile(apk) as z:
@@ -112,7 +118,7 @@ jobs:
         with:
           name: ravenemu-android-native-arm64-debug
           path: |
-            androidNative/build/outputs/apk/debug/androidNative-debug.apk
-            androidNative/build/outputs/sources/ravenemu-native-sources.tar.gz
+            android/build/outputs/apk/debug/android-debug.apk
+            android/build/outputs/sources/ravenemu-native-sources.tar.gz
           if-no-files-found: error
           retention-days: 7

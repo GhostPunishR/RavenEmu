@@ -1,5 +1,7 @@
 # Migration native de RavenEmu
 
+> Réorganisation du 29 octobre 2026 : `android/` (application, JNI et pilotes matériels), `frontend/` (C et Libretro), `tests/hardware/` (tests matériels), `legal/attributions/` (provenance). Le nouvel APK de développement `com.ravenemu.dev` est isolé des données de la bêta et de l'ancienne prévisualisation, sans migration automatique.
+
 Branche de travail : `migration/native-libretro`, dérivée de `main`.
 Objectif : frontend C natif + cores C++20 par l'ABI Libretro, couche Android
 Java/JNI et pilotes vidéo/audio/commandes natifs, selon l'architecture de
@@ -42,16 +44,16 @@ RetroArch Plus, sans remplacer les moteurs maison RavenCore.
 
 `frontend/` constitue la première implantation autonome du chargeur.
 La CI de cette branche teste cette brique sans modifier la CI de production.
-Le module distinct `androidNative/` raccorde Java/JNI, les cores Libretro ARM64
+Le module distinct `android/` raccorde Java/JNI, les cores Libretro ARM64
 et un premier rendu natif OpenGL ES 2, sans modifier `androidApp/`.
 L'audio AAudio, les sauvegardes privées et la bibliothèque ont été ajoutés
 par les tranches suivantes. Les services avancés de la bêta restent à porter.
-Voir [androidNative/README.md](../androidNative/README.md).
+Voir [android/README.md](../android/README.md).
 
 ## Deuxième tranche : prévisualisation Android
 
-- `:androidNative:assembleDebug` compile un APK au nom de package distinct
-  `com.ravenemu.nativepreview`, ARM64 uniquement ; la CI doit vérifier la présence
+- `:android:assembleDebug` compile un APK au nom de package distinct
+  `com.ravenemu.dev`, ARM64 uniquement ; la CI doit vérifier la présence
   des quatre bibliothèques natives.
 - Java n'assure que le cycle de vie Android, le sélecteur de documents et les
   boutons. Les callbacks Libretro et la conversion/présentation des frames GLES2
@@ -77,7 +79,7 @@ Voir [androidNative/README.md](../androidNative/README.md).
 
 ## Quatrième tranche : bibliothèque privée et menu C
 
-- `androidNative/RomLibrary.java` copie les ROMs choisies dans un catalogue
+- `android/RomLibrary.java` copie les ROMs choisies dans un catalogue
   privé (`native-library/`) indexé par SHA-256 et fichier JSON atomique.
   Les copies sont revérifiées avant exécution, et l'import d'une ROM déjà
   présente ne crée pas de doublon. Limites initiales : 256 jeux, 64 MiB par ROM.
@@ -87,7 +89,7 @@ Voir [androidNative/README.md](../androidNative/README.md).
 - Une règle de tests `policy` accepte explicitement `frontend/` en plus
   de `native/` dans les workflows CMake ; les restrictions de chemins et le
   contrôle des actions GitHub demeurent actifs.
-- L'application de test conserve `com.ravenemu.nativepreview` et ne modifie ni
+- L'application de test conserve `com.ravenemu.dev` et ne modifie ni
   la bibliothèque ni les sauvegardes de l'application principale.
 - Restent à tester sur téléphones : commandes tactiles/manette du menu,
   rendu des lettres sur différentes résolutions, import/reprise après fermeture,
@@ -127,7 +129,7 @@ Voir [androidNative/README.md](../androidNative/README.md).
 ## Septième tranche : fidélité à l'interface RavenEmu sans Kotlin
 
 - Exigence explicite : **aucun code applicatif Kotlin ou Compose** dans le
-  module `androidNative`. Le début d'intégration de
+  module `android`. Le début d'intégration de
   `NativeHomeActivity.kt` et ses dépendances Compose a été annulé.
 - Nouveau `NativeHomeActivity.java` comme lanceur : reprise des couleurs
   exactes de `RavenColors.kt` (sans dépendance Kotlin), barre supérieure
@@ -171,7 +173,7 @@ Voir [androidNative/README.md](../androidNative/README.md).
 - Fiche de jeu défilable en paysage et titre de bibliothèque sur une seule ligne.
 - Tests d'Activity en Java avec Robolectric, sans Kotlin applicatif, Compose
   ou dépendance `:shared`. Le workflow de migration est aussi déclenché pour
-  une PR qui ne modifie que `androidNative/` ou `settings.gradle.kts`.
+  une PR qui ne modifie que `android/` ou `settings.gradle.kts`.
 - Tests visuels physiques, grandes polices, encoches et navigation par gestes
   ou trois boutons restent à effectuer. La fiche n'est pas encore une
   reproduction complète du panneau glissant de la bêta.
@@ -287,7 +289,7 @@ portions des sources officielles RetroArch, révision immuable
   vérifiant le pin du core, les modifications suivies, l'exclusion des
   fichiers privés non suivis et le rejet des liens/chemins sortants.
 
-[Provenance, périmètre et distribution](../third_party/retroarch/README.md).
+[Provenance, périmètre et distribution](../legal/attributions/retroarch.md).
 RavenCore reste le moteur ; ce portage ne reprend pas le frontend complet,
 les resamplers sinc ou la planification de RetroArch. L'asservissement audio,
 la reconnexion audio, la mesure de latence et la validation sur matériel

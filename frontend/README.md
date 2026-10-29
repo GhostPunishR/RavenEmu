@@ -1,4 +1,4 @@
-# Frontend natif expérimental (migration RetroArch)
+# Frontend RavenEmu C / Libretro
 
 Première tranche du nouveau frontend **C + Libretro**. Ce dossier est indépendant
 du lecteur Kotlin actuel : il ne remplace ni les APK signés, ni la cible iOS.
@@ -34,7 +34,7 @@ pas que le jeu fonctionne sur Android.
 Un seul core actif (les callbacks Libretro sont process-global).
 Le frontend C de ce dossier ne réalise pas lui-même les écritures de fichiers
 ni le rendu graphique : les pilotes Android C/AAudio/GLES2, le JNI Java et
-le stockage atomique par ROM vivent dans [androidNative/](../androidNative/).
+le stockage atomique par ROM vivent dans [android/](../android/).
 Les options Libretro avancées, RetroAchievements, les fonctions link,
 le rendu final et la migration des données historiques restent à réaliser.
 

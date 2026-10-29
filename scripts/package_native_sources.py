@@ -44,7 +44,7 @@ of every upstream publication or the legality of a future distribution.
 
 To build the preview, use JDK 21, the Android SDK/NDK required by the project,
 and run from RavenEmu/:
-  ./gradlew :androidNative:assembleDebug \\
+  ./gradlew :android:assembleDebug \\
     -PravenSourceRevision=@SOURCE_REVISION@ -PravenSourceModified=@SOURCE_MODIFIED@ \\
     -PravenCoreSource=../RavenCore
 
@@ -129,7 +129,7 @@ def core_pin(repository):
 
 
 def discover_core(repository, pin):
-    caches = repository.glob("androidNative/.cxx/**/arm64-v8a/CMakeCache.txt")
+    caches = repository.glob("android/.cxx/**/arm64-v8a/CMakeCache.txt")
     for cache in sorted(caches, key=lambda path: path.stat().st_mtime, reverse=True):
         if cache.is_symlink():
             raise SourceError(f"Refusing symlink CMake cache: {cache}")
@@ -177,8 +177,8 @@ def build_bundle(repository, core_root=None, dependencies_dir=None, output=None,
     core_revision = revision(core_root)
     if core_revision.lower() != pin:
         raise SourceError("The built RavenCore checkout does not match RAVEN_CORE_REVISION")
-    dependencies_dir = Path(dependencies_dir or repository / "androidNative/build/corresponding-sources").resolve()
-    output = Path(output or repository / "androidNative/build/outputs/sources/ravenemu-native-sources.tar.gz")
+    dependencies_dir = Path(dependencies_dir or repository / "android/build/corresponding-sources").resolve()
+    output = Path(output or repository / "android/build/outputs/sources/ravenemu-native-sources.tar.gz")
     if output.is_symlink():
         raise SourceError("Output must not be a symlink")
     publications, dependency_records = dependency_inputs(dependencies_dir)
@@ -200,7 +200,7 @@ def build_bundle(repository, core_root=None, dependencies_dir=None, output=None,
         "files": [{"path": name, "sha256": hashlib.sha256(data).hexdigest(), "size": len(data)}
                   for name, data, _ in inputs],
     }
-    apk_path = Path(apk) if apk else repository / "androidNative/build/outputs/apk/debug/androidNative-debug.apk"
+    apk_path = Path(apk) if apk else repository / "android/build/outputs/apk/debug/android-debug.apk"
     if apk is not None or apk_path.exists():
         apk_bytes, _ = read_regular(apk_path.parent.resolve(), apk_path.name)
         manifest["apk"] = {"filename": apk_path.name, "sha256": hashlib.sha256(apk_bytes).hexdigest(), "size": len(apk_bytes)}

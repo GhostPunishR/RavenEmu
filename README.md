@@ -45,6 +45,6 @@ Aucun jeu fourni. Sans publicité ni télémétrie. [Confidentialité](PRIVACY.m
 
 **[Licence AGPL-3.0](LICENSE)** · © 2026 GhostPunishR. Projet indépendant, non affilié à Nintendo.
 
-La [prévisualisation native](androidNative/README.md) adapte des portions des
+La [prévisualisation native](android/README.md) adapte des portions des
 pilotes AAudio/GLES2 de RetroArch sous GPLv3 ou ultérieure, en conservant
-RavenCore. [Provenance, licences et crédits](third_party/retroarch/README.md).
+RavenCore. [Provenance, licences et crédits](legal/attributions/retroarch.md).
