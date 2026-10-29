@@ -41,6 +41,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Install software GLES test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y libegl1-mesa-dev libgl1-mesa-dev libgl1-mesa-dri
       - name: Configure CMake
         run: cmake -S frontend -B build/native-frontend -DCMAKE_BUILD_TYPE=Release -DRAVEN_VIDEO_PIXEL_TESTS=ON
       - name: Build frontend, test core and RavenCore adapters
