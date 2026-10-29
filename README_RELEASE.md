@@ -19,15 +19,10 @@ Les chemins ci-dessous sont écrits pour la RACINE du dépôt (promotion 1:1).
 *L'émulation portable, avec le moteur RavenCore.*
 
 [![CI · Applications](https://github.com/GhostPunishR/RavenEmu/actions/workflows/ci-applications.yml/badge.svg?branch=main)](https://github.com/GhostPunishR/RavenEmu/actions/workflows/ci-applications.yml)
+[![C · Frontend](https://img.shields.io/badge/C-Frontend-00599C?logo=c&logoColor=white)](frontend/README.md)
+[![Java · Android](https://img.shields.io/badge/Java-Android-ED8B00?logo=openjdk&logoColor=white)](android/README.md)
 [![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)](https://github.com/GhostPunishR/RavenEmu/releases)
-[![RavenCore](https://img.shields.io/badge/Moteur-RavenCore-8B5CF6)](https://github.com/GhostPunishR/RavenCore)
 [![Licence AGPL-3.0](https://img.shields.io/badge/Licence-AGPL--3.0-663399?logo=gnu&logoColor=white)](LICENSE)
-
-**Langages du projet**
-
-[![Java — Android](https://img.shields.io/badge/Java-Android-ED8B00?logo=openjdk&logoColor=white)](android/README.md)
-[![C — Frontend](https://img.shields.io/badge/C-Frontend-00599C?logo=c&logoColor=white)](frontend/README.md)
-[![C++20 — RavenCore](https://img.shields.io/badge/C%2B%2B20-RavenCore-6B4FBB?logo=cplusplus&logoColor=white)](https://github.com/GhostPunishR/RavenCore)
 
 **[Télécharger](https://github.com/GhostPunishR/RavenEmu/releases) · [Site officiel](https://ghostpunishr.github.io/RavenEmu/) · [Documentation](wiki/Home.md) · [Signaler un problème](https://github.com/GhostPunishR/RavenEmu/issues)**
 
