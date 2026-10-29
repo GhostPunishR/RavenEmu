@@ -1,13 +1,39 @@
-# RavenEmu Android Native Preview (Java + C + Libretro)
+# RavenEmu Android Native Preview (Java + C + C++ / Libretro)
 
 This is an **independent experimental Android application** that does not
 replace the released RavenEmu beta. Application ID: `com.ravenemu.nativepreview`.
 Requires Android 8.0+ and an **ARM64** phone (arm64-v8a).
 
-## Architecture
+## Interface d'origine sans Kotlin dans le module migré
 
-- `MainActivity.java`: Java Activity, SAF import, accessible system library
-  dialog, touch controls, GL thread scheduler, save-state actions and lifecycle.
+Le lancement ouvre `NativeHomeActivity.java`, une adaptation en **Java
+Android Views** du design déjà présent dans la bêta RavenEmu. Les couleurs
+(`#0B0C12`, `#191B28`, `#A78BFA`), la barre d'outils avec ⚙ / + / ⋮,
+le champ de recherche, la grille/listes de jaquettes, les onglets par console,
+le pied de page « RavenEmu By GhostPunishR » et la fiche du jeu reprennent
+le code source de référence `shared/theme/RavenColors.kt`,
+`shared/library/LibraryComponents.kt` et `LibraryDialogs.kt` **pour
+l'apparence seulement**. Ces fichiers Kotlin ne sont pas compilés ni utilisés
+dans `androidNative`.
+
+La couche Android de migration utilise uniquement **Java**, le frontend et
+le rendu restent **C**, et RavenCore reste **C++20**. Les fichiers
+`build.gradle.kts` sont seulement le langage de configuration Gradle déjà
+utilisé par le dépôt ; aucune source Kotlin ou Compose n'est ajoutée au
+nouveau module.
+
+La bibliothèque Java restaure déjà les écrans centraux, mais ce n'est **pas
+encore une parité visuelle totale** : le menu de jeu C et les réglages non
+raccordés aux cores doivent encore être alignés.
+
+## Architecture
+- `NativeHomeActivity.java` : écran bibliothèque d'accueil et navigation en Java.
+- `RavenLibraryAdapter.java` : grille/liste de jaquettes selon le style RavenEmu.
+- `src/main/res/values/styles.xml` : couleurs du thème original.
+
+
+- `MainActivity.java` : lecteur Java/JNI lancé depuis la fiche « Jouer »,
+  avec la barre de jeu, contrôles tactiles, boucle GL et sauvegardes natives.
 - `RomLibrary.java`: offline private GB/GBC/GBA catalogue, SHA-256 identities,
   verified ROM copies and atomic JSON index. No broad storage permission.
 - `CoverRepository.java`: local-only cover import via SAF, bounded PNG
@@ -40,9 +66,11 @@ The build should package `libraven_android.so`,
 `ravenemu_gb_libretro.so`, `ravenemu_gbc_libretro.so` and
 `ravenemu_gba_libretro.so`. They are compiled for ARM64 only.
 
-Launch **RavenEmu Native (Test)** and use **Importer ROM** to copy your
-`.gb`, `.gbc` or `.gba` into the app's private library. **Bibliothèque**
+Launch **RavenEmu Native (Test)** and use the **+** button to copy your
+`.gb`, `.gbc` or `.gba` into the app's private library. The library grid
 reopens previously imported games, including after relaunching the app.
+Tap a cover to open the details sheet, then tap **Jouer** to launch the
+native player. Return with the back arrow to see the same library.
 The library dialog offers **text search** (filenames and cartridge titles,
 accent-insensitive), **GB/GBC/GBA filtering** and sorting by name or system.
 Long-press an entry to see the cartridge header title, ROM size and SHA-256.
