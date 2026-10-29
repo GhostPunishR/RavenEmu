@@ -1,4 +1,63 @@
-RavenEmu Native Preview — Java UI components
+RavenEmu Native Preview — licences et crédits
+
+RavenEmu et RavenCore
+Copyright (C) 2026 GhostPunishR
+Licence GNU Affero General Public License, version 3 (AGPL-3.0.txt).
+RavenCore reste le moteur d’émulation GB, GBC et GBA.
+https://github.com/GhostPunishR/RavenEmu
+https://github.com/GhostPunishR/RavenCore
+
+Portions adaptées des pilotes AAudio et OpenGL2/GLES2 de RetroArch
+Révision amont : 7986022baf6822677ad2cec4bc215069e89bd8ce
+https://github.com/libretro/RetroArch/tree/7986022baf6822677ad2cec4bc215069e89bd8ce
+
+Pilote AAudio : audio/drivers/aaudio.c
+Copyright (C) 2026 - The RetroArch team
+
+Pilote OpenGL2/GLES2 : gfx/drivers/gl2.c
+Compilation/liaison des shaders : gfx/drivers_shader/shader_glsl.c
+Shaders de base : gfx/drivers/gl_shaders/modern_opaque.glsl.vert.h
+et gfx/drivers/gl_shaders/modern_opaque.glsl.frag.h
+Copyright (C) 2010-2014 - Hans-Kristian Arntzen
+Copyright (C) 2011-2017 - Daniel De Matteis
+Copyright (C) 2012-2015 - Michael Lelli
+Copyright (C) 2016-2019 - Brad Parker
+
+Ces portions sont sous GNU General Public License, version 3 ou, à votre
+choix, toute version ultérieure (GPL-3.0.txt). La version 3 est utilisée
+pour leur combinaison avec les parties AGPLv3 de RavenEmu, conformément
+à la section 13 des deux licences. Les parties RetroArch restent sous
+GPL ; la licence propre de RavenEmu et RavenCore reste AGPL.
+
+Adaptation des sous-ensembles de pilotes au frontend et au cycle de vie
+RavenEmu : GhostPunishR, 29 octobre 2026. Les avis de copyright, licences
+et modifications sont également conservés dans les fichiers concernés.
+Le rééchantillonnage propre à RavenEmu reste distinct de ces emprunts.
+Les sources correspondantes et scripts de construction de cette version
+sont accessibles par le bouton Sources et accompagnent l’APK de test.
+
+RavenEmu n’est pas le frontend officiel de RetroArch. Le portage ciblé de
+ces portions ne constitue pas une affiliation, une approbation ou une
+intégration de l’ensemble de RetroArch.
+
+Interface Libretro (libretro.h)
+Copyright (C) 2010-2024 The RetroArch team
+Licence MIT (MIT-LIBRETRO.txt).
+Source : libretro-common@a3194c18ba65ef89734e1898a2f61403c255d368,
+via RavenCore@15675cc3af4f9b07f2e10cc5a7ca6234ea1c77cc.
+L’ABI Libretro est indépendante du frontend RetroArch.
+
+Palettes de compatibilité GBC incluses dans RavenCore
+Tables issues des contributeurs de The Cutting Room Floor, page
+« Notes:Game Boy Color Bootstrap ROM », révision 2183057.
+https://tcrf.net/index.php?title=Notes:Game_Boy_Color_Bootstrap_ROM&oldid=2183057
+Licence Creative Commons Attribution 3.0 Unported :
+https://creativecommons.org/licenses/by/3.0/
+Modification RavenCore : conversion des couleurs RGB 24 bits en RGB555.
+
+Les composants sont fournis sans garantie ; les clauses exactes figurent
+dans les licences ci-jointes. Leurs notices et droits de redistribution
+restent applicables aux copies et modifications.
 
 Material Components for Android 1.14.0
 Copyright (C) 2015 The Android Open Source Project

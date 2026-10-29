@@ -43,10 +43,12 @@ les sections **1 à 8** en tête du document sont le contrat normatif.
 - Faire évoluer RavenEmu vers une architecture inspirée de **RetroArch Plus** :
   frontend natif, cores séparés par l'ABI publique **Libretro**, pilotes natifs
   pour l'image, le son et les entrées.
-- **Ne pas prétendre réutiliser les sources de RetroArch** : l'architecture et
-  l'ABI Libretro sont communes, mais le frontend C de cette branche est propre
-  à RavenEmu. Toute réutilisation future de code tiers exige une vérification
-  de licence, les avis de copyright et les attributions appropriées.
+- Le frontend C reste propre à RavenEmu. Le portage ciblé autorisé des pilotes
+  AAudio et GLES2 reprend désormais des portions de RetroArch : voir
+  [leur provenance et leurs licences](third_party/retroarch/README.md).
+  Ne pas présenter ces portions comme le frontend complet de RetroArch.
+  Tout nouvel emprunt exige une vérification de licence, la conservation
+  des copyrights et des attributions, ainsi que les sources correspondantes.
 - **Garder RavenCore** comme moteur d'émulation en **C++20**, en commençant par
   Game Boy, Game Boy Color et Game Boy Advance. Ne pas remplacer RavenCore par
   un autre émulateur par commodité.

@@ -1,9 +1,9 @@
 #include <jni.h>
-#include <GLES2/gl2.h>
 #include <android/log.h>
 #include <libretro.h>
 #include <ravenemu/frontend.h>
 #include "native_audio.h"
+#include "native_video.h"
 #include "native_input.h"
 #include "native_preview.h"
 
@@ -25,71 +25,6 @@ static size_t rgba_capacity;
 static int image_width, image_height;
 static int image_dirty, image_ready;
 static int preview_valid;
-static GLuint program, texture, vertex_shader, fragment_shader;
-static GLint attribute_position, attribute_uv, uniform_texture;
-
-static const char *vertex_source =
-    "attribute vec2 aPosition;\n"
-    "attribute vec2 aUv;\n"
-    "varying vec2 vUv;\n"
-    "void main() { gl_Position = vec4(aPosition, 0.0, 1.0); vUv = aUv; }\n";
-static const char *fragment_source =
-    "precision mediump float;\n"
-    "varying vec2 vUv;\n"
-    "uniform sampler2D uTexture;\n"
-    "void main() { gl_FragColor = texture2D(uTexture, vUv); }\n";
-
-static GLuint compile_shader(GLenum type, const char *source) {
-    GLuint shader = glCreateShader(type);
-    if (!shader) return 0;
-    glShaderSource(shader, 1, &source, NULL);
-    glCompileShader(shader);
-    GLint success = 0;
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
-    if (!success) {
-        char message[512] = {0};
-        glGetShaderInfoLog(shader, sizeof(message), NULL, message);
-        LOGE("GLSL compilation failed: %s", message);
-        glDeleteShader(shader);
-        return 0;
-    }
-    return shader;
-}
-
-static void init_gl(void) {
-    /* onSurfaceCreated can run again after an EGL context loss.
-     * The previous GL handles no longer refer to valid objects. */
-    program = texture = vertex_shader = fragment_shader = 0;
-    vertex_shader = compile_shader(GL_VERTEX_SHADER, vertex_source);
-    fragment_shader = compile_shader(GL_FRAGMENT_SHADER, fragment_source);
-    if (!vertex_shader || !fragment_shader) return;
-    program = glCreateProgram();
-    glAttachShader(program, vertex_shader);
-    glAttachShader(program, fragment_shader);
-    glLinkProgram(program);
-    GLint linked = 0;
-    glGetProgramiv(program, GL_LINK_STATUS, &linked);
-    if (!linked) {
-        LOGE("OpenGL ES 2 shader program linking failed");
-        glDeleteProgram(program);
-        program = 0;
-        return;
-    }
-    attribute_position = glGetAttribLocation(program, "aPosition");
-    attribute_uv = glGetAttribLocation(program, "aUv");
-    uniform_texture = glGetUniformLocation(program, "uTexture");
-    glGenTextures(1, &texture);
-    glBindTexture(GL_TEXTURE_2D, texture);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    image_dirty = image_ready;
-    /* The texture dimensions need reallocation with every EGL context. */
-    image_width = image_ready ? image_width : 0;
-    image_height = image_ready ? image_height : 0;
-}
-
 static uint8_t stretch5(uint32_t value) {
     return (uint8_t)((value << 3u) | (value >> 2u));
 }
@@ -159,6 +94,7 @@ static int16_t on_input(unsigned port, unsigned device, unsigned index,
 static void clear_frame(void) {
     image_ready = image_dirty = 0;
     preview_valid = 0;
+    raven_video_reset();
     image_width = image_height = 0;
 }
 
@@ -171,7 +107,8 @@ Java_com_ravenemu_nativepreview_NativeBridge_initGl(
     JNIEnv *env, jclass clazz) {
     (void)env;
     (void)clazz;
-    init_gl();
+    raven_video_init_gl();
+    image_dirty = image_ready;
 }
 
 JNIEXPORT jstring JNICALL
@@ -273,44 +210,10 @@ Java_com_ravenemu_nativepreview_NativeBridge_drawFrame(
         raven_input_begin_frame(&input);
         raven_frontend_run_frame(session);
     }
-    glClearColor(0.05f, 0.06f, 0.08f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT);
-    if (!program || !texture || !image_ready || !rgba_pixels ||
-        surface_width <= 0 || surface_height <= 0) {
-        return;
-    }
-
-    glBindTexture(GL_TEXTURE_2D, texture);
-    if (image_dirty) {
-        // Allocate each time dimensions change; first draft keeps this simple.
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image_width, image_height,
-                     0, GL_RGBA, GL_UNSIGNED_BYTE, rgba_pixels);
-        image_dirty = 0;
-    }
-    float scale = (float)image_width / (float)image_height;
-    float viewport_scale = (float)surface_width / (float)surface_height;
-    int w = surface_width, h = surface_height;
-    if (viewport_scale > scale) w = (int)((float)h * scale);
-    else h = (int)((float)w / scale);
-    glViewport((surface_width - w) / 2, (surface_height - h) / 2, w, h);
-    const GLfloat vertices[] = {
-        -1.f, -1.f, 0.f, 1.f,
-         1.f, -1.f, 1.f, 1.f,
-        -1.f,  1.f, 0.f, 0.f,
-         1.f,  1.f, 1.f, 0.f
-    };
-    glUseProgram(program);
-    glActiveTexture(GL_TEXTURE0);
-    glUniform1i(uniform_texture, 0);
-    glEnableVertexAttribArray((GLuint)attribute_position);
-    glEnableVertexAttribArray((GLuint)attribute_uv);
-    glVertexAttribPointer((GLuint)attribute_position, 2, GL_FLOAT, GL_FALSE,
-                          4 * sizeof(GLfloat), vertices);
-    glVertexAttribPointer((GLuint)attribute_uv, 2, GL_FLOAT, GL_FALSE,
-                          4 * sizeof(GLfloat), vertices + 2);
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-    glDisableVertexAttribArray((GLuint)attribute_position);
-    glDisableVertexAttribArray((GLuint)attribute_uv);
+    raven_video_draw(image_ready ? rgba_pixels : NULL,
+        (unsigned)image_width, (unsigned)image_height, image_dirty,
+        surface_width, surface_height);
+    image_dirty = 0;
 }
 
 JNIEXPORT void JNICALL

@@ -408,14 +408,17 @@ public final class NativeHomeActivity extends Activity {
                         "Interface", "À propos"}, (dialog, index) -> {
                     String[] sections = {"Général", "Audio", "Vidéo", "Console",
                             "Interface", "À propos"};
-                    new AlertDialog.Builder(this)
+                    AlertDialog.Builder section = new AlertDialog.Builder(this)
                         .setTitle(sections[index])
                         .setMessage(index == 5
                           ? "RavenEmu By GhostPunishR\nVersion native expérimentale Java / C / C++"
                           : "Les paramètres de cette section seront activés après leur "
                               + "raccordement aux pilotes natifs. "
                               + "Aucune préférence incompatible n'est enregistrée.")
-                        .setPositiveButton("Retour", null).show();
+                        .setPositiveButton("Retour", null);
+                    if (index == 5) section.setNeutralButton("Licences et crédits", (about, button) ->
+                            startActivity(new Intent(this, ThirdPartyLicensesActivity.class)));
+                    section.show();
                 })
                 .setNegativeButton("Fermer", null).show();
     }

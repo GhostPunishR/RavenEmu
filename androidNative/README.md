@@ -195,6 +195,52 @@ le panneau et le numéro d'emplacement ; le redémarrage du jeu repose encore
 sur la SRAM, pas sur une restauration automatique de son état CPU exact.
 No ROM or BIOS is bundled; no broad storage permission is requested.
 
+## Portage ciblé des pilotes RetroArch et crédits
+
+Le backend AAudio et le chemin GLES2 adaptent désormais des portions de
+RetroArch, épinglées à `7986022baf6822677ad2cec4bc215069e89bd8ce`.
+[La provenance détaillée](../third_party/retroarch/README.md) indique les
+fonctions reprises, modifications et copyrights. Les fichiers dérivés restent
+GPLv3 ou ultérieure ; RavenEmu et RavenCore restent AGPLv3.
+
+AAudio demande la fréquence native du périphérique, deux bursts de buffer,
+et une file PCM16 stéréo bornée avec purge à la pause/reprise. Le producteur
+ne bloque pas ; un manque de données produit du silence. Le rééchantillonnage
+linéaire RavenEmu reste distinct. Le pilote GLES2 conserve une texture entre
+images et utilise `glTexSubImage2D` pour les nouvelles images de même taille,
+avec les shaders opaques de base adaptés. Aspect, orientation, nearest et
+miniatures CPU sont conservés.
+
+Dans **Paramètres → À propos → Licences et crédits**, les textes sont locaux,
+sélectionnables, et le bouton Sources cible la révision Git construite. Une
+construction modifiée localement est identifiée comme telle.
+
+La CI joint l'APK **et** `ravenemu-native-sources.tar.gz` au même artifact
+`ravenemu-android-native-arm64-debug`. Depuis un checkout Git propre :
+
+```sh
+./gradlew :androidNative:assembleDebug :androidNative:collectDebugCorrespondingSources
+python3 scripts/test_package_native_sources.py
+python3 scripts/package_native_sources.py
+```
+
+L'archive inclut les fichiers suivis RavenEmu et RavenCore du checkout ARM64
+utilisé par CMake, les licences et scripts, les sources Maven/POM et les
+conteneurs de ressources des dépendances résolues. Elle exclut les fichiers
+non suivis et les caches. Avant un paquet local, les nouveaux fichiers source
+doivent donc être suivis par Git. Le manifeste enregistre révisions,
+modifications et empreintes, dont celle de l'APK. `README-SOURCES.txt` indique
+comment reconstruire sans `.git`, avec le RavenCore fourni, grâce aux
+propriétés Gradle `ravenSourceRevision`, `ravenSourceModified` et
+`ravenCoreSource`. Les outils Android et dépendances Gradle restent à résoudre.
+
+Les tests de files audio et de GLES simulé vérifient les bornes, la concurrence,
+les purges, les doublons d'image, changements de taille/contexte et reprises
+après erreur. Ils ne mesurent pas la latence ni les performances d'un téléphone.
+Le frontend complet, les resamplers sinc et la planification RetroArch ne sont
+pas portés. La reconnexion automatique après changement de route audio reste
+à implémenter et à tester.
+
 ## Current limits (intentional)
 
 This is an integration prototype, not a release candidate.

@@ -44,3 +44,7 @@ Depuis la racine du dépôt, avec JDK 21, le SDK Android API 37 et les outils CM
 Aucun jeu fourni. Sans publicité ni télémétrie. [Confidentialité](PRIVACY.md) · [Sécurité](SECURITY.md)
 
 **[Licence AGPL-3.0](LICENSE)** · © 2026 GhostPunishR. Projet indépendant, non affilié à Nintendo.
+
+La [prévisualisation native](androidNative/README.md) adapte des portions des
+pilotes AAudio/GLES2 de RetroArch sous GPLv3 ou ultérieure, en conservant
+RavenCore. [Provenance, licences et crédits](third_party/retroarch/README.md).

@@ -45,6 +45,26 @@ if(RAVEN_FRONTEND_TESTS AND NOT ANDROID)
         target_compile_options(raven_native_preview_test PRIVATE -Wall -Wextra -Wpedantic)
     endif()
     add_test(NAME raven_native_preview COMMAND raven_native_preview_test)
+    find_package(Threads REQUIRED)
+    add_executable(raven_native_audio_test
+        "${CMAKE_CURRENT_LIST_DIR}/../androidNative/src/test/cpp/test_native_audio.c"
+        "${native_input_dir}/native_audio.c" "${native_input_dir}/retroarch_aaudio.c")
+    target_compile_features(raven_native_audio_test PRIVATE c_std_11)
+    target_include_directories(raven_native_audio_test PRIVATE "${native_input_dir}"
+        "${CMAKE_CURRENT_LIST_DIR}/../androidNative/src/test/cpp/fakes_audio")
+    target_link_libraries(raven_native_audio_test PRIVATE Threads::Threads m)
+    add_test(NAME raven_native_audio COMMAND raven_native_audio_test)
+    add_executable(raven_native_video_test
+        "${CMAKE_CURRENT_LIST_DIR}/../androidNative/src/test/cpp/test_native_video.c"
+        "${native_input_dir}/native_video.c")
+    target_compile_features(raven_native_video_test PRIVATE c_std_11)
+    target_include_directories(raven_native_video_test PRIVATE "${native_input_dir}"
+        "${CMAKE_CURRENT_LIST_DIR}/../androidNative/src/test/cpp/fake_gles2")
+    add_test(NAME raven_native_video COMMAND raven_native_video_test)
+    if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(raven_native_audio_test PRIVATE -Wall -Wextra -Wpedantic)
+        target_compile_options(raven_native_video_test PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
     add_library(raven_frontend_fake_core SHARED tests/fake_core.c)
     target_include_directories(raven_frontend_fake_core PRIVATE
         ${ravencore_SOURCE_DIR}/libretro/include)

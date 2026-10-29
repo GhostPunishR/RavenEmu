@@ -9,6 +9,8 @@ on:
       - 'androidNative/**'
       - 'settings.gradle.kts'
       - 'docs/MIGRATION_NATIVE.md'
+      - 'third_party/retroarch/**'
+      - 'scripts/*native_sources.py'
       - '.github/workflows/native-libretro.yml'
   pull_request:
     paths:
@@ -16,6 +18,8 @@ on:
       - 'androidNative/**'
       - 'settings.gradle.kts'
       - 'docs/MIGRATION_NATIVE.md'
+      - 'third_party/retroarch/**'
+      - 'scripts/*native_sources.py'
       - '.github/workflows/native-libretro.yml'
   workflow_dispatch:
 
@@ -40,7 +44,8 @@ jobs:
       - name: Build frontend, test core and RavenCore adapters
         run: |
           cmake --build build/native-frontend --parallel 2 --target \
-            raven_frontend_test raven_frontend_fake_core raven_frontend_real_core_test raven_native_input_test raven_native_preview_test \
+            raven_frontend_test raven_frontend_fake_core raven_frontend_real_core_test \
+            raven_native_input_test raven_native_preview_test raven_native_audio_test raven_native_video_test \
             ravenemu_gb_libretro ravenemu_gbc_libretro ravenemu_gba_libretro
       - name: Run frontend smoke tests
         run: ctest --test-dir build/native-frontend --output-on-failure
@@ -74,7 +79,11 @@ jobs:
           print('Java + native C/C++ architecture validated')
           PY
       - name: Assemble ARM64 native APK, run Java tests and lint
-        run: ./gradlew :androidNative:assembleDebug :androidNative:testDebugUnitTest :androidNative:lintDebug --stacktrace
+        run: ./gradlew :androidNative:assembleDebug :androidNative:testDebugUnitTest :androidNative:lintDebug :androidNative:collectDebugCorrespondingSources --stacktrace
+      - name: Verify and package corresponding sources
+        run: |
+          python3 scripts/test_package_native_sources.py
+          python3 scripts/package_native_sources.py
       - name: Inspect APK native libraries
         run: |
           python3 - <<'PY'
@@ -90,10 +99,12 @@ jobs:
           if missing:
               raise SystemExit(f'Missing ARM64 libraries: {sorted(missing)}')
           PY
-      - name: Upload debug preview APK
+      - name: Upload debug preview APK and corresponding sources
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ravenemu-android-native-arm64-debug
-          path: androidNative/build/outputs/apk/debug/androidNative-debug.apk
+          path: |
+            androidNative/build/outputs/apk/debug/androidNative-debug.apk
+            androidNative/build/outputs/sources/ravenemu-native-sources.tar.gz
           if-no-files-found: error
           retention-days: 7

@@ -260,3 +260,36 @@ Voir [androidNative/README.md](../androidNative/README.md).
 - Validation physique encore requise avant bascule. Réglages, RA/link,
   hôte iOS natif et continuité CPU exacte après rotation restent des écarts
   de parité documentés ; aucune donnée de la bêta n'est lue ou migrée.
+
+## Treizième tranche : portage ciblé AAudio/GLES2 de RetroArch
+
+À la demande explicite du propriétaire, les pilotes natifs adaptent des
+portions des sources officielles RetroArch, révision immuable
+`7986022baf6822677ad2cec4bc215069e89bd8ce` :
+
+- AAudio : callback non bloquant avec silence en sous-alimentation,
+  configuration PCM16 stéréo à fréquence native, buffers de deux bursts et
+  fermeture bornée. File SPSC C11 propre à l'adaptateur, purge exécutée par
+  son consommateur lors des changements pause/reprise. Le convertisseur
+  linéaire RavenEmu est conservé.
+- GLES2 : shaders opaques amont, compilation/liaison, allocation et mise à
+  jour de texture adaptées. Une image de même taille utilise un sous-upload ;
+  une image dupliquée réutilise la texture. Orientation, aspect, pixels CPU
+  pour les miniatures et reprises après erreur/contexte sont préservés.
+- Copyrights amont et avis datés conservés dans les fichiers GPLv3 ou
+  ultérieure ; AGPLv3 de RavenEmu/RavenCore inchangée. Écran Java local
+  **Licences et crédits**, accessible depuis À propos, avec textes complets
+  et lien de source sur la révision construite. Les autres licences des
+  composants inclus restent applicables.
+- Archive des sources RavenEmu/RavenCore, licences, scripts et publications
+  des dépendances jointe par la CI au même artifact que l'APK. Manifeste
+  d'intégrité et instructions pour reconstruire hors Git. Tests du paquet
+  vérifiant le pin du core, les modifications suivies, l'exclusion des
+  fichiers privés non suivis et le rejet des liens/chemins sortants.
+
+[Provenance, périmètre et distribution](../third_party/retroarch/README.md).
+RavenCore reste le moteur ; ce portage ne reprend pas le frontend complet,
+les resamplers sinc ou la planification de RetroArch. La cadence précise,
+la reconnexion audio, la mesure de latence et la validation sur matériel
+réel restent nécessaires. Cette tranche reste dans la PR #39 brouillon,
+sans modification des modules ou des données de la bêta.

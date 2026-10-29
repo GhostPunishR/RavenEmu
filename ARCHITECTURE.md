@@ -7,8 +7,10 @@
 > [docs/MIGRATION_NATIVE.md](docs/MIGRATION_NATIVE.md) détaille le chemin de
 > transition et les écarts restant à combler.
 >
-> **La migration n'est ni une nouvelle application au design différent,
-> ni une copie du code de RetroArch Plus.** Elle adopte le modèle frontend
+> **La migration préserve le design et le frontend propres à RavenEmu.**
+> Des portions des pilotes AAudio/GLES2 de RetroArch sont adaptées avec
+> [leurs licences et attributions](third_party/retroarch/README.md).
+> Elle adopte le modèle frontend
 > natif + ABI Libretro tout en préservant **RavenCore, l'interface RavenEmu,
 > les sauvegardes, les utilisateurs et les fonctions déjà présentes**.
 
