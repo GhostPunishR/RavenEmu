@@ -6,12 +6,17 @@ Requires Android 8.0+ and an **ARM64** phone (arm64-v8a).
 
 ## Architecture
 
-- `MainActivity.java`: Java Activity, SAF document picker, touch controls,
-  GL thread scheduler, save-state actions and the lifecycle.
+- `MainActivity.java`: Java Activity, SAF import, accessible system library
+  dialog, touch controls, GL thread scheduler, save-state actions and lifecycle.
+- `RomLibrary.java`: offline private GB/GBC/GBA catalogue, SHA-256 identities,
+  verified ROM copies and atomic JSON index. No broad storage permission.
 - `NativeBridge.java`: typed JNI entry points (only `setButtons` is
   allowed on the UI thread; all other emulation calls use the GL thread).
 - `src/main/cpp/bridge.c`: Libretro session management, frame conversion to
   RGBA8888, OpenGL ES 2 texture drawing, atomic joypad input.
+- `src/main/cpp/native_menu.c`: GLES2 pause/menu overlay, pixel glyphs,
+  highlighted navigation and C state machine. Four actions: resume, library,
+  save and load.
 - `../frontend/`: C Libretro host, reused without code duplication.
 - `GhostPunishR/RavenCore`: the pinned C++20 cores, compiled as three
   independent `.so` files.
@@ -28,9 +33,13 @@ Run `./gradlew :androidNative:testDebugUnitTest` for identity/path tests.\n\nThe
 `ravenemu_gb_libretro.so`, `ravenemu_gbc_libretro.so` and
 `ravenemu_gba_libretro.so`. They are compiled for ARM64 only.
 
-Launch **RavenEmu Native (Test)**, select a personally provided
-`.gb`, `.gbc` or `.gba` file with the Android file picker, then
-use the on-screen buttons or a mapped physical gamepad.
+Launch **RavenEmu Native (Test)** and use **Importer ROM** to copy your
+`.gb`, `.gbc` or `.gba` into the app's private library. **Bibliothèque**
+reopens previously imported games, including after relaunching the app.
+**Menu C** displays the native pause menu above the game. Move with UP/DOWN
+(on-screen or on a gamepad) and activate with A; use the library action to open
+the accessible Android list. The Android document picker remains native to
+Android, while menu rendering and selection state live in C.
 No ROM or BIOS is bundled; no broad storage permission is requested.
 
 ## Current limits (intentional)
@@ -42,13 +51,16 @@ This is an integration prototype, not a release candidate.
 - SRAM (`.srm`) is saved atomically on app pause, ROM change, quick-save and
   approximately every 30 seconds while playing. Save-state (`.state`) can
   be written/restored manually; incompatible core versions may reject a state.
-- Saves are **new and isolated** from the original RavenEmu beta. Automatic
-  import of older RavenEmu saves is not implemented.
+- Saves and the newly imported ROM library are **isolated** from the original
+  RavenEmu beta. Automatic import of that beta's ROMs and saves is not
+  implemented. Storage is private; removing the test application deletes it.
+- Library UI uses an accessible Android dialog (file selection remains Android
+  SAF); the pause menu state, pixel-font rendering and navigation are native C.
 - No RetroAchievements, wireless/local link cable or Delta skins yet.
 - A 60 Hz best-effort loop is used instead of the precise core FPS and audio
   clock. The GLSurfaceView is continuous, and may run at display refresh speed.
-- Video is OpenGL ES 2 on a native C texture path; it is not the final shader,
-  overlay, menu, or renderer architecture.
+- Video and the first pause menu are OpenGL ES 2 native C paths, but this is
+  not yet a complete RetroArch-style menu or final shader architecture.
 - `RavenCore` still owns game emulation; no engine source has been duplicated.
 - Only one Libretro core instance may exist at once.
 - The Android APK and gameplay have to be validated on physical hardware;
