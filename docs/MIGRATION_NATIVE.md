@@ -88,3 +88,17 @@ Le module distinct `androidNative/` raccorde Java/JNI, les cores Libretro ARM64\
 - Restent à tester sur téléphones : commandes tactiles/manette du menu,
   rendu des lettres sur différentes résolutions, import/reprise après fermeture,
   mémoire, perf, audio et données.
+
+## Cinquième tranche : recherche et métadonnées hors ligne
+
+- Recherche sans accent sur les titres du catalogue et les titres de cartouche,
+  filtre par console et tri A-Z / Z-A / console, accessibles depuis l'interface
+  native Android du module de test.
+- Lecture sûre des en-têtes GB/GBC (titre 0x134..0x143, drapeau CGB) et GBA
+  (titre 0xA0..0xAB), sans exécuter de données ni interroger de serveur.
+- Index de bibliothèque étendu avec `cartridgeTitle` facultatif ; les index
+  JSON créés par la quatrième tranche restent lisibles sans migration.
+- Tests JVM des en-têtes tronqués/non ASCII, de la recherche, des filtres et
+  du tri ; la compilation ARM64 et la politique du dépôt restent vérifiées.
+- Jaquettes et recherches de métadonnées en ligne restent hors périmètre ;
+  les téléphones physiques doivent encore valider navigation et performance.
