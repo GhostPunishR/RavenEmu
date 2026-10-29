@@ -40,6 +40,7 @@ import javax.microedition.khronos.opengles.GL10;
 /** Separate, non-distributable Java/NDK proof of concept.
  * All emulator calls run on the GL thread; button input uses an atomic mask. */
 public final class MainActivity extends Activity implements GLSurfaceView.Renderer {
+    public static final String EXTRA_ROM_KEY = "com.ravenemu.nativepreview.ROM_KEY";
     private static final int PICK_ROM = 71;
     private static final int PICK_COVER = 72;
     private static final int MAX_ROM = 64 * 1024 * 1024;
@@ -117,6 +118,24 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
         FrameLayout.LayoutParams bottom = new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM);
         root.addView(controls, bottom);
         setContentView(root);
+        // The RavenEmu-style Java library selects a private ROM; only JNI/C
+        // executes it, preserving the Java -> C -> RavenCore C++ architecture.
+        String launchKey = getIntent().getStringExtra(EXTRA_ROM_KEY);
+        if (launchKey != null && CoverRepository.validKey(launchKey)) {
+            io.execute(() -> {
+                try {
+                    for (RomLibrary.Entry entry : RomLibrary.list(getFilesDir())) {
+                        if (launchKey.equals(entry.key)) {
+                            loadFromLibrary(entry);
+                            return;
+                        }
+                    }
+                    postStatus("Jeu absent de la bibliothèque");
+                } catch (IOException error) {
+                    postStatus("Chargement impossible : " + error.getMessage());
+                }
+            });
+        }
     }
 
     private LinearLayout controlRow(Button... controlButtons) {
