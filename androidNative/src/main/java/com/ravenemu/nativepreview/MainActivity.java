@@ -1,6 +1,7 @@
 package com.ravenemu.nativepreview;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.database.Cursor;
 import android.net.Uri;
@@ -20,6 +21,7 @@ import java.io.IOException;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -41,6 +43,7 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
     private long nextFrameNanos;
     private long nextBatterySaveNanos;
     private volatile String activeSaveKey;
+    private volatile boolean menuOpen;
 
     @Override
     public void onCreate(Bundle state) {
@@ -56,9 +59,19 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
         header.setOrientation(LinearLayout.VERTICAL);
         header.setPadding(20, 12, 20, 8);
         Button open = new Button(this);
-        open.setText("Ouvrir une ROM GB / GBC / GBA");
+        open.setText("Importer ROM GB / GBC / GBA");
         open.setOnClickListener(view -> pickRom());
         header.addView(open);
+        LinearLayout navigation = new LinearLayout(this);
+        Button library = new Button(this);
+        library.setText("Bibliothèque");
+        library.setOnClickListener(view -> showLibrary());
+        navigation.addView(library, new LinearLayout.LayoutParams(0, -2, 1));
+        Button menu = new Button(this);
+        menu.setText("Menu C");
+        menu.setOnClickListener(view -> toggleNativeMenu());
+        navigation.addView(menu, new LinearLayout.LayoutParams(0, -2, 1));
+        header.addView(navigation);
         status = new TextView(this);
         status.setTextColor(0xffffffff);
         status.setShadowLayer(3f, 1f, 1f, 0xff000000);
@@ -114,12 +127,16 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
         button.setAlpha(0.87f);
         button.setOnTouchListener((view, event) -> {
             if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
-                setHeld(mask, true);
+                if (menuOpen) {
+                    if (mask == NativeBridge.UP) dispatchMenu(1);
+                    else if (mask == NativeBridge.DOWN) dispatchMenu(2);
+                    else if (mask == NativeBridge.A) dispatchMenu(3);
+                } else setHeld(mask, true);
                 return true;
             }
             if (event.getActionMasked() == MotionEvent.ACTION_UP ||
                 event.getActionMasked() == MotionEvent.ACTION_CANCEL) {
-                setHeld(mask, false);
+                if (!menuOpen) setHeld(mask, false);
                 return true;
             }
             return true;
@@ -157,12 +174,44 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
             return;
         }
         status.setText("Import : " + name);
-        // Only a copy from the user-selected document is read; no broad storage permission.
+        // Copy user-selected bytes to private storage before starting a core.
         io.execute(() -> {
             try {
-                byte[] rom = readRom(uri);
-                String saveKey = SaveRepository.keyFor(system, rom);
-                byte[] battery = SaveRepository.read(getFilesDir(), saveKey, "srm");
+                byte[] bytes = readRom(uri);
+                RomLibrary.Entry imported = RomLibrary.importRom(getFilesDir(), name, bytes);
+                if (!disposed.get()) loadFromLibrary(imported);
+            } catch (Exception error) {
+                postStatus("Import impossible : " + error.getMessage());
+            }
+        });
+    }
+
+    private void showLibrary() {
+        io.execute(() -> {
+            try {
+                List<RomLibrary.Entry> entries = RomLibrary.list(getFilesDir());
+                runOnUiThread(() -> {
+                    if (disposed.get()) return;
+                    String[] labels = new String[entries.size()];
+                    for (int i = 0; i < entries.size(); i++) labels[i] = entries.get(i).label();
+                    new AlertDialog.Builder(this)
+                        .setTitle(entries.isEmpty() ? "Bibliothèque vide" : "Jeux importés")
+                        .setItems(labels, (dialog, index) -> loadFromLibrary(entries.get(index)))
+                        .setPositiveButton("Importer", (dialog, index) -> pickRom())
+                        .setNegativeButton("Fermer", null)
+                        .show();
+                });
+            } catch (Exception error) {
+                postStatus("Bibliothèque indisponible : " + error.getMessage());
+            }
+        });
+    }
+
+    private void loadFromLibrary(RomLibrary.Entry entry) {
+        io.execute(() -> {
+            try {
+                byte[] rom = RomLibrary.readRom(getFilesDir(), entry);
+                byte[] battery = SaveRepository.read(getFilesDir(), entry.key, "srm");
                 if (disposed.get()) return;
                 String nativeDir = getApplicationInfo().nativeLibraryDir;
                 String dataDir = getFilesDir().getAbsolutePath();
@@ -171,35 +220,54 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
                     try {
                         persistBattery();
                     } catch (IOException error) {
-                        postStatus("Ancienne sauvegarde non écrite : " + error.getMessage());
+                        postStatus("Sauvegarde précédente non écrite : " + error.getMessage());
                         return;
                     }
-                    String failure = NativeBridge.openRom(nativeDir, dataDir, system, rom, name);
+                    String failure = NativeBridge.openRom(nativeDir, dataDir,
+                            entry.system, rom, entry.title);
                     if (failure == null && battery != null &&
-                        !NativeBridge.restoreBattery(battery)) {
-                        // Never overwrite a save whose format this core rejects.
+                            !NativeBridge.restoreBattery(battery)) {
                         NativeBridge.closeRom();
-                        failure = "SRAM incompatible : fichier conservé sans écrasement";
+                        failure = "SRAM incompatible : fichier original conservé";
                     }
                     if (failure == null) {
-                        activeSaveKey = saveKey;
-                        nextFrameNanos = 0;
-                        nextBatterySaveNanos = 0;
-                    } else {
-                        activeSaveKey = null;
-                    }
+                        activeSaveKey = entry.key;
+                        nextFrameNanos = nextBatterySaveNanos = 0;
+                    } else activeSaveKey = null;
                     final String result = failure;
-                    runOnUiThread(() -> {
-                        if (!disposed.get()) status.setText(result == null
-                                ? "Core " + system.toUpperCase(Locale.ROOT) + " chargé : " + name
-                                : "Info : " + result);
-                    });
+                    postStatus(result == null ? "Jeu : " + entry.label() : "Échec : " + result);
                 });
             } catch (Exception error) {
-                runOnUiThread(() -> {
-                    if (!disposed.get()) status.setText("Import impossible : " + error.getMessage());
-                });
+                postStatus("Chargement impossible : " + error.getMessage());
             }
+        });
+    }
+
+    private void toggleNativeMenu() {
+        boolean opening = !menuOpen;
+        menuOpen = opening;
+        if (opening) {
+            buttons = 0;
+            NativeBridge.setButtons(0);
+        }
+        surface.queueEvent(() -> {
+            NativeBridge.menuInput(0);
+            NativeBridge.setAudioEnabled(!opening);
+        });
+    }
+
+    private void dispatchMenu(int command) {
+        surface.queueEvent(() -> {
+            int action = NativeBridge.menuInput(command);
+            if (action == 0) return;
+            NativeBridge.setAudioEnabled(true);
+            runOnUiThread(() -> {
+                if (disposed.get()) return;
+                menuOpen = false;
+                if (action == 2) showLibrary();
+                else if (action == 3) quickSave();
+                else if (action == 4) quickLoad();
+            });
         });
     }
 
@@ -322,6 +390,20 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
 
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
+        if (keyCode == KeyEvent.KEYCODE_MENU ||
+            (menuOpen && keyCode == KeyEvent.KEYCODE_BACK)) {
+            if (event.getRepeatCount() == 0) toggleNativeMenu();
+            return true;
+        }
+        if (menuOpen) {
+            if (event.getRepeatCount() != 0) return true;
+            if (keyCode == KeyEvent.KEYCODE_DPAD_UP) dispatchMenu(1);
+            else if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) dispatchMenu(2);
+            else if (keyCode == KeyEvent.KEYCODE_BUTTON_A ||
+                     keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
+                     keyCode == KeyEvent.KEYCODE_ENTER) dispatchMenu(3);
+            return true;
+        }
         int mask = keyMask(keyCode);
         if (mask != 0) {
             setHeld(mask, true);
@@ -332,6 +414,7 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
 
     @Override
     public boolean onKeyUp(int keyCode, KeyEvent event) {
+        if (menuOpen) return true;
         int mask = keyMask(keyCode);
         if (mask != 0) {
             setHeld(mask, false);
