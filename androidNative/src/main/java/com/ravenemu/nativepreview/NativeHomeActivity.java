@@ -179,6 +179,9 @@ public final class NativeHomeActivity extends Activity {
         footnote.setGravity(Gravity.CENTER);
         root.addView(footnote, new LinearLayout.LayoutParams(-1, dp(28)));
 
+        // Reserve actual status bar, cutout, nav buttons and keyboard space.
+        // Android 15 edge-to-edge would otherwise overlay the toolbar/footer.
+        SystemBarInsets.install(this, root);
         setContentView(root);
         updateCards();
     }
