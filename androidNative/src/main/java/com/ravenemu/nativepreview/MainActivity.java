@@ -41,6 +41,7 @@ import javax.microedition.khronos.opengles.GL10;
  * All emulator calls run on the GL thread; button input uses an atomic mask. */
 public final class MainActivity extends Activity implements GLSurfaceView.Renderer {
     private static final int PICK_ROM = 71;
+    private static final int PICK_COVER = 72;
     private static final int MAX_ROM = 64 * 1024 * 1024;
     private final ExecutorService io = Executors.newSingleThreadExecutor();
     private final AtomicBoolean disposed = new AtomicBoolean(false);
@@ -51,6 +52,8 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
     private long nextBatterySaveNanos;
     private volatile String activeSaveKey;
     private volatile boolean menuOpen;
+    private String pendingCoverKey;
+    private CoverAdapter currentLibraryAdapter;
 
     @Override
     public void onCreate(Bundle state) {
@@ -167,6 +170,34 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == PICK_COVER) {
+            String key = pendingCoverKey;
+            pendingCoverKey = null;
+            if (resultCode != RESULT_OK || key == null ||
+                    data == null || data.getData() == null) return;
+            final Uri imageUri = data.getData();
+            io.execute(() -> {
+                try {
+                    // Guard against stale/invalid keys before importing artwork.
+                    boolean found = false;
+                    for (RomLibrary.Entry game : RomLibrary.list(getFilesDir())) {
+                        if (game.key.equals(key)) { found = true; break; }
+                    }
+                    if (!found) throw new IOException("Jeu introuvable");
+                    byte[] image = readBounded(imageUri, CoverRepository.MAX_SOURCE_BYTES);
+                    CoverRepository.importImage(getFilesDir(), key, image);
+                    runOnUiThread(() -> {
+                        if (disposed.get()) return;
+                        if (currentLibraryAdapter != null)
+                            currentLibraryAdapter.invalidateCover(key);
+                        status.setText("Jaquette enregistrée");
+                    });
+                } catch (Exception error) {
+                    postStatus("Jaquette non importée : " + error.getMessage());
+                }
+            });
+            return;
+        }
         if (requestCode != PICK_ROM || resultCode != RESULT_OK ||
             data == null || data.getData() == null) return;
         Uri uri = data.getData();
@@ -185,6 +216,27 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
             } catch (Exception error) {
                 postStatus("Import impossible : " + error.getMessage());
             }
+        });
+    }
+
+    private void pickCover(RomLibrary.Entry game) {
+        pendingCoverKey = game.key;
+        Intent request = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        request.addCategory(Intent.CATEGORY_OPENABLE);
+        request.setType("image/*");
+        request.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        startActivityForResult(request, PICK_COVER);
+    }
+
+    private void removeCover(RomLibrary.Entry game) {
+        io.execute(() -> {
+            boolean removed = CoverRepository.remove(getFilesDir(), game.key);
+            runOnUiThread(() -> {
+                if (disposed.get()) return;
+                if (currentLibraryAdapter != null)
+                    currentLibraryAdapter.invalidateCover(game.key);
+                status.setText(removed ? "Jaquette supprimée" : "Aucune jaquette à supprimer");
+            });
         });
     }
 
@@ -235,8 +287,8 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
         layout.addView(count);
         ListView games = new ListView(this);
         List<RomLibrary.Entry> shown = new java.util.ArrayList<>();
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(
-                this, android.R.layout.simple_list_item_1, new java.util.ArrayList<>());
+        CoverAdapter adapter = new CoverAdapter(this, getFilesDir(), io);
+        currentLibraryAdapter = adapter;
         games.setAdapter(adapter);
         int preferredHeight = (int)(330 * getResources().getDisplayMetrics().density);
         int listHeight = Math.min(preferredHeight,
@@ -254,7 +306,7 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
             shown.clear();
             shown.addAll(RomLibrary.query(entries, search.getText().toString(), system, sort));
             adapter.clear();
-            for (RomLibrary.Entry entry : shown) adapter.add(entry.label());
+            for (RomLibrary.Entry entry : shown) adapter.add(entry);
             adapter.notifyDataSetChanged();
             count.setText(shown.isEmpty() ? "Aucun jeu correspondant"
                     : shown.size() + " jeu(x) sur " + entries.size());
@@ -297,9 +349,14 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
                             + "\nTitre cartouche : " + cartridge
                             + "\nTaille : " + chosen.size + " octets"
                             + "\nSHA-256 : " + chosen.key)
+                    .setNeutralButton("Choisir jaquette", (d, which) -> pickCover(chosen))
+                    .setNegativeButton("Supprimer jaquette", (d, which) -> removeCover(chosen))
                     .setPositiveButton("Fermer", null)
                     .show();
             return true;
+        });
+        dialog.setOnDismissListener(d -> {
+            if (currentLibraryAdapter == adapter) currentLibraryAdapter = null;
         });
         dialog.show();
     }
@@ -378,15 +435,19 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
         return name == null ? "jeu.gb" : name;
     }
 
-    private byte[] readRom(Uri uri) throws Exception {
+    private byte[] readRom(Uri uri) throws IOException {
+        return readBounded(uri, MAX_ROM);
+    }
+
+    private byte[] readBounded(Uri uri, int maxBytes) throws IOException {
         try (InputStream stream = getContentResolver().openInputStream(uri);
              ByteArrayOutputStream output = new ByteArrayOutputStream()) {
-            if (stream == null) throw new IllegalStateException("Document illisible");
+            if (stream == null) throw new IOException("Document illisible");
             byte[] chunk = new byte[32 * 1024];
             int count;
             while ((count = stream.read(chunk)) != -1) {
-                if (output.size() > MAX_ROM - count)
-                    throw new IllegalArgumentException("ROM supérieure à 64 MiB");
+                if (output.size() > maxBytes - count)
+                    throw new IOException("Document trop volumineux");
                 output.write(chunk, 0, count);
             }
             return output.toByteArray();
