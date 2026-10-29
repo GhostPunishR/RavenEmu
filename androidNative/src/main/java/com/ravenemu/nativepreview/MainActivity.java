@@ -305,8 +305,10 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
                     ? RomLibrary.SortOrder.SYSTEM : RomLibrary.SortOrder.TITLE_ASC;
             shown.clear();
             shown.addAll(RomLibrary.query(entries, search.getText().toString(), system, sort));
+            // One UI update, even for the full 256-game catalogue.
+            adapter.setNotifyOnChange(false);
             adapter.clear();
-            for (RomLibrary.Entry entry : shown) adapter.add(entry);
+            adapter.addAll(shown);
             adapter.notifyDataSetChanged();
             count.setText(shown.isEmpty() ? "Aucun jeu correspondant"
                     : shown.size() + " jeu(x) sur " + entries.size());
