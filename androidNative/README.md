@@ -10,6 +10,11 @@ Requires Android 8.0+ and an **ARM64** phone (arm64-v8a).
   dialog, touch controls, GL thread scheduler, save-state actions and lifecycle.
 - `RomLibrary.java`: offline private GB/GBC/GBA catalogue, SHA-256 identities,
   verified ROM copies and atomic JSON index. No broad storage permission.
+- `CoverRepository.java`: local-only cover import via SAF, bounded PNG
+  conversion (maximum 512 px edge, 8 MiB source) and atomic private storage
+  by ROM SHA-256; removal affects no ROMs, saves or other files.
+- `CoverAdapter.java`: image thumbnails decoded on a background executor,
+  with a bounded 32-image LRU cache and text fallback.
 - `NativeBridge.java`: typed JNI entry points (only `setButtons` is
   allowed on the UI thread; all other emulation calls use the GL thread).
 - `src/main/cpp/bridge.c`: Libretro session management, frame conversion to
@@ -41,6 +46,11 @@ reopens previously imported games, including after relaunching the app.
 The library dialog offers **text search** (filenames and cartridge titles,
 accent-insensitive), **GB/GBC/GBA filtering** and sorting by name or system.
 Long-press an entry to see the cartridge header title, ROM size and SHA-256.
+Select **Choisir jaquette** to choose a JPEG/PNG or another Android-decodable
+image from your phone. The app downscales and stores it privately; **Supprimer
+jaquette** removes only that local image. This does not download box art or
+change game ROMs and saves. Android can display the cover next to the title,
+with an offline placeholder for games without artwork.
 Header metadata is read locally without any online API.
 **Menu C** displays the native pause menu above the game. Move with UP/DOWN
 (on-screen or on a gamepad) and activate with A; use the library action to open
@@ -63,6 +73,9 @@ This is an integration prototype, not a release candidate.
 - Library UI uses an accessible searchable Android dialog (file selection remains Android
   SAF); the pause menu state, pixel-font rendering and navigation are native C.
 - No RetroAchievements, wireless/local link cable or Delta skins yet.
+- Cover images must be manually selected by the user from local documents.
+  Import is limited to 8 MiB and 4096 x 4096 input, decoded into 512 px PNG
+  thumbnails. No artwork is bundled or fetched online.
 - A 60 Hz best-effort loop is used instead of the precise core FPS and audio
   clock. The GLSurfaceView is continuous, and may run at display refresh speed.
 - Video and the first pause menu are OpenGL ES 2 native C paths, but this is
