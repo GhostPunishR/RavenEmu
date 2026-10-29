@@ -35,7 +35,7 @@ Run `./gradlew :androidNative:testDebugUnitTest` for identity/path tests.\n\nThe
 
 Launch **RavenEmu Native (Test)** and use **Importer ROM** to copy your
 `.gb`, `.gbc` or `.gba` into the app's private library. **Bibliothèque**
-reopens previously imported games, including after relaunching the app.
+reopens previously imported games, including after relaunching the app.\nThe library dialog offers **text search** (filenames and cartridge titles,\naccent-insensitive), **GB/GBC/GBA filtering** and sorting by name or system.\nLong-press an entry to see the cartridge header title, ROM size and SHA-256.\nHeader metadata is read locally without any online API.
 **Menu C** displays the native pause menu above the game. Move with UP/DOWN
 (on-screen or on a gamepad) and activate with A; use the library action to open
 the accessible Android list. The Android document picker remains native to
@@ -54,7 +54,7 @@ This is an integration prototype, not a release candidate.
 - Saves and the newly imported ROM library are **isolated** from the original
   RavenEmu beta. Automatic import of that beta's ROMs and saves is not
   implemented. Storage is private; removing the test application deletes it.
-- Library UI uses an accessible Android dialog (file selection remains Android
+- Library UI uses an accessible searchable Android dialog (file selection remains Android
   SAF); the pause menu state, pixel-font rendering and navigation are native C.
 - No RetroAchievements, wireless/local link cable or Delta skins yet.
 - A 60 Hz best-effort loop is used instead of the precise core FPS and audio
