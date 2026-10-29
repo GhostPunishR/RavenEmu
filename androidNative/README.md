@@ -23,8 +23,8 @@ utilisé par le dépôt ; aucune source Kotlin ou Compose n'est ajoutée au
 nouveau module.
 
 La bibliothèque Java restaure déjà les écrans centraux, mais ce n'est **pas
-encore une parité visuelle totale** : le menu de jeu C et les réglages non
-raccordés aux cores doivent encore être alignés.
+encore une parité visuelle totale** : les miniatures d'états, les réglages et
+les fonctions avancées du menu doivent encore être raccordés.
 
 ## Calibrage sur les barres du téléphone
 
@@ -95,6 +95,13 @@ conclure à une parité avec la bêta.
   by ROM SHA-256; removal affects no ROMs, saves or other files.
 - `CoverAdapter.java`: image thumbnails decoded on a background executor,
   with a bounded 32-image LRU cache and text fallback.
+- `PlayerMenuSheet.java`: panneau de pause glissant Java Views, quatre
+  emplacements, confirmations et navigation au contrôleur.
+- `PlayerPauseState.java`: pause maintenue tant que le menu, une opération,
+  l'arrière-plan ou la perte de focus le demandent.
+- `StateSlotRepository.java`: versioned atomic state slots, ROM/core identity
+  and SHA-256 validation; disk access stays on the storage executor shared
+  between player Activities, so a recreated player reads after prior writes.
 - `NativeBridge.java`: typed JNI entry points; `setButtons` and `clearButtons`
   update atomic input from the UI. Core calls use the GL thread while running;
   lifecycle cleanup accesses the session only after that thread is paused.
@@ -102,9 +109,9 @@ conclure à une parité avec la bêta.
   RGBA8888, OpenGL ES 2 texture drawing, atomic joypad input.
 - `src/main/cpp/native_input.c`: held/pending input masks and one stable
   joypad snapshot per emulated frame.
-- `src/main/cpp/native_menu.c`: GLES2 pause/menu overlay, pixel glyphs,
-  highlighted navigation and C state machine. Four actions: resume, library,
-  save and load.
+- The C bridge gates emulated frames and native audio together during pause;
+  the Java sheet supplies the RavenEmu presentation instead of the prototype's
+  pixel-font menu. Core capture/restore still uses the GL/emulation thread.
 - `../frontend/`: C Libretro host, reused without code duplication.
 - `GhostPunishR/RavenCore`: the pinned C++20 cores, compiled as three
   independent `.so` files.
@@ -133,19 +140,39 @@ Launch **RavenEmu Native (Test)** and use the **+** button to copy your
 reopens previously imported games, including after relaunching the app.
 Tap a cover to open the details sheet, then tap **Jouer** to launch the
 native player. Return with the back arrow to see the same library.
-The library dialog offers **text search** (filenames and cartridge titles,
-accent-insensitive), **GB/GBC/GBA filtering** and sorting by name or system.
-Long-press an entry to see the cartridge header title, ROM size and SHA-256.
-Select **Choisir jaquette** to choose a JPEG/PNG or another Android-decodable
-image from your phone. The app downscales and stores it privately; **Supprimer
-jaquette** removes only that local image. This does not download box art or
+La bibliothèque d'accueil propose recherche sans accent et filtre GB/GBC/GBA.
+La fiche présente le titre de cartouche et les informations du jeu.
+Select **Image manuelle (facultatif)** to choose a JPEG/PNG or another Android-decodable
+image from your phone. The app downscales and stores it privately; **Retirer
+la jaquette** removes only that local image. This does not download box art or
 change game ROMs and saves. Android can display the cover next to the title,
 with an offline placeholder for games without artwork.
 Header metadata is read locally without any online API.
-**Menu C** displays the native pause menu above the game. Move with UP/DOWN
-(on-screen or on a gamepad) and activate with A; use the library action to open
-the accessible Android list. The Android document picker remains native to
-Android, while menu rendering and selection state live in C.
+**⋮ / Menu du jeu** ouvre le panneau glissant et met image émulée et audio en
+pause. Choisir un des **quatre emplacements**, puis **Sauver**, **Charger** ou
+**Supprimer**. Écrasement et suppression nécessitent confirmation. Une action
+en cours bloque les doubles appuis ; fermer la fiche pendant une opération ne
+reprend le jeu qu'après sa fin, si l'Activity est active et a le focus.
+Retour, le glissement et **Reprendre le jeu** ferment la fiche ; la manette
+navigue entre ses vues, A active et B revient. La flèche du lecteur ramène
+à la bibliothèque d'accueil pour changer de jeu ou importer une ROM/jaquette.
+
+Chaque nouvel état contient sa version de format, l'identité ROM, la révision
+épinglée et l'identité du core, la date et une empreinte SHA-256 du contenu.
+Les fichiers incompatibles/corrompus restent visibles et supprimables ; leur
+chargement est refusé avant désérialisation. Un échec du core tente de restaurer
+l'état courant capturé avant chargement ; si ce retour échoue aussi, le jeu
+est fermé sans écraser la SRAM. L'ancien état rapide du seul package de test
+reste disponible à l'emplacement 1 avec un avertissement et une confirmation
+de compatibilité inconnue. L'enregistrer à nouveau crée une enveloppe versionnée.
+Supprimer cet emplacement le masque avec un marqueur atomique ; le fichier
+historique reste intact et ne réapparaît pas. Aucun fichier bêta n'est lu.
+
+Les miniatures d'états, l'annulation d'un chargement réussi et les autres
+options avancées du menu ne sont pas encore portées. La carte affiche un
+badge console en attendant les captures. La recréation restaure le panneau
+et le numéro d'emplacement ; le redémarrage du jeu repose encore sur la SRAM,
+pas sur une restauration automatique de son état CPU exact.
 No ROM or BIOS is bundled; no broad storage permission is requested.
 
 ## Current limits (intentional)
@@ -154,23 +181,23 @@ This is an integration prototype, not a release candidate.
 - Audio is played through native AAudio (the core's reported sample rate is
   linearly resampled to the device stream rate, normally 48 kHz). Low-latency
   hardware behavior and underruns still need testing on phones.
-- SRAM (`.srm`) is saved atomically on app pause, ROM change, quick-save and
-  approximately every 30 seconds while playing. Save-state (`.state`) can
-  be written/restored manually; incompatible core versions may reject a state.
+- SRAM (`.srm`) is captured at app pause, state save and approximately every
+  30 seconds while playing, then written atomically off the GL/UI threads.
+  Four state slots are saved/restored manually, with core/ROM compatibility
+  checked before loading. SRAM and states are independent.
 - Saves and the newly imported ROM library are **isolated** from the original
   RavenEmu beta. Automatic import of that beta's ROMs and saves is not
   implemented. Storage is private; removing the test application deletes it.
-- The Java home screen uses the RavenEmu-style grid/list. The player also
-  offers a searchable Android library dialog; file selection remains Android
-  SAF. The pause menu state, pixel-font rendering and navigation are native C.
+- The Java home screen uses the RavenEmu-style grid/list; file selection
+  remains Android SAF. The Java pause sheet controls the C pause/audio gate.
 - No RetroAchievements, wireless/local link cable or Delta skins yet.
 - Cover images must be manually selected by the user from local documents.
   Import is limited to 8 MiB and 4096 x 4096 input, decoded into 512 px PNG
   thumbnails. No artwork is bundled or fetched online.
 - A 60 Hz best-effort loop is used instead of the precise core FPS and audio
   clock. The GLSurfaceView is continuous, and may run at display refresh speed.
-- Video and the first pause menu are OpenGL ES 2 native C paths, but this is
-  not yet a complete RetroArch-style menu or final shader architecture.
+- Video uses OpenGL ES 2 in C; shader architecture and the advanced pause
+  options remain incomplete.
 - `RavenCore` still owns game emulation; no engine source has been duplicated.
 - Only one Libretro core instance may exist at once.
 - The Android APK and gameplay have to be validated on physical hardware;

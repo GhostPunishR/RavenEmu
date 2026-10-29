@@ -33,13 +33,14 @@ final class NativeBridge {
     static native void setButtons(int buttons);
     /** Pause/menu/focus loss: release held buttons and discard pending presses. */
     static native void clearButtons();
+    /** GL thread: pause emulation and audio together, without drawing a menu. */
+    static native void setPaused(boolean paused);
+    /** Pinned core revision + Libretro core identity, for private state slots. */
+    static native String stateCompatibility();
     static native byte[] saveBattery();
     static native boolean restoreBattery(byte[] battery);
     static native byte[] saveState();
     static native boolean restoreState(byte[] state);
     static native void setAudioEnabled(boolean enabled);
-    /** C-rendered menu: 0 toggle, 1 up, 2 down, 3 select, 4 close.
-     * Results: 0 nothing, 1 resume, 2 library, 3 save, 4 load. EGL thread. */
-    static native int menuInput(int command);
     static native void closeRom();
 }

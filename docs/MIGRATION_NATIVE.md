@@ -199,3 +199,36 @@ Voir [androidNative/README.md](../androidNative/README.md).
   RetroAchievements restent à porter. Fidélité visuelle, gestes système,
   grandes polices, orientation, son et commandes demandent encore une
   validation sur appareils physiques avant toute bascule produit.
+
+## Onzième tranche : menu de pause et quatre emplacements d'états
+
+- Le prototype de menu bitmap GLES2 est remplacé par le panneau glissant
+  Java Views de RavenEmu : titre du jeu, quatre emplacements, date, carte et
+  actions Sauver/Charger/Supprimer/Reprendre. Le même comportement de panneau
+  que la fiche de bibliothèque est réutilisé, avec défilement et manette A/B.
+- Écrasement et suppression sont confirmés. L'état de chargement et les
+  opérations en cours empêchent les doubles activations ; les résultats et
+  erreurs sont affichés dans le panneau, avec annonce d'accessibilité.
+- Les raisons de pause (menu, opération, arrière-plan, focus) sont combinées.
+  Le pont C bloque les frames émulées et l'audio ensemble ; fermer le panneau
+  ne reprend pas une Activity en arrière-plan ni un chargement inachevé.
+- Les quatre états privés utilisent des enveloppes atomiques versionnées,
+  liées à la ROM et à la révision/identité du core, avec date et SHA-256.
+  Une incompatibilité/corruption refuse le chargement tout en conservant le
+  fichier ; les autres emplacements restent disponibles.
+- Le quick-save de prévisualisation antérieur reste lisible au premier
+  emplacement après confirmation de compatibilité inconnue. Son remplacement
+  écrit un nouvel état ; sa suppression logique atomique empêche son retour
+  sans modifier le fichier historique ni la SRAM. Aucune donnée bêta n'est lue.
+- Captures/restaurations d'états sur le fil GL ; accès SRAM de cycle de vie
+  après sa suspension. Lectures/écritures sur une file de stockage commune
+  aux lecteurs, afin qu'une recréation lise la dernière
+  SRAM après sa sauvegarde en attente. Un état courant est capturé avant
+  restauration pour revenir en arrière si le core refuse le fichier.
+  Une lecture de ROM terminée en arrière-plan attend la reprise avant
+  d'ouvrir le core ; les callbacks d'un lecteur détruit sont abandonnés.
+- Tests de stockage, confirmations, pause et intégration du lecteur ; la
+  validation physique demeure nécessaire. Miniatures, annulation d'un
+  chargement réussi, réglages, RA et link restent des écarts de parité.
+  La rotation restaure panneau/emplacement et SRAM, sans promettre la
+  continuité automatique de l'état CPU exact du jeu.

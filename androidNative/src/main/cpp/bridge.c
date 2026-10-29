@@ -5,7 +5,6 @@
 #include <ravenemu/frontend.h>
 #include "native_audio.h"
 #include "native_input.h"
-#include "native_menu.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -18,6 +17,8 @@
 
 static raven_frontend *session;
 static raven_input input = RAVEN_INPUT_INITIALIZER;
+/* Owned by the GL/emulation thread; Java combines the reasons to pause. */
+static int playback_paused = 1;
 static uint8_t *rgba_pixels;
 static size_t rgba_capacity;
 static int image_width, image_height;
@@ -229,6 +230,7 @@ Java_com_ravenemu_nativepreview_NativeBridge_openRom(
             !raven_audio_open(info.sample_rate)) {
             LOGE("Audio output unavailable; running game without sound");
         }
+        raven_audio_set_running(!playback_paused);
     }
 
 done:
@@ -261,7 +263,7 @@ Java_com_ravenemu_nativepreview_NativeBridge_drawFrame(
     jboolean advance) {
     (void)env;
     (void)clazz;
-    if (raven_menu_visible()) {
+    if (playback_paused) {
         raven_input_clear_buttons(&input);
     } else if (advance && session) {
         raven_input_begin_frame(&input);
@@ -271,7 +273,6 @@ Java_com_ravenemu_nativepreview_NativeBridge_drawFrame(
     glClear(GL_COLOR_BUFFER_BIT);
     if (!program || !texture || !image_ready || !rgba_pixels ||
         surface_width <= 0 || surface_height <= 0) {
-        raven_menu_draw(surface_width, surface_height);
         return;
     }
 
@@ -306,7 +307,27 @@ Java_com_ravenemu_nativepreview_NativeBridge_drawFrame(
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
     glDisableVertexAttribArray((GLuint)attribute_position);
     glDisableVertexAttribArray((GLuint)attribute_uv);
-    raven_menu_draw(surface_width, surface_height);
+}
+
+JNIEXPORT void JNICALL
+Java_com_ravenemu_nativepreview_NativeBridge_setPaused(
+    JNIEnv *env, jclass clazz, jboolean paused) {
+    (void)env; (void)clazz;
+    playback_paused = paused == JNI_TRUE;
+    if (playback_paused) raven_input_clear_buttons(&input);
+    raven_audio_set_running(!playback_paused);
+}
+
+JNIEXPORT jstring JNICALL
+Java_com_ravenemu_nativepreview_NativeBridge_stateCompatibility(JNIEnv *env, jclass clazz) {
+    (void)clazz;
+    raven_core_info info = {0};
+    if (!raven_frontend_get_info(session, &info) || !info.name || !info.version) return NULL;
+    char identity[512];
+    int count = snprintf(identity, sizeof(identity), "libretro-1|%s|%s|%s|state-v1",
+                         RAVEN_CORE_REVISION, info.name, info.version);
+    if (count <= 0 || (size_t)count >= sizeof(identity)) return NULL;
+    return (*env)->NewStringUTF(env, identity);
 }
 
 /* A limit on JNI allocations; Libretro save RAM/state sizes are untrusted. */
@@ -380,15 +401,6 @@ Java_com_ravenemu_nativepreview_NativeBridge_setAudioEnabled(
     JNIEnv *env, jclass clazz, jboolean enabled) {
     (void)env; (void)clazz;
     raven_audio_set_running(enabled == JNI_TRUE);
-}
-
-JNIEXPORT jint JNICALL
-Java_com_ravenemu_nativepreview_NativeBridge_menuInput(
-    JNIEnv *env, jclass clazz, jint command) {
-    (void)env; (void)clazz;
-    int action = raven_menu_input((int)command);
-    if (raven_menu_visible()) raven_input_clear_buttons(&input);
-    return (jint)action;
 }
 
 JNIEXPORT void JNICALL

@@ -1,34 +1,15 @@
 package com.ravenemu.nativepreview;
 
 import android.app.Activity;
-import android.app.AlertDialog;
-import android.text.Editable;
-import android.text.TextWatcher;
-import android.widget.AdapterView;
-import android.widget.ArrayAdapter;
-import android.widget.EditText;
-import android.widget.ListView;
-import android.widget.Spinner;
-import android.content.Intent;
 import android.content.res.Configuration;
-import android.database.Cursor;
-import android.net.Uri;
 import android.opengl.GLSurfaceView;
 import android.os.Bundle;
-import android.provider.OpenableColumns;
 import android.view.Gravity;
 import android.view.KeyEvent;
-import android.view.View;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
-
 import java.io.IOException;
-
-import java.io.ByteArrayOutputStream;
-import java.io.InputStream;
-import java.util.List;
-import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -41,10 +22,10 @@ import javax.microedition.khronos.opengles.GL10;
  * lifecycle cleanup; button input uses an atomic mask. */
 public final class MainActivity extends Activity implements GLSurfaceView.Renderer {
     public static final String EXTRA_ROM_KEY = "com.ravenemu.nativepreview.ROM_KEY";
-    private static final int PICK_ROM = 71;
-    private static final int PICK_COVER = 72;
-    private static final int MAX_ROM = 64 * 1024 * 1024;
-    private final ExecutorService io = Executors.newSingleThreadExecutor();
+    // Shared ordering: a recreated Activity must read SRAM only after the
+    // previous Activity's queued pause snapshot has been written.
+    private static final ExecutorService STORAGE_IO = Executors.newSingleThreadExecutor();
+    private final ExecutorService io = STORAGE_IO;
     private final AtomicBoolean disposed = new AtomicBoolean(false);
     private GLSurfaceView surface;
     private TextView status;
@@ -55,12 +36,25 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
     private long nextBatterySaveNanos;
     private volatile String activeSaveKey;
     private volatile boolean menuOpen;
-    private String pendingCoverKey;
-    private CoverAdapter currentLibraryAdapter;
+    private volatile boolean gamePaused = true;
+    private volatile boolean foreground;
+    private volatile String stateCompatibility;
+    private PlayerPauseState pauseState;
+    private PlayerMenuSheet playerMenu;
+    private StateSlotRepository.Slot[] stateSlots;
+    private boolean slotBusy, restoreMenu;
+    private int selectedSlot;
+    private final Object ioGate = new Object();
+    private int menuGeneration;
+    private Runnable pendingRomLoad;
 
     @Override
     public void onCreate(Bundle state) {
         super.onCreate(state);
+        if (state != null) {
+            restoreMenu = state.getBoolean("player.menu");
+            selectedSlot = Math.max(0, Math.min(3, state.getInt("player.slot")));
+        }
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(NativeHomeActivity.BACKGROUND);
@@ -68,6 +62,15 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
         surface.setEGLContextClientVersion(2);
         surface.setRenderer(this);
         surface.setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);
+        pauseState = new PlayerPauseState(paused -> {
+            gamePaused = paused;
+            releaseInput();
+            if (gameControls != null) gameControls.setEnabled(!paused);
+            surface.queueEvent(() -> {
+                if (!disposed.get()) NativeBridge.setPaused(paused);
+            });
+        });
+        pauseState.menu(restoreMenu);
 
         // Mirror the 48dp RavenEmu player toolbar: back, current game,
         // and the three-dot game menu. The GL/C frontend is unchanged.
@@ -99,7 +102,7 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
         menu.setTextSize(28);
         menu.setTextColor(NativeHomeActivity.TEXT);
         menu.setContentDescription("Menu du jeu");
-        menu.setOnClickListener(view -> toggleNativeMenu());
+        menu.setOnClickListener(view -> togglePlayerMenu());
         toolbar.addView(menu, new LinearLayout.LayoutParams(dp(48), dp(48)));
         header.addView(toolbar);
 
@@ -113,6 +116,7 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
         root.addView(header, new LinearLayout.LayoutParams(-1, -2));
 
         gameControls = new GameControlsView(this, this::setTouchButtons);
+        gameControls.setEnabled(false);
         if (getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE) {
             FrameLayout stage = new FrameLayout(this);
             root.addView(stage, new LinearLayout.LayoutParams(-1, 0, 1));
@@ -133,7 +137,7 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
         // executes it, preserving the Java -> C -> RavenCore C++ architecture.
         String launchKey = getIntent().getStringExtra(EXTRA_ROM_KEY);
         if (launchKey != null && CoverRepository.validKey(launchKey)) {
-            io.execute(() -> {
+            submitIo(() -> {
                 try {
                     for (RomLibrary.Entry entry : RomLibrary.list(getFilesDir())) {
                         if (launchKey.equals(entry.key)) {
@@ -154,19 +158,15 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
     }
 
     private void setHeld(int mask, boolean held) {
+        if (gamePaused) return;
         buttons = held ? (buttons | mask) : (buttons & ~mask);
         NativeBridge.setButtons(buttons | touchButtons);
     }
 
     private void setTouchButtons(int mask) {
-        if (disposed.get()) return;
-        int pressed = mask & ~touchButtons;
+        if (disposed.get() || gamePaused) return;
         touchButtons = mask;
-        if (menuOpen) {
-            if ((pressed & NativeBridge.UP) != 0) dispatchMenu(1);
-            else if ((pressed & NativeBridge.DOWN) != 0) dispatchMenu(2);
-            if ((pressed & NativeBridge.A) != 0) dispatchMenu(3);
-        } else NativeBridge.setButtons(buttons | touchButtons);
+        NativeBridge.setButtons(buttons | touchButtons);
     }
 
     private void releaseInput() {
@@ -175,226 +175,16 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
         NativeBridge.clearButtons();
     }
 
-    private void pickRom() {
-        Intent request = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-        request.addCategory(Intent.CATEGORY_OPENABLE);
-        request.setType("*/*");
-        request.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        startActivityForResult(request, PICK_ROM);
-    }
-
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == PICK_COVER) {
-            String key = pendingCoverKey;
-            pendingCoverKey = null;
-            if (resultCode != RESULT_OK || key == null ||
-                    data == null || data.getData() == null) return;
-            final Uri imageUri = data.getData();
-            io.execute(() -> {
-                try {
-                    // Guard against stale/invalid keys before importing artwork.
-                    boolean found = false;
-                    for (RomLibrary.Entry game : RomLibrary.list(getFilesDir())) {
-                        if (game.key.equals(key)) { found = true; break; }
-                    }
-                    if (!found) throw new IOException("Jeu introuvable");
-                    byte[] image = readBounded(imageUri, CoverRepository.MAX_SOURCE_BYTES);
-                    CoverRepository.importImage(getFilesDir(), key, image);
-                    runOnUiThread(() -> {
-                        if (disposed.get()) return;
-                        if (currentLibraryAdapter != null)
-                            currentLibraryAdapter.invalidateCover(key);
-                        status.setText("Jaquette enregistrée");
-                    });
-                } catch (Exception error) {
-                    postStatus("Jaquette non importée : " + error.getMessage());
-                }
-            });
-            return;
-        }
-        if (requestCode != PICK_ROM || resultCode != RESULT_OK ||
-            data == null || data.getData() == null) return;
-        Uri uri = data.getData();
-        String name = getDisplayName(uri);
-        if (RomLibrary.detectSystem(name) == null) {
-            status.setText("Extension non compatible : choisissez .gb, .gbc ou .gba");
-            return;
-        }
-        status.setText("Import : " + name);
-        // Copy user-selected bytes to private storage before starting a core.
-        io.execute(() -> {
-            try {
-                byte[] bytes = readRom(uri);
-                RomLibrary.Entry imported = RomLibrary.importRom(getFilesDir(), name, bytes);
-                if (!disposed.get()) loadFromLibrary(imported);
-            } catch (Exception error) {
-                postStatus("Import impossible : " + error.getMessage());
-            }
-        });
-    }
-
-    private void pickCover(RomLibrary.Entry game) {
-        pendingCoverKey = game.key;
-        Intent request = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-        request.addCategory(Intent.CATEGORY_OPENABLE);
-        request.setType("image/*");
-        request.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        startActivityForResult(request, PICK_COVER);
-    }
-
-    private void removeCover(RomLibrary.Entry game) {
-        io.execute(() -> {
-            boolean removed = CoverRepository.remove(getFilesDir(), game.key);
-            runOnUiThread(() -> {
-                if (disposed.get()) return;
-                if (currentLibraryAdapter != null)
-                    currentLibraryAdapter.invalidateCover(game.key);
-                status.setText(removed ? "Jaquette supprimée" : "Aucune jaquette à supprimer");
-            });
-        });
-    }
-
-    private void showLibrary() {
-        io.execute(() -> {
-            try {
-                List<RomLibrary.Entry> entries = RomLibrary.list(getFilesDir());
-                runOnUiThread(() -> {
-                    if (!disposed.get()) showLibraryDialog(entries);
-                });
-            } catch (Exception error) {
-                postStatus("Bibliothèque indisponible : " + error.getMessage());
-            }
-        });
-    }
-
-    /** Accessible Android game-picker dialog; the in-game pause menu is C. */
-    private void showLibraryDialog(List<RomLibrary.Entry> entries) {
-        int inset = (int)(16 * getResources().getDisplayMetrics().density);
-        LinearLayout layout = new LinearLayout(this);
-        layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setPadding(inset, 0, inset, 0);
-
-        EditText search = new EditText(this);
-        search.setSingleLine(true);
-        search.setHint("Rechercher un jeu ou titre de cartouche");
-        layout.addView(search, new LinearLayout.LayoutParams(-1, -2));
-
-        LinearLayout controls = new LinearLayout(this);
-        Spinner systemFilter = new Spinner(this);
-        String[] systems = {"Toutes", "GB", "GBC", "GBA"};
-        ArrayAdapter<String> systemsAdapter = new ArrayAdapter<>(
-                this, android.R.layout.simple_spinner_item, systems);
-        systemsAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        systemFilter.setAdapter(systemsAdapter);
-        controls.addView(systemFilter, new LinearLayout.LayoutParams(0, -2, 1));
-
-        Spinner sortFilter = new Spinner(this);
-        String[] sorts = {"Titre A-Z", "Titre Z-A", "Console"};
-        ArrayAdapter<String> sortsAdapter = new ArrayAdapter<>(
-                this, android.R.layout.simple_spinner_item, sorts);
-        sortsAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        sortFilter.setAdapter(sortsAdapter);
-        controls.addView(sortFilter, new LinearLayout.LayoutParams(0, -2, 1));
-        layout.addView(controls, new LinearLayout.LayoutParams(-1, -2));
-
-        TextView count = new TextView(this);
-        layout.addView(count);
-        ListView games = new ListView(this);
-        List<RomLibrary.Entry> shown = new java.util.ArrayList<>();
-        CoverAdapter adapter = new CoverAdapter(this, getFilesDir(), io);
-        currentLibraryAdapter = adapter;
-        games.setAdapter(adapter);
-        int preferredHeight = (int)(330 * getResources().getDisplayMetrics().density);
-        int listHeight = Math.min(preferredHeight,
-                Math.max(100, getResources().getDisplayMetrics().heightPixels / 2));
-        layout.addView(games, new LinearLayout.LayoutParams(-1, listHeight));
-
-        Runnable refresh = () -> {
-            int systemPosition = systemFilter.getSelectedItemPosition();
-            String system = systemPosition <= 0 || systemPosition >= systems.length
-                    ? "" : systems[systemPosition].toLowerCase(Locale.ROOT);
-            RomLibrary.SortOrder sort = sortFilter.getSelectedItemPosition() == 1
-                    ? RomLibrary.SortOrder.TITLE_DESC
-                    : sortFilter.getSelectedItemPosition() == 2
-                    ? RomLibrary.SortOrder.SYSTEM : RomLibrary.SortOrder.TITLE_ASC;
-            shown.clear();
-            shown.addAll(RomLibrary.query(entries, search.getText().toString(), system, sort));
-            // One UI update, even for the full 256-game catalogue.
-            adapter.setNotifyOnChange(false);
-            adapter.clear();
-            adapter.addAll(shown);
-            adapter.notifyDataSetChanged();
-            count.setText(shown.isEmpty() ? "Aucun jeu correspondant"
-                    : shown.size() + " jeu(x) sur " + entries.size());
-        };
-
-        search.addTextChangedListener(new TextWatcher() {
-            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
-                refresh.run();
-            }
-            @Override public void afterTextChanged(Editable s) {}
-        });
-        AdapterView.OnItemSelectedListener selector = new AdapterView.OnItemSelectedListener() {
-            @Override public void onItemSelected(AdapterView<?> parent, View view,
-                                                 int position, long id) { refresh.run(); }
-            @Override public void onNothingSelected(AdapterView<?> parent) { refresh.run(); }
-        };
-        systemFilter.setOnItemSelectedListener(selector);
-        sortFilter.setOnItemSelectedListener(selector);
-        refresh.run();
-
-        AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle("Bibliothèque · " + entries.size() + " jeu(x)")
-                .setView(layout)
-                .setPositiveButton("Importer une ROM", (d, which) -> pickRom())
-                .setNegativeButton("Fermer", null)
-                .create();
-        games.setOnItemClickListener((parent, view, position, id) -> {
-            RomLibrary.Entry chosen = shown.get(position);
-            dialog.dismiss();
-            loadFromLibrary(chosen);
-        });
-        games.setOnItemLongClickListener((parent, view, position, id) -> {
-            RomLibrary.Entry chosen = shown.get(position);
-            String cartridge = chosen.cartridgeTitle.isEmpty()
-                    ? "Non disponible" : chosen.cartridgeTitle;
-            new AlertDialog.Builder(this)
-                    .setTitle(chosen.title)
-                    .setMessage("Console : " + chosen.system.toUpperCase(Locale.ROOT)
-                            + "\nTitre cartouche : " + cartridge
-                            + "\nTaille : " + chosen.size + " octets"
-                            + "\nSHA-256 : " + chosen.key)
-                    .setNeutralButton("Choisir jaquette", (d, which) -> pickCover(chosen))
-                    .setNegativeButton("Supprimer jaquette", (d, which) -> removeCover(chosen))
-                    .setPositiveButton("Fermer", null)
-                    .show();
-            return true;
-        });
-        dialog.setOnDismissListener(d -> {
-            if (currentLibraryAdapter == adapter) currentLibraryAdapter = null;
-        });
-        dialog.show();
-    }
-
     private void loadFromLibrary(RomLibrary.Entry entry) {
-        io.execute(() -> {
+        submitIo(() -> {
             try {
                 byte[] rom = RomLibrary.readRom(getFilesDir(), entry);
                 byte[] battery = SaveRepository.read(getFilesDir(), entry.key, "srm");
                 if (disposed.get()) return;
                 String nativeDir = getApplicationInfo().nativeLibraryDir;
                 String dataDir = getFilesDir().getAbsolutePath();
-                surface.queueEvent(() -> {
+                queueRomLoad(() -> {
                     if (disposed.get()) return;
-                    try {
-                        persistBattery();
-                    } catch (IOException error) {
-                        postStatus("Sauvegarde précédente non écrite : " + error.getMessage());
-                        return;
-                    }
                     String failure = NativeBridge.openRom(nativeDir, dataDir,
                             entry.system, rom, entry.title);
                     if (failure == null && battery != null &&
@@ -404,14 +194,16 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
                     }
                     if (failure == null) {
                         activeSaveKey = entry.key;
+                        stateCompatibility = NativeBridge.stateCompatibility();
                         nextFrameNanos = nextBatterySaveNanos = 0;
-                    } else activeSaveKey = null;
+                    } else { activeSaveKey = null; stateCompatibility = null; }
                     final String result = failure;
                     runOnUiThread(() -> {
                         if (!disposed.get() && result == null && gameTitle != null) {
                             releaseInput();
                             gameControls.setShoulders("gba".equals(entry.system));
                             gameTitle.setText(entry.title);
+                            if (restoreMenu) { restoreMenu = false; togglePlayerMenu(); }
                         }
                     });
                     postStatus(result == null ? "Jeu : " + entry.label() : "Échec : " + result);
@@ -422,58 +214,174 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
         });
     }
 
-    private void toggleNativeMenu() {
-        boolean opening = !menuOpen;
-        menuOpen = opening;
+    private void queueRomLoad(Runnable load) {
+        runOnUiThread(() -> {
+            if (disposed.get()) return;
+            pendingRomLoad = load;
+            dispatchRomLoad();
+        });
+    }
+
+    /** A storage callback may arrive after GLSurfaceView acknowledged pause.
+     * Defer opening a core so it cannot race the paused-session cleanup. */
+    private void dispatchRomLoad() {
+        if (disposed.get() || !foreground || pendingRomLoad == null) return;
+        Runnable load = pendingRomLoad;
+        pendingRomLoad = null;
+        surface.queueEvent(() -> {
+            if (disposed.get()) return;
+            if (!foreground) { queueRomLoad(load); return; }
+            load.run();
+        });
+    }
+
+    private void togglePlayerMenu() {
+        if (playerMenu != null && playerMenu.isShowing()) {
+            playerMenu.dismiss();
+            return;
+        }
+        if (activeSaveKey == null || stateCompatibility == null) {
+            postStatus("Charge un jeu avant d’ouvrir le menu");
+            return;
+        }
+        menuOpen = true;
+        pauseState.menu(true);
         releaseInput();
-        surface.queueEvent(() -> {
-            NativeBridge.menuInput(0);
-            NativeBridge.setAudioEnabled(!opening);
+        if (playerMenu != null) selectedSlot = playerMenu.getSelectedSlot();
+        final int generation = ++menuGeneration;
+        playerMenu = new PlayerMenuSheet(this, gameTitle.getText().toString(), selectedSlot,
+                new PlayerMenuSheet.Listener() {
+                    @Override public void onSave(int slot) { operateSlot(slot, 0); }
+                    @Override public void onLoad(int slot) { operateSlot(slot, 1); }
+                    @Override public void onDelete(int slot) { operateSlot(slot, 2); }
+                    @Override public void onDismiss() {
+                        if (generation != menuGeneration) return;
+                        selectedSlot = playerMenu.getSelectedSlot();
+                        menuOpen = false;
+                        if (!disposed.get()) pauseState.menu(false);
+                    }
+                });
+        stateSlots = null;
+        playerMenu.render(null, slotBusy);
+        playerMenu.show();
+        refreshSlots();
+    }
+
+    private void refreshSlots() {
+        final String key = activeSaveKey, compatibility = stateCompatibility;
+        if (key == null || compatibility == null) return;
+        submitIo(() -> {
+            try {
+                StateSlotRepository.Slot[] loaded = StateSlotRepository.list(getFilesDir(), key, compatibility);
+                runOnUiThread(() -> {
+                    if (disposed.get() || !key.equals(activeSaveKey)) return;
+                    stateSlots = loaded;
+                    if (playerMenu != null && playerMenu.isShowing()) playerMenu.render(loaded, slotBusy);
+                });
+            } catch (IOException error) { finishSlotOperation("Emplacements indisponibles : " + error.getMessage(), null); }
         });
     }
 
-    private void dispatchMenu(int command) {
-        surface.queueEvent(() -> {
-            int action = NativeBridge.menuInput(command);
-            if (action == 0) return;
-            NativeBridge.setAudioEnabled(true);
-            runOnUiThread(() -> {
-                if (disposed.get()) return;
-                releaseInput();
-                menuOpen = false;
-                if (action == 2) showLibrary();
-                else if (action == 3) quickSave();
-                else if (action == 4) quickLoad();
+    /** Capture/restore on GL, disk work on the single storage executor. */
+    private void operateSlot(int slot, int action) {
+        if (disposed.get() || slotBusy || stateSlots == null || activeSaveKey == null ||
+                stateCompatibility == null || slot < 0 || slot >= StateSlotRepository.SLOT_COUNT) return;
+        final String key = activeSaveKey, compatibility = stateCompatibility;
+        final PlayerMenuSheet requestingMenu = playerMenu;
+        final int requestingGeneration = menuGeneration;
+        selectedSlot = slot;
+        slotBusy = true;
+        pauseState.operation(true);
+        playerMenu.render(stateSlots, true);
+        if (action == 0) {
+            surface.queueEvent(() -> {
+                if (!slotSessionAvailable(key, compatibility)) return;
+                byte[] snapshot = NativeBridge.saveState();
+                byte[] battery = NativeBridge.saveBattery();
+                if (snapshot == null) { finishSlotOperation("État indisponible", null); return; }
+                submitIo(() -> {
+                    try {
+                        StateSlotRepository.write(getFilesDir(), key, slot, compatibility, snapshot);
+                        String message = "Emplacement " + (slot + 1) + " enregistré";
+                        try { SaveRepository.write(getFilesDir(), key, "srm", battery); }
+                        catch (IOException error) { message += " · SRAM non écrite : " + error.getMessage(); }
+                        finishSlotOperation(message,
+                                StateSlotRepository.list(getFilesDir(), key, compatibility));
+                    } catch (IOException error) { finishSlotOperation("Sauvegarde impossible : " + error.getMessage(), null); }
+                });
             });
+        } else submitIo(() -> {
+            try {
+                if (action == 2) {
+                    StateSlotRepository.delete(getFilesDir(), key, slot);
+                    finishSlotOperation("Emplacement " + (slot + 1) + " supprimé",
+                            StateSlotRepository.list(getFilesDir(), key, compatibility));
+                } else {
+                    byte[] snapshot = StateSlotRepository.read(getFilesDir(), key, slot, compatibility);
+                    if (snapshot == null) throw new IOException("Emplacement vide");
+                    surface.queueEvent(() -> {
+                        if (!slotSessionAvailable(key, compatibility)) return;
+                        byte[] previous = NativeBridge.saveState();
+                        if (previous == null) {
+                            finishSlotOperation("Chargement annulé : état courant non récupérable", null);
+                            return;
+                        }
+                        boolean restored = NativeBridge.restoreState(snapshot);
+                        if (!restored && !NativeBridge.restoreState(previous)) {
+                            NativeBridge.closeRom();
+                            activeSaveKey = stateCompatibility = null;
+                            finishSlotOperation("Jeu arrêté après échec de restauration ; SRAM conservée", null);
+                            runOnUiThread(() -> {
+                                if (disposed.get()) return;
+                                if (playerMenu != null) playerMenu.dismiss();
+                                android.widget.Toast.makeText(this,
+                                        "Jeu arrêté après échec de restauration ; SRAM conservée",
+                                        android.widget.Toast.LENGTH_LONG).show();
+                                finish();
+                            });
+                            return;
+                        }
+                        finishSlotOperation(restored ? "Emplacement " + (slot + 1) + " chargé"
+                                : "État incompatible : fichier conservé", null);
+                        // Keep the sheet and game paused after a failed restore.
+                        if (restored) runOnUiThread(() -> {
+                            if (!disposed.get() && playerMenu == requestingMenu &&
+                                    menuGeneration == requestingGeneration) requestingMenu.dismiss();
+                        });
+                    });
+                }
+            } catch (IOException error) { finishSlotOperation("Opération impossible : " + error.getMessage(), null); }
         });
     }
 
-    private String getDisplayName(Uri uri) {
-        try (Cursor cursor = getContentResolver().query(uri,
-                new String[]{OpenableColumns.DISPLAY_NAME}, null, null, null)) {
-            if (cursor != null && cursor.moveToFirst() && !cursor.isNull(0))
-                return cursor.getString(0);
-        } catch (Exception ignored) {}
-        String name = uri.getLastPathSegment();
-        return name == null ? "jeu.gb" : name;
+    private boolean slotSessionAvailable(String key, String compatibility) {
+        if (disposed.get() || !foreground || !key.equals(activeSaveKey) ||
+                !compatibility.equals(stateCompatibility)) {
+            finishSlotOperation("Opération interrompue : jeu en arrière-plan ou fermé", null);
+            return false;
+        }
+        return true;
     }
 
-    private byte[] readRom(Uri uri) throws IOException {
-        return readBounded(uri, MAX_ROM);
-    }
-
-    private byte[] readBounded(Uri uri, int maxBytes) throws IOException {
-        try (InputStream stream = getContentResolver().openInputStream(uri);
-             ByteArrayOutputStream output = new ByteArrayOutputStream()) {
-            if (stream == null) throw new IOException("Document illisible");
-            byte[] chunk = new byte[32 * 1024];
-            int count;
-            while ((count = stream.read(chunk)) != -1) {
-                if (output.size() > maxBytes - count)
-                    throw new IOException("Document trop volumineux");
-                output.write(chunk, 0, count);
+    private void finishSlotOperation(String message, StateSlotRepository.Slot[] updated) {
+        runOnUiThread(() -> {
+            if (disposed.get()) return;
+            slotBusy = false;
+            pauseState.operation(false);
+            if (updated != null) stateSlots = updated;
+            if (playerMenu != null && playerMenu.isShowing()) {
+                playerMenu.render(stateSlots, false);
+                playerMenu.showMessage(message);
             }
-            return output.toByteArray();
+            status.setText(message);
+        });
+    }
+
+    private boolean submitIo(Runnable work) {
+        synchronized (ioGate) {
+            if (disposed.get()) return false;
+            io.execute(work);
+            return true;
         }
     }
 
@@ -484,45 +392,12 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
     }
 
     private void persistBattery() throws IOException {
-        if (activeSaveKey == null) return;
+        final String key = activeSaveKey;
+        if (key == null) return;
         byte[] battery = NativeBridge.saveBattery();
-        if (battery != null)
-            SaveRepository.write(getFilesDir(), activeSaveKey, "srm", battery);
-    }
-
-    private void quickSave() {
-        surface.queueEvent(() -> {
-            if (activeSaveKey == null) {
-                postStatus("Charge un jeu avant de sauvegarder un état");
-                return;
-            }
-            try {
-                byte[] state = NativeBridge.saveState();
-                if (state == null) throw new IOException("État indisponible");
-                SaveRepository.write(getFilesDir(), activeSaveKey, "state", state);
-                persistBattery();
-                postStatus("État enregistré");
-            } catch (IOException error) {
-                postStatus("Sauvegarde impossible : " + error.getMessage());
-            }
-        });
-    }
-
-    private void quickLoad() {
-        surface.queueEvent(() -> {
-            if (activeSaveKey == null) {
-                postStatus("Charge un jeu avant de restaurer un état");
-                return;
-            }
-            try {
-                byte[] state = SaveRepository.read(getFilesDir(), activeSaveKey, "state");
-                if (state == null) throw new IOException("Aucun état enregistré");
-                if (!NativeBridge.restoreState(state))
-                    throw new IOException("Format de l'état incompatible");
-                postStatus("État restauré");
-            } catch (IOException error) {
-                postStatus("Restauration impossible : " + error.getMessage());
-            }
+        if (battery != null) submitIo(() -> {
+            try { SaveRepository.write(getFilesDir(), key, "srm", battery); }
+            catch (IOException error) { postStatus("Sauvegarde impossible : " + error.getMessage()); }
         });
     }
 
@@ -542,7 +417,7 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
     public void onDrawFrame(GL10 gl) {
         long now = System.nanoTime();
         // Approx. 60fps until the full scheduler uses the core AV timing.
-        boolean advance = now >= nextFrameNanos;
+        boolean advance = !gamePaused && now >= nextFrameNanos;
         if (advance) nextFrameNanos = now + 16_666_667L;
         NativeBridge.drawFrame(width, height, advance);
         if (advance && activeSaveKey != null && now >= nextBatterySaveNanos) {
@@ -575,18 +450,10 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         if (keyCode == KeyEvent.KEYCODE_MENU ||
             (menuOpen && keyCode == KeyEvent.KEYCODE_BACK)) {
-            if (event.getRepeatCount() == 0) toggleNativeMenu();
+            if (event.getRepeatCount() == 0) togglePlayerMenu();
             return true;
         }
-        if (menuOpen) {
-            if (event.getRepeatCount() != 0) return true;
-            if (keyCode == KeyEvent.KEYCODE_DPAD_UP) dispatchMenu(1);
-            else if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) dispatchMenu(2);
-            else if (keyCode == KeyEvent.KEYCODE_BUTTON_A ||
-                     keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
-                     keyCode == KeyEvent.KEYCODE_ENTER) dispatchMenu(3);
-            return true;
-        }
+        if (gamePaused) return super.onKeyDown(keyCode, event);
         int mask = keyMask(keyCode);
         if (mask != 0) {
             setHeld(mask, true);
@@ -597,7 +464,7 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
 
     @Override
     public boolean onKeyUp(int keyCode, KeyEvent event) {
-        if (menuOpen) return true;
+        if (gamePaused) return super.onKeyUp(keyCode, event);
         int mask = keyMask(keyCode);
         if (mask != 0) {
             setHeld(mask, false);
@@ -608,13 +475,15 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
 
     @Override protected void onResume() {
         super.onResume();
-        if (surface != null) {
-            surface.onResume();
-            surface.queueEvent(() -> NativeBridge.setAudioEnabled(true));
-        }
+        foreground = true;
+        if (surface != null) surface.onResume();
+        if (pauseState != null) pauseState.foreground(true);
+        dispatchRomLoad();
     }
 
     @Override protected void onPause() {
+        foreground = false;
+        if (pauseState != null) pauseState.foreground(false);
         releaseInput();
         // Wait for the GL/emulator thread to stop before touching session data.
         if (surface != null) surface.onPause();
@@ -627,10 +496,19 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
         super.onPause();
     }
 
+    @Override protected void onSaveInstanceState(Bundle state) {
+        super.onSaveInstanceState(state);
+        state.putBoolean("player.menu", menuOpen || restoreMenu);
+        state.putInt("player.slot", playerMenu != null ? playerMenu.getSelectedSlot() : selectedSlot);
+    }
+
     @Override protected void onDestroy() {
         releaseInput();
-        disposed.set(true);
-        io.shutdown();
+        synchronized (ioGate) {
+            disposed.set(true);
+        }
+        pendingRomLoad = null;
+        if (playerMenu != null) playerMenu.dismiss();
         // The emulation thread was already suspended by GLSurfaceView.onPause.
         if (surface != null) surface.onPause();
         NativeBridge.closeRom();
@@ -639,6 +517,7 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
 
     @Override public void onWindowFocusChanged(boolean focused) {
         super.onWindowFocusChanged(focused);
+        if (pauseState != null && !disposed.get()) pauseState.focused(focused);
         if (!focused && !disposed.get()) releaseInput();
     }
 }

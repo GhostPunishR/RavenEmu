@@ -5,14 +5,16 @@ project(RavenEmuNativeFrontend LANGUAGES C CXX)
 include(FetchContent)
 set(RAVENEMU_BUILD_LIBRETRO ON CACHE BOOL "" FORCE)
 set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+set(RAVEN_CORE_REVISION "15675cc3af4f9b07f2e10cc5a7ca6234ea1c77cc")
 FetchContent_Declare(ravencore
     GIT_REPOSITORY https://github.com/GhostPunishR/RavenCore.git
-    GIT_TAG 15675cc3af4f9b07f2e10cc5a7ca6234ea1c77cc
+    GIT_TAG ${RAVEN_CORE_REVISION}
     GIT_SHALLOW FALSE)
 FetchContent_MakeAvailable(ravencore)
 
 add_library(raven_frontend STATIC src/libretro_host.c)
 target_compile_features(raven_frontend PUBLIC c_std_11)
+target_compile_definitions(raven_frontend PUBLIC RAVEN_CORE_REVISION="${RAVEN_CORE_REVISION}")
 target_include_directories(raven_frontend PUBLIC include
     PRIVATE ${ravencore_SOURCE_DIR}/libretro/include)
 target_link_libraries(raven_frontend PUBLIC ${CMAKE_DL_LIBS})
