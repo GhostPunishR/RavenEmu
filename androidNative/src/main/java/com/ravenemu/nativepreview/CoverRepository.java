@@ -134,9 +134,8 @@ final class CoverRepository {
     static boolean remove(File files, String key) {
         File path = coverFile(files, key);
         if (!exists(files, key)) return false;
-        // Delete both the atomic primary and any backup, no ROM or save files.
-        boolean success = !path.exists() || path.delete();
-        File backup = new File(path.getPath() + ".bak");
-        return success && (!backup.exists() || backup.delete());
+        // AtomicFile removes the current file, an interrupted write and backup.
+        new AtomicFile(path).delete();
+        return true;
     }
 }
