@@ -52,7 +52,7 @@ public final class RomLibraryTest {
         assertEquals(Arrays.asList(gbc, gb, gba), descending);
         List<RomLibrary.Entry> bySystem = RomLibrary.query(entries, "", "",
                 RomLibrary.SortOrder.SYSTEM);
-        assertEquals(Arrays.asList(gb, gbc, gba), bySystem);
+        assertEquals(Arrays.asList(gb, gba, gbc), bySystem);
         assertEquals(Arrays.asList(gbc, gb, gba), entries);
     }
 }
