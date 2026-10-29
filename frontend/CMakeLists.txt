@@ -23,6 +23,17 @@ endif()
 option(RAVEN_FRONTEND_TESTS "Test the native frontend with a fake Libretro core" ON)
 if(RAVEN_FRONTEND_TESTS AND NOT ANDROID)
     enable_testing()
+    set(native_input_dir "${CMAKE_CURRENT_LIST_DIR}/../androidNative/src/main/cpp")
+    add_executable(raven_native_input_test
+        "${CMAKE_CURRENT_LIST_DIR}/../androidNative/src/test/cpp/test_native_input.c"
+        "${native_input_dir}/native_input.c")
+    target_compile_features(raven_native_input_test PRIVATE c_std_11)
+    target_include_directories(raven_native_input_test PRIVATE
+        "${native_input_dir}" "${ravencore_SOURCE_DIR}/libretro/include")
+    if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(raven_native_input_test PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+    add_test(NAME raven_native_input COMMAND raven_native_input_test)
     add_library(raven_frontend_fake_core SHARED tests/fake_core.c)
     target_include_directories(raven_frontend_fake_core PRIVATE
         ${ravencore_SOURCE_DIR}/libretro/include)

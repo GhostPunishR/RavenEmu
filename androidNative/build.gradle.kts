@@ -64,6 +64,7 @@ android {
 }
 
 dependencies {
+    implementation(libs.material)
     testImplementation("junit:junit:4.13.2")
     testImplementation(libs.robolectric.core)
     robolectricSdks(libs.robolectric.sdk)

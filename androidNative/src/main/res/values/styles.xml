@@ -13,4 +13,30 @@
         <item name="android:navigationBarColor">#000000</item>
         <item name="android:windowLightStatusBar">false</item>
     </style>
+    <!-- Dedicated Java Views dialog theme; the Activity theme stays unchanged. -->
+    <style name="RavenGameSheetTheme" parent="Theme.MaterialComponents.BottomSheetDialog">
+        <item name="colorPrimary">#A78BFA</item>
+        <item name="colorSecondary">#A78BFA</item>
+        <item name="colorSurface">#191B28</item>
+        <item name="android:textColorPrimary">#F5F2FF</item>
+        <item name="android:textColorSecondary">#AAA2BC</item>
+        <item name="android:statusBarColor">#000000</item>
+        <item name="android:navigationBarColor">#000000</item>
+        <item name="enableEdgeToEdge">true</item>
+        <item name="bottomSheetStyle">@style/RavenGameSheet</item>
+    </style>
+    <style name="RavenGameSheet" parent="Widget.MaterialComponents.BottomSheet.Modal">
+        <item name="backgroundTint">#191B28</item>
+        <item name="shapeAppearanceOverlay">@style/RavenGameSheetShape</item>
+        <item name="paddingBottomSystemWindowInsets">true</item>
+        <item name="paddingLeftSystemWindowInsets">true</item>
+        <item name="paddingRightSystemWindowInsets">true</item>
+    </style>
+    <style name="RavenGameSheetShape">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSizeTopLeft">24dp</item>
+        <item name="cornerSizeTopRight">24dp</item>
+        <item name="cornerSizeBottomLeft">0dp</item>
+        <item name="cornerSizeBottomRight">0dp</item>
+    </style>
 </resources>

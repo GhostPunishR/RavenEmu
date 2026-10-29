@@ -54,6 +54,32 @@ de l'ancien écran. La fiche de jeu est défilable pour les écrans bas en paysa
 Les tests Java Robolectric couvrent ces parcours ; ils ne remplacent pas
 la validation visuelle sur téléphone, notamment avec une grande police.
 
+## Fiche glissante et commandes tactiles
+
+La fiche s'ouvre directement dépliée, sans étape à mi-hauteur. Elle se ferme
+par glissement vers le bas, Retour, un appui à l'extérieur ou « Fermer » ;
+son contenu défile sur les écrans bas. Le jeu sélectionné est restauré après
+recréation de l'Activity et les ouvertures répétées ne superposent pas de fiches.
+`GameDetailsSheet.java` utilise le composant **Android Views** de Material
+Components for Android 1.14.0 avec les couleurs RavenEmu et des coins supérieurs
+arrondis. Sa licence Apache 2.0 et les attributions sont incluses dans
+`src/main/assets/licenses/`. Cette dépendance n'ajoute ni Compose ni source
+applicative Kotlin.
+
+`GameControlsView.java` reprend la croix, les boutons A/B décalés et les
+touches SELECT/START ; L/R apparaissent pour la GBA. La croix permet les
+diagonales et le glissement, avec plusieurs doigts sur les commandes.
+Le mode paysage réserve les côtés aux commandes et garde le centre pour
+l'image. Les contrôles libèrent leurs appuis sur annulation, perte de focus,
+pause, ouverture du menu et changement de jeu. Les entrées tactiles et
+manette sont combinées ; les actions d'accessibilité ont une durée bornée.
+
+Le pilote C `native_input.c` conserve les fronts d'appui jusqu'à une image
+émulée, même si le doigt est déjà relevé. Son instantané reste stable pendant
+cette image ; un simple rafraîchissement vidéo ne consomme pas l'appui.
+La validation tactile et visuelle sur téléphone reste nécessaire avant de
+conclure à une parité avec la bêta.
+
 ## Architecture
 - `NativeHomeActivity.java` : écran bibliothèque d'accueil et navigation en Java.
 - `RavenLibraryAdapter.java` : grille/liste de jaquettes selon le style RavenEmu.
@@ -69,10 +95,13 @@ la validation visuelle sur téléphone, notamment avec une grande police.
   by ROM SHA-256; removal affects no ROMs, saves or other files.
 - `CoverAdapter.java`: image thumbnails decoded on a background executor,
   with a bounded 32-image LRU cache and text fallback.
-- `NativeBridge.java`: typed JNI entry points (only `setButtons` is
-  allowed on the UI thread; all other emulation calls use the GL thread).
+- `NativeBridge.java`: typed JNI entry points; `setButtons` and `clearButtons`
+  update atomic input from the UI. Core calls use the GL thread while running;
+  lifecycle cleanup accesses the session only after that thread is paused.
 - `src/main/cpp/bridge.c`: Libretro session management, frame conversion to
   RGBA8888, OpenGL ES 2 texture drawing, atomic joypad input.
+- `src/main/cpp/native_input.c`: held/pending input masks and one stable
+  joypad snapshot per emulated frame.
 - `src/main/cpp/native_menu.c`: GLES2 pause/menu overlay, pixel glyphs,
   highlighted navigation and C state machine. Four actions: resume, library,
   save and load.
@@ -88,8 +117,11 @@ la validation visuelle sur téléphone, notamment avec une grande police.
 
 APK: `androidNative/build/outputs/apk/debug/androidNative-debug.apk`.
 
-Run `./gradlew :androidNative:testDebugUnitTest` for identity/path, insets and
-Activity recreation/import tests. The test SDK is resolved through Gradle;
+Run `./gradlew :androidNative:testDebugUnitTest` for identity/path, insets,
+Activity recreation/import, sheet gestures and multi-touch controls tests.
+The standalone `raven_native_input_test` target in `frontend/CMakeLists.txt`
+tests the input driver through CTest without Android or a commercial ROM.
+The test SDK is resolved through Gradle;
 the application remains Java-only, without Compose or `:shared`.
 
 The build should package `libraven_android.so`,

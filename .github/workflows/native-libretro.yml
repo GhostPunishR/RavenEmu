@@ -40,7 +40,7 @@ jobs:
       - name: Build frontend, test core and RavenCore adapters
         run: |
           cmake --build build/native-frontend --parallel 2 --target \
-            raven_frontend_test raven_frontend_fake_core raven_frontend_real_core_test \
+            raven_frontend_test raven_frontend_fake_core raven_frontend_real_core_test raven_native_input_test \
             ravenemu_gb_libretro ravenemu_gbc_libretro ravenemu_gba_libretro
       - name: Run frontend smoke tests
         run: ctest --test-dir build/native-frontend --output-on-failure

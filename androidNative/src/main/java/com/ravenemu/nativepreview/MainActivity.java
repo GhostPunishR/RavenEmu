@@ -10,6 +10,7 @@ import android.widget.EditText;
 import android.widget.ListView;
 import android.widget.Spinner;
 import android.content.Intent;
+import android.content.res.Configuration;
 import android.database.Cursor;
 import android.net.Uri;
 import android.opengl.GLSurfaceView;
@@ -17,9 +18,7 @@ import android.os.Bundle;
 import android.provider.OpenableColumns;
 import android.view.Gravity;
 import android.view.KeyEvent;
-import android.view.MotionEvent;
 import android.view.View;
-import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -38,7 +37,8 @@ import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
 
 /** Separate, non-distributable Java/NDK proof of concept.
- * All emulator calls run on the GL thread; button input uses an atomic mask. */
+ * Core calls use the GL thread while running, or a paused session during
+ * lifecycle cleanup; button input uses an atomic mask. */
 public final class MainActivity extends Activity implements GLSurfaceView.Renderer {
     public static final String EXTRA_ROM_KEY = "com.ravenemu.nativepreview.ROM_KEY";
     private static final int PICK_ROM = 71;
@@ -49,7 +49,8 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
     private GLSurfaceView surface;
     private TextView status;
     private TextView gameTitle;
-    private int width = 1, height = 1, buttons;
+    private int width = 1, height = 1, buttons, touchButtons;
+    private GameControlsView gameControls;
     private long nextFrameNanos;
     private long nextBatterySaveNanos;
     private volatile String activeSaveKey;
@@ -60,12 +61,13 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
     @Override
     public void onCreate(Bundle state) {
         super.onCreate(state);
-        FrameLayout root = new FrameLayout(this);
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackgroundColor(NativeHomeActivity.BACKGROUND);
         surface = new GLSurfaceView(this);
         surface.setEGLContextClientVersion(2);
         surface.setRenderer(this);
         surface.setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);
-        root.addView(surface, new FrameLayout.LayoutParams(-1, -1));
 
         // Mirror the 48dp RavenEmu player toolbar: back, current game,
         // and the three-dot game menu. The GL/C frontend is unchanged.
@@ -108,24 +110,21 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
         status.setText("Audio et rendu natifs · RavenCore");
         status.setPadding(dp(12), dp(4), dp(12), dp(4));
         header.addView(status, new LinearLayout.LayoutParams(-1, dp(28)));
-        FrameLayout.LayoutParams headerParams = new FrameLayout.LayoutParams(-1, -2, Gravity.TOP);
-        root.addView(header, headerParams);
+        root.addView(header, new LinearLayout.LayoutParams(-1, -2));
 
-        LinearLayout controls = new LinearLayout(this);
-        controls.setOrientation(LinearLayout.VERTICAL);
-        controls.setPadding(8, 4, 8, 18);
-        controls.addView(controlRow(
-                key("◀", NativeBridge.LEFT),
-                key("▲", NativeBridge.UP),
-                key("▼", NativeBridge.DOWN),
-                key("▶", NativeBridge.RIGHT)));
-        controls.addView(controlRow(
-                key("B", NativeBridge.B),
-                key("A", NativeBridge.A),
-                key("SELECT", NativeBridge.SELECT),
-                key("START", NativeBridge.START)));
-        FrameLayout.LayoutParams bottom = new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM);
-        root.addView(controls, bottom);
+        gameControls = new GameControlsView(this, this::setTouchButtons);
+        if (getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE) {
+            FrameLayout stage = new FrameLayout(this);
+            root.addView(stage, new LinearLayout.LayoutParams(-1, 0, 1));
+            FrameLayout.LayoutParams video = new FrameLayout.LayoutParams(-1, -1);
+            video.leftMargin = video.rightMargin = dp(116);
+            video.bottomMargin = dp(44);
+            stage.addView(surface, video);
+            stage.addView(gameControls, new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM));
+        } else {
+            root.addView(surface, new LinearLayout.LayoutParams(-1, 0, 1));
+            root.addView(gameControls, new LinearLayout.LayoutParams(-1, -2));
+        }
         // Reserve actual status bar, cutout, nav buttons and keyboard space.
         // Android 15 edge-to-edge would otherwise overlay the toolbar/footer.
         SystemBarInsets.install(this, root);
@@ -154,50 +153,26 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
         return Math.round(value * getResources().getDisplayMetrics().density);
     }
 
-    private LinearLayout controlRow(Button... controlButtons) {
-        LinearLayout row = new LinearLayout(this);
-        row.setGravity(Gravity.CENTER);
-        for (Button b : controlButtons) {
-            LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, -2, 1);
-            p.setMargins(3, 3, 3, 3);
-            row.addView(b, p);
-        }
-        return row;
-    }
-
-    private Button key(String label, int mask) {
-        Button button = new Button(this);
-        button.setText(label);
-        button.setTextSize(13);
-        button.setAlpha(0.94f);
-        button.setTextColor(NativeHomeActivity.TEXT);
-        android.graphics.drawable.GradientDrawable buttonShape =
-                NativeHomeActivity.shape(NativeHomeActivity.SURFACE, 16,
-                        getResources().getDisplayMetrics().density);
-        buttonShape.setStroke(dp(1), NativeHomeActivity.OUTLINE);
-        button.setBackground(buttonShape);
-        button.setOnTouchListener((view, event) -> {
-            if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
-                if (menuOpen) {
-                    if (mask == NativeBridge.UP) dispatchMenu(1);
-                    else if (mask == NativeBridge.DOWN) dispatchMenu(2);
-                    else if (mask == NativeBridge.A) dispatchMenu(3);
-                } else setHeld(mask, true);
-                return true;
-            }
-            if (event.getActionMasked() == MotionEvent.ACTION_UP ||
-                event.getActionMasked() == MotionEvent.ACTION_CANCEL) {
-                if (!menuOpen) setHeld(mask, false);
-                return true;
-            }
-            return true;
-        });
-        return button;
-    }
-
     private void setHeld(int mask, boolean held) {
         buttons = held ? (buttons | mask) : (buttons & ~mask);
-        NativeBridge.setButtons(buttons);
+        NativeBridge.setButtons(buttons | touchButtons);
+    }
+
+    private void setTouchButtons(int mask) {
+        if (disposed.get()) return;
+        int pressed = mask & ~touchButtons;
+        touchButtons = mask;
+        if (menuOpen) {
+            if ((pressed & NativeBridge.UP) != 0) dispatchMenu(1);
+            else if ((pressed & NativeBridge.DOWN) != 0) dispatchMenu(2);
+            if ((pressed & NativeBridge.A) != 0) dispatchMenu(3);
+        } else NativeBridge.setButtons(buttons | touchButtons);
+    }
+
+    private void releaseInput() {
+        buttons = touchButtons = 0;
+        if (gameControls != null) gameControls.releaseAll();
+        NativeBridge.clearButtons();
     }
 
     private void pickRom() {
@@ -433,8 +408,11 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
                     } else activeSaveKey = null;
                     final String result = failure;
                     runOnUiThread(() -> {
-                        if (!disposed.get() && result == null && gameTitle != null)
+                        if (!disposed.get() && result == null && gameTitle != null) {
+                            releaseInput();
+                            gameControls.setShoulders("gba".equals(entry.system));
                             gameTitle.setText(entry.title);
+                        }
                     });
                     postStatus(result == null ? "Jeu : " + entry.label() : "Échec : " + result);
                 });
@@ -447,10 +425,7 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
     private void toggleNativeMenu() {
         boolean opening = !menuOpen;
         menuOpen = opening;
-        if (opening) {
-            buttons = 0;
-            NativeBridge.setButtons(0);
-        }
+        releaseInput();
         surface.queueEvent(() -> {
             NativeBridge.menuInput(0);
             NativeBridge.setAudioEnabled(!opening);
@@ -464,6 +439,7 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
             NativeBridge.setAudioEnabled(true);
             runOnUiThread(() -> {
                 if (disposed.get()) return;
+                releaseInput();
                 menuOpen = false;
                 if (action == 2) showLibrary();
                 else if (action == 3) quickSave();
@@ -587,6 +563,8 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
             case KeyEvent.KEYCODE_DPAD_RIGHT: return NativeBridge.RIGHT;
             case KeyEvent.KEYCODE_BUTTON_A: return NativeBridge.A;
             case KeyEvent.KEYCODE_BUTTON_B: return NativeBridge.B;
+            case KeyEvent.KEYCODE_BUTTON_L1: return NativeBridge.L;
+            case KeyEvent.KEYCODE_BUTTON_R1: return NativeBridge.R;
             case KeyEvent.KEYCODE_BUTTON_START: return NativeBridge.START;
             case KeyEvent.KEYCODE_BUTTON_SELECT: return NativeBridge.SELECT;
             default: return 0;
@@ -637,6 +615,7 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
     }
 
     @Override protected void onPause() {
+        releaseInput();
         // Wait for the GL/emulator thread to stop before touching session data.
         if (surface != null) surface.onPause();
         NativeBridge.setAudioEnabled(false);
@@ -649,11 +628,17 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
     }
 
     @Override protected void onDestroy() {
+        releaseInput();
         disposed.set(true);
         io.shutdown();
         // The emulation thread was already suspended by GLSurfaceView.onPause.
         if (surface != null) surface.onPause();
         NativeBridge.closeRom();
         super.onDestroy();
+    }
+
+    @Override public void onWindowFocusChanged(boolean focused) {
+        super.onWindowFocusChanged(focused);
+        if (!focused && !disposed.get()) releaseInput();
     }
 }

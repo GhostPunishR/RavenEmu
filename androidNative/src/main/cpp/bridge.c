@@ -4,9 +4,9 @@
 #include <libretro.h>
 #include <ravenemu/frontend.h>
 #include "native_audio.h"
+#include "native_input.h"
 #include "native_menu.h"
 
-#include <stdatomic.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -17,7 +17,7 @@
 #define MAX_FRAME_SIZE (2048u * 2048u)
 
 static raven_frontend *session;
-static _Atomic unsigned buttons;
+static raven_input input = RAVEN_INPUT_INITIALIZER;
 static uint8_t *rgba_pixels;
 static size_t rgba_capacity;
 static int image_width, image_height;
@@ -147,10 +147,9 @@ static void on_audio(const int16_t *samples, size_t count, void *userdata) {
 
 static int16_t on_input(unsigned port, unsigned device, unsigned index,
                         unsigned id, void *userdata) {
-    (void)index;
     (void)userdata;
-    if (port || device != RETRO_DEVICE_JOYPAD || id >= 16) return 0;
-    return (atomic_load(&buttons) & (1u << id)) ? 1 : 0;
+    if (port || device != RETRO_DEVICE_JOYPAD || index) return 0;
+    return raven_input_pressed(&input, id);
 }
 
 static void clear_frame(void) {
@@ -207,6 +206,7 @@ Java_com_ravenemu_nativepreview_NativeBridge_openRom(
         goto done;
     }
     raven_audio_close();
+    raven_input_clear_buttons(&input);
     clear_frame();
     if (!raven_frontend_open_core(session, library_path, files, files)) {
         result = failure(env, raven_frontend_last_error(session));
@@ -244,7 +244,15 @@ Java_com_ravenemu_nativepreview_NativeBridge_setButtons(
     JNIEnv *env, jclass clazz, jint mask) {
     (void)env;
     (void)clazz;
-    atomic_store(&buttons, (unsigned)mask);
+    raven_input_set_buttons(&input, (unsigned)mask);
+}
+
+JNIEXPORT void JNICALL
+Java_com_ravenemu_nativepreview_NativeBridge_clearButtons(
+    JNIEnv *env, jclass clazz) {
+    (void)env;
+    (void)clazz;
+    raven_input_clear_buttons(&input);
 }
 
 JNIEXPORT void JNICALL
@@ -253,7 +261,12 @@ Java_com_ravenemu_nativepreview_NativeBridge_drawFrame(
     jboolean advance) {
     (void)env;
     (void)clazz;
-    if (advance && session && !raven_menu_visible()) raven_frontend_run_frame(session);
+    if (raven_menu_visible()) {
+        raven_input_clear_buttons(&input);
+    } else if (advance && session) {
+        raven_input_begin_frame(&input);
+        raven_frontend_run_frame(session);
+    }
     glClearColor(0.05f, 0.06f, 0.08f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
     if (!program || !texture || !image_ready || !rgba_pixels ||
@@ -373,7 +386,9 @@ JNIEXPORT jint JNICALL
 Java_com_ravenemu_nativepreview_NativeBridge_menuInput(
     JNIEnv *env, jclass clazz, jint command) {
     (void)env; (void)clazz;
-    return (jint)raven_menu_input((int)command);
+    int action = raven_menu_input((int)command);
+    if (raven_menu_visible()) raven_input_clear_buttons(&input);
+    return (jint)action;
 }
 
 JNIEXPORT void JNICALL
@@ -386,7 +401,7 @@ Java_com_ravenemu_nativepreview_NativeBridge_closeRom(
         raven_frontend_destroy(session);
         session = NULL;
     }
-    atomic_store(&buttons, 0u);
+    raven_input_clear_buttons(&input);
     clear_frame();
     free(rgba_pixels);
     rgba_pixels = NULL;

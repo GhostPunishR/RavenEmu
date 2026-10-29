@@ -20,7 +20,7 @@ import android.widget.FrameLayout;
 import android.widget.GridView;
 import android.widget.LinearLayout;
 import android.widget.PopupMenu;
-import android.widget.ScrollView;
+import androidx.core.widget.NestedScrollView;
 import android.widget.TextView;
 
 import java.io.ByteArrayOutputStream;
@@ -65,6 +65,9 @@ public final class NativeHomeActivity extends Activity {
     private LinearLayout tabs;
     private GridView cards;
     private RavenLibraryAdapter adapter;
+    private GameDetailsSheet details;
+    private String detailsKey;
+    private String restoredDetailsKey;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -73,6 +76,7 @@ public final class NativeHomeActivity extends Activity {
             selectedPage = state.getString("library.page", "");
             listMode = state.getBoolean("library.list");
             selectedCoverKey = state.getString("library.cover");
+            restoredDetailsKey = state.getString("library.details");
         }
         getWindow().setStatusBarColor(Color.BLACK);
         getWindow().setNavigationBarColor(Color.BLACK);
@@ -208,6 +212,13 @@ public final class NativeHomeActivity extends Activity {
                     all.addAll(loaded);
                     updatePages();
                     updateCards();
+                    if (restoredDetailsKey != null) {
+                        String key = restoredDetailsKey;
+                        restoredDetailsKey = null;
+                        for (RomLibrary.Entry entry : all) {
+                            if (key.equals(entry.key)) { showDetails(entry); break; }
+                        }
+                    }
                 });
             } catch (Exception failure) {
                 status("Bibliothèque indisponible : " + failure.getMessage());
@@ -288,11 +299,18 @@ public final class NativeHomeActivity extends Activity {
     }
 
     private void showDetails(RomLibrary.Entry entry) {
+        if (destroyed || (details != null && details.isShowing())) return;
         float density = getResources().getDisplayMetrics().density;
         LinearLayout panel = new LinearLayout(this);
         panel.setOrientation(LinearLayout.VERTICAL);
         panel.setPadding(dp(20), dp(12), dp(20), dp(16));
-        panel.setBackgroundColor(SURFACE);
+
+        View handle = new View(this);
+        handle.setBackground(shape(MUTED, 2, density));
+        LinearLayout.LayoutParams handleParams = new LinearLayout.LayoutParams(dp(32), dp(4));
+        handleParams.gravity = Gravity.CENTER_HORIZONTAL;
+        handleParams.bottomMargin = dp(20);
+        panel.addView(handle, handleParams);
 
         TextView title = text(entry.title, 18, TEXT);
         title.setTypeface(null, android.graphics.Typeface.BOLD);
@@ -337,12 +355,18 @@ public final class NativeHomeActivity extends Activity {
         panel.addView(play, playParams);
 
         // Keep every action reachable in landscape and with large system text.
-        ScrollView scroll = new ScrollView(this);
+        NestedScrollView scroll = new NestedScrollView(this);
         scroll.addView(panel);
-        AlertDialog dialog = new AlertDialog.Builder(this)
-                .setView(scroll)
-                .setNegativeButton("Fermer", null)
-                .create();
+        GameDetailsSheet dialog = new GameDetailsSheet(this);
+        dialog.setContentView(scroll);
+        details = dialog;
+        detailsKey = entry.key;
+        dialog.setOnDismissListener(ignored -> {
+            if (details == dialog) { details = null; detailsKey = null; }
+        });
+        Button close = action("Fermer");
+        panel.addView(close, new LinearLayout.LayoutParams(-1, dp(48)));
+        close.setOnClickListener(view -> dialog.dismiss());
         play.setOnClickListener(view -> {
             dialog.dismiss();
             startActivity(new Intent(this, MainActivity.class)
@@ -485,10 +509,13 @@ public final class NativeHomeActivity extends Activity {
         state.putString("library.page", selectedPage);
         state.putBoolean("library.list", listMode);
         state.putString("library.cover", selectedCoverKey);
+        state.putString("library.details", details != null && details.isShowing()
+                ? detailsKey : restoredDetailsKey);
     }
 
     @Override protected void onDestroy() {
         destroyed = true;
+        if (details != null) details.dismiss();
         io.shutdown();
         super.onDestroy();
     }

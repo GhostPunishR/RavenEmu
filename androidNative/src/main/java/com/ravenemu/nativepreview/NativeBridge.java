@@ -1,7 +1,8 @@
 package com.ravenemu.nativepreview;
 
-/** JNI API of the experimental C frontend. All methods except setButtons
- * are called on the GLSurfaceView rendering thread, in serialized order. */
+/** JNI API of the experimental C frontend. setButtons and clearButtons are
+ * atomic UI inputs; core calls are serialized with the GL/emulation thread,
+ * including lifecycle cleanup after the GL thread has paused. */
 final class NativeBridge {
     static {
         System.loadLibrary("raven_android");
@@ -16,6 +17,8 @@ final class NativeBridge {
     static final int LEFT = 1 << 6;
     static final int RIGHT = 1 << 7;
     static final int A = 1 << 8;
+    static final int L = 1 << 10;
+    static final int R = 1 << 11;
 
     private NativeBridge() {}
 
@@ -26,7 +29,10 @@ final class NativeBridge {
                                  String system, byte[] data, String filename);
 
     static native void drawFrame(int surfaceWidth, int surfaceHeight, boolean advance);
+    /** Current combined joypad mask. Brief presses survive until one core frame. */
     static native void setButtons(int buttons);
+    /** Pause/menu/focus loss: release held buttons and discard pending presses. */
+    static native void clearButtons();
     static native byte[] saveBattery();
     static native boolean restoreBattery(byte[] battery);
     static native byte[] saveState();

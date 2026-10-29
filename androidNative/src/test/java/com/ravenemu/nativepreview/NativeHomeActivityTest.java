@@ -1,17 +1,21 @@
 package com.ravenemu.nativepreview;
 
 import android.app.Activity;
-import android.app.AlertDialog;
+import android.app.Dialog;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Looper;
+import android.os.SystemClock;
+import android.view.MotionEvent;
+import com.google.android.material.bottomsheet.BottomSheetBehavior;
+import java.time.Duration;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.EditText;
 import android.widget.GridView;
-import android.widget.ScrollView;
+import androidx.core.widget.NestedScrollView;
 import android.widget.TextView;
 import org.junit.After;
 import org.junit.Test;
@@ -21,7 +25,7 @@ import org.robolectric.RuntimeEnvironment;
 import org.robolectric.android.controller.ActivityController;
 import org.robolectric.annotation.Config;
 import org.robolectric.annotation.GraphicsMode;
-import org.robolectric.shadows.ShadowAlertDialog;
+import org.robolectric.shadows.ShadowDialog;
 import org.robolectric.shadows.ShadowPopupMenu;
 import org.robolectric.util.ReflectionHelpers;
 import java.io.File;
@@ -69,7 +73,7 @@ public final class NativeHomeActivityTest {
         String key = seedLibrary();
         ActivityController<NativeHomeActivity> first = open(null);
         showFirstGame(first.get());
-        text(ShadowAlertDialog.getLatestAlertDialog().getWindow().getDecorView(),
+        text(ShadowDialog.getLatestDialog().getWindow().getDecorView(),
                 "Image manuelle (facultatif)").performClick();
         assertEquals(Intent.ACTION_OPEN_DOCUMENT,
                 shadowOf(first.get()).getNextStartedActivityForResult().intent.getAction());
@@ -116,15 +120,123 @@ public final class NativeHomeActivityTest {
         String key = seedLibrary();
         NativeHomeActivity activity = open(null).get();
         showFirstGame(activity);
-        AlertDialog dialog = ShadowAlertDialog.getLatestAlertDialog();
+        Dialog dialog = ShadowDialog.getLatestDialog();
         View play = text(dialog.getWindow().getDecorView(), "Jouer");
         View parent = play;
-        while (parent != null && !(parent instanceof ScrollView))
+        while (parent != null && !(parent instanceof NestedScrollView))
             parent = parent.getParent() instanceof View ? (View) parent.getParent() : null;
         assertNotNull("Short screens and large text must allow scrolling to Play", parent);
         play.performClick();
         assertEquals(key, shadowOf(activity).getNextStartedActivity()
                 .getStringExtra(MainActivity.EXTRA_ROM_KEY));
+    }
+
+
+    @Test public void expandedSheetAndSelectedGameSurviveRecreationAndBackDismisses() throws Exception {
+        seedLibrary();
+        ActivityController<NativeHomeActivity> first = open(null);
+        showFirstGame(first.get());
+        GameDetailsSheet sheet = (GameDetailsSheet) ShadowDialog.getLatestDialog();
+        layoutSheet(sheet);
+        assertEquals(BottomSheetBehavior.STATE_EXPANDED, sheet.getBehavior().getState());
+        assertTrue(sheet.getBehavior().getSkipCollapsed());
+        Bundle saved = saveAndDestroy(first);
+        open(saved);
+        GameDetailsSheet restored = (GameDetailsSheet) ShadowDialog.getLatestDialog();
+        assertNotSame(sheet, restored);
+        assertTrue(restored.isShowing());
+        assertNotNull(text(restored.getWindow().getDecorView(), "Alpha.gb"));
+        restored.onBackPressed();
+        assertFalse(restored.isShowing());
+    }
+
+    @Test public void pendingSheetSurvivesAnotherRecreationBeforeCatalogueLoads() throws Exception {
+        String key = seedLibrary();
+        Bundle state = new Bundle();
+        state.putString("library.details", key);
+        ActivityController<NativeHomeActivity> loading = Robolectric.buildActivity(NativeHomeActivity.class);
+        ExecutorService io = ReflectionHelpers.getField(loading.get(), "io");
+        CountDownLatch release = new CountDownLatch(1);
+        io.submit(() -> { try { release.await(5, TimeUnit.SECONDS); }
+                         catch (InterruptedException e) { Thread.currentThread().interrupt(); } });
+        Bundle saved;
+        try {
+            loading.create(state).start().resume().visible();
+            activities.add(loading);
+            saved = saveAndDestroy(loading);
+        } finally { release.countDown(); }
+        open(saved);
+        Dialog restored = ShadowDialog.getLatestDialog();
+        assertTrue(restored.isShowing());
+        assertNotNull(text(restored.getWindow().getDecorView(), "Alpha.gb"));
+    }
+
+    @Test public void firstTouchOnPlayLaunchesOnceWithoutAHalfExpandedStep() throws Exception {
+        String key = seedLibrary();
+        NativeHomeActivity activity = open(null).get();
+        showFirstGame(activity);
+        GameDetailsSheet sheet = (GameDetailsSheet) ShadowDialog.getLatestDialog();
+        showFirstGame(activity);
+        assertSame(sheet, ShadowDialog.getLatestDialog());
+        View decor = layoutSheet(sheet);
+        NestedScrollView scroll = find(decor, NestedScrollView.class);
+        scroll.setSmoothScrollingEnabled(false);
+        scroll.fullScroll(View.FOCUS_DOWN);
+        View play = text(decor, "Jouer");
+        int[] place = new int[2], origin = new int[2];
+        play.getLocationOnScreen(place); decor.getLocationOnScreen(origin);
+        float x = place[0] - origin[0] + play.getWidth() / 2f;
+        float y = place[1] - origin[1] + play.getHeight() / 2f;
+        android.graphics.Rect visible = new android.graphics.Rect();
+        assertTrue("Play must be visible: " + place[0] + "," + place[1]
+                + " size=" + play.getWidth() + "x" + play.getHeight()
+                + " scroll=" + scroll.getScrollY(), play.getGlobalVisibleRect(visible));
+        long down = SystemClock.uptimeMillis();
+        touch(decor, down, down, MotionEvent.ACTION_DOWN, x, y);
+        touch(decor, down, down + 40, MotionEvent.ACTION_UP, x, y);
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(200));
+        Intent launched = shadowOf(activity).getNextStartedActivity();
+        assertNotNull("One touch must reach Play", launched);
+        assertEquals(key, launched.getStringExtra(MainActivity.EXTRA_ROM_KEY));
+        assertNull(shadowOf(activity).getNextStartedActivity());
+    }
+
+    @Test public void downwardDragDismissesTheSheet() throws Exception {
+        seedLibrary();
+        NativeHomeActivity activity = open(null).get();
+        showFirstGame(activity);
+        GameDetailsSheet sheet = (GameDetailsSheet) ShadowDialog.getLatestDialog();
+        View decor = layoutSheet(sheet);
+        View panel = sheet.findViewById(com.google.android.material.R.id.design_bottom_sheet);
+        int[] place = new int[2], origin = new int[2];
+        panel.getLocationOnScreen(place); decor.getLocationOnScreen(origin);
+        float x = place[0] - origin[0] + panel.getWidth() / 2f;
+        float y = place[1] - origin[1] + 16;
+        long down = SystemClock.uptimeMillis();
+        touch(decor, down, down, MotionEvent.ACTION_DOWN, x, y);
+        for (int i = 1; i <= 4; i++)
+            touch(decor, down, down + i * 20, MotionEvent.ACTION_MOVE, x, y + i * 70);
+        touch(decor, down, down + 100, MotionEvent.ACTION_UP, x, y + 300);
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(2));
+        assertFalse("A downward swipe must close the panel", sheet.isShowing());
+    }
+
+    private static View layoutSheet(GameDetailsSheet sheet) {
+        View decor = sheet.getWindow().getDecorView();
+        decor.measure(View.MeasureSpec.makeMeasureSpec(320, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(568, View.MeasureSpec.EXACTLY));
+        decor.layout(0, 0, 320, 568);
+        // CoordinatorLayout requests a second pass after positioning the sheet.
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(500));
+        decor.measure(View.MeasureSpec.makeMeasureSpec(320, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(568, View.MeasureSpec.EXACTLY));
+        decor.layout(0, 0, 320, 568);
+        return decor;
+    }
+
+    private static void touch(View view, long down, long time, int action, float x, float y) {
+        MotionEvent event = MotionEvent.obtain(down, time, action, x, y, 0);
+        try { view.dispatchTouchEvent(event); } finally { event.recycle(); }
     }
 
     private String seedLibrary() throws Exception {

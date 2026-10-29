@@ -175,3 +175,27 @@ Voir [androidNative/README.md](../androidNative/README.md).
 - Tests visuels physiques, grandes polices, encoches et navigation par gestes
   ou trois boutons restent à effectuer. La fiche n'est pas encore une
   reproduction complète du panneau glissant de la bêta.
+
+## Dixième tranche : fiche glissante et commandes tactiles
+
+- Fiche Java `GameDetailsSheet` ouverte en état déplié, sans arrêt à mi-hauteur,
+  avec défilement imbriqué, fermeture par glissement/Retour/extérieur/Fermer
+  et restauration du jeu sélectionné après recréation. Les ouvertures rapides
+  restent limitées à une fiche. Material Components Android Views fournit
+  le comportement du panneau ; le thème conserve la palette RavenEmu et ses
+  licences Apache 2.0 sont incluses dans l'APK de prévisualisation.
+- `GameControlsView` remplace la rangée de boutons du prototype : croix
+  directionnelle glissante avec diagonales, A/B décalés, SELECT/START et L/R
+  pour la GBA, disposition portrait/paysage et appuis multi-doigts.
+- Les masques tactiles et manette sont combinés. Annulation, perte de focus,
+  pause, menu et changement de jeu libèrent les commandes ; les activations
+  d'accessibilité sont bornées dans le temps.
+- Le pilote C atomique `native_input` retient un appui bref jusqu'à la prochaine
+  image émulée et présente un instantané cohérent aux callbacks Libretro.
+  Il ne consomme pas les appuis lors d'un rendu sans émulation. Tests C inclus
+  dans le workflow natif, avec les tests Java de gestes et de multi-touch.
+- Aucune migration des données bêta, source Kotlin applicative ou dépendance
+  Compose/`:shared`. Le menu de pause complet, les réglages, skins, link et
+  RetroAchievements restent à porter. Fidélité visuelle, gestes système,
+  grandes polices, orientation, son et commandes demandent encore une
+  validation sur appareils physiques avant toute bascule produit.
