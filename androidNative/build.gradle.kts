@@ -1,6 +1,5 @@
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 android {
@@ -27,7 +26,6 @@ android {
             }
         }
     }
-    buildFeatures { compose = true }
     // The shared cores need to be unpacked as files for dlopen(path).
     packaging {
         jniLibs {
@@ -46,9 +44,5 @@ android {
 }
 
 dependencies {
-    // Exactly the same shared UI as the existing RavenEmu Android/iOS app.
-    implementation(project(":shared"))
-    implementation("androidx.activity:activity-compose:1.13.0")
-    implementation("org.jetbrains.compose.foundation:foundation:1.12.1")
     testImplementation("junit:junit:4.13.2")
 }
