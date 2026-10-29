@@ -70,3 +70,21 @@ Le module distinct `androidNative/` raccorde Java/JNI, les cores Libretro ARM64\
   données de RavenEmu, aucun jeu ni BIOS livré.
 - À valider : tests instrumentés AAudio, latence, état sur reprise et crash,
   compatibilité des états GB/GBC/GBA, contrôle mémoire et tests sur appareil.
+
+## Quatrième tranche : bibliothèque privée et menu C
+
+- `androidNative/RomLibrary.java` copie les ROMs choisies dans un catalogue
+  privé (`native-library/`) indexé par SHA-256 et fichier JSON atomique.
+  Les copies sont revérifiées avant exécution, et l'import d'une ROM déjà
+  présente ne crée pas de doublon. Limites initiales : 256 jeux, 64 MiB par ROM.
+- Le menu en pause est dessiné directement par `native_menu.c` avec OpenGL ES 2,
+  texte bitmap C et navigation haut/bas/A ; le sélecteur système Android et la
+  liste accessible des jeux restent des services Java de la plateforme.
+- Une règle de tests `policy` accepte explicitement `frontend/` en plus
+  de `native/` dans les workflows CMake ; les restrictions de chemins et le
+  contrôle des actions GitHub demeurent actifs.
+- L'application de test conserve `com.ravenemu.nativepreview` et ne modifie ni
+  la bibliothèque ni les sauvegardes de l'application principale.
+- Restent à tester sur téléphones : commandes tactiles/manette du menu,
+  rendu des lettres sur différentes résolutions, import/reprise après fermeture,
+  mémoire, perf, audio et données.
