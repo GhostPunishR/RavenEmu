@@ -1,4 +1,4 @@
-name: Publier le Wiki
+name: RavenEmu / Wiki
 
 on:
   push:
@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   publish:
-    name: Synchroniser les pages
+    name: Publication des pages
     runs-on: ubuntu-latest
     steps:
       - name: Récupérer le dépôt

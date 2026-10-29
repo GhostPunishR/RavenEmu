@@ -1,4 +1,4 @@
-name: RavenEmu Multiplateforme
+name: RavenEmu / Applications
 # Application autonome : toutes les commandes partent de la racine.
 on:
   push:
@@ -41,7 +41,7 @@ permissions:
 
 jobs:
   policy:
-    name: Règles du dépôt
+    name: Qualité du dépôt
     runs-on: ubuntu-latest
     steps:
       - name: Récupérer le dépôt
@@ -92,7 +92,7 @@ jobs:
         run: ./gradlew :policy:test --stacktrace
 
   native:
-    name: API native (liaison et sauvegardes)
+    name: API native - tests et sauvegardes
     runs-on: ubuntu-latest
     steps:
       - name: Récupérer le dépôt
@@ -107,7 +107,7 @@ jobs:
         run: ctest --test-dir native/build-host --output-on-failure
 
   android:
-    name: Android (APK bêta)
+    name: Android - APK bêta et tests
     runs-on: ubuntu-latest
     env:
       RAVENEMU_VERSION_CODE: ${{ github.run_number }}
@@ -177,7 +177,7 @@ jobs:
           retention-days: 7
 
   ios:
-    name: iOS (application et tests simulateur)
+    name: iOS - simulateur et tests
     runs-on: macos-latest
     steps:
       - name: Récupérer le dépôt
@@ -249,7 +249,7 @@ jobs:
           retention-days: 7
 
   prerelease:
-    name: Publier la préversion Android
+    name: Android - publication de la bêta
     needs: [policy, native, android, ios]
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest

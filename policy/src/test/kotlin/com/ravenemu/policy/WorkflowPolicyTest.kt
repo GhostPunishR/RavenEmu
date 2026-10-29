@@ -19,9 +19,10 @@ class WorkflowPolicyTest {
     private fun lines(file: File) = file.readLines().withIndex()
 
     @Test
-    fun `les workflows sont lus, dont celui de la version multiplateforme`() {
+    fun `les workflows d applications et Android Dev sont présents`() {
         assertTrue(
-            workflows.any { it.name == "multiplateforme.yml" },
+            workflows.any { it.name == "ci-applications.yml" } &&
+                workflows.any { it.name == "ci-android.yml" },
             "Workflows lus : ${workflows.map { it.name }}",
         )
     }

@@ -216,7 +216,7 @@ sélectionnables, et le bouton Sources cible la révision Git construite. Une
 construction modifiée localement est identifiée comme telle.
 
 La CI joint l'APK **et** `ravenemu-native-sources.tar.gz` au même artifact
-`ravenemu-android-native-arm64-debug`. Depuis un checkout Git propre :
+`ravenemu-android-dev-arm64`. Depuis un checkout Git propre :
 
 ```sh
 ./gradlew :android:assembleDebug :android:collectDebugCorrespondingSources
