@@ -17,6 +17,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.text.Normalizer;
 
 /** Offline-only ROM catalogue in this preview app's private files directory.
  * User-imported ROM bytes are copied; no persistent SAF URI access is needed.
@@ -27,15 +28,53 @@ final class RomLibrary {
     private static final int MAX_INDEX_BYTES = 256 * 1024;
 
     static final class Entry {
-        final String key, title, system;
+        final String key, title, system, cartridgeTitle;
         final int size;
         Entry(String key, String title, String system, int size) {
+            this(key, title, system, size, "");
+        }
+        Entry(String key, String title, String system, int size, String cartridgeTitle) {
             this.key = key;
             this.title = title;
             this.system = system;
             this.size = size;
+            this.cartridgeTitle = cartridgeTitle == null ? "" : cartridgeTitle;
         }
-        String label() { return system.toUpperCase(Locale.ROOT) + "  ·  " + title; }
+        String label() {
+            return system.toUpperCase(Locale.ROOT) + "  ·  " + title +
+                    (cartridgeTitle.isEmpty() ||
+                     cartridgeTitle.equalsIgnoreCase(title) ? ""
+                     : "\nEn-tête : " + cartridgeTitle);
+        }
+    }
+
+    enum SortOrder { TITLE_ASC, TITLE_DESC, SYSTEM }
+
+    /** Query is pure Java and works with both older and newer index formats. */
+    static List<Entry> query(List<Entry> entries, String text, String system,
+                             SortOrder order) {
+        String needle = normalize(text == null ? "" : text.trim());
+        String platform = system == null ? "" : system.toLowerCase(Locale.ROOT);
+        List<Entry> result = new ArrayList<>();
+        for (Entry entry : entries) {
+            if (!platform.isEmpty() && !platform.equals(entry.system)) continue;
+            if (!needle.isEmpty() &&
+                !normalize(entry.title).contains(needle) &&
+                !normalize(entry.cartridgeTitle).contains(needle)) continue;
+            result.add(entry);
+        }
+        Comparator<Entry> title = Comparator.comparing(
+                e -> normalize(e.title), String.CASE_INSENSITIVE_ORDER);
+        Comparator<Entry> comparison = order == SortOrder.SYSTEM
+                ? Comparator.comparing((Entry e) -> e.system).thenComparing(title)
+                : order == SortOrder.TITLE_DESC ? title.reversed() : title;
+        result.sort(comparison.thenComparing(e -> e.key));
+        return result;
+    }
+
+    private static String normalize(String value) {
+        String ascii = Normalizer.normalize(value, Normalizer.Form.NFD);
+        return ascii.replaceAll("\\p{M}+", "").toLowerCase(Locale.ROOT);
     }
 
     private RomLibrary() {}
@@ -94,13 +133,15 @@ final class RomLibrary {
                 String key = item.getString("key");
                 String system = item.getString("system");
                 String title = item.getString("title");
+                String cartridgeTitle = item.optString("cartridgeTitle", "");
                 int size = item.getInt("size");
                 if (!key.matches("[a-f0-9]{64}") ||
                     !("gb".equals(system) || "gbc".equals(system) || "gba".equals(system)) ||
                     size <= 0 || size > MAX_ROM_BYTES ||
-                    title.length() > 128 || title.trim().isEmpty())
+                    title.length() > 128 || title.trim().isEmpty() ||
+                    cartridgeTitle.length() > 16)
                     throw new IOException("Entrée de catalogue invalide");
-                entries.add(new Entry(key, title, system, size));
+                entries.add(new Entry(key, title, system, size, cartridgeTitle));
             }
             Collections.sort(entries, Comparator.comparing(e -> e.title.toLowerCase(Locale.ROOT)));
             return entries;
@@ -135,7 +176,8 @@ final class RomLibrary {
         if (games.size() >= MAX_GAMES) throw new IOException("Bibliothèque complète");
         File path = romFile(files, key);
         if (!path.exists()) atomicWrite(path, rom);
-        Entry added = new Entry(key, safeTitle(name), system, rom.length);
+        Entry added = new Entry(key, safeTitle(name), system, rom.length,
+                RomMetadata.cartridgeTitle(system, rom));
         games.add(added);
         JSONArray json = new JSONArray();
         for (Entry entry : games) {
@@ -145,6 +187,7 @@ final class RomLibrary {
                 item.put("title", entry.title);
                 item.put("system", entry.system);
                 item.put("size", entry.size);
+                item.put("cartridgeTitle", entry.cartridgeTitle);
             } catch (JSONException error) {
                 throw new IOException("Indexation impossible", error);
             }
