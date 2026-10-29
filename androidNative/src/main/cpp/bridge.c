@@ -4,6 +4,7 @@
 #include <libretro.h>
 #include <ravenemu/frontend.h>
 #include "native_audio.h"
+#include "native_menu.h"
 
 #include <stdatomic.h>
 #include <stdint.h>
@@ -252,11 +253,14 @@ Java_com_ravenemu_nativepreview_NativeBridge_drawFrame(
     jboolean advance) {
     (void)env;
     (void)clazz;
-    if (advance && session) raven_frontend_run_frame(session);
+    if (advance && session && !raven_menu_visible()) raven_frontend_run_frame(session);
     glClearColor(0.05f, 0.06f, 0.08f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
     if (!program || !texture || !image_ready || !rgba_pixels ||
-        surface_width <= 0 || surface_height <= 0) return;
+        surface_width <= 0 || surface_height <= 0) {
+        raven_menu_draw(surface_width, surface_height);
+        return;
+    }
 
     glBindTexture(GL_TEXTURE_2D, texture);
     if (image_dirty) {
@@ -289,6 +293,7 @@ Java_com_ravenemu_nativepreview_NativeBridge_drawFrame(
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
     glDisableVertexAttribArray((GLuint)attribute_position);
     glDisableVertexAttribArray((GLuint)attribute_uv);
+    raven_menu_draw(surface_width, surface_height);
 }
 
 /* A limit on JNI allocations; Libretro save RAM/state sizes are untrusted. */
@@ -362,6 +367,13 @@ Java_com_ravenemu_nativepreview_NativeBridge_setAudioEnabled(
     JNIEnv *env, jclass clazz, jboolean enabled) {
     (void)env; (void)clazz;
     raven_audio_set_running(enabled == JNI_TRUE);
+}
+
+JNIEXPORT jint JNICALL
+Java_com_ravenemu_nativepreview_NativeBridge_menuInput(
+    JNIEnv *env, jclass clazz, jint command) {
+    (void)env; (void)clazz;
+    return (jint)raven_menu_input((int)command);
 }
 
 JNIEXPORT void JNICALL
