@@ -1,13 +1,42 @@
 # Intention de la migration native RavenEmu
 
 > Instructions de référence pour les agents et contributeurs travaillant sur
-> `migration/native-libretro`. Lire aussi [docs/MIGRATION_NATIVE.md](docs/MIGRATION_NATIVE.md)
+> `migration/native-libretro`. **Lire d'abord
+> [ARCHITECTURE.md](ARCHITECTURE.md), contrat final et source de vérité
+> obligatoire**, puis [docs/MIGRATION_NATIVE.md](docs/MIGRATION_NATIVE.md)
 > et [androidNative/README.md](androidNative/README.md).
 >
 > **Ne pas confondre migration technique et refonte de RavenEmu.** Le résultat
 > recherché conserve **l'identité, l'interface, les jeux et les données de RavenEmu**
 > tout en remplaçant progressivement sa couche d'exécution par une architecture
 > native de type frontend Libretro.
+
+## Règle obligatoire : architecture finale
+
+**Tous les agents, y compris après la fin de la migration, doivent respecter
+[ARCHITECTURE.md](ARCHITECTURE.md).** Ce document définit la cible définitive,
+les frontières des modules, le cycle de vie des sessions Libretro, les
+responsabilités Java / C / C++20, la conformité visuelle, les formats de
+sauvegarde et les critères de bascule. Il s'applique aussi aux nouvelles
+fonctionnalités et correctifs **après publication**, pas uniquement à la PR #39.
+
+Ordre de référence, en cas de contradiction :
+
+1. **Demandes explicites du propriétaire et protection des données** ;
+2. **`ARCHITECTURE.md`** : règles et architecture finale ;
+3. **`AGENTS.md`** : consignes de travail et contraintes des agents ;
+4. **`docs/MIGRATION_NATIVE.md`** : étapes, statut et écarts de migration ;
+5. **Code hérité** : utile comme référence de compatibilité et de design,
+   sans imposer Compose/Kotlin à la nouvelle application.
+
+Ne jamais faire évoluer le code **contre** `ARCHITECTURE.md` pour gagner du
+temps. Si une exception ou un changement de structure paraît nécessaire,
+exposer le besoin au propriétaire, attendre son accord, et mettre à jour
+`ARCHITECTURE.md`, la documentation et les tests dans le même changement.
+
+**Ne pas présenter la section historique** d'`ARCHITECTURE.md` sur
+`shared/`, `androidApp/` et l'ancienne API RavenCore comme la cible finale :
+les sections **1 à 8** en tête du document sont le contrat normatif.
 
 ## Objectif produit
 
