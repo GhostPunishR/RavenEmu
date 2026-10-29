@@ -58,6 +58,19 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+      - name: Enforce Java/C/C++ only in the migrated app
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          source = Path('androidNative/src')
+          kotlin = list(source.rglob('*.kt')) + list(source.rglob('*.kts'))
+          if kotlin:
+              raise SystemExit('Kotlin source forbidden in androidNative: ' + str(kotlin))
+          build = Path('androidNative/build.gradle.kts').read_text()
+          if 'kotlin.plugin.compose' in build or 'project(":shared")' in build:
+              raise SystemExit('Kotlin/Compose integration forbidden in androidNative')
+          print('Java + native C/C++ architecture validated')
+          PY
       - name: Assemble ARM64 native APK and run Java save tests
         run: ./gradlew :androidNative:assembleDebug :androidNative:testDebugUnitTest --stacktrace
       - name: Inspect APK native libraries
