@@ -371,3 +371,11 @@ Les sources Java sont organisées en vrais packages sous `src/main/java/com/rave
 - `platform/` : adaptation aux insets Android.
 
 Les tests JVM reflètent les mêmes packages. Le manifeste déclare les classes d'activités avec leurs sous-packages ; le pont C utilise le préfixe JNI correspondant à `bridge.NativeBridge`.
+
+## Icône de l'APK de développement
+
+L'APK `com.ravenemu.dev` utilise le logo Raven fourni pour la migration dans
+`src/main/res/drawable-nodpi/ravenemu_launcher.webp`. Le lanceur Android
+résout `@mipmap/ic_launcher` vers une icône adaptative sur Android 8.0+.
+Ce changement est limité à l'application de migration ; l'icône de
+`androidApp/` (bêta) n'est pas modifiée.

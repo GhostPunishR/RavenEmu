@@ -15,6 +15,10 @@ required = [
     "android/src/main/cpp/media/state_thumbnail.c",
     "tests/hardware/CMakeLists.txt",
     "legal/attributions/retroarch.md",
+    "android/src/main/res/drawable-nodpi/ravenemu_launcher.webp",
+    "android/src/main/res/drawable/ic_launcher_foreground.xml",
+    "android/src/main/res/mipmap-anydpi-v26/ic_launcher.xml",
+    "android/src/main/res/values/launcher_colors.xml",
 ]
 missing = [p for p in required if not (root / p).is_file()]
 if missing:
@@ -36,4 +40,22 @@ if "Java_com_ravenemu_app_bridge_NativeBridge_" not in bridge or "Java_com_raven
 gradle = (root / "android/build.gradle.kts").read_text(encoding="utf-8")
 if 'namespace = "com.ravenemu.app"' not in gradle or 'applicationId = "com.ravenemu.dev"' not in gradle:
     raise SystemExit("Unexpected Java namespace or development application ID")
+# The migration APK must expose its launcher artwork to the Android manifest.
+import xml.etree.ElementTree as ET
+res = root / "android/src/main/res"
+manifest = ET.parse(root / "android/src/main/AndroidManifest.xml").getroot()
+app = manifest.find("application")
+ns = "{http://schemas.android.com/apk/res/android}"
+if (app is None or app.attrib.get(ns + "icon") != "@mipmap/ic_launcher" or
+        app.attrib.get(ns + "roundIcon") != "@mipmap/ic_launcher"):
+    raise SystemExit("Android Dev launcher icon is missing from the manifest")
+icon = ET.parse(res / "mipmap-anydpi-v26/ic_launcher.xml").getroot()
+if icon.tag != "adaptive-icon" or icon.find("foreground") is None or icon.find("background") is None:
+    raise SystemExit("Android Dev adaptive icon is incomplete")
+foreground = ET.parse(res / "drawable/ic_launcher_foreground.xml").getroot()
+if foreground.tag != "inset" or foreground.attrib.get(ns + "drawable") != "@drawable/ravenemu_launcher":
+    raise SystemExit("Android Dev adaptive foreground does not reference the Raven logo")
+logo = (res / "drawable-nodpi/ravenemu_launcher.webp").read_bytes()
+if len(logo) < 1000 or logo[:4] != b"RIFF" or logo[8:12] != b"WEBP":
+    raise SystemExit("Raven logo is not a valid WebP container")
 print("RavenEmu native layout validated")
