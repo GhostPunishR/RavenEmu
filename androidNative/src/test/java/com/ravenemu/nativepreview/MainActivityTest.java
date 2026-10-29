@@ -78,6 +78,22 @@ public final class MainActivityTest {
         assertEquals(1, FakeNative.opens);
     }
 
+    @Test public void nativePacingOwnsEveryDrawAndAutosaveWaitsForAnExecutedCoreFrame() throws Exception {
+        MainActivity activity = loaded();
+        int reads = FakeNative.batteryReads;
+        FakeNative.framesToAdvance = 0;
+        activity.onDrawFrame(null);
+        activity.onDrawFrame(null);
+        assertTrue("Java must leave the cadence decision to C on each draw", FakeNative.lastAdvance);
+        assertEquals(2, FakeNative.draws);
+        assertEquals("A repeated video frame must not trigger SRAM IO", reads, FakeNative.batteryReads);
+        FakeNative.framesToAdvance = 2;
+        activity.onDrawFrame(null);
+        assertEquals("One save per draw, even when native pacing catches up two core frames",
+                reads + 1, FakeNative.batteryReads);
+        pump(activity);
+    }
+
     @Test public void focusAndMenuReasonsPreventFramesAndBackgroundDismissCannotResume() throws Exception {
         ActivityController<MainActivity> controller = open(null);
         MainActivity activity = controller.get();
@@ -466,11 +482,13 @@ public final class MainActivityTest {
         static final List<byte[]> restoreAttempts = new ArrayList<>(), restoredBatteries = new ArrayList<>();
         static int opens, failRestores;
         static boolean closed, paused, lastAdvance;
+        static int framesToAdvance, draws, batteryReads;
         static void reset() {
             state = new byte[]{1, 2}; battery = new byte[]{3, 4};
             preview = new int[]{2, 1, 0xffff0000, 0xff00ff00};
             restoreAttempts.clear(); restoredBatteries.clear();
             opens = failRestores = 0; closed = lastAdvance = false; paused = true;
+            framesToAdvance = 1; draws = batteryReads = 0;
         }
         private static void requireGl() { assertTrue("Core operation must use the queued GL boundary", QueuedGl.executing); }
         @Implementation protected static void __staticInitializer__() {}
@@ -483,7 +501,7 @@ public final class MainActivityTest {
         @Implementation protected static int[] capturePreview() {
             requireGl(); return preview == null ? null : preview.clone();
         }
-        @Implementation protected static byte[] saveBattery() { return closed ? null : battery.clone(); }
+        @Implementation protected static byte[] saveBattery() { batteryReads++; return closed ? null : battery.clone(); }
         @Implementation protected static boolean restoreBattery(byte[] value) {
             requireGl(); restoredBatteries.add(value.clone()); battery = value.clone(); return true;
         }
@@ -496,7 +514,9 @@ public final class MainActivityTest {
         @Implementation protected static void setButtons(int mask) {}
         @Implementation protected static void clearButtons() {}
         @Implementation protected static void setAudioEnabled(boolean enabled) {}
-        @Implementation protected static void drawFrame(int width, int height, boolean advance) { lastAdvance = advance; }
+        @Implementation protected static int drawFrame(int width, int height, boolean advance) {
+            draws++; lastAdvance = advance; return advance ? framesToAdvance : 0;
+        }
         @Implementation protected static void closeRom() { closed = true; }
     }
 }

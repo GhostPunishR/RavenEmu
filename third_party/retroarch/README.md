@@ -34,7 +34,7 @@ Le frontend, la boucle d'émulation et les menus restent ceux de RavenEmu ;
 RavenCore reste le moteur GB/GBC/GBA. Les resamplers sinc, les presets de
 shaders, la sélection de périphériques, la reconnexion audio automatique,
 les cores graphiques matériels et la planification de RetroArch ne sont
-pas portés. La cadence précise audio/vidéo et la validation sur téléphone
+pas portés. L'asservissement à l'horloge audio et la validation sur téléphone
 restent des travaux de migration.
 
 ## Licences et distribution

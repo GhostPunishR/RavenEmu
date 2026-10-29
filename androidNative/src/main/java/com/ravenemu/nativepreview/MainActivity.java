@@ -33,7 +33,6 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
     private TextView gameTitle;
     private int width = 1, height = 1, buttons, touchButtons;
     private GameControlsView gameControls;
-    private long nextFrameNanos;
     private long nextBatterySaveNanos;
     private volatile String activeSaveKey;
     private volatile boolean menuOpen;
@@ -215,7 +214,7 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
                     if (failure == null) {
                         activeSaveKey = entry.key;
                         stateCompatibility = NativeBridge.stateCompatibility();
-                        nextFrameNanos = nextBatterySaveNanos = 0;
+                        nextBatterySaveNanos = 0;
                     } else { activeSaveKey = null; stateCompatibility = null; }
                     final String result = failure;
                     runOnUiThread(() -> {
@@ -475,7 +474,6 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
     @Override
     public void onSurfaceCreated(GL10 gl, EGLConfig config) {
         NativeBridge.initGl();
-        nextFrameNanos = 0;
     }
 
     @Override
@@ -487,11 +485,8 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
     @Override
     public void onDrawFrame(GL10 gl) {
         long now = System.nanoTime();
-        // Approx. 60fps until the full scheduler uses the core AV timing.
-        boolean advance = !gamePaused && now >= nextFrameNanos;
-        if (advance) nextFrameNanos = now + 16_666_667L;
-        NativeBridge.drawFrame(width, height, advance);
-        if (advance && activeSaveKey != null && now >= nextBatterySaveNanos) {
+        int advanced = NativeBridge.drawFrame(width, height, !gamePaused);
+        if (advanced > 0 && activeSaveKey != null && now >= nextBatterySaveNanos) {
             nextBatterySaveNanos = now + 30_000_000_000L;
             try {
                 persistBattery();

@@ -45,6 +45,7 @@ jobs:
         run: |
           cmake --build build/native-frontend --parallel 2 --target \
             raven_frontend_test raven_frontend_fake_core raven_frontend_real_core_test \
+            raven_frame_clock_test \
             raven_native_input_test raven_native_preview_test raven_native_audio_test raven_native_video_test \
             ravenemu_gb_libretro ravenemu_gbc_libretro ravenemu_gba_libretro
       - name: Run frontend smoke tests

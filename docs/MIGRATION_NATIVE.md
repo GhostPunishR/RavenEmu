@@ -289,7 +289,34 @@ portions des sources officielles RetroArch, révision immuable
 
 [Provenance, périmètre et distribution](../third_party/retroarch/README.md).
 RavenCore reste le moteur ; ce portage ne reprend pas le frontend complet,
-les resamplers sinc ou la planification de RetroArch. La cadence précise,
+les resamplers sinc ou la planification de RetroArch. L'asservissement audio,
 la reconnexion audio, la mesure de latence et la validation sur matériel
 réel restent nécessaires. Cette tranche reste dans la PR #39 brouillon,
 sans modification des modules ou des données de la bêta.
+
+## Quatorzième tranche : cadence native selon les timings Libretro
+
+- Suppression du seuil Java `now + 16 666 667 ns`, qui perdait le reste de
+  période et pouvait sauter des images sur les écrans 60/90/120 Hz.
+  Le frontend C calcule maintenant le nombre d'images dues selon le FPS
+  annoncé par RavenCore et le temps monotone, en conservant ce reste.
+- Le rendu et l'émulation sont distingués : zéro image due réutilise la
+  texture ; plusieurs images dues exécutent les entrées et l'audio de chacune,
+  puis présentent la dernière image disponible. Maximum trois images par
+  rendu ; un retard excessif est abandonné pour borner le travail.
+- Le temps de pause n'est pas rattrapé. Changement de ROM, transitions de
+  pause, surface recréée et tentative de restauration réinitialisent l'époque.
+  Un timing non pris en charge refuse le chargement. JNI renvoie le nombre
+  réellement exécuté ; l'autosauvegarde de SRAM attend une image du core.
+- Tests C déterministes à plusieurs FPS, rafraîchissements de 29,97 à 144 Hz,
+  jitter et durée d'une heure simulée, valeurs invalides, grands timestamps,
+  recul et saut d'horloge, retards bornés et reprises. Test Java du passage
+  systématique au pilote natif et de l'autosauvegarde conditionnelle.
+
+La fréquence est lue au chargement ; les changements AV Libretro en cours
+de partie restent à porter. Cette horloge est propre à RavenEmu, sous sa
+licence AGPL ; elle ne reprend
+pas de code de planification RetroArch. Les appels au core restent sérialisés
+sur GL. Ce jalon ne fournit ni synchronisation sur l'horloge audio ni réglages
+vidéo avancés, et ne remplace pas les mesures FPS/latence et les tests de
+sessions sur appareil. La bêta et ses données restent inchangées.

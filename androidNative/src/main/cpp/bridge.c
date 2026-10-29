@@ -2,10 +2,12 @@
 #include <android/log.h>
 #include <libretro.h>
 #include <ravenemu/frontend.h>
+#include <ravenemu/frame_clock.h>
 #include "native_audio.h"
 #include "native_video.h"
 #include "native_input.h"
 #include "native_preview.h"
+#include <time.h>
 
 #include <stdint.h>
 #include <stdio.h>
@@ -25,6 +27,7 @@ static size_t rgba_capacity;
 static int image_width, image_height;
 static int image_dirty, image_ready;
 static int preview_valid;
+static raven_frame_clock frame_clock;
 static uint8_t stretch5(uint32_t value) {
     return (uint8_t)((value << 3u) | (value >> 2u));
 }
@@ -108,6 +111,7 @@ Java_com_ravenemu_nativepreview_NativeBridge_initGl(
     (void)env;
     (void)clazz;
     raven_video_init_gl();
+    raven_frame_clock_reset(&frame_clock);
     image_dirty = image_ready;
 }
 
@@ -148,6 +152,7 @@ Java_com_ravenemu_nativepreview_NativeBridge_openRom(
         goto done;
     }
     raven_audio_close();
+    frame_clock = (raven_frame_clock){0};
     raven_input_clear_buttons(&input);
     clear_frame();
     if (!raven_frontend_open_core(session, library_path, files, files)) {
@@ -167,8 +172,13 @@ Java_com_ravenemu_nativepreview_NativeBridge_openRom(
         result = failure(env, raven_frontend_last_error(session));
     } else {
         raven_core_info info = {0};
-        if (raven_frontend_get_info(session, &info) && info.sample_rate > 0 &&
-            !raven_audio_open(info.sample_rate)) {
+        if (!raven_frontend_get_info(session, &info) ||
+                !raven_frame_clock_configure(&frame_clock, info.fps)) {
+            result = failure(env, "Unsupported Libretro core frame rate");
+            raven_frontend_unload(session);
+            goto done;
+        }
+        if (!raven_audio_open(info.sample_rate)) {
             LOGE("Audio output unavailable; running game without sound");
         }
         raven_audio_set_running(!playback_paused);
@@ -198,29 +208,46 @@ Java_com_ravenemu_nativepreview_NativeBridge_clearButtons(
     raven_input_clear_buttons(&input);
 }
 
-JNIEXPORT void JNICALL
+JNIEXPORT jint JNICALL
 Java_com_ravenemu_nativepreview_NativeBridge_drawFrame(
     JNIEnv *env, jclass clazz, jint surface_width, jint surface_height,
     jboolean advance) {
     (void)env;
     (void)clazz;
-    if (playback_paused) {
+    unsigned advanced = 0;
+    if (playback_paused || !advance) {
         raven_input_clear_buttons(&input);
-    } else if (advance && session) {
-        raven_input_begin_frame(&input);
-        raven_frontend_run_frame(session);
+        raven_frame_clock_reset(&frame_clock);
+    } else if (session) {
+        struct timespec now;
+        if (clock_gettime(CLOCK_MONOTONIC, &now) == 0) {
+            const uint64_t now_ns = (uint64_t)now.tv_sec * UINT64_C(1000000000) +
+                                    (uint64_t)now.tv_nsec;
+            const unsigned due = raven_frame_clock_tick(&frame_clock, now_ns);
+            for (unsigned i = 0; i < due; ++i) {
+                raven_input_begin_frame(&input);
+                if (!raven_frontend_run_frame(session)) {
+                    raven_frame_clock_reset(&frame_clock);
+                    break;
+                }
+                ++advanced;
+            }
+        }
     }
     raven_video_draw(image_ready ? rgba_pixels : NULL,
         (unsigned)image_width, (unsigned)image_height, image_dirty,
         surface_width, surface_height);
     image_dirty = 0;
+    return (jint)advanced;
 }
 
 JNIEXPORT void JNICALL
 Java_com_ravenemu_nativepreview_NativeBridge_setPaused(
     JNIEnv *env, jclass clazz, jboolean paused) {
     (void)env; (void)clazz;
-    playback_paused = paused == JNI_TRUE;
+    const int next_paused = paused == JNI_TRUE;
+    if (playback_paused != next_paused) raven_frame_clock_reset(&frame_clock);
+    playback_paused = next_paused;
     if (playback_paused) raven_input_clear_buttons(&input);
     raven_audio_set_running(!playback_paused);
 }
@@ -299,6 +326,7 @@ Java_com_ravenemu_nativepreview_NativeBridge_restoreState(
     jbyte *bytes = (*env)->GetByteArrayElements(env, saved, NULL);
     if (!bytes) return JNI_FALSE;
     int result = raven_frontend_load_state(session, bytes, (size_t)size);
+    raven_frame_clock_reset(&frame_clock);
     // Keep displaying the previous frame, but never attach its pixels to a
     // restored state until the core has supplied a fresh video callback.
     preview_valid = 0;
@@ -333,6 +361,7 @@ Java_com_ravenemu_nativepreview_NativeBridge_closeRom(
     (void)env;
     (void)clazz;
     raven_audio_close();
+    frame_clock = (raven_frame_clock){0};
     if (session) {
         raven_frontend_destroy(session);
         session = NULL;

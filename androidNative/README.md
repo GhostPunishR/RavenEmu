@@ -241,6 +241,33 @@ Le frontend complet, les resamplers sinc et la planification RetroArch ne sont
 pas portés. La reconnexion automatique après changement de route audio reste
 à implémenter et à tester.
 
+## Cadence native et fréquence du core
+
+Le frontend C calcule les images à exécuter depuis la fréquence Libretro
+annoncée par RavenCore, avec une horloge monotone. Java transmet chaque rendu
+et les raisons de pause ; il n'impose plus un délai de 60 Hz qui repart de
+l'instant du dernier rendu. Le reste de période est conservé : des rendus à
+90 ou 120 Hz ne changent pas la vitesse du jeu, et un écran plus lent peut
+exécuter plusieurs images du core avant de présenter la dernière.
+
+Le rattrapage est limité à trois images par rendu. Un retard plus grand
+abandonne l'excédent ; il ne provoque pas une longue boucle de récupération.
+Pause/reprise, changement de ROM, restauration d'état et recréation du contexte
+remettent l'horloge à zéro, sans récupérer le temps passé dans les menus.
+Les entrées sont échantillonnées à chaque image émulée et l'audio de chacune
+est transmis au pilote. Un rendu sans image émulée réutilise la texture.
+L'autosauvegarde périodique de SRAM attend également une image réellement
+exécutée. Une fréquence absente ou hors plage prise en charge (1–240 Hz)
+refuse le chargement plutôt que de supposer 60 Hz.
+
+Les tests simulent plusieurs fréquences de core et des écrans de 29,97 à 144 Hz,
+du jitter, une heure d'exécution, de grands timestamps, des retards et reprises.
+Ils prouvent la cadence calculée ; les FPS, la consommation et la latence sur
+téléphone restent à mesurer. Cette horloge suit le temps monotone : elle
+n'est pas encore asservie à l'horloge du périphérique audio, et ne change pas
+la fréquence de l'écran Android. Les changements de timing Libretro pendant
+une partie restent à prendre en charge ; la fréquence est lue au chargement.
+
 ## Current limits (intentional)
 
 This is an integration prototype, not a release candidate.
@@ -260,8 +287,9 @@ This is an integration prototype, not a release candidate.
 - Cover images must be manually selected by the user from local documents.
   Import is limited to 8 MiB and 4096 x 4096 input, decoded into 512 px PNG
   thumbnails. No artwork is bundled or fetched online.
-- A 60 Hz best-effort loop is used instead of the precise core FPS and audio
-  clock. The GLSurfaceView is continuous, and may run at display refresh speed.
+- Native pacing follows the core FPS, with bounded catch-up. It is not yet
+  synchronized to the audio device clock. GLSurfaceView still renders
+  continuously at the display refresh rate.
 - Video uses OpenGL ES 2 in C; shader architecture and the advanced pause
   options remain incomplete.
 - `RavenCore` still owns game emulation; no engine source has been duplicated.

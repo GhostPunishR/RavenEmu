@@ -12,7 +12,7 @@ FetchContent_Declare(ravencore
     GIT_SHALLOW FALSE)
 FetchContent_MakeAvailable(ravencore)
 
-add_library(raven_frontend STATIC src/libretro_host.c)
+add_library(raven_frontend STATIC src/libretro_host.c src/frame_clock.c)
 target_compile_features(raven_frontend PUBLIC c_std_11)
 target_compile_definitions(raven_frontend PUBLIC RAVEN_CORE_REVISION="${RAVEN_CORE_REVISION}")
 target_include_directories(raven_frontend PUBLIC include
@@ -25,6 +25,12 @@ endif()
 option(RAVEN_FRONTEND_TESTS "Test the native frontend with a fake Libretro core" ON)
 if(RAVEN_FRONTEND_TESTS AND NOT ANDROID)
     enable_testing()
+    add_executable(raven_frame_clock_test tests/test_frame_clock.c)
+    target_link_libraries(raven_frame_clock_test PRIVATE raven_frontend)
+    if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(raven_frame_clock_test PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+    add_test(NAME raven_frame_clock COMMAND raven_frame_clock_test)
     set(native_input_dir "${CMAKE_CURRENT_LIST_DIR}/../androidNative/src/main/cpp")
     add_executable(raven_native_input_test
         "${CMAKE_CURRENT_LIST_DIR}/../androidNative/src/test/cpp/test_native_input.c"

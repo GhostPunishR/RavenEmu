@@ -28,7 +28,9 @@ final class NativeBridge {
     static native String openRom(String nativeLibraryDirectory, String filesDirectory,
                                  String system, byte[] data, String filename);
 
-    static native void drawFrame(int surfaceWidth, int surfaceHeight, boolean advance);
+    /** GL thread: native monotonic pacing at the core's FPS, bounded catch-up.
+     * Returns the number of core frames actually executed (0..3). */
+    static native int drawFrame(int surfaceWidth, int surfaceHeight, boolean allowAdvance);
     /** Current combined joypad mask. Brief presses survive until one core frame. */
     static native void setButtons(int buttons);
     /** Pause/menu/focus loss: release held buttons and discard pending presses. */

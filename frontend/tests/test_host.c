@@ -1,4 +1,5 @@
 #include <ravenemu/frontend.h>
+#include <ravenemu/frame_clock.h>
 
 #include <stdint.h>
 #include <stdio.h>
@@ -82,6 +83,22 @@ int main(int argc, char **argv) {
     CHECK(memcmp(battery, replacement, 4) == 0);
     CHECK(obs.video_calls == 2);
     CHECK(obs.audio_frames == 4);
+    CHECK(!obs.invalid_video);
+    // The FPS read through Libretro must drive the host independently of
+    // display refresh, while preserving audio/video callbacks for every run.
+    raven_frame_clock clock = {0};
+    CHECK(raven_frame_clock_configure(&clock, info.fps));
+    unsigned scheduled = 0;
+    for (unsigned draw = 0; draw < 120; ++draw) {
+        unsigned due = raven_frame_clock_tick(&clock, (uint64_t)draw * 1000000000u / 120u);
+        CHECK(due <= RAVEN_FRAME_CLOCK_MAX_CATCHUP);
+        for (unsigned frame = 0; frame < due; ++frame) {
+            CHECK(raven_frontend_run_frame(host));
+            ++scheduled;
+        }
+    }
+    CHECK(scheduled == 60);
+    CHECK(obs.video_calls == 62 && obs.audio_frames == 124);
     CHECK(!obs.invalid_video);
     raven_frontend_unload(host);
     CHECK(!raven_frontend_run_frame(host));
