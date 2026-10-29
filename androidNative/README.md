@@ -26,6 +26,25 @@ La bibliothèque Java restaure déjà les écrans centraux, mais ce n'est **pas
 encore une parité visuelle totale** : le menu de jeu C et les réglages non
 raccordés aux cores doivent encore être alignés.
 
+## Calibrage sur les barres du téléphone
+
+Android 15 (target SDK 35) impose le rendu bord à bord : la barre d'état
+(heure, réseau, batterie) et la navigation système à trois boutons ou par
+gestes peuvent chevaucher l'app si elle n'applique pas ses insets.
+
+Les activités Java `NativeHomeActivity` et `MainActivity` utilisent désormais
+`SystemBarInsets.java` pour réserver les vrais insets `systemBars` et
+`displayCutout` sur les quatre côtés, ainsi que l'inset clavier pour la
+recherche. La barre de titre et le champ de recherche restent sous l'heure et
+les icônes Android ; le pied de page « RavenEmu By GhostPunishR » et les
+boutons tactiles restent au-dessus de la barre de navigation du téléphone.
+
+Les marges sont recalculées depuis les valeurs initiales, sans double décalage
+lors des changements d'orientation, d'affichage du clavier ou du retour dans
+l'application. Des tests JVM valident cette géométrie. Les tests visuels
+restent à effectuer en navigation **3 boutons** et **gestuelle**, portrait et
+paysage, sur appareil physique.
+
 ## Architecture
 - `NativeHomeActivity.java` : écran bibliothèque d'accueil et navigation en Java.
 - `RavenLibraryAdapter.java` : grille/liste de jaquettes selon le style RavenEmu.
