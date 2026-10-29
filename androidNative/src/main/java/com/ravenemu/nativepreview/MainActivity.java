@@ -48,6 +48,7 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
     private final AtomicBoolean disposed = new AtomicBoolean(false);
     private GLSurfaceView surface;
     private TextView status;
+    private TextView gameTitle;
     private int width = 1, height = 1, buttons;
     private long nextFrameNanos;
     private long nextBatterySaveNanos;
@@ -66,39 +67,47 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
         surface.setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);
         root.addView(surface, new FrameLayout.LayoutParams(-1, -1));
 
+        // Mirror the 48dp RavenEmu player toolbar: back, current game,
+        // and the three-dot game menu. The GL/C frontend is unchanged.
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.VERTICAL);
-        header.setPadding(20, 12, 20, 8);
-        Button open = new Button(this);
-        open.setText("Importer ROM GB / GBC / GBA");
-        open.setOnClickListener(view -> pickRom());
-        header.addView(open);
-        LinearLayout navigation = new LinearLayout(this);
-        Button library = new Button(this);
-        library.setText("Bibliothèque");
-        library.setOnClickListener(view -> showLibrary());
-        navigation.addView(library, new LinearLayout.LayoutParams(0, -2, 1));
-        Button menu = new Button(this);
-        menu.setText("Menu C");
+        header.setBackgroundColor(NativeHomeActivity.BACKGROUND);
+
+        LinearLayout toolbar = new LinearLayout(this);
+        toolbar.setGravity(Gravity.CENTER_VERTICAL);
+        TextView back = new TextView(this);
+        back.setText("‹");
+        back.setGravity(Gravity.CENTER);
+        back.setTextSize(32);
+        back.setTextColor(NativeHomeActivity.TEXT);
+        back.setContentDescription("Retour à la bibliothèque");
+        back.setOnClickListener(view -> finish());
+        toolbar.addView(back, new LinearLayout.LayoutParams(dp(48), dp(48)));
+        gameTitle = new TextView(this);
+        gameTitle.setText("RavenEmu");
+        gameTitle.setSingleLine(true);
+        gameTitle.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        gameTitle.setTextSize(16);
+        gameTitle.setTextColor(NativeHomeActivity.TEXT);
+        toolbar.addView(gameTitle, new LinearLayout.LayoutParams(0, dp(48), 1));
+
+        TextView menu = new TextView(this);
+        menu.setText("⋮");
+        menu.setGravity(Gravity.CENTER);
+        menu.setTextSize(28);
+        menu.setTextColor(NativeHomeActivity.TEXT);
+        menu.setContentDescription("Menu du jeu");
         menu.setOnClickListener(view -> toggleNativeMenu());
-        navigation.addView(menu, new LinearLayout.LayoutParams(0, -2, 1));
-        header.addView(navigation);
+        toolbar.addView(menu, new LinearLayout.LayoutParams(dp(48), dp(48)));
+        header.addView(toolbar);
+
         status = new TextView(this);
-        status.setTextColor(0xffffffff);
-        status.setShadowLayer(3f, 1f, 1f, 0xff000000);
-        status.setText("Prévisualisation C / Libretro — audio AAudio + sauvegardes");
-        status.setPadding(10, 6, 10, 6);
-        header.addView(status);
-        LinearLayout saveActions = new LinearLayout(this);
-        Button quickSave = new Button(this);
-        quickSave.setText("Sauver état");
-        quickSave.setOnClickListener(view -> quickSave());
-        Button quickLoad = new Button(this);
-        quickLoad.setText("Charger état");
-        quickLoad.setOnClickListener(view -> quickLoad());
-        saveActions.addView(quickSave, new LinearLayout.LayoutParams(0, -2, 1));
-        saveActions.addView(quickLoad, new LinearLayout.LayoutParams(0, -2, 1));
-        header.addView(saveActions);
+        status.setTextColor(NativeHomeActivity.MUTED);
+        status.setBackgroundColor(NativeHomeActivity.SURFACE);
+        status.setTextSize(11);
+        status.setText("Audio et rendu natifs · RavenCore");
+        status.setPadding(dp(12), dp(4), dp(12), dp(4));
+        header.addView(status, new LinearLayout.LayoutParams(-1, dp(28)));
         FrameLayout.LayoutParams headerParams = new FrameLayout.LayoutParams(-1, -2, Gravity.TOP);
         root.addView(header, headerParams);
 
@@ -138,6 +147,10 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
         }
     }
 
+    private int dp(int value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
+    }
+
     private LinearLayout controlRow(Button... controlButtons) {
         LinearLayout row = new LinearLayout(this);
         row.setGravity(Gravity.CENTER);
@@ -153,7 +166,13 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
         Button button = new Button(this);
         button.setText(label);
         button.setTextSize(13);
-        button.setAlpha(0.87f);
+        button.setAlpha(0.94f);
+        button.setTextColor(NativeHomeActivity.TEXT);
+        android.graphics.drawable.GradientDrawable buttonShape =
+                NativeHomeActivity.shape(NativeHomeActivity.SURFACE, 16,
+                        getResources().getDisplayMetrics().density);
+        buttonShape.setStroke(dp(1), NativeHomeActivity.OUTLINE);
+        button.setBackground(buttonShape);
         button.setOnTouchListener((view, event) -> {
             if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
                 if (menuOpen) {
@@ -410,6 +429,10 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
                         nextFrameNanos = nextBatterySaveNanos = 0;
                     } else activeSaveKey = null;
                     final String result = failure;
+                    runOnUiThread(() -> {
+                        if (!disposed.get() && result == null && gameTitle != null)
+                            gameTitle.setText(entry.title);
+                    });
                     postStatus(result == null ? "Jeu : " + entry.label() : "Échec : " + result);
                 });
             } catch (Exception error) {
