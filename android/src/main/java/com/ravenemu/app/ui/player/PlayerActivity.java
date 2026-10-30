@@ -22,7 +22,6 @@ import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.hardware.display.DisplayManager;
 import android.opengl.GLSurfaceView;
-import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -246,9 +245,13 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         return Math.round(value * getResources().getDisplayMetrics().density);
     }
 
+    /** The display the game is on: the surface's once its window is shown,
+     * the default one before. Never Activity.getDisplay(), which throws for a
+     * context without a display (Robolectric's activities). */
     private Display currentDisplay() {
-        if (Build.VERSION.SDK_INT >= 30) return getDisplay();
-        return getWindowManager().getDefaultDisplay();
+        Display display = surface != null ? surface.getDisplay() : null;
+        if (display == null && displays != null) display = displays.getDisplay(Display.DEFAULT_DISPLAY);
+        return display;
     }
 
     /** UI thread: the native pacer locks on the display only when it knows its

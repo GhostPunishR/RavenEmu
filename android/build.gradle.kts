@@ -28,6 +28,8 @@ val prepareRobolectricSdks by tasks.registering(Sync::class) {
 tasks.withType<Test>().configureEach {
     dependsOn(prepareRobolectricSdks)
     inputs.files(robolectricSdks).withPropertyName("robolectricSdks")
+    // A failing test shows its whole stack trace in the CI log.
+    testLogging { exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL }
     systemProperty("robolectric.offline", "true")
     systemProperty("robolectric.dependency.dir",
         layout.buildDirectory.dir("robolectric-sdk").get().asFile.absolutePath)

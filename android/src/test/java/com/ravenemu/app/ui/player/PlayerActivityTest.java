@@ -235,7 +235,7 @@ public final class PlayerActivityTest {
 
     @Test public void theDisplayRateReachesThePacerAndTheScreenStaysOnWhilePlaying() throws Exception {
         PlayerActivity activity = loaded();
-        android.view.Display display = activity.getDisplay();
+        android.view.Display display = defaultDisplay(activity);
         assertEquals("The native pacer knows the display", display.getRefreshRate(), FakeNative.displayRate, 0.01f);
         assertEquals("A refresh rate the game divides is kept while it is on screen",
                 display.getMode().getModeId(), activity.getWindow().getAttributes().preferredDisplayModeId);
@@ -331,7 +331,7 @@ public final class PlayerActivityTest {
 
     @Test public void theTiltFollowsTheScreenAsItTurns() throws Exception {
         PlayerActivity activity = loaded();
-        android.view.Display display = activity.getDisplay();
+        android.view.Display display = defaultDisplay(activity);
         assertEquals(display.getRotation(), FakeNative.rotation);
         // A half turn keeps the activity: only the display says so.
         shadowOf(display).setRotation(android.view.Surface.ROTATION_270);
@@ -340,6 +340,11 @@ public final class PlayerActivityTest {
         listener.onDisplayChanged(android.view.Display.DEFAULT_DISPLAY);
         pump(activity);
         assertEquals(android.view.Surface.ROTATION_270, FakeNative.rotation);
+    }
+
+    private static android.view.Display defaultDisplay(PlayerActivity activity) {
+        return activity.getSystemService(android.hardware.display.DisplayManager.class)
+                .getDisplay(android.view.Display.DEFAULT_DISPLAY);
     }
 
     /** The value given to `key`, or null without it; keys and values alternate. */
