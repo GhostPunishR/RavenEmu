@@ -17,7 +17,8 @@ du lecteur Kotlin actuel : il ne remplace ni les APK signés, ni la cible iOS.
 cmake -S frontend -B build/native-frontend -DCMAKE_BUILD_TYPE=Release
 cmake --build build/native-frontend --target raven_frontend_test raven_frontend_fake_core raven_frontend_real_core_test \
   raven_frontend_options_test raven_frontend_fake_core_v1 raven_frontend_fake_core_variables \
-  raven_frontend_preempt_test raven_frontend_fake_core_lag raven_frontend_fake_core_lag_incomplete
+  raven_frontend_preempt_test raven_frontend_fake_core_lag raven_frontend_fake_core_lag_incomplete \
+  raven_frontend_achievements_test
 ctest --test-dir build/native-frontend --output-on-failure
 ```
 
@@ -93,3 +94,29 @@ d'une partie aux appuis avancés de n images, appuis d'une image compris,
 historique oublié, quirks) ; `raven_frontend_real_cores` (les trois cores
 RavenCore finissent dans le même état octet pour octet) ; `raven_frame_pacer`
 (garde de coût).
+
+## RetroAchievements
+
+`include/ravenemu/achievements.h` porte les succès RetroAchievements sur le
+SDK officiel **rcheevos** (MIT, révision `1433173`, téléchargé par
+`cmake/rcheevos.cmake` avec les deux correctifs de sûreté de la bêta,
+[provenance](../legal/attributions/rcheevos.md)). L'hôte garde la carte
+mémoire que le core déclare (`RETRO_ENVIRONMENT_SET_MEMORY_MAPS`) ; rcheevos
+la lit par `rc_libretro`, sur le fil d'émulation seulement. Le module gère le
+compte (mot de passe ou jeton), l'identification du jeu par son empreinte,
+l'évaluation à chaque image montrée (jamais pendant les images préventives),
+le mode Hardcore et un résumé. La plateforme fait le réseau : elle prend
+chaque requête (`raven_achievements_next_request`), l'envoie et rend la
+réponse (`raven_achievements_respond`) ; l'interface lit les événements
+(`raven_achievements_next_event`). La fermeture règle elle-même les requêtes
+encore en cours.
+
+Test : `raven_frontend_achievements`, contre un faux service aux réponses du
+format de rcheevos et le vrai core Game Boy de RavenCore, qui exécute une ROM
+construite par le test : elle compte les images en WRAM (`$C001`) et le succès
+« 0xHc001=60 » se débloque à la soixantième image, en mode normal comme en
+Hardcore (requête `h=1`, jeu « maîtrisé »). Le test couvre aussi les refus et
+pannes de connexion, le jeton, l'activation du Hardcore en cours de jeu (remise
+à zéro demandée), un service injoignable ou qui refuse le jeu, et la fermeture
+avec des requêtes en cours. Sans la carte mémoire, le succès ne se débloque
+jamais : le test la vérifie bien.

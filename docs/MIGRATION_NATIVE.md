@@ -752,3 +752,29 @@ chemins (réinitialisation de la vidéo depuis sa catégorie, BIOS sur la
 sous-page Game Boy Advance, recréation sur une sous-page).
 
 Écart assumé avec la bêta, qui montrait chaque catégorie sur une seule page.
+
+## RetroAchievements, tranche RA-1 : le cœur C
+
+Le chantier RetroAchievements (parité avec la bêta, `ARCHITECTURE.md` §7) est
+découpé en trois tranches : **RA-1**, le cœur dans le frontend C ; **RA-2**,
+le réseau Java, le compte et la page Paramètres → RetroAchievements, le
+bandeau de succès ; **RA-3**, les verrous du mode Hardcore dans le lecteur,
+la liste des succès, les classements et le journal hors ligne.
+
+RA-1 :
+- **SDK** : rcheevos (MIT), révision `1433173` de la bêta, avec ses deux
+  correctifs de sûreté appliqués à une copie (`frontend/cmake/rcheevos.cmake`,
+  [provenance](../legal/attributions/rcheevos.md)).
+- **Hôte Libretro** : `RETRO_ENVIRONMENT_SET_MEMORY_MAPS` est gardé (copie des
+  descripteurs, oubliée au déchargement) et `SET_SUPPORT_ACHIEVEMENTS` accepté.
+- **Module** `frontend/src/achievements.c` (code RavenEmu, d'après
+  l'adaptateur de la bêta) : compte par mot de passe ou jeton, identification
+  du jeu par son empreinte, évaluation après chaque image montrée, Hardcore,
+  résumé ; files de requêtes (pour le réseau de la plateforme) et
+  d'événements (pour l'interface), textes du serveur sur une ligne et bornés.
+- Tests : `raven_frontend_achievements`, avec le vrai core Game Boy de
+  RavenCore et une ROM construite par le test (voir `frontend/README.md`).
+  Le succès se débloque à la 60ᵉ image, en normal et en Hardcore ; ASan/UBSan
+  propres.
+
+Pas encore dans l'application : RA-2 relie ce module au lecteur.

@@ -25,6 +25,16 @@ if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(raven_frontend PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
+# RetroAchievements: the frontend's module over the official rcheevos SDK.
+include(cmake/rcheevos.cmake)
+add_library(raven_achievements STATIC src/achievements.c)
+target_compile_features(raven_achievements PUBLIC c_std_11)
+target_include_directories(raven_achievements PRIVATE "${rcheevos_SOURCE_DIR}/src")
+target_link_libraries(raven_achievements PUBLIC raven_frontend PRIVATE raven_rcheevos)
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(raven_achievements PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
 option(RAVEN_FRONTEND_TESTS "Test the native frontend with a fake Libretro core" ON)
 if(RAVEN_FRONTEND_TESTS AND NOT ANDROID)
     enable_testing()
@@ -87,6 +97,14 @@ if(RAVEN_FRONTEND_TESTS AND NOT ANDROID)
     add_test(NAME raven_frontend_preempt COMMAND raven_frontend_preempt_test
              $<TARGET_FILE:raven_frontend_fake_core_lag>
              $<TARGET_FILE:raven_frontend_fake_core_lag_incomplete>)
+    add_executable(raven_frontend_achievements_test tests/test_achievements.c)
+    target_link_libraries(raven_frontend_achievements_test PRIVATE raven_achievements)
+    add_dependencies(raven_frontend_achievements_test ravenemu_gb_libretro)
+    if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(raven_frontend_achievements_test PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+    add_test(NAME raven_frontend_achievements COMMAND raven_frontend_achievements_test
+             $<TARGET_FILE:ravenemu_gb_libretro>)
     add_executable(raven_frontend_real_core_test tests/test_real_cores.c)
     target_link_libraries(raven_frontend_real_core_test PRIVATE raven_frontend)
     add_dependencies(raven_frontend_real_core_test

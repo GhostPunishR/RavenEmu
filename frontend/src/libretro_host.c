@@ -1,5 +1,6 @@
 #include <ravenemu/frontend.h>
 #include <libretro.h>
+#include "frontend_internal.h"
 
 #include <dlfcn.h>
 #include <stdarg.h>
@@ -73,6 +74,10 @@ struct raven_frontend {
     int preempt_ran;             /* A frame ran since the game loaded. */
     uint16_t preempt_joypad;     /* Port 0's buttons at the last frame. */
     uint64_t serialization_quirks;
+    /* The core's memory map (SET_MEMORY_MAPS), copied: the achievements read
+     * the game through it. Descriptors point into the core's memory. */
+    struct retro_memory_map memory_map;
+    struct retro_memory_descriptor *memory_descriptors;
     size_t preempt_state_size;
     unsigned char *preempt_states;
     char error[256];
@@ -393,9 +398,50 @@ static void preempt_replay(raven_frontend *host, unsigned depth) {
     if (!kept) preempt_forget(host);
 }
 
+static void forget_memory_map(raven_frontend *host) {
+    free(host->memory_descriptors);
+    host->memory_descriptors = NULL;
+    host->memory_map.descriptors = NULL;
+    host->memory_map.num_descriptors = 0;
+}
+
+/* RavenCore declares its achievement memory as it loads a game; RetroArch
+ * keeps the descriptors, and so do we, whole. */
+static bool keep_memory_map(raven_frontend *host, const struct retro_memory_map *map) {
+    if (!map || (map->num_descriptors && !map->descriptors) || map->num_descriptors > 4096) return false;
+    struct retro_memory_descriptor *copy = NULL;
+    if (map->num_descriptors) {
+        copy = (struct retro_memory_descriptor *)malloc(sizeof(*copy) * map->num_descriptors);
+        if (!copy) return false;
+        memcpy(copy, map->descriptors, sizeof(*copy) * map->num_descriptors);
+    }
+    forget_memory_map(host);
+    host->memory_descriptors = copy;
+    host->memory_map.descriptors = copy;
+    host->memory_map.num_descriptors = map->num_descriptors;
+    return true;
+}
+
+const struct retro_memory_map *raven_frontend_memory_map(const raven_frontend *host) {
+    return host && host->loaded && host->memory_map.num_descriptors ? &host->memory_map : NULL;
+}
+
+void *raven_frontend_core_memory(const raven_frontend *host, unsigned id, size_t *size) {
+    if (size) *size = 0;
+    if (!host || !host->loaded || active != host) return NULL;
+    void *data = host->api.get_memory_data(id);
+    const size_t length = data ? host->api.get_memory_size(id) : 0;
+    if (size) *size = length;
+    return length ? data : NULL;
+}
+
 static bool environment(unsigned command, void *data) {
     if (!active) return false;
     switch (command) {
+        case RETRO_ENVIRONMENT_SET_MEMORY_MAPS:
+            return keep_memory_map(active, (const struct retro_memory_map *)data);
+        case RETRO_ENVIRONMENT_SET_SUPPORT_ACHIEVEMENTS:
+            return data != NULL;
         case RETRO_ENVIRONMENT_GET_RUMBLE_INTERFACE:
             if (!data || !active->callbacks.rumble) return false;
             ((struct retro_rumble_interface *)data)->set_rumble_state = host_rumble;
@@ -550,6 +596,7 @@ void raven_frontend_unload(raven_frontend *host) {
     host->loaded = 0;
     host->preempt_ran = 0;
     preempt_free(host);
+    forget_memory_map(host);
     free(host->rom);
     host->rom = NULL;
     free(host->rom_path);
