@@ -1,9 +1,11 @@
 package com.ravenemu.app.ui.player;
 import com.ravenemu.app.bridge.NativeBridge;
 import com.ravenemu.app.data.library.RomLibrary;
+import com.ravenemu.app.data.saves.GbaBiosRepository;
 import com.ravenemu.app.data.saves.SaveRepository;
 import com.ravenemu.app.data.saves.StatePreview;
 import com.ravenemu.app.data.saves.StateSlotRepository;
+import com.ravenemu.app.settings.ConsoleSettings;
 import com.ravenemu.app.settings.PlaybackSettings;
 import com.ravenemu.app.ui.settings.PlaybackSettingsActivity;
 
@@ -16,6 +18,7 @@ import android.os.Looper;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.RandomAccessFile;
 import java.util.ArrayDeque;
@@ -40,6 +43,7 @@ import org.robolectric.annotation.Implements;
 import org.robolectric.shadow.api.Shadow;
 import org.robolectric.shadows.ShadowDialog;
 import org.robolectric.shadows.ShadowGLSurfaceView;
+import org.robolectric.shadows.ShadowToast;
 import org.robolectric.util.ReflectionHelpers;
 import static org.junit.Assert.*;
 import static org.robolectric.Shadows.shadowOf;
@@ -61,6 +65,7 @@ public final class PlayerActivityTest {
         RuntimeEnvironment.getApplication().getSharedPreferences(PlaybackSettings.PREFERENCES, 0)
                 .edit().clear().commit();
         files = RuntimeEnvironment.getApplication().getFilesDir();
+        GbaBiosRepository.remove(files);
         key = RomLibrary.importRom(files, "Libre.gb", new byte[0x180]).key;
     }
 
@@ -133,6 +138,49 @@ public final class PlayerActivityTest {
         assertArrayEquals(new String[]{"ravenemu_gb_palette", "gray", "ravenemu_gb_frame_blending", "ghosting"},
                 FakeNative.liveOptions);
         assertEquals("Changing an image option must not reopen the game", 1, FakeNative.opens);
+    }
+
+    @Test public void gameBoyGamesInColorRunOnTheGbcCoreWithTheirColorsAndTheirOwnStates() throws Exception {
+        new ConsoleSettings(true, 3, true, ConsoleSettings.BIOS_RAVENCORE).save(RuntimeEnvironment.getApplication());
+        ActivityController<PlayerActivity> controller = open(null);
+        PlayerActivity activity = controller.get();
+        activity.onWindowFocusChanged(true); pump(activity);
+        assertEquals("gbc", FakeNative.openCore);
+        assertArrayEquals(new String[]{"ravenemu_gbc_color_correction", "disabled",
+                "ravenemu_gbc_frame_blending", "disabled", "ravenemu_gbc_dmg_colors", "a_up",
+                "ravenemu_gbc_hardware", "gba"}, FakeNative.openOptions);
+        assertEquals("A state taken on the GBC of a GBA only reloads there",
+                COMPATIBILITY + "|gbc-on-gba", ReflectionHelpers.getField(activity, "stateCompatibility"));
+        controller.pause();
+        ConsoleSettings.load(activity).withGbColors(5).withGbcOnGba(false).save(activity);
+        controller.resume(); activity.onWindowFocusChanged(true); pump(activity);
+        assertArrayEquals("The colors change at once; the console waits for the next launch",
+                new String[]{"ravenemu_gbc_color_correction", "disabled", "ravenemu_gbc_frame_blending", "disabled",
+                        "ravenemu_gbc_dmg_colors", "left"}, FakeNative.liveOptions);
+        assertEquals(COMPATIBILITY + "|gbc-on-gba", ReflectionHelpers.getField(activity, "stateCompatibility"));
+        assertEquals(1, FakeNative.opens);
+    }
+
+    @Test public void theRealGbaBiosRunsOnlyOnceInstalledAndNamesItsStates() throws Exception {
+        key = RomLibrary.importRom(files, "Libre.gba", new byte[0x200]).key;
+        new ConsoleSettings(false, 0, false, ConsoleSettings.BIOS_REAL).save(RuntimeEnvironment.getApplication());
+        PlayerActivity missing = loaded();
+        assertEquals("gba", FakeNative.openCore);
+        assertEquals("ravenemu_gba_bios", FakeNative.openOptions[4]);
+        assertEquals("disabled", FakeNative.openOptions[5]);
+        assertEquals(COMPATIBILITY, ReflectionHelpers.getField(missing, "stateCompatibility"));
+        assertTrue(ShadowToast.getTextOfLatestToast().startsWith("Vrai BIOS GBA absent"));
+
+        // A synthetic 16 KiB file stands for the player's BIOS.
+        byte[] bios = new byte[GbaBiosRepository.SIZE];
+        Arrays.fill(bios, (byte)0x5a);
+        GbaBiosRepository.install(files, new ByteArrayInputStream(bios));
+        ShadowToast.reset();
+        PlayerActivity installed = loaded();
+        assertEquals("enabled", FakeNative.openOptions[5]);
+        assertEquals(COMPATIBILITY + "|gba-bios-" + GbaBiosRepository.digest(bios),
+                ReflectionHelpers.getField(installed, "stateCompatibility"));
+        assertNull(ShadowToast.getLatestToast());
     }
 
     @Test public void delayedPlaybackPreferenceCommandCannotRunAfterPauseOrDestruction() throws Exception {
@@ -554,6 +602,7 @@ public final class PlayerActivityTest {
         static int settingsApplies;
         static PlaybackSettings appliedSettings;
         static String[] openOptions, liveOptions;
+        static String openCore;
         static void reset() {
             state = new byte[]{1, 2}; battery = new byte[]{3, 4};
             preview = new int[]{2, 1, 0xffff0000, 0xff00ff00};
@@ -562,6 +611,7 @@ public final class PlayerActivityTest {
             framesToAdvance = 1; draws = batteryReads = 0;
             settingsApplies = 0; appliedSettings = null;
             openOptions = liveOptions = null;
+            openCore = null;
         }
         private static void requireGl() { assertTrue("Core operation must use the queued GL boundary", QueuedGl.executing); }
         @Implementation protected static void __staticInitializer__() {}
@@ -569,7 +619,7 @@ public final class PlayerActivityTest {
         @Implementation protected static String openRom(String nativeDir, String filesDir, String system, byte[] rom,
                                                         String title, String[] coreOptions) {
             requireGl(); opens++; closed = false; state = new byte[]{1, 2}; battery = new byte[]{0};
-            openOptions = coreOptions.clone(); return null;
+            openCore = system; openOptions = coreOptions.clone(); return null;
         }
         @Implementation protected static void setCoreOptions(String[] coreOptions) {
             requireGl(); liveOptions = coreOptions.clone();

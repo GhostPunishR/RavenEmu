@@ -1,10 +1,14 @@
 package com.ravenemu.app.ui.settings;
+import com.ravenemu.app.data.saves.GbaBiosRepository;
+import com.ravenemu.app.settings.ConsoleSettings;
 import com.ravenemu.app.settings.PlaybackSettings;
 
+import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Insets;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Looper;
 import android.view.View;
@@ -14,9 +18,15 @@ import android.widget.ScrollView;
 import android.widget.SeekBar;
 import android.widget.Switch;
 import android.widget.TextView;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.TimeUnit;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -27,6 +37,9 @@ import org.robolectric.RuntimeEnvironment;
 import org.robolectric.android.controller.ActivityController;
 import org.robolectric.annotation.Config;
 import org.robolectric.annotation.GraphicsMode;
+import org.robolectric.shadows.ShadowActivity;
+import org.robolectric.shadows.ShadowToast;
+import org.robolectric.util.ReflectionHelpers;
 import static org.junit.Assert.*;
 import static org.robolectric.Shadows.shadowOf;
 
@@ -42,6 +55,7 @@ public final class PlaybackSettingsActivityTest {
         preferences = RuntimeEnvironment.getApplication().getSharedPreferences(
                 PlaybackSettings.PREFERENCES, Context.MODE_PRIVATE);
         preferences.edit().clear().commit();
+        GbaBiosRepository.remove(RuntimeEnvironment.getApplication().getFilesDir());
     }
 
     @After public void close() {
@@ -144,6 +158,72 @@ public final class PlaybackSettingsActivityTest {
         assertNotNull(choice(activity, "Désactivé (défaut), choisi"));
     }
 
+    @Test public void consolePageFollowsTheBetaAndKeepsTheOtherSettings() {
+        new PlaybackSettings(false, 23, false, 0, 100).save(RuntimeEnvironment.getApplication());
+        PlaybackSettingsActivity home = open(null, null).get();
+        described(home, "Ouvrir les réglages console").performClick();
+        assertNotNull(toggle(home, "Jeux Game Boy en couleurs"));
+        PlaybackSettingsActivity activity = open(PlaybackSettingsActivity.CONSOLE, null).get();
+        assertTrue("Opening the page writes nothing",
+                preferences.getAll().keySet().stream().noneMatch(key -> key.startsWith("console.")));
+        View bootColors = choice(activity, "Celles de la boot ROM, jeu par jeu, choisi");
+        assertFalse("The colors wait for Game Boy games in color", bootColors.isEnabled());
+        choice(activity, "Gris").performClick();
+        assertEquals(0, ConsoleSettings.load(activity).gbColors);
+
+        toggle(activity, "Jeux Game Boy en couleurs").performClick();
+        assertTrue(ConsoleSettings.load(activity).gbInColor);
+        assertTrue(choice(activity, "Gris").isEnabled());
+        choice(activity, "A + Haut : rouge").performClick();
+        assertEquals(3, ConsoleSettings.load(activity).gbColors);
+        assertNotNull("The page shows the new choice", choice(activity, "A + Haut : rouge, choisi"));
+        toggle(activity, "Game Boy Color d'une Game Boy Advance").performClick();
+        choice(activity, "Vrai BIOS, sans animation").performClick();
+        ConsoleSettings changed = ConsoleSettings.load(activity);
+        assertTrue(changed.gbInColor);
+        assertEquals(3, changed.gbColors);
+        assertTrue(changed.gbcOnGba);
+        assertEquals(ConsoleSettings.BIOS_REAL_SKIP_INTRO, changed.gbaBios);
+        assertEquals(23, PlaybackSettings.load(activity).audioVolume);
+        assertFalse(PlaybackSettings.load(activity).audioEnabled);
+        assertNotNull(text(activity, "Fichier du BIOS : absent"));
+        assertNull(find(activity, view -> view instanceof TextView
+                && "Retirer le fichier du BIOS".contentEquals(((TextView)view).getText())));
+    }
+
+    @Test public void theBiosFileIsChosenCheckedAndRemoved() throws Exception {
+        PlaybackSettingsActivity activity = open(PlaybackSettingsActivity.CONSOLE, null).get();
+        text(activity, "Choisir le fichier du BIOS").performClick();
+        ShadowActivity.IntentForResult pick = shadowOf(activity).getNextStartedActivityForResult();
+        assertEquals(Intent.ACTION_OPEN_DOCUMENT, pick.intent.getAction());
+        assertTrue(pick.intent.hasCategory(Intent.CATEGORY_OPENABLE));
+
+        // A synthetic 16 KiB file stands for the player's BIOS.
+        byte[] bios = new byte[GbaBiosRepository.SIZE];
+        Arrays.fill(bios, (byte)0x2c);
+        activity.onActivityResult(pick.requestCode, Activity.RESULT_OK,
+                new Intent().setData(Uri.fromFile(file(activity, "gba_bios_dump.bin", bios))));
+        idleIo(activity);
+        assertEquals("BIOS GBA installé", ShadowToast.getTextOfLatestToast());
+        assertArrayEquals(bios, GbaBiosRepository.read(activity.getFilesDir()));
+        assertNotNull(text(activity, "Fichier du BIOS : installé"));
+        assertNotNull(text(activity, "Remplacer le fichier du BIOS"));
+
+        activity.onActivityResult(pick.requestCode, Activity.RESULT_OK,
+                new Intent().setData(Uri.fromFile(file(activity, "rom.gba", new byte[4096]))));
+        idleIo(activity);
+        assertTrue(ShadowToast.getTextOfLatestToast().contains("16 Kio"));
+        assertArrayEquals("A refused file keeps the installed BIOS", bios,
+                GbaBiosRepository.read(activity.getFilesDir()));
+
+        activity.onActivityResult(pick.requestCode, Activity.RESULT_CANCELED, null);
+        text(activity, "Retirer le fichier du BIOS").performClick();
+        idleIo(activity);
+        assertNull(GbaBiosRepository.read(activity.getFilesDir()));
+        assertNotNull(text(activity, "Fichier du BIOS : absent"));
+        assertNotNull(text(activity, "Choisir le fichier du BIOS"));
+    }
+
     @Test public void recreationKeepsVideoPageAndScrollWithoutOverwritingStoredValues() {
         new PlaybackSettings(false, 29, true, 11, 117).save(RuntimeEnvironment.getApplication());
         Map<String, ?> before = preferences.getAll();
@@ -201,6 +281,19 @@ public final class PlaybackSettingsActivityTest {
                 View.MeasureSpec.makeMeasureSpec(320, View.MeasureSpec.EXACTLY));
         decor.layout(0, 0, 320, 320);
         shadowOf(Looper.getMainLooper()).idle();
+    }
+
+    private static File file(PlaybackSettingsActivity activity, String name, byte[] bytes) throws IOException {
+        File file = new File(activity.getCacheDir(), name);
+        try (FileOutputStream out = new FileOutputStream(file)) { out.write(bytes); }
+        return file;
+    }
+
+    private static void idleIo(PlaybackSettingsActivity activity) throws Exception {
+        ExecutorService io = ReflectionHelpers.getField(activity, "io");
+        io.submit(() -> {}).get(5, TimeUnit.SECONDS);
+        shadowOf(Looper.getMainLooper()).idle();
+        layout(activity);
     }
 
     private static void setAsUser(SeekBar slider, int progress) {

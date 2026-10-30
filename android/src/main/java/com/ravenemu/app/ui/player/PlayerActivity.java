@@ -2,10 +2,12 @@ package com.ravenemu.app.ui.player;
 import com.ravenemu.app.bridge.NativeBridge;
 import com.ravenemu.app.data.library.CoverRepository;
 import com.ravenemu.app.data.library.RomLibrary;
+import com.ravenemu.app.data.saves.GbaBiosRepository;
 import com.ravenemu.app.data.saves.SaveRepository;
 import com.ravenemu.app.data.saves.StatePreview;
 import com.ravenemu.app.data.saves.StateSlotRepository;
 import com.ravenemu.app.platform.SystemBarInsets;
+import com.ravenemu.app.settings.ConsoleSettings;
 import com.ravenemu.app.settings.CoreOptions;
 import com.ravenemu.app.settings.PlaybackSettings;
 import com.ravenemu.app.ui.library.HomeActivity;
@@ -47,8 +49,8 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
     private GameControlsView gameControls;
     private long nextBatterySaveNanos;
     private volatile String activeSaveKey;
-    /** GL thread: the console of the open game, for its core options. */
-    private String activeSystem;
+    /** GL thread: the core of the open game ("gb", "gbc" or "gba"), for its options. */
+    private String activeCore;
     private volatile boolean menuOpen;
     private volatile boolean gamePaused = true;
     private volatile boolean foreground;
@@ -213,8 +215,19 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
             try {
                 byte[] rom = RomLibrary.readRom(getFilesDir(), entry);
                 byte[] battery = SaveRepository.read(getFilesDir(), entry.key, "srm");
-                // The image options the core reads as the game loads (palette...).
-                String[] coreOptions = CoreOptions.forSystem(entry.system, PlaybackSettings.load(this));
+                // Settings → Console picks the core; it and the image options
+                // apply as the game loads. The SRAM stays the game's own.
+                ConsoleSettings console = ConsoleSettings.load(this);
+                String core = console.coreFor(entry.system);
+                byte[] bios = null;
+                if ("gba".equals(core) && console.gbaBios != ConsoleSettings.BIOS_RAVENCORE) {
+                    try { bios = GbaBiosRepository.read(getFilesDir()); }
+                    catch (IOException unreadable) { bios = null; }
+                }
+                final boolean biosMissing = "gba".equals(core)
+                        && console.gbaBios != ConsoleSettings.BIOS_RAVENCORE && bios == null;
+                String[] coreOptions = CoreOptions.atLoad(core, PlaybackSettings.load(this), console, bios != null);
+                String stateVariant = console.stateVariant(core, bios == null ? null : GbaBiosRepository.digest(bios));
                 if (disposed.get()) return;
                 String nativeDir = getApplicationInfo().nativeLibraryDir;
                 String dataDir = getFilesDir().getAbsolutePath();
@@ -222,7 +235,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
                     if (disposed.get()) return;
                     undoState = null;
                     String failure = NativeBridge.openRom(nativeDir, dataDir,
-                            entry.system, rom, entry.title, coreOptions);
+                            core, rom, entry.title, coreOptions);
                     if (failure == null && battery != null &&
                             !NativeBridge.restoreBattery(battery)) {
                         NativeBridge.closeRom();
@@ -230,16 +243,20 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
                     }
                     if (failure == null) {
                         activeSaveKey = entry.key;
-                        activeSystem = entry.system;
-                        stateCompatibility = NativeBridge.stateCompatibility();
+                        activeCore = core;
+                        String identity = NativeBridge.stateCompatibility();
+                        stateCompatibility = identity == null ? null : identity + stateVariant;
                         nextBatterySaveNanos = 0;
-                    } else { activeSaveKey = null; stateCompatibility = null; activeSystem = null; }
+                    } else { activeSaveKey = null; stateCompatibility = null; activeCore = null; }
                     final String result = failure;
                     runOnUiThread(() -> {
                         if (!disposed.get() && result == null && gameTitle != null) {
                             releaseInput();
                             gameControls.setShoulders("gba".equals(entry.system));
                             gameTitle.setText(entry.title);
+                            if (biosMissing) android.widget.Toast.makeText(this,
+                                    "Vrai BIOS GBA absent : RavenCore utilise le sien. Choisissez son fichier "
+                                            + "dans Paramètres → Console.", android.widget.Toast.LENGTH_LONG).show();
                             if (restoreMenu) { restoreMenu = false; togglePlayerMenu(); }
                         }
                     });
@@ -427,7 +444,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
             NativeBridge.closeRom();
             undoState = null;
             activeSaveKey = stateCompatibility = null;
-            activeSystem = null;
+            activeCore = null;
             finishSlotOperation("Jeu arrêté après échec de restauration ; SRAM conservée", null);
             runOnUiThread(() -> {
                 if (disposed.get()) return;
@@ -576,12 +593,14 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
 
     private void applyPlaybackSettings() {
         final PlaybackSettings settings = PlaybackSettings.load(this);
+        final ConsoleSettings console = ConsoleSettings.load(this);
         if (surface != null) surface.queueEvent(() -> {
             if (disposed.get() || !foreground) return;
             NativeBridge.setPlaybackOptions(settings.audioEnabled, settings.audioVolume,
                     settings.integerScale, settings.brightness, settings.contrast);
-            // Changed in the settings during the game: the core takes them at its next frame.
-            if (activeSystem != null) NativeBridge.setCoreOptions(CoreOptions.forSystem(activeSystem, settings));
+            // Changed in the settings during the game: the core takes them at
+            // its next frame. The console and the BIOS wait for the next launch.
+            if (activeCore != null) NativeBridge.setCoreOptions(CoreOptions.live(activeCore, settings, console));
         });
     }
 

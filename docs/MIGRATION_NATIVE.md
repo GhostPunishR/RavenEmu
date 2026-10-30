@@ -400,3 +400,43 @@ capteurs restent à exposer : elles changent le core choisi ou la
 compatibilité des états, ou demandent l'import d'un fichier système. La
 validation sur téléphone reste nécessaire ; aucune donnée de la bêta n'est
 lue ou modifiée.
+
+## Dix-septième tranche : page Console
+
+- Page Java **Console** reprenant celle de la bêta (groupes, textes et
+  choix) : **Jeux Game Boy en couleurs** et leurs quatorze **couleurs**
+  (celles de la boot ROM, jeu par jeu, ou une combinaison de touches),
+  **Game Boy Color d'une Game Boy Advance** et le **BIOS** de la GBA
+  (celui de RavenCore, le vrai, le vrai sans animation), avec le choix, le
+  remplacement et le retrait du fichier du BIOS.
+- `ConsoleSettings` choisit le core : un jeu Game Boy en couleurs s'ouvre sur
+  le core GBC de RavenCore, qui le colore lui-même
+  (`ravenemu_gbc_dmg_colors`). `ravenemu_gbc_hardware` et
+  `ravenemu_gba_bios` sont passés avant `retro_load_game` et attendent le
+  lancement suivant ; les couleurs changent aussitôt, même en jeu. La SRAM
+  reste celle du jeu, quel que soit le core.
+- BIOS : choisi avec le sélecteur de documents Android, refusé s'il ne fait
+  pas exactement 16 Kio, copié par écriture atomique dans le stockage privé
+  (`gba_bios.bin`, le dossier système Libretro où le core le cherche).
+  Aucun BIOS n'est fourni. Sans fichier, le core reçoit « BIOS de RavenCore »
+  et un message invite à le choisir dans Paramètres → Console.
+- Identité des états : le core reste la première garantie (RavenGB et RavenGBC
+  ont des identités différentes, et le core GBA refuse un état pris avec un
+  autre BIOS). L'identité gagne en plus `|gbc-on-gba`, ou `|gba-bios-` suivi
+  des 8 premiers octets du SHA-256 du BIOS ; un état pris dans un autre mode
+  apparaît donc incompatible au lieu d'échouer au chargement. Avec les
+  réglages par défaut, l'identité ne change pas et les états existants restent
+  utilisables.
+- Tests C : le core GBC charge la ROM Game Boy générée par le test, avec le
+  matériel GBA et les couleurs choisies avant le chargement, puis des couleurs
+  changées en partie, vérifiées au pixel (aussi sous ASan/UBSan). Tests Java :
+  préférences et valeurs invalides, choix du core et identités, options
+  passées au core au chargement et en partie, page Console, sélecteur et
+  refus d'un fichier qui n'est pas un BIOS, sur un fichier synthétique de
+  16 Kio.
+
+Écarts restants : quand les jeux Game Boy sont en couleurs, le **Profil de
+couleurs** de la page Vidéo ne s'applique plus (il est propre au core Game
+Boy) ; les options de cartouche (type de sauvegarde, RTC, capteur solaire),
+les directions opposées et les capteurs restent à exposer. Aucune donnée de la
+bêta n'est lue ; la validation sur téléphone reste nécessaire.

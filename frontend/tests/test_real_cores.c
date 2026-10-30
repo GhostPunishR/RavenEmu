@@ -36,6 +36,9 @@ static void make_rom(unsigned char *rom, size_t size) {
     rom[0x14d] = checksum;
 }
 
+/* The lightest shade of the Game Boy Color's RGB555, as the core outputs it. */
+#define GBC_WHITE 0xffffffu
+
 static int has_option(raven_frontend *host, const char *key, const char *value) {
     const char *current = raven_frontend_option_value(host, key);
     return current && (!value || strcmp(current, value) == 0);
@@ -71,9 +74,10 @@ static int run_until_frame(raven_frontend *host) {
     return 1;
 }
 
+static unsigned char rom[32 * 1024];
+
 /* The palette chosen before loading, then changed during the game. */
 static int check_gb_palette(raven_frontend *host) {
-    static unsigned char rom[32 * 1024];
     make_rom(rom, sizeof(rom));
     raven_frontend_callbacks callbacks = {video, NULL, NULL, NULL};
     raven_frontend_set_callbacks(host, &callbacks);
@@ -87,6 +91,29 @@ static int check_gb_palette(raven_frontend *host) {
     CHECK(raven_frontend_set_option(host, "ravenemu_gb_palette", "dmg"));
     if (run_until_frame(host)) return 1;
     CHECK(first_pixel == 0xe0f8d0u);
+    raven_frontend_unload(host);
+    return 0;
+}
+
+/* The same Game Boy game in color on the Game Boy Color core, as the
+ * application runs it: its GBA hardware and colors set before loading, the
+ * colors changed again during the game. */
+static int check_gb_in_color(raven_frontend *host) {
+    make_rom(rom, sizeof(rom));
+    raven_frontend_callbacks callbacks = {video, NULL, NULL, NULL};
+    raven_frontend_set_callbacks(host, &callbacks);
+    CHECK(raven_frontend_set_option(host, "ravenemu_gbc_hardware", "gba"));
+    CHECK(raven_frontend_set_option(host, "ravenemu_gbc_dmg_colors", "grayscale"));
+    CHECK(raven_frontend_load_rom(host, rom, sizeof(rom), "raventest.gb"));
+    if (run_until_frame(host)) return 1;
+    CHECK(first_pixel == GBC_WHITE);
+    CHECK(raven_frontend_set_option(host, "ravenemu_gbc_dmg_colors", "b_right"));  /* negative */
+    if (run_until_frame(host)) return 1;
+    CHECK(first_pixel == 0x000000u);
+    CHECK(raven_frontend_set_option(host, "ravenemu_gbc_dmg_colors", "auto"));
+    CHECK(raven_frontend_set_option(host, "ravenemu_gbc_hardware", "gbc"));
+    if (run_until_frame(host)) return 1;
+    CHECK(first_pixel == GBC_WHITE);
     raven_frontend_unload(host);
     return 0;
 }
@@ -114,7 +141,7 @@ int main(int argc, char **argv) {
             return 4;
         }
         if (check_options(host, systems[i - 1]) ||
-            (i == 1 && check_gb_palette(host))) {
+            (i == 1 && check_gb_palette(host)) || (i == 2 && check_gb_in_color(host))) {
             fprintf(stderr, "%s: core options\n", argv[i]);
             raven_frontend_destroy(host);
             return 5;
