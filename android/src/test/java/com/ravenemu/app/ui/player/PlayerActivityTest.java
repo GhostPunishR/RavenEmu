@@ -5,7 +5,9 @@ import com.ravenemu.app.data.saves.GbaBiosRepository;
 import com.ravenemu.app.data.saves.SaveRepository;
 import com.ravenemu.app.data.saves.StatePreview;
 import com.ravenemu.app.data.saves.StateSlotRepository;
+import com.ravenemu.app.settings.CartridgeSettings;
 import com.ravenemu.app.settings.ConsoleSettings;
+import com.ravenemu.app.settings.ControlLayout;
 import com.ravenemu.app.settings.PlaybackSettings;
 import com.ravenemu.app.ui.settings.PlaybackSettingsActivity;
 
@@ -44,6 +46,7 @@ import org.robolectric.shadow.api.Shadow;
 import org.robolectric.shadows.ShadowDialog;
 import org.robolectric.shadows.ShadowGLSurfaceView;
 import org.robolectric.shadows.ShadowToast;
+import org.robolectric.shadows.ShadowVibrator;
 import org.robolectric.util.ReflectionHelpers;
 import static org.junit.Assert.*;
 import static org.robolectric.Shadows.shadowOf;
@@ -93,18 +96,20 @@ public final class PlayerActivityTest {
     }
 
     @Test public void playbackPreferencesApplyOnGlAndReturnFromSettingsKeepsTheMenuPaused() throws Exception {
-        new PlaybackSettings(false, 27, true, -12, 130).save(RuntimeEnvironment.getApplication());
+        new PlaybackSettings(false, 27, true, -12, 130).withEffect(PlaybackSettings.EFFECT_LCD)
+                .save(RuntimeEnvironment.getApplication());
         ActivityController<PlayerActivity> controller = open(null);
         PlayerActivity activity = controller.get();
         activity.onWindowFocusChanged(true); pump(activity);
+        assertEquals("The LCD grid reaches the GLES2 driver", 2, FakeNative.appliedEffect);
         assertFalse(FakeNative.appliedSettings.audioEnabled);
         assertEquals(27, FakeNative.appliedSettings.audioVolume);
         assertTrue(FakeNative.appliedSettings.integerScale);
         assertEquals(-12, FakeNative.appliedSettings.brightness);
         assertEquals(130, FakeNative.appliedSettings.contrast);
         openMenu(activity);
-        menuButton("Paramètres audio et vidéo").performClick();
-        menuButton("Paramètres audio et vidéo").performClick();
+        menuButton("Paramètres").performClick();
+        menuButton("Paramètres").performClick();
         Intent intent = shadowOf(activity).getNextStartedActivity();
         assertEquals(PlaybackSettingsActivity.class.getName(), intent.getComponent().getClassName());
         assertNull("A repeated tap must not stack settings activities", shadowOf(activity).getNextStartedActivity());
@@ -129,15 +134,126 @@ public final class PlayerActivityTest {
         PlayerActivity activity = controller.get();
         activity.onWindowFocusChanged(true); pump(activity);
         assertEquals(1, FakeNative.opens);
-        assertArrayEquals(new String[]{"ravenemu_gb_palette", "pocket", "ravenemu_gb_frame_blending", "mix"},
-                FakeNative.openOptions);
+        assertArrayEquals(new String[]{"ravenemu_gb_palette", "pocket", "ravenemu_gb_frame_blending", "mix",
+                "ravenemu_gb_device_sensors", "enabled"}, FakeNative.openOptions);
         controller.pause();
         PlaybackSettings.load(activity).withImage(PlaybackSettings.PALETTE_GRAY, false, false,
                 PlaybackSettings.BLENDING_GHOSTING).save(activity);
         controller.resume(); activity.onWindowFocusChanged(true); pump(activity);
-        assertArrayEquals(new String[]{"ravenemu_gb_palette", "gray", "ravenemu_gb_frame_blending", "ghosting"},
-                FakeNative.liveOptions);
+        assertArrayEquals(new String[]{"ravenemu_gb_palette", "gray", "ravenemu_gb_frame_blending", "ghosting",
+                "ravenemu_gb_device_sensors", "enabled"}, FakeNative.liveOptions);
         assertEquals("Changing an image option must not reopen the game", 1, FakeNative.opens);
+    }
+
+    @Test public void theGameWaitsWhileTheButtonsAreMovedAndTheirPlacesAreKept() throws Exception {
+        PlayerActivity activity = loaded();
+        openMenu(activity);
+        menuButton("Déplacer les boutons").performClick(); pump(activity);
+        assertFalse(menu(activity).isShowing());
+        assertTrue("The game waits while the buttons move", FakeNative.paused);
+        View done = find(activity.getWindow().getDecorView(), view ->
+                view instanceof TextView && "Terminé".contentEquals(((TextView)view).getText()));
+        assertNotNull(done);
+        assertTrue(done.isShown());
+        GameControlsView controls = ReflectionHelpers.getField(activity, "gameControls");
+        assertTrue(controls.isEditing());
+        View a = find(controls, view -> "A".contentEquals(
+                view.getContentDescription() == null ? "" : view.getContentDescription()));
+        assertTrue(a.performAccessibilityAction(0x02000012, null)); // eight dp to the right
+        done.performClick(); pump(activity);
+        assertFalse(controls.isEditing());
+        assertFalse(done.isShown());
+        assertFalse("The game goes on", FakeNative.paused);
+        assertEquals(8f, ControlLayout.load(activity, false).dx(1), 0f);
+        assertEquals(ControlLayout.DEFAULT, ControlLayout.load(activity, true));
+
+        // Back while editing keeps the places too, and they come back on resume.
+        openMenu(activity);
+        menuButton("Déplacer les boutons").performClick(); pump(activity);
+        assertTrue(a.performAccessibilityAction(0x02000014, null)); // eight dp down
+        assertTrue(activity.onKeyDown(android.view.KeyEvent.KEYCODE_BACK,
+                new android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_BACK)));
+        assertFalse(controls.isEditing());
+        assertFalse(activity.isFinishing());
+        assertEquals(8f, ControlLayout.load(activity, false).dy(1), 0f);
+        ControlLayout.DEFAULT.save(activity, false);
+        ActivityController<PlayerActivity> controller = activities.get(activities.size() - 1);
+        controller.pause(); controller.resume();
+        assertEquals(ControlLayout.DEFAULT, controls.controlLayout());
+    }
+
+    @Test public void theCoresMessagesShowBrieflyOverTheGame() throws Exception {
+        PlayerActivity activity = loaded();
+        ShadowToast.reset();
+        FakeNative.message = "RavenGBA : pas de capteur de lumière, soleil à 50 %";
+        activity.onDrawFrame(null); idle();
+        assertEquals("RavenGBA : pas de capteur de lumière, soleil à 50 %", ShadowToast.getTextOfLatestToast());
+        ShadowToast.reset();
+        activity.onDrawFrame(null); idle();
+        assertNull("Each message once", ShadowToast.getLatestToast());
+    }
+
+    @Test public void aControllerDrivesTheGameThroughKeysHatAndStick() throws Exception {
+        PlayerActivity activity = loaded();
+        assertTrue(key(activity, android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_BUTTON_A));
+        assertEquals(NativeBridge.A, FakeNative.buttons);
+        assertTrue(key(activity, android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_BUTTON_R2));
+        assertEquals(NativeBridge.A | NativeBridge.R, FakeNative.buttons);
+        // The D-pad as hat axes, then the left stick, as Bluetooth controllers send them.
+        assertTrue(activity.dispatchGenericMotionEvent(joystick(1f, 0f, 0f, 0f)));
+        assertEquals(NativeBridge.A | NativeBridge.R | NativeBridge.RIGHT, FakeNative.buttons);
+        assertTrue(activity.dispatchGenericMotionEvent(joystick(0f, 0f, -0.2f, 0.8f)));
+        assertEquals(NativeBridge.A | NativeBridge.R | NativeBridge.DOWN, FakeNative.buttons);
+        assertTrue(key(activity, android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_BUTTON_A));
+        assertEquals(NativeBridge.R | NativeBridge.DOWN, FakeNative.buttons);
+        // The Home key opens the game menu, which pauses and lets go of everything.
+        assertTrue(activity.onKeyDown(android.view.KeyEvent.KEYCODE_BUTTON_MODE,
+                new android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_BUTTON_MODE)));
+        pump(activity);
+        assertTrue(menu(activity).isShowing());
+        assertTrue(FakeNative.paused);
+        assertFalse("Paused, the stick is left to the system",
+                activity.dispatchGenericMotionEvent(joystick(0f, 0f, 1f, 0f)));
+    }
+
+    private static boolean key(PlayerActivity activity, int action, int code) {
+        android.view.KeyEvent event = new android.view.KeyEvent(action, code);
+        return action == android.view.KeyEvent.ACTION_DOWN ? activity.onKeyDown(code, event) : activity.onKeyUp(code, event);
+    }
+
+    private static android.view.MotionEvent joystick(float hatX, float hatY, float x, float y) {
+        android.view.MotionEvent.PointerProperties[] properties = {new android.view.MotionEvent.PointerProperties()};
+        properties[0].toolType = android.view.MotionEvent.TOOL_TYPE_UNKNOWN;
+        android.view.MotionEvent.PointerCoords[] coords = {new android.view.MotionEvent.PointerCoords()};
+        coords[0].setAxisValue(android.view.MotionEvent.AXIS_HAT_X, hatX);
+        coords[0].setAxisValue(android.view.MotionEvent.AXIS_HAT_Y, hatY);
+        coords[0].setAxisValue(android.view.MotionEvent.AXIS_X, x);
+        coords[0].setAxisValue(android.view.MotionEvent.AXIS_Y, y);
+        return android.view.MotionEvent.obtain(0, 0, android.view.MotionEvent.ACTION_MOVE, 1, properties, coords,
+                0, 0, 1f, 1f, 0, 0, android.view.InputDevice.SOURCE_JOYSTICK, 0);
+    }
+
+    @Test public void theDisplayRateReachesThePacerAndTheScreenStaysOnWhilePlaying() throws Exception {
+        PlayerActivity activity = loaded();
+        // Robolectric changes the refresh rate on this Display instance, not globally.
+        GLSurfaceView playerSurface = ReflectionHelpers.getField(activity, "surface");
+        android.view.Display display = playerSurface.getDisplay();
+        assertNotNull("The player surface must be attached to a display", display);
+        assertEquals("The native pacer knows the display", display.getRefreshRate(), FakeNative.displayRate, 0.01f);
+        assertEquals("A refresh rate the game divides is kept while it is on screen",
+                display.getMode().getModeId(), activity.getWindow().getAttributes().preferredDisplayModeId);
+        assertTrue((activity.getWindow().getAttributes().flags
+                & android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) != 0);
+        // The system switches the display: the pacer hears of it.
+        shadowOf(display).setRefreshRate(120f);
+        android.hardware.display.DisplayManager.DisplayListener listener =
+                ReflectionHelpers.getField(activity, "displayListener");
+        listener.onDisplayChanged(android.view.Display.DEFAULT_DISPLAY);
+        pump(activity);
+        assertEquals(120f, FakeNative.displayRate, 0.01f);
+        openMenu(activity);
+        assertEquals("The menu lets the screen sleep", 0, activity.getWindow().getAttributes().flags
+                & android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     }
 
     @Test public void gameBoyGamesInColorRunOnTheGbcCoreWithTheirColorsAndTheirOwnStates() throws Exception {
@@ -148,7 +264,7 @@ public final class PlayerActivityTest {
         assertEquals("gbc", FakeNative.openCore);
         assertArrayEquals(new String[]{"ravenemu_gbc_color_correction", "disabled",
                 "ravenemu_gbc_frame_blending", "disabled", "ravenemu_gbc_dmg_colors", "a_up",
-                "ravenemu_gbc_hardware", "gba"}, FakeNative.openOptions);
+                "ravenemu_gbc_device_sensors", "enabled", "ravenemu_gbc_hardware", "gba"}, FakeNative.openOptions);
         assertEquals("A state taken on the GBC of a GBA only reloads there",
                 COMPATIBILITY + "|gbc-on-gba", ReflectionHelpers.getField(activity, "stateCompatibility"));
         controller.pause();
@@ -156,7 +272,8 @@ public final class PlayerActivityTest {
         controller.resume(); activity.onWindowFocusChanged(true); pump(activity);
         assertArrayEquals("The colors change at once; the console waits for the next launch",
                 new String[]{"ravenemu_gbc_color_correction", "disabled", "ravenemu_gbc_frame_blending", "disabled",
-                        "ravenemu_gbc_dmg_colors", "left"}, FakeNative.liveOptions);
+                        "ravenemu_gbc_dmg_colors", "left", "ravenemu_gbc_device_sensors", "enabled"},
+                FakeNative.liveOptions);
         assertEquals(COMPATIBILITY + "|gbc-on-gba", ReflectionHelpers.getField(activity, "stateCompatibility"));
         assertEquals(1, FakeNative.opens);
     }
@@ -166,8 +283,7 @@ public final class PlayerActivityTest {
         new ConsoleSettings(false, 0, false, ConsoleSettings.BIOS_REAL).save(RuntimeEnvironment.getApplication());
         PlayerActivity missing = loaded();
         assertEquals("gba", FakeNative.openCore);
-        assertEquals("ravenemu_gba_bios", FakeNative.openOptions[4]);
-        assertEquals("disabled", FakeNative.openOptions[5]);
+        assertEquals("disabled", option(FakeNative.openOptions, "ravenemu_gba_bios"));
         assertEquals(COMPATIBILITY, ReflectionHelpers.getField(missing, "stateCompatibility"));
         assertTrue(ShadowToast.getTextOfLatestToast().startsWith("Vrai BIOS GBA absent"));
 
@@ -177,10 +293,67 @@ public final class PlayerActivityTest {
         GbaBiosRepository.install(files, new ByteArrayInputStream(bios));
         ShadowToast.reset();
         PlayerActivity installed = loaded();
-        assertEquals("enabled", FakeNative.openOptions[5]);
+        assertEquals("enabled", option(FakeNative.openOptions, "ravenemu_gba_bios"));
         assertEquals(COMPATIBILITY + "|gba-bios-" + GbaBiosRepository.digest(bios),
                 ReflectionHelpers.getField(installed, "stateCompatibility"));
         assertNull(ShadowToast.getLatestToast());
+    }
+
+    @Test public void theCartridgeMotorVibratesOnlyWhileTheGameRunsAndTheSettingAllowsIt() throws Exception {
+        ActivityController<PlayerActivity> controller = open(null);
+        PlayerActivity activity = controller.get();
+        activity.onWindowFocusChanged(true); pump(activity);
+        ShadowVibrator vibrator = shadowOf(activity.getSystemService(android.os.VibratorManager.class)
+                .getDefaultVibrator());
+        ShadowVibrator.reset();
+        activity.onDrawFrame(null);
+        assertFalse("A motor at rest leaves the phone alone", vibrator.isVibrating());
+        FakeNative.rumbling = true;
+        activity.onDrawFrame(null);
+        assertTrue(vibrator.isVibrating());
+        // Leaving stops the vibrator at once.
+        controller.pause();
+        assertTrue(vibrator.isCancelled());
+        // Settings → Interface turns it off: the game's motor is ignored.
+        new CartridgeSettings(false, true, true, 50).save(activity);
+        ShadowVibrator.reset();
+        controller.resume(); activity.onWindowFocusChanged(true); pump(activity);
+        activity.onDrawFrame(null);
+        assertFalse(vibrator.isVibrating());
+        assertEquals("The sensors reach the core all the same", "enabled",
+                option(FakeNative.liveOptions, "ravenemu_gb_device_sensors"));
+        // On again, but the menu pauses the game: no vibration either.
+        new CartridgeSettings(true, false, true, 50).save(activity);
+        controller.pause(); controller.resume(); activity.onWindowFocusChanged(true); pump(activity);
+        assertEquals("disabled", option(FakeNative.liveOptions, "ravenemu_gb_device_sensors"));
+        openMenu(activity);
+        ShadowVibrator.reset();
+        activity.onDrawFrame(null);
+        assertFalse(vibrator.isVibrating());
+    }
+
+    @Test public void theTiltFollowsTheScreenAsItTurns() throws Exception {
+        PlayerActivity activity = loaded();
+        android.view.Display display = defaultDisplay(activity);
+        assertEquals(display.getRotation(), FakeNative.rotation);
+        // A half turn keeps the activity: only the display says so.
+        shadowOf(display).setRotation(android.view.Surface.ROTATION_270);
+        android.hardware.display.DisplayManager.DisplayListener listener =
+                ReflectionHelpers.getField(activity, "displayListener");
+        listener.onDisplayChanged(android.view.Display.DEFAULT_DISPLAY);
+        pump(activity);
+        assertEquals(android.view.Surface.ROTATION_270, FakeNative.rotation);
+    }
+
+    private static android.view.Display defaultDisplay(PlayerActivity activity) {
+        return activity.getSystemService(android.hardware.display.DisplayManager.class)
+                .getDisplay(android.view.Display.DEFAULT_DISPLAY);
+    }
+
+    /** The value given to `key`, or null without it; keys and values alternate. */
+    private static String option(String[] options, String key) {
+        for (int i = 0; i + 1 < options.length; i += 2) if (options[i].equals(key)) return options[i + 1];
+        return null;
     }
 
     @Test public void delayedPlaybackPreferenceCommandCannotRunAfterPauseOrDestruction() throws Exception {
@@ -601,17 +774,29 @@ public final class PlayerActivityTest {
         static int framesToAdvance, draws, batteryReads;
         static int settingsApplies;
         static PlaybackSettings appliedSettings;
+        static int appliedEffect = -1;
         static String[] openOptions, liveOptions;
         static String openCore;
+        static float displayRate;
+        static double fps;
+        static String message;
+        static int buttons, rotation;
+        static boolean rumbling;
         static void reset() {
             state = new byte[]{1, 2}; battery = new byte[]{3, 4};
             preview = new int[]{2, 1, 0xffff0000, 0xff00ff00};
             restoreAttempts.clear(); restoredBatteries.clear();
             opens = failRestores = 0; closed = lastAdvance = false; paused = true;
             framesToAdvance = 1; draws = batteryReads = 0;
-            settingsApplies = 0; appliedSettings = null;
+            settingsApplies = 0; appliedSettings = null; appliedEffect = -1;
             openOptions = liveOptions = null;
             openCore = null;
+            displayRate = 0f;
+            fps = 59.727500569606;
+            message = null;
+            buttons = 0;
+            rotation = -1;
+            rumbling = false;
         }
         private static void requireGl() { assertTrue("Core operation must use the queued GL boundary", QueuedGl.executing); }
         @Implementation protected static void __staticInitializer__() {}
@@ -621,6 +806,14 @@ public final class PlayerActivityTest {
             requireGl(); opens++; closed = false; state = new byte[]{1, 2}; battery = new byte[]{0};
             openCore = system; openOptions = coreOptions.clone(); return null;
         }
+        @Implementation protected static void setDisplayRate(float hertz) { requireGl(); displayRate = hertz; }
+        @Implementation protected static void setDisplayRotation(int value) { requireGl(); rotation = value; }
+        /** As the bridge: a paused or closed game never vibrates. */
+        @Implementation protected static boolean rumbling() { return rumbling && !paused && !closed; }
+        @Implementation protected static String takeMessage() {
+            String taken = message; message = null; return taken;
+        }
+        @Implementation protected static double frameRate() { requireGl(); return closed ? 0.0 : fps; }
         @Implementation protected static void setCoreOptions(String[] coreOptions) {
             requireGl(); liveOptions = coreOptions.clone();
         }
@@ -640,11 +833,12 @@ public final class PlayerActivityTest {
         }
         @Implementation protected static void setPaused(boolean value) { requireGl(); paused = value; }
         @Implementation protected static void setPlaybackOptions(boolean audioEnabled, int volume,
-                boolean integerScale, int brightness, int contrast) {
+                boolean integerScale, int brightness, int contrast, int screenEffect) {
             requireGl(); settingsApplies++;
             appliedSettings = new PlaybackSettings(audioEnabled, volume, integerScale, brightness, contrast);
+            appliedEffect = screenEffect;
         }
-        @Implementation protected static void setButtons(int mask) {}
+        @Implementation protected static void setButtons(int mask) { buttons = mask; }
         @Implementation protected static void clearButtons() {}
         @Implementation protected static void setAudioEnabled(boolean enabled) {}
         @Implementation protected static int drawFrame(int width, int height, boolean advance) {

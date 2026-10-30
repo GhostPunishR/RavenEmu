@@ -13,6 +13,9 @@ https://github.com/libretro/RetroArch/tree/7986022baf6822677ad2cec4bc215069e89bd
 
 Pilote AAudio : audio/drivers/aaudio.c
 Copyright (C) 2026 - The RetroArch team
+Rappel d'erreur (aaudio_error_cb), révision amont :
+715d38f57745409f7b97b4f1eb70b848d3c2e4c8
+https://github.com/libretro/RetroArch/tree/715d38f57745409f7b97b4f1eb70b848d3c2e4c8
 
 Pilote OpenGL2/GLES2 : gfx/drivers/gl2.c
 Compilation/liaison des shaders : gfx/drivers_shader/shader_glsl.c
@@ -49,6 +52,10 @@ Licence MIT (MIT-LIBRETRO.txt).
 Source : libretro-common@a3194c18ba65ef89734e1898a2f61403c255d368,
 via RavenCore@15675cc3af4f9b07f2e10cc5a7ca6234ea1c77cc.
 L’ABI Libretro est indépendante du frontend RetroArch.
+
+Effets d’écran Lissage net et Grille LCD : écrits pour RavenEmu d’après
+sharp-bilinear (Themaister) et lcd3x (Gigaherz), shaders du domaine public
+de libretro/glsl-shaders, révision cba01a48b0974a1232bea68d999a7c21bc4c233e.
 
 Palettes de compatibilité GBC incluses dans RavenCore
 Tables issues des contributeurs de The Cutting Room Floor, page

@@ -26,6 +26,15 @@ typedef struct raven_frontend_callbacks {
     int16_t (*input)(unsigned port, unsigned device, unsigned index,
                      unsigned id, void *userdata);
     void *userdata;
+    /* Optional, NULL when the platform has none: the core then learns, when
+     * it asks, that there is no rumble or no sensor. Same thread as the core.
+     * rumble: retro_rumble_effect and its 0..65535 strength. sensor_state:
+     * a retro_sensor_action at `rate` Hz, nonzero when the device has the
+     * sensor. sensor_input: a RETRO_SENSOR_* reading, accelerometer in m/s²
+     * along the screen as shown, gyroscope in rad/s, illuminance in lux. */
+    int (*rumble)(unsigned port, unsigned effect, uint16_t strength, void *userdata);
+    int (*sensor_state)(unsigned port, unsigned action, unsigned rate, void *userdata);
+    float (*sensor_input)(unsigned port, unsigned id, void *userdata);
 } raven_frontend_callbacks;
 
 typedef struct raven_core_info {
@@ -90,6 +99,13 @@ int raven_frontend_get_option(const raven_frontend *host, size_t index,
                               raven_core_option *out);
 const char *raven_frontend_option_value(const raven_frontend *host, const char *key);
 int raven_frontend_set_option(raven_frontend *host, const char *key, const char *value);
+/* The latest message the core asks to show (RETRO_ENVIRONMENT_SET_MESSAGE,
+ * or SET_MESSAGE_EXT unless meant for the log alone or at debug level), once:
+ * NULL when no new one came. Emulation thread. Valid UTF-8 without 4-byte
+ * sequences, so Java's modified UTF-8 takes it as is; at most
+ * RAVEN_FRONTEND_MESSAGE_MAX - 1 bytes. Valid until the next call to the core. */
+#define RAVEN_FRONTEND_MESSAGE_MAX 256
+const char *raven_frontend_take_message(raven_frontend *host);
 const char *raven_frontend_last_error(const raven_frontend *host);
 
 #ifdef __cplusplus

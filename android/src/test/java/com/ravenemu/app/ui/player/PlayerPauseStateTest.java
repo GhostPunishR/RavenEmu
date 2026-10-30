@@ -22,6 +22,15 @@ public final class PlayerPauseStateTest {
         assertEquals(List.of(false, true, false), events);
     }
 
+    @Test public void movingTheControlsKeepsTheGamePausedAfterTheMenuCloses() {
+        PlayerPauseState pause = new PlayerPauseState(p -> {});
+        pause.foreground(true); pause.focused(true); pause.menu(true);
+        pause.editing(true); pause.menu(false);
+        assertTrue(pause.isPaused());
+        pause.editing(false);
+        assertFalse(pause.isPaused());
+    }
+
     @Test public void returningToTheForegroundWithTheMenuOpenStaysPaused() {
         PlayerPauseState pause = new PlayerPauseState(p -> {});
         pause.foreground(true); pause.focused(true); pause.menu(true);

@@ -1,10 +1,13 @@
 package com.ravenemu.app.ui.player;
 import com.ravenemu.app.bridge.NativeBridge;
+import com.ravenemu.app.settings.ControlLayout;
+import com.ravenemu.app.settings.ControlSettings;
 
 import android.content.Context;
 import android.content.res.Configuration;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.DashPathEffect;
 import android.graphics.LinearGradient;
 import android.graphics.Paint;
 import android.graphics.RectF;
@@ -13,6 +16,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.SparseArray;
+import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -22,6 +26,10 @@ import android.view.accessibility.AccessibilityNodeInfo;
  * Java counterpart of RavenEmu's touch controls: a sliding diagonal D-pad,
  * staggered A/B, and separate Select/Start. No emulation or JNI runs here.
  * Each child owns its pointers; the listener receives their combined mask.
+ * Settings → Interface sizes the D-pad and A/B, spaces the rows (portrait),
+ * picks the style and the haptics, as the beta's GbTouchControls does.
+ * Each control can also be moved: an offset from its default place, kept
+ * inside this view, and dragged while editing.
  */
 final class GameControlsView extends ViewGroup {
     interface Listener { void onButtonsChanged(int mask); }
@@ -37,6 +45,8 @@ final class GameControlsView extends ViewGroup {
     private boolean shoulders;
     private int accessibleMask;
     private int reportedMask;
+    private ControlSettings settings = ControlSettings.DEFAULTS;
+    private boolean editing;
 
     GameControlsView(Context context, Listener listener) {
         super(context);
@@ -45,13 +55,14 @@ final class GameControlsView extends ViewGroup {
         setClipChildren(false);
         setClipToPadding(false);
         setBackgroundColor(compact() ? Color.TRANSPARENT : Color.BLACK);
+        // In ControlLayout.CONTROLS order.
         dpad = new Dpad(context);
-        a = new Control(context, "A", NativeBridge.A, false);
-        b = new Control(context, "B", NativeBridge.B, false);
-        select = new Control(context, "SELECT", NativeBridge.SELECT, true);
-        start = new Control(context, "START", NativeBridge.START, true);
-        leftShoulder = new Control(context, "L", NativeBridge.L, true);
-        rightShoulder = new Control(context, "R", NativeBridge.R, true);
+        a = new Control(context, 1, "A", NativeBridge.A, false);
+        b = new Control(context, 2, "B", NativeBridge.B, false);
+        select = new Control(context, 3, "SELECT", NativeBridge.SELECT, true);
+        start = new Control(context, 4, "START", NativeBridge.START, true);
+        leftShoulder = new Control(context, 5, "L", NativeBridge.L, true);
+        rightShoulder = new Control(context, 6, "R", NativeBridge.R, true);
         addView(dpad);
         addView(a);
         addView(b);
@@ -71,6 +82,58 @@ final class GameControlsView extends ViewGroup {
         rightShoulder.setVisibility(value ? VISIBLE : GONE);
         requestLayout();
     }
+
+    /** A new size or spacing lays the controls out again, releasing them. */
+    void setSettings(ControlSettings next) {
+        if (next == null) next = ControlSettings.DEFAULTS;
+        boolean moved = next.scale != settings.scale || next.gap != settings.gap;
+        settings = next;
+        if (moved) {
+            releaseAll();
+            requestLayout();
+        }
+        for (int i = 0; i < getChildCount(); i++) getChildAt(i).invalidate();
+    }
+
+    /** The places the player chose for this orientation. */
+    void setControlLayout(ControlLayout layout) {
+        if (layout == null) layout = ControlLayout.DEFAULT;
+        if (layout.equals(controlLayout())) return;
+        releaseAll();
+        for (int i = 0; i < getChildCount(); i++) {
+            TouchControl child = (TouchControl) getChildAt(i);
+            child.dx = layout.dx(child.index);
+            child.dy = layout.dy(child.index);
+        }
+        requestLayout();
+    }
+
+    /** Where each control is now, as the layout pass kept it inside the view. */
+    ControlLayout controlLayout() {
+        ControlLayout layout = ControlLayout.DEFAULT;
+        for (int i = 0; i < getChildCount(); i++) {
+            TouchControl child = (TouchControl) getChildAt(i);
+            layout = layout.with(child.index, child.dx, child.dy);
+        }
+        return layout;
+    }
+
+    /** While editing, a drag moves a control instead of pressing it. */
+    void setEditing(boolean value) {
+        if (editing == value) return;
+        releaseAll();
+        editing = value;
+        for (int i = 0; i < getChildCount(); i++) {
+            TouchControl child = (TouchControl) getChildAt(i);
+            child.dragging = false;
+            child.invalidate();
+        }
+    }
+
+    boolean isEditing() { return editing; }
+
+    /** Landscape lays the controls over the picture, with its own layout. */
+    boolean isLandscape() { return compact(); }
 
     /** Menu, focus loss and detachment must never leave a touch button held. */
     void releaseAll() {
@@ -118,12 +181,22 @@ final class GameControlsView extends ViewGroup {
 
     private int dp(float size) { return Math.round(size * getResources().getDisplayMetrics().density); }
 
+    private float size() { return settings.scale / 100f; }
+
+    /** The D-pad: half the width, at most 132 dp, then the chosen size. */
     private float cluster(float width) {
-        return Math.max(60f, Math.min(132f, Math.min((width - 32f) / 2f, width - 104f)));
+        float base = Math.max(0f, Math.min(132f, (width - 32f) / 2f));
+        return Math.max(60f, Math.min(base * size(), Math.max(60f, width - 104f)));
+    }
+
+    /** A and B: 60 dp at 100 %, between 48 and 69 dp. */
+    private float diameter() {
+        return Math.max(48, Math.min(69, Math.round(60f * size())));
     }
 
     private float desiredHeight(float width) {
-        return compact() ? 152f : (shoulders ? 86f : 0f) + cluster(width) + 46f + 40f + 16f;
+        if (compact()) return 72f + 80f * size();
+        return (shoulders ? 40f + settings.gap : 0f) + cluster(width) + settings.gap + 40f + 16f;
     }
 
     @Override protected void onMeasure(int widthSpec, int heightSpec) {
@@ -145,33 +218,45 @@ final class GameControlsView extends ViewGroup {
         float scale = Math.min(1f, height / desired);
         float offset = Math.max(0f, height - desired);
         if (compact()) {
-            place(dpad, 16, offset + 32 * scale, 80, 80 * scale, layout);
-            place(a, width - 64, offset + 32 * scale, 48, 48 * scale, layout);
-            place(b, width - 104, offset + 80 * scale, 48, 48 * scale, layout);
-            place(select, width / 2 - 101, offset + 112 * scale, 84, 40 * scale, layout);
-            place(start, width / 2 + 17, offset + 112 * scale, 84, 40 * scale, layout);
+            // A fixed overlay beside the picture: only the D-pad and A/B grow.
+            float pad = 80 * size(), button = 48 * size();
+            place(dpad, 16, offset + 32 * scale, pad, pad * scale, layout);
+            place(a, width - 16 - button, offset + 32 * scale, button, button * scale, layout);
+            place(b, width - 56 - button, offset + (32 + button) * scale, button, button * scale, layout);
+            place(select, width / 2 - 101, offset + (32 + pad) * scale, 84, 40 * scale, layout);
+            place(start, width / 2 + 17, offset + (32 + pad) * scale, 84, 40 * scale, layout);
             place(leftShoulder, 16, offset, 80, 28 * scale, layout);
             place(rightShoulder, width - 96, offset, 80, 28 * scale, layout);
         } else {
-            float size = cluster(width);
-            float row = shoulders ? 86f : 0f;
+            float size = cluster(width), button = diameter(), rows = settings.gap;
+            float row = shoulders ? 40f + rows : 0f;
             float actionWidth = Math.min(144f, Math.max(60f, width - 44f - size));
             float gap = Math.min(50f, Math.max(8f, width - 168f));
             place(dpad, 16, offset + row * scale, size, size * scale, layout);
-            place(a, width - 88, offset + row * scale, 60, 60 * scale, layout);
-            place(b, width - 28 - actionWidth, offset + (row + size - 60) * scale, 60, 60 * scale, layout);
-            place(select, (width - 168 - gap) / 2, offset + (row + size + 46) * scale, 84, 40 * scale, layout);
-            place(start, (width + gap) / 2, offset + (row + size + 46) * scale, 84, 40 * scale, layout);
+            place(a, width - 28 - button, offset + row * scale, button, button * scale, layout);
+            place(b, width - 28 - actionWidth, offset + (row + size - button) * scale, button, button * scale, layout);
+            place(select, (width - 168 - gap) / 2, offset + (row + size + rows) * scale, 84, 40 * scale, layout);
+            place(start, (width + gap) / 2, offset + (row + size + rows) * scale, 84, 40 * scale, layout);
             place(leftShoulder, 16, offset, 96, 40 * scale, layout);
             place(rightShoulder, width - 112, offset, 96, 40 * scale, layout);
         }
     }
 
-    private void place(View child, float x, float y, float width, float height, boolean layout) {
+    /** At its default place moved by the player's offset, never outside this view. */
+    private void place(TouchControl child, float x, float y, float width, float height, boolean layout) {
         int w = dp(width), h = dp(height);
-        if (layout) child.layout(dp(x), dp(y), dp(x) + w, dp(y) + h);
-        else child.measure(MeasureSpec.makeMeasureSpec(w, MeasureSpec.EXACTLY),
-                MeasureSpec.makeMeasureSpec(h, MeasureSpec.EXACTLY));
+        if (!layout) {
+            child.measure(MeasureSpec.makeMeasureSpec(w, MeasureSpec.EXACTLY),
+                    MeasureSpec.makeMeasureSpec(h, MeasureSpec.EXACTLY));
+            return;
+        }
+        float density = getResources().getDisplayMetrics().density;
+        float maxX = Math.max(0f, getWidth() / density - width), maxY = Math.max(0f, getHeight() / density - height);
+        float left = Math.max(0f, Math.min(maxX, x + child.dx));
+        float top = Math.max(0f, Math.min(maxY, y + child.dy));
+        // While editing, the offset is the place the control could take.
+        if (editing) { child.dx = left - x; child.dy = top - y; }
+        child.layout(dp(left), dp(top), dp(left) + w, dp(top) + h);
     }
 
     @Override protected void onSizeChanged(int w, int h, int oldw, int oldh) {
@@ -202,13 +287,27 @@ final class GameControlsView extends ViewGroup {
     }
 
     private abstract class TouchControl extends View {
+        // Custom accessibility actions, separate from the platform's actions.
+        static final int MOVE_LEFT = 0x02000011, MOVE_RIGHT = 0x02000012;
+        static final int MOVE_UP = 0x02000013, MOVE_DOWN = 0x02000014;
+        static final float STEP = 8f;
+        final int index;
         int mask;
-        boolean tracking;
+        boolean tracking, dragging;
+        /** The player's offset from the default place, in dp. */
+        float dx, dy;
+        private float dragX, dragY, startDx, startDy;
+        final Paint frame = new Paint(Paint.ANTI_ALIAS_FLAG);
         final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
         final Paint line = new Paint(Paint.ANTI_ALIAS_FLAG);
-        LinearGradient normal, pressed;
-        TouchControl(Context context, String description) {
+        LinearGradient normal, contrast, pressed;
+        TouchControl(Context context, int index, String description) {
             super(context);
+            this.index = index;
+            frame.setStyle(Paint.Style.STROKE);
+            frame.setColor(ACCENT);
+            frame.setStrokeWidth(dp(1.5f));
+            frame.setPathEffect(new DashPathEffect(new float[]{dp(6), dp(4)}, 0));
             setContentDescription(description);
             setFocusable(true);
             setClickable(true);
@@ -219,6 +318,7 @@ final class GameControlsView extends ViewGroup {
         boolean acceptsDown(float x, float y) { return at(x, y) != 0; }
 
         @Override public boolean onTouchEvent(MotionEvent event) {
+            if (editing) return drag(event);
             if (!isEnabled()) return false;
             int action = event.getActionMasked();
             if (action == MotionEvent.ACTION_DOWN) {
@@ -234,6 +334,9 @@ final class GameControlsView extends ViewGroup {
                 }
             }
             boolean clicked = action == MotionEvent.ACTION_UP && mask != 0 && at(event.getX(), event.getY()) != 0;
+            // As in the beta: a short vibration when a press starts.
+            if (mask == 0 && next != 0 && settings.haptics)
+                performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
             if (mask != next) {
                 mask = next;
                 invalidate();
@@ -249,15 +352,75 @@ final class GameControlsView extends ViewGroup {
             return true;
         }
 
+        /** The finger moves the control. Its position is read in the parent,
+         * which stays put while the control follows the finger. */
+        private boolean drag(MotionEvent event) {
+            float density = getResources().getDisplayMetrics().density;
+            float x = getLeft() + event.getX(), y = getTop() + event.getY();
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    dragging = true;
+                    dragX = x;
+                    dragY = y;
+                    startDx = dx;
+                    startDy = dy;
+                    if (getParent() != null) getParent().requestDisallowInterceptTouchEvent(true);
+                    invalidate();
+                    return true;
+                case MotionEvent.ACTION_MOVE:
+                    if (!dragging) return false;
+                    moveTo(startDx + (x - dragX) / density, startDy + (y - dragY) / density);
+                    return true;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    dragging = false;
+                    invalidate();
+                    return true;
+                default:
+                    return dragging;
+            }
+        }
+
+        void moveTo(float x, float y) {
+            dx = x;
+            dy = y;
+            GameControlsView.this.requestLayout();
+        }
+
+        void paintEditing(Canvas canvas) {
+            if (!editing) return;
+            frame.setAlpha(dragging ? 255 : 170);
+            float inset = frame.getStrokeWidth();
+            canvas.drawRect(inset, inset, getWidth() - inset, getHeight() - inset, frame);
+        }
+
+        boolean moveBy(int action) {
+            switch (action) {
+                case MOVE_LEFT: moveTo(dx - STEP, dy); return true;
+                case MOVE_RIGHT: moveTo(dx + STEP, dy); return true;
+                case MOVE_UP: moveTo(dx, dy - STEP); return true;
+                case MOVE_DOWN: moveTo(dx, dy + STEP); return true;
+                default: return false;
+            }
+        }
+
+        @Override public boolean performAccessibilityAction(int action, Bundle arguments) {
+            if (editing && moveBy(action)) return true;
+            return super.performAccessibilityAction(action, arguments);
+        }
+
         @Override protected void onSizeChanged(int w, int h, int oldw, int oldh) {
             normal = new LinearGradient(0, 0, 0, Math.max(1, h), 0xff35334a, 0xff161620, Shader.TileMode.CLAMP);
+            contrast = new LinearGradient(0, 0, 0, Math.max(1, h), 0xff55546d, 0xff22232e, Shader.TileMode.CLAMP);
             pressed = new LinearGradient(0, 0, 0, Math.max(1, h), 0xff735bb3, 0xff33284f, Shader.TileMode.CLAMP);
         }
 
+        /** The beta's style: high contrast lightens the buttons and outlines them in white. */
         void paint() {
-            fill.setShader(mask == 0 ? normal : pressed);
+            boolean contrasted = settings.highContrast();
+            fill.setShader(mask != 0 ? pressed : contrasted ? contrast : normal);
             line.setShader(null);
-            line.setColor(mask == 0 ? BORDER : ACCENT);
+            line.setColor(mask != 0 ? ACCENT : contrasted ? Color.WHITE : BORDER);
             line.setStyle(Paint.Style.STROKE);
             line.setStrokeWidth(dp(mask == 0 ? 1.5f : 2));
         }
@@ -265,6 +428,11 @@ final class GameControlsView extends ViewGroup {
         @Override public void onInitializeAccessibilityNodeInfo(AccessibilityNodeInfo info) {
             super.onInitializeAccessibilityNodeInfo(info);
             info.setClassName("android.widget.Button");
+            if (!editing) return;
+            info.addAction(new AccessibilityNodeInfo.AccessibilityAction(MOVE_LEFT, "Déplacer à gauche"));
+            info.addAction(new AccessibilityNodeInfo.AccessibilityAction(MOVE_RIGHT, "Déplacer à droite"));
+            info.addAction(new AccessibilityNodeInfo.AccessibilityAction(MOVE_UP, "Déplacer vers le haut"));
+            info.addAction(new AccessibilityNodeInfo.AccessibilityAction(MOVE_DOWN, "Déplacer vers le bas"));
         }
     }
 
@@ -275,8 +443,8 @@ final class GameControlsView extends ViewGroup {
         final Paint text = new Paint(Paint.ANTI_ALIAS_FLAG);
         final RectF bounds = new RectF();
 
-        Control(Context context, String label, int button, boolean pill) {
-            super(context, label);
+        Control(Context context, int index, String label, int button, boolean pill) {
+            super(context, index, label);
             this.label = label;
             this.button = button;
             this.pill = pill;
@@ -305,10 +473,11 @@ final class GameControlsView extends ViewGroup {
             text.setColor(mask == 0 ? ACCENT : Color.WHITE);
             canvas.drawText(label, getWidth() / 2f,
                     (getHeight() - text.ascent() - text.descent()) / 2f, text);
+            paintEditing(canvas);
         }
 
         @Override public boolean performClick() {
-            if (!isEnabled() || getVisibility() != VISIBLE) return false;
+            if (editing || !isEnabled() || getVisibility() != VISIBLE) return false;
             accessiblePress(button);
             super.performClick();
             return true;
@@ -322,7 +491,7 @@ final class GameControlsView extends ViewGroup {
         final RectF bounds = new RectF();
 
         Dpad(Context context) {
-            super(context, "Croix directionnelle");
+            super(context, 0, "Croix directionnelle");
             setClickable(false);
         }
 
@@ -366,10 +535,12 @@ final class GameControlsView extends ViewGroup {
             canvas.drawLine(cx - half, cy + offset, cx + half, cy + offset, line);
             canvas.drawLine(cx - offset, cy - half, cx - offset, cy + half, line);
             canvas.drawLine(cx + offset, cy - half, cx + offset, cy + half, line);
+            paintEditing(canvas);
         }
 
         @Override public void onInitializeAccessibilityNodeInfo(AccessibilityNodeInfo info) {
             super.onInitializeAccessibilityNodeInfo(info);
+            if (editing) return;
             info.addAction(new AccessibilityNodeInfo.AccessibilityAction(ACTION_UP, "Haut"));
             info.addAction(new AccessibilityNodeInfo.AccessibilityAction(ACTION_DOWN, "Bas"));
             info.addAction(new AccessibilityNodeInfo.AccessibilityAction(ACTION_LEFT, "Gauche"));
@@ -377,6 +548,7 @@ final class GameControlsView extends ViewGroup {
         }
 
         @Override public boolean performAccessibilityAction(int action, Bundle arguments) {
+            if (editing) return super.performAccessibilityAction(action, arguments);
             if (!isEnabled()) return false;
             int button;
             switch (action) {

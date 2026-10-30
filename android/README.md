@@ -208,7 +208,65 @@ au frontend C avant le chargement du jeu ; au retour des paramètres,
 `setCoreOptions` les change sur le fil GL et le core les applique à l'image
 suivante, sans rouvrir le jeu. Ni la SRAM ni les états ne changent de format.
 Le filtre « DMG vert » de la bêta n'a pas d'équivalent exact ; les options
-de cartouche et les capteurs restent à porter.
+de cartouche (type de sauvegarde, RTC) restent à porter.
+
+## Image calée sur l'écran et son sans craquement
+
+Quand l'écran bat à un multiple de la cadence du jeu (60 ou 120 Hz pour
+59,73 images par seconde, à 5 % près), le lecteur émule exactement une image
+toutes les n synchronisations : plus d'image affichée deux fois sur les
+défilements. La fréquence que donne Android n'est crue qu'une fois confirmée
+par les intervalles mesurés entre deux images ; sinon, et à 90 Hz, l'horloge
+de la console reprend (`frontend/src/frame_pacer.c`). Pendant une partie, le
+lecteur demande un mode d'affichage que le jeu divise et garde l'écran allumé,
+comme la bêta. Le son suit la vitesse du jeu (0,46 % plus vite à 60 Hz) et le
+contrôle dynamique du débit (±0,5 %) garde la file audio à moitié pleine :
+plus d'échantillons jetés ni de silences. Un casque débranché ou un appareil
+Bluetooth perdu rouvre la sortie audio, en gardant la pause.
+
+## Effets d'écran
+
+**Paramètres → Vidéo → Effet d'écran** propose, en plus du rendu au plus
+proche par défaut, le **Lissage net** (pixels nets et réguliers à toute
+taille) et la **Grille LCD** (trame d'un écran de console portable), dessinés
+par le pilote GLES2 d'après deux shaders libretro du domaine public
+([crédits](../legal/attributions/libretro-shaders.md)).
+
+## Manettes et messages du core
+
+Les manettes Bluetooth ou USB et les claviers pilotent le jeu comme dans la
+bêta : croix en touches ou en axes, stick gauche (au-delà de la moitié de sa
+course), A/B, Start/Select, L1/L2 et R1/R2, touche Home pour le menu
+(`GamepadMapper`). Les messages du core (capteur absent, code de triche
+refusé…) s'affichent brièvement par-dessus le jeu.
+
+## Commandes tactiles
+
+**Paramètres → Interface** règle les commandes comme la bêta : retour
+haptique, taille de la croix et de A/B (80 à 115 %), espacement vertical des
+rangées (20 à 80 dp, en portrait), style classique ou contraste élevé, et
+réinitialisation (`ControlSettings`, `GameControlsView.setSettings`). Le
+lecteur les applique en revenant des paramètres.
+
+**Menu du jeu → Déplacer les boutons** met le jeu en pause et laisse faire
+glisser chaque commande ; **Terminé** garde la disposition, **Rétablir** remet
+les places d'origine. Le portrait et le paysage ont chacun la leur
+(`ControlLayout`), chaque commande reste entière dans sa zone (sous l'image en
+portrait, toute la zone de jeu en paysage). La réinitialisation des commandes
+remet aussi les places. Le retour arrière et l'avance rapide ne sont pas portés,
+au choix du propriétaire ; les skins Delta restent à porter.
+
+## Vibration et capteurs de la cartouche
+
+**Paramètres → Interface** reprend la bêta : **Vibration de la cartouche**
+(Drill Dozer, WarioWare: Twisted!, cartouches Game Boy Rumble) et le groupe
+**Capteurs de la cartouche** (capteurs du téléphone, soleil automatique et
+niveau de soleil de Boktai). Le pilote C `hardware/input/sensor_driver.c`
+lit par le NDK l'accéléromètre, le gyroscope et la lumière que le core
+demande, dans le sens de l'écran ; ils s'éteignent pendant la pause. La
+vibration suit le moteur de la cartouche par impulsions de 40 ms, comme la
+bêta (`CartridgeRumble`), et s'arrête en quittant le jeu. Le ressenti et le
+sens des inclinaisons restent à vérifier sur téléphone.
 
 ## Console
 
@@ -226,7 +284,9 @@ incompatible ; la SRAM reste celle du jeu.
 ## Portage ciblé des pilotes RetroArch et crédits
 
 Le backend AAudio et le chemin GLES2 adaptent désormais des portions de
-RetroArch, épinglées à `7986022baf6822677ad2cec4bc215069e89bd8ce`.
+RetroArch, épinglées à `7986022baf6822677ad2cec4bc215069e89bd8ce` ; le rappel
+d'erreur AAudio (reprise après la perte d'un casque ou d'un appareil
+Bluetooth) vient de `715d38f57745409f7b97b4f1eb70b848d3c2e4c8`.
 [La provenance détaillée](../legal/attributions/retroarch.md) indique les
 fonctions reprises, modifications et copyrights. Les fichiers dérivés restent
 GPLv3 ou ultérieure ; RavenEmu et RavenCore restent AGPLv3.
@@ -298,9 +358,11 @@ une partie restent à prendre en charge ; la fréquence est lue au chargement.
 
 ## Réglages audio et vidéo persistants
 
-La bibliothèque ouvre les pages **Audio** et **Vidéo** depuis Paramètres.
-Le menu de pause propose aussi **Paramètres audio et vidéo** ; le retour au
-lecteur conserve la pause du panneau jusqu'à « Reprendre le jeu ».
+Le bouton ⚙ de la bibliothèque ouvre directement la page Paramètres, sur ses
+catégories dans l'ordre de la bêta : **Général**, **Audio**, **Vidéo**,
+**Console**, **Interface** et **À propos**, sans menu flottant intermédiaire.
+Le menu de pause propose aussi **Paramètres** ; le retour au lecteur conserve
+la pause du panneau jusqu'à « Reprendre le jeu ».
 Les pages Java reprennent la barre, les groupes, libellés et couleurs de la
 bêta pour les cinq réglages raccordés :
 

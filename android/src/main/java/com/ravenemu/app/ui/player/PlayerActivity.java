@@ -7,7 +7,10 @@ import com.ravenemu.app.data.saves.SaveRepository;
 import com.ravenemu.app.data.saves.StatePreview;
 import com.ravenemu.app.data.saves.StateSlotRepository;
 import com.ravenemu.app.platform.SystemBarInsets;
+import com.ravenemu.app.settings.CartridgeSettings;
 import com.ravenemu.app.settings.ConsoleSettings;
+import com.ravenemu.app.settings.ControlLayout;
+import com.ravenemu.app.settings.ControlSettings;
 import com.ravenemu.app.settings.CoreOptions;
 import com.ravenemu.app.settings.PlaybackSettings;
 import com.ravenemu.app.ui.library.HomeActivity;
@@ -17,10 +20,19 @@ import android.app.Activity;
 import android.content.Intent;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
+import android.hardware.display.DisplayManager;
 import android.opengl.GLSurfaceView;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.view.Display;
 import android.view.Gravity;
+import android.view.InputDevice;
 import android.view.KeyEvent;
+import android.view.MotionEvent;
+import android.view.Surface;
+import android.view.View;
+import android.view.WindowManager;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -43,10 +55,29 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
     private final ExecutorService io = STORAGE_IO;
     private final AtomicBoolean disposed = new AtomicBoolean(false);
     private GLSurfaceView surface;
-    private TextView status;
     private TextView gameTitle;
-    private int width = 1, height = 1, buttons, touchButtons;
+    private int width = 1, height = 1, touchButtons;
+    /** UI thread: a physical controller's keys and axes. */
+    private final GamepadMapper gamepad = new GamepadMapper();
     private GameControlsView gameControls;
+    /** Shown under the bar while the controls are moved. */
+    private LinearLayout editBar;
+    private boolean editingLandscape;
+    /** UI thread: the open game's frame rate, for the display mode; 0 without. */
+    private double gameFps;
+    private DisplayManager displays;
+    /** The refresh rate follows the display: 60, 90 or 120 Hz, as the system switches. */
+    private final DisplayManager.DisplayListener displayListener = new DisplayManager.DisplayListener() {
+        @Override public void onDisplayAdded(int displayId) {}
+        @Override public void onDisplayRemoved(int displayId) {}
+        @Override public void onDisplayChanged(int displayId) {
+            if (displayId == Display.DEFAULT_DISPLAY) sendDisplay();
+        }
+    };
+    /** The cartridge's motor on the phone's vibrator, after each drawn frame. */
+    private CartridgeRumble rumble;
+    /** Settings → Interface: "Vibration de la cartouche". */
+    private volatile boolean rumbleEnabled = CartridgeSettings.DEFAULTS.rumble;
     private long nextBatterySaveNanos;
     private volatile String activeSaveKey;
     /** GL thread: the core of the open game ("gb", "gbc" or "gba"), for its options. */
@@ -97,10 +128,16 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         surface.setEGLContextClientVersion(2);
         surface.setRenderer(this);
         surface.setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);
+        displays = getSystemService(DisplayManager.class);
+        rumble = new CartridgeRumble(this);
         pauseState = new PlayerPauseState(paused -> {
             gamePaused = paused;
             releaseInput();
             if (gameControls != null) gameControls.setEnabled(!paused);
+            // As in the beta: the screen stays on while the game runs, a game
+            // played on a controller included; the menu lets it sleep.
+            if (paused) getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            else getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
             surface.queueEvent(() -> {
                 if (!disposed.get()) NativeBridge.setPaused(paused);
             });
@@ -129,6 +166,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         gameTitle.setEllipsize(android.text.TextUtils.TruncateAt.END);
         gameTitle.setTextSize(16);
         gameTitle.setTextColor(HomeActivity.TEXT);
+        gameTitle.setGravity(Gravity.CENTER_VERTICAL);
         toolbar.addView(gameTitle, new LinearLayout.LayoutParams(0, dp(48), 1));
 
         TextView menu = new TextView(this);
@@ -141,13 +179,27 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         toolbar.addView(menu, new LinearLayout.LayoutParams(dp(48), dp(48)));
         header.addView(toolbar);
 
-        status = new TextView(this);
-        status.setTextColor(HomeActivity.MUTED);
-        status.setBackgroundColor(HomeActivity.SURFACE);
-        status.setTextSize(11);
-        status.setText("Audio et rendu natifs · RavenCore");
-        status.setPadding(dp(12), dp(4), dp(12), dp(4));
-        header.addView(status, new LinearLayout.LayoutParams(-1, dp(28)));
+        // As in the beta, nothing between the bar and the picture; messages
+        // show in the game menu, or briefly over the game.
+        editBar = new LinearLayout(this);
+        editBar.setGravity(Gravity.CENTER_VERTICAL);
+        editBar.setBackgroundColor(HomeActivity.SURFACE);
+        editBar.setPadding(dp(12), 0, dp(4), 0);
+        TextView hint = new TextView(this);
+        hint.setText("Faites glisser les boutons");
+        hint.setTextColor(HomeActivity.MUTED);
+        hint.setTextSize(12);
+        editBar.addView(hint, new LinearLayout.LayoutParams(0, -2, 1));
+        TextView restore = barButton("Rétablir");
+        restore.setContentDescription("Remettre les boutons à leur place d'origine");
+        restore.setOnClickListener(view -> gameControls.setControlLayout(ControlLayout.DEFAULT));
+        editBar.addView(restore, new LinearLayout.LayoutParams(-2, dp(48)));
+        TextView done = barButton("Terminé");
+        done.setContentDescription("Garder cette disposition des boutons");
+        done.setOnClickListener(view -> finishMovingControls());
+        editBar.addView(done, new LinearLayout.LayoutParams(-2, dp(48)));
+        editBar.setVisibility(View.GONE);
+        header.addView(editBar, new LinearLayout.LayoutParams(-1, dp(48)));
         root.addView(header, new LinearLayout.LayoutParams(-1, -2));
 
         gameControls = new GameControlsView(this, this::setTouchButtons);
@@ -159,7 +211,8 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
             video.leftMargin = video.rightMargin = dp(116);
             video.bottomMargin = dp(44);
             stage.addView(surface, video);
-            stage.addView(gameControls, new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM));
+            // The whole stage, so a control can be moved beside or over the picture.
+            stage.addView(gameControls, new FrameLayout.LayoutParams(-1, -1));
         } else {
             root.addView(surface, new LinearLayout.LayoutParams(-1, 0, 1));
             root.addView(gameControls, new LinearLayout.LayoutParams(-1, -2));
@@ -192,20 +245,76 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         return Math.round(value * getResources().getDisplayMetrics().density);
     }
 
-    private void setHeld(int mask, boolean held) {
-        if (gamePaused) return;
-        buttons = held ? (buttons | mask) : (buttons & ~mask);
-        NativeBridge.setButtons(buttons | touchButtons);
+    /** The display the game is on: the surface's once its window is shown,
+     * the default one before. Never Activity.getDisplay(), which throws for a
+     * context without a display (Robolectric's activities). */
+    private Display currentDisplay() {
+        Display display = surface != null ? surface.getDisplay() : null;
+        if (display == null && displays != null) display = displays.getDisplay(Display.DEFAULT_DISPLAY);
+        return display;
+    }
+
+    /** UI thread: the native pacer locks on the display only when it knows its
+     * rate; the tilt follows the screen, a half turn included. */
+    private void sendDisplay() {
+        Display display = currentDisplay();
+        final float hertz = display != null ? display.getRefreshRate() : 0f;
+        final int rotation = display != null ? display.getRotation() : Surface.ROTATION_0;
+        if (surface != null) surface.queueEvent(() -> {
+            if (disposed.get()) return;
+            NativeBridge.setDisplayRate(hertz);
+            NativeBridge.setDisplayRotation(rotation);
+        });
+    }
+
+    /** UI thread: a refresh rate the game divides, as long as it is on screen. */
+    private void applyDisplayMode() {
+        int mode = DisplayModes.modeFor(currentDisplay(), gameFps);
+        WindowManager.LayoutParams attributes = getWindow().getAttributes();
+        if (attributes.preferredDisplayModeId == mode) return;
+        attributes.preferredDisplayModeId = mode;
+        getWindow().setAttributes(attributes);
+    }
+
+    private TextView barButton(String label) {
+        TextView button = new TextView(this);
+        button.setText(label);
+        button.setGravity(Gravity.CENTER);
+        button.setTextSize(14);
+        button.setTextColor(HomeActivity.ACCENT);
+        button.setPadding(dp(12), 0, dp(12), 0);
+        button.setMinWidth(dp(48));
+        return button;
+    }
+
+    /** From the game menu: the game waits while the player drags the controls. */
+    private void startMovingControls() {
+        if (disposed.get() || gameControls == null || gameControls.isEditing()) return;
+        pauseState.editing(true);
+        if (playerMenu != null) playerMenu.dismiss();
+        editingLandscape = gameControls.isLandscape();
+        gameControls.setEditing(true);
+        editBar.setVisibility(View.VISIBLE);
+    }
+
+    /** Keeps the places for the orientation they were chosen in. */
+    private void finishMovingControls() {
+        if (gameControls == null || !gameControls.isEditing()) return;
+        gameControls.controlLayout().save(this, editingLandscape);
+        gameControls.setEditing(false);
+        editBar.setVisibility(View.GONE);
+        pauseState.editing(false);
     }
 
     private void setTouchButtons(int mask) {
         if (disposed.get() || gamePaused) return;
         touchButtons = mask;
-        NativeBridge.setButtons(buttons | touchButtons);
+        NativeBridge.setButtons(gamepad.mask() | touchButtons);
     }
 
     private void releaseInput() {
-        buttons = touchButtons = 0;
+        gamepad.reset();
+        touchButtons = 0;
         if (gameControls != null) gameControls.releaseAll();
         NativeBridge.clearButtons();
     }
@@ -226,7 +335,8 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
                 }
                 final boolean biosMissing = "gba".equals(core)
                         && console.gbaBios != ConsoleSettings.BIOS_RAVENCORE && bios == null;
-                String[] coreOptions = CoreOptions.atLoad(core, PlaybackSettings.load(this), console, bios != null);
+                String[] coreOptions = CoreOptions.atLoad(core, PlaybackSettings.load(this), console,
+                        CartridgeSettings.load(this), bios != null);
                 String stateVariant = console.stateVariant(core, bios == null ? null : GbaBiosRepository.digest(bios));
                 if (disposed.get()) return;
                 String nativeDir = getApplicationInfo().nativeLibraryDir;
@@ -241,6 +351,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
                         NativeBridge.closeRom();
                         failure = "SRAM incompatible : fichier original conservé";
                     }
+                    final double fps = failure == null ? NativeBridge.frameRate() : 0.0;
                     if (failure == null) {
                         activeSaveKey = entry.key;
                         activeCore = core;
@@ -251,6 +362,8 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
                     final String result = failure;
                     runOnUiThread(() -> {
                         if (!disposed.get() && result == null && gameTitle != null) {
+                            gameFps = fps;
+                            applyDisplayMode();
                             releaseInput();
                             gameControls.setShoulders("gba".equals(entry.system));
                             gameTitle.setText(entry.title);
@@ -260,7 +373,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
                             if (restoreMenu) { restoreMenu = false; togglePlayerMenu(); }
                         }
                     });
-                    postStatus(result == null ? "Jeu : " + entry.label() : "Échec : " + result);
+                    if (result != null) postStatus("Échec : " + result);
                 });
             } catch (Exception error) {
                 postStatus("Chargement impossible : " + error.getMessage());
@@ -290,6 +403,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
     }
 
     private void togglePlayerMenu() {
+        finishMovingControls();
         if (playerMenu != null && playerMenu.isShowing()) {
             playerMenu.dismiss();
             return;
@@ -309,6 +423,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
                     @Override public void onLoad(int slot) { operateSlot(slot, 1); }
                     @Override public void onDelete(int slot) { operateSlot(slot, 2); }
                     @Override public void onUndo() { undoLastLoad(); }
+                    @Override public void onMoveControls() { startMovingControls(); }
                     @Override public void onSettings() {
                         if (!disposed.get() && foreground && !slotBusy && !settingsLaunching) {
                             settingsLaunching = true;
@@ -484,8 +599,9 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
             if (playerMenu != null && playerMenu.isShowing()) {
                 renderPlayerMenu();
                 playerMenu.showMessage(message);
+            } else {
+                android.widget.Toast.makeText(this, message, android.widget.Toast.LENGTH_SHORT).show();
             }
-            status.setText(message);
         });
     }
 
@@ -497,9 +613,11 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         }
     }
 
+    /** A problem worth telling: briefly over the game. */
     private void postStatus(String message) {
         runOnUiThread(() -> {
-            if (!disposed.get()) status.setText(message);
+            if (!disposed.get())
+                android.widget.Toast.makeText(this, message, android.widget.Toast.LENGTH_LONG).show();
         });
     }
 
@@ -528,6 +646,12 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
     public void onDrawFrame(GL10 gl) {
         long now = System.nanoTime();
         int advanced = NativeBridge.drawFrame(width, height, !gamePaused);
+        rumble.update(rumbleEnabled && NativeBridge.rumbling(), now);
+        // What the core asks to show, as RetroArch shows it: briefly over the game.
+        final String message = NativeBridge.takeMessage();
+        if (message != null) runOnUiThread(() -> {
+            if (!disposed.get()) android.widget.Toast.makeText(this, message, android.widget.Toast.LENGTH_LONG).show();
+        });
         if (advanced > 0 && activeSaveKey != null && now >= nextBatterySaveNanos) {
             nextBatterySaveNanos = now + 30_000_000_000L;
             try {
@@ -538,47 +662,44 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         }
     }
 
-    private int keyMask(int keyCode) {
-        switch (keyCode) {
-            case KeyEvent.KEYCODE_DPAD_UP: return NativeBridge.UP;
-            case KeyEvent.KEYCODE_DPAD_DOWN: return NativeBridge.DOWN;
-            case KeyEvent.KEYCODE_DPAD_LEFT: return NativeBridge.LEFT;
-            case KeyEvent.KEYCODE_DPAD_RIGHT: return NativeBridge.RIGHT;
-            case KeyEvent.KEYCODE_BUTTON_A: return NativeBridge.A;
-            case KeyEvent.KEYCODE_BUTTON_B: return NativeBridge.B;
-            case KeyEvent.KEYCODE_BUTTON_L1: return NativeBridge.L;
-            case KeyEvent.KEYCODE_BUTTON_R1: return NativeBridge.R;
-            case KeyEvent.KEYCODE_BUTTON_START: return NativeBridge.START;
-            case KeyEvent.KEYCODE_BUTTON_SELECT: return NativeBridge.SELECT;
-            default: return 0;
+    /** A controller key, while the game runs: the buttons it holds reach the core. */
+    private boolean gamepadKey(int keyCode, KeyEvent event) {
+        if (gamePaused || !gamepad.handles(keyCode)) return false;
+        if (gamepad.key(keyCode, event.getAction(), event.getRepeatCount()))
+            NativeBridge.setButtons(gamepad.mask() | touchButtons);
+        return true;
+    }
+
+    /** The D-pad as hat axes and the left stick, on many Bluetooth controllers. */
+    @Override public boolean dispatchGenericMotionEvent(MotionEvent event) {
+        if (!gamePaused && event.isFromSource(InputDevice.SOURCE_JOYSTICK)
+                && event.getAction() == MotionEvent.ACTION_MOVE) {
+            gamepad.axes(event.getAxisValue(MotionEvent.AXIS_HAT_X), event.getAxisValue(MotionEvent.AXIS_HAT_Y),
+                    event.getAxisValue(MotionEvent.AXIS_X), event.getAxisValue(MotionEvent.AXIS_Y));
+            NativeBridge.setButtons(gamepad.mask() | touchButtons);
+            return true;
         }
+        return super.dispatchGenericMotionEvent(event);
     }
 
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
-        if (keyCode == KeyEvent.KEYCODE_MENU ||
+        if (keyCode == KeyEvent.KEYCODE_BACK && gameControls != null && gameControls.isEditing()) {
+            finishMovingControls();
+            return true;
+        }
+        // The controller's Home key opens the game menu, as in the beta.
+        if (keyCode == KeyEvent.KEYCODE_MENU || keyCode == KeyEvent.KEYCODE_BUTTON_MODE ||
             (menuOpen && keyCode == KeyEvent.KEYCODE_BACK)) {
             if (event.getRepeatCount() == 0) togglePlayerMenu();
             return true;
         }
-        if (gamePaused) return super.onKeyDown(keyCode, event);
-        int mask = keyMask(keyCode);
-        if (mask != 0) {
-            setHeld(mask, true);
-            return true;
-        }
-        return super.onKeyDown(keyCode, event);
+        return gamepadKey(keyCode, event) || super.onKeyDown(keyCode, event);
     }
 
     @Override
     public boolean onKeyUp(int keyCode, KeyEvent event) {
-        if (gamePaused) return super.onKeyUp(keyCode, event);
-        int mask = keyMask(keyCode);
-        if (mask != 0) {
-            setHeld(mask, false);
-            return true;
-        }
-        return super.onKeyUp(keyCode, event);
+        return gamepadKey(keyCode, event) || super.onKeyUp(keyCode, event);
     }
 
     @Override protected void onResume() {
@@ -586,6 +707,14 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         foreground = true;
         settingsLaunching = false;
         if (surface != null) surface.onResume();
+        if (displays != null) displays.registerDisplayListener(displayListener, new Handler(Looper.getMainLooper()));
+        sendDisplay();
+        // Settings → Interface: size, spacing, style and haptics of the touch
+        // controls, and where the player moved them for this orientation.
+        if (gameControls != null) {
+            gameControls.setSettings(ControlSettings.load(this));
+            gameControls.setControlLayout(ControlLayout.load(this, gameControls.isLandscape()));
+        }
         applyPlaybackSettings();
         if (pauseState != null) pauseState.foreground(true);
         dispatchRomLoad();
@@ -594,22 +723,28 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
     private void applyPlaybackSettings() {
         final PlaybackSettings settings = PlaybackSettings.load(this);
         final ConsoleSettings console = ConsoleSettings.load(this);
+        final CartridgeSettings cartridge = CartridgeSettings.load(this);
+        rumbleEnabled = cartridge.rumble;
         if (surface != null) surface.queueEvent(() -> {
             if (disposed.get() || !foreground) return;
             NativeBridge.setPlaybackOptions(settings.audioEnabled, settings.audioVolume,
-                    settings.integerScale, settings.brightness, settings.contrast);
+                    settings.integerScale, settings.brightness, settings.contrast, settings.effectCode());
             // Changed in the settings during the game: the core takes them at
             // its next frame. The console and the BIOS wait for the next launch.
-            if (activeCore != null) NativeBridge.setCoreOptions(CoreOptions.live(activeCore, settings, console));
+            if (activeCore != null)
+                NativeBridge.setCoreOptions(CoreOptions.live(activeCore, settings, console, cartridge));
         });
     }
 
     @Override protected void onPause() {
+        finishMovingControls();
+        if (displays != null) displays.unregisterDisplayListener(displayListener);
         foreground = false;
         if (pauseState != null) pauseState.foreground(false);
         releaseInput();
         // Wait for the GL/emulator thread to stop before touching session data.
         if (surface != null) surface.onPause();
+        rumble.stop();
         NativeBridge.setAudioEnabled(false);
         try {
             persistBattery();

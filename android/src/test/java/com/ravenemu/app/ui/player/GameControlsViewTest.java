@@ -1,9 +1,12 @@
 package com.ravenemu.app.ui.player;
 import com.ravenemu.app.bridge.NativeBridge;
+import com.ravenemu.app.settings.ControlLayout;
+import com.ravenemu.app.settings.ControlSettings;
 
 import android.app.Activity;
 import android.os.Looper;
 import android.os.SystemClock;
+import android.view.HapticFeedbackConstants;
 import android.view.InputDevice;
 import android.view.MotionEvent;
 import android.view.View;
@@ -50,6 +53,127 @@ public final class GameControlsViewTest {
         assertTrue(labelled("START").getTop() > b.getBottom());
         assertEquals(View.GONE, labelled("L").getVisibility());
         assertEquals(View.GONE, labelled("R").getVisibility());
+    }
+
+    @Test public void sizeAndSpacingFollowTheInterfaceSettingsLikeTheBeta() {
+        open(320, false);
+        apply(new ControlSettings(false, 115, 80, ControlSettings.STYLE_CLASSIC));
+        View dpad = labelled("Croix directionnelle"), a = labelled("A"), b = labelled("B");
+        assertEquals("132 dp at 115 %", 152, dpad.getWidth());
+        assertEquals(69, a.getWidth());
+        assertEquals(69, b.getWidth());
+        assertEquals("D-pad, 80 dp, the pills and 16 dp", 288, controls.getMeasuredHeight());
+        assertEquals(dpad.getBottom() + 80, labelled("SELECT").getTop(), 1);
+        assertEquals(320 - 28, a.getRight(), 1);
+        assertEquals(dpad.getBottom(), b.getBottom(), 1);
+
+        apply(new ControlSettings(false, 80, 20, ControlSettings.STYLE_CLASSIC));
+        assertEquals(106, dpad.getWidth());
+        assertEquals("A and B never go under 48 dp", 48, a.getWidth());
+        assertEquals(182, controls.getMeasuredHeight());
+        assertEquals(dpad.getBottom() + 20, labelled("SELECT").getTop(), 1);
+
+        apply(ControlSettings.DEFAULTS);
+        assertEquals(234, controls.getMeasuredHeight());
+        assertEquals(132, dpad.getWidth());
+        assertEquals(60, a.getWidth());
+    }
+
+    @Test public void theShoulderRowKeepsTheChosenSpacing() {
+        open(320, true);
+        apply(new ControlSettings(false, 100, 20, ControlSettings.STYLE_CLASSIC));
+        View l = labelled("L"), dpad = labelled("Croix directionnelle");
+        assertEquals(0, l.getTop());
+        assertEquals(l.getBottom() + 20, dpad.getTop(), 1);
+        assertEquals(40 + 20 + 132 + 20 + 40 + 16, controls.getMeasuredHeight());
+    }
+
+    @Test public void changingTheSizeReleasesAHeldButton() {
+        open(320, false);
+        View a = labelled("A");
+        touch(MotionEvent.ACTION_DOWN, 3, centerX(a), centerY(a));
+        assertEquals(NativeBridge.A, current());
+        controls.setSettings(ControlSettings.DEFAULTS.withScale(90));
+        assertEquals(0, current());
+        controls.setSettings(ControlSettings.DEFAULTS.withScale(90).withStyle(ControlSettings.STYLE_CONTRAST));
+        assertEquals("A new style alone moves nothing", 1, changes.stream().filter(m -> m == 0).count());
+    }
+
+    @Test public void hapticsOnlyWhenChosenAndOnlyAsAPressStarts() {
+        open(320, false);
+        View a = labelled("A"), dpad = labelled("Croix directionnelle");
+        touch(MotionEvent.ACTION_DOWN, 4, centerX(a), centerY(a));
+        touch(MotionEvent.ACTION_UP, 4, centerX(a), centerY(a));
+        assertEquals("Off by default, as in the beta", -1, shadowOf(a).lastHapticFeedbackPerformed());
+        controls.setSettings(ControlSettings.DEFAULTS.withHaptics(true));
+        touch(MotionEvent.ACTION_DOWN, 4, centerX(a), centerY(a));
+        assertEquals(HapticFeedbackConstants.LONG_PRESS, shadowOf(a).lastHapticFeedbackPerformed());
+        touch(MotionEvent.ACTION_UP, 4, centerX(a), centerY(a));
+        float x = centerX(dpad), y = centerY(dpad);
+        touch(MotionEvent.ACTION_DOWN, 5, x, y);
+        assertEquals("The neutral hub presses nothing", -1, shadowOf(dpad).lastHapticFeedbackPerformed());
+        touch(MotionEvent.ACTION_MOVE, 5, x, y - 40);
+        assertEquals(HapticFeedbackConstants.LONG_PRESS, shadowOf(dpad).lastHapticFeedbackPerformed());
+        touch(MotionEvent.ACTION_UP, 5, x, y - 40);
+    }
+
+    @Test public void editingDragsAControlWithoutPressingItAndKeepsItInside() {
+        open(320, false);
+        View a = labelled("A");
+        int left = a.getLeft(), top = a.getTop();
+        controls.setEditing(true);
+        touch(MotionEvent.ACTION_DOWN, 8, centerX(a), centerY(a));
+        touch(MotionEvent.ACTION_MOVE, 8, centerX(a) - 100, centerY(a) + 30);
+        relayout();
+        assertEquals(left - 100, a.getLeft());
+        assertEquals(top + 30, a.getTop());
+        touch(MotionEvent.ACTION_MOVE, 8, centerX(a) + 1000, centerY(a) + 1000);
+        relayout();
+        assertEquals("Never past the right edge", 320, a.getRight());
+        assertEquals("Never under the controls", controls.getHeight(), a.getBottom());
+        touch(MotionEvent.ACTION_UP, 8, centerX(a), centerY(a));
+        assertTrue("A drag presses nothing", changes.isEmpty());
+        ControlLayout layout = controls.controlLayout();
+        assertEquals(a.getLeft() - left, layout.dx(1), 1f);
+        assertEquals(a.getTop() - top, layout.dy(1), 1f);
+
+        controls.setEditing(false);
+        touch(MotionEvent.ACTION_DOWN, 9, centerX(a), centerY(a));
+        assertEquals("At its new place, A presses A", NativeBridge.A, current());
+        touch(MotionEvent.ACTION_UP, 9, centerX(a), centerY(a));
+    }
+
+    @Test public void aSavedLayoutPlacesTheControlsAndTheDefaultBringsThemBack() {
+        open(320, false);
+        View dpad = labelled("Croix directionnelle"), start = labelled("START");
+        int startLeft = start.getLeft();
+        controls.setControlLayout(ControlLayout.DEFAULT.with(0, 20, -10).with(4, -30, 0));
+        relayout();
+        assertEquals(36, dpad.getLeft());
+        assertEquals("Kept inside the view", 0, dpad.getTop());
+        assertEquals(startLeft - 30, start.getLeft());
+        controls.setControlLayout(ControlLayout.DEFAULT);
+        relayout();
+        assertEquals(16, dpad.getLeft());
+        assertEquals(startLeft, start.getLeft());
+    }
+
+    @Test public void accessibilityMovesAControlOnlyWhileEditing() {
+        open(320, false);
+        View dpad = labelled("Croix directionnelle");
+        final int moveRight = 0x02000012, up = 0x02000001;
+        assertTrue(hasAction(dpad, up));
+        assertFalse(hasAction(dpad, moveRight));
+        dpad.performAccessibilityAction(moveRight, null);
+        relayout();
+        assertEquals(16, dpad.getLeft());
+        controls.setEditing(true);
+        assertTrue(hasAction(dpad, moveRight));
+        assertFalse("No D-pad press while editing", hasAction(dpad, up));
+        assertTrue(dpad.performAccessibilityAction(moveRight, null));
+        relayout();
+        assertEquals(24, dpad.getLeft());
+        assertTrue(changes.isEmpty());
     }
 
     @Test public void aDpadGestureMayStartInTheHubSlideDiagonallyAndLeave() {
@@ -214,6 +338,27 @@ public final class GameControlsViewTest {
         host.get().setContentView(controls, new ViewGroup.LayoutParams(width, controls.getMeasuredHeight()));
         controls.layout(0, 0, controls.getMeasuredWidth(), controls.getMeasuredHeight());
         shadowOf(Looper.getMainLooper()).idle();
+    }
+
+    private void relayout() {
+        controls.measure(View.MeasureSpec.makeMeasureSpec(controls.getWidth(), View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(controls.getHeight(), View.MeasureSpec.EXACTLY));
+        controls.layout(0, 0, controls.getMeasuredWidth(), controls.getMeasuredHeight());
+    }
+
+    private static boolean hasAction(View view, int id) {
+        AccessibilityNodeInfo info = view.createAccessibilityNodeInfo();
+        for (AccessibilityNodeInfo.AccessibilityAction action : info.getActionList())
+            if (action.getId() == id) return true;
+        return false;
+    }
+
+    private void apply(ControlSettings settings) {
+        controls.setSettings(settings);
+        int width = controls.getWidth();
+        controls.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(600, View.MeasureSpec.AT_MOST));
+        controls.layout(0, 0, controls.getMeasuredWidth(), controls.getMeasuredHeight());
     }
 
     private View labelled(String name) {

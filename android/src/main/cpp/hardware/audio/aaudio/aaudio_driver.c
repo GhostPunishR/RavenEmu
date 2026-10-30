@@ -26,6 +26,14 @@
  * Lifecycle purges are executed by the consumer, which alone owns its cursor.
  * No RetroArch resampler, multichannel, AC3 or device-selection code is used.
  * RavenEmu output preference changes also use the consumer-owned purge.
+ *
+ * Modified for RavenEmu by GhostPunishR, 2026-10-30.
+ * Source: RetroArch 715d38f57745409f7b97b4f1eb70b848d3c2e4c8,
+ * audio/drivers/aaudio.c (aaudio_error_cb and its stream generation).
+ * https://github.com/libretro/RetroArch/blob/715d38f57745409f7b97b4f1eb70b848d3c2e4c8/audio/drivers/aaudio.c
+ * Adaptation: a disconnect (headphones out, a Bluetooth or USB device gone)
+ * only marks the stream lost; the emulation owner reopens it, never the
+ * callback. RavenEmu also reports the queue fill for its rate control.
  */
 #include "aaudio_driver.h"
 
@@ -56,6 +64,9 @@ static _Atomic uint32_t write_position;
 static _Atomic uint64_t control;
 static uint32_t control_generation; /* owner only */
 static uint64_t callback_control;   /* consumer only */
+/* Each opened stream's number, and the last one AAudio reported lost. */
+static int stream_generation;       /* owner only */
+static _Atomic int lost_generation;
 
 static void publish_control(int active) {
     uint32_t target = atomic_load_explicit(&write_position, memory_order_acquire);
@@ -110,6 +121,13 @@ void raven_aaudio_push(int16_t left, int16_t right) {
     atomic_store_explicit(&write_position, write + 1u, memory_order_release);
 }
 
+/* Adapted from aaudio_error_cb: a disconnect ends the stream for good. Only
+ * say so; a stale report from an older stream is ignored. */
+static void error_callback(AAudioStream *unused, void *userdata, aaudio_result_t error) {
+    (void)unused; (void)error;
+    atomic_store_explicit(&lost_generation, (int)(intptr_t)userdata, memory_order_release);
+}
+
 /* Adapted from aaudio_close_stream: bounded stop-state wait before close.
  * AAudioStream_close completes callback teardown before queue cursors reset. */
 static void close_stream(AAudioStream *closing) {
@@ -142,6 +160,8 @@ int raven_aaudio_open(int *sample_rate) {
     AAudioStreamBuilder_setChannelCount(builder, 2);
     AAudioStreamBuilder_setSampleRate(builder, AAUDIO_UNSPECIFIED);
     AAudioStreamBuilder_setDataCallback(builder, data_callback, NULL);
+    ++stream_generation;
+    AAudioStreamBuilder_setErrorCallback(builder, error_callback, (void *)(intptr_t)stream_generation);
     result = AAudioStreamBuilder_openStream(builder, &stream);
     AAudioStreamBuilder_delete(builder);
     if (result != AAUDIO_OK || !stream) {
@@ -187,6 +207,17 @@ int raven_aaudio_open(int *sample_rate) {
 }
 
 int raven_aaudio_running(void) { return stream && running; }
+
+int raven_aaudio_lost(void) {
+    return stream && atomic_load_explicit(&lost_generation, memory_order_acquire) == stream_generation;
+}
+
+void raven_aaudio_fill(uint32_t *queued, uint32_t *limit) {
+    const uint32_t write = atomic_load_explicit(&write_position, memory_order_relaxed);
+    const uint32_t read = atomic_load_explicit(&read_position, memory_order_acquire);
+    if (queued) *queued = stream ? write - read : 0;
+    if (limit) *limit = stream ? ring_limit : 0;
+}
 
 void raven_aaudio_flush(void) {
     if (stream) publish_control(running);

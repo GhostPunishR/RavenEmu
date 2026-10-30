@@ -8,7 +8,6 @@ import com.ravenemu.app.ui.settings.PlaybackSettingsActivity;
 
 import android.app.Activity;
 import android.app.Dialog;
-import android.app.AlertDialog;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.net.Uri;
@@ -56,20 +55,16 @@ public final class HomeActivityTest {
             activity.pause().stop().destroy();
     }
 
-    @Test public void audioAndVideoCategoriesOpenTheCorrespondingNativeSettingsPage() throws Exception {
+    @Test public void settingsOpenTheRealPageOnItsCategoriesWithoutAFloatingMenu() throws Exception {
         HomeActivity activity = open(null).get();
         View settings = described(activity.getWindow().getDecorView(), "Paramètres");
         settings.performClick();
-        AlertDialog dialog = (AlertDialog)ShadowDialog.getLatestDialog();
-        dialog.getListView().performItemClick(null, 1, 1);
-        Intent audio = shadowOf(activity).getNextStartedActivity();
-        assertEquals(PlaybackSettingsActivity.class.getName(), audio.getComponent().getClassName());
-        assertEquals("audio", audio.getStringExtra(PlaybackSettingsActivity.EXTRA_PAGE));
-        settings.performClick();
-        dialog = (AlertDialog)ShadowDialog.getLatestDialog();
-        dialog.getListView().performItemClick(null, 2, 2);
-        Intent video = shadowOf(activity).getNextStartedActivity();
-        assertEquals("video", video.getStringExtra(PlaybackSettingsActivity.EXTRA_PAGE));
+        shadowOf(Looper.getMainLooper()).idle();
+        Intent page = shadowOf(activity).getNextStartedActivity();
+        assertEquals(PlaybackSettingsActivity.class.getName(), page.getComponent().getClassName());
+        assertNull("The categories, not one page", page.getStringExtra(PlaybackSettingsActivity.EXTRA_PAGE));
+        Dialog shown = ShadowDialog.getLatestDialog();
+        assertTrue("No floating settings menu", shown == null || !shown.isShowing());
     }
 
     @Test public void recreationKeepsQueryConsoleAndListMode() throws Exception {

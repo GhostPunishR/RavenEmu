@@ -13,6 +13,13 @@ void raven_video_init_gl(void);
  * Brightness is clamped to -50..50, contrast to 50..150 (percent). */
 void raven_video_set_options(int integer_scale, int brightness, int contrast);
 
+/* Screen effects, GL owner only, no immediate GL calls; they survive
+ * reset and context changes. Unknown values are no effect. */
+#define RAVEN_VIDEO_EFFECT_NONE 0
+#define RAVEN_VIDEO_EFFECT_SHARP 1  /* sharp pixels at any size */
+#define RAVEN_VIDEO_EFFECT_LCD 2    /* a handheld LCD's grid */
+void raven_video_set_effect(int effect);
+
 /* rgba is tightly packed, top-first RGBA8888, with width*height*4 bytes.
  * dirty announces new CPU pixels; identical frames still redraw but do not
  * upload. Allocation/upload failures retain a retry even after dirty clears.

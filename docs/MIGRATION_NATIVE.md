@@ -440,3 +440,217 @@ couleurs** de la page Vidéo ne s'applique plus (il est propre au core Game
 Boy) ; les options de cartouche (type de sauvegarde, RTC, capteur solaire),
 les directions opposées et les capteurs restent à exposer. Aucune donnée de la
 bêta n'est lue ; la validation sur téléphone reste nécessaire.
+
+## Dix-huitième tranche : page Interface, commandes tactiles
+
+- Page Java **Interface** reprenant la partie commandes de la bêta (groupes,
+  textes, bornes et valeurs par défaut) : **Retour haptique** (désactivé par
+  défaut), **Taille des commandes** de 80 à 115 %, **Espacement vertical** de
+  20 à 80 dp, **Style des boutons** classique ou contraste élevé, et
+  **Réinitialiser les commandes**.
+- `ControlSettings` garde ces choix avec les autres préférences du module ;
+  une valeur hors bornes est ramenée dans ses bornes, une valeur mal formée
+  revient à son défaut sans toucher aux autres.
+- `GameControlsView` suit la géométrie de `GbTouchControls` de la bêta : la
+  croix (moitié de la largeur, 132 dp au plus) et A/B (60 dp, entre 48 et
+  69 dp) suivent la taille ; SELECT, START, L et R gardent la leur ;
+  l'espacement sépare les rangées en portrait. En paysage, la superposition
+  compacte grandit avec la taille mais garde son espacement fixe. Le style
+  contraste élevé reprend les dégradés et le contour blanc de la bêta ; le
+  retour haptique (`LONG_PRESS`) se déclenche quand un appui commence, sur un
+  bouton ou en entrant dans une direction de la croix. Le lecteur applique
+  les réglages à chaque retour au premier plan ; un changement de taille ou
+  d'espacement relâche les boutons tenus.
+- Tests Java : préférences et bornes, géométrie au pixel aux tailles et
+  espacements extrêmes avec et sans L/R, relâchement au changement de taille,
+  retour haptique seulement s'il est choisi, page Interface et
+  réinitialisation.
+
+Écarts restants : le résumé de la catégorie dit « Commandes tactiles et
+style », sans « retour arrière » (voir la tranche suivante) ; la vibration et
+les capteurs de la cartouche et les skins Delta de la page Interface restent à
+porter. La validation sur téléphone (sensation du retour haptique, encoches,
+navigation par gestes) reste nécessaire.
+
+## Dix-neuvième tranche : déplacement libre des boutons
+
+Choix du propriétaire : le **retour arrière** et l'**avance rapide** de la
+bêta ne sont pas portés dans l'application native. Ce sont des écarts voulus,
+pas des oublis ; la page Interface ne les annonce pas.
+
+- Le menu du jeu gagne **Déplacer les boutons** : le jeu reste en pause, une
+  barre « Faites glisser les boutons · Rétablir · Terminé » remplace la ligne
+  d'état, et chaque commande (croix, A, B, SELECT, START, L, R) se déplace au
+  doigt, encadrée en pointillés. Un glissement n'appuie sur rien. **Terminé**,
+  le retour Android ou la mise en arrière-plan gardent la disposition ;
+  **Rétablir** remet les places d'origine. La bêta annonçait cette fonction
+  « plus tard ».
+- `ControlLayout` garde, pour le portrait et pour le paysage, le décalage en
+  dp de chaque commande depuis sa place d'origine (au dixième de dp) ; une
+  valeur abîmée redonne la disposition d'origine. Le décalage s'ajoute à la
+  géométrie de la page Interface (taille, espacement), et la vue garde chaque
+  commande entière à l'intérieur de sa zone : en portrait la zone des
+  commandes sous l'image, en paysage toute la zone de jeu, image comprise, la
+  vue des commandes la couvrant désormais (transparente, elle laisse passer
+  les touchers hors des commandes).
+- Accessibilité : en mode déplacement, chaque commande propose « Déplacer à
+  gauche / à droite / vers le haut / vers le bas » (8 dp) ; les actions de
+  la croix reviennent ensuite.
+- Paramètres → Interface explique où déplacer les boutons, et
+  **Réinitialiser les commandes** remet aussi leurs places d'origine, dans les
+  deux orientations.
+- Tests Java : stockage par orientation et valeurs abîmées, glissement au
+  pixel et bornes de la zone, glissement sans appui puis appui à la nouvelle
+  place, disposition appliquée puis rétablie, actions d'accessibilité,
+  parcours complet depuis le menu du jeu (pause, Terminé, retour Android,
+  rechargement au retour au premier plan), réinitialisation depuis Interface.
+
+Écarts restants : en portrait, les commandes ne montent pas sur l'image ; la
+validation sur téléphone (précision du glissement, encoches, gestes de
+navigation près des bords) reste nécessaire.
+
+## Retours de capture : paramètres et écran de jeu
+
+Corrections demandées par le propriétaire d'après une capture sur téléphone.
+
+- **Paramètres en double** : le bouton ⚙ de la bibliothèque ouvrait une
+  liste flottante (Général, Audio, Vidéo, Console, Interface, À propos) dont
+  quatre entrées n'affichaient qu'un texte d'attente, puis la vraie page avec
+  ses propres catégories. Il ouvre désormais directement la vraie page, sur
+  ses catégories dans l'ordre de la bêta. **Général** reprend la page de la
+  bêta (pause automatique ; câble link, jaquettes en ligne et diagnostic
+  attendent leur portage, comme la bêta les masque sans eux). **À propos**
+  donne l'auteur, ouvre les licences et crédits dans l'application et le code
+  source de RavenEmu et RavenCore. Le bouton du menu de jeu devient
+  « Paramètres ».
+- **Écran de jeu** aligné sur le lecteur de la bêta : fond noir, image calée en
+  haut de sa zone et centrée en largeur (le reste de l'espace va vers les
+  commandes), titre centré verticalement dans la barre, plus de ligne d'état
+  sous la barre (elle débordait sur deux lignes). Les erreurs apparaissent en
+  message bref ; les opérations d'emplacements restent annoncées dans le menu.
+- Tests : pilote GLES2 (fond noir, place de l'image, aussi au pixel par EGL en
+  local), bibliothèque sans liste flottante, ordre des catégories et absence
+  de texte d'attente, pages Général et À propos, menu de jeu.
+
+Écarts restants : les conditions d'utilisation et la politique de
+confidentialité s'ouvrent en ligne (dépôt GitHub), pas encore dans le lecteur
+intégré de l'application ; RetroAchievements n'a pas encore sa catégorie. La
+validation sur téléphone reste nécessaire.
+
+## Tranche A : image calée sur l'écran et son sans craquement
+
+Première tranche des emprunts à RetroArch choisis par le propriétaire.
+
+- **Calage sur l'écran** (`frontend/src/frame_pacer.c`, code RavenEmu) : quand
+  l'écran bat à n fois la cadence du jeu, à 5 % près, une image est émulée
+  toutes les n synchronisations ; le jeu tourne alors 0,46 % plus vite à
+  60 Hz, comme dans RetroArch et la bêta. La fréquence annoncée par Android
+  n'est retenue qu'après 30 intervalles mesurés en accord (nombre entier de
+  synchronisations, moyenne à 2 % près) ; 8 désaccords de suite, ou une
+  moyenne qui s'écarte de 3 %, rendent la main à l'horloge de la console. Un
+  téléphone qui passe à 90 ou 120 Hz sans prévenir ne fait donc jamais
+  accélérer le jeu. Java transmet la fréquence au démarrage et à chaque
+  changement, demande un mode d'affichage que le jeu divise (60 ou 120 Hz
+  plutôt que 90) et garde l'écran allumé pendant la partie.
+- **Contrôle dynamique du débit** (`audio_pipeline.c`, code RavenEmu d'après
+  l'algorithme publié par l'auteur de RetroArch) : la vitesse du jeu est
+  appliquée au rééchantillonneur, puis chaque écriture corrige le rapport d'au
+  plus ±0,5 % vers une file à moitié pleine, mesurée au milieu du lot écrit.
+  Les échantillons jetés (file pleine) et les silences (file vide) qui
+  craquaient disparaissent.
+- **Reprise de la sortie audio** (rappel d'erreur adapté d'`aaudio.c`,
+  RetroArch 715d38f) : un casque débranché ou un appareil Bluetooth perdu
+  marque le stream perdu ; le fil d'émulation le rouvre en gardant la pause,
+  et réessaie environ une fois par seconde tant qu'aucune sortie n'est prête.
+- Tests : `raven_frame_pacer` (cadences, une heure à 60 Hz sans image répétée
+  ni sautée, 120 Hz, 90 Hz, fréquences annoncées fausses, rafraîchissement
+  manqué, changement de fréquence ; mutation de la garde vérifiée),
+  `raven_native_audio` (correction bornée, horloge d'appareil plus rapide ou
+  plus lente de 0,2 % sans silence ni saturation, vitesse d'écran, perte et
+  réouverture), Java (`DisplayModesTest`, fréquence transmise, mode demandé,
+  écran allumé).
+
+Écarts restants : la sensation de fluidité, la latence audio réelle et le
+comportement des écrans à fréquence variable restent à vérifier sur téléphone.
+
+## Tranche B : manettes et messages du core
+
+- **Manettes** (`GamepadMapper.java`, logique du `GamepadMapper` de la bêta) :
+  croix en touches ou en axes (`AXIS_HAT_X/Y`, comme l'envoient beaucoup de
+  manettes Bluetooth), stick gauche vers la croix au-delà de la moitié de sa
+  course, le chapeau l'emportant sur le stick ; A, B, Start, Select, L1/L2 et
+  R1/R2. Un bouton tenu par deux sources reste appuyé jusqu'à la dernière. La
+  touche Home ouvre le menu du jeu ; pendant une pause, les événements restent
+  au système. Le clic des sticks (avance rapide et retour arrière dans la bêta)
+  n'est pas repris, au choix du propriétaire.
+- **Messages du core** (frontend C) : `RETRO_ENVIRONMENT_SET_MESSAGE` et
+  `SET_MESSAGE_EXT` (sauf journal seul ou niveau débogage), version 1
+  annoncée par `GET_MESSAGE_INTERFACE_VERSION`. `raven_frontend_take_message`
+  rend chaque message une fois, en UTF-8 valide sans caractère de 4 octets
+  (un octet invalide, un émoji ou un caractère coupé deviennent « ? »), ce
+  que `NewStringUTF` exige. Le lecteur l'affiche en message bref : capteur de
+  lumière absent, code de triche refusé, BIOS manquant…
+- Tests : messages du faux core (simple, étendu, journal, débogage, octets
+  invalides) ; Java (`GamepadMapperTest`, touches, chapeau et stick dans le
+  lecteur, touche Home, message affiché une seule fois).
+
+## Tranche C : lissage net et grille LCD
+
+- **Effet d'écran** (page Vidéo, défaut « Aucun » comme la bêta) : **Lissage
+  net**, des pixels nets et réguliers à toute taille (une GBA agrandie 4,5×
+  n'a plus de colonnes inégales), et **Grille LCD**, la trame d'un écran de
+  console portable. Le pilote GLES2 les dessine dans son shader unique, d'après
+  `sharp-bilinear` (Themaister) et `lcd3x` (Gigaherz), deux shaders du domaine
+  public de libretro/glsl-shaders `cba01a4`
+  ([crédits](../legal/attributions/libretro-shaders.md)). Le lissage net passe
+  la texture au filtre bilinéaire matériel ; les autres effets gardent le
+  filtre au plus proche. Le réglage survit aux changements de contexte GL et
+  « Rétablir l'affichage d'origine » le remet à « Aucun ».
+- Tests : faux GLES2 (filtre et uniforms par effet, effet gardé après un
+  nouveau contexte), rendu réel par EGL (une seule colonne mélangée à 2,5×
+  au lieu d'aucune au plus proche ; chaque colonne de la grille atténue une
+  couleur différente, et les lignes alternent), Java (préférence, page
+  Vidéo, passage au pilote).
+
+## Tranche D : vibration et capteurs de la cartouche
+
+- **Frontend C** : `raven_frontend_callbacks` gagne trois rappels facultatifs,
+  `rumble`, `sensor_state` et `sensor_input`. L'hôte ne répond à
+  `GET_RUMBLE_INTERFACE` et `GET_SENSOR_INTERFACE` que si la plateforme les
+  fournit ; un frontend sans vibreur ni capteurs reste valide.
+- **Pilote de capteurs** (`hardware/input/sensor_driver.c`, code RavenEmu,
+  NDK `ASensorManager`) : accéléromètre, gyroscope et capteur de lumière, mis
+  en marche seulement à la demande du core, sur le fil GL qui les lit (file
+  d'événements sur son `ALooper`, vidée une fois par image émulée, sans
+  regroupement). L'accélération et la rotation suivent l'écran tel qu'il est
+  tourné, comme `CartridgeSensors` de la bêta (`setDisplayRotation`, demi-tour
+  compris). Un capteur absent est refusé : RavenCore affiche alors son message
+  (« pas de capteur de lumière, soleil à 50 % »). Le menu de pause les éteint,
+  pour la batterie ; la fermeture du jeu libère la file.
+- **Vibration** (`CartridgeRumble.java`, logique de la bêta) : le core signale
+  le moteur allumé ou éteint ; après chaque image dessinée, un moteur allumé
+  prolonge une impulsion de 40 ms (au plus une par image à 60 Hz), un moteur
+  éteint laisse finir la sienne, et quitter le jeu l'arrête aussitôt. Jamais
+  pendant une pause. Permission `VIBRATE`, comme la bêta.
+- **Paramètres → Interface** reprend les textes et valeurs par défaut de la
+  bêta (`CartridgeSettings`) : **Vibration de la cartouche** (activée),
+  groupe **Capteurs de la cartouche** avec **Capteurs du téléphone** (activés),
+  **Soleil automatique (Boktai)** (activé, grisé sans les capteurs) et
+  **Soleil (Boktai)** par dizaines (50 %, grisé quand le capteur de lumière
+  règle le soleil). `CoreOptions` les traduit en `ravenemu_*_device_sensors`
+  et `ravenemu_gba_solar_light` (`sensor` ou le niveau), changés en partie
+  sans rouvrir le jeu. « Réinitialiser les commandes » n'y touche pas, comme
+  dans la bêta.
+- Tests : faux core (interfaces demandées, capteur activé à 60 Hz, moteur
+  allumé puis éteint selon l'accéléromètre, arrêt et extinction au
+  déchargement) ; `raven_native_sensors` sur un faux NDK (file créée sur le
+  looper du fil, période et absence de regroupement, quatre rotations,
+  capteur absent ou refusé, pause, plafond de 1 kHz, fermeture et nouvelle
+  file) ; Java (`CartridgeSettingsTest`, `CoreOptionsTest`,
+  `CartridgeRumbleTest`, page Interface, vibration selon le réglage et la
+  pause, rotation transmise).
+
+Écarts restants : le sens des inclinaisons, la sensibilité du gyroscope, le
+seuil de lumière de Boktai et le ressenti de la vibration restent à vérifier
+sur téléphone, avec les jeux concernés. Les manettes ne vibrent pas encore et
+leurs capteurs ne sont pas lus : seuls ceux du téléphone servent.

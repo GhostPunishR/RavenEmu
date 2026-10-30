@@ -35,6 +35,12 @@
  * modules keep their existing licenses; this is not the RetroArch frontend.
  * RavenEmu additions, 2026-10-29: integer-size viewport and shader-only
  * brightness/contrast controls; no new upstream source is imported.
+ * RavenEmu additions, 2026-10-30: black background, and the picture at the
+ * top of the surface, centered across it, as the beta's player shows it.
+ * Screen effects, written for RavenEmu after two public-domain shaders of
+ * libretro/glsl-shaders cba01a48b0974a1232bea68d999a7c21bc4c233e:
+ * interpolation/shaders/sharp-bilinear.glsl (Themaister) and
+ * handheld/shaders/lcd3x.glsl (Gigaherz).
  */
 
 #include "gles2_renderer.h"
@@ -47,10 +53,12 @@
 static GLuint program, texture;
 static GLint vertex_coord, tex_coord, texture_uniform, mvp_uniform;
 static GLint brightness_uniform, contrast_uniform;
+static GLint effect_uniform, source_size_uniform, output_size_uniform;
 static unsigned texture_width, texture_height;
 static GLint max_texture_edge;
+static GLint texture_filter;  /* As the texture is set; 0 before allocation. */
 static int upload_pending = 1;
-static int integer_scale, brightness, contrast = 100;
+static int integer_scale, brightness, contrast = 100, effect = RAVEN_VIDEO_EFFECT_NONE;
 
 /* Stock opaque shaders from the pinned RetroArch sources above. The GLSL
  * wrapper is replaced with explicit GLES precision, without the unrelated
@@ -66,13 +74,36 @@ static const char *stock_vertex =
     "  gl_Position = MVPMatrix * vec4(VertexCoord, 0.0, 1.0);\n"
     "  tex_coord = TexCoord;\n"
     "}\n";
+/* Effect 1, sharp pixels: a whole-number nearest prescale, then the
+ * hardware's bilinear filter for the rest, as sharp-bilinear does with its
+ * automatic prescale. Effect 2, LCD grid: dark scanlines and a red, green,
+ * blue column triad over each source pixel, as lcd3x does at its defaults
+ * (16 and 4). The source fills the texture, so its size is the input's. */
 static const char *stock_fragment =
     "uniform sampler2D Texture;\n"
     "uniform float Brightness;\n"
     "uniform float Contrast;\n"
+    "uniform float Effect;\n"
+    "uniform vec2 SourceSize;\n"
+    "uniform vec2 OutputSize;\n"
     "varying vec2 tex_coord;\n"
     "void main() {\n"
-    "  vec3 color = texture2D(Texture, tex_coord).rgb;\n"
+    "  vec2 coord = tex_coord;\n"
+    "  if (Effect == 1.0) {\n"
+    "    vec2 texel = tex_coord * SourceSize;\n"
+    "    float scale = max(floor(OutputSize.y / SourceSize.y + 0.01), 1.0);\n"
+    "    float range = 0.5 - 0.5 / scale;\n"
+    "    vec2 center = fract(texel) - 0.5;\n"
+    "    vec2 f = (center - clamp(center, -range, range)) * scale + 0.5;\n"
+    "    coord = (floor(texel) + f) / SourceSize;\n"
+    "  }\n"
+    "  vec3 color = texture2D(Texture, coord).rgb;\n"
+    "  if (Effect == 2.0) {\n"
+    "    vec2 angle = tex_coord * SourceSize * 6.283185307;\n"
+    "    float rows = (16.0 + sin(angle.y)) / 17.0;\n"
+    "    vec3 columns = (4.0 + sin(angle.x + vec3(1.570796327, -0.523598776, -2.617993878))) / 5.0;\n"
+    "    color *= rows * columns;\n"
+    "  }\n"
     "  if (Brightness != 0.0 || Contrast != 100.0) {\n"
     "    vec3 bytes = floor(color * 255.0 + 0.5);\n"
     "    vec3 delta = (bytes - 128.0) * (Contrast / 100.0);\n"
@@ -117,8 +148,12 @@ static int create_pipeline(void) {
     mvp_uniform = glGetUniformLocation(next_program, "MVPMatrix");
     brightness_uniform = glGetUniformLocation(next_program, "Brightness");
     contrast_uniform = glGetUniformLocation(next_program, "Contrast");
+    effect_uniform = glGetUniformLocation(next_program, "Effect");
+    source_size_uniform = glGetUniformLocation(next_program, "SourceSize");
+    output_size_uniform = glGetUniformLocation(next_program, "OutputSize");
     if (vertex_coord < 0 || tex_coord < 0 || texture_uniform < 0 || mvp_uniform < 0 ||
-            brightness_uniform < 0 || contrast_uniform < 0) goto error;
+            brightness_uniform < 0 || contrast_uniform < 0 || effect_uniform < 0 ||
+            source_size_uniform < 0 || output_size_uniform < 0) goto error;
     glGetIntegerv(GL_MAX_TEXTURE_SIZE, &max_texture_edge);
     if (max_texture_edge <= 0) goto error;
     glGenTextures(1, &next_texture);
@@ -139,7 +174,13 @@ error:
 
 void raven_video_reset(void) {
     texture_width = texture_height = 0;
+    texture_filter = 0;
     upload_pending = 1;
+}
+
+void raven_video_set_effect(int next_effect) {
+    effect = next_effect == RAVEN_VIDEO_EFFECT_SHARP || next_effect == RAVEN_VIDEO_EFFECT_LCD
+        ? next_effect : RAVEN_VIDEO_EFFECT_NONE;
 }
 
 void raven_video_set_options(int next_integer_scale, int next_brightness, int next_contrast) {
@@ -158,11 +199,17 @@ void raven_video_init_gl(void) {
 
 /* RGBA-only adaptation of gl_load_texture_data: the pinned GLES branch and
  * nearest filter settings, without RetroArch's packed formats/mipmap paths. */
+/* Sharp pixels need the hardware's bilinear filter; the others, nearest. */
+static GLint wanted_filter(void) {
+    return effect == RAVEN_VIDEO_EFFECT_SHARP ? GL_LINEAR : GL_NEAREST;
+}
+
 static void allocate_texture(unsigned width, unsigned height, const uint8_t *rgba) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    texture_filter = wanted_filter();
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, texture_filter);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, texture_filter);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, (GLsizei)width, (GLsizei)height,
                 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
@@ -171,7 +218,7 @@ static void allocate_texture(unsigned width, unsigned height, const uint8_t *rgb
 void raven_video_draw(const uint8_t *rgba, unsigned width, unsigned height,
                       int dirty, int surface_width, int surface_height) {
     if (dirty) upload_pending = 1;
-    glClearColor(0.05f, 0.06f, 0.08f, 1.0f);
+    glClearColor(0.f, 0.f, 0.f, 1.f);
     glClear(GL_COLOR_BUFFER_BIT);
     if (!rgba || !width || !height || width > MAX_EDGE || height > MAX_EDGE ||
             surface_width <= 0 || surface_height <= 0) return;
@@ -195,6 +242,11 @@ void raven_video_draw(const uint8_t *rgba, unsigned width, unsigned height,
         if (glGetError() != GL_NO_ERROR) return;
         upload_pending = 0;
     }
+    if (texture_filter != wanted_filter()) {
+        texture_filter = wanted_filter();
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, texture_filter);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, texture_filter);
+    }
 
     int w = surface_width, h = surface_height;
     if ((int64_t)surface_width * height > (int64_t)surface_height * width)
@@ -209,7 +261,9 @@ void raven_video_draw(const uint8_t *rgba, unsigned width, unsigned height,
     }
     if (w < 1) w = 1;
     if (h < 1) h = 1;
-    glViewport((surface_width - w) / 2, (surface_height - h) / 2, w, h);
+    /* The beta pins the picture to the top: the free space stays below it,
+     * next to the touch controls. GL counts rows from the bottom. */
+    glViewport((surface_width - w) / 2, surface_height - h, w, h);
     const GLfloat vertex[] = {-1.f,-1.f, 1.f,-1.f, -1.f,1.f, 1.f,1.f};
     const GLfloat coords[] = {0.f,1.f, 1.f,1.f, 0.f,0.f, 1.f,0.f};
     const GLfloat identity[] = {1.f,0.f,0.f,0.f, 0.f,1.f,0.f,0.f,
@@ -218,6 +272,9 @@ void raven_video_draw(const uint8_t *rgba, unsigned width, unsigned height,
     glUniform1i(texture_uniform, 0);
     glUniform1f(brightness_uniform, (GLfloat)brightness);
     glUniform1f(contrast_uniform, (GLfloat)contrast);
+    glUniform1f(effect_uniform, (GLfloat)effect);
+    glUniform2f(source_size_uniform, (GLfloat)width, (GLfloat)height);
+    glUniform2f(output_size_uniform, (GLfloat)w, (GLfloat)h);
     glUniformMatrix4fv(mvp_uniform, 1, GL_FALSE, identity);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glEnableVertexAttribArray((GLuint)vertex_coord);

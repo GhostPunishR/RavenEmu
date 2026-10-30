@@ -1,6 +1,9 @@
 package com.ravenemu.app.ui.settings;
 import com.ravenemu.app.data.saves.GbaBiosRepository;
+import com.ravenemu.app.settings.CartridgeSettings;
 import com.ravenemu.app.settings.ConsoleSettings;
+import com.ravenemu.app.settings.ControlLayout;
+import com.ravenemu.app.settings.ControlSettings;
 import com.ravenemu.app.settings.PlaybackSettings;
 
 import android.app.Activity;
@@ -141,7 +144,12 @@ public final class PlaybackSettingsActivityTest {
         toggle(activity, "Game Boy Color").performClick();
         toggle(activity, "Game Boy Advance").performClick();
         choice(activity, "Rémanence").performClick();
+        assertNotNull(choice(activity, "Aucun (défaut), choisi"));
+        choice(activity, "Lissage net").performClick();
+        assertEquals(PlaybackSettings.EFFECT_SHARP, PlaybackSettings.load(activity).screenEffect);
+        choice(activity, "Grille LCD").performClick();
         PlaybackSettings changed = PlaybackSettings.load(activity);
+        assertEquals(PlaybackSettings.EFFECT_LCD, changed.screenEffect);
         assertTrue(changed.lcdCorrectionGbc);
         assertTrue(changed.lcdCorrectionGba);
         assertEquals(PlaybackSettings.BLENDING_GHOSTING, changed.frameBlending);
@@ -153,9 +161,11 @@ public final class PlaybackSettingsActivityTest {
         assertFalse(restored.lcdCorrectionGbc);
         assertFalse(restored.lcdCorrectionGba);
         assertEquals(PlaybackSettings.BLENDING_OFF, restored.frameBlending);
+        assertEquals(PlaybackSettings.EFFECT_NONE, restored.screenEffect);
         assertFalse(restored.audioEnabled);
         assertEquals(23, restored.audioVolume);
         assertNotNull(choice(activity, "Désactivé (défaut), choisi"));
+        assertNotNull(choice(activity, "Aucun (défaut), choisi"));
     }
 
     @Test public void consolePageFollowsTheBetaAndKeepsTheOtherSettings() {
@@ -222,6 +232,129 @@ public final class PlaybackSettingsActivityTest {
         assertNull(GbaBiosRepository.read(activity.getFilesDir()));
         assertNotNull(text(activity, "Fichier du BIOS : absent"));
         assertNotNull(text(activity, "Choisir le fichier du BIOS"));
+    }
+
+    @Test public void theCategoriesAreTheBetasInItsOrderAndEachOpensItsPage() {
+        PlaybackSettingsActivity activity = open(null, null).get();
+        String[] categories = {"général", "audio", "vidéo", "console", "interface", "à propos"};
+        int previous = -1;
+        for (String category : categories) {
+            View row = described(activity, "Ouvrir les réglages " + category);
+            int top = row.getTop();
+            assertTrue(category + " comes after the one before", top > previous);
+            previous = top;
+        }
+        assertNull("No placeholder text", find(activity, view -> view instanceof TextView
+                && ((TextView)view).getText().toString().contains("seront activés")));
+        described(activity, "Ouvrir les réglages général").performClick();
+        assertNotNull(text(activity, "Général"));
+        assertNotNull(text(activity, "Pause automatique"));
+        activity.onBackPressed();
+        described(activity, "Ouvrir les réglages à propos").performClick();
+        assertNotNull(text(activity, "À propos"));
+    }
+
+    @Test public void aboutOpensTheLicencesInTheAppAndTheSourcesOnline() {
+        PlaybackSettingsActivity activity = open(PlaybackSettingsActivity.ABOUT, null).get();
+        find(activity, view -> view.getContentDescription() != null
+                && view.getContentDescription().toString().startsWith("Licences et crédits.")).performClick();
+        Intent licences = shadowOf(activity).getNextStartedActivity();
+        assertEquals(LicensesActivity.class.getName(), licences.getComponent().getClassName());
+        find(activity, view -> view.getContentDescription() != null
+                && view.getContentDescription().toString().startsWith("RavenCore.")).performClick();
+        Intent source = shadowOf(activity).getNextStartedActivity();
+        assertEquals(Intent.ACTION_VIEW, source.getAction());
+        assertEquals("https://github.com/GhostPunishR/RavenCore", source.getDataString());
+        find(activity, view -> view.getContentDescription() != null
+                && view.getContentDescription().toString().startsWith("Politique de confidentialité.")).performClick();
+        assertEquals("https://github.com/GhostPunishR/RavenEmu/blob/main/PRIVACY.md",
+                shadowOf(activity).getNextStartedActivity().getDataString());
+    }
+
+    @Test public void interfacePageSetsTheTouchControlsAndResetsThem() {
+        new PlaybackSettings(false, 23, false, 0, 100).save(RuntimeEnvironment.getApplication());
+        PlaybackSettingsActivity home = open(null, null).get();
+        described(home, "Ouvrir les réglages interface").performClick();
+        assertNotNull(toggle(home, "Retour haptique"));
+        PlaybackSettingsActivity activity = open(PlaybackSettingsActivity.INTERFACE, null).get();
+        assertTrue("Opening the page writes nothing",
+                preferences.getAll().keySet().stream().noneMatch(key -> key.startsWith("controls.")));
+        assertEquals(20, slider(activity, "Taille des commandes").getProgress());
+        assertEquals(26, slider(activity, "Espacement vertical").getProgress());
+        assertNotNull(choice(activity, "Classique (défaut), choisi"));
+
+        toggle(activity, "Retour haptique").performClick();
+        setAsUser(slider(activity, "Taille des commandes"), 32); // 80 + 32 = 112 %
+        setAsUser(slider(activity, "Espacement vertical"), 10); // 20 + 10 = 30 dp
+        assertNotNull(text(activity, "30 dp"));
+        choice(activity, "Contraste élevé").performClick();
+        ControlSettings changed = ControlSettings.load(activity);
+        assertTrue(changed.haptics);
+        assertEquals(112, changed.scale);
+        assertEquals(30, changed.gap);
+        assertTrue(changed.highContrast());
+        assertNotNull(choice(activity, "Contraste élevé, choisi"));
+        assertEquals(23, PlaybackSettings.load(activity).audioVolume);
+
+        ControlLayout.DEFAULT.with(1, 40, 0).save(activity, false);
+        ControlLayout.DEFAULT.with(0, 0, -60).save(activity, true);
+        assertNotNull(find(activity, view -> view instanceof TextView
+                && ((TextView)view).getText().toString().contains("« Déplacer les boutons »")));
+        text(activity, "Réinitialiser les commandes").performClick();
+        assertEquals("The buttons go back too", ControlLayout.DEFAULT, ControlLayout.load(activity, false));
+        assertEquals(ControlLayout.DEFAULT, ControlLayout.load(activity, true));
+        ControlSettings restored = ControlSettings.load(activity);
+        assertFalse(restored.haptics);
+        assertEquals(100, restored.scale);
+        assertEquals(46, restored.gap);
+        assertFalse(restored.highContrast());
+        assertFalse(toggle(activity, "Retour haptique").isChecked());
+        assertEquals(20, slider(activity, "Taille des commandes").getProgress());
+        assertNotNull(choice(activity, "Classique (défaut), choisi"));
+        assertFalse(PlaybackSettings.load(activity).audioEnabled);
+    }
+
+    @Test public void interfacePageSetsTheCartridgeMotorTheSensorsAndTheSun() {
+        PlaybackSettingsActivity activity = open(PlaybackSettingsActivity.INTERFACE, null).get();
+        assertTrue("Opening the page writes nothing",
+                preferences.getAll().keySet().stream().noneMatch(key -> key.startsWith("cartridge.")));
+        assertTrue(toggle(activity, "Vibration de la cartouche").isChecked());
+        assertTrue(toggle(activity, "Capteurs du téléphone").isChecked());
+        Switch solarAuto = toggle(activity, "Soleil automatique (Boktai)");
+        SeekBar sun = slider(activity, "Soleil (Boktai)");
+        assertTrue(solarAuto.isChecked());
+        assertTrue(solarAuto.isEnabled());
+        assertFalse("The light sensor sets the sun", sun.isEnabled());
+        assertEquals("By tens: 50 %", 5, sun.getProgress());
+        assertEquals(10, sun.getMax());
+
+        toggle(activity, "Vibration de la cartouche").performClick();
+        assertFalse(CartridgeSettings.load(activity).rumble);
+        toggle(activity, "Capteurs du téléphone").performClick();
+        assertFalse("Without the sensors, no automatic sun", solarAuto.isEnabled());
+        assertTrue(sun.isEnabled());
+        ((View)solarAuto.getParent()).performClick();
+        assertTrue("A greyed-out row stays as it is", CartridgeSettings.load(activity).solarAuto);
+        setAsUser(sun, 8);
+        assertNotNull(text(activity, "80 %"));
+        CartridgeSettings saved = CartridgeSettings.load(activity);
+        assertFalse(saved.rumble);
+        assertFalse(saved.sensors);
+        assertTrue(saved.solarAuto);
+        assertEquals(80, saved.solarLevel);
+
+        toggle(activity, "Capteurs du téléphone").performClick();
+        toggle(activity, "Soleil automatique (Boktai)").performClick();
+        assertTrue("The chosen sun, with the sensors on", sun.isEnabled());
+        // As in the beta, resetting the controls leaves the cartridge alone.
+        text(activity, "Réinitialiser les commandes").performClick();
+        CartridgeSettings kept = CartridgeSettings.load(activity);
+        assertFalse(kept.rumble);
+        assertTrue(kept.sensors);
+        assertFalse(kept.solarAuto);
+        assertEquals(80, kept.solarLevel);
+        assertEquals(8, slider(activity, "Soleil (Boktai)").getProgress());
+        assertTrue(slider(activity, "Soleil (Boktai)").isEnabled());
     }
 
     @Test public void recreationKeepsVideoPageAndScrollWithoutOverwritingStoredValues() {

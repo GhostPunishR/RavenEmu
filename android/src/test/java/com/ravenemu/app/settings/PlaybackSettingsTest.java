@@ -34,6 +34,8 @@ public final class PlaybackSettingsTest {
         assertFalse(value.lcdCorrectionGbc);
         assertFalse(value.lcdCorrectionGba);
         assertEquals(PlaybackSettings.BLENDING_OFF, value.frameBlending);
+        assertEquals(PlaybackSettings.EFFECT_NONE, value.screenEffect);
+        assertEquals(0, value.effectCode());
         assertTrue(preferences.getAll().isEmpty());
     }
 
@@ -109,5 +111,18 @@ public final class PlaybackSettingsTest {
         assertEquals(50, value.contrast);
         value.save(context);
         assertEquals("keep", preferences.getString("future.setting", ""));
+    }
+
+    @Test public void theScreenEffectPersistsAndFallsBackOnItsOwn() {
+        PlaybackSettings.DEFAULTS.withAudio(false, 40).withEffect(PlaybackSettings.EFFECT_SHARP).save(context);
+        PlaybackSettings saved = PlaybackSettings.load(context);
+        assertEquals(PlaybackSettings.EFFECT_SHARP, saved.screenEffect);
+        assertEquals(1, saved.effectCode());
+        assertEquals(40, saved.audioVolume);
+        assertEquals(PlaybackSettings.EFFECT_SHARP, saved.withPicture(true, 5, 110).screenEffect);
+        assertEquals(2, saved.withEffect(PlaybackSettings.EFFECT_LCD).effectCode());
+        preferences.edit().putString("video.screen_effect", "crt").commit();
+        assertEquals(PlaybackSettings.EFFECT_NONE, PlaybackSettings.load(context).screenEffect);
+        assertEquals(40, PlaybackSettings.load(context).audioVolume);
     }
 }

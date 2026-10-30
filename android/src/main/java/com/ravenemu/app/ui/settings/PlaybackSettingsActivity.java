@@ -2,7 +2,10 @@ package com.ravenemu.app.ui.settings;
 import com.ravenemu.app.R;
 import com.ravenemu.app.data.saves.GbaBiosRepository;
 import com.ravenemu.app.platform.SystemBarInsets;
+import com.ravenemu.app.settings.CartridgeSettings;
 import com.ravenemu.app.settings.ConsoleSettings;
+import com.ravenemu.app.settings.ControlLayout;
+import com.ravenemu.app.settings.ControlSettings;
 import com.ravenemu.app.settings.PlaybackSettings;
 import com.ravenemu.app.ui.library.HomeActivity;
 
@@ -38,18 +41,28 @@ import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/** Java Views counterpart of the beta's Audio, Video and Console settings
- * pages. Only settings connected to the native drivers are presented here. */
+/** Java Views counterpart of the beta's settings: Général, Audio, Vidéo,
+ * Console, Interface and À propos. The library's ⚙ opens it on its categories.
+ * Only settings connected to the native drivers are presented here. */
 public final class PlaybackSettingsActivity extends Activity {
     public static final String EXTRA_PAGE = "playback.settings.page";
     public static final String HOME = "home";
     public static final String AUDIO = "audio";
     public static final String VIDEO = "video";
     public static final String CONSOLE = "console";
+    public static final String INTERFACE = "interface";
+    public static final String GENERAL = "general";
+    public static final String ABOUT = "about";
+    private static final String[] PAGES = {HOME, AUDIO, VIDEO, CONSOLE, INTERFACE, GENERAL, ABOUT};
+    private static final String[] TITLES = {"Paramètres", "Audio", "Vidéo", "Console", "Interface",
+            "Général", "À propos"};
+    private static final String REPOSITORY = "https://github.com/GhostPunishR/RavenEmu";
     private static final int PICK_BIOS = 1;
 
     private PlaybackSettings settings;
     private ConsoleSettings console;
+    private ControlSettings controls;
+    private CartridgeSettings cartridge;
     private boolean biosInstalled;
     /** The BIOS copy and removal, off the UI thread, one at a time. */
     private final ExecutorService io = Executors.newSingleThreadExecutor();
@@ -59,7 +72,7 @@ public final class PlaybackSettingsActivity extends Activity {
     private Button back;
     private SeekBar volume;
     private String page;
-    private final int[] scrollPositions = new int[4];
+    private final int[] scrollPositions = new int[PAGES.length];
     private int pageSerial;
     private boolean rendered;
 
@@ -67,14 +80,14 @@ public final class PlaybackSettingsActivity extends Activity {
         super.onCreate(state);
         settings = PlaybackSettings.load(this);
         console = ConsoleSettings.load(this);
+        controls = ControlSettings.load(this);
+        cartridge = CartridgeSettings.load(this);
         biosInstalled = GbaBiosRepository.installed(getFilesDir());
         String initialPage = getIntent().getStringExtra(EXTRA_PAGE);
         if (state != null) {
             initialPage = state.getString("settings.page", initialPage);
-            scrollPositions[0] = Math.max(0, state.getInt("settings.scroll.home"));
-            scrollPositions[1] = Math.max(0, state.getInt("settings.scroll.audio"));
-            scrollPositions[2] = Math.max(0, state.getInt("settings.scroll.video"));
-            scrollPositions[3] = Math.max(0, state.getInt("settings.scroll.console"));
+            for (int i = 0; i < PAGES.length; i++)
+                scrollPositions[i] = Math.max(0, state.getInt("settings.scroll." + PAGES[i]));
         }
 
         LinearLayout root = column();
@@ -112,23 +125,32 @@ public final class PlaybackSettingsActivity extends Activity {
 
     private void showPage(String requestedPage) {
         if (rendered) scrollPositions[index(page)] = scroll.getScrollY();
-        page = CONSOLE.equals(requestedPage) ? CONSOLE : VIDEO.equals(requestedPage) ? VIDEO
-                : AUDIO.equals(requestedPage) ? AUDIO : HOME;
+        page = PAGES[index(requestedPage)];
         rendered = true;
         final int request = ++pageSerial;
-        title.setText(CONSOLE.equals(page) ? "Console" : VIDEO.equals(page) ? "Vidéo"
-                : AUDIO.equals(page) ? "Audio" : "Paramètres");
+        title.setText(TITLES[index(page)]);
         back.setContentDescription(HOME.equals(page) ? "Fermer les paramètres" : "Retour aux paramètres");
         content.removeAllViews();
-        if (AUDIO.equals(page)) audioPage(); else if (VIDEO.equals(page)) videoPage();
-        else if (CONSOLE.equals(page)) consolePage(); else homePage();
+        switch (page) {
+            case AUDIO: audioPage(); break;
+            case VIDEO: videoPage(); break;
+            case CONSOLE: consolePage(); break;
+            case INTERFACE: interfacePage(); break;
+            case GENERAL: generalPage(); break;
+            case ABOUT: aboutPage(); break;
+            default: homePage();
+        }
         final int restoreScroll = scrollPositions[index(page)];
         scroll.post(() -> {
             if (!isFinishing() && !isDestroyed() && request == pageSerial) scroll.scrollTo(0, restoreScroll);
         });
     }
 
+    /** The beta's categories, in its order; RetroAchievements waits for its native port. */
     private void homePage() {
+        category("Général", "Pause automatique", GENERAL,
+                "M3,5H13V7H3ZM17,5H21V7H17ZM13,3H17V9H13ZM3,11H7V13H3ZM11,11H21V13H11ZM7,9H11V15H7Z"
+                        + "M3,17H13V19H3ZM17,17H21V19H17ZM13,15H17V21H13Z");
         category("Audio", "Son du jeu et volume", AUDIO,
                 "M3,9H7L12,4V20L7,15H3ZM15,8V16C17,15 17,9 15,8ZM15,3V5C21,7 21,17 15,19V21C24,18 24,6 15,3Z");
         category("Vidéo", "Couleurs, correction LCD, mélange d'images, taille, luminosité et contraste", VIDEO,
@@ -137,6 +159,70 @@ public final class PlaybackSettingsActivity extends Activity {
         category("Console", "Jeux Game Boy en couleurs, GBC d'une GBA, BIOS GBA", CONSOLE,
                 "M11,7h2v2h-2zM11,11h2v6h-2zM12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2z"
                         + "M12,20c-4.41,0 -8,-3.59 -8,-8s3.59,-8 8,-8 8,3.59 8,8 -3.59,8 -8,8z");
+        // The beta says "Vibrations, capteurs, commandes, retour arrière, style et
+        // Skin Delta": the owner left rewind out of the native player, and the
+        // Delta skins wait for their port, so neither is announced.
+        category("Interface", "Vibrations, capteurs, commandes et style", INTERFACE,
+                "M3,3H11V11H3ZM13,3H21V11H13ZM3,13H11V21H3ZM13,13H21V21H13Z");
+        category("À propos", "Version, auteur, confidentialité et licences", ABOUT,
+                "M11,7h2v2h-2zM11,11h2v6h-2zM12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2z"
+                        + "M12,20c-4.41,0 -8,-3.59 -8,-8s3.59,-8 8,-8 8,3.59 8,8 -3.59,8 -8,8z");
+    }
+
+    /** The beta's Général page; its link cable, online covers and diagnostics
+     * wait for those native features, as the beta hides them without them. */
+    private void generalPage() {
+        group("Émulation");
+        description("Pause automatique",
+                "Le jeu et son audio sont suspendus lorsque RavenEmu passe en arrière-plan ou lorsque le "
+                        + "panneau de jeu est ouvert. Ce comportement est fixe pour protéger la partie.");
+    }
+
+    /** The beta's À propos: who makes RavenEmu, its licences and its source.
+     * The terms and the privacy policy are read online until the native
+     * reader carries them. */
+    private void aboutPage() {
+        TextView name = text("RavenEmu", 18, HomeActivity.TEXT);
+        name.setTypeface(null, Typeface.BOLD);
+        add(name, 0);
+        add(text("Par GhostPunishR · version native expérimentale Java / C / C++", 13, HomeActivity.MUTED), 4);
+        group("Informations légales");
+        aboutRow("Conditions d'utilisation", "Ce que RavenEmu fournit, et votre responsabilité", "↗",
+                view -> openLink(REPOSITORY + "/blob/main/TERMS.md"));
+        aboutRow("Politique de confidentialité", "Données échangées et services tiers", "↗",
+                view -> openLink(REPOSITORY + "/blob/main/PRIVACY.md"));
+        group("Licences et crédits");
+        aboutRow("Licences et crédits", "Crédits, GPLv3, AGPLv3, MIT et Apache 2, lus dans l'application", "›",
+                view -> startActivity(new Intent(this, LicensesActivity.class)));
+        group("Code source");
+        aboutRow("RavenEmu", "github.com/GhostPunishR/RavenEmu", "↗", view -> openLink(REPOSITORY));
+        aboutRow("RavenCore", "github.com/GhostPunishR/RavenCore", "↗",
+                view -> openLink("https://github.com/GhostPunishR/RavenCore"));
+    }
+
+    private void aboutRow(String label, String summary, String trailing, View.OnClickListener open) {
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setMinimumHeight(dp(56));
+        row.setPadding(0, dp(8), 0, dp(8));
+        LinearLayout description = column();
+        description.addView(text(label, 15, HomeActivity.TEXT));
+        add(description, text(summary, 12, HomeActivity.MUTED), 3);
+        row.addView(description, new LinearLayout.LayoutParams(0, -2, 1));
+        TextView mark = text(trailing, 18, HomeActivity.ACCENT);
+        mark.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        row.addView(mark);
+        row.setContentDescription(label + ". " + summary);
+        row.setOnClickListener(open);
+        add(row, 6);
+    }
+
+    private void openLink(String address) {
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(address)));
+        } catch (ActivityNotFoundException missing) {
+            Toast.makeText(this, "Aucune application pour ouvrir ce lien", Toast.LENGTH_LONG).show();
+        }
     }
 
     private void category(String label, String summary, String destination, String iconPath) {
@@ -220,6 +306,15 @@ public final class PlaybackSettingsActivity extends Activity {
                         PlaybackSettings.BLENDING_GHOSTING},
                 settings.frameBlending, blending -> update(settings.withImage(settings.gbPalette,
                         settings.lcdCorrectionGbc, settings.lcdCorrectionGba, blending)));
+        // Native additions after two public-domain RetroArch shaders
+        // (sharp-bilinear, lcd3x), drawn by the GLES2 driver.
+        group("Effet d'écran");
+        description("Rendu des pixels",
+                "Le lissage net garde des pixels nets et réguliers quelle que soit la taille de l'image ; "
+                        + "la grille LCD imite la trame de l'écran d'une console portable.");
+        choices(new String[]{"Aucun (défaut)", "Lissage net", "Grille LCD"},
+                new String[]{PlaybackSettings.EFFECT_NONE, PlaybackSettings.EFFECT_SHARP, PlaybackSettings.EFFECT_LCD},
+                settings.screenEffect, effect -> update(settings.withEffect(effect)));
         group("Taille de l'image");
         settingSwitch("Pixels entiers",
                 "L'image prend un multiple entier de sa taille : tous les pixels sont identiques, avec des bords noirs autour.",
@@ -234,7 +329,7 @@ public final class PlaybackSettingsActivity extends Activity {
         reset.setTextColor(HomeActivity.ACCENT);
         reset.setOnClickListener(view -> {
             update(settings.withPicture(false, 0, 100).withImage(PlaybackSettings.PALETTE_ORIGINAL,
-                    false, false, PlaybackSettings.BLENDING_OFF));
+                    false, false, PlaybackSettings.BLENDING_OFF).withEffect(PlaybackSettings.EFFECT_NONE));
             showPage(VIDEO);
         });
         add(reset, 14);
@@ -290,6 +385,70 @@ public final class PlaybackSettingsActivity extends Activity {
                 biosChanged(null);
             }));
         }
+    }
+
+    /** The beta's Interface page: the touch controls, where the buttons were
+     * moved, and the cartridge hardware the phone stands in for. Its Delta skin
+     * section waits for that native feature; rewind is left out at the
+     * owner's request. */
+    private void interfacePage() {
+        group("Commandes tactiles");
+        settingSwitch("Retour haptique", "Petite vibration à la pression des boutons.", controls.haptics,
+                enabled -> updateControls(controls.withHaptics(enabled)));
+        settingSwitch("Vibration de la cartouche",
+                "Fait vibrer le téléphone avec les jeux équipés d'un moteur de vibration (Drill Dozer, "
+                        + "WarioWare: Twisted!, cartouches Game Boy Rumble).",
+                cartridge.rumble, enabled -> updateCartridge(cartridge.withRumble(enabled)));
+        slider("Taille des commandes", controls.scale, ControlSettings.SCALE_MIN, ControlSettings.SCALE_MAX,
+                " %", value -> updateControls(controls.withScale(value)));
+        slider("Espacement vertical", controls.gap, ControlSettings.GAP_MIN, ControlSettings.GAP_MAX,
+                " dp", value -> updateControls(controls.withGap(value)));
+        group("Style des boutons");
+        choices(new String[]{"Classique (défaut)", "Contraste élevé"},
+                new String[]{ControlSettings.STYLE_CLASSIC, ControlSettings.STYLE_CONTRAST}, controls.style,
+                style -> updateControls(controls.withStyle(style)));
+        add(text("Pour déplacer les boutons, ouvrez le menu du jeu puis « Déplacer les boutons ». Le "
+                + "portrait et le paysage gardent chacun leur disposition.", 12, HomeActivity.MUTED), 8);
+        Button reset = textButton("Réinitialiser les commandes", HomeActivity.ACCENT);
+        reset.setOnClickListener(view -> {
+            updateControls(ControlSettings.DEFAULTS);
+            ControlLayout.reset(this);
+            showPage(INTERFACE);
+        });
+        // RavenCore's Libretro sensors, fed by the native sensor driver.
+        group("Capteurs de la cartouche");
+        Switch[] solarAuto = new Switch[1];
+        SeekBar[] solarLevel = new SeekBar[1];
+        settingSwitch("Capteurs du téléphone",
+                "Le gyroscope, l'inclinaison et la lumière du téléphone remplacent ceux de la cartouche : "
+                        + "WarioWare: Twisted!, Yoshi Topsy-Turvy, Kirby Tilt 'n' Tumble, Boktai.",
+                cartridge.sensors, enabled -> {
+                    updateCartridge(cartridge.withSensors(enabled));
+                    solarAuto[0].setEnabled(enabled);
+                    solarLevel[0].setEnabled(!cartridge.solarFromSensor());
+                });
+        solarAuto[0] = settingSwitch("Soleil automatique (Boktai)",
+                "Le capteur de lumière du téléphone règle le soleil : il faut la lumière du jour, celle d'une "
+                        + "pièce ne suffit pas. Sans ce capteur, le niveau ci-dessous s'applique.",
+                cartridge.solarAuto, enabled -> {
+                    updateCartridge(cartridge.withSolarAuto(enabled));
+                    solarLevel[0].setEnabled(!cartridge.solarFromSensor());
+                });
+        solarAuto[0].setEnabled(cartridge.sensors);
+        solarLevel[0] = slider("Soleil (Boktai)", cartridge.solarLevel, CartridgeSettings.SOLAR_MIN,
+                CartridgeSettings.SOLAR_MAX, CartridgeSettings.SOLAR_STEP, " %",
+                value -> updateCartridge(cartridge.withSolarLevel(value)));
+        solarLevel[0].setEnabled(!cartridge.solarFromSensor());
+    }
+
+    private void updateCartridge(CartridgeSettings updated) {
+        cartridge = updated;
+        cartridge.save(this);
+    }
+
+    private void updateControls(ControlSettings updated) {
+        controls = updated;
+        controls.save(this);
     }
 
     private void updateConsole(ConsoleSettings updated) {
@@ -382,7 +541,7 @@ public final class PlaybackSettingsActivity extends Activity {
         settings.save(this);
     }
 
-    private void settingSwitch(String label, String summary, boolean checked, BooleanChange change) {
+    private Switch settingSwitch(String label, String summary, boolean checked, BooleanChange change) {
         LinearLayout row = new LinearLayout(this);
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setMinimumHeight(dp(64));
@@ -409,34 +568,47 @@ public final class PlaybackSettingsActivity extends Activity {
         LinearLayout.LayoutParams size = new LinearLayout.LayoutParams(-2, -2);
         size.leftMargin = dp(12);
         row.addView(control, size);
-        row.setOnClickListener(view -> control.performClick());
+        // A switch greyed out by another setting stays as it is.
+        row.setOnClickListener(view -> { if (control.isEnabled()) control.performClick(); });
         row.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         add(row, 14);
+        return control;
     }
 
     private SeekBar slider(String label, int value, int minimum, int maximum,
                            boolean percent, IntChange change) {
+        return slider(label, value, minimum, maximum, percent ? " %" : "", change);
+    }
+
+    private SeekBar slider(String label, int value, int minimum, int maximum,
+                           String unit, IntChange change) {
+        return slider(label, value, minimum, maximum, 1, unit, change);
+    }
+
+    /** Steps of `step` from minimum: Boktai's sun moves by tens. */
+    private SeekBar slider(String label, int value, int minimum, int maximum, int step,
+                           String unit, IntChange change) {
         LinearLayout block = column();
         LinearLayout heading = new LinearLayout(this);
         heading.setGravity(Gravity.CENTER_VERTICAL);
         heading.addView(text(label, 15, HomeActivity.TEXT), new LinearLayout.LayoutParams(0, -2, 1));
-        TextView valueText = text(valueText(value, percent), 14, HomeActivity.ACCENT);
+        TextView valueText = text(value + unit, 14, HomeActivity.ACCENT);
         heading.addView(valueText);
         block.addView(heading);
         SeekBar control = new SeekBar(this);
         control.setSaveEnabled(false);
-        control.setMax(maximum - minimum);
-        control.setProgress(value - minimum);
-        control.setContentDescription(label + ", " + valueText(value, percent));
+        control.setMax((maximum - minimum) / step);
+        control.setProgress((value - minimum) / step);
+        control.setContentDescription(label + ", " + value + unit);
         control.setProgressTintList(ColorStateList.valueOf(HomeActivity.ACCENT));
         control.setThumbTintList(ColorStateList.valueOf(HomeActivity.ACCENT));
         control.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 // Android view-state restoration must never save a stale value.
                 if (!fromUser) return;
-                int current = progress + minimum;
-                valueText.setText(valueText(current, percent));
-                control.setContentDescription(label + ", " + valueText(current, percent));
+                int current = minimum + progress * step;
+                valueText.setText(current + unit);
+                control.setContentDescription(label + ", " + current + unit);
                 change.accept(current);
             }
             @Override public void onStartTrackingTouch(SeekBar seekBar) {}
@@ -445,10 +617,6 @@ public final class PlaybackSettingsActivity extends Activity {
         block.addView(control, new LinearLayout.LayoutParams(-1, dp(48)));
         add(block, 14);
         return control;
-    }
-
-    private static String valueText(int value, boolean percent) {
-        return percent ? value + " %" : String.valueOf(value);
     }
 
     private void group(String label) {
@@ -513,8 +681,10 @@ public final class PlaybackSettingsActivity extends Activity {
         parent.addView(view, size);
     }
 
+    /** The page's place in PAGES; an unknown page is the categories. */
     private static int index(String page) {
-        return CONSOLE.equals(page) ? 3 : VIDEO.equals(page) ? 2 : AUDIO.equals(page) ? 1 : 0;
+        for (int i = 0; i < PAGES.length; i++) if (PAGES[i].equals(page)) return i;
+        return 0;
     }
     private int dp(int value) { return Math.round(value * getResources().getDisplayMetrics().density); }
     private interface BooleanChange { void accept(boolean value); }
@@ -525,10 +695,7 @@ public final class PlaybackSettingsActivity extends Activity {
         super.onSaveInstanceState(state);
         scrollPositions[index(page)] = scroll.getScrollY();
         state.putString("settings.page", page);
-        state.putInt("settings.scroll.home", scrollPositions[0]);
-        state.putInt("settings.scroll.audio", scrollPositions[1]);
-        state.putInt("settings.scroll.video", scrollPositions[2]);
-        state.putInt("settings.scroll.console", scrollPositions[3]);
+        for (int i = 0; i < PAGES.length; i++) state.putInt("settings.scroll." + PAGES[i], scrollPositions[i]);
     }
 
     @Override protected void onDestroy() {
