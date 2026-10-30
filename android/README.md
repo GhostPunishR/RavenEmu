@@ -195,6 +195,34 @@ le panneau et le numéro d'emplacement ; le redémarrage du jeu repose encore
 sur la SRAM, pas sur une restauration automatique de son état CPU exact.
 No ROM or BIOS is bundled; no broad storage permission is requested.
 
+## Options des cores et réglages d'image
+
+**Paramètres → Vidéo** reprend trois groupes de la bêta, traités par RavenCore
+lui-même au travers de ses options Libretro : **Profil de couleurs** des jeux
+Game Boy (Original, le vert de la console comme dans la bêta ; Pocket gris ;
+Gris neutre), **Correction des couleurs LCD** pour la Game Boy Color et la Game
+Boy Advance, et **Mélange d'images** (désactivé, mélange de deux images,
+rémanence). `CoreOptions.java` traduit ces réglages en clés des cores
+(`ravenemu_gb_palette`, `ravenemu_gbc_color_correction`…). `openRom` les passe
+au frontend C avant le chargement du jeu ; au retour des paramètres,
+`setCoreOptions` les change sur le fil GL et le core les applique à l'image
+suivante, sans rouvrir le jeu. Ni la SRAM ni les états ne changent de format.
+Le filtre « DMG vert » de la bêta n'a pas d'équivalent exact ; les options
+de cartouche et les capteurs restent à porter.
+
+## Console
+
+**Paramètres → Console** reprend la page de la bêta. **Jeux Game Boy en
+couleurs** ouvre les jeux Game Boy sur le core Game Boy Color, avec les
+couleurs choisies (celles de la boot ROM ou une combinaison de touches),
+changées aussitôt même en jeu. **Game Boy Color d'une Game Boy Advance** et le
+**BIOS** de la GBA (RavenCore, vrai BIOS, vrai BIOS sans animation) valent au
+lancement suivant. Le fichier du BIOS, choisi avec le sélecteur de documents,
+doit faire 16 Kio ; il est copié en `gba_bios.bin` dans le stockage privé, que
+le core lit comme dossier système (`GbaBiosRepository`). Aucun BIOS n'est
+fourni. Un état pris sur une autre console ou avec un autre BIOS apparaît
+incompatible ; la SRAM reste celle du jeu.
+
 ## Portage ciblé des pilotes RetroArch et crédits
 
 Le backend AAudio et le chemin GLES2 adaptent désormais des portions de

@@ -30,7 +30,46 @@ public final class PlaybackSettingsTest {
         assertFalse(value.integerScale);
         assertEquals(0, value.brightness);
         assertEquals(100, value.contrast);
+        assertEquals(PlaybackSettings.PALETTE_ORIGINAL, value.gbPalette);
+        assertFalse(value.lcdCorrectionGbc);
+        assertFalse(value.lcdCorrectionGba);
+        assertEquals(PlaybackSettings.BLENDING_OFF, value.frameBlending);
         assertTrue(preferences.getAll().isEmpty());
+    }
+
+    @Test public void imageOptionsPersistAndChangingOneKeepsTheOthers() {
+        new PlaybackSettings(false, 40, true, 5, 110, PlaybackSettings.PALETTE_POCKET, true, false,
+                PlaybackSettings.BLENDING_GHOSTING).save(context);
+        PlaybackSettings saved = PlaybackSettings.load(context);
+        assertEquals(PlaybackSettings.PALETTE_POCKET, saved.gbPalette);
+        assertTrue(saved.lcdCorrectionGbc);
+        assertFalse(saved.lcdCorrectionGba);
+        assertEquals(PlaybackSettings.BLENDING_GHOSTING, saved.frameBlending);
+        PlaybackSettings sound = saved.withAudio(true, 90);
+        assertEquals(PlaybackSettings.PALETTE_POCKET, sound.gbPalette);
+        assertEquals(PlaybackSettings.BLENDING_GHOSTING, sound.frameBlending);
+        PlaybackSettings picture = saved.withPicture(false, 0, 100);
+        assertTrue(picture.lcdCorrectionGbc);
+        assertEquals(40, picture.audioVolume);
+        PlaybackSettings image = saved.withImage(PlaybackSettings.PALETTE_GRAY, false, true,
+                PlaybackSettings.BLENDING_MIX);
+        assertEquals(110, image.contrast);
+        assertTrue(image.integerScale);
+        assertTrue(image.lcdCorrectionGba);
+    }
+
+    @Test public void unknownOrMalformedImageOptionsFallBackToTheirDefaults() {
+        preferences.edit().putString("video.gb_palette", "sepia").putString("video.frame_blending", "blur")
+                .putString("video.lcd_gbc", "true").putBoolean("video.lcd_gba", true).commit();
+        PlaybackSettings value = PlaybackSettings.load(context);
+        assertEquals(PlaybackSettings.PALETTE_ORIGINAL, value.gbPalette);
+        assertEquals(PlaybackSettings.BLENDING_OFF, value.frameBlending);
+        assertFalse(value.lcdCorrectionGbc);
+        assertTrue(value.lcdCorrectionGba);
+        preferences.edit().putInt("video.gb_palette", 2).commit();
+        assertEquals(PlaybackSettings.PALETTE_ORIGINAL, PlaybackSettings.load(context).gbPalette);
+        assertEquals(PlaybackSettings.BLENDING_OFF,
+                new PlaybackSettings(true, 100, false, 0, 100, null, false, false, null).frameBlending);
     }
 
     @Test public void normalizedSettingsPersistAsOneIndependentSnapshot() {

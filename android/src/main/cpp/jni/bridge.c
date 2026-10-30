@@ -17,6 +17,7 @@
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, "RavenNative", __VA_ARGS__)
 #define MAX_ROM_BYTES (64u * 1024u * 1024u)
 #define MAX_FRAME_SIZE (2048u * 2048u)
+#define MAX_CORE_OPTIONS 64u
 
 static raven_frontend *session;
 static raven_input input = RAVEN_INPUT_INITIALIZER;
@@ -101,6 +102,30 @@ static void clear_frame(void) {
     image_width = image_height = 0;
 }
 
+/* Core options from Java as alternating keys and values. A key the open core
+ * does not declare, or a value it does not offer, is skipped: the core keeps
+ * its own. Called on the emulation (GL) thread, like every core call. */
+static void apply_core_options(JNIEnv *env, jobjectArray options) {
+    if (!options || !session) return;
+    jsize count = (*env)->GetArrayLength(env, options);
+    if (count < 0 || (size_t)count > 2u * MAX_CORE_OPTIONS) {
+        LOGE("Too many core options: %d", (int)count);
+        return;
+    }
+    for (jsize i = 0; i + 1 < count; i += 2) {
+        jstring key = (jstring)(*env)->GetObjectArrayElement(env, options, i);
+        jstring value = (jstring)(*env)->GetObjectArrayElement(env, options, i + 1);
+        const char *k = key ? (*env)->GetStringUTFChars(env, key, NULL) : NULL;
+        const char *v = value ? (*env)->GetStringUTFChars(env, value, NULL) : NULL;
+        if (k && v && !raven_frontend_set_option(session, k, v))
+            LOGE("Core option %s=%s not offered by this core", k, v);
+        if (k) (*env)->ReleaseStringUTFChars(env, key, k);
+        if (v) (*env)->ReleaseStringUTFChars(env, value, v);
+        if (key) (*env)->DeleteLocalRef(env, key);
+        if (value) (*env)->DeleteLocalRef(env, value);
+    }
+}
+
 static jstring failure(JNIEnv *env, const char *error) {
     return (*env)->NewStringUTF(env, error ? error : "Unknown native error");
 }
@@ -118,7 +143,7 @@ Java_com_ravenemu_app_bridge_NativeBridge_initGl(
 JNIEXPORT jstring JNICALL
 Java_com_ravenemu_app_bridge_NativeBridge_openRom(
     JNIEnv *env, jclass clazz, jstring lib_dir, jstring files_dir,
-    jstring core_name, jbyteArray rom, jstring filename) {
+    jstring core_name, jbyteArray rom, jstring filename, jobjectArray core_options) {
     (void)clazz;
     if (!lib_dir || !files_dir || !core_name || !rom || !filename)
         return failure(env, "Missing ROM or core details");
@@ -161,6 +186,8 @@ Java_com_ravenemu_app_bridge_NativeBridge_openRom(
     }
     raven_frontend_callbacks callbacks = {on_video, on_audio, on_input, NULL};
     raven_frontend_set_callbacks(session, &callbacks);
+    /* Before the game loads: the options read only then apply to it. */
+    apply_core_options(env, core_options);
     jbyte *bytes = (*env)->GetByteArrayElements(env, rom, NULL);
     if (!bytes) {
         result = failure(env, "Unable to read ROM contents");
@@ -259,6 +286,13 @@ Java_com_ravenemu_app_bridge_NativeBridge_setPlaybackOptions(
     (void)env; (void)clazz;
     raven_audio_set_output(audio_enabled == JNI_TRUE, audio_volume);
     raven_video_set_options(integer_scale == JNI_TRUE, brightness, contrast);
+}
+
+JNIEXPORT void JNICALL
+Java_com_ravenemu_app_bridge_NativeBridge_setCoreOptions(
+    JNIEnv *env, jclass clazz, jobjectArray core_options) {
+    (void)clazz;
+    apply_core_options(env, core_options);
 }
 
 JNIEXPORT jstring JNICALL

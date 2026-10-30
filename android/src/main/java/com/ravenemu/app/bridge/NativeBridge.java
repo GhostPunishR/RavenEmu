@@ -25,9 +25,14 @@ public final class NativeBridge {
 
     public static native void initGl();
 
-    /** Return null on success, otherwise an error suitable for display. */
+    /** Return null on success, otherwise an error suitable for display.
+     * coreOptions: alternating Libretro option keys and values, applied before
+     * the game loads; those the core does not offer are skipped. */
     public static native String openRom(String nativeLibraryDirectory, String filesDirectory,
-                                 String system, byte[] data, String filename);
+                                 String system, byte[] data, String filename, String[] coreOptions);
+    /** GL thread: change core options during the game (alternating keys and
+     * values); the core takes them at its next frame. */
+    public static native void setCoreOptions(String[] coreOptions);
 
     /** GL thread: native monotonic pacing at the core's FPS, bounded catch-up.
      * Returns the number of core frames actually executed (0..3). */
