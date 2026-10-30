@@ -112,15 +112,54 @@ public final class GameControlsViewTest {
         assertTrue(menu.isEnabled());
     }
 
-    @Test public void theMiddleMenuAppearsOnlyWithPortraitShoulders() {
+    @Test public void gbAndGbcMenuSitsBetweenSelectAndStartWithoutShoulders() {
+        int[] menus = {0};
+        open(320, false, () -> menus[0]++);
+        View menu = labelled("Menu du jeu");
+        View select = labelled("SELECT"), start = labelled("START");
+        assertEquals(View.VISIBLE, menu.getVisibility());
+        assertEquals(View.GONE, labelled("L").getVisibility());
+        assertEquals(View.GONE, labelled("R").getVisibility());
+        assertEquals("No extra row takes space from the picture", 234, controls.getMeasuredHeight());
+        assertEquals(160f, centerX(menu), 0.5f);
+        assertEquals(centerY(select), centerY(menu), 0.5f);
+        assertTrue("Menu clears SELECT", select.getRight() < menu.getLeft());
+        assertTrue("Menu clears START", menu.getRight() < start.getLeft());
+        assertTrue(touch(MotionEvent.ACTION_DOWN, 13, centerX(menu), centerY(menu)));
+        assertTrue(touch(MotionEvent.ACTION_UP, 13, centerX(menu), centerY(menu)));
+        shadowOf(Looper.getMainLooper()).idle();
+        assertEquals(1, menus[0]);
+        assertTrue("Menu never sends emulator buttons", changes.isEmpty());
+    }
+
+    @Test public void narrowGbLayoutKeepsAllThreeMenuRowButtonsApart() {
+        open(240, false, () -> {});
+        View menu = labelled("Menu du jeu");
+        assertTrue(labelled("SELECT").getRight() < menu.getLeft());
+        assertTrue(menu.getRight() < labelled("START").getLeft());
+        assertEquals(120f, centerX(menu), 0.5f);
+    }
+
+    @Test public void menuMovesWithTheConsoleAndStaysHiddenWithoutAnAction() {
         open(320, false, () -> {});
         View menu = labelled("Menu du jeu");
-        assertEquals(View.GONE, menu.getVisibility());
-        controls.setShoulders(true);
-        relayout();
         assertEquals(View.VISIBLE, menu.getVisibility());
+        assertEquals(centerY(labelled("SELECT")), centerY(menu), 0.5f);
+        controls.setShoulders(true);
+        apply(ControlSettings.DEFAULTS);
+        assertEquals(View.VISIBLE, menu.getVisibility());
+        assertEquals(centerY(labelled("L")), centerY(menu), 0.5f);
         controls.setShoulders(false);
-        assertEquals(View.GONE, menu.getVisibility());
+        apply(ControlSettings.DEFAULTS);
+        assertEquals(View.VISIBLE, menu.getVisibility());
+        assertEquals(centerY(labelled("SELECT")), centerY(menu), 0.5f);
+    }
+
+    @Test public void anUnwiredMenuIsNotShown() {
+        open(320, false);
+        assertEquals(View.GONE, labelled("Menu du jeu").getVisibility());
+        controls.setShoulders(true);
+        assertEquals(View.GONE, labelled("Menu du jeu").getVisibility());
     }
 
     @Test public void changingTheSizeReleasesAHeldButton() {
