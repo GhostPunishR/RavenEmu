@@ -101,6 +101,8 @@ public final class GameControlsViewTest {
 
         assertTrue(touch(MotionEvent.ACTION_DOWN, 12, centerX(menu), centerY(menu)));
         assertTrue(touch(MotionEvent.ACTION_UP, 12, centerX(menu), centerY(menu)));
+        // View posts its click to the UI loop; controls publish their input synchronously.
+        shadowOf(Looper.getMainLooper()).idle();
         assertEquals(1, menus[0]);
         assertTrue("Opening the menu must never press a core button", changes.isEmpty());
 
