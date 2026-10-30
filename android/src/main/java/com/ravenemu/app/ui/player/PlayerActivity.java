@@ -202,7 +202,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         header.addView(editBar, new LinearLayout.LayoutParams(-1, dp(48)));
         root.addView(header, new LinearLayout.LayoutParams(-1, -2));
 
-        gameControls = new GameControlsView(this, this::setTouchButtons);
+        gameControls = new GameControlsView(this, this::setTouchButtons, this::togglePlayerMenu);
         gameControls.setEnabled(false);
         if (getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE) {
             FrameLayout stage = new FrameLayout(this);
