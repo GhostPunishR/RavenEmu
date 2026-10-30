@@ -224,6 +224,14 @@ contrôle dynamique du débit (±0,5 %) garde la file audio à moitié pleine :
 plus d'échantillons jetés ni de silences. Un casque débranché ou un appareil
 Bluetooth perdu rouvre la sortie audio, en gardant la pause.
 
+## Effets d'écran
+
+**Paramètres → Vidéo → Effet d'écran** propose, en plus du rendu au plus
+proche par défaut, le **Lissage net** (pixels nets et réguliers à toute
+taille) et la **Grille LCD** (trame d'un écran de console portable), dessinés
+par le pilote GLES2 d'après deux shaders libretro du domaine public
+([crédits](../legal/attributions/libretro-shaders.md)).
+
 ## Manettes et messages du core
 
 Les manettes Bluetooth ou USB et les claviers pilotent le jeu comme dans la

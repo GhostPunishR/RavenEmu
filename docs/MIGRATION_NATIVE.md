@@ -593,3 +593,21 @@ comportement des écrans à fréquence variable restent à vérifier sur télép
 - Tests : messages du faux core (simple, étendu, journal, débogage, octets
   invalides) ; Java (`GamepadMapperTest`, touches, chapeau et stick dans le
   lecteur, touche Home, message affiché une seule fois).
+
+## Tranche C : lissage net et grille LCD
+
+- **Effet d'écran** (page Vidéo, défaut « Aucun » comme la bêta) : **Lissage
+  net**, des pixels nets et réguliers à toute taille (une GBA agrandie 4,5×
+  n'a plus de colonnes inégales), et **Grille LCD**, la trame d'un écran de
+  console portable. Le pilote GLES2 les dessine dans son shader unique, d'après
+  `sharp-bilinear` (Themaister) et `lcd3x` (Gigaherz), deux shaders du domaine
+  public de libretro/glsl-shaders `cba01a4`
+  ([crédits](../legal/attributions/libretro-shaders.md)). Le lissage net passe
+  la texture au filtre bilinéaire matériel ; les autres effets gardent le
+  filtre au plus proche. Le réglage survit aux changements de contexte GL et
+  « Rétablir l'affichage d'origine » le remet à « Aucun ».
+- Tests : faux GLES2 (filtre et uniforms par effet, effet gardé après un
+  nouveau contexte), rendu réel par EGL (une seule colonne mélangée à 2,5×
+  au lieu d'aucune au plus proche ; chaque colonne de la grille atténue une
+  couleur différente, et les lignes alternent), Java (préférence, page
+  Vidéo, passage au pilote).

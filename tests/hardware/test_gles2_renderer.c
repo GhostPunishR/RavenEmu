@@ -15,7 +15,7 @@ static GLenum error_code;
 static GLuint next_name = 1;
 static GLint viewport[4], unpack_alignment, mag_filter, min_filter, wrap_s, wrap_t;
 static GLfloat uv[8];
-static GLfloat brightness_value, contrast_value;
+static GLfloat brightness_value, contrast_value, effect_value, source_size[2], output_size[2];
 static int uniform_calls;
 static uint8_t rgba[240 * 160 * 4];
 
@@ -35,7 +35,8 @@ GLint glGetAttribLocation(GLuint program, const GLchar *name) {
 GLint glGetUniformLocation(GLuint program, const GLchar *name) {
     UNUSED(program);
     if (!locations_ok) return -1;
-    return !strcmp(name, "Brightness") ? 4 : !strcmp(name, "Contrast") ? 5 : 2;
+    return !strcmp(name, "Brightness") ? 4 : !strcmp(name, "Contrast") ? 5 : !strcmp(name, "Effect") ? 6
+        : !strcmp(name, "SourceSize") ? 7 : !strcmp(name, "OutputSize") ? 8 : 2;
 }
 void glGetIntegerv(GLenum pname, GLint *data) { UNUSED(pname); *data = texture_limit; }
 void glGenTextures(GLsizei n, GLuint *textures) { for (int i = 0; i < n; i++) textures[i] = next_name++; }
@@ -77,6 +78,11 @@ void glUniform1f(GLint location, GLfloat value) {
     uniform_calls++;
     if (location == 4) brightness_value = value;
     if (location == 5) contrast_value = value;
+    if (location == 6) effect_value = value;
+}
+void glUniform2f(GLint location, GLfloat x, GLfloat y) {
+    if (location == 7) { source_size[0] = x; source_size[1] = y; }
+    if (location == 8) { output_size[0] = x; output_size[1] = y; }
 }
 void glUniformMatrix4fv(GLint location, GLsizei count, GLboolean transpose, const GLfloat *value) {
     UNUSED(location); UNUSED(count); UNUSED(transpose); UNUSED(value);
@@ -202,9 +208,9 @@ static int persistent_options_use_uniforms_and_integer_viewports(void) {
     fresh();
     raven_video_draw(rgba, 240, 160, 1, 600, 600);
     CHECK(brightness_value == 0.f && contrast_value == 100.f);
-    CHECK(image_calls == 1 && sub_calls == 0 && uniform_calls == 2);
+    CHECK(image_calls == 1 && sub_calls == 0 && uniform_calls == 3);
     raven_video_set_options(1, 20, 75);
-    CHECK(uniform_calls == 2); // Setter is safe before a GL context is current.
+    CHECK(uniform_calls == 3); // Setter is safe before a GL context is current.
     raven_video_draw(rgba, 240, 160, 0, 600, 600);
     CHECK(viewport[0] == 60 && viewport[1] == 280 && viewport[2] == 480 && viewport[3] == 320);
     CHECK(brightness_value == 20.f && contrast_value == 75.f);
@@ -228,11 +234,41 @@ static int persistent_options_use_uniforms_and_integer_viewports(void) {
     return 0;
 }
 
+static int effects_choose_the_filter_and_reach_the_shader(void) {
+    fresh();
+    raven_video_set_effect(RAVEN_VIDEO_EFFECT_NONE);
+    raven_video_draw(rgba, 240, 160, 1, 600, 600);
+    CHECK(mag_filter == GL_NEAREST && min_filter == GL_NEAREST && effect_value == 0.f);
+    CHECK(source_size[0] == 240.f && source_size[1] == 160.f);
+    CHECK(output_size[0] == 600.f && output_size[1] == 400.f);
+    // Sharp pixels: the hardware's bilinear filter, without a new upload.
+    raven_video_set_effect(RAVEN_VIDEO_EFFECT_SHARP);
+    raven_video_draw(rgba, 240, 160, 0, 600, 600);
+    CHECK(mag_filter == GL_LINEAR && min_filter == GL_LINEAR && effect_value == 1.f);
+    CHECK(image_calls == 1 && sub_calls == 0);
+    raven_video_set_effect(RAVEN_VIDEO_EFFECT_LCD);
+    raven_video_draw(rgba, 240, 160, 0, 600, 600);
+    CHECK(mag_filter == GL_NEAREST && effect_value == 2.f);
+    raven_video_set_effect(99);
+    raven_video_draw(rgba, 240, 160, 0, 600, 600);
+    CHECK(effect_value == 0.f);
+    // The choice survives a new context: the new texture starts filtered right.
+    raven_video_set_effect(RAVEN_VIDEO_EFFECT_SHARP);
+    raven_video_reset();
+    raven_video_init_gl();
+    mag_filter = min_filter = 0;
+    raven_video_draw(rgba, 160, 144, 1, 320, 480);
+    CHECK(mag_filter == GL_LINEAR && min_filter == GL_LINEAR && effect_value == 1.f);
+    raven_video_set_effect(RAVEN_VIDEO_EFFECT_NONE);
+    return 0;
+}
+
 int main(void) {
     if (allocation_updates_and_duplicate() || resize_and_context_lifecycle() ||
             invalid_frames_and_limits_clear_without_old_image() ||
             shader_failures_and_upload_failures_retry() || viewport_extremes_do_not_overflow() ||
-            persistent_options_use_uniforms_and_integer_viewports()) return 1;
+            persistent_options_use_uniforms_and_integer_viewports() ||
+            effects_choose_the_filter_and_reach_the_shader()) return 1;
     puts("RetroArch GLES subset: upload reuse, context/reset, bounds, errors, aspect and settings passed");
     return 0;
 }

@@ -55,6 +55,7 @@ class VideoPixelsTest(unittest.TestCase):
         cls.init = function(cls.driver, "raven_video_init_gl", None)
         cls.reset = function(cls.driver, "raven_video_reset", None)
         cls.options = function(cls.driver, "raven_video_set_options", None, integer, integer, integer)
+        cls.effect = function(cls.driver, "raven_video_set_effect", None, integer)
         cls.draw = function(cls.driver, "raven_video_draw", None, pointer, c.c_uint,
                             c.c_uint, integer, integer, integer)
         cls.read = function(cls.gl, "glReadPixels", None, integer, integer, integer,
@@ -138,6 +139,42 @@ class VideoPixelsTest(unittest.TestCase):
         self.options(1, 0, 100)
         self.assertIn(self.render(source, 2, 1, 1, 1, 0),
                       ([255, 0, 0, 255], [0, 255, 0, 255]))
+
+    def test_sharp_pixels_blend_only_one_column_at_each_edge(self):
+        # Red then green, two source pixels, 2.5 times wider on a 5x3 surface:
+        # the picture fills rows 1 and 2, GL counting from the bottom.
+        source = [255, 0, 0, 255, 0, 255, 0, 255]
+        self.options(0, 0, 100)
+        self.reset()
+        self.effect(0)
+        nearest = self.render(source, 2, 1, 5, 3)[5 * 4:10 * 4]
+        self.effect(1)
+        sharp = self.render(source, 2, 1, 5, 3, 0)[5 * 4:10 * 4]
+        self.effect(0)
+        def mixed(row):
+            return [i for i in range(5) if row[i * 4] not in (0, 255) or row[i * 4 + 1] not in (0, 255)]
+        self.assertEqual([], mixed(nearest), "Nearest never blends")
+        self.assertEqual(1, len(mixed(sharp)), "One blended column where the pixels meet")
+        self.assertEqual([255, 0, 0, 255], sharp[:4])
+        self.assertEqual([0, 255, 0, 255], sharp[16:20])
+
+    def test_lcd_grid_draws_a_colour_triad_and_scanlines(self):
+        # One white source pixel, three by three on screen.
+        self.options(0, 0, 100)
+        self.reset()
+        self.effect(2)
+        output = self.render([255, 255, 255, 255], 1, 1, 3, 3)
+        self.effect(0)
+        row = output[1 * 3 * 4:2 * 3 * 4]
+        # Each column dims a different one of red, green and blue.
+        dimmest = []
+        for column in range(3):
+            pixel = row[column * 4:column * 4 + 3]
+            dimmest.append(pixel.index(min(pixel)))
+            self.assertLess(min(pixel), max(pixel), (column, pixel))
+        self.assertEqual({0, 1, 2}, set(dimmest))
+        # A darker scanline between rows.
+        self.assertNotEqual(output[0:12], output[12:24])
 
     def test_options_survive_new_context_and_rom_reset(self):
         source = self.gradient()

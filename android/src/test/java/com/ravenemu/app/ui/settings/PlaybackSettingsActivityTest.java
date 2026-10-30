@@ -143,7 +143,12 @@ public final class PlaybackSettingsActivityTest {
         toggle(activity, "Game Boy Color").performClick();
         toggle(activity, "Game Boy Advance").performClick();
         choice(activity, "Rémanence").performClick();
+        assertNotNull(choice(activity, "Aucun (défaut), choisi"));
+        choice(activity, "Lissage net").performClick();
+        assertEquals(PlaybackSettings.EFFECT_SHARP, PlaybackSettings.load(activity).screenEffect);
+        choice(activity, "Grille LCD").performClick();
         PlaybackSettings changed = PlaybackSettings.load(activity);
+        assertEquals(PlaybackSettings.EFFECT_LCD, changed.screenEffect);
         assertTrue(changed.lcdCorrectionGbc);
         assertTrue(changed.lcdCorrectionGba);
         assertEquals(PlaybackSettings.BLENDING_GHOSTING, changed.frameBlending);
@@ -155,9 +160,11 @@ public final class PlaybackSettingsActivityTest {
         assertFalse(restored.lcdCorrectionGbc);
         assertFalse(restored.lcdCorrectionGba);
         assertEquals(PlaybackSettings.BLENDING_OFF, restored.frameBlending);
+        assertEquals(PlaybackSettings.EFFECT_NONE, restored.screenEffect);
         assertFalse(restored.audioEnabled);
         assertEquals(23, restored.audioVolume);
         assertNotNull(choice(activity, "Désactivé (défaut), choisi"));
+        assertNotNull(choice(activity, "Aucun (défaut), choisi"));
     }
 
     @Test public void consolePageFollowsTheBetaAndKeepsTheOtherSettings() {

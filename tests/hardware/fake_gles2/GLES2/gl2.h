@@ -28,6 +28,7 @@ typedef char GLchar;
 #define GL_TEXTURE_MIN_FILTER 0x2801
 #define GL_CLAMP_TO_EDGE 0x812F
 #define GL_NEAREST 0x2600
+#define GL_LINEAR 0x2601
 #define GL_UNPACK_ALIGNMENT 0x0CF5
 #define GL_RGBA 0x1908
 #define GL_UNSIGNED_BYTE 0x1401
@@ -69,6 +70,7 @@ void glViewport(GLint x, GLint y, GLsizei width, GLsizei height);
 void glUseProgram(GLuint program);
 void glUniform1i(GLint location, GLint value);
 void glUniform1f(GLint location, GLfloat value);
+void glUniform2f(GLint location, GLfloat x, GLfloat y);
 void glUniformMatrix4fv(GLint location, GLsizei count, GLboolean transpose, const GLfloat *value);
 void glBindBuffer(GLenum target, GLuint buffer);
 void glEnableVertexAttribArray(GLuint index);

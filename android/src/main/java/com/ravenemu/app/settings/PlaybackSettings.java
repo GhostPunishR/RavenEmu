@@ -16,6 +16,11 @@ public final class PlaybackSettings {
     public static final String BLENDING_OFF = "off";
     public static final String BLENDING_MIX = "mix";
     public static final String BLENDING_GHOSTING = "ghosting";
+    /** Screen effects of the native GLES2 driver: none, sharp pixels at any
+     * size, or a handheld LCD's grid. */
+    public static final String EFFECT_NONE = "none";
+    public static final String EFFECT_SHARP = "sharp";
+    public static final String EFFECT_LCD = "lcd";
 
     public static final PlaybackSettings DEFAULTS = new PlaybackSettings(true, 100, false, 0, 100);
 
@@ -29,6 +34,7 @@ public final class PlaybackSettings {
     public final boolean lcdCorrectionGbc;
     public final boolean lcdCorrectionGba;
     public final String frameBlending;
+    public final String screenEffect;
 
     /** Sound and picture, with the cores' own image options at their defaults. */
     public PlaybackSettings(boolean audioEnabled, int audioVolume, boolean integerScale,
@@ -40,6 +46,14 @@ public final class PlaybackSettings {
     public PlaybackSettings(boolean audioEnabled, int audioVolume, boolean integerScale,
                      int brightness, int contrast, String gbPalette,
                      boolean lcdCorrectionGbc, boolean lcdCorrectionGba, String frameBlending) {
+        this(audioEnabled, audioVolume, integerScale, brightness, contrast, gbPalette,
+                lcdCorrectionGbc, lcdCorrectionGba, frameBlending, EFFECT_NONE);
+    }
+
+    public PlaybackSettings(boolean audioEnabled, int audioVolume, boolean integerScale,
+                     int brightness, int contrast, String gbPalette,
+                     boolean lcdCorrectionGbc, boolean lcdCorrectionGba, String frameBlending,
+                     String screenEffect) {
         this.audioEnabled = audioEnabled;
         this.audioVolume = clamp(audioVolume, 0, 100);
         this.integerScale = integerScale;
@@ -49,22 +63,33 @@ public final class PlaybackSettings {
         this.lcdCorrectionGbc = lcdCorrectionGbc;
         this.lcdCorrectionGba = lcdCorrectionGba;
         this.frameBlending = oneOf(frameBlending, BLENDING_OFF, BLENDING_MIX, BLENDING_GHOSTING);
+        this.screenEffect = oneOf(screenEffect, EFFECT_NONE, EFFECT_SHARP, EFFECT_LCD);
     }
 
     public PlaybackSettings withAudio(boolean enabled, int volume) {
         return new PlaybackSettings(enabled, volume, integerScale, brightness, contrast,
-                gbPalette, lcdCorrectionGbc, lcdCorrectionGba, frameBlending);
+                gbPalette, lcdCorrectionGbc, lcdCorrectionGba, frameBlending, screenEffect);
     }
 
     public PlaybackSettings withPicture(boolean integerScale, int brightness, int contrast) {
         return new PlaybackSettings(audioEnabled, audioVolume, integerScale, brightness, contrast,
-                gbPalette, lcdCorrectionGbc, lcdCorrectionGba, frameBlending);
+                gbPalette, lcdCorrectionGbc, lcdCorrectionGba, frameBlending, screenEffect);
     }
 
     public PlaybackSettings withImage(String gbPalette, boolean lcdCorrectionGbc,
                                       boolean lcdCorrectionGba, String frameBlending) {
         return new PlaybackSettings(audioEnabled, audioVolume, integerScale, brightness, contrast,
-                gbPalette, lcdCorrectionGbc, lcdCorrectionGba, frameBlending);
+                gbPalette, lcdCorrectionGbc, lcdCorrectionGba, frameBlending, screenEffect);
+    }
+
+    public PlaybackSettings withEffect(String effect) {
+        return new PlaybackSettings(audioEnabled, audioVolume, integerScale, brightness, contrast,
+                gbPalette, lcdCorrectionGbc, lcdCorrectionGba, frameBlending, effect);
+    }
+
+    /** RAVEN_VIDEO_EFFECT_NONE, _SHARP or _LCD, for NativeBridge. */
+    public int effectCode() {
+        return EFFECT_SHARP.equals(screenEffect) ? 1 : EFFECT_LCD.equals(screenEffect) ? 2 : 0;
     }
 
     public static PlaybackSettings load(Context context) {
@@ -77,7 +102,8 @@ public final class PlaybackSettings {
                 integer(values, "video.contrast", 100),
                 string(values, "video.gb_palette", PALETTE_ORIGINAL),
                 bool(values, "video.lcd_gbc", false), bool(values, "video.lcd_gba", false),
-                string(values, "video.frame_blending", BLENDING_OFF));
+                string(values, "video.frame_blending", BLENDING_OFF),
+                string(values, "video.screen_effect", EFFECT_NONE));
     }
 
     public void save(Context context) {
@@ -88,6 +114,7 @@ public final class PlaybackSettings {
                 .putString("video.gb_palette", gbPalette)
                 .putBoolean("video.lcd_gbc", lcdCorrectionGbc).putBoolean("video.lcd_gba", lcdCorrectionGba)
                 .putString("video.frame_blending", frameBlending)
+                .putString("video.screen_effect", screenEffect)
                 .apply();
     }
 

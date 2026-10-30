@@ -316,10 +316,11 @@ Java_com_ravenemu_app_bridge_NativeBridge_frameRate(JNIEnv *env, jclass clazz) {
 JNIEXPORT void JNICALL
 Java_com_ravenemu_app_bridge_NativeBridge_setPlaybackOptions(
     JNIEnv *env, jclass clazz, jboolean audio_enabled, jint audio_volume,
-    jboolean integer_scale, jint brightness, jint contrast) {
+    jboolean integer_scale, jint brightness, jint contrast, jint screen_effect) {
     (void)env; (void)clazz;
     raven_audio_set_output(audio_enabled == JNI_TRUE, audio_volume);
     raven_video_set_options(integer_scale == JNI_TRUE, brightness, contrast);
+    raven_video_set_effect(screen_effect);
 }
 
 JNIEXPORT void JNICALL

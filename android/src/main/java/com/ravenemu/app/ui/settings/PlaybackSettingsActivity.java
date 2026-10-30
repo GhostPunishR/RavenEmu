@@ -302,6 +302,15 @@ public final class PlaybackSettingsActivity extends Activity {
                         PlaybackSettings.BLENDING_GHOSTING},
                 settings.frameBlending, blending -> update(settings.withImage(settings.gbPalette,
                         settings.lcdCorrectionGbc, settings.lcdCorrectionGba, blending)));
+        // Native additions after two public-domain RetroArch shaders
+        // (sharp-bilinear, lcd3x), drawn by the GLES2 driver.
+        group("Effet d'écran");
+        description("Rendu des pixels",
+                "Le lissage net garde des pixels nets et réguliers quelle que soit la taille de l'image ; "
+                        + "la grille LCD imite la trame de l'écran d'une console portable.");
+        choices(new String[]{"Aucun (défaut)", "Lissage net", "Grille LCD"},
+                new String[]{PlaybackSettings.EFFECT_NONE, PlaybackSettings.EFFECT_SHARP, PlaybackSettings.EFFECT_LCD},
+                settings.screenEffect, effect -> update(settings.withEffect(effect)));
         group("Taille de l'image");
         settingSwitch("Pixels entiers",
                 "L'image prend un multiple entier de sa taille : tous les pixels sont identiques, avec des bords noirs autour.",
@@ -316,7 +325,7 @@ public final class PlaybackSettingsActivity extends Activity {
         reset.setTextColor(HomeActivity.ACCENT);
         reset.setOnClickListener(view -> {
             update(settings.withPicture(false, 0, 100).withImage(PlaybackSettings.PALETTE_ORIGINAL,
-                    false, false, PlaybackSettings.BLENDING_OFF));
+                    false, false, PlaybackSettings.BLENDING_OFF).withEffect(PlaybackSettings.EFFECT_NONE));
             showPage(VIDEO);
         });
         add(reset, 14);
