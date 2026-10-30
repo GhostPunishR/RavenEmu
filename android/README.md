@@ -210,6 +210,20 @@ suivante, sans rouvrir le jeu. Ni la SRAM ni les états ne changent de format.
 Le filtre « DMG vert » de la bêta n'a pas d'équivalent exact ; les options
 de cartouche et les capteurs restent à porter.
 
+## Image calée sur l'écran et son sans craquement
+
+Quand l'écran bat à un multiple de la cadence du jeu (60 ou 120 Hz pour
+59,73 images par seconde, à 5 % près), le lecteur émule exactement une image
+toutes les n synchronisations : plus d'image affichée deux fois sur les
+défilements. La fréquence que donne Android n'est crue qu'une fois confirmée
+par les intervalles mesurés entre deux images ; sinon, et à 90 Hz, l'horloge
+de la console reprend (`frontend/src/frame_pacer.c`). Pendant une partie, le
+lecteur demande un mode d'affichage que le jeu divise et garde l'écran allumé,
+comme la bêta. Le son suit la vitesse du jeu (0,46 % plus vite à 60 Hz) et le
+contrôle dynamique du débit (±0,5 %) garde la file audio à moitié pleine :
+plus d'échantillons jetés ni de silences. Un casque débranché ou un appareil
+Bluetooth perdu rouvre la sortie audio, en gardant la pause.
+
 ## Commandes tactiles
 
 **Paramètres → Interface** règle les commandes comme la bêta : retour
@@ -243,7 +257,9 @@ incompatible ; la SRAM reste celle du jeu.
 ## Portage ciblé des pilotes RetroArch et crédits
 
 Le backend AAudio et le chemin GLES2 adaptent désormais des portions de
-RetroArch, épinglées à `7986022baf6822677ad2cec4bc215069e89bd8ce`.
+RetroArch, épinglées à `7986022baf6822677ad2cec4bc215069e89bd8ce` ; le rappel
+d'erreur AAudio (reprise après la perte d'un casque ou d'un appareil
+Bluetooth) vient de `715d38f57745409f7b97b4f1eb70b848d3c2e4c8`.
 [La provenance détaillée](../legal/attributions/retroarch.md) indique les
 fonctions reprises, modifications et copyrights. Les fichiers dérivés restent
 GPLv3 ou ultérieure ; RavenEmu et RavenCore restent AGPLv3.

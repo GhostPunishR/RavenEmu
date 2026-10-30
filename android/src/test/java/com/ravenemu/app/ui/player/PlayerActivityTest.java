@@ -178,6 +178,26 @@ public final class PlayerActivityTest {
         assertEquals(ControlLayout.DEFAULT, controls.controlLayout());
     }
 
+    @Test public void theDisplayRateReachesThePacerAndTheScreenStaysOnWhilePlaying() throws Exception {
+        PlayerActivity activity = loaded();
+        android.view.Display display = activity.getDisplay();
+        assertEquals("The native pacer knows the display", display.getRefreshRate(), FakeNative.displayRate, 0.01f);
+        assertEquals("A refresh rate the game divides is kept while it is on screen",
+                display.getMode().getModeId(), activity.getWindow().getAttributes().preferredDisplayModeId);
+        assertTrue((activity.getWindow().getAttributes().flags
+                & android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) != 0);
+        // The system switches the display: the pacer hears of it.
+        shadowOf(display).setRefreshRate(120f);
+        android.hardware.display.DisplayManager.DisplayListener listener =
+                ReflectionHelpers.getField(activity, "displayListener");
+        listener.onDisplayChanged(android.view.Display.DEFAULT_DISPLAY);
+        pump(activity);
+        assertEquals(120f, FakeNative.displayRate, 0.01f);
+        openMenu(activity);
+        assertEquals("The menu lets the screen sleep", 0, activity.getWindow().getAttributes().flags
+                & android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+    }
+
     @Test public void gameBoyGamesInColorRunOnTheGbcCoreWithTheirColorsAndTheirOwnStates() throws Exception {
         new ConsoleSettings(true, 3, true, ConsoleSettings.BIOS_RAVENCORE).save(RuntimeEnvironment.getApplication());
         ActivityController<PlayerActivity> controller = open(null);
@@ -641,6 +661,8 @@ public final class PlayerActivityTest {
         static PlaybackSettings appliedSettings;
         static String[] openOptions, liveOptions;
         static String openCore;
+        static float displayRate;
+        static double fps;
         static void reset() {
             state = new byte[]{1, 2}; battery = new byte[]{3, 4};
             preview = new int[]{2, 1, 0xffff0000, 0xff00ff00};
@@ -650,6 +672,8 @@ public final class PlayerActivityTest {
             settingsApplies = 0; appliedSettings = null;
             openOptions = liveOptions = null;
             openCore = null;
+            displayRate = 0f;
+            fps = 59.727500569606;
         }
         private static void requireGl() { assertTrue("Core operation must use the queued GL boundary", QueuedGl.executing); }
         @Implementation protected static void __staticInitializer__() {}
@@ -659,6 +683,8 @@ public final class PlayerActivityTest {
             requireGl(); opens++; closed = false; state = new byte[]{1, 2}; battery = new byte[]{0};
             openCore = system; openOptions = coreOptions.clone(); return null;
         }
+        @Implementation protected static void setDisplayRate(float hertz) { requireGl(); displayRate = hertz; }
+        @Implementation protected static double frameRate() { requireGl(); return closed ? 0.0 : fps; }
         @Implementation protected static void setCoreOptions(String[] coreOptions) {
             requireGl(); liveOptions = coreOptions.clone();
         }

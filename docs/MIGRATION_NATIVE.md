@@ -536,3 +536,39 @@ Corrections demandées par le propriétaire d'après une capture sur téléphone
 confidentialité s'ouvrent en ligne (dépôt GitHub), pas encore dans le lecteur
 intégré de l'application ; RetroAchievements n'a pas encore sa catégorie. La
 validation sur téléphone reste nécessaire.
+
+## Tranche A : image calée sur l'écran et son sans craquement
+
+Première tranche des emprunts à RetroArch choisis par le propriétaire.
+
+- **Calage sur l'écran** (`frontend/src/frame_pacer.c`, code RavenEmu) : quand
+  l'écran bat à n fois la cadence du jeu, à 5 % près, une image est émulée
+  toutes les n synchronisations ; le jeu tourne alors 0,46 % plus vite à
+  60 Hz, comme dans RetroArch et la bêta. La fréquence annoncée par Android
+  n'est retenue qu'après 30 intervalles mesurés en accord (nombre entier de
+  synchronisations, moyenne à 2 % près) ; 8 désaccords de suite, ou une
+  moyenne qui s'écarte de 3 %, rendent la main à l'horloge de la console. Un
+  téléphone qui passe à 90 ou 120 Hz sans prévenir ne fait donc jamais
+  accélérer le jeu. Java transmet la fréquence au démarrage et à chaque
+  changement, demande un mode d'affichage que le jeu divise (60 ou 120 Hz
+  plutôt que 90) et garde l'écran allumé pendant la partie.
+- **Contrôle dynamique du débit** (`audio_pipeline.c`, code RavenEmu d'après
+  l'algorithme publié par l'auteur de RetroArch) : la vitesse du jeu est
+  appliquée au rééchantillonneur, puis chaque écriture corrige le rapport d'au
+  plus ±0,5 % vers une file à moitié pleine, mesurée au milieu du lot écrit.
+  Les échantillons jetés (file pleine) et les silences (file vide) qui
+  craquaient disparaissent.
+- **Reprise de la sortie audio** (rappel d'erreur adapté d'`aaudio.c`,
+  RetroArch 715d38f) : un casque débranché ou un appareil Bluetooth perdu
+  marque le stream perdu ; le fil d'émulation le rouvre en gardant la pause,
+  et réessaie environ une fois par seconde tant qu'aucune sortie n'est prête.
+- Tests : `raven_frame_pacer` (cadences, une heure à 60 Hz sans image répétée
+  ni sautée, 120 Hz, 90 Hz, fréquences annoncées fausses, rafraîchissement
+  manqué, changement de fréquence ; mutation de la garde vérifiée),
+  `raven_native_audio` (correction bornée, horloge d'appareil plus rapide ou
+  plus lente de 0,2 % sans silence ni saturation, vitesse d'écran, perte et
+  réouverture), Java (`DisplayModesTest`, fréquence transmise, mode demandé,
+  écran allumé).
+
+Écarts restants : la sensation de fluidité, la latence audio réelle et le
+comportement des écrans à fréquence variable restent à vérifier sur téléphone.

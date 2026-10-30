@@ -34,9 +34,15 @@ public final class NativeBridge {
      * values); the core takes them at its next frame. */
     public static native void setCoreOptions(String[] coreOptions);
 
-    /** GL thread: native monotonic pacing at the core's FPS, bounded catch-up.
-     * Returns the number of core frames actually executed (0..3). */
+    /** GL thread: one core frame every n display refreshes when the display
+     * divides the core rate (the sound follows), otherwise native monotonic
+     * pacing at the core's FPS; bounded catch-up. Also reopens a lost audio
+     * device. Returns the number of core frames actually executed (0..3). */
     public static native int drawFrame(int surfaceWidth, int surfaceHeight, boolean allowAdvance);
+    /** GL thread: the display's refresh rate, on start and whenever it changes. */
+    public static native void setDisplayRate(float hertz);
+    /** GL thread: the open game's frame rate, 0 without one. */
+    public static native double frameRate();
     /** Current combined joypad mask. Brief presses survive until one core frame. */
     public static native void setButtons(int buttons);
     /** Pause/menu/focus loss: release held buttons and discard pending presses. */

@@ -19,11 +19,17 @@ import android.app.Activity;
 import android.content.Intent;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
+import android.hardware.display.DisplayManager;
 import android.opengl.GLSurfaceView;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.view.Display;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
+import android.view.WindowManager;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -52,6 +58,17 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
     /** Shown under the bar while the controls are moved. */
     private LinearLayout editBar;
     private boolean editingLandscape;
+    /** UI thread: the open game's frame rate, for the display mode; 0 without. */
+    private double gameFps;
+    private DisplayManager displays;
+    /** The refresh rate follows the display: 60, 90 or 120 Hz, as the system switches. */
+    private final DisplayManager.DisplayListener displayListener = new DisplayManager.DisplayListener() {
+        @Override public void onDisplayAdded(int displayId) {}
+        @Override public void onDisplayRemoved(int displayId) {}
+        @Override public void onDisplayChanged(int displayId) {
+            if (displayId == Display.DEFAULT_DISPLAY) sendDisplayRate();
+        }
+    };
     private long nextBatterySaveNanos;
     private volatile String activeSaveKey;
     /** GL thread: the core of the open game ("gb", "gbc" or "gba"), for its options. */
@@ -102,10 +119,15 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         surface.setEGLContextClientVersion(2);
         surface.setRenderer(this);
         surface.setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);
+        displays = getSystemService(DisplayManager.class);
         pauseState = new PlayerPauseState(paused -> {
             gamePaused = paused;
             releaseInput();
             if (gameControls != null) gameControls.setEnabled(!paused);
+            // As in the beta: the screen stays on while the game runs, a game
+            // played on a controller included; the menu lets it sleep.
+            if (paused) getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            else getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
             surface.queueEvent(() -> {
                 if (!disposed.get()) NativeBridge.setPaused(paused);
             });
@@ -213,6 +235,29 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         return Math.round(value * getResources().getDisplayMetrics().density);
     }
 
+    private Display currentDisplay() {
+        if (Build.VERSION.SDK_INT >= 30) return getDisplay();
+        return getWindowManager().getDefaultDisplay();
+    }
+
+    /** UI thread: the native pacer locks on the display only when it knows its rate. */
+    private void sendDisplayRate() {
+        Display display = currentDisplay();
+        final float hertz = display != null ? display.getRefreshRate() : 0f;
+        if (surface != null) surface.queueEvent(() -> {
+            if (!disposed.get()) NativeBridge.setDisplayRate(hertz);
+        });
+    }
+
+    /** UI thread: a refresh rate the game divides, as long as it is on screen. */
+    private void applyDisplayMode() {
+        int mode = DisplayModes.modeFor(currentDisplay(), gameFps);
+        WindowManager.LayoutParams attributes = getWindow().getAttributes();
+        if (attributes.preferredDisplayModeId == mode) return;
+        attributes.preferredDisplayModeId = mode;
+        getWindow().setAttributes(attributes);
+    }
+
     private TextView barButton(String label) {
         TextView button = new TextView(this);
         button.setText(label);
@@ -292,6 +337,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
                         NativeBridge.closeRom();
                         failure = "SRAM incompatible : fichier original conservé";
                     }
+                    final double fps = failure == null ? NativeBridge.frameRate() : 0.0;
                     if (failure == null) {
                         activeSaveKey = entry.key;
                         activeCore = core;
@@ -302,6 +348,8 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
                     final String result = failure;
                     runOnUiThread(() -> {
                         if (!disposed.get() && result == null && gameTitle != null) {
+                            gameFps = fps;
+                            applyDisplayMode();
                             releaseInput();
                             gameControls.setShoulders("gba".equals(entry.system));
                             gameTitle.setText(entry.title);
@@ -646,6 +694,8 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         foreground = true;
         settingsLaunching = false;
         if (surface != null) surface.onResume();
+        if (displays != null) displays.registerDisplayListener(displayListener, new Handler(Looper.getMainLooper()));
+        sendDisplayRate();
         // Settings → Interface: size, spacing, style and haptics of the touch
         // controls, and where the player moved them for this orientation.
         if (gameControls != null) {
@@ -672,6 +722,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
 
     @Override protected void onPause() {
         finishMovingControls();
+        if (displays != null) displays.unregisterDisplayListener(displayListener);
         foreground = false;
         if (pauseState != null) pauseState.foreground(false);
         releaseInput();

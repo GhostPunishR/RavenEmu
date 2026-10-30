@@ -2,13 +2,14 @@
 
 Source amont : [libretro/RetroArch, révision
 7986022baf6822677ad2cec4bc215069e89bd8ce](https://github.com/libretro/RetroArch/tree/7986022baf6822677ad2cec4bc215069e89bd8ce).
-Adaptations par GhostPunishR le 29 octobre 2026. Les fichiers adaptés gardent
+Adaptations par GhostPunishR les 29 et 30 octobre 2026 (le 30 : rappel
+d'erreur AAudio, depuis la révision 715d38f57745409f7b97b4f1eb70b848d3c2e4c8). Les fichiers adaptés gardent
 leurs avis de copyright, de modification et leur licence **GPL-3.0-or-later**.
 
 | Fichier RavenEmu | Sources amont et parties adaptées |
 | --- | --- |
-| `androidNative/src/main/cpp/retroarch_aaudio.c` | `audio/drivers/aaudio.c` : `aaudio_data_cb`, ouverture PCM, configuration des buffers et fermeture du stream |
-| `androidNative/src/main/cpp/native_video.c` | `gfx/drivers/gl2.c` : chargement et mise à jour de texture, branche GLES des images logicielles ; `gfx/drivers_shader/shader_glsl.c` : compilation et liaison ; `gfx/drivers/gl_shaders/modern_opaque.glsl.vert.h` et `.frag.h` : shaders opaques de base |
+| `android/src/main/cpp/hardware/audio/aaudio/aaudio_driver.c` | `audio/drivers/aaudio.c` : `aaudio_data_cb`, ouverture PCM, configuration des buffers et fermeture du stream ; depuis la [révision 715d38f57745409f7b97b4f1eb70b848d3c2e4c8](https://github.com/libretro/RetroArch/blob/715d38f57745409f7b97b4f1eb70b848d3c2e4c8/audio/drivers/aaudio.c), `aaudio_error_cb` et la génération du stream |
+| `android/src/main/cpp/hardware/video/gles2/gles2_renderer.c` | `gfx/drivers/gl2.c` : chargement et mise à jour de texture, branche GLES des images logicielles ; `gfx/drivers_shader/shader_glsl.c` : compilation et liaison ; `gfx/drivers/gl_shaders/modern_opaque.glsl.vert.h` et `.frag.h` : shaders opaques de base |
 
 AAudio : copyright © 2026 The RetroArch team.
 GL2 : copyright © 2010–2014 Hans-Kristian Arntzen, 2011–2017 Daniel De Matteis,
@@ -24,6 +25,13 @@ au périphérique est de deux bursts ; le budget de file est de 64 ms, ajusté
 aux bursts et à la capacité. Ce budget ne mesure pas la latence réelle.
 Le convertisseur linéaire de `native_audio.c` reste celui de RavenEmu.
 
+Le rappel d'erreur AAudio (`aaudio_error_cb`) signale seulement qu'un
+périphérique a disparu (casque débranché, Bluetooth, USB), en ignorant le
+signalement d'un stream déjà remplacé ; le propriétaire de l'émulation ferme
+et rouvre le stream, jamais le rappel lui-même. La logique de réouverture,
+réessayée environ une fois par seconde en gardant la pause, est celle de
+RavenEmu.
+
 Le pilote vidéo reçoit les pixels RGBA logiciels de RavenCore, alloue la
 texture quand sa géométrie change et la met à jour par `glTexSubImage2D`.
 Un rafraîchissement sans image nouvelle réutilise la texture. Le filtrage
@@ -37,14 +45,17 @@ licence indiquée dans chaque fichier ; elles ne sont pas attribuées à l'amont
 
 Le frontend, la boucle d'émulation et les menus restent ceux de RavenEmu ;
 RavenCore reste le moteur GB/GBC/GBA. Les resamplers sinc, les presets de
-shaders, la sélection de périphériques, la reconnexion audio automatique,
-les cores graphiques matériels et la planification de RetroArch ne sont
-pas portés. L'asservissement à l'horloge audio et la validation sur téléphone
-restent des travaux de migration.
+shaders, la sélection de périphériques, les cores graphiques matériels et la
+planification de RetroArch ne sont pas portés. Le calage sur l'écran et le
+contrôle dynamique du débit audio reprennent l'idée publiée par l'auteur de
+RetroArch, mais leur code (`frontend/src/frame_pacer.c`,
+`android/src/main/cpp/hardware/audio/audio_pipeline.c`) est écrit pour
+RavenEmu, sous sa licence AGPLv3 ; aucune ligne de `audio/audio_driver.c`
+n'y est reprise. La validation sur téléphone reste un travail de migration.
 
 ## Licences et distribution
 
-Le [texte intégral GPLv3](../../androidNative/src/main/assets/licenses/GPL-3.0.txt)
+Le [texte intégral GPLv3](../../android/src/main/assets/licenses/GPL-3.0.txt)
 accompagne l'APK. RavenEmu et RavenCore gardent leur [licence AGPLv3](../../LICENSE).
 Les sections [13 de GPLv3](https://www.gnu.org/licenses/gpl-3.0.html#section13)
 et [13 d'AGPLv3](https://www.gnu.org/licenses/agpl-3.0.html#section13) permettent
@@ -64,7 +75,7 @@ Les fichiers non suivis, clés privées, caches et sorties de compilation
 ne font pas partie de l'archive.
 
 Pour reconstruire l'archive et l'APK, voir les commandes dans
-[androidNative/README.md](../../androidNative/README.md). Les dépendances
+[android/README.md](../../android/README.md). Les dépendances
 conservent leurs propres licences et notices. Leurs publications sources
 sont complétées par leurs dépôts de construction :
 [Material Components](https://github.com/material-components/material-components-android/tree/1.14.0),

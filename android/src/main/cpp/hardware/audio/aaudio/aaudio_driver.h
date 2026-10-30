@@ -15,6 +15,10 @@
 int raven_aaudio_open(int *sample_rate);
 int raven_aaudio_running(void);
 void raven_aaudio_push(int16_t left, int16_t right);
+/* The device was disconnected (headphones, Bluetooth, USB): close and reopen. */
+int raven_aaudio_lost(void);
+/* Frames waiting in the software queue, and how many it may hold. */
+void raven_aaudio_fill(uint32_t *queued, uint32_t *limit);
 void raven_aaudio_set_running(int running);
 /* Publish a consumer-owned purge without changing the stream's run state. */
 void raven_aaudio_flush(void);

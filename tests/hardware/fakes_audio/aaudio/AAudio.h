@@ -7,6 +7,7 @@ typedef int32_t aaudio_result_t;
 typedef int32_t aaudio_stream_state_t;
 typedef int32_t aaudio_data_callback_result_t;
 typedef aaudio_data_callback_result_t (*AAudioStream_dataCallback)(AAudioStream *, void *, void *, int32_t);
+typedef void (*AAudioStream_errorCallback)(AAudioStream *, void *, aaudio_result_t);
 #define AAUDIO_OK 0
 #define AAUDIO_ERROR_DISCONNECTED (-899)
 #define AAUDIO_UNSPECIFIED 0
@@ -30,6 +31,7 @@ void AAudioStreamBuilder_setFormat(AAudioStreamBuilder *, int32_t);
 void AAudioStreamBuilder_setChannelCount(AAudioStreamBuilder *, int32_t);
 void AAudioStreamBuilder_setSampleRate(AAudioStreamBuilder *, int32_t);
 void AAudioStreamBuilder_setDataCallback(AAudioStreamBuilder *, AAudioStream_dataCallback, void *);
+void AAudioStreamBuilder_setErrorCallback(AAudioStreamBuilder *, AAudioStream_errorCallback, void *);
 aaudio_result_t AAudioStreamBuilder_openStream(AAudioStreamBuilder *, AAudioStream **);
 aaudio_result_t AAudioStreamBuilder_delete(AAudioStreamBuilder *);
 int32_t AAudioStream_getSampleRate(AAudioStream *);

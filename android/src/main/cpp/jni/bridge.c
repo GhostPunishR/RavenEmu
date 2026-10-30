@@ -2,7 +2,7 @@
 #include <android/log.h>
 #include <libretro.h>
 #include <ravenemu/frontend.h>
-#include <ravenemu/frame_clock.h>
+#include <ravenemu/frame_pacer.h>
 #include "audio_pipeline.h"
 #include "gles2_renderer.h"
 #include "input_driver.h"
@@ -28,7 +28,10 @@ static size_t rgba_capacity;
 static int image_width, image_height;
 static int image_dirty, image_ready;
 static int preview_valid;
-static raven_frame_clock frame_clock;
+/* Locked on the display when it divides the core rate, else the console clock. */
+static raven_frame_pacer frame_pacer;
+/* The display's refresh rate, as Android reports it; kept across games. */
+static double display_rate;
 static uint8_t stretch5(uint32_t value) {
     return (uint8_t)((value << 3u) | (value >> 2u));
 }
@@ -136,7 +139,7 @@ Java_com_ravenemu_app_bridge_NativeBridge_initGl(
     (void)env;
     (void)clazz;
     raven_video_init_gl();
-    raven_frame_clock_reset(&frame_clock);
+    raven_frame_pacer_reset(&frame_pacer);
     image_dirty = image_ready;
 }
 
@@ -177,7 +180,8 @@ Java_com_ravenemu_app_bridge_NativeBridge_openRom(
         goto done;
     }
     raven_audio_close();
-    frame_clock = (raven_frame_clock){0};
+    frame_pacer = (raven_frame_pacer){0};
+    raven_frame_pacer_set_display(&frame_pacer, display_rate);
     raven_input_clear_buttons(&input);
     clear_frame();
     if (!raven_frontend_open_core(session, library_path, files, files)) {
@@ -200,7 +204,7 @@ Java_com_ravenemu_app_bridge_NativeBridge_openRom(
     } else {
         raven_core_info info = {0};
         if (!raven_frontend_get_info(session, &info) ||
-                !raven_frame_clock_configure(&frame_clock, info.fps)) {
+                !raven_frame_pacer_configure(&frame_pacer, info.fps)) {
             result = failure(env, "Unsupported Libretro core frame rate");
             raven_frontend_unload(session);
             goto done;
@@ -242,19 +246,23 @@ Java_com_ravenemu_app_bridge_NativeBridge_drawFrame(
     (void)env;
     (void)clazz;
     unsigned advanced = 0;
+    /* Headphones or a Bluetooth device gone: AAudio only says so. */
+    raven_audio_recover();
     if (playback_paused || !advance) {
         raven_input_clear_buttons(&input);
-        raven_frame_clock_reset(&frame_clock);
+        raven_frame_pacer_reset(&frame_pacer);
     } else if (session) {
         struct timespec now;
         if (clock_gettime(CLOCK_MONOTONIC, &now) == 0) {
             const uint64_t now_ns = (uint64_t)now.tv_sec * UINT64_C(1000000000) +
                                     (uint64_t)now.tv_nsec;
-            const unsigned due = raven_frame_clock_tick(&frame_clock, now_ns);
+            const unsigned due = raven_frame_pacer_tick(&frame_pacer, now_ns);
+            /* Locked on the display, the game runs at its pace: so does the sound. */
+            raven_audio_set_speed(raven_frame_pacer_speed(&frame_pacer));
             for (unsigned i = 0; i < due; ++i) {
                 raven_input_begin_frame(&input);
                 if (!raven_frontend_run_frame(session)) {
-                    raven_frame_clock_reset(&frame_clock);
+                    raven_frame_pacer_reset(&frame_pacer);
                     break;
                 }
                 ++advanced;
@@ -273,10 +281,27 @@ Java_com_ravenemu_app_bridge_NativeBridge_setPaused(
     JNIEnv *env, jclass clazz, jboolean paused) {
     (void)env; (void)clazz;
     const int next_paused = paused == JNI_TRUE;
-    if (playback_paused != next_paused) raven_frame_clock_reset(&frame_clock);
+    if (playback_paused != next_paused) raven_frame_pacer_reset(&frame_pacer);
     playback_paused = next_paused;
     if (playback_paused) raven_input_clear_buttons(&input);
     raven_audio_set_running(!playback_paused);
+}
+
+/* GL thread: the display's refresh rate, on start and whenever it changes. */
+JNIEXPORT void JNICALL
+Java_com_ravenemu_app_bridge_NativeBridge_setDisplayRate(
+    JNIEnv *env, jclass clazz, jfloat hertz) {
+    (void)env; (void)clazz;
+    display_rate = hertz;
+    raven_frame_pacer_set_display(&frame_pacer, display_rate);
+}
+
+/* GL thread: the open game's frame rate, 0 without one. */
+JNIEXPORT jdouble JNICALL
+Java_com_ravenemu_app_bridge_NativeBridge_frameRate(JNIEnv *env, jclass clazz) {
+    (void)env; (void)clazz;
+    raven_core_info info = {0};
+    return session && raven_frontend_get_info(session, &info) ? info.fps : 0.0;
 }
 
 JNIEXPORT void JNICALL
@@ -369,7 +394,7 @@ Java_com_ravenemu_app_bridge_NativeBridge_restoreState(
     jbyte *bytes = (*env)->GetByteArrayElements(env, saved, NULL);
     if (!bytes) return JNI_FALSE;
     int result = raven_frontend_load_state(session, bytes, (size_t)size);
-    raven_frame_clock_reset(&frame_clock);
+    raven_frame_pacer_reset(&frame_pacer);
     // Keep displaying the previous frame, but never attach its pixels to a
     // restored state until the core has supplied a fresh video callback.
     preview_valid = 0;
@@ -404,7 +429,8 @@ Java_com_ravenemu_app_bridge_NativeBridge_closeRom(
     (void)env;
     (void)clazz;
     raven_audio_close();
-    frame_clock = (raven_frame_clock){0};
+    frame_pacer = (raven_frame_pacer){0};
+    raven_frame_pacer_set_display(&frame_pacer, display_rate);
     if (session) {
         raven_frontend_destroy(session);
         session = NULL;
