@@ -3,6 +3,7 @@ import com.ravenemu.app.R;
 import com.ravenemu.app.data.saves.GbaBiosRepository;
 import com.ravenemu.app.platform.SystemBarInsets;
 import com.ravenemu.app.settings.ConsoleSettings;
+import com.ravenemu.app.settings.ControlLayout;
 import com.ravenemu.app.settings.ControlSettings;
 import com.ravenemu.app.settings.PlaybackSettings;
 import com.ravenemu.app.ui.library.HomeActivity;
@@ -144,7 +145,7 @@ public final class PlaybackSettingsActivity extends Activity {
                 "M11,7h2v2h-2zM11,11h2v6h-2zM12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2z"
                         + "M12,20c-4.41,0 -8,-3.59 -8,-8s3.59,-8 8,-8 8,3.59 8,8 -3.59,8 -8,8z");
         // The beta says "Commandes tactiles, retour arrière et style": the
-        // native player has no rewind yet, so it is not announced.
+        // owner left rewind out of the native player, so it is not announced.
         category("Interface", "Commandes tactiles et style", INTERFACE,
                 "M3,3H11V11H3ZM13,3H21V11H13ZM3,13H11V21H3ZM13,13H21V21H13Z");
     }
@@ -302,8 +303,9 @@ public final class PlaybackSettingsActivity extends Activity {
         }
     }
 
-    /** The beta's Interface page, touch controls part. Its rewind, cartridge
-     * and Delta skin sections wait for those native features. */
+    /** The beta's Interface page, touch controls part, and where the buttons
+     * were moved. Its cartridge and Delta skin sections wait for those native
+     * features; rewind is left out at the owner's request. */
     private void interfacePage() {
         group("Commandes tactiles");
         settingSwitch("Retour haptique", "Petite vibration à la pression des boutons.", controls.haptics,
@@ -316,10 +318,12 @@ public final class PlaybackSettingsActivity extends Activity {
         choices(new String[]{"Classique (défaut)", "Contraste élevé"},
                 new String[]{ControlSettings.STYLE_CLASSIC, ControlSettings.STYLE_CONTRAST}, controls.style,
                 style -> updateControls(controls.withStyle(style)));
-        add(text("Le déplacement libre des boutons sera ajouté plus tard.", 12, HomeActivity.MUTED), 8);
+        add(text("Pour déplacer les boutons, ouvrez le menu du jeu puis « Déplacer les boutons ». Le "
+                + "portrait et le paysage gardent chacun leur disposition.", 12, HomeActivity.MUTED), 8);
         Button reset = textButton("Réinitialiser les commandes", HomeActivity.ACCENT);
         reset.setOnClickListener(view -> {
             updateControls(ControlSettings.DEFAULTS);
+            ControlLayout.reset(this);
             showPage(INTERFACE);
         });
     }

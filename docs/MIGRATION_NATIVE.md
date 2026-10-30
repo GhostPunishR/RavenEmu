@@ -467,9 +467,44 @@ bêta n'est lue ; la validation sur téléphone reste nécessaire.
   réinitialisation.
 
 Écarts restants : le résumé de la catégorie dit « Commandes tactiles et
-style », sans « retour arrière », que le lecteur natif n'a pas encore ; les
-sections retour arrière, vibration et capteurs de la cartouche et skins Delta
-de la page Interface restent à porter, comme le déplacement libre des
-boutons, annoncé « plus tard » dans la bêta aussi. La validation sur téléphone
-(sensation du retour haptique, encoches, navigation par gestes) reste
-nécessaire.
+style », sans « retour arrière » (voir la tranche suivante) ; la vibration et
+les capteurs de la cartouche et les skins Delta de la page Interface restent à
+porter. La validation sur téléphone (sensation du retour haptique, encoches,
+navigation par gestes) reste nécessaire.
+
+## Dix-neuvième tranche : déplacement libre des boutons
+
+Choix du propriétaire : le **retour arrière** et l'**avance rapide** de la
+bêta ne sont pas portés dans l'application native. Ce sont des écarts voulus,
+pas des oublis ; la page Interface ne les annonce pas.
+
+- Le menu du jeu gagne **Déplacer les boutons** : le jeu reste en pause, une
+  barre « Faites glisser les boutons · Rétablir · Terminé » remplace la ligne
+  d'état, et chaque commande (croix, A, B, SELECT, START, L, R) se déplace au
+  doigt, encadrée en pointillés. Un glissement n'appuie sur rien. **Terminé**,
+  le retour Android ou la mise en arrière-plan gardent la disposition ;
+  **Rétablir** remet les places d'origine. La bêta annonçait cette fonction
+  « plus tard ».
+- `ControlLayout` garde, pour le portrait et pour le paysage, le décalage en
+  dp de chaque commande depuis sa place d'origine (au dixième de dp) ; une
+  valeur abîmée redonne la disposition d'origine. Le décalage s'ajoute à la
+  géométrie de la page Interface (taille, espacement), et la vue garde chaque
+  commande entière à l'intérieur de sa zone : en portrait la zone des
+  commandes sous l'image, en paysage toute la zone de jeu, image comprise, la
+  vue des commandes la couvrant désormais (transparente, elle laisse passer
+  les touchers hors des commandes).
+- Accessibilité : en mode déplacement, chaque commande propose « Déplacer à
+  gauche / à droite / vers le haut / vers le bas » (8 dp) ; les actions de
+  la croix reviennent ensuite.
+- Paramètres → Interface explique où déplacer les boutons, et
+  **Réinitialiser les commandes** remet aussi leurs places d'origine, dans les
+  deux orientations.
+- Tests Java : stockage par orientation et valeurs abîmées, glissement au
+  pixel et bornes de la zone, glissement sans appui puis appui à la nouvelle
+  place, disposition appliquée puis rétablie, actions d'accessibilité,
+  parcours complet depuis le menu du jeu (pause, Terminé, retour Android,
+  rechargement au retour au premier plan), réinitialisation depuis Interface.
+
+Écarts restants : en portrait, les commandes ne montent pas sur l'image ; la
+validation sur téléphone (précision du glissement, encoches, gestes de
+navigation près des bords) reste nécessaire.

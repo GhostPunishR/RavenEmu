@@ -8,6 +8,7 @@ import com.ravenemu.app.data.saves.StatePreview;
 import com.ravenemu.app.data.saves.StateSlotRepository;
 import com.ravenemu.app.platform.SystemBarInsets;
 import com.ravenemu.app.settings.ConsoleSettings;
+import com.ravenemu.app.settings.ControlLayout;
 import com.ravenemu.app.settings.ControlSettings;
 import com.ravenemu.app.settings.CoreOptions;
 import com.ravenemu.app.settings.PlaybackSettings;
@@ -22,6 +23,7 @@ import android.opengl.GLSurfaceView;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.KeyEvent;
+import android.view.View;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -48,6 +50,9 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
     private TextView gameTitle;
     private int width = 1, height = 1, buttons, touchButtons;
     private GameControlsView gameControls;
+    /** Shown instead of the status line while the controls are moved. */
+    private LinearLayout editBar;
+    private boolean editingLandscape;
     private long nextBatterySaveNanos;
     private volatile String activeSaveKey;
     /** GL thread: the core of the open game ("gb", "gbc" or "gba"), for its options. */
@@ -149,6 +154,25 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         status.setText("Audio et rendu natifs · RavenCore");
         status.setPadding(dp(12), dp(4), dp(12), dp(4));
         header.addView(status, new LinearLayout.LayoutParams(-1, dp(28)));
+        editBar = new LinearLayout(this);
+        editBar.setGravity(Gravity.CENTER_VERTICAL);
+        editBar.setBackgroundColor(HomeActivity.SURFACE);
+        editBar.setPadding(dp(12), 0, dp(4), 0);
+        TextView hint = new TextView(this);
+        hint.setText("Faites glisser les boutons");
+        hint.setTextColor(HomeActivity.MUTED);
+        hint.setTextSize(12);
+        editBar.addView(hint, new LinearLayout.LayoutParams(0, -2, 1));
+        TextView restore = barButton("Rétablir");
+        restore.setContentDescription("Remettre les boutons à leur place d'origine");
+        restore.setOnClickListener(view -> gameControls.setControlLayout(ControlLayout.DEFAULT));
+        editBar.addView(restore, new LinearLayout.LayoutParams(-2, dp(48)));
+        TextView done = barButton("Terminé");
+        done.setContentDescription("Garder cette disposition des boutons");
+        done.setOnClickListener(view -> finishMovingControls());
+        editBar.addView(done, new LinearLayout.LayoutParams(-2, dp(48)));
+        editBar.setVisibility(View.GONE);
+        header.addView(editBar, new LinearLayout.LayoutParams(-1, dp(48)));
         root.addView(header, new LinearLayout.LayoutParams(-1, -2));
 
         gameControls = new GameControlsView(this, this::setTouchButtons);
@@ -160,7 +184,8 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
             video.leftMargin = video.rightMargin = dp(116);
             video.bottomMargin = dp(44);
             stage.addView(surface, video);
-            stage.addView(gameControls, new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM));
+            // The whole stage, so a control can be moved beside or over the picture.
+            stage.addView(gameControls, new FrameLayout.LayoutParams(-1, -1));
         } else {
             root.addView(surface, new LinearLayout.LayoutParams(-1, 0, 1));
             root.addView(gameControls, new LinearLayout.LayoutParams(-1, -2));
@@ -191,6 +216,38 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
 
     private int dp(int value) {
         return Math.round(value * getResources().getDisplayMetrics().density);
+    }
+
+    private TextView barButton(String label) {
+        TextView button = new TextView(this);
+        button.setText(label);
+        button.setGravity(Gravity.CENTER);
+        button.setTextSize(14);
+        button.setTextColor(HomeActivity.ACCENT);
+        button.setPadding(dp(12), 0, dp(12), 0);
+        button.setMinWidth(dp(48));
+        return button;
+    }
+
+    /** From the game menu: the game waits while the player drags the controls. */
+    private void startMovingControls() {
+        if (disposed.get() || gameControls == null || gameControls.isEditing()) return;
+        pauseState.editing(true);
+        if (playerMenu != null) playerMenu.dismiss();
+        editingLandscape = gameControls.isLandscape();
+        gameControls.setEditing(true);
+        status.setVisibility(View.GONE);
+        editBar.setVisibility(View.VISIBLE);
+    }
+
+    /** Keeps the places for the orientation they were chosen in. */
+    private void finishMovingControls() {
+        if (gameControls == null || !gameControls.isEditing()) return;
+        gameControls.controlLayout().save(this, editingLandscape);
+        gameControls.setEditing(false);
+        editBar.setVisibility(View.GONE);
+        status.setVisibility(View.VISIBLE);
+        pauseState.editing(false);
     }
 
     private void setHeld(int mask, boolean held) {
@@ -291,6 +348,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
     }
 
     private void togglePlayerMenu() {
+        finishMovingControls();
         if (playerMenu != null && playerMenu.isShowing()) {
             playerMenu.dismiss();
             return;
@@ -310,6 +368,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
                     @Override public void onLoad(int slot) { operateSlot(slot, 1); }
                     @Override public void onDelete(int slot) { operateSlot(slot, 2); }
                     @Override public void onUndo() { undoLastLoad(); }
+                    @Override public void onMoveControls() { startMovingControls(); }
                     @Override public void onSettings() {
                         if (!disposed.get() && foreground && !slotBusy && !settingsLaunching) {
                             settingsLaunching = true;
@@ -557,6 +616,10 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
 
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
+        if (keyCode == KeyEvent.KEYCODE_BACK && gameControls != null && gameControls.isEditing()) {
+            finishMovingControls();
+            return true;
+        }
         if (keyCode == KeyEvent.KEYCODE_MENU ||
             (menuOpen && keyCode == KeyEvent.KEYCODE_BACK)) {
             if (event.getRepeatCount() == 0) togglePlayerMenu();
@@ -587,8 +650,12 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         foreground = true;
         settingsLaunching = false;
         if (surface != null) surface.onResume();
-        // Settings → Interface: size, spacing, style and haptics of the touch controls.
-        if (gameControls != null) gameControls.setSettings(ControlSettings.load(this));
+        // Settings → Interface: size, spacing, style and haptics of the touch
+        // controls, and where the player moved them for this orientation.
+        if (gameControls != null) {
+            gameControls.setSettings(ControlSettings.load(this));
+            gameControls.setControlLayout(ControlLayout.load(this, gameControls.isLandscape()));
+        }
         applyPlaybackSettings();
         if (pauseState != null) pauseState.foreground(true);
         dispatchRomLoad();
@@ -608,6 +675,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
     }
 
     @Override protected void onPause() {
+        finishMovingControls();
         foreground = false;
         if (pauseState != null) pauseState.foreground(false);
         releaseInput();

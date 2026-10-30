@@ -1,6 +1,7 @@
 package com.ravenemu.app.ui.settings;
 import com.ravenemu.app.data.saves.GbaBiosRepository;
 import com.ravenemu.app.settings.ConsoleSettings;
+import com.ravenemu.app.settings.ControlLayout;
 import com.ravenemu.app.settings.ControlSettings;
 import com.ravenemu.app.settings.PlaybackSettings;
 
@@ -250,7 +251,13 @@ public final class PlaybackSettingsActivityTest {
         assertNotNull(choice(activity, "Contraste élevé, choisi"));
         assertEquals(23, PlaybackSettings.load(activity).audioVolume);
 
+        ControlLayout.DEFAULT.with(1, 40, 0).save(activity, false);
+        ControlLayout.DEFAULT.with(0, 0, -60).save(activity, true);
+        assertNotNull(find(activity, view -> view instanceof TextView
+                && ((TextView)view).getText().toString().contains("« Déplacer les boutons »")));
         text(activity, "Réinitialiser les commandes").performClick();
+        assertEquals("The buttons go back too", ControlLayout.DEFAULT, ControlLayout.load(activity, false));
+        assertEquals(ControlLayout.DEFAULT, ControlLayout.load(activity, true));
         ControlSettings restored = ControlSettings.load(activity);
         assertFalse(restored.haptics);
         assertEquals(100, restored.scale);

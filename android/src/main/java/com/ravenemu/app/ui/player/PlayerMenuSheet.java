@@ -36,6 +36,7 @@ final class PlayerMenuSheet {
         void onDismiss();
         default void onUndo() {}
         default void onSettings() {}
+        default void onMoveControls() {}
     }
 
     private static final int CARD = 0xff202230;
@@ -155,6 +156,11 @@ final class PlayerMenuSheet {
         resume.setBackground(buttonBackground(HomeActivity.ACCENT));
         resume.setOnClickListener(view -> dismiss());
         add(content, resume, 12);
+        Button move = button("Déplacer les boutons", 14);
+        move.setOnClickListener(view -> {
+            if (!busy && dialog.isShowing()) listener.onMoveControls();
+        });
+        add(content, move, 12);
         settings = button("Paramètres audio et vidéo", 14);
         settings.setOnClickListener(view -> {
             if (!busy && dialog.isShowing()) listener.onSettings();

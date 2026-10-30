@@ -1,5 +1,6 @@
 package com.ravenemu.app.ui.player;
 import com.ravenemu.app.bridge.NativeBridge;
+import com.ravenemu.app.settings.ControlLayout;
 import com.ravenemu.app.settings.ControlSettings;
 
 import android.app.Activity;
@@ -114,6 +115,65 @@ public final class GameControlsViewTest {
         touch(MotionEvent.ACTION_MOVE, 5, x, y - 40);
         assertEquals(HapticFeedbackConstants.LONG_PRESS, shadowOf(dpad).lastHapticFeedbackPerformed());
         touch(MotionEvent.ACTION_UP, 5, x, y - 40);
+    }
+
+    @Test public void editingDragsAControlWithoutPressingItAndKeepsItInside() {
+        open(320, false);
+        View a = labelled("A");
+        int left = a.getLeft(), top = a.getTop();
+        controls.setEditing(true);
+        touch(MotionEvent.ACTION_DOWN, 8, centerX(a), centerY(a));
+        touch(MotionEvent.ACTION_MOVE, 8, centerX(a) - 100, centerY(a) + 30);
+        relayout();
+        assertEquals(left - 100, a.getLeft());
+        assertEquals(top + 30, a.getTop());
+        touch(MotionEvent.ACTION_MOVE, 8, centerX(a) + 1000, centerY(a) + 1000);
+        relayout();
+        assertEquals("Never past the right edge", 320, a.getRight());
+        assertEquals("Never under the controls", controls.getHeight(), a.getBottom());
+        touch(MotionEvent.ACTION_UP, 8, centerX(a), centerY(a));
+        assertTrue("A drag presses nothing", changes.isEmpty());
+        ControlLayout layout = controls.controlLayout();
+        assertEquals(a.getLeft() - left, layout.dx(1), 1f);
+        assertEquals(a.getTop() - top, layout.dy(1), 1f);
+
+        controls.setEditing(false);
+        touch(MotionEvent.ACTION_DOWN, 9, centerX(a), centerY(a));
+        assertEquals("At its new place, A presses A", NativeBridge.A, current());
+        touch(MotionEvent.ACTION_UP, 9, centerX(a), centerY(a));
+    }
+
+    @Test public void aSavedLayoutPlacesTheControlsAndTheDefaultBringsThemBack() {
+        open(320, false);
+        View dpad = labelled("Croix directionnelle"), start = labelled("START");
+        int startLeft = start.getLeft();
+        controls.setControlLayout(ControlLayout.DEFAULT.with(0, 20, -10).with(4, -30, 0));
+        relayout();
+        assertEquals(36, dpad.getLeft());
+        assertEquals("Kept inside the view", 0, dpad.getTop());
+        assertEquals(startLeft - 30, start.getLeft());
+        controls.setControlLayout(ControlLayout.DEFAULT);
+        relayout();
+        assertEquals(16, dpad.getLeft());
+        assertEquals(startLeft, start.getLeft());
+    }
+
+    @Test public void accessibilityMovesAControlOnlyWhileEditing() {
+        open(320, false);
+        View dpad = labelled("Croix directionnelle");
+        final int moveRight = 0x02000012, up = 0x02000001;
+        assertTrue(hasAction(dpad, up));
+        assertFalse(hasAction(dpad, moveRight));
+        dpad.performAccessibilityAction(moveRight, null);
+        relayout();
+        assertEquals(16, dpad.getLeft());
+        controls.setEditing(true);
+        assertTrue(hasAction(dpad, moveRight));
+        assertFalse("No D-pad press while editing", hasAction(dpad, up));
+        assertTrue(dpad.performAccessibilityAction(moveRight, null));
+        relayout();
+        assertEquals(24, dpad.getLeft());
+        assertTrue(changes.isEmpty());
     }
 
     @Test public void aDpadGestureMayStartInTheHubSlideDiagonallyAndLeave() {
@@ -278,6 +338,19 @@ public final class GameControlsViewTest {
         host.get().setContentView(controls, new ViewGroup.LayoutParams(width, controls.getMeasuredHeight()));
         controls.layout(0, 0, controls.getMeasuredWidth(), controls.getMeasuredHeight());
         shadowOf(Looper.getMainLooper()).idle();
+    }
+
+    private void relayout() {
+        controls.measure(View.MeasureSpec.makeMeasureSpec(controls.getWidth(), View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(controls.getHeight(), View.MeasureSpec.EXACTLY));
+        controls.layout(0, 0, controls.getMeasuredWidth(), controls.getMeasuredHeight());
+    }
+
+    private static boolean hasAction(View view, int id) {
+        AccessibilityNodeInfo info = view.createAccessibilityNodeInfo();
+        for (AccessibilityNodeInfo.AccessibilityAction action : info.getActionList())
+            if (action.getId() == id) return true;
+        return false;
     }
 
     private void apply(ControlSettings settings) {

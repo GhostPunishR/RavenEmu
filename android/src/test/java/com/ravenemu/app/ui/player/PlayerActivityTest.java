@@ -6,6 +6,7 @@ import com.ravenemu.app.data.saves.SaveRepository;
 import com.ravenemu.app.data.saves.StatePreview;
 import com.ravenemu.app.data.saves.StateSlotRepository;
 import com.ravenemu.app.settings.ConsoleSettings;
+import com.ravenemu.app.settings.ControlLayout;
 import com.ravenemu.app.settings.PlaybackSettings;
 import com.ravenemu.app.ui.settings.PlaybackSettingsActivity;
 
@@ -138,6 +139,43 @@ public final class PlayerActivityTest {
         assertArrayEquals(new String[]{"ravenemu_gb_palette", "gray", "ravenemu_gb_frame_blending", "ghosting"},
                 FakeNative.liveOptions);
         assertEquals("Changing an image option must not reopen the game", 1, FakeNative.opens);
+    }
+
+    @Test public void theGameWaitsWhileTheButtonsAreMovedAndTheirPlacesAreKept() throws Exception {
+        PlayerActivity activity = loaded();
+        openMenu(activity);
+        menuButton("Déplacer les boutons").performClick(); pump(activity);
+        assertFalse(menu(activity).isShowing());
+        assertTrue("The game waits while the buttons move", FakeNative.paused);
+        View done = find(activity.getWindow().getDecorView(), view ->
+                view instanceof TextView && "Terminé".contentEquals(((TextView)view).getText()));
+        assertNotNull(done);
+        assertTrue(done.isShown());
+        GameControlsView controls = ReflectionHelpers.getField(activity, "gameControls");
+        assertTrue(controls.isEditing());
+        View a = find(controls, view -> "A".contentEquals(
+                view.getContentDescription() == null ? "" : view.getContentDescription()));
+        assertTrue(a.performAccessibilityAction(0x02000012, null)); // eight dp to the right
+        done.performClick(); pump(activity);
+        assertFalse(controls.isEditing());
+        assertFalse(done.isShown());
+        assertFalse("The game goes on", FakeNative.paused);
+        assertEquals(8f, ControlLayout.load(activity, false).dx(1), 0f);
+        assertEquals(ControlLayout.DEFAULT, ControlLayout.load(activity, true));
+
+        // Back while editing keeps the places too, and they come back on resume.
+        openMenu(activity);
+        menuButton("Déplacer les boutons").performClick(); pump(activity);
+        assertTrue(a.performAccessibilityAction(0x02000014, null)); // eight dp down
+        assertTrue(activity.onKeyDown(android.view.KeyEvent.KEYCODE_BACK,
+                new android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_BACK)));
+        assertFalse(controls.isEditing());
+        assertFalse(activity.isFinishing());
+        assertEquals(8f, ControlLayout.load(activity, false).dy(1), 0f);
+        ControlLayout.DEFAULT.save(activity, false);
+        ActivityController<PlayerActivity> controller = activities.get(activities.size() - 1);
+        controller.pause(); controller.resume();
+        assertEquals(ControlLayout.DEFAULT, controls.controlLayout());
     }
 
     @Test public void gameBoyGamesInColorRunOnTheGbcCoreWithTheirColorsAndTheirOwnStates() throws Exception {
