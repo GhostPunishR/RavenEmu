@@ -29,6 +29,21 @@ typedef struct raven_core_api {
     bool (*unserialize)(const void *, size_t);
 } raven_core_api;
 
+/* A declared core option and the index of its current value. */
+typedef struct raven_option {
+    char *key;
+    char *label;
+    char *info;
+    char *category;
+    size_t value_count;
+    char **values;
+    char **labels;
+    size_t selected;
+} raven_option;
+
+/* Bounds on what a core may declare; RavenCore declares about a dozen. */
+#define RAVEN_MAX_OPTIONS 128
+
 struct raven_frontend {
     void *library;
     raven_core_api api;
@@ -42,6 +57,9 @@ struct raven_frontend {
     int initialized;
     int loaded;
     unsigned pixel_format;
+    raven_option *options;
+    size_t option_count;
+    int options_updated;  /* Reported once by GET_VARIABLE_UPDATE. */
     char error[256];
 };
 
@@ -55,6 +73,185 @@ static char *copy_string(const char *value) {
     char *result = (char *)malloc(size);
     if (result) memcpy(result, value, size);
     return result;
+}
+
+static char *copy_range(const char *start, size_t length) {
+    char *result = (char *)malloc(length + 1);
+    if (!result) return NULL;
+    memcpy(result, start, length);
+    result[length] = 0;
+    return result;
+}
+
+static void free_option(raven_option *option) {
+    for (size_t i = 0; i < option->value_count; ++i) {
+        if (option->values) free(option->values[i]);
+        if (option->labels) free(option->labels[i]);
+    }
+    free(option->values);
+    free(option->labels);
+    free(option->key);
+    free(option->label);
+    free(option->info);
+    free(option->category);
+    memset(option, 0, sizeof(*option));
+}
+
+static void free_options(raven_option *options, size_t count) {
+    for (size_t i = 0; i < count; ++i) free_option(&options[i]);
+    free(options);
+}
+
+static raven_option *find_option(const raven_frontend *host, const char *key) {
+    if (!host || !key) return NULL;
+    for (size_t i = 0; i < host->option_count; ++i)
+        if (!strcmp(host->options[i].key, key)) return &host->options[i];
+    return NULL;
+}
+
+static int find_value(const raven_option *option, const char *value, size_t *index) {
+    if (!value) return 0;
+    for (size_t i = 0; i < option->value_count; ++i) {
+        if (!strcmp(option->values[i], value)) {
+            *index = i;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/* Fills one option from what a core declared; NULL labels fall back to the
+ * values, an unknown default to the first value. Returns 0 when out of memory. */
+static int fill_option(raven_option *option, const char *key, const char *label,
+                       const char *info, const char *category,
+                       const char *const *values, const char *const *labels,
+                       size_t count, const char *default_value) {
+    option->key = copy_string(key);
+    option->label = copy_string(label ? label : key);
+    option->info = copy_string(info);
+    option->category = copy_string(category);
+    option->values = (char **)calloc(count, sizeof(char *));
+    option->labels = (char **)calloc(count, sizeof(char *));
+    if (!option->key || !option->label || !option->info || !option->category ||
+        !option->values || !option->labels) return 0;
+    option->value_count = count;
+    for (size_t i = 0; i < count; ++i) {
+        option->values[i] = copy_string(values[i]);
+        option->labels[i] = copy_string(labels && labels[i] ? labels[i] : values[i]);
+        if (!option->values[i] || !option->labels[i]) return 0;
+    }
+    if (!find_value(option, default_value, &option->selected)) option->selected = 0;
+    return 1;
+}
+
+/* Replaces the declared options; a value chosen before stays chosen when the
+ * new declaration still offers it. */
+static void replace_options(raven_frontend *host, raven_option *options, size_t count) {
+    for (size_t i = 0; i < count; ++i) {
+        const raven_option *previous = find_option(host, options[i].key);
+        size_t index;
+        if (previous && find_value(&options[i], previous->values[previous->selected], &index))
+            options[i].selected = index;
+    }
+    free_options(host->options, host->option_count);
+    host->options = options;
+    host->option_count = count;
+}
+
+/* Options v2 (or v1, without categories): definitions end with a NULL key,
+ * values with a NULL value. */
+static bool declare_v2(raven_frontend *host, const struct retro_core_options_v2 *declared) {
+    if (!declared || !declared->definitions) return false;
+    raven_option *options = (raven_option *)calloc(RAVEN_MAX_OPTIONS, sizeof(raven_option));
+    if (!options) return false;
+    size_t count = 0;
+    for (const struct retro_core_option_v2_definition *definition = declared->definitions;
+         definition->key && count < RAVEN_MAX_OPTIONS; ++definition) {
+        const char *values[RETRO_NUM_CORE_OPTION_VALUES_MAX];
+        const char *labels[RETRO_NUM_CORE_OPTION_VALUES_MAX];
+        size_t value_count = 0;
+        while (value_count < RETRO_NUM_CORE_OPTION_VALUES_MAX && definition->values[value_count].value) {
+            values[value_count] = definition->values[value_count].value;
+            labels[value_count] = definition->values[value_count].label;
+            ++value_count;
+        }
+        if (!value_count) continue;
+        if (!fill_option(&options[count++], definition->key, definition->desc, definition->info,
+                         definition->category_key, values, labels, value_count,
+                         definition->default_value)) {
+            free_options(options, count);
+            return false;
+        }
+    }
+    replace_options(host, options, count);
+    return true;
+}
+
+static bool declare_v1(raven_frontend *host, const struct retro_core_option_definition *definitions) {
+    if (!definitions) return false;
+    raven_option *options = (raven_option *)calloc(RAVEN_MAX_OPTIONS, sizeof(raven_option));
+    if (!options) return false;
+    size_t count = 0;
+    for (const struct retro_core_option_definition *definition = definitions;
+         definition->key && count < RAVEN_MAX_OPTIONS; ++definition) {
+        const char *values[RETRO_NUM_CORE_OPTION_VALUES_MAX];
+        const char *labels[RETRO_NUM_CORE_OPTION_VALUES_MAX];
+        size_t value_count = 0;
+        while (value_count < RETRO_NUM_CORE_OPTION_VALUES_MAX && definition->values[value_count].value) {
+            values[value_count] = definition->values[value_count].value;
+            labels[value_count] = definition->values[value_count].label;
+            ++value_count;
+        }
+        if (!value_count) continue;
+        if (!fill_option(&options[count++], definition->key, definition->desc, definition->info,
+                         NULL, values, labels, value_count, definition->default_value)) {
+            free_options(options, count);
+            return false;
+        }
+    }
+    replace_options(host, options, count);
+    return true;
+}
+
+/* Legacy variables: « Label; first|second|third », the first being the default. */
+static bool declare_variables(raven_frontend *host, const struct retro_variable *variables) {
+    if (!variables) return false;
+    raven_option *options = (raven_option *)calloc(RAVEN_MAX_OPTIONS, sizeof(raven_option));
+    if (!options) return false;
+    size_t count = 0;
+    for (const struct retro_variable *variable = variables;
+         variable->key && count < RAVEN_MAX_OPTIONS; ++variable) {
+        const char *text = variable->value ? variable->value : "";
+        const char *separator = strchr(text, ';');
+        if (!separator) continue;
+        char *label = copy_range(text, (size_t)(separator - text));
+        const char *list = separator + 1;
+        while (*list == ' ') ++list;
+        char *pieces[RETRO_NUM_CORE_OPTION_VALUES_MAX];
+        size_t value_count = 0;
+        int failed = !label;
+        while (!failed && *list && value_count < RETRO_NUM_CORE_OPTION_VALUES_MAX) {
+            const char *end = strchr(list, '|');
+            const size_t length = end ? (size_t)(end - list) : strlen(list);
+            if (length) {
+                pieces[value_count] = copy_range(list, length);
+                if (!pieces[value_count]) failed = 1; else ++value_count;
+            }
+            list = end ? end + 1 : list + length;
+        }
+        if (!failed && value_count &&
+            !fill_option(&options[count++], variable->key, label, NULL, NULL,
+                         (const char *const *)pieces, NULL, value_count, pieces[0]))
+            failed = 1;
+        for (size_t i = 0; i < value_count; ++i) free(pieces[i]);
+        free(label);
+        if (failed) {
+            free_options(options, count);
+            return false;
+        }
+    }
+    replace_options(host, options, count);
+    return true;
 }
 
 static void set_error(raven_frontend *host, const char *message) {
@@ -99,15 +296,30 @@ static bool environment(unsigned command, void *data) {
             return true;
         case RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION:
             if (!data) return false;
-            *(unsigned *)data = 0;  /* Legacy variables; options UI comes later. */
+            *(unsigned *)data = 2;
             return true;
+        case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2:
+            return declare_v2(active, (const struct retro_core_options_v2 *)data);
+        case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2_INTL:
+            return data && declare_v2(active, ((const struct retro_core_options_v2_intl *)data)->us);
+        case RETRO_ENVIRONMENT_SET_CORE_OPTIONS:
+            return declare_v1(active, (const struct retro_core_option_definition *)data);
+        case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_INTL:
+            return data && declare_v1(active, ((const struct retro_core_options_intl *)data)->us);
+        case RETRO_ENVIRONMENT_SET_VARIABLES:
+            return declare_variables(active, (const struct retro_variable *)data);
         case RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE:
             if (!data) return false;
-            *(bool *)data = false;
+            *(bool *)data = active->options_updated != 0;
+            active->options_updated = 0;
             return true;
-        case RETRO_ENVIRONMENT_GET_VARIABLE:
-            return false; /* The core must use its own default options. */
-        case RETRO_ENVIRONMENT_SET_VARIABLES:
+        case RETRO_ENVIRONMENT_GET_VARIABLE: {
+            struct retro_variable *variable = (struct retro_variable *)data;
+            if (!variable) return false;
+            const raven_option *option = find_option(active, variable->key);
+            variable->value = option ? option->values[option->selected] : NULL;
+            return option != NULL;
+        }
         case RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS:
             return true;
         case RETRO_ENVIRONMENT_GET_LOG_INTERFACE:
@@ -123,7 +335,7 @@ static bool environment(unsigned command, void *data) {
             *(unsigned *)data = RETRO_LANGUAGE_FRENCH;
             return true;
         /* Features not yet exposed: sensors, achievements, rumble, hardware
-         * rendering, core options UI, memory descriptors, and subsystems. */
+         * rendering, option visibility, memory descriptors, and subsystems. */
         default:
             return false;
     }
@@ -184,6 +396,10 @@ void raven_frontend_close_core(raven_frontend *host) {
     if (host->library) dlclose(host->library);
     host->library = NULL;
     if (active == host) active = NULL;
+    free_options(host->options, host->option_count);
+    host->options = NULL;
+    host->option_count = 0;
+    host->options_updated = 0;
     free(host->system_directory);
     free(host->save_directory);
     host->system_directory = NULL;
@@ -283,6 +499,7 @@ int raven_frontend_load_rom(raven_frontend *host, const void *rom,
         return 0;
     }
     memcpy(host->rom, rom, size);
+    host->options_updated = 0;  /* The core reads every option as the game loads. */
     struct retro_game_info game = {host->rom_path, host->rom, size, NULL};
     if (!host->api.load_game(&game)) {
         set_error(host, "Libretro core rejected the ROM");
@@ -363,6 +580,44 @@ int raven_frontend_get_info(const raven_frontend *host, raven_core_info *out) {
     out->height = host->av.geometry.base_height;
     out->fps = host->av.timing.fps;
     out->sample_rate = host->av.timing.sample_rate;
+    return 1;
+}
+
+size_t raven_frontend_option_count(const raven_frontend *host) {
+    return host ? host->option_count : 0;
+}
+
+int raven_frontend_get_option(const raven_frontend *host, size_t index,
+                              raven_core_option *out) {
+    if (!host || !out || index >= host->option_count) return 0;
+    const raven_option *option = &host->options[index];
+    out->key = option->key;
+    out->label = option->label;
+    out->info = option->info;
+    out->category = option->category;
+    out->value_count = option->value_count;
+    out->values = (const char *const *)option->values;
+    out->labels = (const char *const *)option->labels;
+    out->value = option->values[option->selected];
+    return 1;
+}
+
+const char *raven_frontend_option_value(const raven_frontend *host, const char *key) {
+    const raven_option *option = find_option(host, key);
+    return option ? option->values[option->selected] : NULL;
+}
+
+int raven_frontend_set_option(raven_frontend *host, const char *key, const char *value) {
+    raven_option *option = find_option(host, key);
+    size_t index;
+    if (!option || !find_value(option, value, &index)) {
+        set_error(host, option ? "Value not offered by this core option" : "Unknown core option");
+        return 0;
+    }
+    if (option->selected != index) {
+        option->selected = index;
+        host->options_updated = 1;
+    }
     return 1;
 }
 

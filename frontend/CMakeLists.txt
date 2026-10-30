@@ -38,6 +38,24 @@ if(RAVEN_FRONTEND_TESTS AND NOT ANDROID)
     target_include_directories(raven_frontend_fake_core PRIVATE
         ${ravencore_SOURCE_DIR}/libretro/include)
     set_target_properties(raven_frontend_fake_core PROPERTIES PREFIX "")
+    # The same fake core, declaring its options through v1 or legacy variables.
+    foreach(variant V1 VARIABLES)
+        string(TOLOWER ${variant} variant_name)
+        add_library(raven_frontend_fake_core_${variant_name} SHARED tests/fake_core.c)
+        target_include_directories(raven_frontend_fake_core_${variant_name} PRIVATE
+            ${ravencore_SOURCE_DIR}/libretro/include)
+        target_compile_definitions(raven_frontend_fake_core_${variant_name} PRIVATE FAKE_CORE_${variant})
+        set_target_properties(raven_frontend_fake_core_${variant_name} PROPERTIES PREFIX "")
+    endforeach()
+    add_executable(raven_frontend_options_test tests/test_options.c)
+    target_link_libraries(raven_frontend_options_test PRIVATE raven_frontend)
+    if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(raven_frontend_options_test PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+    add_test(NAME raven_frontend_options COMMAND raven_frontend_options_test
+             $<TARGET_FILE:raven_frontend_fake_core>
+             $<TARGET_FILE:raven_frontend_fake_core_v1>
+             $<TARGET_FILE:raven_frontend_fake_core_variables>)
     add_executable(raven_frontend_test tests/test_host.c)
     target_link_libraries(raven_frontend_test PRIVATE raven_frontend)
     add_test(NAME raven_frontend_smoke COMMAND raven_frontend_test

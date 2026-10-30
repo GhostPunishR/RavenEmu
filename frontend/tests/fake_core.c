@@ -9,9 +9,55 @@ static retro_audio_sample_batch_t audio_batch;
 static retro_input_poll_t input_poll;
 static retro_input_state_t input_state;
 static int loaded;
+static int red;  /* The "raven_test_color" option, read at load and when it changes. */
+
+/* One option, declared as options v2 (default), v1 (FAKE_CORE_V1) or
+ * legacy variables (FAKE_CORE_VARIABLES), plus a second one to keep. */
+static void declare_options(void) {
+#if defined(FAKE_CORE_VARIABLES)
+    static const struct retro_variable variables[] = {
+        {"raven_test_color", "Couleur; green|red"},
+        {"raven_test_speed", "Vitesse; 1|2|4"},
+        {NULL, NULL},
+    };
+    env(RETRO_ENVIRONMENT_SET_VARIABLES, (void *)variables);
+#elif defined(FAKE_CORE_V1)
+    static const struct retro_core_option_definition definitions[] = {
+        {"raven_test_color", "Couleur", "Couleur du deuxième pixel.",
+         {{"green", "Vert"}, {"red", "Rouge"}, {NULL, NULL}}, "green"},
+        {"raven_test_speed", "Vitesse", NULL, {{"1", NULL}, {"2", NULL}, {"4", NULL}, {NULL, NULL}}, "1"},
+        {NULL, NULL, NULL, {{NULL, NULL}}, NULL},
+    };
+    env(RETRO_ENVIRONMENT_SET_CORE_OPTIONS, (void *)definitions);
+#else
+    unsigned version = 0;
+    if (!env(RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION, &version) || version < 2) return;
+    static struct retro_core_option_v2_category categories[] = {
+        {"video", "Image", "Couleurs."}, {NULL, NULL, NULL},
+    };
+    static struct retro_core_option_v2_definition definitions[] = {
+        {"raven_test_color", "Couleur", NULL, "Couleur du deuxième pixel.", NULL, "video",
+         {{"green", "Vert"}, {"red", "Rouge"}, {NULL, NULL}}, "green"},
+        {"raven_test_speed", "Vitesse", NULL, NULL, NULL, NULL,
+         {{"1", NULL}, {"2", NULL}, {"4", NULL}, {NULL, NULL}}, "1"},
+        {NULL, NULL, NULL, NULL, NULL, NULL, {{NULL, NULL}}, NULL},
+    };
+    struct retro_core_options_v2 options = {categories, definitions};
+    env(RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2, &options);
+#endif
+}
+
+static void read_options(void) {
+    struct retro_variable variable = {"raven_test_color", NULL};
+    red = env && env(RETRO_ENVIRONMENT_GET_VARIABLE, &variable) && variable.value &&
+          strcmp(variable.value, "red") == 0;
+}
 
 unsigned retro_api_version(void) { return RETRO_API_VERSION; }
-void retro_set_environment(retro_environment_t cb) { env = cb; }
+void retro_set_environment(retro_environment_t cb) {
+    env = cb;
+    declare_options();
+}
 void retro_set_video_refresh(retro_video_refresh_t cb) { video = cb; }
 void retro_set_audio_sample(retro_audio_sample_t cb) { (void)cb; }
 void retro_set_audio_sample_batch(retro_audio_sample_batch_t cb) { audio_batch = cb; }
@@ -42,16 +88,19 @@ void retro_get_system_av_info(struct retro_system_av_info *info) {
 bool retro_load_game(const struct retro_game_info *game) {
     loaded = game && game->data && game->size == 4 &&
              memcmp(game->data, "RVN1", 4) == 0;
+    read_options();
     return loaded != 0;
 }
 void retro_unload_game(void) { loaded = 0; }
 void retro_run(void) {
     if (!loaded) return;
+    bool updated = false;
+    if (env && env(RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE, &updated) && updated) read_options();
     if (input_poll) input_poll();
     const int pressed = input_state && input_state(0, RETRO_DEVICE_JOYPAD, 0,
                                                     RETRO_DEVICE_ID_JOYPAD_A);
     const uint32_t pixels[4] = {
-        pressed ? 0x00112233u : 0, 0x0000ff00u, 0x000000ffu, 0
+        pressed ? 0x00112233u : 0, red ? 0x00ff0000u : 0x0000ff00u, 0x000000ffu, 0
     };
     const int16_t samples[4] = {100, -100, 200, -200};
     if (video) video(pixels, 2, 2, 2 * sizeof(uint32_t));

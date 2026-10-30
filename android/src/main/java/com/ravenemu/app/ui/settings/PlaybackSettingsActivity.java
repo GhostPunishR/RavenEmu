@@ -108,7 +108,7 @@ public final class PlaybackSettingsActivity extends Activity {
     private void homePage() {
         category("Audio", "Son du jeu et volume", AUDIO,
                 "M3,9H7L12,4V20L7,15H3ZM15,8V16C17,15 17,9 15,8ZM15,3V5C21,7 21,17 15,19V21C24,18 24,6 15,3Z");
-        category("Vidéo", "Taille de l'image, luminosité et contraste", VIDEO,
+        category("Vidéo", "Couleurs, correction LCD, mélange d'images, taille, luminosité et contraste", VIDEO,
                 "M3,3H21V17H13V19H17V21H7V19H11V17H3ZM5,5V15H19V5Z");
     }
 
@@ -153,36 +153,101 @@ public final class PlaybackSettingsActivity extends Activity {
         settingSwitch("Activer le son",
                 "Conserve l'horloge d'émulation et coupe uniquement la sortie audio.",
                 settings.audioEnabled, enabled -> {
-                    update(new PlaybackSettings(enabled, settings.audioVolume, settings.integerScale,
-                            settings.brightness, settings.contrast));
+                    update(settings.withAudio(enabled, settings.audioVolume));
                     volume.setEnabled(enabled);
                 });
         volume = slider("Volume", settings.audioVolume, 0, 100, true, value ->
-                update(new PlaybackSettings(settings.audioEnabled, value, settings.integerScale,
-                        settings.brightness, settings.contrast)));
+                update(settings.withAudio(settings.audioEnabled, value)));
         volume.setEnabled(settings.audioEnabled);
     }
 
     private void videoPage() {
+        // The beta's groups and wording. The colors, the LCD correction and the
+        // frame blending are RavenCore's, set through its Libretro options.
+        group("Écran");
+        description("Profil de couleurs",
+                "Original garde le vert de la Game Boy ; Pocket gris imite la Game Boy Pocket ; "
+                        + "Gris neutre passe en niveaux de gris purs. Ces profils ne concernent que les jeux "
+                        + "Game Boy : les jeux Game Boy Color et Game Boy Advance gardent toujours leurs couleurs.");
+        choices(new String[]{"Original", "Pocket gris", "Gris neutre"},
+                new String[]{PlaybackSettings.PALETTE_ORIGINAL, PlaybackSettings.PALETTE_POCKET,
+                        PlaybackSettings.PALETTE_GRAY},
+                settings.gbPalette, palette -> update(settings.withImage(palette,
+                        settings.lcdCorrectionGbc, settings.lcdCorrectionGba, settings.frameBlending)));
+        group("Correction des couleurs LCD");
+        settingSwitch("Game Boy Color",
+                "Atténue les couleurs très vives pour retrouver l'aspect plus mat de l'écran d'origine.",
+                settings.lcdCorrectionGbc, enabled -> update(settings.withImage(settings.gbPalette,
+                        enabled, settings.lcdCorrectionGba, settings.frameBlending)));
+        settingSwitch("Game Boy Advance",
+                "Même correction, réglée à part pour la Game Boy Advance.",
+                settings.lcdCorrectionGba, enabled -> update(settings.withImage(settings.gbPalette,
+                        settings.lcdCorrectionGbc, enabled, settings.frameBlending)));
+        group("Mélange d'images");
+        description("Rémanence de l'écran",
+                "Certains jeux font clignoter un objet d'une image à l'autre pour le rendre transparent, "
+                        + "en comptant sur la lenteur de l'écran d'origine (F-Zero, Castlevania). Le mélange le "
+                        + "montre transparent ; la rémanence laisse une traîne.");
+        choices(new String[]{"Désactivé (défaut)", "Mélange de deux images", "Rémanence"},
+                new String[]{PlaybackSettings.BLENDING_OFF, PlaybackSettings.BLENDING_MIX,
+                        PlaybackSettings.BLENDING_GHOSTING},
+                settings.frameBlending, blending -> update(settings.withImage(settings.gbPalette,
+                        settings.lcdCorrectionGbc, settings.lcdCorrectionGba, blending)));
         group("Taille de l'image");
         settingSwitch("Pixels entiers",
                 "L'image prend un multiple entier de sa taille : tous les pixels sont identiques, avec des bords noirs autour.",
-                settings.integerScale, enabled -> update(new PlaybackSettings(settings.audioEnabled,
-                        settings.audioVolume, enabled, settings.brightness, settings.contrast)));
+                settings.integerScale, enabled -> update(settings.withPicture(
+                        enabled, settings.brightness, settings.contrast)));
         group("Ajustements");
         slider("Luminosité", settings.brightness, -50, 50, false, value ->
-                update(new PlaybackSettings(settings.audioEnabled, settings.audioVolume,
-                        settings.integerScale, value, settings.contrast)));
+                update(settings.withPicture(settings.integerScale, value, settings.contrast)));
         slider("Contraste", settings.contrast, 50, 150, true, value ->
-                update(new PlaybackSettings(settings.audioEnabled, settings.audioVolume,
-                        settings.integerScale, settings.brightness, value)));
+                update(settings.withPicture(settings.integerScale, settings.brightness, value)));
         Button reset = button("Rétablir l'affichage d'origine");
         reset.setTextColor(HomeActivity.ACCENT);
         reset.setOnClickListener(view -> {
-            update(new PlaybackSettings(settings.audioEnabled, settings.audioVolume, false, 0, 100));
+            update(settings.withPicture(false, 0, 100).withImage(PlaybackSettings.PALETTE_ORIGINAL,
+                    false, false, PlaybackSettings.BLENDING_OFF));
             showPage(VIDEO);
         });
         add(reset, 14);
+    }
+
+    private void description(String label, String summary) {
+        LinearLayout block = column();
+        block.addView(text(label, 15, HomeActivity.TEXT));
+        add(block, text(summary, 13, HomeActivity.MUTED), 4);
+        add(block, 14);
+    }
+
+    /** The beta's ChoiceRow: ● or ○ then the label, the chosen row on the surface color. */
+    private void choices(String[] labels, String[] values, String selected, StringChange change) {
+        LinearLayout list = column();
+        for (int i = 0; i < labels.length; i++) {
+            final String value = values[i];
+            final boolean chosen = value.equals(selected);
+            LinearLayout row = new LinearLayout(this);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setMinimumHeight(dp(48));
+            row.setPadding(dp(12), dp(10), dp(12), dp(10));
+            row.setBackgroundColor(chosen ? HomeActivity.SURFACE : HomeActivity.BACKGROUND);
+            TextView mark = text(chosen ? "●" : "○", 17, HomeActivity.ACCENT);
+            mark.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+            row.addView(mark);
+            TextView name = text(labels[i], 14, HomeActivity.TEXT);
+            LinearLayout.LayoutParams gap = new LinearLayout.LayoutParams(0, -2, 1);
+            gap.setMarginStart(dp(12));
+            row.addView(name, gap);
+            row.setSelected(chosen);
+            row.setContentDescription(labels[i] + (chosen ? ", choisi" : ""));
+            row.setOnClickListener(view -> {
+                if (chosen) return;
+                change.accept(value);
+                showPage(page);
+            });
+            list.addView(row, new LinearLayout.LayoutParams(-1, -2));
+        }
+        add(list, 6);
     }
 
     private void update(PlaybackSettings updated) {
@@ -314,6 +379,7 @@ public final class PlaybackSettingsActivity extends Activity {
     private int dp(int value) { return Math.round(value * getResources().getDisplayMetrics().density); }
     private interface BooleanChange { void accept(boolean value); }
     private interface IntChange { void accept(int value); }
+    private interface StringChange { void accept(String value); }
 
     @Override protected void onSaveInstanceState(Bundle state) {
         super.onSaveInstanceState(state);

@@ -38,6 +38,20 @@ typedef struct raven_core_info {
     double sample_rate;
 } raven_core_info;
 
+/* A core option, as the core declared it (Libretro options v2 or v1, or the
+ * legacy « Label; a|b|c » variables). Strings are owned by the host and stay
+ * valid until the core closes or declares its options again. */
+typedef struct raven_core_option {
+    const char *key;
+    const char *label;
+    const char *info;      /* Empty when the core gives none. */
+    const char *category;  /* Empty when the core gives none. */
+    size_t value_count;
+    const char *const *values;
+    const char *const *labels;
+    const char *value;     /* The current value: the core's default until set. */
+} raven_core_option;
+
 raven_frontend *raven_frontend_create(void);
 void raven_frontend_destroy(raven_frontend *host);
 int raven_frontend_open_core(raven_frontend *host, const char *library_path,
@@ -64,6 +78,18 @@ int raven_frontend_load_state(raven_frontend *host,
 void raven_frontend_unload(raven_frontend *host);
 void raven_frontend_close_core(raven_frontend *host);
 int raven_frontend_get_info(const raven_frontend *host, raven_core_info *out);
+
+/* Core options of the open core, read and set on the emulation thread like
+ * every call to the core. A value set before load_rom applies when the game
+ * loads; one set while it runs reaches the core at its next frame, through
+ * RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE, if the core rereads that option.
+ * set_option keeps the current value and returns 0 for a key the core did not
+ * declare or a value it does not offer. */
+size_t raven_frontend_option_count(const raven_frontend *host);
+int raven_frontend_get_option(const raven_frontend *host, size_t index,
+                              raven_core_option *out);
+const char *raven_frontend_option_value(const raven_frontend *host, const char *key);
+int raven_frontend_set_option(raven_frontend *host, const char *key, const char *value);
 const char *raven_frontend_last_error(const raven_frontend *host);
 
 #ifdef __cplusplus

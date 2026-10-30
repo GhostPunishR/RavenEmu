@@ -6,6 +6,7 @@ import com.ravenemu.app.data.saves.SaveRepository;
 import com.ravenemu.app.data.saves.StatePreview;
 import com.ravenemu.app.data.saves.StateSlotRepository;
 import com.ravenemu.app.platform.SystemBarInsets;
+import com.ravenemu.app.settings.CoreOptions;
 import com.ravenemu.app.settings.PlaybackSettings;
 import com.ravenemu.app.ui.library.HomeActivity;
 import com.ravenemu.app.ui.settings.PlaybackSettingsActivity;
@@ -46,6 +47,8 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
     private GameControlsView gameControls;
     private long nextBatterySaveNanos;
     private volatile String activeSaveKey;
+    /** GL thread: the console of the open game, for its core options. */
+    private String activeSystem;
     private volatile boolean menuOpen;
     private volatile boolean gamePaused = true;
     private volatile boolean foreground;
@@ -210,6 +213,8 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
             try {
                 byte[] rom = RomLibrary.readRom(getFilesDir(), entry);
                 byte[] battery = SaveRepository.read(getFilesDir(), entry.key, "srm");
+                // The image options the core reads as the game loads (palette...).
+                String[] coreOptions = CoreOptions.forSystem(entry.system, PlaybackSettings.load(this));
                 if (disposed.get()) return;
                 String nativeDir = getApplicationInfo().nativeLibraryDir;
                 String dataDir = getFilesDir().getAbsolutePath();
@@ -217,7 +222,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
                     if (disposed.get()) return;
                     undoState = null;
                     String failure = NativeBridge.openRom(nativeDir, dataDir,
-                            entry.system, rom, entry.title);
+                            entry.system, rom, entry.title, coreOptions);
                     if (failure == null && battery != null &&
                             !NativeBridge.restoreBattery(battery)) {
                         NativeBridge.closeRom();
@@ -225,9 +230,10 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
                     }
                     if (failure == null) {
                         activeSaveKey = entry.key;
+                        activeSystem = entry.system;
                         stateCompatibility = NativeBridge.stateCompatibility();
                         nextBatterySaveNanos = 0;
-                    } else { activeSaveKey = null; stateCompatibility = null; }
+                    } else { activeSaveKey = null; stateCompatibility = null; activeSystem = null; }
                     final String result = failure;
                     runOnUiThread(() -> {
                         if (!disposed.get() && result == null && gameTitle != null) {
@@ -421,6 +427,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
             NativeBridge.closeRom();
             undoState = null;
             activeSaveKey = stateCompatibility = null;
+            activeSystem = null;
             finishSlotOperation("Jeu arrêté après échec de restauration ; SRAM conservée", null);
             runOnUiThread(() -> {
                 if (disposed.get()) return;
@@ -573,6 +580,8 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
             if (disposed.get() || !foreground) return;
             NativeBridge.setPlaybackOptions(settings.audioEnabled, settings.audioVolume,
                     settings.integerScale, settings.brightness, settings.contrast);
+            // Changed in the settings during the game: the core takes them at its next frame.
+            if (activeSystem != null) NativeBridge.setCoreOptions(CoreOptions.forSystem(activeSystem, settings));
         });
     }
 

@@ -354,3 +354,49 @@ des écarts de parité, ainsi que les services RA/link/skins et l'hôte iOS nati
 Le chemin shader `mediump` peut présenter une petite différence d'arrondi
 selon le GPU. Les validations sur téléphone restent nécessaires avant bascule.
 Aucune préférence, sauvegarde ou donnée de la bêta n'est lue ou modifiée.
+
+## Seizième tranche : options des cores et réglages d'image
+
+- Le frontend C sert les options déclarées par les cores Libretro : options v2
+  (catégories), v1 et variables historiques « Libellé; a|b|c ».
+  `GET_CORE_OPTIONS_VERSION` répond 2, `GET_VARIABLE` donne la valeur choisie
+  (le défaut du core sinon) et `GET_VARIABLE_UPDATE` signale une seule fois un
+  changement fait pendant la partie. Une redéclaration garde les valeurs encore
+  proposées ; la fermeture du core oublie ses options.
+- API publique C (`raven_frontend_option_count`, `raven_frontend_get_option`,
+  `raven_frontend_option_value`, `raven_frontend_set_option`) : une clé
+  inconnue ou une valeur non proposée est refusée et la valeur courante reste.
+  Appels sur le fil d'émulation, comme tous les appels au core. Au plus
+  128 options et 128 valeurs par option, chaînes copiées par l'hôte.
+- JNI : `openRom` applique les options avant `retro_load_game` ;
+  `setCoreOptions` les change en cours de partie, sur le fil GL. Les clés que
+  le core ouvert ne déclare pas sont ignorées et journalisées.
+- Page Java **Vidéo** reprenant les groupes et textes de la bêta :
+  **Profil de couleurs** des jeux Game Boy, **Correction des couleurs LCD**
+  (Game Boy Color, Game Boy Advance) et **Mélange d'images** (désactivé,
+  mélange de deux images, rémanence). Réglages propres au module de
+  développement, appliqués au chargement puis au retour au premier plan ;
+  « Rétablir l'affichage d'origine » les remet aussi à zéro. Ces traitements
+  sont ceux de RavenCore (`ravenemu_gb_palette`,
+  `ravenemu_gbc|gba_color_correction`, `ravenemu_*_frame_blending`), sans
+  post-traitement Java ni GLES ajouté, et ne changent ni la SRAM ni le format
+  des états.
+- Tests C : faux core sous ses trois déclarations (valeur choisie avant le
+  chargement, changement en partie, refus des clés/valeurs inconnues, oubli à
+  la fermeture), et vrais cores RavenCore : options déclarées par chaque
+  console, palette d'une ROM Game Boy générée par le test (ni jeu ni BIOS)
+  vérifiée au pixel au chargement et en cours de partie. Sous ASan/UBSan en
+  local. Tests Java : correspondance réglages → clés des cores, persistance et
+  valeurs invalides, page Vidéo, options passées à l'ouverture et au retour
+  des réglages.
+
+Écarts restants : le profil « DMG vert » de la bêta, un filtre de luminance
+vert plus sombre, n'a pas d'équivalent exact ; le module propose à la place
+les trois palettes de RavenCore (Original, identique à celui de la bêta,
+Pocket gris et Gris neutre). Les options **Console** (jeux Game Boy en
+couleurs, GBC d'une GBA, BIOS GBA et son import), les options de cartouche
+(type de sauvegarde, RTC, capteur solaire), les directions opposées et les
+capteurs restent à exposer : elles changent le core choisi ou la
+compatibilité des états, ou demandent l'import d'un fichier système. La
+validation sur téléphone reste nécessaire ; aucune donnée de la bêta n'est
+lue ou modifiée.

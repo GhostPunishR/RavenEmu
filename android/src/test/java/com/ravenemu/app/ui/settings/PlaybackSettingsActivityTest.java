@@ -116,6 +116,34 @@ public final class PlaybackSettingsActivityTest {
         assertEquals(50, slider(activity, "Contraste").getProgress());
     }
 
+    @Test public void imageOptionsFollowTheBetaChoicesAndResetWithThePicture() {
+        new PlaybackSettings(false, 23, false, 0, 100).save(RuntimeEnvironment.getApplication());
+        PlaybackSettingsActivity activity = open(PlaybackSettingsActivity.VIDEO, null).get();
+        assertNotNull(text(activity, "Profil de couleurs"));
+        assertNotNull(choice(activity, "Original, choisi"));
+        choice(activity, "Pocket gris").performClick();
+        assertEquals(PlaybackSettings.PALETTE_POCKET, PlaybackSettings.load(activity).gbPalette);
+        assertNotNull("The page shows the new choice", choice(activity, "Pocket gris, choisi"));
+        toggle(activity, "Game Boy Color").performClick();
+        toggle(activity, "Game Boy Advance").performClick();
+        choice(activity, "Rémanence").performClick();
+        PlaybackSettings changed = PlaybackSettings.load(activity);
+        assertTrue(changed.lcdCorrectionGbc);
+        assertTrue(changed.lcdCorrectionGba);
+        assertEquals(PlaybackSettings.BLENDING_GHOSTING, changed.frameBlending);
+        assertEquals(PlaybackSettings.PALETTE_POCKET, changed.gbPalette);
+        assertEquals(23, changed.audioVolume);
+        text(activity, "Rétablir l'affichage d'origine").performClick();
+        PlaybackSettings restored = PlaybackSettings.load(activity);
+        assertEquals(PlaybackSettings.PALETTE_ORIGINAL, restored.gbPalette);
+        assertFalse(restored.lcdCorrectionGbc);
+        assertFalse(restored.lcdCorrectionGba);
+        assertEquals(PlaybackSettings.BLENDING_OFF, restored.frameBlending);
+        assertFalse(restored.audioEnabled);
+        assertEquals(23, restored.audioVolume);
+        assertNotNull(choice(activity, "Désactivé (défaut), choisi"));
+    }
+
     @Test public void recreationKeepsVideoPageAndScrollWithoutOverwritingStoredValues() {
         new PlaybackSettings(false, 29, true, 11, 117).save(RuntimeEnvironment.getApplication());
         Map<String, ?> before = preferences.getAll();
@@ -198,6 +226,14 @@ public final class PlaybackSettingsActivityTest {
                 candidate.getContentDescription().toString().startsWith(label + ","));
         assertNotNull(label, view);
         return (SeekBar)view;
+    }
+
+    private static View choice(PlaybackSettingsActivity activity, String description) {
+        View view = find(activity, candidate -> candidate.isClickable() &&
+                description.contentEquals(candidate.getContentDescription() == null ? ""
+                        : candidate.getContentDescription()));
+        assertNotNull(description, view);
+        return view;
     }
 
     private static View described(PlaybackSettingsActivity activity, String description) {

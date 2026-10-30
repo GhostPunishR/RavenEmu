@@ -117,6 +117,24 @@ public final class PlayerActivityTest {
         assertFalse(FakeNative.paused);
     }
 
+    @Test public void imageOptionsReachTheCoreAsTheGameLoadsAndAfterReturningFromSettings() throws Exception {
+        new PlaybackSettings(true, 100, false, 0, 100, PlaybackSettings.PALETTE_POCKET, true, false,
+                PlaybackSettings.BLENDING_MIX).save(RuntimeEnvironment.getApplication());
+        ActivityController<PlayerActivity> controller = open(null);
+        PlayerActivity activity = controller.get();
+        activity.onWindowFocusChanged(true); pump(activity);
+        assertEquals(1, FakeNative.opens);
+        assertArrayEquals(new String[]{"ravenemu_gb_palette", "pocket", "ravenemu_gb_frame_blending", "mix"},
+                FakeNative.openOptions);
+        controller.pause();
+        PlaybackSettings.load(activity).withImage(PlaybackSettings.PALETTE_GRAY, false, false,
+                PlaybackSettings.BLENDING_GHOSTING).save(activity);
+        controller.resume(); activity.onWindowFocusChanged(true); pump(activity);
+        assertArrayEquals(new String[]{"ravenemu_gb_palette", "gray", "ravenemu_gb_frame_blending", "ghosting"},
+                FakeNative.liveOptions);
+        assertEquals("Changing an image option must not reopen the game", 1, FakeNative.opens);
+    }
+
     @Test public void delayedPlaybackPreferenceCommandCannotRunAfterPauseOrDestruction() throws Exception {
         ActivityController<PlayerActivity> controller = open(null);
         controller.pause();
@@ -535,6 +553,7 @@ public final class PlayerActivityTest {
         static int framesToAdvance, draws, batteryReads;
         static int settingsApplies;
         static PlaybackSettings appliedSettings;
+        static String[] openOptions, liveOptions;
         static void reset() {
             state = new byte[]{1, 2}; battery = new byte[]{3, 4};
             preview = new int[]{2, 1, 0xffff0000, 0xff00ff00};
@@ -542,12 +561,18 @@ public final class PlayerActivityTest {
             opens = failRestores = 0; closed = lastAdvance = false; paused = true;
             framesToAdvance = 1; draws = batteryReads = 0;
             settingsApplies = 0; appliedSettings = null;
+            openOptions = liveOptions = null;
         }
         private static void requireGl() { assertTrue("Core operation must use the queued GL boundary", QueuedGl.executing); }
         @Implementation protected static void __staticInitializer__() {}
         @Implementation protected static void initGl() {}
-        @Implementation protected static String openRom(String nativeDir, String filesDir, String system, byte[] rom, String title) {
-            requireGl(); opens++; closed = false; state = new byte[]{1, 2}; battery = new byte[]{0}; return null;
+        @Implementation protected static String openRom(String nativeDir, String filesDir, String system, byte[] rom,
+                                                        String title, String[] coreOptions) {
+            requireGl(); opens++; closed = false; state = new byte[]{1, 2}; battery = new byte[]{0};
+            openOptions = coreOptions.clone(); return null;
+        }
+        @Implementation protected static void setCoreOptions(String[] coreOptions) {
+            requireGl(); liveOptions = coreOptions.clone();
         }
         @Implementation protected static String stateCompatibility() { requireGl(); return COMPATIBILITY; }
         @Implementation protected static byte[] saveState() { requireGl(); return state.clone(); }
