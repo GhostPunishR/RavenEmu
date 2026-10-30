@@ -42,6 +42,8 @@ final class GameControlsView extends ViewGroup {
     private final SparseArray<Runnable> accessibleReleases = new SparseArray<>();
     private final Dpad dpad;
     private final Control a, b, select, start, leftShoulder, rightShoulder;
+    private final MenuButton menuButton;
+    private final Runnable onMenu;
     private boolean shoulders;
     private int accessibleMask;
     private int reportedMask;
@@ -49,8 +51,13 @@ final class GameControlsView extends ViewGroup {
     private boolean editing;
 
     GameControlsView(Context context, Listener listener) {
+        this(context, listener, null);
+    }
+
+    GameControlsView(Context context, Listener listener, Runnable onMenu) {
         super(context);
         this.listener = listener;
+        this.onMenu = onMenu;
         setMotionEventSplittingEnabled(true);
         setClipChildren(false);
         setClipToPadding(false);
@@ -63,6 +70,7 @@ final class GameControlsView extends ViewGroup {
         start = new Control(context, 4, "START", NativeBridge.START, true);
         leftShoulder = new Control(context, 5, "L", NativeBridge.L, true);
         rightShoulder = new Control(context, 6, "R", NativeBridge.R, true);
+        menuButton = new MenuButton(context);
         addView(dpad);
         addView(a);
         addView(b);
@@ -70,16 +78,22 @@ final class GameControlsView extends ViewGroup {
         addView(start);
         addView(leftShoulder);
         addView(rightShoulder);
+        addView(menuButton);
         leftShoulder.setVisibility(GONE);
         rightShoulder.setVisibility(GONE);
+        menuButton.setVisibility(GONE);
     }
 
     void setShoulders(boolean value) {
-        if (shoulders == value) return;
+        if (shoulders == value) {
+            menuButton.setVisibility(!compact() && onMenu != null ? VISIBLE : GONE);
+            return;
+        }
         releaseAll();
         shoulders = value;
         leftShoulder.setVisibility(value ? VISIBLE : GONE);
         rightShoulder.setVisibility(value ? VISIBLE : GONE);
+        menuButton.setVisibility(!compact() && onMenu != null ? VISIBLE : GONE);
         requestLayout();
     }
 
@@ -101,6 +115,7 @@ final class GameControlsView extends ViewGroup {
         if (layout.equals(controlLayout())) return;
         releaseAll();
         for (int i = 0; i < getChildCount(); i++) {
+            if (!(getChildAt(i) instanceof TouchControl)) continue;
             TouchControl child = (TouchControl) getChildAt(i);
             child.dx = layout.dx(child.index);
             child.dy = layout.dy(child.index);
@@ -112,6 +127,7 @@ final class GameControlsView extends ViewGroup {
     ControlLayout controlLayout() {
         ControlLayout layout = ControlLayout.DEFAULT;
         for (int i = 0; i < getChildCount(); i++) {
+            if (!(getChildAt(i) instanceof TouchControl)) continue;
             TouchControl child = (TouchControl) getChildAt(i);
             layout = layout.with(child.index, child.dx, child.dy);
         }
@@ -123,7 +139,9 @@ final class GameControlsView extends ViewGroup {
         if (editing == value) return;
         releaseAll();
         editing = value;
+        menuButton.setEnabled(isEnabled() && !editing);
         for (int i = 0; i < getChildCount(); i++) {
+            if (!(getChildAt(i) instanceof TouchControl)) continue;
             TouchControl child = (TouchControl) getChildAt(i);
             child.dragging = false;
             child.invalidate();
@@ -142,6 +160,7 @@ final class GameControlsView extends ViewGroup {
         accessibleReleases.clear();
         accessibleMask = 0;
         for (int i = 0; i < getChildCount(); i++) {
+            if (!(getChildAt(i) instanceof TouchControl)) continue;
             TouchControl child = (TouchControl) getChildAt(i);
             child.mask = 0;
             child.tracking = false;
@@ -153,7 +172,8 @@ final class GameControlsView extends ViewGroup {
     private void publish() {
         int combined = accessibleMask;
         for (int i = 0; i < getChildCount(); i++)
-            combined |= ((TouchControl) getChildAt(i)).mask;
+            if (getChildAt(i) instanceof TouchControl)
+                combined |= ((TouchControl) getChildAt(i)).mask;
         if (combined == reportedMask) return;
         reportedMask = combined;
         listener.onButtonsChanged(combined);
@@ -227,11 +247,14 @@ final class GameControlsView extends ViewGroup {
             place(start, width / 2 + 17, offset + (32 + pad) * scale, 84, 40 * scale, layout);
             place(leftShoulder, 16, offset, 80, 28 * scale, layout);
             place(rightShoulder, width - 96, offset, 80, 28 * scale, layout);
+            place(menuButton, (width - 48) / 2, offset, 48, 28 * scale, layout);
         } else {
             float size = cluster(width), button = diameter(), rows = settings.gap;
             float row = shoulders ? 40f + rows : 0f;
             float actionWidth = Math.min(144f, Math.max(60f, width - 44f - size));
-            float gap = Math.min(50f, Math.max(8f, width - 168f));
+            // GB/GBC have no L/R: center the menu between SELECT and START.
+            float gap = Math.min(!shoulders && onMenu != null ? 66f : 50f,
+                    Math.max(8f, width - 168f));
             place(dpad, 16, offset + row * scale, size, size * scale, layout);
             place(a, width - 28 - button, offset + row * scale, button, button * scale, layout);
             place(b, width - 28 - actionWidth, offset + (row + size - button) * scale, button, button * scale, layout);
@@ -239,11 +262,16 @@ final class GameControlsView extends ViewGroup {
             place(start, (width + gap) / 2, offset + (row + size + rows) * scale, 84, 40 * scale, layout);
             place(leftShoulder, 16, offset, 96, 40 * scale, layout);
             place(rightShoulder, width - 112, offset, 96, 40 * scale, layout);
+            // GBA: between L/R; GB/GBC: beside SELECT/START, without a new row.
+            float menuWidth = shoulders ? 48f : Math.min(48f, Math.max(24f, gap - 8f));
+            float menuRow = shoulders ? 0f : row + size + rows;
+            place(menuButton, (width - menuWidth) / 2, offset + menuRow * scale,
+                    menuWidth, 40 * scale, layout);
         }
     }
 
     /** At its default place moved by the player's offset, never outside this view. */
-    private void place(TouchControl child, float x, float y, float width, float height, boolean layout) {
+    private void place(View child, float x, float y, float width, float height, boolean layout) {
         int w = dp(width), h = dp(height);
         if (!layout) {
             child.measure(MeasureSpec.makeMeasureSpec(w, MeasureSpec.EXACTLY),
@@ -252,10 +280,11 @@ final class GameControlsView extends ViewGroup {
         }
         float density = getResources().getDisplayMetrics().density;
         float maxX = Math.max(0f, getWidth() / density - width), maxY = Math.max(0f, getHeight() / density - height);
-        float left = Math.max(0f, Math.min(maxX, x + child.dx));
-        float top = Math.max(0f, Math.min(maxY, y + child.dy));
-        // While editing, the offset is the place the control could take.
-        if (editing) { child.dx = left - x; child.dy = top - y; }
+        TouchControl movable = child instanceof TouchControl ? (TouchControl) child : null;
+        float left = Math.max(0f, Math.min(maxX, x + (movable == null ? 0f : movable.dx)));
+        float top = Math.max(0f, Math.min(maxY, y + (movable == null ? 0f : movable.dy)));
+        // The menu is fixed; stored offsets continue to cover only game buttons.
+        if (editing && movable != null) { movable.dx = left - x; movable.dy = top - y; }
         child.layout(dp(left), dp(top), dp(left) + w, dp(top) + h);
     }
 
@@ -267,6 +296,7 @@ final class GameControlsView extends ViewGroup {
         super.onConfigurationChanged(configuration);
         releaseAll();
         setBackgroundColor(compact() ? Color.TRANSPARENT : Color.BLACK);
+        menuButton.setVisibility(!compact() && onMenu != null ? VISIBLE : GONE);
         requestLayout();
     }
 
@@ -284,6 +314,49 @@ final class GameControlsView extends ViewGroup {
         super.setEnabled(enabled);
         if (!enabled) releaseAll();
         for (int i = 0; i < getChildCount(); i++) getChildAt(i).setEnabled(enabled);
+        menuButton.setEnabled(enabled && !editing);
+    }
+
+    /** Modern game menu between L and R; it never sends an emulator input bit. */
+    private final class MenuButton extends View {
+        private final Paint background = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint outline = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+        MenuButton(Context context) {
+            super(context);
+            setContentDescription("Menu du jeu");
+            setFocusable(true);
+            setOnClickListener(view -> {
+                if (!editing && onMenu != null) onMenu.run();
+            });
+        }
+
+        @Override protected void drawableStateChanged() {
+            super.drawableStateChanged();
+            invalidate();
+        }
+
+        @Override protected void onDraw(Canvas canvas) {
+            boolean pressed = isPressed();
+            boolean contrast = settings.highContrast();
+            background.setStyle(Paint.Style.FILL);
+            background.setShader(new LinearGradient(0, 0, 0, Math.max(1, getHeight()),
+                    pressed ? 0xff735bb3 : contrast ? 0xff55546d : 0xff35334a,
+                    pressed ? 0xff33284f : contrast ? 0xff22232e : 0xff161620,
+                    Shader.TileMode.CLAMP));
+            float cx = getWidth() / 2f, cy = getHeight() / 2f;
+            float radius = Math.min(cx, cy) - dp(2);
+            canvas.drawCircle(cx, cy, radius, background);
+            outline.setShader(null);
+            outline.setStyle(Paint.Style.STROKE);
+            outline.setColor(pressed ? ACCENT : contrast ? Color.WHITE : BORDER);
+            outline.setStrokeWidth(dp(1.5f));
+            canvas.drawCircle(cx, cy, radius, outline);
+            outline.setColor(pressed ? Color.WHITE : ACCENT);
+            outline.setStrokeWidth(dp(2.2f));
+            for (int i = -1; i <= 1; i++)
+                canvas.drawLine(cx - dp(7), cy + i * dp(5), cx + dp(7), cy + i * dp(5), outline);
+        }
     }
 
     private abstract class TouchControl extends View {
@@ -528,13 +601,19 @@ final class GameControlsView extends ViewGroup {
             canvas.drawCircle(getWidth() / 2f, getHeight() / 2f, arm * .38f, fill);
             canvas.drawCircle(getWidth() / 2f, getHeight() / 2f, arm * .36f, line);
             float cx = getWidth() / 2f, cy = getHeight() / 2f;
-            float offset = Math.min(getWidth(), getHeight()) * .36f, half = arm * .11f;
+            float offset = Math.min(getWidth(), getHeight()) * .36f;
+            float arrow = Math.min(getWidth(), getHeight()) * .045f;
             line.setColor(ACCENT);
             line.setStrokeWidth(dp(2.3f));
-            canvas.drawLine(cx - half, cy - offset, cx + half, cy - offset, line);
-            canvas.drawLine(cx - half, cy + offset, cx + half, cy + offset, line);
-            canvas.drawLine(cx - offset, cy - half, cx - offset, cy + half, line);
-            canvas.drawLine(cx + offset, cy - half, cx + offset, cy + half, line);
+            // Directional chevrons echo the reference controller, in the existing palette.
+            canvas.drawLine(cx - arrow, cy - offset + arrow, cx, cy - offset - arrow, line);
+            canvas.drawLine(cx, cy - offset - arrow, cx + arrow, cy - offset + arrow, line);
+            canvas.drawLine(cx - arrow, cy + offset - arrow, cx, cy + offset + arrow, line);
+            canvas.drawLine(cx, cy + offset + arrow, cx + arrow, cy + offset - arrow, line);
+            canvas.drawLine(cx - offset + arrow, cy - arrow, cx - offset - arrow, cy, line);
+            canvas.drawLine(cx - offset - arrow, cy, cx - offset + arrow, cy + arrow, line);
+            canvas.drawLine(cx + offset - arrow, cy - arrow, cx + offset + arrow, cy, line);
+            canvas.drawLine(cx + offset + arrow, cy, cx + offset - arrow, cy + arrow, line);
             paintEditing(canvas);
         }
 
