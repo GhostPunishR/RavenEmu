@@ -197,7 +197,7 @@ No ROM or BIOS is bundled; no broad storage permission is requested.
 
 ## Options des cores et réglages d'image
 
-**Paramètres → Vidéo** reprend trois groupes de la bêta, traités par RavenCore
+**Paramètres → Vidéo → Couleurs** et **→ Rendu** reprennent trois groupes de la bêta, traités par RavenCore
 lui-même au travers de ses options Libretro : **Profil de couleurs** des jeux
 Game Boy (Original, le vert de la console comme dans la bêta ; Pocket gris ;
 Gris neutre), **Correction des couleurs LCD** pour la Game Boy Color et la Game
@@ -209,6 +209,17 @@ au frontend C avant le chargement du jeu ; au retour des paramètres,
 suivante, sans rouvrir le jeu. Ni la SRAM ni les états ne changent de format.
 Le filtre « DMG vert » de la bêta n'a pas d'équivalent exact ; les options
 de cartouche (type de sauvegarde, RTC) restent à porter.
+
+## Paramètres en sous-pages
+
+À la demande du propriétaire, chaque catégorie des **Paramètres** liste ses
+sous-pages au lieu de tout empiler : **Général** (Émulation, Latence),
+**Audio** (Son du jeu, Qualité du son), **Vidéo** (Couleurs, Rendu, Taille et
+réglages, et « Rétablir l'affichage d'origine » pour les trois), **Console**
+(Game Boy et GBC, Game Boy Advance) et **Interface** (Commandes tactiles,
+Cartouche). Le retour, par la barre ou par Android, remonte d'un niveau ; la
+page et sa position survivent à la recréation de l'activité. La bêta, elle,
+montrait chaque catégorie sur une seule page.
 
 ## Image calée sur l'écran et son sans craquement
 
@@ -226,7 +237,7 @@ Bluetooth perdu rouvre la sortie audio, en gardant la pause.
 
 ## Effets d'écran
 
-**Paramètres → Vidéo → Effet d'écran** propose, en plus du rendu au plus
+**Paramètres → Vidéo → Rendu → Effet d'écran** propose, en plus du rendu au plus
 proche par défaut, le **Lissage net** (pixels nets et réguliers à toute
 taille) et la **Grille LCD** (trame d'un écran de console portable), dessinés
 par le pilote GLES2 d'après deux shaders libretro du domaine public
@@ -264,7 +275,7 @@ Le gain réel et le coût restent à mesurer sur téléphone.
 
 ## Commandes tactiles
 
-**Paramètres → Interface** règle les commandes comme la bêta : retour
+**Paramètres → Interface → Commandes tactiles** règle les commandes comme la bêta : retour
 haptique, taille de la croix et de A/B (80 à 115 %), espacement vertical des
 rangées (20 à 80 dp, en portrait), style classique ou contraste élevé, et
 réinitialisation (`ControlSettings`, `GameControlsView.setSettings`). Le
@@ -280,7 +291,7 @@ au choix du propriétaire ; les skins Delta restent à porter.
 
 ## Vibration et capteurs de la cartouche
 
-**Paramètres → Interface** reprend la bêta : **Vibration de la cartouche**
+**Paramètres → Interface → Cartouche** reprend la bêta : **Vibration de la cartouche**
 (Drill Dozer, WarioWare: Twisted!, cartouches Game Boy Rumble) et le groupe
 **Capteurs de la cartouche** (capteurs du téléphone, soleil automatique et
 niveau de soleil de Boktai). Le pilote C `hardware/input/sensor_driver.c`
@@ -292,7 +303,7 @@ sens des inclinaisons restent à vérifier sur téléphone.
 
 ## Console
 
-**Paramètres → Console** reprend la page de la bêta. **Jeux Game Boy en
+**Paramètres → Console** (sous-pages **Game Boy et GBC** et **Game Boy Advance**) reprend la page de la bêta. **Jeux Game Boy en
 couleurs** ouvre les jeux Game Boy sur le core Game Boy Color, avec les
 couleurs choisies (celles de la boot ROM ou une combinaison de touches),
 changées aussitôt même en jeu. **Game Boy Color d'une Game Boy Advance** et le

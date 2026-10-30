@@ -726,3 +726,29 @@ pas encore porté, devra vérifier sa compatibilité avec les images préventive
   (`PlaybackSettingsTest`, page Audio, réglage transmis au lecteur).
 
 Écarts restants : l'écoute et le coût sur téléphone restent à vérifier.
+
+## Paramètres en sous-pages
+
+Demande du propriétaire : à l'intérieur de chaque catégorie, les réglages
+étaient empilés sans ordre. Chaque catégorie liste maintenant ses sous-pages,
+dans le style des lignes de catégories :
+
+| Catégorie | Sous-pages |
+| --- | --- |
+| Général | Émulation (pause automatique), Latence (images préventives) |
+| Audio | Son du jeu (son, volume), Qualité du son (rééchantillonnage) |
+| Vidéo | Couleurs (profil Game Boy, correction LCD), Rendu (mélange d'images, effet d'écran), Taille et réglages (pixels entiers, luminosité, contraste) ; « Rétablir l'affichage d'origine » reste sur la page Vidéo, pour les trois |
+| Console | Game Boy et GBC (couleurs, GBC d'une GBA), Game Boy Advance (BIOS et son fichier) |
+| Interface | Commandes tactiles (haptique, taille, espacement, style, réinitialisation), Cartouche (vibration, capteurs, soleil de Boktai) |
+
+À propos garde sa liste. Le retour remonte d'un niveau (sous-page, catégorie,
+catégories, puis fermeture) ; la page et sa position de défilement survivent à
+la recréation. « Vibration de la cartouche » quitte les commandes tactiles pour
+la sous-page Cartouche. Aucune préférence ne change de nom ni de valeur.
+
+Tests : parcours de toutes les sous-pages dans l'ordre, retour d'un niveau par
+la barre et par Android, sans écriture ; tests existants adaptés aux nouveaux
+chemins (réinitialisation de la vidéo depuis sa catégorie, BIOS sur la
+sous-page Game Boy Advance, recréation sur une sous-page).
+
+Écart assumé avec la bêta, qui montrait chaque catégorie sur une seule page.

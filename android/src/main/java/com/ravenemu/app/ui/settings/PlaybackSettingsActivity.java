@@ -54,9 +54,25 @@ public final class PlaybackSettingsActivity extends Activity {
     public static final String INTERFACE = "interface";
     public static final String GENERAL = "general";
     public static final String ABOUT = "about";
-    private static final String[] PAGES = {HOME, AUDIO, VIDEO, CONSOLE, INTERFACE, GENERAL, ABOUT};
+    /** Each category lists its sub-pages; "category/sub-page" goes back to its category. */
+    public static final String GENERAL_EMULATION = "general/emulation";
+    public static final String GENERAL_LATENCY = "general/latency";
+    public static final String AUDIO_SOUND = "audio/sound";
+    public static final String AUDIO_QUALITY = "audio/quality";
+    public static final String VIDEO_COLORS = "video/colors";
+    public static final String VIDEO_RENDERING = "video/rendering";
+    public static final String VIDEO_PICTURE = "video/picture";
+    public static final String CONSOLE_GB = "console/gb";
+    public static final String CONSOLE_GBA = "console/gba";
+    public static final String INTERFACE_CONTROLS = "interface/controls";
+    public static final String INTERFACE_CARTRIDGE = "interface/cartridge";
+    private static final String[] PAGES = {HOME, AUDIO, VIDEO, CONSOLE, INTERFACE, GENERAL, ABOUT,
+            GENERAL_EMULATION, GENERAL_LATENCY, AUDIO_SOUND, AUDIO_QUALITY, VIDEO_COLORS, VIDEO_RENDERING,
+            VIDEO_PICTURE, CONSOLE_GB, CONSOLE_GBA, INTERFACE_CONTROLS, INTERFACE_CARTRIDGE};
     private static final String[] TITLES = {"Paramètres", "Audio", "Vidéo", "Console", "Interface",
-            "Général", "À propos"};
+            "Général", "À propos", "Émulation", "Latence", "Son du jeu", "Qualité du son", "Couleurs",
+            "Rendu", "Taille et réglages", "Game Boy et GBC", "Game Boy Advance", "Commandes tactiles",
+            "Cartouche"};
     private static final String REPOSITORY = "https://github.com/GhostPunishR/RavenEmu";
     private static final int PICK_BIOS = 1;
 
@@ -130,7 +146,10 @@ public final class PlaybackSettingsActivity extends Activity {
         rendered = true;
         final int request = ++pageSerial;
         title.setText(TITLES[index(page)]);
-        back.setContentDescription(HOME.equals(page) ? "Fermer les paramètres" : "Retour aux paramètres");
+        final String parent = parent(page);
+        back.setContentDescription(HOME.equals(page) ? "Fermer les paramètres"
+                : HOME.equals(parent) ? "Retour aux paramètres"
+                : "Retour aux réglages " + TITLES[index(parent)].toLowerCase(Locale.ROOT));
         content.removeAllViews();
         switch (page) {
             case AUDIO: audioPage(); break;
@@ -139,6 +158,17 @@ public final class PlaybackSettingsActivity extends Activity {
             case INTERFACE: interfacePage(); break;
             case GENERAL: generalPage(); break;
             case ABOUT: aboutPage(); break;
+            case GENERAL_EMULATION: generalEmulationPage(); break;
+            case GENERAL_LATENCY: generalLatencyPage(); break;
+            case AUDIO_SOUND: audioSoundPage(); break;
+            case AUDIO_QUALITY: audioQualityPage(); break;
+            case VIDEO_COLORS: videoColorsPage(); break;
+            case VIDEO_RENDERING: videoRenderingPage(); break;
+            case VIDEO_PICTURE: videoPicturePage(); break;
+            case CONSOLE_GB: consoleGameBoyPage(); break;
+            case CONSOLE_GBA: consoleAdvancePage(); break;
+            case INTERFACE_CONTROLS: interfaceControlsPage(); break;
+            case INTERFACE_CARTRIDGE: interfaceCartridgePage(); break;
             default: homePage();
         }
         final int restoreScroll = scrollPositions[index(page)];
@@ -152,9 +182,9 @@ public final class PlaybackSettingsActivity extends Activity {
         category("Général", "Pause automatique et latence", GENERAL,
                 "M3,5H13V7H3ZM17,5H21V7H17ZM13,3H17V9H13ZM3,11H7V13H3ZM11,11H21V13H11ZM7,9H11V15H7Z"
                         + "M3,17H13V19H3ZM17,17H21V19H17ZM13,15H17V21H13Z");
-        category("Audio", "Son du jeu et volume", AUDIO,
+        category("Audio", "Son du jeu, volume et qualité", AUDIO,
                 "M3,9H7L12,4V20L7,15H3ZM15,8V16C17,15 17,9 15,8ZM15,3V5C21,7 21,17 15,19V21C24,18 24,6 15,3Z");
-        category("Vidéo", "Couleurs, correction LCD, mélange d'images, taille, luminosité et contraste", VIDEO,
+        category("Vidéo", "Couleurs, rendu, taille, luminosité et contraste", VIDEO,
                 "M3,3H21V17H13V19H17V21H7V19H11V17H3ZM5,5V15H19V5Z");
         // The beta draws Console with its default (About) icon.
         category("Console", "Jeux Game Boy en couleurs, GBC d'une GBA, BIOS GBA", CONSOLE,
@@ -173,12 +203,18 @@ public final class PlaybackSettingsActivity extends Activity {
     /** The beta's Général page; its link cable, online covers and diagnostics
      * wait for those native features, as the beta hides them without them. */
     private void generalPage() {
-        group("Émulation");
+        category("Émulation", "Pause automatique", GENERAL_EMULATION, null);
+        category("Latence", "Images préventives", GENERAL_LATENCY, null);
+    }
+
+    private void generalEmulationPage() {
         description("Pause automatique",
                 "Le jeu et son audio sont suspendus lorsque RavenEmu passe en arrière-plan ou lorsque le "
                         + "panneau de jeu est ouvert. Ce comportement est fixe pour protéger la partie.");
-        // A native addition after RetroArch's preemptive frames (the C frontend).
-        group("Latence");
+    }
+
+    /** A native addition after RetroArch's preemptive frames (the C frontend). */
+    private void generalLatencyPage() {
         description("Images préventives",
                 "Quand une touche change, RavenEmu rejoue aussitôt les dernières images avec elle : le jeu "
                         + "répond une à trois images plus tôt (environ 17 ms chacune). Chaque appui fait émuler "
@@ -248,32 +284,45 @@ public final class PlaybackSettingsActivity extends Activity {
         row.setContentDescription("Ouvrir les réglages " + label.toLowerCase(Locale.ROOT));
         row.setOnClickListener(view -> showPage(destination));
 
-        FrameLayout iconBox = new FrameLayout(this);
-        iconBox.setBackground(shape(0x21a78bfa));
-        iconBox.addView(new SettingsIcon(this, iconPath),
-                new FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER));
-        row.addView(iconBox, new LinearLayout.LayoutParams(dp(42), dp(42)));
+        // The categories carry the beta's icons; their sub-pages, text alone.
+        if (iconPath != null) {
+            FrameLayout iconBox = new FrameLayout(this);
+            iconBox.setBackground(shape(0x21a78bfa));
+            iconBox.addView(new SettingsIcon(this, iconPath),
+                    new FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER));
+            row.addView(iconBox, new LinearLayout.LayoutParams(dp(42), dp(42)));
+        }
         LinearLayout description = column();
         TextView name = text(label, 16, HomeActivity.TEXT);
         name.setTypeface(null, Typeface.BOLD);
         description.addView(name);
         add(description, text(summary, 12, HomeActivity.MUTED), 4);
         LinearLayout.LayoutParams details = new LinearLayout.LayoutParams(0, -2, 1);
-        details.setMarginStart(dp(13));
+        details.setMarginStart(iconPath != null ? dp(13) : dp(4));
         details.setMarginEnd(dp(13));
         row.addView(description, details);
         row.addView(text("›", 23, HomeActivity.ACCENT));
         add(row, content.getChildCount() == 0 ? 0 : 14);
     }
 
+    /** A sub-page goes back to its category, a category to the categories. */
     private void navigateBack() {
-        if (HOME.equals(page)) finish(); else showPage(HOME);
+        if (HOME.equals(page)) finish(); else showPage(parent(page));
+    }
+
+    private static String parent(String page) {
+        final int slash = page.indexOf('/');
+        return slash < 0 ? HOME : page.substring(0, slash);
     }
 
     @Override public void onBackPressed() { navigateBack(); }
 
     private void audioPage() {
-        group("Son du jeu");
+        category("Son du jeu", "Activer le son et volume", AUDIO_SOUND, null);
+        category("Qualité du son", "Rééchantillonnage sinc ou linéaire", AUDIO_QUALITY, null);
+    }
+
+    private void audioSoundPage() {
         settingSwitch("Activer le son",
                 "Conserve l'horloge d'émulation et coupe uniquement la sortie audio.",
                 settings.audioEnabled, enabled -> {
@@ -283,8 +332,10 @@ public final class PlaybackSettingsActivity extends Activity {
         volume = slider("Volume", settings.audioVolume, 0, 100, true, value ->
                 update(settings.withAudio(settings.audioEnabled, value)));
         volume.setEnabled(settings.audioEnabled);
-        // A native addition: the beta's player had linear interpolation only.
-        group("Qualité du son");
+    }
+
+    /** A native addition: the beta's player had linear interpolation only. */
+    private void audioQualityPage() {
         description("Rééchantillonnage",
                 "Le son du jeu est converti à la fréquence du téléphone. Le filtre sinc garde les notes "
                         + "aiguës nettes, sans le sifflement métallique de l'interpolation linéaire, pour moins "
@@ -294,9 +345,24 @@ public final class PlaybackSettingsActivity extends Activity {
                 settings.resampler, value -> update(settings.withResampler(value)));
     }
 
+    /** The beta's Vidéo groups, by theme. Its reset brings every one back. */
     private void videoPage() {
-        // The beta's groups and wording. The colors, the LCD correction and the
-        // frame blending are RavenCore's, set through its Libretro options.
+        category("Couleurs", "Profil Game Boy et correction LCD", VIDEO_COLORS, null);
+        category("Rendu", "Mélange d'images et effet d'écran", VIDEO_RENDERING, null);
+        category("Taille et réglages", "Pixels entiers, luminosité et contraste", VIDEO_PICTURE, null);
+        Button reset = button("Rétablir l'affichage d'origine");
+        reset.setTextColor(HomeActivity.ACCENT);
+        reset.setOnClickListener(view -> {
+            update(settings.withPicture(false, 0, 100).withImage(PlaybackSettings.PALETTE_ORIGINAL,
+                    false, false, PlaybackSettings.BLENDING_OFF).withEffect(PlaybackSettings.EFFECT_NONE));
+            showPage(VIDEO);
+        });
+        add(reset, 14);
+    }
+
+    /** The beta's wording. The colors, the LCD correction and the frame
+     * blending are RavenCore's, set through its Libretro options. */
+    private void videoColorsPage() {
         group("Écran");
         description("Profil de couleurs",
                 "Original garde le vert de la Game Boy ; Pocket gris imite la Game Boy Pocket ; "
@@ -316,6 +382,9 @@ public final class PlaybackSettingsActivity extends Activity {
                 "Même correction, réglée à part pour la Game Boy Advance.",
                 settings.lcdCorrectionGba, enabled -> update(settings.withImage(settings.gbPalette,
                         settings.lcdCorrectionGbc, enabled, settings.frameBlending)));
+    }
+
+    private void videoRenderingPage() {
         group("Mélange d'images");
         description("Rémanence de l'écran",
                 "Certains jeux font clignoter un objet d'une image à l'autre pour le rendre transparent, "
@@ -335,6 +404,9 @@ public final class PlaybackSettingsActivity extends Activity {
         choices(new String[]{"Aucun (défaut)", "Lissage net", "Grille LCD"},
                 new String[]{PlaybackSettings.EFFECT_NONE, PlaybackSettings.EFFECT_SHARP, PlaybackSettings.EFFECT_LCD},
                 settings.screenEffect, effect -> update(settings.withEffect(effect)));
+    }
+
+    private void videoPicturePage() {
         group("Taille de l'image");
         settingSwitch("Pixels entiers",
                 "L'image prend un multiple entier de sa taille : tous les pixels sont identiques, avec des bords noirs autour.",
@@ -345,20 +417,16 @@ public final class PlaybackSettingsActivity extends Activity {
                 update(settings.withPicture(settings.integerScale, value, settings.contrast)));
         slider("Contraste", settings.contrast, 50, 150, true, value ->
                 update(settings.withPicture(settings.integerScale, settings.brightness, value)));
-        Button reset = button("Rétablir l'affichage d'origine");
-        reset.setTextColor(HomeActivity.ACCENT);
-        reset.setOnClickListener(view -> {
-            update(settings.withPicture(false, 0, 100).withImage(PlaybackSettings.PALETTE_ORIGINAL,
-                    false, false, PlaybackSettings.BLENDING_OFF).withEffect(PlaybackSettings.EFFECT_NONE));
-            showPage(VIDEO);
-        });
-        add(reset, 14);
     }
 
     /** The beta's Console page: the console that runs the games. Taken at the
      * game's launch, except the Game Boy colors, which change at once. */
     private void consolePage() {
-        group("Game Boy et Game Boy Color");
+        category("Game Boy et GBC", "Jeux Game Boy en couleurs et GBC d'une GBA", CONSOLE_GB, null);
+        category("Game Boy Advance", "BIOS et son fichier", CONSOLE_GBA, null);
+    }
+
+    private void consoleGameBoyPage() {
         LinearLayout[] colors = new LinearLayout[1];
         settingSwitch("Jeux Game Boy en couleurs",
                 "Les jeux Game Boy tournent sur une Game Boy Color, qui leur donne des couleurs : celles que sa "
@@ -382,7 +450,9 @@ public final class PlaybackSettingsActivity extends Activity {
                         + "leurs bonus. Un état pris avec l'autre console ne se recharge pas. Pris en compte au "
                         + "lancement du jeu.",
                 console.gbcOnGba, enabled -> updateConsole(console.withGbcOnGba(enabled)));
-        group("Game Boy Advance");
+    }
+
+    private void consoleAdvancePage() {
         description("BIOS",
                 "RavenCore répond lui-même aux appels du BIOS. Le vrai BIOS, celui de votre console, joue son "
                         + "animation de démarrage (sauf si vous la sautez) : choisissez son fichier (16 Kio), aucun "
@@ -412,13 +482,13 @@ public final class PlaybackSettingsActivity extends Activity {
      * section waits for that native feature; rewind is left out at the
      * owner's request. */
     private void interfacePage() {
-        group("Commandes tactiles");
+        category("Commandes tactiles", "Retour haptique, taille, espacement et style", INTERFACE_CONTROLS, null);
+        category("Cartouche", "Vibration et capteurs du téléphone", INTERFACE_CARTRIDGE, null);
+    }
+
+    private void interfaceControlsPage() {
         settingSwitch("Retour haptique", "Petite vibration à la pression des boutons.", controls.haptics,
                 enabled -> updateControls(controls.withHaptics(enabled)));
-        settingSwitch("Vibration de la cartouche",
-                "Fait vibrer le téléphone avec les jeux équipés d'un moteur de vibration (Drill Dozer, "
-                        + "WarioWare: Twisted!, cartouches Game Boy Rumble).",
-                cartridge.rumble, enabled -> updateCartridge(cartridge.withRumble(enabled)));
         slider("Taille des commandes", controls.scale, ControlSettings.SCALE_MIN, ControlSettings.SCALE_MAX,
                 " %", value -> updateControls(controls.withScale(value)));
         slider("Espacement vertical", controls.gap, ControlSettings.GAP_MIN, ControlSettings.GAP_MAX,
@@ -433,9 +503,18 @@ public final class PlaybackSettingsActivity extends Activity {
         reset.setOnClickListener(view -> {
             updateControls(ControlSettings.DEFAULTS);
             ControlLayout.reset(this);
-            showPage(INTERFACE);
+            showPage(INTERFACE_CONTROLS);
         });
-        // RavenCore's Libretro sensors, fed by the native sensor driver.
+    }
+
+    /** The cartridge hardware the phone stands in for: its motor, and
+     * RavenCore's Libretro sensors fed by the native sensor driver. */
+    private void interfaceCartridgePage() {
+        group("Vibration");
+        settingSwitch("Vibration de la cartouche",
+                "Fait vibrer le téléphone avec les jeux équipés d'un moteur de vibration (Drill Dozer, "
+                        + "WarioWare: Twisted!, cartouches Game Boy Rumble).",
+                cartridge.rumble, enabled -> updateCartridge(cartridge.withRumble(enabled)));
         group("Capteurs de la cartouche");
         Switch[] solarAuto = new Switch[1];
         SeekBar[] solarLevel = new SeekBar[1];
@@ -509,7 +588,7 @@ public final class PlaybackSettingsActivity extends Activity {
             if (isDestroyed()) return;
             biosInstalled = installed;
             if (message != null) Toast.makeText(this, message, Toast.LENGTH_LONG).show();
-            if (CONSOLE.equals(page)) showPage(CONSOLE);
+            if (CONSOLE_GBA.equals(page)) showPage(CONSOLE_GBA);
         });
     }
 
@@ -693,7 +772,8 @@ public final class PlaybackSettingsActivity extends Activity {
         return layout;
     }
 
-    private void add(View view, int top) { add(content, view, top); }
+    /** Nothing above a page's first block. */
+    private void add(View view, int top) { add(content, view, content.getChildCount() == 0 ? 0 : top); }
 
     private void add(LinearLayout parent, View view, int top) {
         LinearLayout.LayoutParams size = new LinearLayout.LayoutParams(-1, -2);

@@ -74,29 +74,66 @@ public final class PlaybackSettingsActivityTest {
         assertNotNull(text(activity, "Paramètres"));
         assertTrue(preferences.getAll().isEmpty());
         described(activity, "Ouvrir les réglages audio").performClick();
+        described(activity, "Ouvrir les réglages son du jeu").performClick();
         assertTrue(toggle(activity, "Activer le son").isChecked());
         assertEquals(100, slider(activity, "Volume").getProgress());
         assertTrue(preferences.getAll().isEmpty());
     }
 
-    @Test public void toolbarAndAndroidBackFollowTheBetaCategoryNavigation() {
+    @Test public void toolbarAndAndroidBackClimbOneLevelAtATime() {
         PlaybackSettingsActivity activity = open(null, null).get();
         described(activity, "Ouvrir les réglages audio").performClick();
+        described(activity, "Ouvrir les réglages son du jeu").performClick();
         assertNotNull(toggle(activity, "Activer le son"));
+        described(activity, "Retour aux réglages audio").performClick();
+        assertNotNull(described(activity, "Ouvrir les réglages qualité du son"));
         described(activity, "Retour aux paramètres").performClick();
         assertFalse(activity.isFinishing());
         described(activity, "Ouvrir les réglages vidéo").performClick();
+        described(activity, "Ouvrir les réglages taille et réglages").performClick();
         assertNotNull(toggle(activity, "Pixels entiers"));
         activity.onBackPressed();
         assertFalse(activity.isFinishing());
+        assertNotNull(described(activity, "Ouvrir les réglages couleurs"));
+        activity.onBackPressed();
         assertNotNull(described(activity, "Ouvrir les réglages audio"));
         activity.onBackPressed();
         assertTrue(activity.isFinishing());
     }
 
+    @Test public void everyCategoryListsItsSubPagesInOrderAndEachComesBackToIt() {
+        String[][] tree = {
+                {"général", "émulation", "latence"},
+                {"audio", "son du jeu", "qualité du son"},
+                {"vidéo", "couleurs", "rendu", "taille et réglages"},
+                {"console", "game boy et gbc", "game boy advance"},
+                {"interface", "commandes tactiles", "cartouche"},
+        };
+        PlaybackSettingsActivity activity = open(null, null).get();
+        for (String[] branch : tree) {
+            described(activity, "Ouvrir les réglages " + branch[0]).performClick();
+            layout(activity);
+            int previous = -1;
+            for (int i = 1; i < branch.length; i++) {
+                View row = described(activity, "Ouvrir les réglages " + branch[i]);
+                assertTrue(branch[i] + " comes after the one before", row.getTop() > previous);
+                previous = row.getTop();
+            }
+            for (int i = 1; i < branch.length; i++) {
+                described(activity, "Ouvrir les réglages " + branch[i]).performClick();
+                assertNotNull(branch[i], described(activity, "Retour aux réglages " + branch[0]));
+                activity.onBackPressed();
+                assertNotNull(described(activity, "Ouvrir les réglages " + branch[1]));
+            }
+            described(activity, "Retour aux paramètres").performClick();
+            assertNotNull(described(activity, "Ouvrir les réglages audio"));
+        }
+        assertTrue("Browsing writes nothing", preferences.getAll().isEmpty());
+    }
+
     @Test public void oneTapMuteKeepsVolumeAndReenablingRestoresItsControl() {
         new PlaybackSettings(true, 37, true, 12, 120).save(RuntimeEnvironment.getApplication());
-        PlaybackSettingsActivity activity = open(PlaybackSettingsActivity.AUDIO, null).get();
+        PlaybackSettingsActivity activity = open(PlaybackSettingsActivity.AUDIO_SOUND, null).get();
         Switch sound = toggle(activity, "Activer le son");
         SeekBar volume = slider(activity, "Volume");
         assertEquals(37, volume.getProgress());
@@ -115,7 +152,7 @@ public final class PlaybackSettingsActivityTest {
 
     @Test public void audioPageChoosesTheResamplerAndKeepsTheVolume() {
         new PlaybackSettings(true, 37, true, 12, 120).save(RuntimeEnvironment.getApplication());
-        PlaybackSettingsActivity activity = open(PlaybackSettingsActivity.AUDIO, null).get();
+        PlaybackSettingsActivity activity = open(PlaybackSettingsActivity.AUDIO_QUALITY, null).get();
         assertNotNull(text(activity, "Rééchantillonnage"));
         assertNotNull(choice(activity, "Sinc (défaut), choisi"));
         choice(activity, "Linéaire").performClick();
@@ -128,7 +165,7 @@ public final class PlaybackSettingsActivityTest {
 
     @Test public void videoAdjustmentsPersistAndResetPreservesAudioPreferences() {
         new PlaybackSettings(false, 23, false, 0, 100).save(RuntimeEnvironment.getApplication());
-        PlaybackSettingsActivity activity = open(PlaybackSettingsActivity.VIDEO, null).get();
+        PlaybackSettingsActivity activity = open(PlaybackSettingsActivity.VIDEO_PICTURE, null).get();
         toggle(activity, "Pixels entiers").performClick();
         setAsUser(slider(activity, "Luminosité"), 72); // -50 + 72 = 22
         setAsUser(slider(activity, "Contraste"), 82); // 50 + 82 = 132
@@ -136,6 +173,8 @@ public final class PlaybackSettingsActivityTest {
         assertTrue(changed.integerScale);
         assertEquals(22, changed.brightness);
         assertEquals(132, changed.contrast);
+        // The reset sits on the Vidéo page, for every one of its sub-pages.
+        activity.onBackPressed();
         text(activity, "Rétablir l'affichage d'origine").performClick();
         PlaybackSettings restored = PlaybackSettings.load(activity);
         assertFalse(restored.integerScale);
@@ -143,13 +182,15 @@ public final class PlaybackSettingsActivityTest {
         assertEquals(100, restored.contrast);
         assertFalse(restored.audioEnabled);
         assertEquals(23, restored.audioVolume);
+        described(activity, "Ouvrir les réglages taille et réglages").performClick();
+        assertFalse(toggle(activity, "Pixels entiers").isChecked());
         assertEquals(50, slider(activity, "Luminosité").getProgress());
         assertEquals(50, slider(activity, "Contraste").getProgress());
     }
 
     @Test public void imageOptionsFollowTheBetaChoicesAndResetWithThePicture() {
         new PlaybackSettings(false, 23, false, 0, 100).save(RuntimeEnvironment.getApplication());
-        PlaybackSettingsActivity activity = open(PlaybackSettingsActivity.VIDEO, null).get();
+        PlaybackSettingsActivity activity = open(PlaybackSettingsActivity.VIDEO_COLORS, null).get();
         assertNotNull(text(activity, "Profil de couleurs"));
         assertNotNull(choice(activity, "Original, choisi"));
         choice(activity, "Pocket gris").performClick();
@@ -157,6 +198,8 @@ public final class PlaybackSettingsActivityTest {
         assertNotNull("The page shows the new choice", choice(activity, "Pocket gris, choisi"));
         toggle(activity, "Game Boy Color").performClick();
         toggle(activity, "Game Boy Advance").performClick();
+        activity.onBackPressed();
+        described(activity, "Ouvrir les réglages rendu").performClick();
         choice(activity, "Rémanence").performClick();
         assertNotNull(choice(activity, "Aucun (défaut), choisi"));
         choice(activity, "Lissage net").performClick();
@@ -169,6 +212,7 @@ public final class PlaybackSettingsActivityTest {
         assertEquals(PlaybackSettings.BLENDING_GHOSTING, changed.frameBlending);
         assertEquals(PlaybackSettings.PALETTE_POCKET, changed.gbPalette);
         assertEquals(23, changed.audioVolume);
+        activity.onBackPressed();
         text(activity, "Rétablir l'affichage d'origine").performClick();
         PlaybackSettings restored = PlaybackSettings.load(activity);
         assertEquals(PlaybackSettings.PALETTE_ORIGINAL, restored.gbPalette);
@@ -178,16 +222,21 @@ public final class PlaybackSettingsActivityTest {
         assertEquals(PlaybackSettings.EFFECT_NONE, restored.screenEffect);
         assertFalse(restored.audioEnabled);
         assertEquals(23, restored.audioVolume);
+        described(activity, "Ouvrir les réglages rendu").performClick();
         assertNotNull(choice(activity, "Désactivé (défaut), choisi"));
         assertNotNull(choice(activity, "Aucun (défaut), choisi"));
+        activity.onBackPressed();
+        described(activity, "Ouvrir les réglages couleurs").performClick();
+        assertNotNull(choice(activity, "Original, choisi"));
     }
 
     @Test public void consolePageFollowsTheBetaAndKeepsTheOtherSettings() {
         new PlaybackSettings(false, 23, false, 0, 100).save(RuntimeEnvironment.getApplication());
         PlaybackSettingsActivity home = open(null, null).get();
         described(home, "Ouvrir les réglages console").performClick();
+        described(home, "Ouvrir les réglages game boy et gbc").performClick();
         assertNotNull(toggle(home, "Jeux Game Boy en couleurs"));
-        PlaybackSettingsActivity activity = open(PlaybackSettingsActivity.CONSOLE, null).get();
+        PlaybackSettingsActivity activity = open(PlaybackSettingsActivity.CONSOLE_GB, null).get();
         assertTrue("Opening the page writes nothing",
                 preferences.getAll().keySet().stream().noneMatch(key -> key.startsWith("console.")));
         View bootColors = choice(activity, "Celles de la boot ROM, jeu par jeu, choisi");
@@ -202,6 +251,8 @@ public final class PlaybackSettingsActivityTest {
         assertEquals(3, ConsoleSettings.load(activity).gbColors);
         assertNotNull("The page shows the new choice", choice(activity, "A + Haut : rouge, choisi"));
         toggle(activity, "Game Boy Color d'une Game Boy Advance").performClick();
+        activity.onBackPressed();
+        described(activity, "Ouvrir les réglages game boy advance").performClick();
         choice(activity, "Vrai BIOS, sans animation").performClick();
         ConsoleSettings changed = ConsoleSettings.load(activity);
         assertTrue(changed.gbInColor);
@@ -216,7 +267,7 @@ public final class PlaybackSettingsActivityTest {
     }
 
     @Test public void theBiosFileIsChosenCheckedAndRemoved() throws Exception {
-        PlaybackSettingsActivity activity = open(PlaybackSettingsActivity.CONSOLE, null).get();
+        PlaybackSettingsActivity activity = open(PlaybackSettingsActivity.CONSOLE_GBA, null).get();
         text(activity, "Choisir le fichier du BIOS").performClick();
         ShadowActivity.IntentForResult pick = shadowOf(activity).getNextStartedActivityForResult();
         assertEquals(Intent.ACTION_OPEN_DOCUMENT, pick.intent.getAction());
@@ -289,8 +340,9 @@ public final class PlaybackSettingsActivityTest {
         new PlaybackSettings(false, 23, false, 0, 100).save(RuntimeEnvironment.getApplication());
         PlaybackSettingsActivity home = open(null, null).get();
         described(home, "Ouvrir les réglages interface").performClick();
+        described(home, "Ouvrir les réglages commandes tactiles").performClick();
         assertNotNull(toggle(home, "Retour haptique"));
-        PlaybackSettingsActivity activity = open(PlaybackSettingsActivity.INTERFACE, null).get();
+        PlaybackSettingsActivity activity = open(PlaybackSettingsActivity.INTERFACE_CONTROLS, null).get();
         assertTrue("Opening the page writes nothing",
                 preferences.getAll().keySet().stream().noneMatch(key -> key.startsWith("controls.")));
         assertEquals(20, slider(activity, "Taille des commandes").getProgress());
@@ -329,7 +381,7 @@ public final class PlaybackSettingsActivityTest {
     }
 
     @Test public void generalPageSetsThePreemptiveFrames() {
-        PlaybackSettingsActivity activity = open(PlaybackSettingsActivity.GENERAL, null).get();
+        PlaybackSettingsActivity activity = open(PlaybackSettingsActivity.GENERAL_LATENCY, null).get();
         assertNotNull(text(activity, "Images préventives"));
         assertNotNull(choice(activity, "Désactivées (défaut), choisi"));
         assertTrue("Opening the page writes nothing",
@@ -337,14 +389,14 @@ public final class PlaybackSettingsActivityTest {
         choice(activity, "2 images").performClick();
         assertEquals(2, LatencySettings.load(activity).preemptiveFrames);
         assertNotNull(choice(activity, "2 images, choisi"));
-        PlaybackSettingsActivity reopened = open(PlaybackSettingsActivity.GENERAL, null).get();
+        PlaybackSettingsActivity reopened = open(PlaybackSettingsActivity.GENERAL_LATENCY, null).get();
         assertNotNull(choice(reopened, "2 images, choisi"));
         choice(reopened, "Désactivées (défaut)").performClick();
         assertEquals(0, LatencySettings.load(reopened).preemptiveFrames);
     }
 
     @Test public void interfacePageSetsTheCartridgeMotorTheSensorsAndTheSun() {
-        PlaybackSettingsActivity activity = open(PlaybackSettingsActivity.INTERFACE, null).get();
+        PlaybackSettingsActivity activity = open(PlaybackSettingsActivity.INTERFACE_CARTRIDGE, null).get();
         assertTrue("Opening the page writes nothing",
                 preferences.getAll().keySet().stream().noneMatch(key -> key.startsWith("cartridge.")));
         assertTrue(toggle(activity, "Vibration de la cartouche").isChecked());
@@ -376,7 +428,11 @@ public final class PlaybackSettingsActivityTest {
         toggle(activity, "Soleil automatique (Boktai)").performClick();
         assertTrue("The chosen sun, with the sensors on", sun.isEnabled());
         // As in the beta, resetting the controls leaves the cartridge alone.
+        activity.onBackPressed();
+        described(activity, "Ouvrir les réglages commandes tactiles").performClick();
         text(activity, "Réinitialiser les commandes").performClick();
+        activity.onBackPressed();
+        described(activity, "Ouvrir les réglages cartouche").performClick();
         CartridgeSettings kept = CartridgeSettings.load(activity);
         assertFalse(kept.rumble);
         assertTrue(kept.sensors);
@@ -392,6 +448,7 @@ public final class PlaybackSettingsActivityTest {
         ActivityController<PlaybackSettingsActivity> first = open(PlaybackSettingsActivity.AUDIO, null);
         described(first.get(), "Retour aux paramètres").performClick();
         described(first.get(), "Ouvrir les réglages vidéo").performClick();
+        described(first.get(), "Ouvrir les réglages couleurs").performClick();
         layout(first.get());
         ScrollView previous = scroll(first.get());
         previous.scrollTo(0, 60);
@@ -401,9 +458,13 @@ public final class PlaybackSettingsActivityTest {
         first.saveInstanceState(saved).pause().stop().destroy();
         activities.remove(first);
         PlaybackSettingsActivity recreated = open(PlaybackSettingsActivity.AUDIO, saved).get();
-        assertNotNull(toggle(recreated, "Pixels entiers"));
+        assertNotNull(choice(recreated, "Original, choisi"));
         assertEquals(savedScroll, scroll(recreated).getScrollY());
         assertEquals(before, preferences.getAll());
+        // Back from the restored sub-page: its category, then the picture's settings.
+        described(recreated, "Retour aux réglages vidéo").performClick();
+        described(recreated, "Ouvrir les réglages taille et réglages").performClick();
+        assertTrue(toggle(recreated, "Pixels entiers").isChecked());
         assertEquals(61, slider(recreated, "Luminosité").getProgress());
         assertEquals(67, slider(recreated, "Contraste").getProgress());
     }
