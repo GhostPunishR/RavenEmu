@@ -113,6 +113,19 @@ public final class PlaybackSettingsActivityTest {
                 "64 %".contentEquals(((TextView)view).getText())));
     }
 
+    @Test public void audioPageChoosesTheResamplerAndKeepsTheVolume() {
+        new PlaybackSettings(true, 37, true, 12, 120).save(RuntimeEnvironment.getApplication());
+        PlaybackSettingsActivity activity = open(PlaybackSettingsActivity.AUDIO, null).get();
+        assertNotNull(text(activity, "Rééchantillonnage"));
+        assertNotNull(choice(activity, "Sinc (défaut), choisi"));
+        choice(activity, "Linéaire").performClick();
+        assertEquals(PlaybackSettings.RESAMPLER_LINEAR, PlaybackSettings.load(activity).resampler);
+        assertEquals(37, PlaybackSettings.load(activity).audioVolume);
+        assertNotNull(choice(activity, "Linéaire, choisi"));
+        choice(activity, "Sinc (défaut)").performClick();
+        assertEquals(PlaybackSettings.RESAMPLER_SINC, PlaybackSettings.load(activity).resampler);
+    }
+
     @Test public void videoAdjustmentsPersistAndResetPreservesAudioPreferences() {
         new PlaybackSettings(false, 23, false, 0, 100).save(RuntimeEnvironment.getApplication());
         PlaybackSettingsActivity activity = open(PlaybackSettingsActivity.VIDEO, null).get();

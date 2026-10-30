@@ -283,6 +283,15 @@ public final class PlaybackSettingsActivity extends Activity {
         volume = slider("Volume", settings.audioVolume, 0, 100, true, value ->
                 update(settings.withAudio(settings.audioEnabled, value)));
         volume.setEnabled(settings.audioEnabled);
+        // A native addition: the beta's player had linear interpolation only.
+        group("Qualité du son");
+        description("Rééchantillonnage",
+                "Le son du jeu est converti à la fréquence du téléphone. Le filtre sinc garde les notes "
+                        + "aiguës nettes, sans le sifflement métallique de l'interpolation linéaire, pour moins "
+                        + "de 1 % d'un cœur du processeur ; l'interpolation linéaire reste au choix pour comparer.");
+        choices(new String[]{"Sinc (défaut)", "Linéaire"},
+                new String[]{PlaybackSettings.RESAMPLER_SINC, PlaybackSettings.RESAMPLER_LINEAR},
+                settings.resampler, value -> update(settings.withResampler(value)));
     }
 
     private void videoPage() {

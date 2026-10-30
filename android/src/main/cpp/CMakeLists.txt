@@ -11,6 +11,7 @@ FetchContent_GetProperties(ravencore)
 add_library(raven_android SHARED
     jni/bridge.c
     hardware/audio/audio_pipeline.c
+    hardware/audio/sinc_resampler.c
     hardware/audio/aaudio/aaudio_driver.c
     hardware/video/gles2/gles2_renderer.c
     hardware/input/input_driver.c

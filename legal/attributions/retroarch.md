@@ -23,7 +23,8 @@ dépendances du frontend RetroArch ; le producteur n'attend pas de place.
 Le callback remplit les sous-alimentations par du silence. La taille demandée
 au périphérique est de deux bursts ; le budget de file est de 64 ms, ajusté
 aux bursts et à la capacité. Ce budget ne mesure pas la latence réelle.
-Le convertisseur linéaire de `native_audio.c` reste celui de RavenEmu.
+Les convertisseurs de fréquence (linéaire et sinc, `audio_pipeline.c` et
+`sinc_resampler.c`) restent ceux de RavenEmu.
 
 Le rappel d'erreur AAudio (`aaudio_error_cb`) signale seulement qu'un
 périphérique a disparu (casque débranché, Bluetooth, USB), en ignorant le
@@ -46,7 +47,10 @@ licence indiquée dans chaque fichier ; elles ne sont pas attribuées à l'amont
 Le frontend, la boucle d'émulation et les menus restent ceux de RavenEmu ;
 RavenCore reste le moteur GB/GBC/GBA. Les resamplers sinc, les presets de
 shaders, la sélection de périphériques, les cores graphiques matériels et la
-planification de RetroArch ne sont pas portés. Le calage sur l'écran et le
+planification de RetroArch ne sont pas portés : le filtre sinc de RavenEmu
+(`android/src/main/cpp/hardware/audio/sinc_resampler.c`) est écrit pour lui,
+d'après la méthode classique d'interpolation à bande limitée et une fenêtre
+de Kaiser, sans aucune ligne de `libretro-common/audio/resampler`. Le calage sur l'écran et le
 contrôle dynamique du débit audio reprennent l'idée publiée par l'auteur de
 RetroArch, mais leur code (`frontend/src/frame_pacer.c`,
 `android/src/main/cpp/hardware/audio/audio_pipeline.c`) est écrit pour

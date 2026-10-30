@@ -22,13 +22,20 @@ add_test(NAME raven_native_preview COMMAND raven_native_preview_test)
 
 find_package(Threads REQUIRED)
 add_executable(raven_native_audio_test test_audio_pipeline.c
-    "${DRIVERS}/audio/audio_pipeline.c" "${DRIVERS}/audio/aaudio/aaudio_driver.c")
+    "${DRIVERS}/audio/audio_pipeline.c" "${DRIVERS}/audio/sinc_resampler.c"
+    "${DRIVERS}/audio/aaudio/aaudio_driver.c")
 target_compile_features(raven_native_audio_test PRIVATE c_std_11)
 target_include_directories(raven_native_audio_test PRIVATE
     "${DRIVERS}/audio" "${DRIVERS}/audio/aaudio"
     "${CMAKE_CURRENT_LIST_DIR}/fakes_audio")
 target_link_libraries(raven_native_audio_test PRIVATE Threads::Threads m)
 add_test(NAME raven_native_audio COMMAND raven_native_audio_test)
+
+add_executable(raven_native_sinc_test test_sinc_resampler.c "${DRIVERS}/audio/sinc_resampler.c")
+target_compile_features(raven_native_sinc_test PRIVATE c_std_11)
+target_include_directories(raven_native_sinc_test PRIVATE "${DRIVERS}/audio")
+target_link_libraries(raven_native_sinc_test PRIVATE m)
+add_test(NAME raven_native_sinc COMMAND raven_native_sinc_test)
 
 add_executable(raven_native_video_test test_gles2_renderer.c "${DRIVERS}/video/gles2/gles2_renderer.c")
 target_compile_features(raven_native_video_test PRIVATE c_std_11)
@@ -53,4 +60,5 @@ if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(raven_native_audio_test PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(raven_native_video_test PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(raven_native_sensor_test PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(raven_native_sinc_test PRIVATE -Wall -Wextra -Wpedantic)
 endif()

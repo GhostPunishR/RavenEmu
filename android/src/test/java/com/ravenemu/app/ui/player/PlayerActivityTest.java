@@ -103,6 +103,7 @@ public final class PlayerActivityTest {
         PlayerActivity activity = controller.get();
         activity.onWindowFocusChanged(true); pump(activity);
         assertEquals("The LCD grid reaches the GLES2 driver", 2, FakeNative.appliedEffect);
+        assertEquals("The sinc filter by default", 1, FakeNative.appliedResampler);
         assertFalse(FakeNative.appliedSettings.audioEnabled);
         assertEquals(27, FakeNative.appliedSettings.audioVolume);
         assertTrue(FakeNative.appliedSettings.integerScale);
@@ -787,7 +788,7 @@ public final class PlayerActivityTest {
         static int framesToAdvance, draws, batteryReads;
         static int settingsApplies;
         static PlaybackSettings appliedSettings;
-        static int appliedEffect = -1;
+        static int appliedEffect = -1, appliedResampler = -1;
         static String[] openOptions, liveOptions;
         static String openCore;
         static float displayRate;
@@ -801,7 +802,7 @@ public final class PlayerActivityTest {
             restoreAttempts.clear(); restoredBatteries.clear();
             opens = failRestores = 0; closed = lastAdvance = false; paused = true;
             framesToAdvance = 1; draws = batteryReads = 0;
-            settingsApplies = 0; appliedSettings = null; appliedEffect = -1;
+            settingsApplies = 0; appliedSettings = null; appliedEffect = -1; appliedResampler = -1;
             openOptions = liveOptions = null;
             openCore = null;
             displayRate = 0f;
@@ -848,7 +849,8 @@ public final class PlayerActivityTest {
         }
         @Implementation protected static void setPaused(boolean value) { requireGl(); paused = value; }
         @Implementation protected static void setPlaybackOptions(boolean audioEnabled, int volume,
-                boolean integerScale, int brightness, int contrast, int screenEffect) {
+                boolean integerScale, int brightness, int contrast, int screenEffect, int resampler) {
+            appliedResampler = resampler;
             requireGl(); settingsApplies++;
             appliedSettings = new PlaybackSettings(audioEnabled, volume, integerScale, brightness, contrast);
             appliedEffect = screenEffect;

@@ -691,3 +691,38 @@ leurs capteurs ne sont pas lus : seuls ceux du téléphone servent.
 Écarts restants : le gain ressenti, le coût sur téléphone et le bon nombre
 d'images par jeu restent à mesurer. Le mode Hardcore de RetroAchievements,
 pas encore porté, devra vérifier sa compatibilité avec les images préventives.
+
+## Piste 9 : rééchantillonneur sinc
+
+- **Choix de mise en œuvre** : le sinc de libretro-common (MIT) a été
+  examiné, en version flottante et entière, sur la révision d48b3aa de
+  RetroArch, vérifiée octet pour octet contre le dépôt officiel. Il entraîne
+  environ 2 700 lignes d'en-têtes de libretro-common, dont un fichier sans
+  aucune mention de licence (`sinc_resampler_internal.h`). Le filtre est donc
+  écrit pour RavenEmu (`hardware/audio/sinc_resampler.c`, AGPLv3), d'après la
+  méthode classique d'interpolation à bande limitée : sinc fenêtré par Kaiser
+  (β = 8, 16 passages par zéro de chaque côté), table polyphasée de 256 lignes
+  interpolées, normalisée pour qu'une constante reste exacte. La bande passe à
+  90 % de la plus basse des deux fréquences de Nyquist, et le noyau s'élargit
+  quand le core émet plus vite que le téléphone ne joue.
+- **Pipeline audio** : `raven_audio_set_resampler` choisit sinc (par défaut)
+  ou linéaire ; les deux gardent exactement la même cadence de sortie, donc le
+  même contrôle dynamique du débit et la même vitesse d'écran. Le filtre est
+  construit à l'ouverture du flux (hors du rappel AAudio) et remis à zéro à la
+  pause. Le début d'un flux tient sa première trame : pas de clic.
+- **Paramètres → Audio → Qualité du son** : « Sinc (défaut) » ou « Linéaire »
+  (`PlaybackSettings.resampler`), appliqué sans rouvrir le jeu.
+- **Mesures locales** : une note de 10 kHz à 32 768 Hz vers 48 kHz garde un
+  rapport signal/bruit de 88,7 dB, contre 13,8 dB en linéaire ; une note de
+  30 kHz venue d'un core à 131 072 Hz se replie à 18 kHz à −98 dB, contre
+  −1,5 dB en linéaire. Coût : 2,2 ms par seconde de son (0,2 % d'un cœur
+  x86), 5,4 ms pour 131 072 Hz ; retard ajouté : 17 trames d'entrée, environ
+  0,5 ms.
+- Tests : `raven_native_sinc` (constante exacte et cadence linéaire sur cinq
+  rapports et des lots irréguliers, images et repliement, saturation sans
+  retournement, retard exact, remise à zéro, canaux indépendants, entrées
+  invalides ; huit mutations détectées), `raven_native_audio` (cadence, niveau
+  et gain dans le pipeline, choix gardé à la réouverture), Java
+  (`PlaybackSettingsTest`, page Audio, réglage transmis au lecteur).
+
+Écarts restants : l'écoute et le coût sur téléphone restent à vérifier.

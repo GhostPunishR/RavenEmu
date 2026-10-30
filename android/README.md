@@ -240,6 +240,16 @@ course), A/B, Start/Select, L1/L2 et R1/R2, touche Home pour le menu
 (`GamepadMapper`). Les messages du core (capteur absent, code de triche
 refusé…) s'affichent brièvement par-dessus le jeu.
 
+## Rééchantillonnage sinc
+
+**Paramètres → Audio → Qualité du son** choisit comment le son du jeu passe
+à la fréquence du téléphone : **Sinc** par défaut (`sinc_resampler.c`, écrit
+pour RavenEmu, filtre à fenêtre de Kaiser), qui garde les notes aiguës des
+ondes carrées Game Boy nettes là où l'interpolation **Linéaire**, toujours
+proposée pour comparer, ajoute un sifflement d'images. Les deux gardent la
+même cadence de sortie et le contrôle dynamique du débit. Coût mesuré en
+local : 0,2 % d'un cœur x86 ; reste à mesurer sur téléphone, à l'oreille.
+
 ## Latence : images préventives
 
 **Paramètres → Général → Latence** propose les images préventives (désactivées
@@ -306,7 +316,7 @@ GPLv3 ou ultérieure ; RavenEmu et RavenCore restent AGPLv3.
 AAudio demande la fréquence native du périphérique, deux bursts de buffer,
 et une file PCM16 stéréo bornée avec purge à la pause/reprise. Le producteur
 ne bloque pas ; un manque de données produit du silence. Le rééchantillonnage
-linéaire RavenEmu reste distinct. Le pilote GLES2 conserve une texture entre
+(sinc ou linéaire) reste celui de RavenEmu. Le pilote GLES2 conserve une texture entre
 images et utilise `glTexSubImage2D` pour les nouvelles images de même taille,
 avec les shaders opaques de base adaptés. Aspect, orientation, nearest et
 miniatures CPU sont conservés.
@@ -418,7 +428,8 @@ mélange d'images et autres pages de paramètres restent à porter.
 
 This is an integration prototype, not a release candidate.
 - Audio is played through native AAudio (the core's reported sample rate is
-  linearly resampled to the device stream rate, normally 48 kHz). Low-latency
+  resampled by a windowed sinc, or linearly if chosen, to the device stream
+  rate, normally 48 kHz). Low-latency
   hardware behavior and underruns still need testing on phones.
 - SRAM (`.srm`) is captured at app pause, state save and approximately every
   30 seconds while playing, then written atomically off the GL/UI threads.

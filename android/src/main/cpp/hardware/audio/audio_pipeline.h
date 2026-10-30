@@ -28,5 +28,12 @@ void raven_audio_set_running(int running);
  * clocked, with silence in place of PCM. Pending software PCM is discarded
  * on change; samples already submitted to the device may finish playing. */
 void raven_audio_set_output(int enabled, int volume);
+/* How the core's rate becomes the device's: windowed sinc (sinc_resampler.c,
+ * the default) or linear interpolation, both with the same cadence and rate
+ * control. Emulation owner; survives close/open; a change restarts the
+ * stream's filter, and pending software PCM is kept. */
+#define RAVEN_AUDIO_RESAMPLER_LINEAR 0
+#define RAVEN_AUDIO_RESAMPLER_SINC 1
+void raven_audio_set_resampler(int resampler);
 void raven_audio_close(void);
 #endif

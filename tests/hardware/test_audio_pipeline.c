@@ -69,6 +69,8 @@ static void defaults(void) {
     raven_audio_set_output(1, 100);
     // Exact conversion counts: the rate control has its own scenarios.
     raven_audio_set_rate_control(0.0);
+    // Exact linear values; the sinc has its own scenario here and its own test.
+    raven_audio_set_resampler(RAVEN_AUDIO_RESAMPLER_LINEAR);
     raven_audio_set_speed(1.0);
     open_error = opens = 0;
     native_rate = 48000; format = AAUDIO_FORMAT_PCM_I16; channels = 2;
@@ -342,6 +344,38 @@ static int a_lost_device_is_reopened_with_its_pause_state(void) {
     return 1;
 }
 
+/* Frames a 32768 Hz constant becomes at 48 kHz, each checked exact. */
+static int constant_frames(int16_t level, int gain_percent) {
+    int16_t constant[300 * 2], out[1200 * 2];
+    for (int i = 0; i < 300; ++i) { constant[i * 2] = level; constant[i * 2 + 1] = (int16_t)-level; }
+    raven_audio_write(constant, 150); raven_audio_write(constant + 300, 150);
+    memset(out, 0x7f, sizeof(out)); consume(out, 1200);
+    const int16_t expected = (int16_t)(level * gain_percent / 100);
+    int count = 0;
+    for (int i = 0; i < 1200; ++i) {
+        if (!out[i * 2] && !out[i * 2 + 1]) continue;
+        if (out[i * 2] != expected || out[i * 2 + 1] != -expected) return -1;
+        ++count;
+    }
+    return count;
+}
+
+static int the_sinc_keeps_the_cadence_the_level_and_the_gain(void) {
+    defaults(); CHECK(raven_audio_open(32768));
+    const int linear = constant_frames(1000, 100);
+    CHECK(linear > 400);
+    raven_audio_set_resampler(RAVEN_AUDIO_RESAMPLER_SINC);
+    CHECK(constant_frames(1000, 100) == linear);  /* same cadence, constant exact */
+    raven_audio_set_output(1, 50);
+    const int going_on = constant_frames(1000, 50);  /* the stream goes on, no frame primes it */
+    CHECK(going_on > linear && going_on <= linear + 2);
+    raven_audio_close(); CHECK(raven_audio_open(32768));
+    CHECK(constant_frames(-3000, 50) == linear);  /* the choice outlives the stream */
+    raven_audio_set_resampler(RAVEN_AUDIO_RESAMPLER_LINEAR);
+    CHECK(constant_frames(1000, 50) == linear);
+    return 1;
+}
+
 int main(void) {
     int okay = open_and_device_negotiation() && rates_chunks_and_silence() &&
         pause_discards_old_audio_without_erasing_fresh_samples() && bounded_queue_wrap_and_stop() &&
@@ -350,10 +384,11 @@ int main(void) {
         rate_adjust_steers_towards_a_half_full_queue() &&
         rate_control_absorbs_a_device_clock_drift() &&
         the_display_speed_reaches_the_resampler() &&
-        a_lost_device_is_reopened_with_its_pause_state();
+        a_lost_device_is_reopened_with_its_pause_state() &&
+        the_sinc_keeps_the_cadence_the_level_and_the_gain();
     raven_audio_close();
     if (!okay) return 1;
-    puts("AAudio subset: 10 scenarios passed (negotiation, resampling, pause, bounds, output settings, SPSC, "
-         "rate control, display speed, device loss)");
+    puts("AAudio subset: 11 scenarios passed (negotiation, resampling, pause, bounds, output settings, SPSC, "
+         "rate control, display speed, device loss, sinc)");
     return 0;
 }

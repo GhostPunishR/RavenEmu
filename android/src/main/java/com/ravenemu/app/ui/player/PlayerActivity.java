@@ -730,7 +730,8 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         if (surface != null) surface.queueEvent(() -> {
             if (disposed.get() || !foreground) return;
             NativeBridge.setPlaybackOptions(settings.audioEnabled, settings.audioVolume,
-                    settings.integerScale, settings.brightness, settings.contrast, settings.effectCode());
+                    settings.integerScale, settings.brightness, settings.contrast, settings.effectCode(),
+                    settings.resamplerCode());
             NativeBridge.setPreemptiveFrames(latency.preemptiveFrames);
             // Changed in the settings during the game: the core takes them at
             // its next frame. The console and the BIOS wait for the next launch.
