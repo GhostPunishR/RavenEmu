@@ -85,12 +85,15 @@ final class GameControlsView extends ViewGroup {
     }
 
     void setShoulders(boolean value) {
-        if (shoulders == value) return;
+        if (shoulders == value) {
+            menuButton.setVisibility(!compact() && onMenu != null ? VISIBLE : GONE);
+            return;
+        }
         releaseAll();
         shoulders = value;
         leftShoulder.setVisibility(value ? VISIBLE : GONE);
         rightShoulder.setVisibility(value ? VISIBLE : GONE);
-        menuButton.setVisibility(value && !compact() && onMenu != null ? VISIBLE : GONE);
+        menuButton.setVisibility(!compact() && onMenu != null ? VISIBLE : GONE);
         requestLayout();
     }
 
@@ -249,7 +252,9 @@ final class GameControlsView extends ViewGroup {
             float size = cluster(width), button = diameter(), rows = settings.gap;
             float row = shoulders ? 40f + rows : 0f;
             float actionWidth = Math.min(144f, Math.max(60f, width - 44f - size));
-            float gap = Math.min(50f, Math.max(8f, width - 168f));
+            // GB/GBC have no L/R: center the menu between SELECT and START.
+            float gap = Math.min(!shoulders && onMenu != null ? 66f : 50f,
+                    Math.max(8f, width - 168f));
             place(dpad, 16, offset + row * scale, size, size * scale, layout);
             place(a, width - 28 - button, offset + row * scale, button, button * scale, layout);
             place(b, width - 28 - actionWidth, offset + (row + size - button) * scale, button, button * scale, layout);
@@ -257,8 +262,11 @@ final class GameControlsView extends ViewGroup {
             place(start, (width + gap) / 2, offset + (row + size + rows) * scale, 84, 40 * scale, layout);
             place(leftShoulder, 16, offset, 96, 40 * scale, layout);
             place(rightShoulder, width - 112, offset, 96, 40 * scale, layout);
-            // Portrait GBA: L, the game menu and R share the upper row.
-            place(menuButton, (width - 48) / 2, offset, 48, 40 * scale, layout);
+            // GBA: between L/R; GB/GBC: beside SELECT/START, without a new row.
+            float menuWidth = shoulders ? 48f : Math.min(48f, Math.max(24f, gap - 8f));
+            float menuRow = shoulders ? 0f : row + size + rows;
+            place(menuButton, (width - menuWidth) / 2, offset + menuRow * scale,
+                    menuWidth, 40 * scale, layout);
         }
     }
 
@@ -288,7 +296,7 @@ final class GameControlsView extends ViewGroup {
         super.onConfigurationChanged(configuration);
         releaseAll();
         setBackgroundColor(compact() ? Color.TRANSPARENT : Color.BLACK);
-        menuButton.setVisibility(shoulders && !compact() && onMenu != null ? VISIBLE : GONE);
+        menuButton.setVisibility(!compact() && onMenu != null ? VISIBLE : GONE);
         requestLayout();
     }
 
