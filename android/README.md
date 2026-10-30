@@ -210,6 +210,15 @@ suivante, sans rouvrir le jeu. Ni la SRAM ni les états ne changent de format.
 Le filtre « DMG vert » de la bêta n'a pas d'équivalent exact ; les options
 de cartouche et les capteurs restent à porter.
 
+## Commandes tactiles
+
+**Paramètres → Interface** règle les commandes comme la bêta : retour
+haptique, taille de la croix et de A/B (80 à 115 %), espacement vertical des
+rangées (20 à 80 dp, en portrait), style classique ou contraste élevé, et
+réinitialisation (`ControlSettings`, `GameControlsView.setSettings`). Le
+lecteur les applique en revenant des paramètres. Le retour arrière, la
+vibration et les capteurs de la cartouche et les skins Delta restent à porter.
+
 ## Console
 
 **Paramètres → Console** reprend la page de la bêta. **Jeux Game Boy en

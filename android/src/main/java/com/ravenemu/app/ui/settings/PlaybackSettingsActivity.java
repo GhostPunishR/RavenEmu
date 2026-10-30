@@ -3,6 +3,7 @@ import com.ravenemu.app.R;
 import com.ravenemu.app.data.saves.GbaBiosRepository;
 import com.ravenemu.app.platform.SystemBarInsets;
 import com.ravenemu.app.settings.ConsoleSettings;
+import com.ravenemu.app.settings.ControlSettings;
 import com.ravenemu.app.settings.PlaybackSettings;
 import com.ravenemu.app.ui.library.HomeActivity;
 
@@ -38,18 +39,20 @@ import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/** Java Views counterpart of the beta's Audio, Video and Console settings
- * pages. Only settings connected to the native drivers are presented here. */
+/** Java Views counterpart of the beta's Audio, Video, Console and Interface
+ * settings pages. Only settings connected to the native drivers are presented here. */
 public final class PlaybackSettingsActivity extends Activity {
     public static final String EXTRA_PAGE = "playback.settings.page";
     public static final String HOME = "home";
     public static final String AUDIO = "audio";
     public static final String VIDEO = "video";
     public static final String CONSOLE = "console";
+    public static final String INTERFACE = "interface";
     private static final int PICK_BIOS = 1;
 
     private PlaybackSettings settings;
     private ConsoleSettings console;
+    private ControlSettings controls;
     private boolean biosInstalled;
     /** The BIOS copy and removal, off the UI thread, one at a time. */
     private final ExecutorService io = Executors.newSingleThreadExecutor();
@@ -59,7 +62,7 @@ public final class PlaybackSettingsActivity extends Activity {
     private Button back;
     private SeekBar volume;
     private String page;
-    private final int[] scrollPositions = new int[4];
+    private final int[] scrollPositions = new int[5];
     private int pageSerial;
     private boolean rendered;
 
@@ -67,6 +70,7 @@ public final class PlaybackSettingsActivity extends Activity {
         super.onCreate(state);
         settings = PlaybackSettings.load(this);
         console = ConsoleSettings.load(this);
+        controls = ControlSettings.load(this);
         biosInstalled = GbaBiosRepository.installed(getFilesDir());
         String initialPage = getIntent().getStringExtra(EXTRA_PAGE);
         if (state != null) {
@@ -75,6 +79,7 @@ public final class PlaybackSettingsActivity extends Activity {
             scrollPositions[1] = Math.max(0, state.getInt("settings.scroll.audio"));
             scrollPositions[2] = Math.max(0, state.getInt("settings.scroll.video"));
             scrollPositions[3] = Math.max(0, state.getInt("settings.scroll.console"));
+            scrollPositions[4] = Math.max(0, state.getInt("settings.scroll.interface"));
         }
 
         LinearLayout root = column();
@@ -112,16 +117,17 @@ public final class PlaybackSettingsActivity extends Activity {
 
     private void showPage(String requestedPage) {
         if (rendered) scrollPositions[index(page)] = scroll.getScrollY();
-        page = CONSOLE.equals(requestedPage) ? CONSOLE : VIDEO.equals(requestedPage) ? VIDEO
-                : AUDIO.equals(requestedPage) ? AUDIO : HOME;
+        page = INTERFACE.equals(requestedPage) ? INTERFACE : CONSOLE.equals(requestedPage) ? CONSOLE
+                : VIDEO.equals(requestedPage) ? VIDEO : AUDIO.equals(requestedPage) ? AUDIO : HOME;
         rendered = true;
         final int request = ++pageSerial;
-        title.setText(CONSOLE.equals(page) ? "Console" : VIDEO.equals(page) ? "Vidéo"
-                : AUDIO.equals(page) ? "Audio" : "Paramètres");
+        title.setText(INTERFACE.equals(page) ? "Interface" : CONSOLE.equals(page) ? "Console"
+                : VIDEO.equals(page) ? "Vidéo" : AUDIO.equals(page) ? "Audio" : "Paramètres");
         back.setContentDescription(HOME.equals(page) ? "Fermer les paramètres" : "Retour aux paramètres");
         content.removeAllViews();
         if (AUDIO.equals(page)) audioPage(); else if (VIDEO.equals(page)) videoPage();
-        else if (CONSOLE.equals(page)) consolePage(); else homePage();
+        else if (CONSOLE.equals(page)) consolePage(); else if (INTERFACE.equals(page)) interfacePage();
+        else homePage();
         final int restoreScroll = scrollPositions[index(page)];
         scroll.post(() -> {
             if (!isFinishing() && !isDestroyed() && request == pageSerial) scroll.scrollTo(0, restoreScroll);
@@ -137,6 +143,10 @@ public final class PlaybackSettingsActivity extends Activity {
         category("Console", "Jeux Game Boy en couleurs, GBC d'une GBA, BIOS GBA", CONSOLE,
                 "M11,7h2v2h-2zM11,11h2v6h-2zM12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2z"
                         + "M12,20c-4.41,0 -8,-3.59 -8,-8s3.59,-8 8,-8 8,3.59 8,8 -3.59,8 -8,8z");
+        // The beta says "Commandes tactiles, retour arrière et style": the
+        // native player has no rewind yet, so it is not announced.
+        category("Interface", "Commandes tactiles et style", INTERFACE,
+                "M3,3H11V11H3ZM13,3H21V11H13ZM3,13H11V21H3ZM13,13H21V21H13Z");
     }
 
     private void category(String label, String summary, String destination, String iconPath) {
@@ -292,6 +302,33 @@ public final class PlaybackSettingsActivity extends Activity {
         }
     }
 
+    /** The beta's Interface page, touch controls part. Its rewind, cartridge
+     * and Delta skin sections wait for those native features. */
+    private void interfacePage() {
+        group("Commandes tactiles");
+        settingSwitch("Retour haptique", "Petite vibration à la pression des boutons.", controls.haptics,
+                enabled -> updateControls(controls.withHaptics(enabled)));
+        slider("Taille des commandes", controls.scale, ControlSettings.SCALE_MIN, ControlSettings.SCALE_MAX,
+                " %", value -> updateControls(controls.withScale(value)));
+        slider("Espacement vertical", controls.gap, ControlSettings.GAP_MIN, ControlSettings.GAP_MAX,
+                " dp", value -> updateControls(controls.withGap(value)));
+        group("Style des boutons");
+        choices(new String[]{"Classique (défaut)", "Contraste élevé"},
+                new String[]{ControlSettings.STYLE_CLASSIC, ControlSettings.STYLE_CONTRAST}, controls.style,
+                style -> updateControls(controls.withStyle(style)));
+        add(text("Le déplacement libre des boutons sera ajouté plus tard.", 12, HomeActivity.MUTED), 8);
+        Button reset = textButton("Réinitialiser les commandes", HomeActivity.ACCENT);
+        reset.setOnClickListener(view -> {
+            updateControls(ControlSettings.DEFAULTS);
+            showPage(INTERFACE);
+        });
+    }
+
+    private void updateControls(ControlSettings updated) {
+        controls = updated;
+        controls.save(this);
+    }
+
     private void updateConsole(ConsoleSettings updated) {
         console = updated;
         console.save(this);
@@ -416,18 +453,23 @@ public final class PlaybackSettingsActivity extends Activity {
 
     private SeekBar slider(String label, int value, int minimum, int maximum,
                            boolean percent, IntChange change) {
+        return slider(label, value, minimum, maximum, percent ? " %" : "", change);
+    }
+
+    private SeekBar slider(String label, int value, int minimum, int maximum,
+                           String unit, IntChange change) {
         LinearLayout block = column();
         LinearLayout heading = new LinearLayout(this);
         heading.setGravity(Gravity.CENTER_VERTICAL);
         heading.addView(text(label, 15, HomeActivity.TEXT), new LinearLayout.LayoutParams(0, -2, 1));
-        TextView valueText = text(valueText(value, percent), 14, HomeActivity.ACCENT);
+        TextView valueText = text(value + unit, 14, HomeActivity.ACCENT);
         heading.addView(valueText);
         block.addView(heading);
         SeekBar control = new SeekBar(this);
         control.setSaveEnabled(false);
         control.setMax(maximum - minimum);
         control.setProgress(value - minimum);
-        control.setContentDescription(label + ", " + valueText(value, percent));
+        control.setContentDescription(label + ", " + value + unit);
         control.setProgressTintList(ColorStateList.valueOf(HomeActivity.ACCENT));
         control.setThumbTintList(ColorStateList.valueOf(HomeActivity.ACCENT));
         control.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
@@ -435,8 +477,8 @@ public final class PlaybackSettingsActivity extends Activity {
                 // Android view-state restoration must never save a stale value.
                 if (!fromUser) return;
                 int current = progress + minimum;
-                valueText.setText(valueText(current, percent));
-                control.setContentDescription(label + ", " + valueText(current, percent));
+                valueText.setText(current + unit);
+                control.setContentDescription(label + ", " + current + unit);
                 change.accept(current);
             }
             @Override public void onStartTrackingTouch(SeekBar seekBar) {}
@@ -445,10 +487,6 @@ public final class PlaybackSettingsActivity extends Activity {
         block.addView(control, new LinearLayout.LayoutParams(-1, dp(48)));
         add(block, 14);
         return control;
-    }
-
-    private static String valueText(int value, boolean percent) {
-        return percent ? value + " %" : String.valueOf(value);
     }
 
     private void group(String label) {
@@ -514,7 +552,8 @@ public final class PlaybackSettingsActivity extends Activity {
     }
 
     private static int index(String page) {
-        return CONSOLE.equals(page) ? 3 : VIDEO.equals(page) ? 2 : AUDIO.equals(page) ? 1 : 0;
+        return INTERFACE.equals(page) ? 4 : CONSOLE.equals(page) ? 3 : VIDEO.equals(page) ? 2
+                : AUDIO.equals(page) ? 1 : 0;
     }
     private int dp(int value) { return Math.round(value * getResources().getDisplayMetrics().density); }
     private interface BooleanChange { void accept(boolean value); }
@@ -529,6 +568,7 @@ public final class PlaybackSettingsActivity extends Activity {
         state.putInt("settings.scroll.audio", scrollPositions[1]);
         state.putInt("settings.scroll.video", scrollPositions[2]);
         state.putInt("settings.scroll.console", scrollPositions[3]);
+        state.putInt("settings.scroll.interface", scrollPositions[4]);
     }
 
     @Override protected void onDestroy() {

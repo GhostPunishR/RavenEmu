@@ -440,3 +440,36 @@ couleurs** de la page Vidéo ne s'applique plus (il est propre au core Game
 Boy) ; les options de cartouche (type de sauvegarde, RTC, capteur solaire),
 les directions opposées et les capteurs restent à exposer. Aucune donnée de la
 bêta n'est lue ; la validation sur téléphone reste nécessaire.
+
+## Dix-huitième tranche : page Interface, commandes tactiles
+
+- Page Java **Interface** reprenant la partie commandes de la bêta (groupes,
+  textes, bornes et valeurs par défaut) : **Retour haptique** (désactivé par
+  défaut), **Taille des commandes** de 80 à 115 %, **Espacement vertical** de
+  20 à 80 dp, **Style des boutons** classique ou contraste élevé, et
+  **Réinitialiser les commandes**.
+- `ControlSettings` garde ces choix avec les autres préférences du module ;
+  une valeur hors bornes est ramenée dans ses bornes, une valeur mal formée
+  revient à son défaut sans toucher aux autres.
+- `GameControlsView` suit la géométrie de `GbTouchControls` de la bêta : la
+  croix (moitié de la largeur, 132 dp au plus) et A/B (60 dp, entre 48 et
+  69 dp) suivent la taille ; SELECT, START, L et R gardent la leur ;
+  l'espacement sépare les rangées en portrait. En paysage, la superposition
+  compacte grandit avec la taille mais garde son espacement fixe. Le style
+  contraste élevé reprend les dégradés et le contour blanc de la bêta ; le
+  retour haptique (`LONG_PRESS`) se déclenche quand un appui commence, sur un
+  bouton ou en entrant dans une direction de la croix. Le lecteur applique
+  les réglages à chaque retour au premier plan ; un changement de taille ou
+  d'espacement relâche les boutons tenus.
+- Tests Java : préférences et bornes, géométrie au pixel aux tailles et
+  espacements extrêmes avec et sans L/R, relâchement au changement de taille,
+  retour haptique seulement s'il est choisi, page Interface et
+  réinitialisation.
+
+Écarts restants : le résumé de la catégorie dit « Commandes tactiles et
+style », sans « retour arrière », que le lecteur natif n'a pas encore ; les
+sections retour arrière, vibration et capteurs de la cartouche et skins Delta
+de la page Interface restent à porter, comme le déplacement libre des
+boutons, annoncé « plus tard » dans la bêta aussi. La validation sur téléphone
+(sensation du retour haptique, encoches, navigation par gestes) reste
+nécessaire.

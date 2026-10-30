@@ -1,5 +1,6 @@
 package com.ravenemu.app.ui.player;
 import com.ravenemu.app.bridge.NativeBridge;
+import com.ravenemu.app.settings.ControlSettings;
 
 import android.content.Context;
 import android.content.res.Configuration;
@@ -13,6 +14,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.SparseArray;
+import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -22,6 +24,8 @@ import android.view.accessibility.AccessibilityNodeInfo;
  * Java counterpart of RavenEmu's touch controls: a sliding diagonal D-pad,
  * staggered A/B, and separate Select/Start. No emulation or JNI runs here.
  * Each child owns its pointers; the listener receives their combined mask.
+ * Settings → Interface sizes the D-pad and A/B, spaces the rows (portrait),
+ * picks the style and the haptics, as the beta's GbTouchControls does.
  */
 final class GameControlsView extends ViewGroup {
     interface Listener { void onButtonsChanged(int mask); }
@@ -37,6 +41,7 @@ final class GameControlsView extends ViewGroup {
     private boolean shoulders;
     private int accessibleMask;
     private int reportedMask;
+    private ControlSettings settings = ControlSettings.DEFAULTS;
 
     GameControlsView(Context context, Listener listener) {
         super(context);
@@ -70,6 +75,18 @@ final class GameControlsView extends ViewGroup {
         leftShoulder.setVisibility(value ? VISIBLE : GONE);
         rightShoulder.setVisibility(value ? VISIBLE : GONE);
         requestLayout();
+    }
+
+    /** A new size or spacing lays the controls out again, releasing them. */
+    void setSettings(ControlSettings next) {
+        if (next == null) next = ControlSettings.DEFAULTS;
+        boolean moved = next.scale != settings.scale || next.gap != settings.gap;
+        settings = next;
+        if (moved) {
+            releaseAll();
+            requestLayout();
+        }
+        for (int i = 0; i < getChildCount(); i++) getChildAt(i).invalidate();
     }
 
     /** Menu, focus loss and detachment must never leave a touch button held. */
@@ -118,12 +135,22 @@ final class GameControlsView extends ViewGroup {
 
     private int dp(float size) { return Math.round(size * getResources().getDisplayMetrics().density); }
 
+    private float size() { return settings.scale / 100f; }
+
+    /** The D-pad: half the width, at most 132 dp, then the chosen size. */
     private float cluster(float width) {
-        return Math.max(60f, Math.min(132f, Math.min((width - 32f) / 2f, width - 104f)));
+        float base = Math.max(0f, Math.min(132f, (width - 32f) / 2f));
+        return Math.max(60f, Math.min(base * size(), Math.max(60f, width - 104f)));
+    }
+
+    /** A and B: 60 dp at 100 %, between 48 and 69 dp. */
+    private float diameter() {
+        return Math.max(48, Math.min(69, Math.round(60f * size())));
     }
 
     private float desiredHeight(float width) {
-        return compact() ? 152f : (shoulders ? 86f : 0f) + cluster(width) + 46f + 40f + 16f;
+        if (compact()) return 72f + 80f * size();
+        return (shoulders ? 40f + settings.gap : 0f) + cluster(width) + settings.gap + 40f + 16f;
     }
 
     @Override protected void onMeasure(int widthSpec, int heightSpec) {
@@ -145,23 +172,25 @@ final class GameControlsView extends ViewGroup {
         float scale = Math.min(1f, height / desired);
         float offset = Math.max(0f, height - desired);
         if (compact()) {
-            place(dpad, 16, offset + 32 * scale, 80, 80 * scale, layout);
-            place(a, width - 64, offset + 32 * scale, 48, 48 * scale, layout);
-            place(b, width - 104, offset + 80 * scale, 48, 48 * scale, layout);
-            place(select, width / 2 - 101, offset + 112 * scale, 84, 40 * scale, layout);
-            place(start, width / 2 + 17, offset + 112 * scale, 84, 40 * scale, layout);
+            // A fixed overlay beside the picture: only the D-pad and A/B grow.
+            float pad = 80 * size(), button = 48 * size();
+            place(dpad, 16, offset + 32 * scale, pad, pad * scale, layout);
+            place(a, width - 16 - button, offset + 32 * scale, button, button * scale, layout);
+            place(b, width - 56 - button, offset + (32 + button) * scale, button, button * scale, layout);
+            place(select, width / 2 - 101, offset + (32 + pad) * scale, 84, 40 * scale, layout);
+            place(start, width / 2 + 17, offset + (32 + pad) * scale, 84, 40 * scale, layout);
             place(leftShoulder, 16, offset, 80, 28 * scale, layout);
             place(rightShoulder, width - 96, offset, 80, 28 * scale, layout);
         } else {
-            float size = cluster(width);
-            float row = shoulders ? 86f : 0f;
+            float size = cluster(width), button = diameter(), rows = settings.gap;
+            float row = shoulders ? 40f + rows : 0f;
             float actionWidth = Math.min(144f, Math.max(60f, width - 44f - size));
             float gap = Math.min(50f, Math.max(8f, width - 168f));
             place(dpad, 16, offset + row * scale, size, size * scale, layout);
-            place(a, width - 88, offset + row * scale, 60, 60 * scale, layout);
-            place(b, width - 28 - actionWidth, offset + (row + size - 60) * scale, 60, 60 * scale, layout);
-            place(select, (width - 168 - gap) / 2, offset + (row + size + 46) * scale, 84, 40 * scale, layout);
-            place(start, (width + gap) / 2, offset + (row + size + 46) * scale, 84, 40 * scale, layout);
+            place(a, width - 28 - button, offset + row * scale, button, button * scale, layout);
+            place(b, width - 28 - actionWidth, offset + (row + size - button) * scale, button, button * scale, layout);
+            place(select, (width - 168 - gap) / 2, offset + (row + size + rows) * scale, 84, 40 * scale, layout);
+            place(start, (width + gap) / 2, offset + (row + size + rows) * scale, 84, 40 * scale, layout);
             place(leftShoulder, 16, offset, 96, 40 * scale, layout);
             place(rightShoulder, width - 112, offset, 96, 40 * scale, layout);
         }
@@ -206,7 +235,7 @@ final class GameControlsView extends ViewGroup {
         boolean tracking;
         final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
         final Paint line = new Paint(Paint.ANTI_ALIAS_FLAG);
-        LinearGradient normal, pressed;
+        LinearGradient normal, contrast, pressed;
         TouchControl(Context context, String description) {
             super(context);
             setContentDescription(description);
@@ -234,6 +263,9 @@ final class GameControlsView extends ViewGroup {
                 }
             }
             boolean clicked = action == MotionEvent.ACTION_UP && mask != 0 && at(event.getX(), event.getY()) != 0;
+            // As in the beta: a short vibration when a press starts.
+            if (mask == 0 && next != 0 && settings.haptics)
+                performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
             if (mask != next) {
                 mask = next;
                 invalidate();
@@ -251,13 +283,16 @@ final class GameControlsView extends ViewGroup {
 
         @Override protected void onSizeChanged(int w, int h, int oldw, int oldh) {
             normal = new LinearGradient(0, 0, 0, Math.max(1, h), 0xff35334a, 0xff161620, Shader.TileMode.CLAMP);
+            contrast = new LinearGradient(0, 0, 0, Math.max(1, h), 0xff55546d, 0xff22232e, Shader.TileMode.CLAMP);
             pressed = new LinearGradient(0, 0, 0, Math.max(1, h), 0xff735bb3, 0xff33284f, Shader.TileMode.CLAMP);
         }
 
+        /** The beta's style: high contrast lightens the buttons and outlines them in white. */
         void paint() {
-            fill.setShader(mask == 0 ? normal : pressed);
+            boolean contrasted = settings.highContrast();
+            fill.setShader(mask != 0 ? pressed : contrasted ? contrast : normal);
             line.setShader(null);
-            line.setColor(mask == 0 ? BORDER : ACCENT);
+            line.setColor(mask != 0 ? ACCENT : contrasted ? Color.WHITE : BORDER);
             line.setStyle(Paint.Style.STROKE);
             line.setStrokeWidth(dp(mask == 0 ? 1.5f : 2));
         }

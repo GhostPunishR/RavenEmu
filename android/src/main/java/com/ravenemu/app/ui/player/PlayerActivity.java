@@ -8,6 +8,7 @@ import com.ravenemu.app.data.saves.StatePreview;
 import com.ravenemu.app.data.saves.StateSlotRepository;
 import com.ravenemu.app.platform.SystemBarInsets;
 import com.ravenemu.app.settings.ConsoleSettings;
+import com.ravenemu.app.settings.ControlSettings;
 import com.ravenemu.app.settings.CoreOptions;
 import com.ravenemu.app.settings.PlaybackSettings;
 import com.ravenemu.app.ui.library.HomeActivity;
@@ -586,6 +587,8 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         foreground = true;
         settingsLaunching = false;
         if (surface != null) surface.onResume();
+        // Settings → Interface: size, spacing, style and haptics of the touch controls.
+        if (gameControls != null) gameControls.setSettings(ControlSettings.load(this));
         applyPlaybackSettings();
         if (pauseState != null) pauseState.foreground(true);
         dispatchRomLoad();

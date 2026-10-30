@@ -1,6 +1,7 @@
 package com.ravenemu.app.ui.settings;
 import com.ravenemu.app.data.saves.GbaBiosRepository;
 import com.ravenemu.app.settings.ConsoleSettings;
+import com.ravenemu.app.settings.ControlSettings;
 import com.ravenemu.app.settings.PlaybackSettings;
 
 import android.app.Activity;
@@ -222,6 +223,43 @@ public final class PlaybackSettingsActivityTest {
         assertNull(GbaBiosRepository.read(activity.getFilesDir()));
         assertNotNull(text(activity, "Fichier du BIOS : absent"));
         assertNotNull(text(activity, "Choisir le fichier du BIOS"));
+    }
+
+    @Test public void interfacePageSetsTheTouchControlsAndResetsThem() {
+        new PlaybackSettings(false, 23, false, 0, 100).save(RuntimeEnvironment.getApplication());
+        PlaybackSettingsActivity home = open(null, null).get();
+        described(home, "Ouvrir les réglages interface").performClick();
+        assertNotNull(toggle(home, "Retour haptique"));
+        PlaybackSettingsActivity activity = open(PlaybackSettingsActivity.INTERFACE, null).get();
+        assertTrue("Opening the page writes nothing",
+                preferences.getAll().keySet().stream().noneMatch(key -> key.startsWith("controls.")));
+        assertEquals(20, slider(activity, "Taille des commandes").getProgress());
+        assertEquals(26, slider(activity, "Espacement vertical").getProgress());
+        assertNotNull(choice(activity, "Classique (défaut), choisi"));
+
+        toggle(activity, "Retour haptique").performClick();
+        setAsUser(slider(activity, "Taille des commandes"), 32); // 80 + 32 = 112 %
+        setAsUser(slider(activity, "Espacement vertical"), 10); // 20 + 10 = 30 dp
+        assertNotNull(text(activity, "30 dp"));
+        choice(activity, "Contraste élevé").performClick();
+        ControlSettings changed = ControlSettings.load(activity);
+        assertTrue(changed.haptics);
+        assertEquals(112, changed.scale);
+        assertEquals(30, changed.gap);
+        assertTrue(changed.highContrast());
+        assertNotNull(choice(activity, "Contraste élevé, choisi"));
+        assertEquals(23, PlaybackSettings.load(activity).audioVolume);
+
+        text(activity, "Réinitialiser les commandes").performClick();
+        ControlSettings restored = ControlSettings.load(activity);
+        assertFalse(restored.haptics);
+        assertEquals(100, restored.scale);
+        assertEquals(46, restored.gap);
+        assertFalse(restored.highContrast());
+        assertFalse(toggle(activity, "Retour haptique").isChecked());
+        assertEquals(20, slider(activity, "Taille des commandes").getProgress());
+        assertNotNull(choice(activity, "Classique (défaut), choisi"));
+        assertFalse(PlaybackSettings.load(activity).audioEnabled);
     }
 
     @Test public void recreationKeepsVideoPageAndScrollWithoutOverwritingStoredValues() {
