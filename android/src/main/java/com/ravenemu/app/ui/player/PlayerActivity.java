@@ -27,7 +27,9 @@ import android.os.Handler;
 import android.os.Looper;
 import android.view.Display;
 import android.view.Gravity;
+import android.view.InputDevice;
 import android.view.KeyEvent;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
@@ -53,7 +55,9 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
     private final AtomicBoolean disposed = new AtomicBoolean(false);
     private GLSurfaceView surface;
     private TextView gameTitle;
-    private int width = 1, height = 1, buttons, touchButtons;
+    private int width = 1, height = 1, touchButtons;
+    /** UI thread: a physical controller's keys and axes. */
+    private final GamepadMapper gamepad = new GamepadMapper();
     private GameControlsView gameControls;
     /** Shown under the bar while the controls are moved. */
     private LinearLayout editBar;
@@ -288,20 +292,15 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         pauseState.editing(false);
     }
 
-    private void setHeld(int mask, boolean held) {
-        if (gamePaused) return;
-        buttons = held ? (buttons | mask) : (buttons & ~mask);
-        NativeBridge.setButtons(buttons | touchButtons);
-    }
-
     private void setTouchButtons(int mask) {
         if (disposed.get() || gamePaused) return;
         touchButtons = mask;
-        NativeBridge.setButtons(buttons | touchButtons);
+        NativeBridge.setButtons(gamepad.mask() | touchButtons);
     }
 
     private void releaseInput() {
-        buttons = touchButtons = 0;
+        gamepad.reset();
+        touchButtons = 0;
         if (gameControls != null) gameControls.releaseAll();
         NativeBridge.clearButtons();
     }
@@ -632,6 +631,11 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
     public void onDrawFrame(GL10 gl) {
         long now = System.nanoTime();
         int advanced = NativeBridge.drawFrame(width, height, !gamePaused);
+        // What the core asks to show, as RetroArch shows it: briefly over the game.
+        final String message = NativeBridge.takeMessage();
+        if (message != null) runOnUiThread(() -> {
+            if (!disposed.get()) android.widget.Toast.makeText(this, message, android.widget.Toast.LENGTH_LONG).show();
+        });
         if (advanced > 0 && activeSaveKey != null && now >= nextBatterySaveNanos) {
             nextBatterySaveNanos = now + 30_000_000_000L;
             try {
@@ -642,20 +646,24 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         }
     }
 
-    private int keyMask(int keyCode) {
-        switch (keyCode) {
-            case KeyEvent.KEYCODE_DPAD_UP: return NativeBridge.UP;
-            case KeyEvent.KEYCODE_DPAD_DOWN: return NativeBridge.DOWN;
-            case KeyEvent.KEYCODE_DPAD_LEFT: return NativeBridge.LEFT;
-            case KeyEvent.KEYCODE_DPAD_RIGHT: return NativeBridge.RIGHT;
-            case KeyEvent.KEYCODE_BUTTON_A: return NativeBridge.A;
-            case KeyEvent.KEYCODE_BUTTON_B: return NativeBridge.B;
-            case KeyEvent.KEYCODE_BUTTON_L1: return NativeBridge.L;
-            case KeyEvent.KEYCODE_BUTTON_R1: return NativeBridge.R;
-            case KeyEvent.KEYCODE_BUTTON_START: return NativeBridge.START;
-            case KeyEvent.KEYCODE_BUTTON_SELECT: return NativeBridge.SELECT;
-            default: return 0;
+    /** A controller key, while the game runs: the buttons it holds reach the core. */
+    private boolean gamepadKey(int keyCode, KeyEvent event) {
+        if (gamePaused || !gamepad.handles(keyCode)) return false;
+        if (gamepad.key(keyCode, event.getAction(), event.getRepeatCount()))
+            NativeBridge.setButtons(gamepad.mask() | touchButtons);
+        return true;
+    }
+
+    /** The D-pad as hat axes and the left stick, on many Bluetooth controllers. */
+    @Override public boolean dispatchGenericMotionEvent(MotionEvent event) {
+        if (!gamePaused && event.isFromSource(InputDevice.SOURCE_JOYSTICK)
+                && event.getAction() == MotionEvent.ACTION_MOVE) {
+            gamepad.axes(event.getAxisValue(MotionEvent.AXIS_HAT_X), event.getAxisValue(MotionEvent.AXIS_HAT_Y),
+                    event.getAxisValue(MotionEvent.AXIS_X), event.getAxisValue(MotionEvent.AXIS_Y));
+            NativeBridge.setButtons(gamepad.mask() | touchButtons);
+            return true;
         }
+        return super.dispatchGenericMotionEvent(event);
     }
 
     @Override
@@ -664,29 +672,18 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
             finishMovingControls();
             return true;
         }
-        if (keyCode == KeyEvent.KEYCODE_MENU ||
+        // The controller's Home key opens the game menu, as in the beta.
+        if (keyCode == KeyEvent.KEYCODE_MENU || keyCode == KeyEvent.KEYCODE_BUTTON_MODE ||
             (menuOpen && keyCode == KeyEvent.KEYCODE_BACK)) {
             if (event.getRepeatCount() == 0) togglePlayerMenu();
             return true;
         }
-        if (gamePaused) return super.onKeyDown(keyCode, event);
-        int mask = keyMask(keyCode);
-        if (mask != 0) {
-            setHeld(mask, true);
-            return true;
-        }
-        return super.onKeyDown(keyCode, event);
+        return gamepadKey(keyCode, event) || super.onKeyDown(keyCode, event);
     }
 
     @Override
     public boolean onKeyUp(int keyCode, KeyEvent event) {
-        if (gamePaused) return super.onKeyUp(keyCode, event);
-        int mask = keyMask(keyCode);
-        if (mask != 0) {
-            setHeld(mask, false);
-            return true;
-        }
-        return super.onKeyUp(keyCode, event);
+        return gamepadKey(keyCode, event) || super.onKeyUp(keyCode, event);
     }
 
     @Override protected void onResume() {

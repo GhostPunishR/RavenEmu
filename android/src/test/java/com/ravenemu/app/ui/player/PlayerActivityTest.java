@@ -178,6 +178,57 @@ public final class PlayerActivityTest {
         assertEquals(ControlLayout.DEFAULT, controls.controlLayout());
     }
 
+    @Test public void theCoresMessagesShowBrieflyOverTheGame() throws Exception {
+        PlayerActivity activity = loaded();
+        ShadowToast.reset();
+        FakeNative.message = "RavenGBA : pas de capteur de lumière, soleil à 50 %";
+        activity.onDrawFrame(null); idle();
+        assertEquals("RavenGBA : pas de capteur de lumière, soleil à 50 %", ShadowToast.getTextOfLatestToast());
+        ShadowToast.reset();
+        activity.onDrawFrame(null); idle();
+        assertNull("Each message once", ShadowToast.getLatestToast());
+    }
+
+    @Test public void aControllerDrivesTheGameThroughKeysHatAndStick() throws Exception {
+        PlayerActivity activity = loaded();
+        assertTrue(key(activity, android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_BUTTON_A));
+        assertEquals(NativeBridge.A, FakeNative.buttons);
+        assertTrue(key(activity, android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_BUTTON_R2));
+        assertEquals(NativeBridge.A | NativeBridge.R, FakeNative.buttons);
+        // The D-pad as hat axes, then the left stick, as Bluetooth controllers send them.
+        assertTrue(activity.dispatchGenericMotionEvent(joystick(1f, 0f, 0f, 0f)));
+        assertEquals(NativeBridge.A | NativeBridge.R | NativeBridge.RIGHT, FakeNative.buttons);
+        assertTrue(activity.dispatchGenericMotionEvent(joystick(0f, 0f, -0.2f, 0.8f)));
+        assertEquals(NativeBridge.A | NativeBridge.R | NativeBridge.DOWN, FakeNative.buttons);
+        assertTrue(key(activity, android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_BUTTON_A));
+        assertEquals(NativeBridge.R | NativeBridge.DOWN, FakeNative.buttons);
+        // The Home key opens the game menu, which pauses and lets go of everything.
+        assertTrue(activity.onKeyDown(android.view.KeyEvent.KEYCODE_BUTTON_MODE,
+                new android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_BUTTON_MODE)));
+        pump(activity);
+        assertTrue(menu(activity).isShowing());
+        assertTrue(FakeNative.paused);
+        assertFalse("Paused, the stick is left to the system",
+                activity.dispatchGenericMotionEvent(joystick(0f, 0f, 1f, 0f)));
+    }
+
+    private static boolean key(PlayerActivity activity, int action, int code) {
+        android.view.KeyEvent event = new android.view.KeyEvent(action, code);
+        return action == android.view.KeyEvent.ACTION_DOWN ? activity.onKeyDown(code, event) : activity.onKeyUp(code, event);
+    }
+
+    private static android.view.MotionEvent joystick(float hatX, float hatY, float x, float y) {
+        android.view.MotionEvent.PointerProperties[] properties = {new android.view.MotionEvent.PointerProperties()};
+        properties[0].toolType = android.view.MotionEvent.TOOL_TYPE_UNKNOWN;
+        android.view.MotionEvent.PointerCoords[] coords = {new android.view.MotionEvent.PointerCoords()};
+        coords[0].setAxisValue(android.view.MotionEvent.AXIS_HAT_X, hatX);
+        coords[0].setAxisValue(android.view.MotionEvent.AXIS_HAT_Y, hatY);
+        coords[0].setAxisValue(android.view.MotionEvent.AXIS_X, x);
+        coords[0].setAxisValue(android.view.MotionEvent.AXIS_Y, y);
+        return android.view.MotionEvent.obtain(0, 0, android.view.MotionEvent.ACTION_MOVE, 1, properties, coords,
+                0, 0, 1f, 1f, 0, 0, android.view.InputDevice.SOURCE_JOYSTICK, 0);
+    }
+
     @Test public void theDisplayRateReachesThePacerAndTheScreenStaysOnWhilePlaying() throws Exception {
         PlayerActivity activity = loaded();
         android.view.Display display = activity.getDisplay();
@@ -663,6 +714,8 @@ public final class PlayerActivityTest {
         static String openCore;
         static float displayRate;
         static double fps;
+        static String message;
+        static int buttons;
         static void reset() {
             state = new byte[]{1, 2}; battery = new byte[]{3, 4};
             preview = new int[]{2, 1, 0xffff0000, 0xff00ff00};
@@ -674,6 +727,8 @@ public final class PlayerActivityTest {
             openCore = null;
             displayRate = 0f;
             fps = 59.727500569606;
+            message = null;
+            buttons = 0;
         }
         private static void requireGl() { assertTrue("Core operation must use the queued GL boundary", QueuedGl.executing); }
         @Implementation protected static void __staticInitializer__() {}
@@ -684,6 +739,9 @@ public final class PlayerActivityTest {
             openCore = system; openOptions = coreOptions.clone(); return null;
         }
         @Implementation protected static void setDisplayRate(float hertz) { requireGl(); displayRate = hertz; }
+        @Implementation protected static String takeMessage() {
+            String taken = message; message = null; return taken;
+        }
         @Implementation protected static double frameRate() { requireGl(); return closed ? 0.0 : fps; }
         @Implementation protected static void setCoreOptions(String[] coreOptions) {
             requireGl(); liveOptions = coreOptions.clone();
@@ -708,7 +766,7 @@ public final class PlayerActivityTest {
             requireGl(); settingsApplies++;
             appliedSettings = new PlaybackSettings(audioEnabled, volume, integerScale, brightness, contrast);
         }
-        @Implementation protected static void setButtons(int mask) {}
+        @Implementation protected static void setButtons(int mask) { buttons = mask; }
         @Implementation protected static void clearButtons() {}
         @Implementation protected static void setAudioEnabled(boolean enabled) {}
         @Implementation protected static int drawFrame(int width, int height, boolean advance) {

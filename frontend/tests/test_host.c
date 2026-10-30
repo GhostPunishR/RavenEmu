@@ -60,12 +60,20 @@ int main(int argc, char **argv) {
     const unsigned char invalid[] = {0, 0, 0, 0};
     const unsigned char valid[] = {'R', 'V', 'N', '1'};
     CHECK(!raven_frontend_load_rom(host, invalid, sizeof(invalid), "wrong.rvn"));
+    CHECK(raven_frontend_take_message(host) == NULL);
     CHECK(raven_frontend_load_rom(host, valid, sizeof(valid), "demo.rvn"));
     CHECK(raven_frontend_get_info(host, &info));
     CHECK(info.width == 2 && info.height == 2);
     CHECK(info.fps == 60.0 && info.sample_rate == 48000.0);
+    // The core's messages reach the frontend once each; the log's do not.
+    const char *message = raven_frontend_take_message(host);
+    CHECK(message && strcmp(message, "RavenTest : jeu chargé") == 0);
+    CHECK(raven_frontend_take_message(host) == NULL);
     CHECK(raven_frontend_run_frame(host));
+    CHECK(raven_frontend_take_message(host) == NULL);
     CHECK(raven_frontend_run_frame(host));
+    message = raven_frontend_take_message(host);
+    CHECK(message && strcmp(message, "Attention : à l'écran") == 0);
     CHECK(raven_frontend_battery_size(host) == 4);
     unsigned char battery[4] = {0};
     CHECK(raven_frontend_read_battery(host, battery, sizeof(battery)));
@@ -83,6 +91,13 @@ int main(int argc, char **argv) {
     CHECK(memcmp(battery, replacement, 4) == 0);
     CHECK(obs.video_calls == 2);
     CHECK(obs.audio_frames == 4);
+    // Debug level is not shown; malformed bytes and 4-byte characters become
+    // '?', a character cut at the end too: valid modified UTF-8 for Java.
+    CHECK(raven_frontend_run_frame(host));
+    CHECK(raven_frontend_take_message(host) == NULL);
+    CHECK(raven_frontend_run_frame(host));
+    message = raven_frontend_take_message(host);
+    CHECK(message && strcmp(message, "Bad ? byte, emoji ?, cut ?") == 0);
     CHECK(!obs.invalid_video);
     // The FPS read through Libretro must drive the host independently of
     // display refresh, while preserving audio/video callbacks for every run.
@@ -98,7 +113,7 @@ int main(int argc, char **argv) {
         }
     }
     CHECK(scheduled == 60);
-    CHECK(obs.video_calls == 62 && obs.audio_frames == 124);
+    CHECK(obs.video_calls == 64 && obs.audio_frames == 128);
     CHECK(!obs.invalid_video);
     raven_frontend_unload(host);
     CHECK(!raven_frontend_run_frame(host));

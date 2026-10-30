@@ -10,6 +10,29 @@ static retro_input_poll_t input_poll;
 static retro_input_state_t input_state;
 static int loaded;
 static int red;  /* The "raven_test_color" option, read at load and when it changes. */
+static unsigned frames; /* Since the game loaded: each early frame sends one message. */
+
+/* Messages as a core sends them: plain, then the extended kind, for the log
+ * alone (not shown), on screen, at debug level (not shown), and malformed. */
+static void send_message(unsigned frame) {
+    if (!env) return;
+    if (frame == 0) {
+        const struct retro_message plain = {"RavenTest : jeu chargé", 180};
+        env(RETRO_ENVIRONMENT_SET_MESSAGE, (void *)&plain);
+        return;
+    }
+    struct retro_message_ext ext = {0};
+    ext.duration = 3000;
+    ext.level = RETRO_LOG_WARN;
+    ext.target = RETRO_MESSAGE_TARGET_OSD;
+    ext.type = RETRO_MESSAGE_TYPE_NOTIFICATION;
+    if (frame == 1) { ext.msg = "Journal seulement"; ext.target = RETRO_MESSAGE_TARGET_LOG; }
+    else if (frame == 2) ext.msg = "Attention : à l'écran";
+    else if (frame == 3) { ext.msg = "Débogage"; ext.level = RETRO_LOG_DEBUG; }
+    else if (frame == 4) ext.msg = "Bad \xff byte, emoji \xf0\x9f\x8e\xae, cut \xc3";
+    else return;
+    env(RETRO_ENVIRONMENT_SET_MESSAGE_EXT, &ext);
+}
 
 /* One option, declared as options v2 (default), v1 (FAKE_CORE_V1) or
  * legacy variables (FAKE_CORE_VARIABLES), plus a second one to keep. */
@@ -89,11 +112,14 @@ bool retro_load_game(const struct retro_game_info *game) {
     loaded = game && game->data && game->size == 4 &&
              memcmp(game->data, "RVN1", 4) == 0;
     read_options();
+    frames = 0;
+    if (loaded) send_message(frames++);
     return loaded != 0;
 }
 void retro_unload_game(void) { loaded = 0; }
 void retro_run(void) {
     if (!loaded) return;
+    send_message(frames++);
     bool updated = false;
     if (env && env(RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE, &updated) && updated) read_options();
     if (input_poll) input_poll();

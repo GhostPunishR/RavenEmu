@@ -296,6 +296,15 @@ Java_com_ravenemu_app_bridge_NativeBridge_setDisplayRate(
     raven_frame_pacer_set_display(&frame_pacer, display_rate);
 }
 
+/* GL thread: the core's latest on-screen message, once; NULL without one.
+ * The frontend keeps it to modified UTF-8, which NewStringUTF requires. */
+JNIEXPORT jstring JNICALL
+Java_com_ravenemu_app_bridge_NativeBridge_takeMessage(JNIEnv *env, jclass clazz) {
+    (void)clazz;
+    const char *message = session ? raven_frontend_take_message(session) : NULL;
+    return message ? (*env)->NewStringUTF(env, message) : NULL;
+}
+
 /* GL thread: the open game's frame rate, 0 without one. */
 JNIEXPORT jdouble JNICALL
 Java_com_ravenemu_app_bridge_NativeBridge_frameRate(JNIEnv *env, jclass clazz) {

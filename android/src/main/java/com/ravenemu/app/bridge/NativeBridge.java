@@ -43,6 +43,9 @@ public final class NativeBridge {
     public static native void setDisplayRate(float hertz);
     /** GL thread: the open game's frame rate, 0 without one. */
     public static native double frameRate();
+    /** GL thread: the core's latest message to show (a missing BIOS, a refused
+     * cheat...), once; null without a new one. */
+    public static native String takeMessage();
     /** Current combined joypad mask. Brief presses survive until one core frame. */
     public static native void setButtons(int buttons);
     /** Pause/menu/focus loss: release held buttons and discard pending presses. */

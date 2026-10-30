@@ -60,6 +60,8 @@ struct raven_frontend {
     raven_option *options;
     size_t option_count;
     int options_updated;  /* Reported once by GET_VARIABLE_UPDATE. */
+    char message[RAVEN_FRONTEND_MESSAGE_MAX];
+    int message_pending;
     char error[256];
 };
 
@@ -266,9 +268,55 @@ static void core_log(enum retro_log_level level, const char *fmt, ...) {
     va_end(args);
 }
 
+/* Keep a message as valid UTF-8 of one to three bytes per character: a
+ * malformed byte or a 4-byte character becomes '?', and the end never cuts
+ * a character in two. */
+static void keep_message(raven_frontend *host, const char *text) {
+    if (!text || !*text) return;
+    const unsigned char *in = (const unsigned char *)text;
+    size_t out = 0;
+    while (*in && out + 1 < sizeof(host->message)) {
+        size_t length = *in < 0x80 ? 1 : (*in & 0xe0) == 0xc0 ? 2 : (*in & 0xf0) == 0xe0 ? 3 : 0;
+        for (size_t i = 1; i < length; ++i)
+            if ((in[i] & 0xc0) != 0x80) length = 0;
+        if (length == 2 && *in < 0xc2) length = 0;  /* overlong */
+        if (length == 3 && ((*in == 0xe0 && in[1] < 0xa0) || (*in == 0xed && in[1] >= 0xa0)))
+            length = 0;  /* overlong, or a UTF-16 surrogate */
+        if (!length) {
+            host->message[out++] = '?';
+            ++in;
+            while ((*in & 0xc0) == 0x80) ++in;  /* the rest of a bad character */
+            continue;
+        }
+        if (out + length >= sizeof(host->message)) break;
+        memcpy(host->message + out, in, length);
+        out += length;
+        in += length;
+    }
+    host->message[out] = 0;
+    host->message_pending = out > 0;
+}
+
 static bool environment(unsigned command, void *data) {
     if (!active) return false;
     switch (command) {
+        case RETRO_ENVIRONMENT_GET_MESSAGE_INTERFACE_VERSION:
+            if (!data) return false;
+            *(unsigned *)data = 1;
+            return true;
+        case RETRO_ENVIRONMENT_SET_MESSAGE: {
+            const struct retro_message *message = (const struct retro_message *)data;
+            if (!message) return false;
+            keep_message(active, message->msg);
+            return true;
+        }
+        case RETRO_ENVIRONMENT_SET_MESSAGE_EXT: {
+            const struct retro_message_ext *message = (const struct retro_message_ext *)data;
+            if (!message) return false;
+            if (message->target != RETRO_MESSAGE_TARGET_LOG && message->level != RETRO_LOG_DEBUG)
+                keep_message(active, message->msg);
+            return true;
+        }
         case RETRO_ENVIRONMENT_SET_PIXEL_FORMAT: {
             if (!data) return false;
             const enum retro_pixel_format format = *(const enum retro_pixel_format *)data;
@@ -400,6 +448,7 @@ void raven_frontend_close_core(raven_frontend *host) {
     host->options = NULL;
     host->option_count = 0;
     host->options_updated = 0;
+    host->message_pending = 0;
     free(host->system_directory);
     free(host->save_directory);
     host->system_directory = NULL;
@@ -619,6 +668,12 @@ int raven_frontend_set_option(raven_frontend *host, const char *key, const char 
         host->options_updated = 1;
     }
     return 1;
+}
+
+const char *raven_frontend_take_message(raven_frontend *host) {
+    if (!host || !host->message_pending) return NULL;
+    host->message_pending = 0;
+    return host->message;
 }
 
 const char *raven_frontend_last_error(const raven_frontend *host) {

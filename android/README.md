@@ -224,6 +224,14 @@ contrôle dynamique du débit (±0,5 %) garde la file audio à moitié pleine :
 plus d'échantillons jetés ni de silences. Un casque débranché ou un appareil
 Bluetooth perdu rouvre la sortie audio, en gardant la pause.
 
+## Manettes et messages du core
+
+Les manettes Bluetooth ou USB et les claviers pilotent le jeu comme dans la
+bêta : croix en touches ou en axes, stick gauche (au-delà de la moitié de sa
+course), A/B, Start/Select, L1/L2 et R1/R2, touche Home pour le menu
+(`GamepadMapper`). Les messages du core (capteur absent, code de triche
+refusé…) s'affichent brièvement par-dessus le jeu.
+
 ## Commandes tactiles
 
 **Paramètres → Interface** règle les commandes comme la bêta : retour

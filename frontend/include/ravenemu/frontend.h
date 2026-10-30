@@ -90,6 +90,13 @@ int raven_frontend_get_option(const raven_frontend *host, size_t index,
                               raven_core_option *out);
 const char *raven_frontend_option_value(const raven_frontend *host, const char *key);
 int raven_frontend_set_option(raven_frontend *host, const char *key, const char *value);
+/* The latest message the core asks to show (RETRO_ENVIRONMENT_SET_MESSAGE,
+ * or SET_MESSAGE_EXT unless meant for the log alone or at debug level), once:
+ * NULL when no new one came. Emulation thread. Valid UTF-8 without 4-byte
+ * sequences, so Java's modified UTF-8 takes it as is; at most
+ * RAVEN_FRONTEND_MESSAGE_MAX - 1 bytes. Valid until the next call to the core. */
+#define RAVEN_FRONTEND_MESSAGE_MAX 256
+const char *raven_frontend_take_message(raven_frontend *host);
 const char *raven_frontend_last_error(const raven_frontend *host);
 
 #ifdef __cplusplus

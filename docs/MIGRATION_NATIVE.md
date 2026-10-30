@@ -572,3 +572,24 @@ Première tranche des emprunts à RetroArch choisis par le propriétaire.
 
 Écarts restants : la sensation de fluidité, la latence audio réelle et le
 comportement des écrans à fréquence variable restent à vérifier sur téléphone.
+
+## Tranche B : manettes et messages du core
+
+- **Manettes** (`GamepadMapper.java`, logique du `GamepadMapper` de la bêta) :
+  croix en touches ou en axes (`AXIS_HAT_X/Y`, comme l'envoient beaucoup de
+  manettes Bluetooth), stick gauche vers la croix au-delà de la moitié de sa
+  course, le chapeau l'emportant sur le stick ; A, B, Start, Select, L1/L2 et
+  R1/R2. Un bouton tenu par deux sources reste appuyé jusqu'à la dernière. La
+  touche Home ouvre le menu du jeu ; pendant une pause, les événements restent
+  au système. Le clic des sticks (avance rapide et retour arrière dans la bêta)
+  n'est pas repris, au choix du propriétaire.
+- **Messages du core** (frontend C) : `RETRO_ENVIRONMENT_SET_MESSAGE` et
+  `SET_MESSAGE_EXT` (sauf journal seul ou niveau débogage), version 1
+  annoncée par `GET_MESSAGE_INTERFACE_VERSION`. `raven_frontend_take_message`
+  rend chaque message une fois, en UTF-8 valide sans caractère de 4 octets
+  (un octet invalide, un émoji ou un caractère coupé deviennent « ? »), ce
+  que `NewStringUTF` exige. Le lecteur l'affiche en message bref : capteur de
+  lumière absent, code de triche refusé, BIOS manquant…
+- Tests : messages du faux core (simple, étendu, journal, débogage, octets
+  invalides) ; Java (`GamepadMapperTest`, touches, chapeau et stick dans le
+  lecteur, touche Home, message affiché une seule fois).

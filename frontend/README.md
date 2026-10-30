@@ -54,3 +54,10 @@ Les buffers vidéo/PCM appartiennent aux cores. Ils doivent être copiés ou
 consommés synchroniquement dans les callbacks. Ne jamais garder leurs pointeurs.
 
 Lire aussi [le plan de migration](../docs/MIGRATION_NATIVE.md).
+
+## Messages du core
+
+Les messages qu'un core demande d'afficher (`RETRO_ENVIRONMENT_SET_MESSAGE`
+ou `SET_MESSAGE_EXT`, hors journal seul et débogage) sont gardés par l'hôte ;
+`raven_frontend_take_message` rend chacun une fois, en UTF-8 valide sans
+caractère de 4 octets. Le test `raven_frontend_smoke` le vérifie.
