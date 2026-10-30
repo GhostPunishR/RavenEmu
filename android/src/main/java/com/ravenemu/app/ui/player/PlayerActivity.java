@@ -12,6 +12,7 @@ import com.ravenemu.app.settings.ConsoleSettings;
 import com.ravenemu.app.settings.ControlLayout;
 import com.ravenemu.app.settings.ControlSettings;
 import com.ravenemu.app.settings.CoreOptions;
+import com.ravenemu.app.settings.LatencySettings;
 import com.ravenemu.app.settings.PlaybackSettings;
 import com.ravenemu.app.ui.library.HomeActivity;
 import com.ravenemu.app.ui.settings.PlaybackSettingsActivity;
@@ -724,11 +725,13 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         final PlaybackSettings settings = PlaybackSettings.load(this);
         final ConsoleSettings console = ConsoleSettings.load(this);
         final CartridgeSettings cartridge = CartridgeSettings.load(this);
+        final LatencySettings latency = LatencySettings.load(this);
         rumbleEnabled = cartridge.rumble;
         if (surface != null) surface.queueEvent(() -> {
             if (disposed.get() || !foreground) return;
             NativeBridge.setPlaybackOptions(settings.audioEnabled, settings.audioVolume,
                     settings.integerScale, settings.brightness, settings.contrast, settings.effectCode());
+            NativeBridge.setPreemptiveFrames(latency.preemptiveFrames);
             // Changed in the settings during the game: the core takes them at
             // its next frame. The console and the BIOS wait for the next launch.
             if (activeCore != null)

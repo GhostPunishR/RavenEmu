@@ -41,6 +41,9 @@ public final class NativeBridge {
     public static native int drawFrame(int surfaceWidth, int surfaceHeight, boolean allowAdvance);
     /** GL thread: the display's refresh rate, on start and whenever it changes. */
     public static native void setDisplayRate(float hertz);
+    /** GL thread: preemptive frames, 0 (off) to 3; the player lowers them for a
+     * game the phone cannot replay in time, and says so through takeMessage. */
+    public static native void setPreemptiveFrames(int frames);
     /** GL thread: Display.getRotation(), so the tilt follows the screen as shown. */
     public static native void setDisplayRotation(int rotation);
     /** GL thread, after drawFrame: the cartridge's motor runs; never while paused. */

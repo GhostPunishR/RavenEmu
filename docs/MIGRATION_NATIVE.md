@@ -654,3 +654,40 @@ comportement des écrans à fréquence variable restent à vérifier sur télép
 seuil de lumière de Boktai et le ressenti de la vibration restent à vérifier
 sur téléphone, avec les jeux concernés. Les manettes ne vibrent pas encore et
 leurs capteurs ne sont pas lus : seuls ceux du téléphone servent.
+
+## Piste 7 : images préventives (latence)
+
+- **Frontend C** (`libretro_host.c`, idée des « preemptive frames » de
+  RetroArch, code RavenEmu) : `raven_frontend_set_preemptive_frames` (0 à 3)
+  garde l'état du core avant chacune des n dernières images, dans un anneau
+  alloué à la taille des états. Quand la croix ou les boutons du port 0
+  changent, l'image revient n images en arrière et les rejoue avec les
+  nouveaux boutons, sans image ni son (`GET_AUDIO_VIDEO_ENABLE` à 0, que
+  RavenCore utilise pour sauter son rendu), en gardant les états de la
+  nouvelle chronologie. Un appui d'une image reste un appui d'une image. Les
+  états chargés, la SRAM restaurée, un nouveau jeu et la pause effacent
+  l'historique ; un core aux états incomplets (`SET_SERIALIZATION_QUIRKS`)
+  n'est jamais rejoué.
+- **Garde de coût** (`raven_replay_guard_overloaded`, `frame_pacer.c`) : une
+  image rejouée qui dépasse les trois quarts de la période du jeu est un
+  dépassement ; trois sur huit rejeux, et le pont JNI retire une image
+  préventive pour ce jeu, avec un message bref.
+- **Paramètres → Général → Latence** : « Images préventives », désactivées
+  par défaut, 1, 2 ou 3 images (`LatencySettings`), appliquées sans rouvrir
+  le jeu.
+- Mesures locales (x86, ROM de test vides) : un état GB fait 204 Kio et se
+  sauvegarde en 0,05 ms, un état GBA 682 Kio en 0,13 ms. Sur téléphone, le
+  coût dominant sera celui des images rejouées à chaque changement de touche.
+- Tests : `raven_frontend_preempt` (faux core à deux images de retard : la
+  réaction arrive 1 ou 2 images plus tôt, et 3 fait sauter l'image ; une
+  image et un son par appel quoi qu'on rejoue ; chronologie identique à une
+  partie aux appuis avancés de n images ; historique effacé après un état,
+  la SRAM, la pause, un changement de réglage ou un nouveau jeu ; quirks),
+  `raven_frontend_real_cores` (GB, GBC et GBA de RavenCore finissent dans le
+  même état octet pour octet que la référence), `raven_frame_pacer` (garde),
+  Java (`LatencySettingsTest`, page Général, réglage transmis au lecteur).
+  Dix mutations de l'implémentation sont toutes détectées.
+
+Écarts restants : le gain ressenti, le coût sur téléphone et le bon nombre
+d'images par jeu restent à mesurer. Le mode Hardcore de RetroAchievements,
+pas encore porté, devra vérifier sa compatibilité avec les images préventives.

@@ -8,6 +8,7 @@ import com.ravenemu.app.data.saves.StateSlotRepository;
 import com.ravenemu.app.settings.CartridgeSettings;
 import com.ravenemu.app.settings.ConsoleSettings;
 import com.ravenemu.app.settings.ControlLayout;
+import com.ravenemu.app.settings.LatencySettings;
 import com.ravenemu.app.settings.PlaybackSettings;
 import com.ravenemu.app.ui.settings.PlaybackSettingsActivity;
 
@@ -330,6 +331,18 @@ public final class PlayerActivityTest {
         ShadowVibrator.reset();
         activity.onDrawFrame(null);
         assertFalse(vibrator.isVibrating());
+    }
+
+    @Test public void preemptiveFramesReachTheNativePlayerOffByDefault() throws Exception {
+        ActivityController<PlayerActivity> controller = open(null);
+        PlayerActivity activity = controller.get();
+        activity.onWindowFocusChanged(true); pump(activity);
+        assertEquals(0, FakeNative.preemptive);
+        controller.pause();
+        new LatencySettings(2).save(activity);
+        controller.resume(); activity.onWindowFocusChanged(true); pump(activity);
+        assertEquals("Changed in the settings, taken without reopening the game", 2, FakeNative.preemptive);
+        assertEquals(1, FakeNative.opens);
     }
 
     @Test public void theTiltFollowsTheScreenAsItTurns() throws Exception {
@@ -780,7 +793,7 @@ public final class PlayerActivityTest {
         static float displayRate;
         static double fps;
         static String message;
-        static int buttons, rotation;
+        static int buttons, rotation, preemptive;
         static boolean rumbling;
         static void reset() {
             state = new byte[]{1, 2}; battery = new byte[]{3, 4};
@@ -796,6 +809,7 @@ public final class PlayerActivityTest {
             message = null;
             buttons = 0;
             rotation = -1;
+            preemptive = -1;
             rumbling = false;
         }
         private static void requireGl() { assertTrue("Core operation must use the queued GL boundary", QueuedGl.executing); }
@@ -808,6 +822,7 @@ public final class PlayerActivityTest {
         }
         @Implementation protected static void setDisplayRate(float hertz) { requireGl(); displayRate = hertz; }
         @Implementation protected static void setDisplayRotation(int value) { requireGl(); rotation = value; }
+        @Implementation protected static void setPreemptiveFrames(int frames) { requireGl(); preemptive = frames; }
         /** As the bridge: a paused or closed game never vibrates. */
         @Implementation protected static boolean rumbling() { return rumbling && !paused && !closed; }
         @Implementation protected static String takeMessage() {

@@ -70,6 +70,23 @@ if(RAVEN_FRONTEND_TESTS AND NOT ANDROID)
     target_include_directories(raven_frontend_test PRIVATE ${ravencore_SOURCE_DIR}/libretro/include)
     add_test(NAME raven_frontend_smoke COMMAND raven_frontend_test
              $<TARGET_FILE:raven_frontend_fake_core>)
+    # A game with input lag, for preemptive frames, and one whose states are incomplete.
+    add_library(raven_frontend_fake_core_lag SHARED tests/fake_core_lag.c)
+    add_library(raven_frontend_fake_core_lag_incomplete SHARED tests/fake_core_lag.c)
+    target_compile_definitions(raven_frontend_fake_core_lag_incomplete PRIVATE FAKE_LAG_INCOMPLETE)
+    foreach(lag_core raven_frontend_fake_core_lag raven_frontend_fake_core_lag_incomplete)
+        target_include_directories(${lag_core} PRIVATE ${ravencore_SOURCE_DIR}/libretro/include)
+        set_target_properties(${lag_core} PROPERTIES PREFIX "")
+    endforeach()
+    add_executable(raven_frontend_preempt_test tests/test_preempt.c)
+    target_link_libraries(raven_frontend_preempt_test PRIVATE raven_frontend)
+    target_include_directories(raven_frontend_preempt_test PRIVATE ${ravencore_SOURCE_DIR}/libretro/include)
+    if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(raven_frontend_preempt_test PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+    add_test(NAME raven_frontend_preempt COMMAND raven_frontend_preempt_test
+             $<TARGET_FILE:raven_frontend_fake_core_lag>
+             $<TARGET_FILE:raven_frontend_fake_core_lag_incomplete>)
     add_executable(raven_frontend_real_core_test tests/test_real_cores.c)
     target_link_libraries(raven_frontend_real_core_test PRIVATE raven_frontend)
     add_dependencies(raven_frontend_real_core_test

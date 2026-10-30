@@ -35,6 +35,13 @@ static raven_frame_pacer frame_pacer;
 static double display_rate;
 /* The cartridge's motor, as the core last set it: strong and weak. */
 static uint16_t rumble_strength[2];
+/* Preemptive frames: as Settings → Général asks, under a cap this game
+ * lowers when the phone cannot replay that many in time. */
+static unsigned preempt_wanted, preempt_cap = RAVEN_FRONTEND_PREEMPT_MAX;
+static raven_replay_guard replay_guard;
+/* A message from the player itself, shown like the core's. */
+static char player_message[RAVEN_FRONTEND_MESSAGE_MAX];
+static int player_message_pending;
 static uint8_t stretch5(uint32_t value) {
     return (uint8_t)((value << 3u) | (value >> 2u));
 }
@@ -117,6 +124,35 @@ static int on_sensor_state(unsigned port, unsigned action, unsigned rate, void *
 static float on_sensor_input(unsigned port, unsigned id, void *userdata) {
     (void)userdata;
     return port == 0 ? raven_sensors_read(id) : 0.0f;
+}
+
+static uint64_t monotonic_ns(void) {
+    struct timespec now;
+    if (clock_gettime(CLOCK_MONOTONIC, &now) != 0) return 0;
+    return (uint64_t)now.tv_sec * UINT64_C(1000000000) + (uint64_t)now.tv_nsec;
+}
+
+static void apply_preemption(void) {
+    if (session)
+        raven_frontend_set_preemptive_frames(session, preempt_wanted < preempt_cap ? preempt_wanted : preempt_cap);
+}
+
+/* After a frame that replayed: too slow too often, one frame less for this
+ * game, and the player is told. */
+static void lower_preemption_if_slow(uint64_t cost_ns) {
+    if (!raven_replay_guard_overloaded(&replay_guard, cost_ns, frame_pacer.core_fps)) return;
+    const unsigned current = raven_frontend_preemptive_frames(session);
+    if (!current) return;
+    preempt_cap = current - 1;
+    apply_preemption();
+    if (preempt_cap)
+        snprintf(player_message, sizeof(player_message),
+                 "Images préventives ramenées à %u pour ce jeu : le téléphone n'en rejoue pas %u à temps.",
+                 preempt_cap, current);
+    else
+        snprintf(player_message, sizeof(player_message),
+                 "Images préventives désactivées pour ce jeu : le téléphone ne rejoue pas une image à temps.");
+    player_message_pending = 1;
 }
 
 static void clear_frame(void) {
@@ -217,6 +253,9 @@ Java_com_ravenemu_app_bridge_NativeBridge_openRom(
         .video = on_video, .audio = on_audio, .input = on_input,
         .rumble = on_rumble, .sensor_state = on_sensor_state, .sensor_input = on_sensor_input};
     raven_frontend_set_callbacks(session, &callbacks);
+    preempt_cap = RAVEN_FRONTEND_PREEMPT_MAX;
+    replay_guard = (raven_replay_guard){0};
+    apply_preemption();
     /* Before the game loads: the options read only then apply to it. */
     apply_core_options(env, core_options);
     jbyte *bytes = (*env)->GetByteArrayElements(env, rom, NULL);
@@ -278,6 +317,8 @@ Java_com_ravenemu_app_bridge_NativeBridge_drawFrame(
     if (playback_paused || !advance) {
         raven_input_clear_buttons(&input);
         raven_frame_pacer_reset(&frame_pacer);
+        /* Buttons let go during a pause are not a press to replay. */
+        if (session) raven_frontend_forget_preemption(session);
     } else if (session) {
         struct timespec now;
         if (clock_gettime(CLOCK_MONOTONIC, &now) == 0) {
@@ -289,10 +330,13 @@ Java_com_ravenemu_app_bridge_NativeBridge_drawFrame(
             if (due) raven_sensors_poll();
             for (unsigned i = 0; i < due; ++i) {
                 raven_input_begin_frame(&input);
+                const uint64_t started = monotonic_ns();
                 if (!raven_frontend_run_frame(session)) {
                     raven_frame_pacer_reset(&frame_pacer);
                     break;
                 }
+                if (raven_frontend_replayed_frames(session))
+                    lower_preemption_if_slow(monotonic_ns() - started);
                 ++advanced;
             }
         }
@@ -315,6 +359,16 @@ Java_com_ravenemu_app_bridge_NativeBridge_setPaused(
     raven_audio_set_running(!playback_paused);
     /* The menu open, the sensors rest: the battery lasts. */
     raven_sensors_set_active(!playback_paused);
+}
+
+/* GL thread: Settings → Général → Latence, 0 to RAVEN_FRONTEND_PREEMPT_MAX. */
+JNIEXPORT void JNICALL
+Java_com_ravenemu_app_bridge_NativeBridge_setPreemptiveFrames(
+    JNIEnv *env, jclass clazz, jint frames) {
+    (void)env; (void)clazz;
+    preempt_wanted = frames <= 0 ? 0u
+        : (unsigned)frames > RAVEN_FRONTEND_PREEMPT_MAX ? RAVEN_FRONTEND_PREEMPT_MAX : (unsigned)frames;
+    apply_preemption();
 }
 
 /* GL thread: Display.getRotation(), for the tilt along the screen. */
@@ -342,11 +396,16 @@ Java_com_ravenemu_app_bridge_NativeBridge_setDisplayRate(
     raven_frame_pacer_set_display(&frame_pacer, display_rate);
 }
 
-/* GL thread: the core's latest on-screen message, once; NULL without one.
- * The frontend keeps it to modified UTF-8, which NewStringUTF requires. */
+/* GL thread: the latest on-screen message, once; NULL without one. The
+ * player's own (preemptive frames lowered) comes first, then the core's;
+ * both are modified UTF-8, which NewStringUTF requires. */
 JNIEXPORT jstring JNICALL
 Java_com_ravenemu_app_bridge_NativeBridge_takeMessage(JNIEnv *env, jclass clazz) {
     (void)clazz;
+    if (player_message_pending) {
+        player_message_pending = 0;
+        return (*env)->NewStringUTF(env, player_message);
+    }
     const char *message = session ? raven_frontend_take_message(session) : NULL;
     return message ? (*env)->NewStringUTF(env, message) : NULL;
 }

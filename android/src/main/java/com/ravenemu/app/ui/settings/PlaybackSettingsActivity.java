@@ -6,6 +6,7 @@ import com.ravenemu.app.settings.CartridgeSettings;
 import com.ravenemu.app.settings.ConsoleSettings;
 import com.ravenemu.app.settings.ControlLayout;
 import com.ravenemu.app.settings.ControlSettings;
+import com.ravenemu.app.settings.LatencySettings;
 import com.ravenemu.app.settings.PlaybackSettings;
 import com.ravenemu.app.ui.library.HomeActivity;
 
@@ -148,7 +149,7 @@ public final class PlaybackSettingsActivity extends Activity {
 
     /** The beta's categories, in its order; RetroAchievements waits for its native port. */
     private void homePage() {
-        category("Général", "Pause automatique", GENERAL,
+        category("Général", "Pause automatique et latence", GENERAL,
                 "M3,5H13V7H3ZM17,5H21V7H17ZM13,3H17V9H13ZM3,11H7V13H3ZM11,11H21V13H11ZM7,9H11V15H7Z"
                         + "M3,17H13V19H3ZM17,17H21V19H17ZM13,15H17V21H13Z");
         category("Audio", "Son du jeu et volume", AUDIO,
@@ -176,6 +177,16 @@ public final class PlaybackSettingsActivity extends Activity {
         description("Pause automatique",
                 "Le jeu et son audio sont suspendus lorsque RavenEmu passe en arrière-plan ou lorsque le "
                         + "panneau de jeu est ouvert. Ce comportement est fixe pour protéger la partie.");
+        // A native addition after RetroArch's preemptive frames (the C frontend).
+        group("Latence");
+        description("Images préventives",
+                "Quand une touche change, RavenEmu rejoue aussitôt les dernières images avec elle : le jeu "
+                        + "répond une à trois images plus tôt (environ 17 ms chacune). Chaque appui fait émuler "
+                        + "ces images en plus ; si le téléphone ne suit pas, le réglage baisse de lui-même pour "
+                        + "le jeu en cours. Au-delà du retard propre au jeu, l'image saute : commencez par une.");
+        choices(new String[]{"Désactivées (défaut)", "1 image", "2 images", "3 images"},
+                new String[]{"0", "1", "2", "3"}, String.valueOf(LatencySettings.load(this).preemptiveFrames),
+                value -> new LatencySettings(Integer.parseInt(value)).save(this));
     }
 
     /** The beta's À propos: who makes RavenEmu, its licences and its source.

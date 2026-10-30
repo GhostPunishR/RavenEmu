@@ -51,7 +51,11 @@ contrôle dynamique du débit audio reprennent l'idée publiée par l'auteur de
 RetroArch, mais leur code (`frontend/src/frame_pacer.c`,
 `android/src/main/cpp/hardware/audio/audio_pipeline.c`) est écrit pour
 RavenEmu, sous sa licence AGPLv3 ; aucune ligne de `audio/audio_driver.c`
-n'y est reprise. La validation sur téléphone reste un travail de migration.
+n'y est reprise. De même, les images préventives reprennent l'idée des
+« preemptive frames » de RetroArch (`runahead.c`), mais leur code
+(`frontend/src/libretro_host.c`, garde de coût dans `frontend/src/frame_pacer.c`)
+est écrit pour RavenEmu ; aucune ligne de `runahead.c` n'y est reprise. La
+validation sur téléphone reste un travail de migration.
 
 ## Licences et distribution
 

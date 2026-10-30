@@ -1,7 +1,10 @@
+#define _POSIX_C_SOURCE 200809L
 #include <ravenemu/frontend.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 /* Validate the real RavenCore Libretro adapters can be loaded by the new C
  * frontend on Linux, with the options the application sets. No game or BIOS
@@ -14,6 +17,12 @@
 
 static uint32_t first_pixel;
 static unsigned frames_seen;
+static uint16_t held;  /* Port 0's buttons, for preemptive frames. */
+
+static int16_t input(unsigned port, unsigned device, unsigned index, unsigned id, void *opaque) {
+    (void)opaque; (void)index;
+    return port == 0 && device == 1 /* RETRO_DEVICE_JOYPAD */ && id < 16 ? (held >> id) & 1 : 0;
+}
 
 static void video(const raven_video_frame *frame, void *opaque) {
     (void)opaque;
@@ -118,6 +127,71 @@ static int check_gb_in_color(raven_frontend *host) {
     return 0;
 }
 
+/* A GBA ROM that loops at its entry (b .), its header's fixed byte set. */
+static unsigned char gba_rom[1024];
+
+static uint16_t buttons_at(unsigned frame) {
+    return frame % 9 < 4 ? (uint16_t)(1u << (frame % 16)) : 0;
+}
+
+static double elapsed_ms(const struct timespec *start) {
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    return (double)(now.tv_sec - start->tv_sec) * 1e3 + (double)(now.tv_nsec - start->tv_nsec) / 1e6;
+}
+
+/* Runs `frames` frames, each button pressed `shift` frames early; the state
+ * at the end in `state`, and the milliseconds per frame. */
+static int run_script(raven_frontend *host, const unsigned char *game, size_t size, const char *name,
+                      unsigned preempt, unsigned shift, unsigned char **state, size_t *state_size,
+                      double *per_frame) {
+    CHECK(raven_frontend_set_preemptive_frames(host, preempt));
+    CHECK(raven_frontend_load_rom(host, game, size, name));
+    enum { FRAMES = 240 };
+    unsigned replays = 0;
+    struct timespec start;
+    clock_gettime(CLOCK_MONOTONIC, &start);
+    for (unsigned frame = 0; frame < FRAMES; ++frame) {
+        held = buttons_at(frame + shift < FRAMES ? frame + shift : FRAMES - 1);
+        const unsigned before = frames_seen;
+        CHECK(raven_frontend_run_frame(host));
+        CHECK(frames_seen == before + 1);  /* one picture, replays unseen */
+        replays += raven_frontend_replayed_frames(host);
+    }
+    *per_frame = elapsed_ms(&start) / FRAMES;
+    CHECK(preempt == 0 || replays > 0);
+    *state_size = raven_frontend_state_size(host);
+    CHECK(*state_size > 0 && (*state = malloc(*state_size)) != NULL);
+    CHECK(raven_frontend_save_state(host, *state, *state_size));
+    raven_frontend_unload(host);
+    return 0;
+}
+
+/* Preemptive frames on RavenCore: the replayed timeline ends in exactly the
+ * state of a game played with each button pressed two frames earlier, so
+ * its states load back whole and repeat. Prints what it costs here. */
+static int check_preemption(raven_frontend *host, const unsigned char *game, size_t size,
+                            const char *name) {
+    raven_frontend_callbacks callbacks = {.video = video, .input = input};
+    raven_frontend_set_callbacks(host, &callbacks);
+    unsigned char *preempted = NULL, *expected = NULL;
+    size_t preempted_size = 0, expected_size = 0;
+    double with = 0.0, without = 0.0;
+    if (run_script(host, game, size, name, 2, 0, &preempted, &preempted_size, &with) ||
+        run_script(host, game, size, name, 0, 2, &expected, &expected_size, &without)) {
+        free(preempted); free(expected);
+        return 1;
+    }
+    const int same = preempted_size == expected_size && memcmp(preempted, expected, expected_size) == 0;
+    printf("  preemptive frames: state %zu bytes, %.3f ms per frame with 2, %.3f without\n",
+           expected_size, with, without);
+    free(preempted); free(expected);
+    held = 0;
+    CHECK(raven_frontend_set_preemptive_frames(host, 0));
+    CHECK(same);
+    return 0;
+}
+
 int main(int argc, char **argv) {
     if (argc != 4) {
         fprintf(stderr, "Expected paths to GB, GBC and GBA Libretro cores\n");
@@ -145,6 +219,17 @@ int main(int argc, char **argv) {
             fprintf(stderr, "%s: core options\n", argv[i]);
             raven_frontend_destroy(host);
             return 5;
+        }
+        make_rom(rom, sizeof(rom));
+        memset(gba_rom, 0, sizeof(gba_rom));
+        const unsigned char loop[] = {0xfe, 0xff, 0xff, 0xea};
+        memcpy(gba_rom, loop, sizeof(loop));
+        gba_rom[0xb2] = 0x96;  /* the header's fixed byte */
+        if (i == 3 ? check_preemption(host, gba_rom, sizeof(gba_rom), "raventest.gba")
+                   : check_preemption(host, rom, sizeof(rom), "raventest.gb")) {
+            fprintf(stderr, "%s: preemptive frames\n", argv[i]);
+            raven_frontend_destroy(host);
+            return 6;
         }
         printf("%s: %s (%s), %zu options\n", argv[i], info.name, info.version,
                raven_frontend_option_count(host));

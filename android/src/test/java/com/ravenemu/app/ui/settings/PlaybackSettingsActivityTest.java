@@ -4,6 +4,7 @@ import com.ravenemu.app.settings.CartridgeSettings;
 import com.ravenemu.app.settings.ConsoleSettings;
 import com.ravenemu.app.settings.ControlLayout;
 import com.ravenemu.app.settings.ControlSettings;
+import com.ravenemu.app.settings.LatencySettings;
 import com.ravenemu.app.settings.PlaybackSettings;
 
 import android.app.Activity;
@@ -312,6 +313,21 @@ public final class PlaybackSettingsActivityTest {
         assertEquals(20, slider(activity, "Taille des commandes").getProgress());
         assertNotNull(choice(activity, "Classique (défaut), choisi"));
         assertFalse(PlaybackSettings.load(activity).audioEnabled);
+    }
+
+    @Test public void generalPageSetsThePreemptiveFrames() {
+        PlaybackSettingsActivity activity = open(PlaybackSettingsActivity.GENERAL, null).get();
+        assertNotNull(text(activity, "Images préventives"));
+        assertNotNull(choice(activity, "Désactivées (défaut), choisi"));
+        assertTrue("Opening the page writes nothing",
+                preferences.getAll().keySet().stream().noneMatch(key -> key.startsWith("latency.")));
+        choice(activity, "2 images").performClick();
+        assertEquals(2, LatencySettings.load(activity).preemptiveFrames);
+        assertNotNull(choice(activity, "2 images, choisi"));
+        PlaybackSettingsActivity reopened = open(PlaybackSettingsActivity.GENERAL, null).get();
+        assertNotNull(choice(reopened, "2 images, choisi"));
+        choice(reopened, "Désactivées (défaut)").performClick();
+        assertEquals(0, LatencySettings.load(reopened).preemptiveFrames);
     }
 
     @Test public void interfacePageSetsTheCartridgeMotorTheSensorsAndTheSun() {

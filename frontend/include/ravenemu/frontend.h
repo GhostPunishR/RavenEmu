@@ -88,6 +88,24 @@ void raven_frontend_unload(raven_frontend *host);
 void raven_frontend_close_core(raven_frontend *host);
 int raven_frontend_get_info(const raven_frontend *host, raven_core_info *out);
 
+/* Preemptive frames (RetroArch's idea, RavenEmu code): with n frames, the
+ * host keeps the core's state before each of the last n frames; when port
+ * 0's joypad differs from the previous frame's, run_frame goes back n frames
+ * and runs them again with the new buttons, neither shown nor heard, before
+ * the frame itself. A game that answers a press k frames later then answers
+ * min(n, k) frames sooner; more than k makes the picture jump. Each frame
+ * costs a saved state, a change n more frames. 0, the default, turns it off;
+ * above RAVEN_FRONTEND_PREEMPT_MAX is refused. The setting stays across
+ * games; the history starts again at each load, restored state or SRAM, and
+ * at forget_preemption (a pause: buttons released meanwhile are not a
+ * change to replay). Emulation thread, like every call to the core. */
+#define RAVEN_FRONTEND_PREEMPT_MAX 3u
+int raven_frontend_set_preemptive_frames(raven_frontend *host, unsigned frames);
+unsigned raven_frontend_preemptive_frames(const raven_frontend *host);
+/* Frames the last run_frame ran again, 0 without a replay. */
+unsigned raven_frontend_replayed_frames(const raven_frontend *host);
+void raven_frontend_forget_preemption(raven_frontend *host);
+
 /* Core options of the open core, read and set on the emulation thread like
  * every call to the core. A value set before load_rom applies when the game
  * loads; one set while it runs reaches the core at its next frame, through

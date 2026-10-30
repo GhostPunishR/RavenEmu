@@ -16,7 +16,8 @@ du lecteur Kotlin actuel : il ne remplace ni les APK signés, ni la cible iOS.
 ```sh
 cmake -S frontend -B build/native-frontend -DCMAKE_BUILD_TYPE=Release
 cmake --build build/native-frontend --target raven_frontend_test raven_frontend_fake_core raven_frontend_real_core_test \
-  raven_frontend_options_test raven_frontend_fake_core_v1 raven_frontend_fake_core_variables
+  raven_frontend_options_test raven_frontend_fake_core_v1 raven_frontend_fake_core_variables \
+  raven_frontend_preempt_test raven_frontend_fake_core_lag raven_frontend_fake_core_lag_incomplete
 ctest --test-dir build/native-frontend --output-on-failure
 ```
 
@@ -70,3 +71,25 @@ caractère de 4 octets. Le test `raven_frontend_smoke` le vérifie.
 en m/s² dans le sens de l'écran, rotation en rad/s, lumière en lux). Sans
 eux, `GET_RUMBLE_INTERFACE` et `GET_SENSOR_INTERFACE` répondent faux et le
 core s'en passe. Le test `raven_frontend_smoke` les vérifie avec le faux core.
+
+## Images préventives
+
+`raven_frontend_set_preemptive_frames(host, n)` (0 à 3, désactivé par défaut)
+garde l'état du core avant chacune des n dernières images. Quand les boutons
+du port 0 changent, `raven_frontend_run_frame` revient n images en arrière et
+les rejoue avec les nouveaux boutons, sans image ni son
+(`GET_AUDIO_VIDEO_ENABLE` répond 0 : RavenCore saute alors son rendu), puis
+exécute l'image demandée. Un jeu qui répond à un appui k images plus tard
+répond min(n, k) images plus tôt ; au-delà de k, l'image saute.
+L'historique repart de zéro à chaque chargement, état restauré, SRAM restaurée
+et `raven_frontend_forget_preemption` (pause). Un core qui déclare des états
+incomplets (`SET_SERIALIZATION_QUIRKS`) n'est jamais rejoué.
+`raven_replay_guard_overloaded` (`frame_pacer.h`) dit quand une image rejouée
+dépasse trop souvent les trois quarts de la période du jeu.
+
+Tests : `raven_frontend_preempt` avec `fake_core_lag.c`, un jeu à deux images
+de retard (gain mesuré pour n = 0 à 3, chronologie rejouée identique à celle
+d'une partie aux appuis avancés de n images, appuis d'une image compris,
+historique oublié, quirks) ; `raven_frontend_real_cores` (les trois cores
+RavenCore finissent dans le même état octet pour octet) ; `raven_frame_pacer`
+(garde de coût).

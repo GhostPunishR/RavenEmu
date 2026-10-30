@@ -240,6 +240,18 @@ course), A/B, Start/Select, L1/L2 et R1/R2, touche Home pour le menu
 (`GamepadMapper`). Les messages du core (capteur absent, code de triche
 refusé…) s'affichent brièvement par-dessus le jeu.
 
+## Latence : images préventives
+
+**Paramètres → Général → Latence** propose les images préventives (désactivées
+par défaut ; 1, 2 ou 3 images), idée de RetroArch écrite pour RavenEmu dans le
+frontend C : à chaque changement de touche, les dernières images sont
+rejouées avec elle, et le jeu répond d'autant plus tôt, dans la limite de son
+propre retard. Si le téléphone ne rejoue pas ces images à temps (trois
+dépassements des trois quarts d'une image sur huit rejeux), le lecteur en
+retire une pour le jeu en cours et le dit par un message bref. La pause oublie
+l'historique : relâcher les touches pendant le menu ne réécrit pas le passé.
+Le gain réel et le coût restent à mesurer sur téléphone.
+
 ## Commandes tactiles
 
 **Paramètres → Interface** règle les commandes comme la bêta : retour

@@ -102,3 +102,14 @@ double raven_frame_pacer_speed(const raven_frame_pacer *pacer) {
     if (!pacer || !pacer->locked || !pacer->vsyncs_per_frame || !(pacer->core_fps > 0.0)) return 1.0;
     return pacer->display_hz / pacer->vsyncs_per_frame / pacer->core_fps;
 }
+
+int raven_replay_guard_overloaded(raven_replay_guard *guard, uint64_t cost_ns, double core_fps) {
+    if (!guard || !(core_fps > 0.0) || !isfinite(core_fps)) return 0;
+    if ((double)cost_ns > RAVEN_REPLAY_BUDGET * 1e9 / core_fps) ++guard->overruns;
+    if (guard->overruns >= RAVEN_REPLAY_OVERRUNS) {
+        guard->replays = guard->overruns = 0;
+        return 1;
+    }
+    if (++guard->replays >= RAVEN_REPLAY_WINDOW) guard->replays = guard->overruns = 0;
+    return 0;
+}
