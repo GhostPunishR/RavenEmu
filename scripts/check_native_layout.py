@@ -12,6 +12,7 @@ required = [
     "android/src/main/cpp/hardware/audio/aaudio/aaudio_driver.c",
     "android/src/main/cpp/hardware/video/gles2/gles2_renderer.c",
     "android/src/main/cpp/hardware/input/input_driver.c",
+    "android/src/main/cpp/hardware/input/sensor_driver.c",
     "android/src/main/cpp/media/state_thumbnail.c",
     "tests/hardware/CMakeLists.txt",
     "legal/attributions/retroarch.md",

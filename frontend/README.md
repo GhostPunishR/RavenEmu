@@ -61,3 +61,12 @@ Les messages qu'un core demande d'afficher (`RETRO_ENVIRONMENT_SET_MESSAGE`
 ou `SET_MESSAGE_EXT`, hors journal seul et débogage) sont gardés par l'hôte ;
 `raven_frontend_take_message` rend chacun une fois, en UTF-8 valide sans
 caractère de 4 octets. Le test `raven_frontend_smoke` le vérifie.
+
+## Vibration et capteurs
+
+`raven_frontend_callbacks` accepte trois rappels facultatifs : `rumble`
+(moteur d'un port, effet fort ou faible, force 0 à 65535), `sensor_state`
+(action `retro_sensor_action` et fréquence) et `sensor_input` (accélération
+en m/s² dans le sens de l'écran, rotation en rad/s, lumière en lux). Sans
+eux, `GET_RUMBLE_INTERFACE` et `GET_SENSOR_INTERFACE` répondent faux et le
+core s'en passe. Le test `raven_frontend_smoke` les vérifie avec le faux core.

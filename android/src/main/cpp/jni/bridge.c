@@ -6,6 +6,7 @@
 #include "audio_pipeline.h"
 #include "gles2_renderer.h"
 #include "input_driver.h"
+#include "sensor_driver.h"
 #include "state_thumbnail.h"
 #include <time.h>
 
@@ -32,6 +33,8 @@ static int preview_valid;
 static raven_frame_pacer frame_pacer;
 /* The display's refresh rate, as Android reports it; kept across games. */
 static double display_rate;
+/* The cartridge's motor, as the core last set it: strong and weak. */
+static uint16_t rumble_strength[2];
 static uint8_t stretch5(uint32_t value) {
     return (uint8_t)((value << 3u) | (value >> 2u));
 }
@@ -96,6 +99,24 @@ static int16_t on_input(unsigned port, unsigned device, unsigned index,
     (void)userdata;
     if (port || device != RETRO_DEVICE_JOYPAD || index) return 0;
     return raven_input_pressed(&input, id);
+}
+
+/* One phone, one motor and one set of sensors: the first player's. */
+static int on_rumble(unsigned port, unsigned effect, uint16_t strength, void *userdata) {
+    (void)userdata;
+    if (port != 0 || effect > RETRO_RUMBLE_WEAK) return 0;
+    rumble_strength[effect] = strength;
+    return 1;
+}
+
+static int on_sensor_state(unsigned port, unsigned action, unsigned rate, void *userdata) {
+    (void)userdata;
+    return port == 0 && raven_sensors_set_state(action, rate);
+}
+
+static float on_sensor_input(unsigned port, unsigned id, void *userdata) {
+    (void)userdata;
+    return port == 0 ? raven_sensors_read(id) : 0.0f;
 }
 
 static void clear_frame(void) {
@@ -184,11 +205,17 @@ Java_com_ravenemu_app_bridge_NativeBridge_openRom(
     raven_frame_pacer_set_display(&frame_pacer, display_rate);
     raven_input_clear_buttons(&input);
     clear_frame();
+    /* The next game asks for its own sensors, as it loads. */
+    raven_sensors_close();
+    raven_sensors_set_active(!playback_paused);
+    rumble_strength[0] = rumble_strength[1] = 0;
     if (!raven_frontend_open_core(session, library_path, files, files)) {
         result = failure(env, raven_frontend_last_error(session));
         goto done;
     }
-    raven_frontend_callbacks callbacks = {on_video, on_audio, on_input, NULL};
+    raven_frontend_callbacks callbacks = {
+        .video = on_video, .audio = on_audio, .input = on_input,
+        .rumble = on_rumble, .sensor_state = on_sensor_state, .sensor_input = on_sensor_input};
     raven_frontend_set_callbacks(session, &callbacks);
     /* Before the game loads: the options read only then apply to it. */
     apply_core_options(env, core_options);
@@ -259,6 +286,7 @@ Java_com_ravenemu_app_bridge_NativeBridge_drawFrame(
             const unsigned due = raven_frame_pacer_tick(&frame_pacer, now_ns);
             /* Locked on the display, the game runs at its pace: so does the sound. */
             raven_audio_set_speed(raven_frame_pacer_speed(&frame_pacer));
+            if (due) raven_sensors_poll();
             for (unsigned i = 0; i < due; ++i) {
                 raven_input_begin_frame(&input);
                 if (!raven_frontend_run_frame(session)) {
@@ -285,6 +313,24 @@ Java_com_ravenemu_app_bridge_NativeBridge_setPaused(
     playback_paused = next_paused;
     if (playback_paused) raven_input_clear_buttons(&input);
     raven_audio_set_running(!playback_paused);
+    /* The menu open, the sensors rest: the battery lasts. */
+    raven_sensors_set_active(!playback_paused);
+}
+
+/* GL thread: Display.getRotation(), for the tilt along the screen. */
+JNIEXPORT void JNICALL
+Java_com_ravenemu_app_bridge_NativeBridge_setDisplayRotation(
+    JNIEnv *env, jclass clazz, jint rotation) {
+    (void)env; (void)clazz;
+    raven_sensors_set_rotation(rotation);
+}
+
+/* GL thread, after each drawn frame: whether the cartridge's motor runs. A
+ * paused game never vibrates. */
+JNIEXPORT jboolean JNICALL
+Java_com_ravenemu_app_bridge_NativeBridge_rumbling(JNIEnv *env, jclass clazz) {
+    (void)env; (void)clazz;
+    return session && !playback_paused && (rumble_strength[0] || rumble_strength[1]) ? JNI_TRUE : JNI_FALSE;
 }
 
 /* GL thread: the display's refresh rate, on start and whenever it changes. */
@@ -445,6 +491,8 @@ Java_com_ravenemu_app_bridge_NativeBridge_closeRom(
         raven_frontend_destroy(session);
         session = NULL;
     }
+    raven_sensors_close();
+    rumble_strength[0] = rumble_strength[1] = 0;
     raven_input_clear_buttons(&input);
     clear_frame();
     free(rgba_pixels);

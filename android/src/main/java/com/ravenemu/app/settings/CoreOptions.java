@@ -21,8 +21,8 @@ public final class CoreOptions {
      * loads. The real GBA BIOS only when one is installed, so the core never
      * runs another BIOS than the state identity says. */
     public static String[] atLoad(String core, PlaybackSettings image, ConsoleSettings console,
-                                  boolean gbaBiosInstalled) {
-        List<String> options = new ArrayList<>(Arrays.asList(live(core, image, console)));
+                                  CartridgeSettings cartridge, boolean gbaBiosInstalled) {
+        List<String> options = new ArrayList<>(Arrays.asList(live(core, image, console, cartridge)));
         if ("gbc".equals(core)) {
             options.add("ravenemu_gbc_hardware");
             options.add(console.gbcOnGba ? "gba" : "gbc");
@@ -34,24 +34,30 @@ public final class CoreOptions {
         return options.toArray(new String[0]);
     }
 
-    /** The options the core rereads during the game: the image ones, and the
-     * colors of the Game Boy games on the Game Boy Color. */
-    public static String[] live(String core, PlaybackSettings image, ConsoleSettings console) {
+    /** The options the core rereads during the game: the image ones, the
+     * colors of the Game Boy games on the Game Boy Color, the phone's sensors
+     * and Boktai's sun. */
+    public static String[] live(String core, PlaybackSettings image, ConsoleSettings console,
+                                CartridgeSettings cartridge) {
         if (!"gb".equals(core) && !"gbc".equals(core) && !"gba".equals(core)) return new String[0];
         String blending = PlaybackSettings.BLENDING_OFF.equals(image.frameBlending)
                 ? "disabled" : image.frameBlending;
         String prefix = "ravenemu_" + core + "_";
+        String sensors = enabled(cartridge.sensors);
         switch (core) {
             case "gb":
                 return new String[]{prefix + "palette", palette(image.gbPalette),
-                        prefix + "frame_blending", blending};
+                        prefix + "frame_blending", blending, prefix + "device_sensors", sensors};
             case "gbc":
                 return new String[]{prefix + "color_correction", enabled(image.lcdCorrectionGbc),
                         prefix + "frame_blending", blending,
-                        "ravenemu_gbc_dmg_colors", GB_COLOR_VALUES[console.gbColors]};
+                        "ravenemu_gbc_dmg_colors", GB_COLOR_VALUES[console.gbColors],
+                        prefix + "device_sensors", sensors};
             default:
                 return new String[]{prefix + "color_correction", enabled(image.lcdCorrectionGba),
-                        prefix + "frame_blending", blending};
+                        prefix + "frame_blending", blending, prefix + "device_sensors", sensors,
+                        "ravenemu_gba_solar_light", cartridge.solarFromSensor()
+                                ? "sensor" : String.valueOf(cartridge.solarLevel)};
         }
     }
 

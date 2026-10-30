@@ -2,6 +2,7 @@ package com.ravenemu.app.ui.settings;
 import com.ravenemu.app.R;
 import com.ravenemu.app.data.saves.GbaBiosRepository;
 import com.ravenemu.app.platform.SystemBarInsets;
+import com.ravenemu.app.settings.CartridgeSettings;
 import com.ravenemu.app.settings.ConsoleSettings;
 import com.ravenemu.app.settings.ControlLayout;
 import com.ravenemu.app.settings.ControlSettings;
@@ -61,6 +62,7 @@ public final class PlaybackSettingsActivity extends Activity {
     private PlaybackSettings settings;
     private ConsoleSettings console;
     private ControlSettings controls;
+    private CartridgeSettings cartridge;
     private boolean biosInstalled;
     /** The BIOS copy and removal, off the UI thread, one at a time. */
     private final ExecutorService io = Executors.newSingleThreadExecutor();
@@ -79,6 +81,7 @@ public final class PlaybackSettingsActivity extends Activity {
         settings = PlaybackSettings.load(this);
         console = ConsoleSettings.load(this);
         controls = ControlSettings.load(this);
+        cartridge = CartridgeSettings.load(this);
         biosInstalled = GbaBiosRepository.installed(getFilesDir());
         String initialPage = getIntent().getStringExtra(EXTRA_PAGE);
         if (state != null) {
@@ -156,9 +159,10 @@ public final class PlaybackSettingsActivity extends Activity {
         category("Console", "Jeux Game Boy en couleurs, GBC d'une GBA, BIOS GBA", CONSOLE,
                 "M11,7h2v2h-2zM11,11h2v6h-2zM12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2z"
                         + "M12,20c-4.41,0 -8,-3.59 -8,-8s3.59,-8 8,-8 8,3.59 8,8 -3.59,8 -8,8z");
-        // The beta says "Commandes tactiles, retour arrière et style": the
-        // owner left rewind out of the native player, so it is not announced.
-        category("Interface", "Commandes tactiles et style", INTERFACE,
+        // The beta says "Vibrations, capteurs, commandes, retour arrière, style et
+        // Skin Delta": the owner left rewind out of the native player, and the
+        // Delta skins wait for their port, so neither is announced.
+        category("Interface", "Vibrations, capteurs, commandes et style", INTERFACE,
                 "M3,3H11V11H3ZM13,3H21V11H13ZM3,13H11V21H3ZM13,13H21V21H13Z");
         category("À propos", "Version, auteur, confidentialité et licences", ABOUT,
                 "M11,7h2v2h-2zM11,11h2v6h-2zM12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2z"
@@ -383,13 +387,18 @@ public final class PlaybackSettingsActivity extends Activity {
         }
     }
 
-    /** The beta's Interface page, touch controls part, and where the buttons
-     * were moved. Its cartridge and Delta skin sections wait for those native
-     * features; rewind is left out at the owner's request. */
+    /** The beta's Interface page: the touch controls, where the buttons were
+     * moved, and the cartridge hardware the phone stands in for. Its Delta skin
+     * section waits for that native feature; rewind is left out at the
+     * owner's request. */
     private void interfacePage() {
         group("Commandes tactiles");
         settingSwitch("Retour haptique", "Petite vibration à la pression des boutons.", controls.haptics,
                 enabled -> updateControls(controls.withHaptics(enabled)));
+        settingSwitch("Vibration de la cartouche",
+                "Fait vibrer le téléphone avec les jeux équipés d'un moteur de vibration (Drill Dozer, "
+                        + "WarioWare: Twisted!, cartouches Game Boy Rumble).",
+                cartridge.rumble, enabled -> updateCartridge(cartridge.withRumble(enabled)));
         slider("Taille des commandes", controls.scale, ControlSettings.SCALE_MIN, ControlSettings.SCALE_MAX,
                 " %", value -> updateControls(controls.withScale(value)));
         slider("Espacement vertical", controls.gap, ControlSettings.GAP_MIN, ControlSettings.GAP_MAX,
@@ -406,6 +415,35 @@ public final class PlaybackSettingsActivity extends Activity {
             ControlLayout.reset(this);
             showPage(INTERFACE);
         });
+        // RavenCore's Libretro sensors, fed by the native sensor driver.
+        group("Capteurs de la cartouche");
+        Switch[] solarAuto = new Switch[1];
+        SeekBar[] solarLevel = new SeekBar[1];
+        settingSwitch("Capteurs du téléphone",
+                "Le gyroscope, l'inclinaison et la lumière du téléphone remplacent ceux de la cartouche : "
+                        + "WarioWare: Twisted!, Yoshi Topsy-Turvy, Kirby Tilt 'n' Tumble, Boktai.",
+                cartridge.sensors, enabled -> {
+                    updateCartridge(cartridge.withSensors(enabled));
+                    solarAuto[0].setEnabled(enabled);
+                    solarLevel[0].setEnabled(!cartridge.solarFromSensor());
+                });
+        solarAuto[0] = settingSwitch("Soleil automatique (Boktai)",
+                "Le capteur de lumière du téléphone règle le soleil : il faut la lumière du jour, celle d'une "
+                        + "pièce ne suffit pas. Sans ce capteur, le niveau ci-dessous s'applique.",
+                cartridge.solarAuto, enabled -> {
+                    updateCartridge(cartridge.withSolarAuto(enabled));
+                    solarLevel[0].setEnabled(!cartridge.solarFromSensor());
+                });
+        solarAuto[0].setEnabled(cartridge.sensors);
+        solarLevel[0] = slider("Soleil (Boktai)", cartridge.solarLevel, CartridgeSettings.SOLAR_MIN,
+                CartridgeSettings.SOLAR_MAX, CartridgeSettings.SOLAR_STEP, " %",
+                value -> updateCartridge(cartridge.withSolarLevel(value)));
+        solarLevel[0].setEnabled(!cartridge.solarFromSensor());
+    }
+
+    private void updateCartridge(CartridgeSettings updated) {
+        cartridge = updated;
+        cartridge.save(this);
     }
 
     private void updateControls(ControlSettings updated) {
@@ -503,7 +541,7 @@ public final class PlaybackSettingsActivity extends Activity {
         settings.save(this);
     }
 
-    private void settingSwitch(String label, String summary, boolean checked, BooleanChange change) {
+    private Switch settingSwitch(String label, String summary, boolean checked, BooleanChange change) {
         LinearLayout row = new LinearLayout(this);
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setMinimumHeight(dp(64));
@@ -530,9 +568,11 @@ public final class PlaybackSettingsActivity extends Activity {
         LinearLayout.LayoutParams size = new LinearLayout.LayoutParams(-2, -2);
         size.leftMargin = dp(12);
         row.addView(control, size);
-        row.setOnClickListener(view -> control.performClick());
+        // A switch greyed out by another setting stays as it is.
+        row.setOnClickListener(view -> { if (control.isEnabled()) control.performClick(); });
         row.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         add(row, 14);
+        return control;
     }
 
     private SeekBar slider(String label, int value, int minimum, int maximum,
@@ -541,6 +581,12 @@ public final class PlaybackSettingsActivity extends Activity {
     }
 
     private SeekBar slider(String label, int value, int minimum, int maximum,
+                           String unit, IntChange change) {
+        return slider(label, value, minimum, maximum, 1, unit, change);
+    }
+
+    /** Steps of `step` from minimum: Boktai's sun moves by tens. */
+    private SeekBar slider(String label, int value, int minimum, int maximum, int step,
                            String unit, IntChange change) {
         LinearLayout block = column();
         LinearLayout heading = new LinearLayout(this);
@@ -551,8 +597,8 @@ public final class PlaybackSettingsActivity extends Activity {
         block.addView(heading);
         SeekBar control = new SeekBar(this);
         control.setSaveEnabled(false);
-        control.setMax(maximum - minimum);
-        control.setProgress(value - minimum);
+        control.setMax((maximum - minimum) / step);
+        control.setProgress((value - minimum) / step);
         control.setContentDescription(label + ", " + value + unit);
         control.setProgressTintList(ColorStateList.valueOf(HomeActivity.ACCENT));
         control.setThumbTintList(ColorStateList.valueOf(HomeActivity.ACCENT));
@@ -560,7 +606,7 @@ public final class PlaybackSettingsActivity extends Activity {
             @Override public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 // Android view-state restoration must never save a stale value.
                 if (!fromUser) return;
-                int current = progress + minimum;
+                int current = minimum + progress * step;
                 valueText.setText(current + unit);
                 control.setContentDescription(label + ", " + current + unit);
                 change.accept(current);

@@ -7,6 +7,7 @@ import com.ravenemu.app.data.saves.SaveRepository;
 import com.ravenemu.app.data.saves.StatePreview;
 import com.ravenemu.app.data.saves.StateSlotRepository;
 import com.ravenemu.app.platform.SystemBarInsets;
+import com.ravenemu.app.settings.CartridgeSettings;
 import com.ravenemu.app.settings.ConsoleSettings;
 import com.ravenemu.app.settings.ControlLayout;
 import com.ravenemu.app.settings.ControlSettings;
@@ -30,6 +31,7 @@ import android.view.Gravity;
 import android.view.InputDevice;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
+import android.view.Surface;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
@@ -70,9 +72,13 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         @Override public void onDisplayAdded(int displayId) {}
         @Override public void onDisplayRemoved(int displayId) {}
         @Override public void onDisplayChanged(int displayId) {
-            if (displayId == Display.DEFAULT_DISPLAY) sendDisplayRate();
+            if (displayId == Display.DEFAULT_DISPLAY) sendDisplay();
         }
     };
+    /** The cartridge's motor on the phone's vibrator, after each drawn frame. */
+    private CartridgeRumble rumble;
+    /** Settings → Interface: "Vibration de la cartouche". */
+    private volatile boolean rumbleEnabled = CartridgeSettings.DEFAULTS.rumble;
     private long nextBatterySaveNanos;
     private volatile String activeSaveKey;
     /** GL thread: the core of the open game ("gb", "gbc" or "gba"), for its options. */
@@ -124,6 +130,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         surface.setRenderer(this);
         surface.setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);
         displays = getSystemService(DisplayManager.class);
+        rumble = new CartridgeRumble(this);
         pauseState = new PlayerPauseState(paused -> {
             gamePaused = paused;
             releaseInput();
@@ -244,12 +251,16 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         return getWindowManager().getDefaultDisplay();
     }
 
-    /** UI thread: the native pacer locks on the display only when it knows its rate. */
-    private void sendDisplayRate() {
+    /** UI thread: the native pacer locks on the display only when it knows its
+     * rate; the tilt follows the screen, a half turn included. */
+    private void sendDisplay() {
         Display display = currentDisplay();
         final float hertz = display != null ? display.getRefreshRate() : 0f;
+        final int rotation = display != null ? display.getRotation() : Surface.ROTATION_0;
         if (surface != null) surface.queueEvent(() -> {
-            if (!disposed.get()) NativeBridge.setDisplayRate(hertz);
+            if (disposed.get()) return;
+            NativeBridge.setDisplayRate(hertz);
+            NativeBridge.setDisplayRotation(rotation);
         });
     }
 
@@ -321,7 +332,8 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
                 }
                 final boolean biosMissing = "gba".equals(core)
                         && console.gbaBios != ConsoleSettings.BIOS_RAVENCORE && bios == null;
-                String[] coreOptions = CoreOptions.atLoad(core, PlaybackSettings.load(this), console, bios != null);
+                String[] coreOptions = CoreOptions.atLoad(core, PlaybackSettings.load(this), console,
+                        CartridgeSettings.load(this), bios != null);
                 String stateVariant = console.stateVariant(core, bios == null ? null : GbaBiosRepository.digest(bios));
                 if (disposed.get()) return;
                 String nativeDir = getApplicationInfo().nativeLibraryDir;
@@ -631,6 +643,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
     public void onDrawFrame(GL10 gl) {
         long now = System.nanoTime();
         int advanced = NativeBridge.drawFrame(width, height, !gamePaused);
+        rumble.update(rumbleEnabled && NativeBridge.rumbling(), now);
         // What the core asks to show, as RetroArch shows it: briefly over the game.
         final String message = NativeBridge.takeMessage();
         if (message != null) runOnUiThread(() -> {
@@ -692,7 +705,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         settingsLaunching = false;
         if (surface != null) surface.onResume();
         if (displays != null) displays.registerDisplayListener(displayListener, new Handler(Looper.getMainLooper()));
-        sendDisplayRate();
+        sendDisplay();
         // Settings → Interface: size, spacing, style and haptics of the touch
         // controls, and where the player moved them for this orientation.
         if (gameControls != null) {
@@ -707,13 +720,16 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
     private void applyPlaybackSettings() {
         final PlaybackSettings settings = PlaybackSettings.load(this);
         final ConsoleSettings console = ConsoleSettings.load(this);
+        final CartridgeSettings cartridge = CartridgeSettings.load(this);
+        rumbleEnabled = cartridge.rumble;
         if (surface != null) surface.queueEvent(() -> {
             if (disposed.get() || !foreground) return;
             NativeBridge.setPlaybackOptions(settings.audioEnabled, settings.audioVolume,
                     settings.integerScale, settings.brightness, settings.contrast, settings.effectCode());
             // Changed in the settings during the game: the core takes them at
             // its next frame. The console and the BIOS wait for the next launch.
-            if (activeCore != null) NativeBridge.setCoreOptions(CoreOptions.live(activeCore, settings, console));
+            if (activeCore != null)
+                NativeBridge.setCoreOptions(CoreOptions.live(activeCore, settings, console, cartridge));
         });
     }
 
@@ -725,6 +741,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         releaseInput();
         // Wait for the GL/emulator thread to stop before touching session data.
         if (surface != null) surface.onPause();
+        rumble.stop();
         NativeBridge.setAudioEnabled(false);
         try {
             persistBattery();

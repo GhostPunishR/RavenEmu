@@ -67,6 +67,7 @@ if(RAVEN_FRONTEND_TESTS AND NOT ANDROID)
              $<TARGET_FILE:raven_frontend_fake_core_variables>)
     add_executable(raven_frontend_test tests/test_host.c)
     target_link_libraries(raven_frontend_test PRIVATE raven_frontend)
+    target_include_directories(raven_frontend_test PRIVATE ${ravencore_SOURCE_DIR}/libretro/include)
     add_test(NAME raven_frontend_smoke COMMAND raven_frontend_test
              $<TARGET_FILE:raven_frontend_fake_core>)
     add_executable(raven_frontend_real_core_test tests/test_real_cores.c)

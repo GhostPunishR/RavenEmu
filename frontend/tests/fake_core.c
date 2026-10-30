@@ -11,6 +11,11 @@ static retro_input_state_t input_state;
 static int loaded;
 static int red;  /* The "raven_test_color" option, read at load and when it changes. */
 static unsigned frames; /* Since the game loaded: each early frame sends one message. */
+/* Like a tilt cartridge with a rumble motor: it rumbles while the device
+ * tilts right, past half a g along the screen. */
+static struct retro_rumble_interface rumble;
+static struct retro_sensor_interface sensors;
+static int tilt_sensor, rumbling;
 
 /* Messages as a core sends them: plain, then the extended kind, for the log
  * alone (not shown), on screen, at debug level (not shown), and malformed. */
@@ -114,12 +119,33 @@ bool retro_load_game(const struct retro_game_info *game) {
     read_options();
     frames = 0;
     if (loaded) send_message(frames++);
+    rumble.set_rumble_state = NULL;
+    sensors.set_sensor_state = NULL;
+    sensors.get_sensor_input = NULL;
+    rumbling = tilt_sensor = 0;
+    if (loaded && env) {
+        if (!env(RETRO_ENVIRONMENT_GET_RUMBLE_INTERFACE, &rumble)) rumble.set_rumble_state = NULL;
+        if (env(RETRO_ENVIRONMENT_GET_SENSOR_INTERFACE, &sensors) && sensors.set_sensor_state)
+            tilt_sensor = sensors.set_sensor_state(0, RETRO_SENSOR_ACCELEROMETER_ENABLE, 60);
+    }
     return loaded != 0;
 }
-void retro_unload_game(void) { loaded = 0; }
+void retro_unload_game(void) {
+    if (rumbling && rumble.set_rumble_state) rumble.set_rumble_state(0, RETRO_RUMBLE_STRONG, 0);
+    if (tilt_sensor && sensors.set_sensor_state) sensors.set_sensor_state(0, RETRO_SENSOR_ACCELEROMETER_DISABLE, 0);
+    rumbling = tilt_sensor = 0;
+    loaded = 0;
+}
 void retro_run(void) {
     if (!loaded) return;
     send_message(frames++);
+    if (tilt_sensor && sensors.get_sensor_input && rumble.set_rumble_state) {
+        const int tilted = sensors.get_sensor_input(0, RETRO_SENSOR_ACCELEROMETER_X) > 4.9f;
+        if (tilted != rumbling) {
+            rumbling = tilted;
+            rumble.set_rumble_state(0, RETRO_RUMBLE_STRONG, tilted ? 0xffff : 0);
+        }
+    }
     bool updated = false;
     if (env && env(RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE, &updated) && updated) read_options();
     if (input_poll) input_poll();

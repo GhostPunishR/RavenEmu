@@ -268,6 +268,21 @@ static void core_log(enum retro_log_level level, const char *fmt, ...) {
     va_end(args);
 }
 
+static bool host_rumble(unsigned port, enum retro_rumble_effect effect, uint16_t strength) {
+    if (!active || !active->callbacks.rumble) return false;
+    return active->callbacks.rumble(port, (unsigned)effect, strength, active->callbacks.userdata) != 0;
+}
+
+static bool host_sensor_state(unsigned port, enum retro_sensor_action action, unsigned rate) {
+    if (!active || !active->callbacks.sensor_state) return false;
+    return active->callbacks.sensor_state(port, (unsigned)action, rate, active->callbacks.userdata) != 0;
+}
+
+static float host_sensor_input(unsigned port, unsigned id) {
+    if (!active || !active->callbacks.sensor_input) return 0.0f;
+    return active->callbacks.sensor_input(port, id, active->callbacks.userdata);
+}
+
 /* Keep a message as valid UTF-8 of one to three bytes per character: a
  * malformed byte or a 4-byte character becomes '?', and the end never cuts
  * a character in two. */
@@ -300,6 +315,17 @@ static void keep_message(raven_frontend *host, const char *text) {
 static bool environment(unsigned command, void *data) {
     if (!active) return false;
     switch (command) {
+        case RETRO_ENVIRONMENT_GET_RUMBLE_INTERFACE:
+            if (!data || !active->callbacks.rumble) return false;
+            ((struct retro_rumble_interface *)data)->set_rumble_state = host_rumble;
+            return true;
+        case RETRO_ENVIRONMENT_GET_SENSOR_INTERFACE: {
+            if (!data || !active->callbacks.sensor_state || !active->callbacks.sensor_input) return false;
+            struct retro_sensor_interface *sensors = (struct retro_sensor_interface *)data;
+            sensors->set_sensor_state = host_sensor_state;
+            sensors->get_sensor_input = host_sensor_input;
+            return true;
+        }
         case RETRO_ENVIRONMENT_GET_MESSAGE_INTERFACE_VERSION:
             if (!data) return false;
             *(unsigned *)data = 1;

@@ -1,5 +1,6 @@
 package com.ravenemu.app.ui.settings;
 import com.ravenemu.app.data.saves.GbaBiosRepository;
+import com.ravenemu.app.settings.CartridgeSettings;
 import com.ravenemu.app.settings.ConsoleSettings;
 import com.ravenemu.app.settings.ControlLayout;
 import com.ravenemu.app.settings.ControlSettings;
@@ -311,6 +312,49 @@ public final class PlaybackSettingsActivityTest {
         assertEquals(20, slider(activity, "Taille des commandes").getProgress());
         assertNotNull(choice(activity, "Classique (défaut), choisi"));
         assertFalse(PlaybackSettings.load(activity).audioEnabled);
+    }
+
+    @Test public void interfacePageSetsTheCartridgeMotorTheSensorsAndTheSun() {
+        PlaybackSettingsActivity activity = open(PlaybackSettingsActivity.INTERFACE, null).get();
+        assertTrue("Opening the page writes nothing",
+                preferences.getAll().keySet().stream().noneMatch(key -> key.startsWith("cartridge.")));
+        assertTrue(toggle(activity, "Vibration de la cartouche").isChecked());
+        assertTrue(toggle(activity, "Capteurs du téléphone").isChecked());
+        Switch solarAuto = toggle(activity, "Soleil automatique (Boktai)");
+        SeekBar sun = slider(activity, "Soleil (Boktai)");
+        assertTrue(solarAuto.isChecked());
+        assertTrue(solarAuto.isEnabled());
+        assertFalse("The light sensor sets the sun", sun.isEnabled());
+        assertEquals("By tens: 50 %", 5, sun.getProgress());
+        assertEquals(10, sun.getMax());
+
+        toggle(activity, "Vibration de la cartouche").performClick();
+        assertFalse(CartridgeSettings.load(activity).rumble);
+        toggle(activity, "Capteurs du téléphone").performClick();
+        assertFalse("Without the sensors, no automatic sun", solarAuto.isEnabled());
+        assertTrue(sun.isEnabled());
+        ((View)solarAuto.getParent()).performClick();
+        assertTrue("A greyed-out row stays as it is", CartridgeSettings.load(activity).solarAuto);
+        setAsUser(sun, 8);
+        assertNotNull(text(activity, "80 %"));
+        CartridgeSettings saved = CartridgeSettings.load(activity);
+        assertFalse(saved.rumble);
+        assertFalse(saved.sensors);
+        assertTrue(saved.solarAuto);
+        assertEquals(80, saved.solarLevel);
+
+        toggle(activity, "Capteurs du téléphone").performClick();
+        toggle(activity, "Soleil automatique (Boktai)").performClick();
+        assertTrue("The chosen sun, with the sensors on", sun.isEnabled());
+        // As in the beta, resetting the controls leaves the cartridge alone.
+        text(activity, "Réinitialiser les commandes").performClick();
+        CartridgeSettings kept = CartridgeSettings.load(activity);
+        assertFalse(kept.rumble);
+        assertTrue(kept.sensors);
+        assertFalse(kept.solarAuto);
+        assertEquals(80, kept.solarLevel);
+        assertEquals(8, slider(activity, "Soleil (Boktai)").getProgress());
+        assertTrue(slider(activity, "Soleil (Boktai)").isEnabled());
     }
 
     @Test public void recreationKeepsVideoPageAndScrollWithoutOverwritingStoredValues() {

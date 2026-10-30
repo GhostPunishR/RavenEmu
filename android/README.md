@@ -208,7 +208,7 @@ au frontend C avant le chargement du jeu ; au retour des paramètres,
 `setCoreOptions` les change sur le fil GL et le core les applique à l'image
 suivante, sans rouvrir le jeu. Ni la SRAM ni les états ne changent de format.
 Le filtre « DMG vert » de la bêta n'a pas d'équivalent exact ; les options
-de cartouche et les capteurs restent à porter.
+de cartouche (type de sauvegarde, RTC) restent à porter.
 
 ## Image calée sur l'écran et son sans craquement
 
@@ -254,8 +254,19 @@ les places d'origine. Le portrait et le paysage ont chacun la leur
 (`ControlLayout`), chaque commande reste entière dans sa zone (sous l'image en
 portrait, toute la zone de jeu en paysage). La réinitialisation des commandes
 remet aussi les places. Le retour arrière et l'avance rapide ne sont pas portés,
-au choix du propriétaire ; la vibration et les capteurs de la cartouche et les
-skins Delta restent à porter.
+au choix du propriétaire ; les skins Delta restent à porter.
+
+## Vibration et capteurs de la cartouche
+
+**Paramètres → Interface** reprend la bêta : **Vibration de la cartouche**
+(Drill Dozer, WarioWare: Twisted!, cartouches Game Boy Rumble) et le groupe
+**Capteurs de la cartouche** (capteurs du téléphone, soleil automatique et
+niveau de soleil de Boktai). Le pilote C `hardware/input/sensor_driver.c`
+lit par le NDK l'accéléromètre, le gyroscope et la lumière que le core
+demande, dans le sens de l'écran ; ils s'éteignent pendant la pause. La
+vibration suit le moteur de la cartouche par impulsions de 40 ms, comme la
+bêta (`CartridgeRumble`), et s'arrête en quittant le jeu. Le ressenti et le
+sens des inclinaisons restent à vérifier sur téléphone.
 
 ## Console
 

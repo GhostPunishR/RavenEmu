@@ -23,7 +23,7 @@ static int check_core(const char *path, int categorized, int labelled) {
     CHECK(host != NULL);
     CHECK(raven_frontend_option_count(host) == 0);
     CHECK(raven_frontend_open_core(host, path, ".", "."));
-    raven_frontend_callbacks callbacks = {video, NULL, NULL, NULL};
+    raven_frontend_callbacks callbacks = {.video = video};
     raven_frontend_set_callbacks(host, &callbacks);
 
     // The declaration, as the core gave it.

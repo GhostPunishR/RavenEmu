@@ -611,3 +611,46 @@ comportement des écrans à fréquence variable restent à vérifier sur télép
   au lieu d'aucune au plus proche ; chaque colonne de la grille atténue une
   couleur différente, et les lignes alternent), Java (préférence, page
   Vidéo, passage au pilote).
+
+## Tranche D : vibration et capteurs de la cartouche
+
+- **Frontend C** : `raven_frontend_callbacks` gagne trois rappels facultatifs,
+  `rumble`, `sensor_state` et `sensor_input`. L'hôte ne répond à
+  `GET_RUMBLE_INTERFACE` et `GET_SENSOR_INTERFACE` que si la plateforme les
+  fournit ; un frontend sans vibreur ni capteurs reste valide.
+- **Pilote de capteurs** (`hardware/input/sensor_driver.c`, code RavenEmu,
+  NDK `ASensorManager`) : accéléromètre, gyroscope et capteur de lumière, mis
+  en marche seulement à la demande du core, sur le fil GL qui les lit (file
+  d'événements sur son `ALooper`, vidée une fois par image émulée, sans
+  regroupement). L'accélération et la rotation suivent l'écran tel qu'il est
+  tourné, comme `CartridgeSensors` de la bêta (`setDisplayRotation`, demi-tour
+  compris). Un capteur absent est refusé : RavenCore affiche alors son message
+  (« pas de capteur de lumière, soleil à 50 % »). Le menu de pause les éteint,
+  pour la batterie ; la fermeture du jeu libère la file.
+- **Vibration** (`CartridgeRumble.java`, logique de la bêta) : le core signale
+  le moteur allumé ou éteint ; après chaque image dessinée, un moteur allumé
+  prolonge une impulsion de 40 ms (au plus une par image à 60 Hz), un moteur
+  éteint laisse finir la sienne, et quitter le jeu l'arrête aussitôt. Jamais
+  pendant une pause. Permission `VIBRATE`, comme la bêta.
+- **Paramètres → Interface** reprend les textes et valeurs par défaut de la
+  bêta (`CartridgeSettings`) : **Vibration de la cartouche** (activée),
+  groupe **Capteurs de la cartouche** avec **Capteurs du téléphone** (activés),
+  **Soleil automatique (Boktai)** (activé, grisé sans les capteurs) et
+  **Soleil (Boktai)** par dizaines (50 %, grisé quand le capteur de lumière
+  règle le soleil). `CoreOptions` les traduit en `ravenemu_*_device_sensors`
+  et `ravenemu_gba_solar_light` (`sensor` ou le niveau), changés en partie
+  sans rouvrir le jeu. « Réinitialiser les commandes » n'y touche pas, comme
+  dans la bêta.
+- Tests : faux core (interfaces demandées, capteur activé à 60 Hz, moteur
+  allumé puis éteint selon l'accéléromètre, arrêt et extinction au
+  déchargement) ; `raven_native_sensors` sur un faux NDK (file créée sur le
+  looper du fil, période et absence de regroupement, quatre rotations,
+  capteur absent ou refusé, pause, plafond de 1 kHz, fermeture et nouvelle
+  file) ; Java (`CartridgeSettingsTest`, `CoreOptionsTest`,
+  `CartridgeRumbleTest`, page Interface, vibration selon le réglage et la
+  pause, rotation transmise).
+
+Écarts restants : le sens des inclinaisons, la sensibilité du gyroscope, le
+seuil de lumière de Boktai et le ressenti de la vibration restent à vérifier
+sur téléphone, avec les jeux concernés. Les manettes ne vibrent pas encore et
+leurs capteurs ne sont pas lus : seuls ceux du téléphone servent.

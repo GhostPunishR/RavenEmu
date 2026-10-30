@@ -41,6 +41,10 @@ public final class NativeBridge {
     public static native int drawFrame(int surfaceWidth, int surfaceHeight, boolean allowAdvance);
     /** GL thread: the display's refresh rate, on start and whenever it changes. */
     public static native void setDisplayRate(float hertz);
+    /** GL thread: Display.getRotation(), so the tilt follows the screen as shown. */
+    public static native void setDisplayRotation(int rotation);
+    /** GL thread, after drawFrame: the cartridge's motor runs; never while paused. */
+    public static native boolean rumbling();
     /** GL thread: the open game's frame rate, 0 without one. */
     public static native double frameRate();
     /** GL thread: the core's latest message to show (a missing BIOS, a refused

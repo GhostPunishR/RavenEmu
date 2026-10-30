@@ -79,7 +79,7 @@ static unsigned char rom[32 * 1024];
 /* The palette chosen before loading, then changed during the game. */
 static int check_gb_palette(raven_frontend *host) {
     make_rom(rom, sizeof(rom));
-    raven_frontend_callbacks callbacks = {video, NULL, NULL, NULL};
+    raven_frontend_callbacks callbacks = {.video = video};
     raven_frontend_set_callbacks(host, &callbacks);
     CHECK(raven_frontend_set_option(host, "ravenemu_gb_palette", "gray"));
     CHECK(raven_frontend_load_rom(host, rom, sizeof(rom), "raventest.gb"));
@@ -100,7 +100,7 @@ static int check_gb_palette(raven_frontend *host) {
  * colors changed again during the game. */
 static int check_gb_in_color(raven_frontend *host) {
     make_rom(rom, sizeof(rom));
-    raven_frontend_callbacks callbacks = {video, NULL, NULL, NULL};
+    raven_frontend_callbacks callbacks = {.video = video};
     raven_frontend_set_callbacks(host, &callbacks);
     CHECK(raven_frontend_set_option(host, "ravenemu_gbc_hardware", "gba"));
     CHECK(raven_frontend_set_option(host, "ravenemu_gbc_dmg_colors", "grayscale"));

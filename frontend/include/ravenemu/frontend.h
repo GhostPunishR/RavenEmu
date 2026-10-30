@@ -26,6 +26,15 @@ typedef struct raven_frontend_callbacks {
     int16_t (*input)(unsigned port, unsigned device, unsigned index,
                      unsigned id, void *userdata);
     void *userdata;
+    /* Optional, NULL when the platform has none: the core then learns, when
+     * it asks, that there is no rumble or no sensor. Same thread as the core.
+     * rumble: retro_rumble_effect and its 0..65535 strength. sensor_state:
+     * a retro_sensor_action at `rate` Hz, nonzero when the device has the
+     * sensor. sensor_input: a RETRO_SENSOR_* reading, accelerometer in m/s²
+     * along the screen as shown, gyroscope in rad/s, illuminance in lux. */
+    int (*rumble)(unsigned port, unsigned effect, uint16_t strength, void *userdata);
+    int (*sensor_state)(unsigned port, unsigned action, unsigned rate, void *userdata);
+    float (*sensor_input)(unsigned port, unsigned id, void *userdata);
 } raven_frontend_callbacks;
 
 typedef struct raven_core_info {

@@ -5,6 +5,7 @@ import com.ravenemu.app.data.saves.GbaBiosRepository;
 import com.ravenemu.app.data.saves.SaveRepository;
 import com.ravenemu.app.data.saves.StatePreview;
 import com.ravenemu.app.data.saves.StateSlotRepository;
+import com.ravenemu.app.settings.CartridgeSettings;
 import com.ravenemu.app.settings.ConsoleSettings;
 import com.ravenemu.app.settings.ControlLayout;
 import com.ravenemu.app.settings.PlaybackSettings;
@@ -45,6 +46,7 @@ import org.robolectric.shadow.api.Shadow;
 import org.robolectric.shadows.ShadowDialog;
 import org.robolectric.shadows.ShadowGLSurfaceView;
 import org.robolectric.shadows.ShadowToast;
+import org.robolectric.shadows.ShadowVibrator;
 import org.robolectric.util.ReflectionHelpers;
 import static org.junit.Assert.*;
 import static org.robolectric.Shadows.shadowOf;
@@ -132,14 +134,14 @@ public final class PlayerActivityTest {
         PlayerActivity activity = controller.get();
         activity.onWindowFocusChanged(true); pump(activity);
         assertEquals(1, FakeNative.opens);
-        assertArrayEquals(new String[]{"ravenemu_gb_palette", "pocket", "ravenemu_gb_frame_blending", "mix"},
-                FakeNative.openOptions);
+        assertArrayEquals(new String[]{"ravenemu_gb_palette", "pocket", "ravenemu_gb_frame_blending", "mix",
+                "ravenemu_gb_device_sensors", "enabled"}, FakeNative.openOptions);
         controller.pause();
         PlaybackSettings.load(activity).withImage(PlaybackSettings.PALETTE_GRAY, false, false,
                 PlaybackSettings.BLENDING_GHOSTING).save(activity);
         controller.resume(); activity.onWindowFocusChanged(true); pump(activity);
-        assertArrayEquals(new String[]{"ravenemu_gb_palette", "gray", "ravenemu_gb_frame_blending", "ghosting"},
-                FakeNative.liveOptions);
+        assertArrayEquals(new String[]{"ravenemu_gb_palette", "gray", "ravenemu_gb_frame_blending", "ghosting",
+                "ravenemu_gb_device_sensors", "enabled"}, FakeNative.liveOptions);
         assertEquals("Changing an image option must not reopen the game", 1, FakeNative.opens);
     }
 
@@ -259,7 +261,7 @@ public final class PlayerActivityTest {
         assertEquals("gbc", FakeNative.openCore);
         assertArrayEquals(new String[]{"ravenemu_gbc_color_correction", "disabled",
                 "ravenemu_gbc_frame_blending", "disabled", "ravenemu_gbc_dmg_colors", "a_up",
-                "ravenemu_gbc_hardware", "gba"}, FakeNative.openOptions);
+                "ravenemu_gbc_device_sensors", "enabled", "ravenemu_gbc_hardware", "gba"}, FakeNative.openOptions);
         assertEquals("A state taken on the GBC of a GBA only reloads there",
                 COMPATIBILITY + "|gbc-on-gba", ReflectionHelpers.getField(activity, "stateCompatibility"));
         controller.pause();
@@ -267,7 +269,8 @@ public final class PlayerActivityTest {
         controller.resume(); activity.onWindowFocusChanged(true); pump(activity);
         assertArrayEquals("The colors change at once; the console waits for the next launch",
                 new String[]{"ravenemu_gbc_color_correction", "disabled", "ravenemu_gbc_frame_blending", "disabled",
-                        "ravenemu_gbc_dmg_colors", "left"}, FakeNative.liveOptions);
+                        "ravenemu_gbc_dmg_colors", "left", "ravenemu_gbc_device_sensors", "enabled"},
+                FakeNative.liveOptions);
         assertEquals(COMPATIBILITY + "|gbc-on-gba", ReflectionHelpers.getField(activity, "stateCompatibility"));
         assertEquals(1, FakeNative.opens);
     }
@@ -277,8 +280,7 @@ public final class PlayerActivityTest {
         new ConsoleSettings(false, 0, false, ConsoleSettings.BIOS_REAL).save(RuntimeEnvironment.getApplication());
         PlayerActivity missing = loaded();
         assertEquals("gba", FakeNative.openCore);
-        assertEquals("ravenemu_gba_bios", FakeNative.openOptions[4]);
-        assertEquals("disabled", FakeNative.openOptions[5]);
+        assertEquals("disabled", option(FakeNative.openOptions, "ravenemu_gba_bios"));
         assertEquals(COMPATIBILITY, ReflectionHelpers.getField(missing, "stateCompatibility"));
         assertTrue(ShadowToast.getTextOfLatestToast().startsWith("Vrai BIOS GBA absent"));
 
@@ -288,10 +290,62 @@ public final class PlayerActivityTest {
         GbaBiosRepository.install(files, new ByteArrayInputStream(bios));
         ShadowToast.reset();
         PlayerActivity installed = loaded();
-        assertEquals("enabled", FakeNative.openOptions[5]);
+        assertEquals("enabled", option(FakeNative.openOptions, "ravenemu_gba_bios"));
         assertEquals(COMPATIBILITY + "|gba-bios-" + GbaBiosRepository.digest(bios),
                 ReflectionHelpers.getField(installed, "stateCompatibility"));
         assertNull(ShadowToast.getLatestToast());
+    }
+
+    @Test public void theCartridgeMotorVibratesOnlyWhileTheGameRunsAndTheSettingAllowsIt() throws Exception {
+        ActivityController<PlayerActivity> controller = open(null);
+        PlayerActivity activity = controller.get();
+        activity.onWindowFocusChanged(true); pump(activity);
+        ShadowVibrator vibrator = shadowOf(activity.getSystemService(android.os.VibratorManager.class)
+                .getDefaultVibrator());
+        ShadowVibrator.reset();
+        activity.onDrawFrame(null);
+        assertFalse("A motor at rest leaves the phone alone", vibrator.isVibrating());
+        FakeNative.rumbling = true;
+        activity.onDrawFrame(null);
+        assertTrue(vibrator.isVibrating());
+        // Leaving stops the vibrator at once.
+        controller.pause();
+        assertTrue(vibrator.isCancelled());
+        // Settings → Interface turns it off: the game's motor is ignored.
+        new CartridgeSettings(false, true, true, 50).save(activity);
+        ShadowVibrator.reset();
+        controller.resume(); activity.onWindowFocusChanged(true); pump(activity);
+        activity.onDrawFrame(null);
+        assertFalse(vibrator.isVibrating());
+        assertEquals("The sensors reach the core all the same", "enabled",
+                option(FakeNative.liveOptions, "ravenemu_gb_device_sensors"));
+        // On again, but the menu pauses the game: no vibration either.
+        new CartridgeSettings(true, false, true, 50).save(activity);
+        controller.pause(); controller.resume(); activity.onWindowFocusChanged(true); pump(activity);
+        assertEquals("disabled", option(FakeNative.liveOptions, "ravenemu_gb_device_sensors"));
+        openMenu(activity);
+        ShadowVibrator.reset();
+        activity.onDrawFrame(null);
+        assertFalse(vibrator.isVibrating());
+    }
+
+    @Test public void theTiltFollowsTheScreenAsItTurns() throws Exception {
+        PlayerActivity activity = loaded();
+        android.view.Display display = activity.getDisplay();
+        assertEquals(display.getRotation(), FakeNative.rotation);
+        // A half turn keeps the activity: only the display says so.
+        shadowOf(display).setRotation(android.view.Surface.ROTATION_270);
+        android.hardware.display.DisplayManager.DisplayListener listener =
+                ReflectionHelpers.getField(activity, "displayListener");
+        listener.onDisplayChanged(android.view.Display.DEFAULT_DISPLAY);
+        pump(activity);
+        assertEquals(android.view.Surface.ROTATION_270, FakeNative.rotation);
+    }
+
+    /** The value given to `key`, or null without it; keys and values alternate. */
+    private static String option(String[] options, String key) {
+        for (int i = 0; i + 1 < options.length; i += 2) if (options[i].equals(key)) return options[i + 1];
+        return null;
     }
 
     @Test public void delayedPlaybackPreferenceCommandCannotRunAfterPauseOrDestruction() throws Exception {
@@ -718,7 +772,8 @@ public final class PlayerActivityTest {
         static float displayRate;
         static double fps;
         static String message;
-        static int buttons;
+        static int buttons, rotation;
+        static boolean rumbling;
         static void reset() {
             state = new byte[]{1, 2}; battery = new byte[]{3, 4};
             preview = new int[]{2, 1, 0xffff0000, 0xff00ff00};
@@ -732,6 +787,8 @@ public final class PlayerActivityTest {
             fps = 59.727500569606;
             message = null;
             buttons = 0;
+            rotation = -1;
+            rumbling = false;
         }
         private static void requireGl() { assertTrue("Core operation must use the queued GL boundary", QueuedGl.executing); }
         @Implementation protected static void __staticInitializer__() {}
@@ -742,6 +799,9 @@ public final class PlayerActivityTest {
             openCore = system; openOptions = coreOptions.clone(); return null;
         }
         @Implementation protected static void setDisplayRate(float hertz) { requireGl(); displayRate = hertz; }
+        @Implementation protected static void setDisplayRotation(int value) { requireGl(); rotation = value; }
+        /** As the bridge: a paused or closed game never vibrates. */
+        @Implementation protected static boolean rumbling() { return rumbling && !paused && !closed; }
         @Implementation protected static String takeMessage() {
             String taken = message; message = null; return taken;
         }
