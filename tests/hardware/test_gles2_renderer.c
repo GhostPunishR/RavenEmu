@@ -65,7 +65,10 @@ void glTexSubImage2D(GLenum target, GLint level, GLint xoffset, GLint yoffset, G
 void glActiveTexture(GLenum texture) { UNUSED(texture); }
 void glBindTexture(GLenum target, GLuint texture) { UNUSED(target); UNUSED(texture); }
 GLenum glGetError(void) { GLenum error = error_code; error_code = GL_NO_ERROR; return error; }
-void glClearColor(GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha) { UNUSED(red); UNUSED(green); UNUSED(blue); UNUSED(alpha); }
+static GLfloat clear_color[4] = {-1.f, -1.f, -1.f, -1.f};
+void glClearColor(GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha) {
+    clear_color[0] = red; clear_color[1] = green; clear_color[2] = blue; clear_color[3] = alpha;
+}
 void glClear(GLbitfield mask) { UNUSED(mask); clear_calls++; }
 void glViewport(GLint x, GLint y, GLsizei width, GLsizei height) { viewport[0]=x; viewport[1]=y; viewport[2]=width; viewport[3]=height; }
 void glUseProgram(GLuint program) { UNUSED(program); }
@@ -112,7 +115,9 @@ static int allocation_updates_and_duplicate(void) {
     CHECK(image_calls == 1 && sub_calls == 0 && draw_calls == 1);
     CHECK(unpack_alignment == 4 && mag_filter == GL_NEAREST && min_filter == GL_NEAREST);
     CHECK(wrap_s == GL_CLAMP_TO_EDGE && wrap_t == GL_CLAMP_TO_EDGE);
-    CHECK(viewport[0] == 0 && viewport[1] == 100 && viewport[2] == 600 && viewport[3] == 400);
+    /* Black around the picture, which sits at the top, as in the beta. */
+    CHECK(clear_color[0] == 0.f && clear_color[1] == 0.f && clear_color[2] == 0.f && clear_color[3] == 1.f);
+    CHECK(viewport[0] == 0 && viewport[1] == 200 && viewport[2] == 600 && viewport[3] == 400);
     CHECK(uv[0] == 0.f && uv[1] == 1.f && uv[4] == 0.f && uv[5] == 0.f);
     raven_video_draw(rgba, 240, 160, 1, 600, 600);
     CHECK(image_calls == 1 && sub_calls == 1 && draw_calls == 2);
@@ -126,7 +131,7 @@ static int resize_and_context_lifecycle(void) {
     raven_video_draw(rgba, 240, 160, 1, 600, 600);
     raven_video_draw(rgba, 160, 144, 0, 320, 480);
     CHECK(image_calls == 2 && sub_calls == 0);
-    CHECK(viewport[0] == 0 && viewport[1] == 96 && viewport[2] == 320 && viewport[3] == 288);
+    CHECK(viewport[0] == 0 && viewport[1] == 192 && viewport[2] == 320 && viewport[3] == 288);
     raven_video_reset();
     CHECK(delete_texture_calls == 0);
     raven_video_draw(rgba, 160, 144, 0, 320, 480);
@@ -188,7 +193,7 @@ static int viewport_extremes_do_not_overflow(void) {
     CHECK(viewport[0] == (INT_MAX - 1) / 2 && viewport[1] == 0);
     CHECK(viewport[2] == 1 && viewport[3] == 1);
     raven_video_draw(rgba, 160, 144, 0, 1, INT_MAX);
-    CHECK(viewport[0] == 0 && viewport[1] == (INT_MAX - 1) / 2);
+    CHECK(viewport[0] == 0 && viewport[1] == INT_MAX - 1);
     CHECK(viewport[2] == 1 && viewport[3] == 1);
     return 0;
 }
@@ -201,12 +206,12 @@ static int persistent_options_use_uniforms_and_integer_viewports(void) {
     raven_video_set_options(1, 20, 75);
     CHECK(uniform_calls == 2); // Setter is safe before a GL context is current.
     raven_video_draw(rgba, 240, 160, 0, 600, 600);
-    CHECK(viewport[0] == 60 && viewport[1] == 140 && viewport[2] == 480 && viewport[3] == 320);
+    CHECK(viewport[0] == 60 && viewport[1] == 280 && viewport[2] == 480 && viewport[3] == 320);
     CHECK(brightness_value == 20.f && contrast_value == 75.f);
     CHECK(image_calls == 1 && sub_calls == 0 && draw_calls == 2);
     // Below native size, integer scale falls back to fitting rather than crop.
     raven_video_draw(rgba, 240, 160, 0, 120, 100);
-    CHECK(viewport[0] == 0 && viewport[1] == 10 && viewport[2] == 120 && viewport[3] == 80);
+    CHECK(viewport[0] == 0 && viewport[1] == 20 && viewport[2] == 120 && viewport[3] == 80);
     raven_video_reset();
     raven_video_init_gl();
     raven_video_draw(rgba, 240, 160, 0, 600, 600);

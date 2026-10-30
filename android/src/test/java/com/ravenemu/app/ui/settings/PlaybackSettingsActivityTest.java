@@ -226,6 +226,43 @@ public final class PlaybackSettingsActivityTest {
         assertNotNull(text(activity, "Choisir le fichier du BIOS"));
     }
 
+    @Test public void theCategoriesAreTheBetasInItsOrderAndEachOpensItsPage() {
+        PlaybackSettingsActivity activity = open(null, null).get();
+        String[] categories = {"général", "audio", "vidéo", "console", "interface", "à propos"};
+        int previous = -1;
+        for (String category : categories) {
+            View row = described(activity, "Ouvrir les réglages " + category);
+            int top = row.getTop();
+            assertTrue(category + " comes after the one before", top > previous);
+            previous = top;
+        }
+        assertNull("No placeholder text", find(activity, view -> view instanceof TextView
+                && ((TextView)view).getText().toString().contains("seront activés")));
+        described(activity, "Ouvrir les réglages général").performClick();
+        assertNotNull(text(activity, "Général"));
+        assertNotNull(text(activity, "Pause automatique"));
+        activity.onBackPressed();
+        described(activity, "Ouvrir les réglages à propos").performClick();
+        assertNotNull(text(activity, "À propos"));
+    }
+
+    @Test public void aboutOpensTheLicencesInTheAppAndTheSourcesOnline() {
+        PlaybackSettingsActivity activity = open(PlaybackSettingsActivity.ABOUT, null).get();
+        find(activity, view -> view.getContentDescription() != null
+                && view.getContentDescription().toString().startsWith("Licences et crédits.")).performClick();
+        Intent licences = shadowOf(activity).getNextStartedActivity();
+        assertEquals(LicensesActivity.class.getName(), licences.getComponent().getClassName());
+        find(activity, view -> view.getContentDescription() != null
+                && view.getContentDescription().toString().startsWith("RavenCore.")).performClick();
+        Intent source = shadowOf(activity).getNextStartedActivity();
+        assertEquals(Intent.ACTION_VIEW, source.getAction());
+        assertEquals("https://github.com/GhostPunishR/RavenCore", source.getDataString());
+        find(activity, view -> view.getContentDescription() != null
+                && view.getContentDescription().toString().startsWith("Politique de confidentialité.")).performClick();
+        assertEquals("https://github.com/GhostPunishR/RavenEmu/blob/main/PRIVACY.md",
+                shadowOf(activity).getNextStartedActivity().getDataString());
+    }
+
     @Test public void interfacePageSetsTheTouchControlsAndResetsThem() {
         new PlaybackSettings(false, 23, false, 0, 100).save(RuntimeEnvironment.getApplication());
         PlaybackSettingsActivity home = open(null, null).get();

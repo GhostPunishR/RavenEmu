@@ -35,6 +35,8 @@
  * modules keep their existing licenses; this is not the RetroArch frontend.
  * RavenEmu additions, 2026-10-29: integer-size viewport and shader-only
  * brightness/contrast controls; no new upstream source is imported.
+ * RavenEmu additions, 2026-10-30: black background, and the picture at the
+ * top of the surface, centered across it, as the beta's player shows it.
  */
 
 #include "gles2_renderer.h"
@@ -171,7 +173,7 @@ static void allocate_texture(unsigned width, unsigned height, const uint8_t *rgb
 void raven_video_draw(const uint8_t *rgba, unsigned width, unsigned height,
                       int dirty, int surface_width, int surface_height) {
     if (dirty) upload_pending = 1;
-    glClearColor(0.05f, 0.06f, 0.08f, 1.0f);
+    glClearColor(0.f, 0.f, 0.f, 1.f);
     glClear(GL_COLOR_BUFFER_BIT);
     if (!rgba || !width || !height || width > MAX_EDGE || height > MAX_EDGE ||
             surface_width <= 0 || surface_height <= 0) return;
@@ -209,7 +211,9 @@ void raven_video_draw(const uint8_t *rgba, unsigned width, unsigned height,
     }
     if (w < 1) w = 1;
     if (h < 1) h = 1;
-    glViewport((surface_width - w) / 2, (surface_height - h) / 2, w, h);
+    /* The beta pins the picture to the top: the free space stays below it,
+     * next to the touch controls. GL counts rows from the bottom. */
+    glViewport((surface_width - w) / 2, surface_height - h, w, h);
     const GLfloat vertex[] = {-1.f,-1.f, 1.f,-1.f, -1.f,1.f, 1.f,1.f};
     const GLfloat coords[] = {0.f,1.f, 1.f,1.f, 0.f,0.f, 1.f,0.f};
     const GLfloat identity[] = {1.f,0.f,0.f,0.f, 0.f,1.f,0.f,0.f,

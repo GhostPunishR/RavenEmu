@@ -127,12 +127,14 @@ class VideoPixelsTest(unittest.TestCase):
         self.options(1, 0, 100)
         self.reset()
         output = self.render(source, 2, 1, 7, 7)
-        row = output[3 * 7 * 4:4 * 7 * 4]
+        # The 6x3 picture sits at the top: rows 4 to 6, GL counting from the bottom.
+        row = output[5 * 7 * 4:6 * 7 * 4]
         self.assertEqual([255, 0, 0, 255] * 3 + [0, 255, 0, 255] * 3, row[:24])
         self.assertLess(max(row[24:27]), 25)  # Last column is outside the 6x3 viewport.
         self.options(0, 0, 100)
         output = self.render(source, 2, 1, 7, 7, 0)
-        self.assertEqual([0, 255, 0, 255], output[(3 * 7 + 6) * 4:(3 * 7 + 7) * 4])
+        self.assertEqual([0, 255, 0, 255], output[(5 * 7 + 6) * 4:(5 * 7 + 7) * 4])
+        self.assertEqual([0, 0, 0, 255], output[:4], "Black below the picture")
         self.options(1, 0, 100)
         self.assertIn(self.render(source, 2, 1, 1, 1, 0),
                       ([255, 0, 0, 255], [0, 255, 0, 255]))

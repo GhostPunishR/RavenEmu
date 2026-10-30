@@ -280,12 +280,12 @@ public final class PlayerMenuSheetTest {
     @Test public void settingsKeepThePanelOpenAndAreBlockedDuringSlotOperations() {
         open(0);
         sheet.render(empty(), false);
-        text("Paramètres audio et vidéo").performClick();
+        text("Paramètres").performClick();
         assertEquals(java.util.Collections.singletonList("settings"), actions);
         assertTrue(sheet.isShowing());
         sheet.render(empty(), true);
-        assertFalse(text("Paramètres audio et vidéo").isEnabled());
-        text("Paramètres audio et vidéo").performClick();
+        assertFalse(text("Paramètres").isEnabled());
+        text("Paramètres").performClick();
         assertEquals(1, actions.size());
     }
 

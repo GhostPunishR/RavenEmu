@@ -161,7 +161,7 @@ final class PlayerMenuSheet {
             if (!busy && dialog.isShowing()) listener.onMoveControls();
         });
         add(content, move, 12);
-        settings = button("Paramètres audio et vidéo", 14);
+        settings = button("Paramètres", 14);
         settings.setOnClickListener(view -> {
             if (!busy && dialog.isShowing()) listener.onSettings();
         });

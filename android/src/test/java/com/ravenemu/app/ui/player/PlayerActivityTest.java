@@ -104,8 +104,8 @@ public final class PlayerActivityTest {
         assertEquals(-12, FakeNative.appliedSettings.brightness);
         assertEquals(130, FakeNative.appliedSettings.contrast);
         openMenu(activity);
-        menuButton("Paramètres audio et vidéo").performClick();
-        menuButton("Paramètres audio et vidéo").performClick();
+        menuButton("Paramètres").performClick();
+        menuButton("Paramètres").performClick();
         Intent intent = shadowOf(activity).getNextStartedActivity();
         assertEquals(PlaybackSettingsActivity.class.getName(), intent.getComponent().getClassName());
         assertNull("A repeated tap must not stack settings activities", shadowOf(activity).getNextStartedActivity());

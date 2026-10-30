@@ -4,11 +4,9 @@ import com.ravenemu.app.data.library.RomLibrary;
 import com.ravenemu.app.platform.SystemBarInsets;
 import com.ravenemu.app.ui.common.GameDetailsSheet;
 import com.ravenemu.app.ui.player.PlayerActivity;
-import com.ravenemu.app.ui.settings.LicensesActivity;
 import com.ravenemu.app.ui.settings.PlaybackSettingsActivity;
 
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.content.Intent;
 import android.database.Cursor;
 import android.graphics.Color;
@@ -408,32 +406,9 @@ public final class HomeActivity extends Activity {
         return button;
     }
 
+    /** The real settings page, on its categories, as in the beta. */
     private void showSettings() {
-        new AlertDialog.Builder(this)
-                .setTitle("Paramètres")
-                .setItems(new String[]{"Général", "Audio", "Vidéo", "Console",
-                        "Interface", "À propos"}, (dialog, index) -> {
-                    String[] sections = {"Général", "Audio", "Vidéo", "Console",
-                            "Interface", "À propos"};
-                    if (index == 1 || index == 2) {
-                        startActivity(new Intent(this, PlaybackSettingsActivity.class)
-                                .putExtra(PlaybackSettingsActivity.EXTRA_PAGE,
-                                        index == 1 ? PlaybackSettingsActivity.AUDIO : PlaybackSettingsActivity.VIDEO));
-                        return;
-                    }
-                    AlertDialog.Builder section = new AlertDialog.Builder(this)
-                        .setTitle(sections[index])
-                        .setMessage(index == 5
-                          ? "RavenEmu By GhostPunishR\nVersion native expérimentale Java / C / C++"
-                          : "Les paramètres de cette section seront activés après leur "
-                              + "raccordement aux pilotes natifs. "
-                              + "Aucune préférence incompatible n'est enregistrée.")
-                        .setPositiveButton("Retour", null);
-                    if (index == 5) section.setNeutralButton("Licences et crédits", (about, button) ->
-                            startActivity(new Intent(this, LicensesActivity.class)));
-                    section.show();
-                })
-                .setNegativeButton("Fermer", null).show();
+        startActivity(new Intent(this, PlaybackSettingsActivity.class));
     }
 
     private void pickRom() {

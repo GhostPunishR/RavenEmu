@@ -508,3 +508,31 @@ pas des oublis ; la page Interface ne les annonce pas.
 Écarts restants : en portrait, les commandes ne montent pas sur l'image ; la
 validation sur téléphone (précision du glissement, encoches, gestes de
 navigation près des bords) reste nécessaire.
+
+## Retours de capture : paramètres et écran de jeu
+
+Corrections demandées par le propriétaire d'après une capture sur téléphone.
+
+- **Paramètres en double** : le bouton ⚙ de la bibliothèque ouvrait une
+  liste flottante (Général, Audio, Vidéo, Console, Interface, À propos) dont
+  quatre entrées n'affichaient qu'un texte d'attente, puis la vraie page avec
+  ses propres catégories. Il ouvre désormais directement la vraie page, sur
+  ses catégories dans l'ordre de la bêta. **Général** reprend la page de la
+  bêta (pause automatique ; câble link, jaquettes en ligne et diagnostic
+  attendent leur portage, comme la bêta les masque sans eux). **À propos**
+  donne l'auteur, ouvre les licences et crédits dans l'application et le code
+  source de RavenEmu et RavenCore. Le bouton du menu de jeu devient
+  « Paramètres ».
+- **Écran de jeu** aligné sur le lecteur de la bêta : fond noir, image calée en
+  haut de sa zone et centrée en largeur (le reste de l'espace va vers les
+  commandes), titre centré verticalement dans la barre, plus de ligne d'état
+  sous la barre (elle débordait sur deux lignes). Les erreurs apparaissent en
+  message bref ; les opérations d'emplacements restent annoncées dans le menu.
+- Tests : pilote GLES2 (fond noir, place de l'image, aussi au pixel par EGL en
+  local), bibliothèque sans liste flottante, ordre des catégories et absence
+  de texte d'attente, pages Général et À propos, menu de jeu.
+
+Écarts restants : les conditions d'utilisation et la politique de
+confidentialité s'ouvrent en ligne (dépôt GitHub), pas encore dans le lecteur
+intégré de l'application ; RetroAchievements n'a pas encore sa catégorie. La
+validation sur téléphone reste nécessaire.

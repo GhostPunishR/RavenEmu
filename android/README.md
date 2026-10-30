@@ -315,9 +315,11 @@ une partie restent à prendre en charge ; la fréquence est lue au chargement.
 
 ## Réglages audio et vidéo persistants
 
-La bibliothèque ouvre les pages **Audio** et **Vidéo** depuis Paramètres.
-Le menu de pause propose aussi **Paramètres audio et vidéo** ; le retour au
-lecteur conserve la pause du panneau jusqu'à « Reprendre le jeu ».
+Le bouton ⚙ de la bibliothèque ouvre directement la page Paramètres, sur ses
+catégories dans l'ordre de la bêta : **Général**, **Audio**, **Vidéo**,
+**Console**, **Interface** et **À propos**, sans menu flottant intermédiaire.
+Le menu de pause propose aussi **Paramètres** ; le retour au lecteur conserve
+la pause du panneau jusqu'à « Reprendre le jeu ».
 Les pages Java reprennent la barre, les groupes, libellés et couleurs de la
 bêta pour les cinq réglages raccordés :
 

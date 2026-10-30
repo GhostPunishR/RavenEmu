@@ -46,11 +46,10 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
     private final ExecutorService io = STORAGE_IO;
     private final AtomicBoolean disposed = new AtomicBoolean(false);
     private GLSurfaceView surface;
-    private TextView status;
     private TextView gameTitle;
     private int width = 1, height = 1, buttons, touchButtons;
     private GameControlsView gameControls;
-    /** Shown instead of the status line while the controls are moved. */
+    /** Shown under the bar while the controls are moved. */
     private LinearLayout editBar;
     private boolean editingLandscape;
     private long nextBatterySaveNanos;
@@ -135,6 +134,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         gameTitle.setEllipsize(android.text.TextUtils.TruncateAt.END);
         gameTitle.setTextSize(16);
         gameTitle.setTextColor(HomeActivity.TEXT);
+        gameTitle.setGravity(Gravity.CENTER_VERTICAL);
         toolbar.addView(gameTitle, new LinearLayout.LayoutParams(0, dp(48), 1));
 
         TextView menu = new TextView(this);
@@ -147,13 +147,8 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         toolbar.addView(menu, new LinearLayout.LayoutParams(dp(48), dp(48)));
         header.addView(toolbar);
 
-        status = new TextView(this);
-        status.setTextColor(HomeActivity.MUTED);
-        status.setBackgroundColor(HomeActivity.SURFACE);
-        status.setTextSize(11);
-        status.setText("Audio et rendu natifs · RavenCore");
-        status.setPadding(dp(12), dp(4), dp(12), dp(4));
-        header.addView(status, new LinearLayout.LayoutParams(-1, dp(28)));
+        // As in the beta, nothing between the bar and the picture; messages
+        // show in the game menu, or briefly over the game.
         editBar = new LinearLayout(this);
         editBar.setGravity(Gravity.CENTER_VERTICAL);
         editBar.setBackgroundColor(HomeActivity.SURFACE);
@@ -236,7 +231,6 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         if (playerMenu != null) playerMenu.dismiss();
         editingLandscape = gameControls.isLandscape();
         gameControls.setEditing(true);
-        status.setVisibility(View.GONE);
         editBar.setVisibility(View.VISIBLE);
     }
 
@@ -246,7 +240,6 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         gameControls.controlLayout().save(this, editingLandscape);
         gameControls.setEditing(false);
         editBar.setVisibility(View.GONE);
-        status.setVisibility(View.VISIBLE);
         pauseState.editing(false);
     }
 
@@ -318,7 +311,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
                             if (restoreMenu) { restoreMenu = false; togglePlayerMenu(); }
                         }
                     });
-                    postStatus(result == null ? "Jeu : " + entry.label() : "Échec : " + result);
+                    if (result != null) postStatus("Échec : " + result);
                 });
             } catch (Exception error) {
                 postStatus("Chargement impossible : " + error.getMessage());
@@ -544,8 +537,9 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
             if (playerMenu != null && playerMenu.isShowing()) {
                 renderPlayerMenu();
                 playerMenu.showMessage(message);
+            } else {
+                android.widget.Toast.makeText(this, message, android.widget.Toast.LENGTH_SHORT).show();
             }
-            status.setText(message);
         });
     }
 
@@ -557,9 +551,11 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         }
     }
 
+    /** A problem worth telling: briefly over the game. */
     private void postStatus(String message) {
         runOnUiThread(() -> {
-            if (!disposed.get()) status.setText(message);
+            if (!disposed.get())
+                android.widget.Toast.makeText(this, message, android.widget.Toast.LENGTH_LONG).show();
         });
     }
 

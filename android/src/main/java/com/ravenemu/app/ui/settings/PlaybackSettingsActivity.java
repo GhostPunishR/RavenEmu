@@ -40,8 +40,9 @@ import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/** Java Views counterpart of the beta's Audio, Video, Console and Interface
- * settings pages. Only settings connected to the native drivers are presented here. */
+/** Java Views counterpart of the beta's settings: Général, Audio, Vidéo,
+ * Console, Interface and À propos. The library's ⚙ opens it on its categories.
+ * Only settings connected to the native drivers are presented here. */
 public final class PlaybackSettingsActivity extends Activity {
     public static final String EXTRA_PAGE = "playback.settings.page";
     public static final String HOME = "home";
@@ -49,6 +50,12 @@ public final class PlaybackSettingsActivity extends Activity {
     public static final String VIDEO = "video";
     public static final String CONSOLE = "console";
     public static final String INTERFACE = "interface";
+    public static final String GENERAL = "general";
+    public static final String ABOUT = "about";
+    private static final String[] PAGES = {HOME, AUDIO, VIDEO, CONSOLE, INTERFACE, GENERAL, ABOUT};
+    private static final String[] TITLES = {"Paramètres", "Audio", "Vidéo", "Console", "Interface",
+            "Général", "À propos"};
+    private static final String REPOSITORY = "https://github.com/GhostPunishR/RavenEmu";
     private static final int PICK_BIOS = 1;
 
     private PlaybackSettings settings;
@@ -63,7 +70,7 @@ public final class PlaybackSettingsActivity extends Activity {
     private Button back;
     private SeekBar volume;
     private String page;
-    private final int[] scrollPositions = new int[5];
+    private final int[] scrollPositions = new int[PAGES.length];
     private int pageSerial;
     private boolean rendered;
 
@@ -76,11 +83,8 @@ public final class PlaybackSettingsActivity extends Activity {
         String initialPage = getIntent().getStringExtra(EXTRA_PAGE);
         if (state != null) {
             initialPage = state.getString("settings.page", initialPage);
-            scrollPositions[0] = Math.max(0, state.getInt("settings.scroll.home"));
-            scrollPositions[1] = Math.max(0, state.getInt("settings.scroll.audio"));
-            scrollPositions[2] = Math.max(0, state.getInt("settings.scroll.video"));
-            scrollPositions[3] = Math.max(0, state.getInt("settings.scroll.console"));
-            scrollPositions[4] = Math.max(0, state.getInt("settings.scroll.interface"));
+            for (int i = 0; i < PAGES.length; i++)
+                scrollPositions[i] = Math.max(0, state.getInt("settings.scroll." + PAGES[i]));
         }
 
         LinearLayout root = column();
@@ -118,24 +122,32 @@ public final class PlaybackSettingsActivity extends Activity {
 
     private void showPage(String requestedPage) {
         if (rendered) scrollPositions[index(page)] = scroll.getScrollY();
-        page = INTERFACE.equals(requestedPage) ? INTERFACE : CONSOLE.equals(requestedPage) ? CONSOLE
-                : VIDEO.equals(requestedPage) ? VIDEO : AUDIO.equals(requestedPage) ? AUDIO : HOME;
+        page = PAGES[index(requestedPage)];
         rendered = true;
         final int request = ++pageSerial;
-        title.setText(INTERFACE.equals(page) ? "Interface" : CONSOLE.equals(page) ? "Console"
-                : VIDEO.equals(page) ? "Vidéo" : AUDIO.equals(page) ? "Audio" : "Paramètres");
+        title.setText(TITLES[index(page)]);
         back.setContentDescription(HOME.equals(page) ? "Fermer les paramètres" : "Retour aux paramètres");
         content.removeAllViews();
-        if (AUDIO.equals(page)) audioPage(); else if (VIDEO.equals(page)) videoPage();
-        else if (CONSOLE.equals(page)) consolePage(); else if (INTERFACE.equals(page)) interfacePage();
-        else homePage();
+        switch (page) {
+            case AUDIO: audioPage(); break;
+            case VIDEO: videoPage(); break;
+            case CONSOLE: consolePage(); break;
+            case INTERFACE: interfacePage(); break;
+            case GENERAL: generalPage(); break;
+            case ABOUT: aboutPage(); break;
+            default: homePage();
+        }
         final int restoreScroll = scrollPositions[index(page)];
         scroll.post(() -> {
             if (!isFinishing() && !isDestroyed() && request == pageSerial) scroll.scrollTo(0, restoreScroll);
         });
     }
 
+    /** The beta's categories, in its order; RetroAchievements waits for its native port. */
     private void homePage() {
+        category("Général", "Pause automatique", GENERAL,
+                "M3,5H13V7H3ZM17,5H21V7H17ZM13,3H17V9H13ZM3,11H7V13H3ZM11,11H21V13H11ZM7,9H11V15H7Z"
+                        + "M3,17H13V19H3ZM17,17H21V19H17ZM13,15H17V21H13Z");
         category("Audio", "Son du jeu et volume", AUDIO,
                 "M3,9H7L12,4V20L7,15H3ZM15,8V16C17,15 17,9 15,8ZM15,3V5C21,7 21,17 15,19V21C24,18 24,6 15,3Z");
         category("Vidéo", "Couleurs, correction LCD, mélange d'images, taille, luminosité et contraste", VIDEO,
@@ -148,6 +160,65 @@ public final class PlaybackSettingsActivity extends Activity {
         // owner left rewind out of the native player, so it is not announced.
         category("Interface", "Commandes tactiles et style", INTERFACE,
                 "M3,3H11V11H3ZM13,3H21V11H13ZM3,13H11V21H3ZM13,13H21V21H13Z");
+        category("À propos", "Version, auteur, confidentialité et licences", ABOUT,
+                "M11,7h2v2h-2zM11,11h2v6h-2zM12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2z"
+                        + "M12,20c-4.41,0 -8,-3.59 -8,-8s3.59,-8 8,-8 8,3.59 8,8 -3.59,8 -8,8z");
+    }
+
+    /** The beta's Général page; its link cable, online covers and diagnostics
+     * wait for those native features, as the beta hides them without them. */
+    private void generalPage() {
+        group("Émulation");
+        description("Pause automatique",
+                "Le jeu et son audio sont suspendus lorsque RavenEmu passe en arrière-plan ou lorsque le "
+                        + "panneau de jeu est ouvert. Ce comportement est fixe pour protéger la partie.");
+    }
+
+    /** The beta's À propos: who makes RavenEmu, its licences and its source.
+     * The terms and the privacy policy are read online until the native
+     * reader carries them. */
+    private void aboutPage() {
+        TextView name = text("RavenEmu", 18, HomeActivity.TEXT);
+        name.setTypeface(null, Typeface.BOLD);
+        add(name, 0);
+        add(text("Par GhostPunishR · version native expérimentale Java / C / C++", 13, HomeActivity.MUTED), 4);
+        group("Informations légales");
+        aboutRow("Conditions d'utilisation", "Ce que RavenEmu fournit, et votre responsabilité", "↗",
+                view -> openLink(REPOSITORY + "/blob/main/TERMS.md"));
+        aboutRow("Politique de confidentialité", "Données échangées et services tiers", "↗",
+                view -> openLink(REPOSITORY + "/blob/main/PRIVACY.md"));
+        group("Licences et crédits");
+        aboutRow("Licences et crédits", "Crédits, GPLv3, AGPLv3, MIT et Apache 2, lus dans l'application", "›",
+                view -> startActivity(new Intent(this, LicensesActivity.class)));
+        group("Code source");
+        aboutRow("RavenEmu", "github.com/GhostPunishR/RavenEmu", "↗", view -> openLink(REPOSITORY));
+        aboutRow("RavenCore", "github.com/GhostPunishR/RavenCore", "↗",
+                view -> openLink("https://github.com/GhostPunishR/RavenCore"));
+    }
+
+    private void aboutRow(String label, String summary, String trailing, View.OnClickListener open) {
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setMinimumHeight(dp(56));
+        row.setPadding(0, dp(8), 0, dp(8));
+        LinearLayout description = column();
+        description.addView(text(label, 15, HomeActivity.TEXT));
+        add(description, text(summary, 12, HomeActivity.MUTED), 3);
+        row.addView(description, new LinearLayout.LayoutParams(0, -2, 1));
+        TextView mark = text(trailing, 18, HomeActivity.ACCENT);
+        mark.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        row.addView(mark);
+        row.setContentDescription(label + ". " + summary);
+        row.setOnClickListener(open);
+        add(row, 6);
+    }
+
+    private void openLink(String address) {
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(address)));
+        } catch (ActivityNotFoundException missing) {
+            Toast.makeText(this, "Aucune application pour ouvrir ce lien", Toast.LENGTH_LONG).show();
+        }
     }
 
     private void category(String label, String summary, String destination, String iconPath) {
@@ -555,9 +626,10 @@ public final class PlaybackSettingsActivity extends Activity {
         parent.addView(view, size);
     }
 
+    /** The page's place in PAGES; an unknown page is the categories. */
     private static int index(String page) {
-        return INTERFACE.equals(page) ? 4 : CONSOLE.equals(page) ? 3 : VIDEO.equals(page) ? 2
-                : AUDIO.equals(page) ? 1 : 0;
+        for (int i = 0; i < PAGES.length; i++) if (PAGES[i].equals(page)) return i;
+        return 0;
     }
     private int dp(int value) { return Math.round(value * getResources().getDisplayMetrics().density); }
     private interface BooleanChange { void accept(boolean value); }
@@ -568,11 +640,7 @@ public final class PlaybackSettingsActivity extends Activity {
         super.onSaveInstanceState(state);
         scrollPositions[index(page)] = scroll.getScrollY();
         state.putString("settings.page", page);
-        state.putInt("settings.scroll.home", scrollPositions[0]);
-        state.putInt("settings.scroll.audio", scrollPositions[1]);
-        state.putInt("settings.scroll.video", scrollPositions[2]);
-        state.putInt("settings.scroll.console", scrollPositions[3]);
-        state.putInt("settings.scroll.interface", scrollPositions[4]);
+        for (int i = 0; i < PAGES.length; i++) state.putInt("settings.scroll." + PAGES[i], scrollPositions[i]);
     }
 
     @Override protected void onDestroy() {
