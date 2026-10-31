@@ -1114,3 +1114,56 @@ Start, devait aller en **haut, au centre** des commandes.
 `GbTouchControls` de la bêta, qui n'est pas modifiée. Validation sur téléphone
 à faire (lisibilité, place du menu sur les petits écrans).
 
+## Skins Delta, lot K
+
+Portage en Java des skins Delta de la bêta 0.8.1 (`androidApp/.../deltaskin`),
+au choix du propriétaire. Aucun skin n'est fourni : l'utilisateur importe les
+siens.
+
+- **Données** (`data/skins`) : `DeltaSkin` lit `info.json` comme la bêta
+  (propriétés obligatoires, types stricts, clés inconnues ignorées) ;
+  `DeltaSkinValidator` garde ses limites (GB/GBC ou GBA, au moins une
+  représentation iPhone portrait, cadres dans `mappingSize` à 1 % près,
+  nombres finis, PDF nommé à la racine, entrées inconnues mises de côté) ;
+  `DeltaSkinArchive` relit l'archive sous les mêmes limites (25 Mio, 64
+  entrées, 50 Mio décompressés, taux de compression, chemins, liens
+  symboliques, archives imbriquées, doublons, un seul `info.json`, PDF d'une
+  page au ratio de la représentation) puis prépare l'installation dans un
+  dossier temporaire privé, les PDF portrait sous des noms fixes ;
+  `DeltaSkinRepository` installe d'un bloc dans `files/delta-skins/<SHA-256 de
+  l'identifiant>`, remplace en gardant l'ancien dossier jusqu'à relecture du
+  nouveau, et n'affiche qu'un skin qui se relit en entier. Le choix par console
+  (GB/GBC partagent le leur) est dans les préférences de l'application ; les
+  skins de la bêta ne sont jamais lus.
+- **Paramètres → Interface → Skin Delta** : texte de la bêta, « Importer un
+  fichier .deltaskin » (sélecteur Android, copie bornée dans le cache privé),
+  liste avec « Utiliser » / « Retirer » et « Supprimer » (confirmation), messages
+  de la bêta. Un skin importé est choisi pour sa console. Tout se fait hors du
+  fil d'interface.
+- **Lecteur, en portrait** : le skin choisi pour la console du jeu remplace les
+  commandes tactiles. Comme dans la bêta, son PDF est dessiné en bas, à la
+  largeur de l'écran, et l'image du jeu se place au-dessus, centrée à son
+  format. La page est rendue par `PdfRenderer` hors du fil d'interface et
+  gardée en cache. Toucher, glisser et plusieurs doigts suivent la bêta : cadre
+  dessiné prioritaire sur les zones étendues, croix découpée en 3 × 3 pour les
+  diagonales, bouton relâché avec son dernier doigt, entrée `menu` qui ouvre le
+  menu du jeu, marque discrète sur la partie appuyée, retour haptique des
+  réglages. Un skin qui ne se dessine pas est retiré pour sa console
+  (« Skin invalide : commandes classiques restaurées »). En paysage, les
+  commandes classiques restent (la bêta n'affiche les skins qu'en portrait) ;
+  « Déplacer les boutons » ne s'applique pas à un skin.
+- Tests : `DeltaSkinTest` (manifeste et validation), `DeltaSkinArchiveTest`
+  (préparation, quinze refus dont chemins, lien symbolique, archive imbriquée
+  ou déguisée, bombe de compression), `DeltaSkinRepositoryTest` (installation,
+  doublon, conflit, remplacement, suppression, dossier abîmé), `DeltaSkinInputTest`
+  (mise en page, choix standard ou bord à bord, toucher, plusieurs doigts,
+  menu), `PlaybackSettingsActivityTest` (page Skin Delta, refus d'un fichier
+  qui n'est pas un .deltaskin), `PlayerActivityTest` (le skin remplace les
+  commandes, A et le menu du skin, repli sur les commandes classiques).
+
+Écarts restants : les bandeaux RetroAchievements restent dans la zone de
+l'image au lieu de toute la zone du skin ; les représentations paysage et les
+écrans multiples (`screens`, `gameScreenFrame`) sont lus et vérifiés mais pas
+utilisés, comme dans la bêta. Validation sur téléphone à faire avec de vrais
+skins (rendu des PDF, précision du toucher, bord à bord sur un écran haut).
+

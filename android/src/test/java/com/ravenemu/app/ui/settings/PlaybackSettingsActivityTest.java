@@ -528,6 +528,57 @@ public final class PlaybackSettingsActivityTest {
         assertEquals(0, LatencySettings.load(reopened).preemptiveFrames);
     }
 
+    @Test public void theSkinDeltaPageChoosesAndDeletesTheInstalledSkins() throws Exception {
+        android.content.Context app = RuntimeEnvironment.getApplication();
+        File work = new File(app.getCacheDir(), "skin-work");
+        assertTrue(work.isDirectory() || work.mkdirs());
+        PlaybackSettingsActivity empty = open(PlaybackSettingsActivity.INTERFACE_SKINS, null).get();
+        idleIo(empty);
+        assertNotNull(text(empty, "Aucun skin installé : commandes classiques."));
+        assertNotNull(text(empty, "Importer un fichier .deltaskin"));
+
+        com.ravenemu.app.data.skins.DeltaSkinFixtures.install(com.ravenemu.app.data.skins.DeltaSkins.root(app), work, "Test");
+        PlaybackSettingsActivity activity = open(PlaybackSettingsActivity.INTERFACE_SKINS, null).get();
+        idleIo(activity);
+        assertNotNull(text(activity, "Test"));
+        assertNotNull(text(activity, "Game Boy / Game Boy Color"));
+        described(activity, "Utiliser le skin Test").performClick();
+        idleIo(activity);
+        assertEquals(com.ravenemu.app.data.skins.DeltaSkinFixtures.IDENTIFIER,
+                preferences.getString("skins.selected.gb_gbc", null));
+        assertNotNull(text(activity, "Game Boy / Game Boy Color · utilisé"));
+        described(activity, "Retirer le skin Test").performClick();
+        idleIo(activity);
+        assertNull("Back to the classic controls", preferences.getString("skins.selected.gb_gbc", null));
+        described(activity, "Utiliser le skin Test").performClick();
+        idleIo(activity);
+
+        described(activity, "Supprimer le skin Test").performClick();
+        android.app.AlertDialog confirm = (android.app.AlertDialog) org.robolectric.shadows.ShadowAlertDialog
+                .getLatestAlertDialog();
+        assertTrue(confirm.isShowing());
+        confirm.getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick();
+        shadowOf(Looper.getMainLooper()).idle();
+        idleIo(activity);
+        assertEquals("Skin supprimé", ShadowToast.getTextOfLatestToast());
+        assertNotNull(text(activity, "Aucun skin installé : commandes classiques."));
+        assertNull("A deleted skin is no longer chosen", preferences.getString("skins.selected.gb_gbc", null));
+    }
+
+    @Test public void aFileThatIsNotADeltaSkinIsRefusedWithTheBetasMessage() throws Exception {
+        PlaybackSettingsActivity activity = open(PlaybackSettingsActivity.INTERFACE, null).get();
+        described(activity, "Ouvrir les réglages skin delta").performClick();
+        idleIo(activity);
+        text(activity, "Importer un fichier .deltaskin").performClick();
+        ShadowActivity.IntentForResult pick = shadowOf(activity).getNextStartedActivityForResult();
+        assertEquals(Intent.ACTION_OPEN_DOCUMENT, pick.intent.getAction());
+        activity.onActivityResult(pick.requestCode, Activity.RESULT_OK,
+                new Intent().setData(Uri.fromFile(file(activity, "skin.zip", new byte[]{'P', 'K', 3, 4}))));
+        idleIo(activity);
+        assertEquals("Le fichier doit porter l'extension .deltaskin", ShadowToast.getTextOfLatestToast());
+        assertNotNull(text(activity, "Aucun skin installé : commandes classiques."));
+    }
+
     @Test public void interfacePageSetsTheCartridgeMotorTheSensorsAndTheSun() {
         PlaybackSettingsActivity activity = open(PlaybackSettingsActivity.INTERFACE_CARTRIDGE, null).get();
         assertTrue("Opening the page writes nothing",

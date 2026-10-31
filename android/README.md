@@ -345,7 +345,13 @@ les places d'origine. Le portrait et le paysage ont chacun la leur
 (`ControlLayout`), chaque commande reste entière dans sa zone (sous l'image en
 portrait, toute la zone de jeu en paysage). La réinitialisation des commandes
 remet aussi les places. Le retour arrière et l'avance rapide ne sont pas portés,
-au choix du propriétaire ; les skins Delta restent à porter.
+au choix du propriétaire.
+
+**Paramètres → Interface → Skin Delta** importe un fichier `.deltaskin`
+(vérifié comme dans la bêta, stocké en privé), le choisit pour sa console ou le
+supprime. En portrait, le skin choisi remplace les commandes tactiles : son PDF
+en bas, l'image du jeu au-dessus, ses boutons et son bouton menu actifs
+(`data/skins`, `DeltaSkinView`). Aucun skin n'est fourni.
 
 ## Vibration et capteurs de la cartouche
 

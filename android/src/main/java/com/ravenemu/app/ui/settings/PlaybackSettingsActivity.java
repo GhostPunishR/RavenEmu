@@ -2,6 +2,8 @@ package com.ravenemu.app.ui.settings;
 import com.ravenemu.app.R;
 import com.ravenemu.app.bridge.NativeAchievements;
 import com.ravenemu.app.data.saves.GbaBiosRepository;
+import com.ravenemu.app.data.skins.DeltaSkinException;
+import com.ravenemu.app.data.skins.DeltaSkins;
 import com.ravenemu.app.platform.AchievementsHttp;
 import com.ravenemu.app.platform.RetroUserAgent;
 import com.ravenemu.app.platform.SystemBarInsets;
@@ -19,6 +21,7 @@ import com.ravenemu.app.ui.common.RavenIcon;
 import com.ravenemu.app.ui.library.HomeActivity;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
@@ -53,6 +56,8 @@ import android.window.OnBackInvokedDispatcher;
 import java.io.IOException;
 import java.io.InputStream;
 import java.security.GeneralSecurityException;
+import java.util.Collections;
+import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -82,22 +87,29 @@ public final class PlaybackSettingsActivity extends Activity {
     public static final String CONSOLE_GBA = "console/gba";
     public static final String INTERFACE_CONTROLS = "interface/controls";
     public static final String INTERFACE_CARTRIDGE = "interface/cartridge";
+    public static final String INTERFACE_SKINS = "interface/skins";
     private static final String[] PAGES = {HOME, AUDIO, VIDEO, CONSOLE, INTERFACE, GENERAL, ABOUT,
             GENERAL_EMULATION, GENERAL_LATENCY, AUDIO_SOUND, AUDIO_QUALITY, VIDEO_COLORS, VIDEO_RENDERING,
-            VIDEO_PICTURE, CONSOLE_GB, CONSOLE_GBA, INTERFACE_CONTROLS, INTERFACE_CARTRIDGE, RETRO};
+            VIDEO_PICTURE, CONSOLE_GB, CONSOLE_GBA, INTERFACE_CONTROLS, INTERFACE_CARTRIDGE, INTERFACE_SKINS, RETRO};
     private static final String[] TITLES = {"Paramètres", "Audio", "Vidéo", "Console", "Interface",
             "Général", "À propos", "Émulation", "Latence", "Son du jeu", "Qualité du son", "Couleurs",
             "Rendu", "Taille et réglages", "Game Boy et GBC", "Game Boy Advance", "Commandes tactiles",
-            "Cartouche", "RetroAchievements"};
+            "Cartouche", "Skin Delta", "RetroAchievements"};
     private static final int ERROR = 0xffff928b;
     private static final String REPOSITORY = "https://github.com/GhostPunishR/RavenEmu";
     private static final int PICK_BIOS = 1;
+    private static final int PICK_SKIN = 2;
 
     private PlaybackSettings settings;
     private ConsoleSettings console;
     private ControlSettings controls;
     private CartridgeSettings cartridge;
     private boolean biosInstalled;
+    /** The installed Delta skins, read on the IO executor; an import or a change in progress. */
+    private DeltaSkins skins;
+    private List<DeltaSkins.Entry> skinEntries = Collections.emptyList();
+    private boolean skinsRead, skinBusy, skinImporting;
+    private AlertDialog skinDialog;
     /** The BIOS copy and removal, and the account file, off the UI thread, one at a time. */
     private final ExecutorService io = Executors.newSingleThreadExecutor();
     /** RetroAchievements' sign-in and the avatar: they wait for the network. */
@@ -126,6 +138,7 @@ public final class PlaybackSettingsActivity extends Activity {
         cartridge = CartridgeSettings.load(this);
         achievementSettings = AchievementSettings.load(this);
         biosInstalled = GbaBiosRepository.installed(getFilesDir());
+        skins = new DeltaSkins(this);
         io.execute(() -> {
             AchievementAccount stored = AchievementAccount.load(this);
             runOnUiThread(() -> {
@@ -201,6 +214,7 @@ public final class PlaybackSettingsActivity extends Activity {
             case CONSOLE_GBA: consoleAdvancePage(); break;
             case INTERFACE_CONTROLS: interfaceControlsPage(); break;
             case INTERFACE_CARTRIDGE: interfaceCartridgePage(); break;
+            case INTERFACE_SKINS: interfaceSkinsPage(); break;
             case RETRO: retroPage(); break;
             default: homePage();
         }
@@ -221,7 +235,8 @@ public final class PlaybackSettingsActivity extends Activity {
         // The beta says "Vibrations, capteurs, commandes, retour arrière, style et
         // Skin Delta": the owner left rewind out of the native player, and the
         // Delta skins wait for their port, so neither is announced.
-        category("Interface", "Vibrations, capteurs, commandes et style", INTERFACE, RavenIcon.Glyph.GAMEPAD);
+        category("Interface", "Vibrations, capteurs, commandes, style et skin Delta", INTERFACE,
+                RavenIcon.Glyph.GAMEPAD);
         category("À propos", "Version, auteur, confidentialité et licences", ABOUT, RavenIcon.Glyph.INFO);
     }
 
@@ -738,12 +753,137 @@ public final class PlaybackSettingsActivity extends Activity {
     }
 
     /** The beta's Interface page: the touch controls, where the buttons were
-     * moved, and the cartridge hardware the phone stands in for. Its Delta skin
-     * section waits for that native feature; rewind is left out at the
-     * owner's request. */
+     * moved, the cartridge hardware the phone stands in for, and the Delta
+     * skins; rewind is left out at the owner's request. */
     private void interfacePage() {
         category("Commandes tactiles", "Retour haptique, taille, espacement et style", INTERFACE_CONTROLS, null);
         category("Cartouche", "Vibration et capteurs du téléphone", INTERFACE_CARTRIDGE, null);
+        category("Skin Delta", "Importer et choisir un skin .deltaskin", INTERFACE_SKINS, null);
+    }
+
+    /** The beta's Skin Delta section: import a .deltaskin, use it for its
+     * console or go back to the classic controls, delete it. In portrait only. */
+    private void interfaceSkinsPage() {
+        add(text("RavenEmu lit les skins au format .deltaskin, en portrait. Ce projet n'est ni affilié à Delta, "
+                + "ni approuvé par ses auteurs : aucun skin n'est fourni, vous importez les vôtres. Game Boy et "
+                + "Game Boy Color partagent leur skin.", 13, HomeActivity.MUTED), 0);
+        Button pick = textButton("Importer un fichier .deltaskin", HomeActivity.ACCENT);
+        pick.setEnabled(!skinBusy);
+        pick.setOnClickListener(view -> pickSkin());
+        if (skinImporting) add(text("Importation du skin…", 12, HomeActivity.MUTED), 4);
+        if (!skinsRead) {
+            add(text("Lecture des skins…", 12, HomeActivity.MUTED), 8);
+            if (!skinBusy) reloadSkins(null);
+            return;
+        }
+        if (skinEntries.isEmpty()) add(text("Aucun skin installé : commandes classiques.", 12, HomeActivity.MUTED), 8);
+        for (DeltaSkins.Entry skin : skinEntries) {
+            LinearLayout row = new LinearLayout(this);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setMinimumHeight(dp(56));
+            LinearLayout texts = column();
+            TextView name = text(skin.name, 14, HomeActivity.TEXT);
+            name.setTypeface(null, Typeface.BOLD);
+            name.setSingleLine(true);
+            name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            texts.addView(name);
+            texts.addView(text(skin.console + (skin.selected ? " · utilisé" : ""), 12,
+                    skin.selected ? HomeActivity.ACCENT : HomeActivity.MUTED));
+            row.addView(texts, new LinearLayout.LayoutParams(0, -2, 1));
+            Button use = rowButton(skin.selected ? "Retirer" : "Utiliser", HomeActivity.ACCENT);
+            use.setContentDescription((skin.selected ? "Retirer le skin " : "Utiliser le skin ") + skin.name);
+            use.setEnabled(!skinBusy);
+            use.setOnClickListener(view -> changeSkins(() -> skins.toggle(skin.id), null));
+            row.addView(use, new LinearLayout.LayoutParams(-2, -2));
+            Button delete = rowButton("Supprimer", HomeActivity.MUTED);
+            delete.setContentDescription("Supprimer le skin " + skin.name);
+            delete.setEnabled(!skinBusy);
+            delete.setOnClickListener(view -> confirmSkinDeletion(skin));
+            row.addView(delete, new LinearLayout.LayoutParams(-2, -2));
+            add(row, 8);
+        }
+    }
+
+    private void confirmSkinDeletion(DeltaSkins.Entry skin) {
+        if (skinDialog != null && skinDialog.isShowing()) return;
+        skinDialog = new AlertDialog.Builder(this).setTitle("Supprimer ce skin ?")
+                .setMessage(skin.name + " sera supprimé de l'appareil. Les commandes classiques reviennent s'il "
+                        + "était utilisé.")
+                .setPositiveButton("Supprimer", (dialog, which) -> changeSkins(() -> {
+                    try {
+                        skins.delete(skin.id);
+                        return "Skin supprimé";
+                    } catch (DeltaSkinException error) {
+                        return DeltaSkinException.userMessage(error.code);
+                    }
+                }))
+                .setNegativeButton("Annuler", null).create();
+        skinDialog.show();
+        skinDialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(HomeActivity.ACCENT);
+        skinDialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(HomeActivity.SECONDARY);
+    }
+
+    private interface SkinChange { String run(); }
+
+    private void changeSkins(Runnable change, String message) {
+        changeSkins(() -> {
+            change.run();
+            return message;
+        });
+    }
+
+    /** IO executor: the change, then the list read again and the message shown. */
+    private void changeSkins(SkinChange change) {
+        if (skinBusy) return;
+        skinBusy = true;
+        if (INTERFACE_SKINS.equals(page)) showPage(INTERFACE_SKINS);
+        io.execute(() -> {
+            String message;
+            try {
+                message = change.run();
+            } catch (RuntimeException error) {
+                message = DeltaSkinException.userMessage(DeltaSkinException.Code.STORAGE_ERROR);
+            }
+            reloadSkins(message);
+        });
+    }
+
+    /** Off the UI thread when called from the IO executor; from the UI thread it queues the read. */
+    private void reloadSkins(String message) {
+        Runnable read = () -> {
+            List<DeltaSkins.Entry> entries;
+            try {
+                entries = skins.entries();
+            } catch (RuntimeException unreadable) {
+                entries = Collections.emptyList();
+            }
+            final List<DeltaSkins.Entry> listed = entries;
+            runOnUiThread(() -> {
+                if (isDestroyed()) return;
+                skinEntries = listed;
+                skinsRead = true;
+                skinBusy = false;
+                skinImporting = false;
+                if (message != null) Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+                if (INTERFACE_SKINS.equals(page)) showPage(INTERFACE_SKINS);
+            });
+        };
+        if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+            skinBusy = true;
+            io.execute(read);
+        } else read.run();
+    }
+
+    private void pickSkin() {
+        if (skinBusy) return;
+        Intent pick = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        pick.addCategory(Intent.CATEGORY_OPENABLE);
+        pick.setType("*/*");
+        try {
+            startActivityForResult(pick, PICK_SKIN);
+        } catch (ActivityNotFoundException missing) {
+            Toast.makeText(this, "Aucune application pour choisir un fichier", Toast.LENGTH_LONG).show();
+        }
     }
 
     private void interfaceControlsPage() {
@@ -828,8 +968,15 @@ public final class PlaybackSettingsActivity extends Activity {
 
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
-        if (request != PICK_BIOS || result != RESULT_OK || data == null || data.getData() == null) return;
+        if (result != RESULT_OK || data == null || data.getData() == null) return;
         Uri uri = data.getData();
+        if (request == PICK_SKIN) {
+            if (skinBusy) return;
+            skinImporting = true;
+            changeSkins(() -> skins.importSkin(uri));
+            return;
+        }
+        if (request != PICK_BIOS) return;
         io.execute(() -> {
             String message = "BIOS GBA installé";
             try (InputStream input = getContentResolver().openInputStream(uri)) {
@@ -999,6 +1146,15 @@ public final class PlaybackSettingsActivity extends Activity {
         return button;
     }
 
+    /** A TextButton for a row, not added to the page. */
+    private Button rowButton(String label, int color) {
+        Button button = button(label);
+        button.setTextColor(color);
+        button.setTextSize(13);
+        button.setBackgroundColor(Color.TRANSPARENT);
+        return button;
+    }
+
     /** The beta's TextButton: no background, the label in its color. */
     private Button textButton(String label, int color) {
         Button button = button(label);
@@ -1058,6 +1214,7 @@ public final class PlaybackSettingsActivity extends Activity {
     }
 
     @Override protected void onDestroy() {
+        if (skinDialog != null) skinDialog.dismiss();
         io.shutdown();
         network.shutdown();
         super.onDestroy();

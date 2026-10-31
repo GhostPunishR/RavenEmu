@@ -10,6 +10,9 @@ import com.ravenemu.app.data.saves.SaveStorage;
 import com.ravenemu.app.data.saves.SaveTransfer;
 import com.ravenemu.app.data.saves.StatePreview;
 import com.ravenemu.app.data.saves.StateSlotRepository;
+import com.ravenemu.app.data.skins.DeltaSkin;
+import com.ravenemu.app.data.skins.DeltaSkinException;
+import com.ravenemu.app.data.skins.DeltaSkins;
 import com.ravenemu.app.platform.AchievementsHttp;
 import com.ravenemu.app.platform.RetroUserAgent;
 import com.ravenemu.app.platform.SystemBarInsets;
@@ -75,6 +78,16 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
     /** UI thread: a physical controller's keys and axes. */
     private final GamepadMapper gamepad = new GamepadMapper();
     private GameControlsView gameControls;
+    /** Portrait: the Delta skin chosen for the game's console, drawn over the
+     * picture's column instead of the touch controls; null in landscape. */
+    private DeltaSkinView skinView;
+    /** The picture and the achievements over it: the skin's game area when it shows. */
+    private FrameLayout pictureFrame;
+    /** UI thread: the open game's system, for its console's skin; null before a game. */
+    private String loadedSystem;
+    private int skinRequest;
+    /** Skins are read and checked off the UI thread, apart from the saves. */
+    private static final ExecutorService SKINS = java.util.concurrent.Executors.newSingleThreadExecutor();
     /** Shown under the bar while the controls are moved. */
     private LinearLayout editBar;
     private boolean editingLandscape;
@@ -164,6 +177,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
             gamePaused = paused;
             releaseInput();
             if (gameControls != null) gameControls.setEnabled(!paused);
+            if (skinView != null) skinView.setEnabled(!paused);
             // As in the beta: the screen stays on while the game runs, a game
             // played on a controller included; the menu lets it sleep.
             if (paused) getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
@@ -248,9 +262,25 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
             // The whole stage, so a control can be moved beside or over the picture.
             stage.addView(gameControls, new FrameLayout.LayoutParams(-1, -1));
         } else {
-            root.addView(screen, new LinearLayout.LayoutParams(-1, 0, 1));
-            root.addView(gameControls, new LinearLayout.LayoutParams(-1, -2));
+            // The picture over the touch controls; a Delta skin covers both
+            // and gives the picture its place.
+            FrameLayout stage = new FrameLayout(this);
+            LinearLayout column = new LinearLayout(this);
+            column.setOrientation(LinearLayout.VERTICAL);
+            column.addView(screen, new LinearLayout.LayoutParams(-1, 0, 1));
+            column.addView(gameControls, new LinearLayout.LayoutParams(-1, -2));
+            stage.addView(column, new FrameLayout.LayoutParams(-1, -1));
+            skinView = new DeltaSkinView(this, new DeltaSkinView.Listener() {
+                @Override public void onButtons(int mask) { setTouchButtons(mask); }
+                @Override public void onMenu() { togglePlayerMenu(); }
+                @Override public void onReady(DeltaSkinLayout layout) { showSkin(layout); }
+                @Override public void onError(DeltaSkinException.Code code) { skinFailed(); }
+            });
+            skinView.setEnabled(false);
+            stage.addView(skinView, new FrameLayout.LayoutParams(-1, -1));
+            root.addView(stage, new LinearLayout.LayoutParams(-1, 0, 1));
         }
+        pictureFrame = screen;
         // Reserve actual status bar, cutout, nav buttons and keyboard space.
         // Android 15 edge-to-edge would otherwise overlay the toolbar/footer.
         SystemBarInsets.install(this, root);
@@ -321,9 +351,79 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         return button;
     }
 
+    /** UI thread: the skin of the open game's console, read again (back from
+     * the settings, it may have changed); classic controls without one. */
+    private void refreshSkin() {
+        if (skinView == null || loadedSystem == null || disposed.get()) return;
+        final DeltaSkin.Console console = DeltaSkins.console(loadedSystem);
+        final boolean haptics = ControlSettings.load(this).haptics;
+        final int request = ++skinRequest;
+        final android.content.Context context = getApplicationContext();
+        SKINS.execute(() -> {
+            DeltaSkins.Configuration found;
+            try {
+                found = new DeltaSkins(context).configuration(console);
+            } catch (RuntimeException unreadable) {
+                found = null;
+            }
+            final DeltaSkins.Configuration configuration = found;
+            runOnUiThread(() -> {
+                if (disposed.get() || request != skinRequest || skinView == null) return;
+                if (configuration == null) {
+                    showClassicControls();
+                    return;
+                }
+                DeltaSkins.Configuration current = skinView.configuration();
+                // The same archive keeps its drawn page.
+                skinView.setConfiguration(current != null && current.sha256.equals(configuration.sha256)
+                        ? current : configuration, haptics);
+            });
+        });
+    }
+
+    /** The skin is drawn: the picture takes the game's area above it. */
+    private void showSkin(DeltaSkinLayout layout) {
+        if (pictureFrame == null || gameControls == null) return;
+        if (gameControls.isEditing()) finishMovingControls();
+        releaseInput();
+        gameControls.setVisibility(View.GONE);
+        LinearLayout.LayoutParams area = new LinearLayout.LayoutParams(
+                (int) Math.round(layout.gameArea.width()), (int) Math.round(layout.gameArea.height()));
+        area.leftMargin = (int) Math.round(layout.gameArea.left);
+        area.topMargin = (int) Math.round(layout.gameArea.top);
+        pictureFrame.setLayoutParams(area);
+    }
+
+    private void showClassicControls() {
+        // Landscape has no skin: its picture is not in the portrait column.
+        if (skinView == null) return;
+        skinView.setConfiguration(null, false);
+        if (pictureFrame == null || gameControls == null) return;
+        if (gameControls.getVisibility() == View.VISIBLE) return;
+        releaseInput();
+        pictureFrame.setLayoutParams(new LinearLayout.LayoutParams(-1, 0, 1));
+        gameControls.setVisibility(View.VISIBLE);
+    }
+
+    /** A skin that cannot be drawn is unselected, as in the beta. */
+    private void skinFailed() {
+        DeltaSkins.Configuration failed = skinView != null ? skinView.configuration() : null;
+        showClassicControls();
+        if (failed == null) return;
+        final android.content.Context context = getApplicationContext();
+        SKINS.execute(() -> new DeltaSkins(context).fallback(failed.console, failed.sha256));
+        android.widget.Toast.makeText(this, "Skin invalide : commandes classiques restaurées",
+                android.widget.Toast.LENGTH_LONG).show();
+    }
+
     /** From the game menu: the game waits while the player drags the controls. */
     private void startMovingControls() {
         if (disposed.get() || gameControls == null || gameControls.isEditing()) return;
+        if (skinView != null && skinView.configuration() != null) {
+            android.widget.Toast.makeText(this, "Un skin Delta place lui-même ses boutons.",
+                    android.widget.Toast.LENGTH_SHORT).show();
+            return;
+        }
         pauseState.editing(true);
         if (playerMenu != null) playerMenu.dismiss();
         editingLandscape = gameControls.isLandscape();
@@ -350,6 +450,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         gamepad.reset();
         touchButtons = 0;
         if (gameControls != null) gameControls.releaseAll();
+        if (skinView != null) skinView.releaseAll();
         NativeBridge.clearButtons();
     }
 
@@ -454,6 +555,8 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
                             applyDisplayMode();
                             releaseInput();
                             gameControls.setShoulders("gba".equals(entry.system));
+                            loadedSystem = entry.system;
+                            refreshSkin();
                             gameTitle.setText(entry.title);
                             if (biosMissing) android.widget.Toast.makeText(this,
                                     "Vrai BIOS GBA absent : RavenCore utilise le sien. Choisissez son fichier "
@@ -1037,6 +1140,8 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
             gameControls.setSettings(ControlSettings.load(this));
             gameControls.setControlLayout(ControlLayout.load(this, gameControls.isLandscape()));
         }
+        // Back from Settings → Interface: another skin, or none.
+        refreshSkin();
         applyPlaybackSettings();
         if (pauseState != null) pauseState.foreground(true);
         dispatchRomLoad();

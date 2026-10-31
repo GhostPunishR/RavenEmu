@@ -31,6 +31,7 @@ import android.content.Intent;
 import android.opengl.GLSurfaceView;
 import android.os.Bundle;
 import android.os.Looper;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.EditText;
@@ -930,6 +931,85 @@ public final class PlayerActivityTest {
         } finally { release.countDown(); }
     }
 
+    @Test public void aChosenDeltaSkinReplacesTheControlsAndItsButtonsPlay() throws Exception {
+        android.content.Context app = RuntimeEnvironment.getApplication();
+        File work = new File(app.getCacheDir(), "skin-work");
+        assertTrue(work.isDirectory() || work.mkdirs());
+        com.ravenemu.app.data.skins.DeltaSkinFixtures.install(com.ravenemu.app.data.skins.DeltaSkins.root(app), work, "Test");
+        app.getSharedPreferences(PlaybackSettings.PREFERENCES, 0).edit()
+                .putString("skins.selected.gb_gbc", com.ravenemu.app.data.skins.DeltaSkinFixtures.IDENTIFIER).commit();
+        DeltaSkinView.Renderer previous = DeltaSkinView.renderer;
+        DeltaSkinView.renderer = (pdf, sha, kind, w, h) ->
+                android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888);
+        try {
+            PlayerActivity activity = loaded();
+            settleSkin(activity);
+            GameControlsView controls = ReflectionHelpers.getField(activity, "gameControls");
+            DeltaSkinView skin = ReflectionHelpers.getField(activity, "skinView");
+            View picture = ReflectionHelpers.getField(activity, "pictureFrame");
+            assertTrue(skin.ready());
+            assertEquals(View.VISIBLE, skin.getVisibility());
+            assertEquals("The skin replaces the touch controls", View.GONE, controls.getVisibility());
+            DeltaSkinLayout layout = skin.layout();
+            assertEquals("The picture takes the game's area", Math.round(layout.gameArea.height()),
+                    picture.getLayoutParams().height);
+            assertEquals(Math.round(layout.panel.height()), Math.round(320 * 300 / 400.0));
+
+            // The A item (320, 80, 60 × 60 of 400 × 300) at the panel's scale.
+            float scale = (float) layout.scale, top = (float) layout.panel.top;
+            touchSkin(skin, MotionEvent.ACTION_DOWN, 350 * scale, top + 110 * scale);
+            assertEquals(NativeBridge.A, FakeNative.buttons & NativeBridge.A);
+            touchSkin(skin, MotionEvent.ACTION_UP, 350 * scale, top + 110 * scale);
+            assertEquals(0, FakeNative.buttons);
+
+            ShadowToast.reset();
+            openMenu(activity);
+            menuButton("Déplacer les boutons").performClick();
+            idle();
+            assertEquals("Un skin Delta place lui-même ses boutons.", ShadowToast.getTextOfLatestToast());
+            assertFalse(controls.isEditing());
+            menu(activity).dismiss();
+            pump(activity);
+
+            touchSkin(skin, MotionEvent.ACTION_DOWN, 200 * scale, top + 25 * scale);
+            touchSkin(skin, MotionEvent.ACTION_UP, 200 * scale, top + 25 * scale);
+            pump(activity);
+            assertTrue("The skin's menu button opens the game menu", menu(activity).isShowing());
+            assertTrue(FakeNative.paused);
+        } finally {
+            DeltaSkinView.renderer = previous;
+        }
+    }
+
+    @Test public void aSkinThatCannotBeDrawnGivesTheClassicControlsBack() throws Exception {
+        android.content.Context app = RuntimeEnvironment.getApplication();
+        File work = new File(app.getCacheDir(), "skin-work");
+        assertTrue(work.isDirectory() || work.mkdirs());
+        com.ravenemu.app.data.skins.DeltaSkinFixtures.install(com.ravenemu.app.data.skins.DeltaSkins.root(app), work, "Test");
+        android.content.SharedPreferences preferences = app.getSharedPreferences(PlaybackSettings.PREFERENCES, 0);
+        preferences.edit().putString("skins.selected.gb_gbc", com.ravenemu.app.data.skins.DeltaSkinFixtures.IDENTIFIER)
+                .commit();
+        DeltaSkinView.Renderer previous = DeltaSkinView.renderer;
+        DeltaSkinView.renderer = (pdf, sha, kind, w, h) -> {
+            throw new com.ravenemu.app.data.skins.DeltaSkinException(
+                    com.ravenemu.app.data.skins.DeltaSkinException.Code.PDF_INVALID, "test");
+        };
+        try {
+            ShadowToast.reset();
+            PlayerActivity activity = loaded();
+            settleSkin(activity);
+            GameControlsView controls = ReflectionHelpers.getField(activity, "gameControls");
+            DeltaSkinView skin = ReflectionHelpers.getField(activity, "skinView");
+            assertEquals(View.VISIBLE, controls.getVisibility());
+            assertEquals(View.GONE, skin.getVisibility());
+            assertEquals("Skin invalide : commandes classiques restaurées", ShadowToast.getTextOfLatestToast());
+            assertNull("The console goes back to the classic controls",
+                    preferences.getString("skins.selected.gb_gbc", null));
+        } finally {
+            DeltaSkinView.renderer = previous;
+        }
+    }
+
     @Test public void theMenuButtonAmongTheControlsOpensTheGameMenu() throws Exception {
         PlayerActivity activity = loaded();
         GameControlsView controls = ReflectionHelpers.getField(activity, "gameControls");
@@ -1101,6 +1181,27 @@ public final class PlayerActivityTest {
     }
 
     private static void idle() { shadowOf(Looper.getMainLooper()).idle(); }
+
+    /** The skin read off the UI thread, laid out, its page drawn, the picture placed. */
+    private void settleSkin(PlayerActivity activity) throws Exception {
+        ExecutorService skins = ReflectionHelpers.getStaticField(PlayerActivity.class, "SKINS");
+        for (int i = 0; i < 3; i++) {
+            skins.submit(() -> {}).get(5, TimeUnit.SECONDS);
+            idle();
+            View decor = activity.getWindow().getDecorView();
+            decor.measure(View.MeasureSpec.makeMeasureSpec(320, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(568, View.MeasureSpec.EXACTLY));
+            decor.layout(0, 0, 320, 568);
+            DeltaSkinView.RENDER.submit(() -> {}).get(5, TimeUnit.SECONDS);
+            idle();
+        }
+    }
+
+    private static void touchSkin(DeltaSkinView skin, int action, float x, float y) {
+        long now = android.os.SystemClock.uptimeMillis();
+        MotionEvent event = MotionEvent.obtain(now, now, action, x, y, 0);
+        try { skin.dispatchTouchEvent(event); } finally { event.recycle(); }
+    }
     private View menuButton(String label) {
         View result = find(menuDialog().getWindow().getDecorView(), view ->
                 view instanceof TextView && label.contentEquals(((TextView)view).getText()));
