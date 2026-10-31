@@ -145,7 +145,7 @@ public final class HomeActivity extends Activity {
         center.rightMargin = dp(102);
         toolbar.addView(heading, center);
 
-        View settings = iconButton(RavenIcon.Glyph.SETTINGS, TEXT, "Paramètres", view -> showSettings());
+        View settings = iconButton(RavenIcon.Glyph.SETTINGS, ACCENT, "Paramètres", view -> showSettings());
         toolbar.addView(settings, new FrameLayout.LayoutParams(dp(48), -1, Gravity.LEFT));
 
         LinearLayout actions = new LinearLayout(this);
@@ -153,7 +153,7 @@ public final class HomeActivity extends Activity {
         toolbar.addView(actions, right);
         actions.addView(iconButton(RavenIcon.Glyph.ADD, ACCENT, "Ajouter une ROM", view -> pickRom()),
                 new LinearLayout.LayoutParams(dp(48), -1));
-        actions.addView(iconButton(RavenIcon.Glyph.MORE, TEXT, "Plus d'options", this::showOptions),
+        actions.addView(iconButton(RavenIcon.Glyph.MORE, ACCENT, "Plus d'options", this::showOptions),
                 new LinearLayout.LayoutParams(dp(48), -1));
 
         search = new EditText(this);
@@ -163,7 +163,7 @@ public final class HomeActivity extends Activity {
         search.setTextSize(15);
         search.setHint("Rechercher un jeu");
         search.setCompoundDrawablesRelativeWithIntrinsicBounds(
-                new RavenIcon(RavenIcon.Glyph.SEARCH, MUTED, dp(20)), null, null, null);
+                new RavenIcon(RavenIcon.Glyph.SEARCH, ACCENT, dp(20)), null, null, null);
         search.setCompoundDrawablePadding(dp(10));
         search.setContentDescription("Rechercher un jeu");
         search.setText(searchText);
@@ -257,11 +257,12 @@ public final class HomeActivity extends Activity {
         tabs.removeAllViews();
         if (pages.size() <= 1) return;
         for (String page : pages) {
-            // The beta's PageIndicator: a console pictogram per page, larger when active.
+            // The beta's PageIndicator: a console pictogram per page, larger and
+            // on its highlight when active; every icon in the accent colour.
             boolean active = page.equals(selectedPage);
             RavenIcon.Glyph glyph = page.isEmpty() ? RavenIcon.Glyph.ALL : "gb".equals(page) ? RavenIcon.Glyph.GB
                     : "gbc".equals(page) ? RavenIcon.Glyph.GBC : RavenIcon.Glyph.GBA;
-            android.widget.ImageView option = RavenIcon.button(this, glyph, active ? ACCENT : MUTED,
+            android.widget.ImageView option = RavenIcon.button(this, glyph, ACCENT,
                     active ? 24 : 21, pageTitle(page));
             ((RavenIcon) option.getDrawable()).setScreenAlpha(active ? 255 : 128);
             option.setSelected(active);

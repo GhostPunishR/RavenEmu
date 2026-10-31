@@ -147,7 +147,7 @@ public final class PlaybackSettingsActivity extends Activity {
         LinearLayout toolbar = new LinearLayout(this);
         toolbar.setGravity(Gravity.CENTER_VERTICAL);
         toolbar.setBackgroundColor(HomeActivity.SURFACE);
-        back = RavenIcon.button(this, RavenIcon.Glyph.BACK, HomeActivity.TEXT, 24, "Retour aux paramètres");
+        back = RavenIcon.button(this, RavenIcon.Glyph.BACK, HomeActivity.ACCENT, 24, "Retour aux paramètres");
         back.setOnClickListener(view -> navigateBack());
         toolbar.addView(back, new LinearLayout.LayoutParams(dp(48), -1));
         title = text("", 20, HomeActivity.TEXT);

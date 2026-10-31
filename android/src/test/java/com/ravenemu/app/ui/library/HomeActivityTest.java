@@ -479,6 +479,12 @@ public final class HomeActivityTest {
         EditText search = find(root, EditText.class);
         assertEquals("Rechercher un jeu", search.getHint().toString());
         assertTrue(search.getCompoundDrawablesRelative()[0] instanceof RavenIcon);
+        // Every icon in the one accent colour, the owner's choice.
+        for (String label : new String[]{"Paramètres", "Ajouter une ROM", "Plus d'options", "Tous les jeux",
+                "Game Boy", "Game Boy Color"})
+            assertEquals(label, HomeActivity.ACCENT,
+                    ((RavenIcon) ((android.widget.ImageView) described(root, label)).getDrawable()).tint());
+        assertEquals(HomeActivity.ACCENT, ((RavenIcon) search.getCompoundDrawablesRelative()[0]).tint());
     }
 
     private static RavenIcon.Glyph glyph(View view) {

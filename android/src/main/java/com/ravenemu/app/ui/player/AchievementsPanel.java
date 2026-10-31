@@ -195,7 +195,7 @@ final class AchievementsPanel {
         middle.setMarginStart(dp(12));
         middle.setMarginEnd(dp(8));
         card.addView(text, middle);
-        card.addView(RavenIcon.image(owner, RavenIcon.Glyph.CHEVRON, HomeActivity.MUTED, 20),
+        card.addView(RavenIcon.image(owner, RavenIcon.Glyph.CHEVRON, HomeActivity.ACCENT, 20),
                 new LinearLayout.LayoutParams(dp(24), dp(24)));
         card.setContentDescription("RetroAchievements. " + lines[0] + ". " + lines[1]
                 + (lines[2].isEmpty() ? "" : ". " + lines[2]) + ". Ouvrir RetroAchievements");

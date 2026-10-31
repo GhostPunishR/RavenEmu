@@ -95,6 +95,9 @@ public final class PlaybackSettingsActivityTest {
             assertEquals(row[0], RavenIcon.Glyph.valueOf(row[1]), glyph);
             assertTrue("One icon per category: " + row[0], seen.add(glyph));
         }
+        View close = described(activity, "Fermer les paramètres");
+        assertEquals(com.ravenemu.app.ui.library.HomeActivity.ACCENT,
+                ((RavenIcon) ((android.widget.ImageView) close).getDrawable()).tint());
         assertNull("No chevron typed as text", find(activity, view -> view instanceof TextView
                 && "›".contentEquals(((TextView) view).getText())));
     }

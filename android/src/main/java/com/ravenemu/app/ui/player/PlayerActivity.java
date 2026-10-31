@@ -182,7 +182,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
 
         LinearLayout toolbar = new LinearLayout(this);
         toolbar.setGravity(Gravity.CENTER_VERTICAL);
-        View back = RavenIcon.button(this, RavenIcon.Glyph.BACK, HomeActivity.TEXT, 24, "Retour à la bibliothèque");
+        View back = RavenIcon.button(this, RavenIcon.Glyph.BACK, HomeActivity.ACCENT, 24, "Retour à la bibliothèque");
         back.setOnClickListener(view -> finish());
         toolbar.addView(back, new LinearLayout.LayoutParams(dp(48), dp(48)));
         gameTitle = new TextView(this);
@@ -194,7 +194,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         gameTitle.setGravity(Gravity.CENTER_VERTICAL);
         toolbar.addView(gameTitle, new LinearLayout.LayoutParams(0, dp(48), 1));
 
-        View menu = RavenIcon.button(this, RavenIcon.Glyph.MORE, HomeActivity.TEXT, 24, "Menu du jeu");
+        View menu = RavenIcon.button(this, RavenIcon.Glyph.MORE, HomeActivity.ACCENT, 24, "Menu du jeu");
         menu.setOnClickListener(view -> togglePlayerMenu());
         toolbar.addView(menu, new LinearLayout.LayoutParams(dp(48), dp(48)));
         header.addView(toolbar);

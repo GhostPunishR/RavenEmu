@@ -20,7 +20,8 @@ import java.util.Locale;
 import java.util.Map;
 
 /** RavenEmu's icons, drawn for it on a 24 × 24 grid: one 2-unit line with
- * round ends and corners, and a few filled details, in one colour, so that
+ * round ends and corners, and a few filled details, all in the accent colour
+ * (the owner's choice; gold only marks an unlock in the banner), so that
  * every screen draws the same crisp shapes at any density, never a font's
  * symbol. The console pictograms follow the beta's ConsoleIcons (portrait
  * handheld, the same with a colour screen, landscape handheld, a grid for

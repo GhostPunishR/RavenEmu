@@ -1054,8 +1054,11 @@ reprenait celle d'« À propos »).
 
 - `ui/common/RavenIcon` : un jeu d'icônes dessinées pour RavenEmu sur une
   grille de 24, un trait de 2 aux bouts et angles arrondis et quelques
-  détails pleins, d'une seule couleur ; même rendu sur tout téléphone et à
-  toute densité, jamais un caractère d'une police.
+  détails pleins, toutes dans la couleur d'accent violette (demande du
+  propriétaire : plus aucune icône blanche ou grise ; seul le doré marque un
+  succès débloqué) ; même rendu sur tout téléphone et à toute densité, jamais
+  un caractère d'une police. L'onglet actif se distingue par son fond et sa
+  taille.
 - Remplacements : `⚙`, `+`, `⋮` de la bibliothèque ; la loupe `⌕` de la
   recherche ; `‹` et `⋮` du lecteur ; `‹` des Paramètres, des licences et des
   pages du menu de jeu ; les chevrons `›` et liens `↗` ; les marques radio

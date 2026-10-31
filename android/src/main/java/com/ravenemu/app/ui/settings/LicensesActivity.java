@@ -57,7 +57,7 @@ public final class LicensesActivity extends Activity {
 
         LinearLayout toolbar = new LinearLayout(this);
         toolbar.setGravity(Gravity.CENTER_VERTICAL);
-        View back = RavenIcon.button(this, RavenIcon.Glyph.BACK, HomeActivity.TEXT, 24, "Retour aux paramètres");
+        View back = RavenIcon.button(this, RavenIcon.Glyph.BACK, HomeActivity.ACCENT, 24, "Retour aux paramètres");
         back.setOnClickListener(view -> finish());
         toolbar.addView(back, new LinearLayout.LayoutParams(dp(48), dp(48)));
         TextView heading = text("Licences et crédits", 19, HomeActivity.TEXT);
