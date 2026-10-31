@@ -505,10 +505,21 @@ This is an integration prototype, not a release candidate.
 - Saves and the newly imported ROM library are **isolated** from the original
   RavenEmu beta. Automatic import of that beta's ROMs and saves is not
   implemented. Storage is private; removing the test application deletes it.
+- The game sheet's **Sauvegardes** section (lot S-1) exports the game's SRAM
+  as `.sav` or `.srm` and imports a `.sav`, a `.srm` or a beta RavenEmu
+  `.zip` after a review, as the beta does (`data/saves/SaveTransfer`,
+  `ui/library/SaveTransferUi`). An archive is matched to the SHA-256 of the
+  ROM bytes; its save states are checked but not imported (the beta's states
+  carry no core identity). Transfers run on `SaveStorage.IO`, the player's
+  own save executor, so they always follow the game's last SRAM write. A
+  save of another size is read as RavenCore reads one, its first bytes over
+  the core's fresh SRAM, then written back at the core's size; a game without
+  SRAM keeps the file unread.
 - The Java home screen uses the RavenEmu-style grid/list; file selection
   remains Android SAF. The Java pause sheet controls the C pause/audio gate.
-- RetroAchievements: Softcore, unlock banners and chime only; Hardcore, the
-  achievement list, leaderboards and the offline journal wait for RA-3.
+- RetroAchievements: Softcore with banners, chime, the achievement list,
+  leaderboards, challenge indicators and the offline journal; Hardcore waits
+  for RetroAchievements' approval of RavenEmu, as in the beta.
   No wireless/local link cable or Delta skins yet.
 - Cover images must be manually selected by the user from local documents.
   Import is limited to 8 MiB and 4096 x 4096 input, decoded into 512 px PNG

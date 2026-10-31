@@ -4,6 +4,8 @@ import com.ravenemu.app.data.library.CoverRepository;
 import com.ravenemu.app.data.library.RomLibrary;
 import com.ravenemu.app.data.saves.GbaBiosRepository;
 import com.ravenemu.app.data.saves.SaveRepository;
+import com.ravenemu.app.data.saves.SaveStorage;
+import com.ravenemu.app.data.saves.SaveTransfer;
 import com.ravenemu.app.data.saves.StatePreview;
 import com.ravenemu.app.data.saves.StateSlotRepository;
 import com.ravenemu.app.platform.AchievementsHttp;
@@ -45,7 +47,6 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import java.io.IOException;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.microedition.khronos.egl.EGLConfig;
@@ -58,7 +59,8 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
     public static final String EXTRA_ROM_KEY = "com.ravenemu.app.ROM_KEY";
     // Shared ordering: a recreated Activity must read SRAM only after the
     // previous Activity's queued pause snapshot has been written.
-    private static final ExecutorService STORAGE_IO = Executors.newSingleThreadExecutor();
+    /** Shared with the library's save transfers: one order for every save write. */
+    private static final ExecutorService STORAGE_IO = SaveStorage.IO;
     private final ExecutorService io = STORAGE_IO;
     private final AtomicBoolean disposed = new AtomicBoolean(false);
     private GLSurfaceView surface;
@@ -383,12 +385,24 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
                     undoState = null;
                     String failure = NativeBridge.openRom(nativeDir, dataDir,
                             core, rom, entry.title, coreOptions);
-                    if (failure == null && battery != null &&
-                            !NativeBridge.restoreBattery(battery)) {
-                        achievements.stop();
-                        NativeBridge.closeRom();
-                        failure = "SRAM incompatible : fichier original conservé";
+                    String notice = null;
+                    if (failure == null && battery != null && !NativeBridge.restoreBattery(battery)) {
+                        // A file of another size, from another emulator or an
+                        // import: read as RavenCore reads one, its first bytes
+                        // over the core's fresh SRAM (SaveTransfer.fit).
+                        byte[] fitted = SaveTransfer.fit(battery, NativeBridge.saveBattery());
+                        if (fitted == null) {
+                            notice = "Ce jeu n'a pas de mémoire de sauvegarde : fichier conservé, non chargé";
+                        } else if (fitted != battery && NativeBridge.restoreBattery(fitted)) {
+                            notice = "Sauvegarde de " + battery.length + " octets lue sur les "
+                                    + fitted.length + " octets du jeu";
+                        } else {
+                            achievements.stop();
+                            NativeBridge.closeRom();
+                            failure = "SRAM incompatible : fichier original conservé";
+                        }
                     }
+                    if (failure == null && notice != null) postStatus(notice);
                     // Once the SRAM is in: the ROM is identified by its hash.
                     if (failure == null) achievements.start(http, account, journal, entry.system, rom, hardcore);
                     else achievements.stop();

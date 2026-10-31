@@ -73,6 +73,7 @@ public final class HomeActivity extends Activity {
     private GameDetailsSheet details;
     private String detailsKey;
     private String restoredDetailsKey;
+    private SaveTransferUi saves;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -83,6 +84,7 @@ public final class HomeActivity extends Activity {
             selectedCoverKey = state.getString("library.cover");
             restoredDetailsKey = state.getString("library.details");
         }
+        saves = new SaveTransferUi(this, state);
         getWindow().setStatusBarColor(Color.BLACK);
         getWindow().setNavigationBarColor(Color.BLACK);
         createLibrary();
@@ -358,6 +360,10 @@ public final class HomeActivity extends Activity {
         LinearLayout.LayoutParams playParams = new LinearLayout.LayoutParams(-1, dp(48));
         playParams.topMargin = dp(16);
         panel.addView(play, playParams);
+        saves.addSection(panel, entry, () -> {
+            GameDetailsSheet sheet = details;
+            if (sheet != null) sheet.dismiss();
+        });
 
         // Keep every action reachable in landscape and with large system text.
         NestedScrollView scroll = new NestedScrollView(this);
@@ -420,6 +426,7 @@ public final class HomeActivity extends Activity {
 
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
+        if (saves.onResult(request, result, data)) return;
         if (result != RESULT_OK || data == null || data.getData() == null) {
             if (request == PICK_COVER) selectedCoverKey = null;
             return;
@@ -499,6 +506,7 @@ public final class HomeActivity extends Activity {
         state.putString("library.search", searchText);
         state.putString("library.page", selectedPage);
         state.putBoolean("library.list", listMode);
+        saves.save(state);
         state.putString("library.cover", selectedCoverKey);
         state.putString("library.details", details != null && details.isShowing()
                 ? detailsKey : restoredDetailsKey);
@@ -507,6 +515,7 @@ public final class HomeActivity extends Activity {
     @Override protected void onDestroy() {
         destroyed = true;
         if (details != null) details.dismiss();
+        saves.destroy();
         io.shutdown();
         super.onDestroy();
     }

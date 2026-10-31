@@ -919,3 +919,43 @@ La bêta avait rencontré le même problème et le corrigeait dans
   commande finit sans `-O2`/`-O3` ou si l'une des cibles natives manque.
 
 À vérifier sur téléphone : vitesse réelle des jeux GB, GBC et GBA.
+
+## Sauvegardes, lot S-1 : import et export depuis la fiche du jeu
+
+Portage de `GbSaveTransfer` et `GbSaveTransfersUi` de la bêta 0.8.1, pour la
+sauvegarde de la cartouche (SRAM).
+
+- **Fiche du jeu**, section « Sauvegardes » de la bêta : « Exporter » propose
+  `.sav` (la plupart des émulateurs) ou `.srm` (RetroArch), sous le nom de la
+  ROM ; « Importer » lit un `.sav`, un `.srm` ou une archive `.zip` RavenEmu.
+- **Revue avant écriture**, avec les textes de la bêta : jeu visé, contenu,
+  avertissement pour un fichier seul qui ne nomme pas sa ROM, données
+  remplacées. Rien n'est écrit avant « Confirmer l'import ».
+- **Archives de la bêta** (`RavenEmu-GB-Saves` v1 et la génération V3, paquet
+  d'un jeu ou archive de bibliothèque avec un dossier par jeu) : liées au
+  SHA-256 des octets de la ROM, manifeste et sommes de contrôle vérifiés,
+  noms, dossiers et tailles bornés (archive piégée refusée). Seule la SRAM est
+  importée : les états de l'archive sont vérifiés puis nommés comme non
+  importés, car ceux de la bêta ne portent pas l'identité du core qui les a
+  écrits.
+- **Ordre des écritures** : l'exécuteur de sauvegarde du lecteur devient
+  `SaveStorage.IO`, partagé avec la bibliothèque. Le lecteur met sa dernière
+  SRAM en file dans `onPause`, avant que la bibliothèque reprenne la main :
+  un import la suit toujours et n'est jamais écrasé par elle.
+- **Taille différente** : un `.sav` d'un autre émulateur peut porter une autre
+  fin d'horloge, ou aucune. Le lecteur ne refuse plus le jeu : il lit le
+  fichier comme RavenCore le lit, ses premiers octets sur la SRAM neuve du
+  core, l'annonce, puis la réécrit à la taille du core. Un jeu sans SRAM
+  garde le fichier sans le lire. Une restauration refusée à taille égale
+  arrête toujours le jeu en conservant le fichier.
+- Tests : `SaveTransferTest` (fichiers bruts, archives d'un jeu et de
+  bibliothèque, autre ROM, fichier altéré, chemins, états seuls, adaptation
+  de taille, nom d'export), `HomeActivityTest` (export `.srm`, export sans
+  sauvegarde, revue puis confirmation, refus et annulation, archive, reprise
+  après recréation), `PlayerActivityTest` (taille différente, jeu sans SRAM,
+  exécuteur partagé).
+
+Écarts restants : les états de la bêta ne sont pas importés (leur conversion
+demanderait la décision du propriétaire) ; l'export de toutes les sauvegardes
+(S-2) et l'import d'un dossier (S-3) suivent. Validation sur téléphone à faire.
+

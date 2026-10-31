@@ -5,6 +5,7 @@ import com.ravenemu.app.bridge.NativeBridge;
 import com.ravenemu.app.data.library.RomLibrary;
 import com.ravenemu.app.data.saves.GbaBiosRepository;
 import com.ravenemu.app.data.saves.SaveRepository;
+import com.ravenemu.app.data.saves.SaveStorage;
 import com.ravenemu.app.data.saves.StatePreview;
 import com.ravenemu.app.data.saves.StateSlotRepository;
 import com.ravenemu.app.platform.AchievementsHttp;
@@ -758,6 +759,44 @@ public final class PlayerActivityTest {
         assertFalse(activity.isFinishing());
     }
 
+    /** The game's next SRAM write, the first frame's or the pause's, keeps the core's size. */
+    @Test public void aSaveOfAnotherSizeIsReadAsTheCoreReadsItThenKeptAtItsSize() throws Exception {
+        FakeNative.sramSize = 4;
+        SaveRepository.write(files, key, "srm", new byte[]{1, 2, 3, 4, 5, 6});
+        ShadowToast.reset();
+        PlayerActivity activity = loaded();
+        assertFalse("The game plays", FakeNative.closed);
+        assertArrayEquals(new byte[]{1, 2, 3, 4},
+                FakeNative.restoredBatteries.get(FakeNative.restoredBatteries.size() - 1));
+        assertEquals("Sauvegarde de 6 octets lue sur les 4 octets du jeu", ShadowToast.getTextOfLatestToast());
+        activities.remove(activities.size() - 1).pause().stop().destroy();
+        io(activity).submit(() -> {}).get(5, TimeUnit.SECONDS);
+        assertArrayEquals(new byte[]{1, 2, 3, 4}, SaveRepository.read(files, key, "srm"));
+
+        // Shorter: the rest of the SRAM stays the core's.
+        SaveRepository.write(files, key, "srm", new byte[]{1, 2});
+        loaded();
+        assertArrayEquals(new byte[]{1, 2, 0x7f, 0x7f},
+                FakeNative.restoredBatteries.get(FakeNative.restoredBatteries.size() - 1));
+    }
+
+    @Test public void aGameWithoutSramStillPlaysAndKeepsItsFile() throws Exception {
+        FakeNative.sramSize = 0;
+        SaveRepository.write(files, key, "srm", new byte[]{1, 2, 3});
+        ShadowToast.reset();
+        PlayerActivity activity = loaded();
+        assertFalse(FakeNative.closed);
+        assertEquals("Ce jeu n'a pas de mémoire de sauvegarde : fichier conservé, non chargé",
+                ShadowToast.getTextOfLatestToast());
+        activities.remove(activities.size() - 1).pause().stop().destroy();
+        io(activity).submit(() -> {}).get(5, TimeUnit.SECONDS);
+        assertArrayEquals(new byte[]{1, 2, 3}, SaveRepository.read(files, key, "srm"));
+    }
+
+    @Test public void thePlayersSaveWritesShareTheLibrarysExecutor() throws Exception {
+        assertSame(SaveStorage.IO, io(loaded()));
+    }
+
     @Test public void failedLoadAndRollbackStopTheGameWithoutDeletingSramOrSlot() throws Exception {
         PlayerActivity activity = loaded();
         SaveRepository.write(files, key, "srm", new byte[]{50, 51});
@@ -1016,6 +1055,8 @@ public final class PlayerActivityTest {
         static int opens, failRestores;
         static boolean closed, paused, lastAdvance;
         static int framesToAdvance, draws, batteryReads;
+        /** The core's SRAM size, as the bridge checks it; -1 takes any size. */
+        static int sramSize = -1;
         static int settingsApplies;
         static PlaybackSettings appliedSettings;
         static int appliedEffect = -1, appliedResampler = -1;
@@ -1034,6 +1075,7 @@ public final class PlayerActivityTest {
             restoreAttempts.clear(); restoredBatteries.clear();
             opens = failRestores = 0; closed = lastAdvance = false; paused = true;
             framesToAdvance = 1; draws = batteryReads = 0;
+            sramSize = -1;
             settingsApplies = 0; appliedSettings = null; appliedEffect = -1; appliedResampler = -1;
             openOptions = liveOptions = null;
             openCore = null;
@@ -1050,7 +1092,10 @@ public final class PlayerActivityTest {
         @Implementation protected static void initGl() {}
         @Implementation protected static String openRom(String nativeDir, String filesDir, String system, byte[] rom,
                                                         String title, String[] coreOptions) {
-            requireGl(); opens++; closed = false; state = new byte[]{1, 2}; battery = new byte[]{0};
+            requireGl(); opens++; closed = false; state = new byte[]{1, 2};
+            if (sramSize < 0) battery = new byte[]{0};
+            else if (sramSize == 0) battery = null;
+            else { battery = new byte[sramSize]; Arrays.fill(battery, (byte)0x7f); }
             openCore = system; openOptions = coreOptions.clone(); return null;
         }
         @Implementation protected static void setDisplayRate(float hertz) { requireGl(); displayRate = hertz; }
@@ -1070,9 +1115,13 @@ public final class PlayerActivityTest {
         @Implementation protected static int[] capturePreview() {
             requireGl(); return preview == null ? null : preview.clone();
         }
-        @Implementation protected static byte[] saveBattery() { batteryReads++; return closed ? null : battery.clone(); }
+        @Implementation protected static byte[] saveBattery() {
+            batteryReads++; return closed || battery == null ? null : battery.clone();
+        }
         @Implementation protected static boolean restoreBattery(byte[] value) {
-            requireGl(); restoredBatteries.add(value.clone()); battery = value.clone(); return true;
+            requireGl();
+            if (sramSize >= 0 && value.length != sramSize) return false;
+            restoredBatteries.add(value.clone()); battery = value.clone(); return true;
         }
         @Implementation protected static boolean restoreState(byte[] value) {
             requireGl(); restoreAttempts.add(value.clone());
