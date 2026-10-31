@@ -816,11 +816,29 @@ RA-1 :
   bandeau (file, durées, réglages, position), lecteur avec et sans compte ;
   JUnit : textes, User-Agent, carillon.
 
-Écarts restants pour **RA-3** : verrous du mode Hardcore (pas de chargement
+## RetroAchievements, tranche RA-3
+
+**RA-3a, journal hors ligne** (portage de `AwardJournal.kt`, `AwardPolicy.kt`
+et `AwardSyncTracker.kt` de la bêta) :
+- chaque requête de déblocage construite par rcheevos (Softcore, HTTPS vers
+  `retroachievements.org` exactement) est écrite dans le journal **avant**
+  d'être envoyée, et en sort quand le service l'accepte (ou répond qu'il l'a
+  déjà) ;
+- le journal (`settings/AwardJournal.java`, `noBackupFilesDir`) est scellé
+  par le Keystore et lié à son fichier (données associées) : le fichier du
+  compte ne s'ouvre pas comme journal, ni l'inverse ; une seule tentative
+  gardée par déblocage, 256 au plus ;
+- à la session suivante du même compte, une fois connecté, ce qu'une session
+  précédente a laissé est renvoyé avec le nouveau jeton (signature et délai
+  de rcheevos intacts), de 5 s en 5 s doublées jusqu'à 2 min ; les déblocages
+  de la session en cours restent à rcheevos ;
+- la déconnexion efface le journal et révoque ceux encore ouverts, comme la
+  bêta ; si le journal est indisponible ou plein, le bandeau le dit une fois.
+
+Écarts restants pour **RA-3** (après RA-3a) : verrous du mode Hardcore (pas de chargement
 d'état, pauses limitées) et son activation, liste des succès, classements,
 indicateurs de défi et de suivi, carte du compte dans le menu de jeu, journal
-hors ligne (aujourd'hui rcheevos réessaie tant que le jeu reste ouvert ; un
-déblocage dont la requête n'est pas encore partie au moment où le lecteur est
-détruit, rotation comprise, est perdu), progression des succès dans les états.
+hors ligne (fait en RA-3a, ci-dessous), progression des succès dans les
+états.
 La recréation du lecteur (rotation) reconnecte le compte et ré-identifie le
 jeu. Validation sur téléphone et connexion à un vrai compte à faire.

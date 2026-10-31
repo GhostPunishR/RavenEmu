@@ -40,6 +40,11 @@ public class FakeAchievements {
     /** An event raised without a request, as during frames. */
     public static synchronized void raise(String... fields) { events.add(fields); }
 
+    /** A request the module asks to send next, such as an award. */
+    public static synchronized void request(int id, String url, String post) {
+        requests.add(new String[]{String.valueOf(id), url, post, "application/x-www-form-urlencoded"});
+    }
+
     @Implementation protected static void __staticInitializer__() {}
 
     @Implementation protected static synchronized long createAccount() {

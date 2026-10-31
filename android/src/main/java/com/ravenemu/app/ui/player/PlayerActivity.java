@@ -11,6 +11,7 @@ import com.ravenemu.app.platform.RetroUserAgent;
 import com.ravenemu.app.platform.SystemBarInsets;
 import com.ravenemu.app.settings.AchievementAccount;
 import com.ravenemu.app.settings.AchievementSettings;
+import com.ravenemu.app.settings.AwardJournal;
 import com.ravenemu.app.settings.CartridgeSettings;
 import com.ravenemu.app.settings.ConsoleSettings;
 import com.ravenemu.app.settings.ControlLayout;
@@ -358,6 +359,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
                 // achievements follow it. Without an account, no network.
                 final AchievementAccount account = AchievementAccount.load(this);
                 final AchievementsHttp http = account == null ? null : new AchievementsHttp(RetroUserAgent.of(this));
+                final AwardJournal journal = account == null ? null : AwardJournal.open(this);
                 if (disposed.get()) return;
                 String nativeDir = getApplicationInfo().nativeLibraryDir;
                 String dataDir = getFilesDir().getAbsolutePath();
@@ -373,7 +375,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
                         failure = "SRAM incompatible : fichier original conservé";
                     }
                     // Once the SRAM is in: the ROM is identified by its hash.
-                    if (failure == null) achievements.start(http, account, entry.system, rom);
+                    if (failure == null) achievements.start(http, account, journal, entry.system, rom);
                     else achievements.stop();
                     final double fps = failure == null ? NativeBridge.frameRate() : 0.0;
                     if (failure == null) {

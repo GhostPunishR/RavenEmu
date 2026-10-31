@@ -4,6 +4,7 @@ import com.ravenemu.app.data.saves.GbaBiosRepository;
 import com.ravenemu.app.platform.ClearSealer;
 import com.ravenemu.app.settings.AchievementAccount;
 import com.ravenemu.app.settings.AchievementSettings;
+import com.ravenemu.app.settings.AwardJournal;
 import com.ravenemu.app.settings.CartridgeSettings;
 import com.ravenemu.app.settings.ConsoleSettings;
 import com.ravenemu.app.settings.ControlLayout;
@@ -365,9 +366,14 @@ public final class PlaybackSettingsActivityTest {
         idleNetwork(activity);
         assertEquals("TOKEN-9", FakeAchievements.lastToken);
         assertNotNull(text(activity, "Raven Rouge"));
+        assertTrue(AwardJournal.open(activity).remember(new AwardJournal.Award("Raven",
+                "https://retroachievements.org/dorequest.php", "r=awardachievement&u=Raven&t=TOKEN-9&a=1&h=0&v=s",
+                "application/x-www-form-urlencoded")));
         described(activity, "Se déconnecter de RetroAchievements").performClick();
         idleIo(activity);
         assertNull(AchievementAccount.load(activity));
+        assertTrue("The unlocks still waiting go with the account",
+                AwardJournal.open(activity).forAccount("Raven").isEmpty());
         assertNotNull(described(activity, "Nom d'utilisateur"));
     }
 

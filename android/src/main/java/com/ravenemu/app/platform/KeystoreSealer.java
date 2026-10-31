@@ -22,9 +22,16 @@ public final class KeystoreSealer {
 
     private KeystoreSealer() {}
 
-    public static byte[] seal(byte[] plain) throws GeneralSecurityException {
+    public static byte[] seal(byte[] plain) throws GeneralSecurityException { return seal(plain, null); }
+
+    public static byte[] open(byte[] sealed) throws GeneralSecurityException { return open(sealed, null); }
+
+    /** `context`, authenticated but not stored, binds the data to its file:
+     * one file's contents never open as another's. */
+    public static byte[] seal(byte[] plain, byte[] context) throws GeneralSecurityException {
         Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
         cipher.init(Cipher.ENCRYPT_MODE, key());
+        if (context != null) cipher.updateAAD(context);
         byte[] nonce = cipher.getIV();
         if (nonce == null || nonce.length != NONCE_BYTES) throw new GeneralSecurityException("Unexpected GCM nonce");
         byte[] body = cipher.doFinal(plain);
@@ -33,10 +40,11 @@ public final class KeystoreSealer {
         return sealed;
     }
 
-    public static byte[] open(byte[] sealed) throws GeneralSecurityException {
+    public static byte[] open(byte[] sealed, byte[] context) throws GeneralSecurityException {
         if (sealed == null || sealed.length <= NONCE_BYTES) throw new GeneralSecurityException("Sealed data too short");
         Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
         cipher.init(Cipher.DECRYPT_MODE, key(), new GCMParameterSpec(TAG_BITS, sealed, 0, NONCE_BYTES));
+        if (context != null) cipher.updateAAD(context);
         return cipher.doFinal(sealed, NONCE_BYTES, sealed.length - NONCE_BYTES);
     }
 

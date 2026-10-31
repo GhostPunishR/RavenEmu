@@ -38,15 +38,17 @@ final class AchievementNotices {
                             "Succès indisponibles : réseau absent au lancement du jeu", "", false)
                     : new Notice("Connexion RetroAchievements refusée", or(event.title,
                             "Reconnectez le compte dans les paramètres"), "", false);
-            // rcheevos keeps the awards and retries while the game stays open.
+            // rcheevos retries while the game stays open; the journal, after.
             case "offline": return new Notice("RetroAchievements hors ligne",
-                    "Les succès seront envoyés au retour du réseau, jeu ouvert", "", false);
+                    "Les succès seront envoyés au retour du réseau", "", false);
             case "online": return new Notice("RetroAchievements", "De nouveau en ligne", "", false);
             case "server_error": return new Notice("Erreur RetroAchievements", or(event.title,
                     "Le serveur n'a pas répondu"), "", false);
             case "leaderboard_started": return new Notice("Classement commencé", event.title, "", false);
             case "leaderboard_failed": return new Notice("Classement annulé", event.title, "", false);
             case "leaderboard_submitted": return new Notice("Classement envoyé", event.title, "", false);
+            // RavenEmu's own, such as the offline journal being unavailable.
+            case "notice": return new Notice(event.title, event.detail, "", false);
             default: return null;
         }
     }

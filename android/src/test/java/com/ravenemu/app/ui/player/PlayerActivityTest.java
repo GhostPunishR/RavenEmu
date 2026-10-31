@@ -9,8 +9,10 @@ import com.ravenemu.app.data.saves.StatePreview;
 import com.ravenemu.app.data.saves.StateSlotRepository;
 import com.ravenemu.app.platform.AchievementsHttp;
 import com.ravenemu.app.platform.ClearSealer;
+import com.ravenemu.app.platform.FakeHttp;
 import com.ravenemu.app.settings.AchievementAccount;
 import com.ravenemu.app.settings.AchievementSettings;
+import com.ravenemu.app.settings.AwardJournal;
 import com.ravenemu.app.settings.CartridgeSettings;
 import com.ravenemu.app.settings.ConsoleSettings;
 import com.ravenemu.app.settings.ControlLayout;
@@ -63,7 +65,7 @@ import static org.robolectric.Shadows.shadowOf;
 @RunWith(RobolectricTestRunner.class)
 @Config(sdk = 36, qualifiers = "en-rUS-w320dp-h568dp-mdpi",
         shadows = {PlayerActivityTest.QueuedGl.class, PlayerActivityTest.FakeNative.class,
-                FakeAchievements.class, ClearSealer.class})
+                FakeAchievements.class, ClearSealer.class, FakeHttp.class})
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 public final class PlayerActivityTest {
     private static final String COMPATIBILITY = "RavenCore-test-pinned|gb|1";
@@ -74,7 +76,9 @@ public final class PlayerActivityTest {
     @Before public void setUp() throws Exception {
         FakeNative.reset();
         FakeAchievements.reset();
+        FakeHttp.reset();
         AchievementAccount.clear(RuntimeEnvironment.getApplication());
+        AwardJournal.clear(RuntimeEnvironment.getApplication());
         RuntimeEnvironment.getApplication().getSharedPreferences(PlaybackSettings.PREFERENCES, 0)
                 .edit().clear().commit();
         files = RuntimeEnvironment.getApplication().getFilesDir();
@@ -291,6 +295,56 @@ public final class PlayerActivityTest {
         idle();
         AchievementOverlay overlay = ReflectionHelpers.getField(activity, "achievementOverlay");
         assertEquals("12 succès disponibles · Libre", String.valueOf(overlay.bannerText()));
+    }
+
+    private static final String AWARD_URL = "https://retroachievements.org/dorequest.php";
+    private static final String AWARD = "r=awardachievement&u=Raven&t=TOKEN-1&a=5501&h=0&m=abc&o=3&v=sig";
+
+    /** Frames until the condition holds; the network threads are real. */
+    private static void framesUntil(PlayerActivity activity, java.util.function.BooleanSupplier condition)
+            throws Exception {
+        for (int i = 0; i < 2500 && !condition.getAsBoolean(); i++) {
+            activity.onDrawFrame(null);
+            idle();
+            Thread.sleep(2);
+        }
+        assertTrue("Condition reached within five seconds", condition.getAsBoolean());
+    }
+
+    @Test public void anUnlockWaitsInTheJournalWhenThePlayerClosesThenReachesTheService() throws Exception {
+        android.content.Context app = RuntimeEnvironment.getApplication();
+        new AchievementAccount("Raven", "TOKEN-1", "", "", 0, 0).save(app);
+        AchievementSettings.DEFAULTS.withSound(false).save(app);
+        FakeAchievements.afterAnswer.add(new String[]{"login", "Raven", "Raven", "TOKEN-1", "", ""});
+        final boolean[] journaledFirst = {false};
+        FakeHttp.onSend = (url, post) -> {
+            if (post.startsWith("r=awardachievement"))
+                journaledFirst[0] = AwardJournal.open(app).forAccount("Raven").size() == 1;
+        };
+        PlayerActivity activity = loaded();
+        framesUntil(activity, () -> FakeAchievements.answers.size() >= 1);
+        // The award the module asks for: the network never answers.
+        FakeAchievements.request(2, AWARD_URL, AWARD);
+        framesUntil(activity, () -> FakeAchievements.answers.size() >= 2);
+        assertTrue("Journaled before it is sent", journaledFirst[0]);
+        assertEquals(AchievementsHttp.NO_ANSWER, FakeAchievements.answers.get(1)[2]);
+        assertEquals(1, AwardJournal.open(app).forAccount("Raven").size());
+        // The player closes, as a rotation does.
+        ActivityController<PlayerActivity> controller = activities.remove(activities.size() - 1);
+        controller.pause().stop().destroy();
+        io(activity).submit(() -> {}).get(5, TimeUnit.SECONDS);
+        assertEquals("Kept for the next session", 1, AwardJournal.open(app).forAccount("Raven").size());
+
+        // Next session, a new token: the unlock is sent again with it, and accepted.
+        FakeHttp.reset();
+        FakeAchievements.reset();
+        new AchievementAccount("Raven", "TOKEN-2", "", "", 0, 0).save(app);
+        FakeAchievements.afterAnswer.add(new String[]{"login", "Raven", "Raven", "TOKEN-2", "", ""});
+        FakeHttp.answer(200, "{\"Success\":true,\"User\":\"Raven\"}");
+        FakeHttp.answer(200, "{\"Success\":true,\"Score\":5,\"AchievementID\":5501}");
+        PlayerActivity next = loaded();
+        framesUntil(next, () -> AwardJournal.open(app).forAccount("Raven").isEmpty());
+        assertTrue(FakeHttp.sent.contains(AWARD_URL + " " + AWARD.replace("t=TOKEN-1", "t=TOKEN-2")));
     }
 
     @Test public void theDisplayRateReachesThePacerAndTheScreenStaysOnWhilePlaying() throws Exception {

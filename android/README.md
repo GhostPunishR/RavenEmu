@@ -245,12 +245,16 @@ bandeau à la fois, carte de progression dessous ; le carillon de la bêta
 (écrit par RavenEmu) se joue au volume du jeu. Sans compte, rien ne part sur
 le réseau. La permission `INTERNET` est la seule ajoutée.
 
+Chaque déblocage passe par un **journal hors ligne** scellé (comme la bêta) :
+écrit avant l'envoi, effacé une fois accepté, renvoyé à la session suivante
+du même compte s'il n'a pas pu partir (réseau absent, lecteur fermé ou
+tourné). La déconnexion l'efface.
+
 Écarts restants (tranche RA-3) : verrous du mode Hardcore, liste des succès,
 classements, indicateurs de défi et de suivi, carte du compte dans le menu de
-jeu, journal hors ligne des déblocages (aujourd'hui, rcheevos réessaie tant
-que le jeu reste ouvert), progression des succès dans les états de jeu (un
-chargement d'état remet les succès à zéro, comme l'exige rcheevos sans
-données de progression).
+jeu, progression des succès dans les états de jeu (un chargement d'état remet
+les succès à zéro, comme l'exige rcheevos sans données de progression ; la
+bêta ne les sauvegardait pas non plus).
 
 ## Image calée sur l'écran et son sans craquement
 

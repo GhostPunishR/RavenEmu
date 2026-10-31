@@ -7,6 +7,7 @@ import com.ravenemu.app.platform.RetroUserAgent;
 import com.ravenemu.app.platform.SystemBarInsets;
 import com.ravenemu.app.settings.AchievementAccount;
 import com.ravenemu.app.settings.AchievementSettings;
+import com.ravenemu.app.settings.AwardJournal;
 import com.ravenemu.app.settings.CartridgeSettings;
 import com.ravenemu.app.settings.ConsoleSettings;
 import com.ravenemu.app.settings.ControlLayout;
@@ -392,6 +393,8 @@ public final class PlaybackSettingsActivity extends Activity {
     private void signOut() {
         if (signingIn) return;
         io.execute(() -> {
+            // The unlocks still waiting go with the account, as in the beta.
+            AwardJournal.clear(this);
             AchievementAccount.clear(this);
             runOnUiThread(() -> {
                 if (isDestroyed()) return;
