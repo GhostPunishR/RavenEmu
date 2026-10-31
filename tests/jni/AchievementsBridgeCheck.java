@@ -82,11 +82,16 @@ public final class AchievementsBridgeCheck {
         check(account.nextRequest() == null && account.nextEvent() == null && account.summary() == null, "closed");
 
         // Without a game, the player's instance cannot start.
-        check(NativeAchievements.startGame("SyntheticUser", "SyntheticToken", 4, counterRom()) == null, "no game");
+        check(NativeAchievements.startGame("SyntheticUser", "SyntheticToken", 4, counterRom(), false) == null, "no game");
         byte[] rom = counterRom();
         check(open(args[0], rom), "core");
-        check(NativeAchievements.startGame("u", "t", 99, rom) == null, "bad console");
-        NativeAchievements player = NativeAchievements.startGame("SyntheticUser", "SyntheticToken", 4, rom);
+        check(NativeAchievements.startGame("u", "t", 99, rom, false) == null, "bad console");
+        // Started in Hardcore, the mode holds from the login on; then back to Softcore.
+        NativeAchievements strict = NativeAchievements.startGame("SyntheticUser", "SyntheticToken", 4, rom, true);
+        check(strict != null && strict.hardcore(), "hardcore start");
+        strict.setHardcore(false);
+        check(!strict.hardcore() && strict.canPause(), "softcore again");
+        NativeAchievements player = NativeAchievements.startGame("SyntheticUser", "SyntheticToken", 4, rom, false);
         check(player != null, "player");
         NativeAchievements.Request first = player.nextRequest();
         check(first.postData.contains("r=login2") && first.postData.contains("t=SyntheticToken"), "token login " + first.postData);
@@ -149,7 +154,7 @@ public final class AchievementsBridgeCheck {
         other.close();
         check(player.summary() != null, "player kept");
         // The next game's instance replaces it; the old handle cannot close the new one.
-        NativeAchievements next = NativeAchievements.startGame("SyntheticUser", "SyntheticToken", 4, rom);
+        NativeAchievements next = NativeAchievements.startGame("SyntheticUser", "SyntheticToken", 4, rom, false);
         check(next != null && player.summary() == null && player.nextEvent() == null, "replaced by the next game");
         check(player.entries().length == 0 && player.boards().length == 0 && player.scores().scores.length == 0
               && player.richPresence().isEmpty(), "an old handle lists nothing");

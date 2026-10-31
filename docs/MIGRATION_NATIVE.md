@@ -865,10 +865,35 @@ au plus, chacun jusqu'à son propre masquage par rcheevos ; une valeur de
 suivi se met à jour sur place ; en bas, les bandeaux passent au-dessus ; une
 remise à zéro Hardcore ou la fermeture du jeu les efface.
 
-Écarts restants pour **RA-3** (après RA-3a, RA-3b et RA-3c) : verrous du mode Hardcore (pas de chargement
-d'état, pauses limitées) et son activation, liste des succès, classements,
+**RA-3d, verrous du mode Hardcore** (portage de `RetroHardcorePolicy.kt` et
+`HardcoreGate.kt`) : comme dans la bêta, le Hardcore attend l'approbation de
+RavenEmu par l'équipe RetroAchievements ; tant qu'elle manque
+(`settings/HardcorePolicy.approved()`), aucun interrupteur n'est montré et
+rien ne l'active. Une fois approuvé :
+- la session démarre dans son mode avant la connexion (pas de remise à zéro
+  au chargement) ; activé pendant un jeu, il le redémarre
+  (`raven_frontend_reset`, nouveau, puis rcheevos) ;
+- aucune image ne tourne pendant la connexion et l'identification de la ROM ;
+  sans réseau, la partie attend et réessaie (5 s doublées, 1 min au plus),
+  avec le message de la bêta ;
+- aucun état n'est chargé, l'annulation d'un chargement comprise ;
+- chaque pause du menu est demandée à rcheevos, qui la refuse trop tôt après
+  la précédente (« Mode Hardcore : pause indisponible pour le moment. ») ;
+- les requêtes de déblocage Hardcore entrent alors dans le journal ;
+- `retro_reset` est un symbole facultatif pour l'hôte : sans lui, pas de redémarrage.
+
+Ces verrous sont testés en simulant l'approbation (doublure Robolectric de
+`HardcorePolicy.approved()`), et le pont JNI démarre réellement une session
+Hardcore sur le core GB dans `raven_jni_achievements`.
+
+Écarts restants (RA-3 terminée) : progression des succès dans les états de
+jeu (un chargement d'état remet les succès à zéro ; la bêta ne la sauvegardait
+pas non plus), avatars des classements, validation sur téléphone avec un vrai
+compte, et la demande d'approbation Hardcore à RetroAchievements, qui revient
+au propriétaire.
+
+Les écarts que RA-2 laissait sont ainsi traités : verrous du mode Hardcore
+et son activation (en attente d'approbation), liste des succès, classements,
 indicateurs de défi et de suivi, carte du compte dans le menu de jeu, journal
-hors ligne (fait en RA-3a, ci-dessous), progression des succès dans les
-états.
-La recréation du lecteur (rotation) reconnecte le compte et ré-identifie le
-jeu. Validation sur téléphone et connexion à un vrai compte à faire.
+hors ligne. La recréation du lecteur (rotation) reconnecte le compte et
+ré-identifie le jeu.

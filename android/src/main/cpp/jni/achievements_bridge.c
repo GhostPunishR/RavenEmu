@@ -140,12 +140,12 @@ Java_com_ravenemu_app_bridge_NativeAchievements_createAccount(JNIEnv *env, jclas
     return handle;
 }
 
-/* GL thread, once the game loaded: the player's instance, signed in with the
- * stored token, identifying the ROM. Replaces the previous one; 0 without a
- * game, a valid console or memory. */
+/* GL thread, once the game loaded: the player's instance, in its mode,
+ * signed in with the stored token, identifying the ROM. Replaces the
+ * previous one; 0 without a game, a valid console or memory. */
 JNIEXPORT jlong JNICALL
 Java_com_ravenemu_app_bridge_NativeAchievements_startGame(
-    JNIEnv *env, jclass clazz, jbyteArray user, jbyteArray token, jint console, jbyteArray rom) {
+    JNIEnv *env, jclass clazz, jbyteArray user, jbyteArray token, jint console, jbyteArray rom, jboolean hardcore) {
     (void)clazz;
     raven_bridge_achievements_close();
     raven_frontend *session = raven_bridge_session();
@@ -160,7 +160,9 @@ Java_com_ravenemu_app_bridge_NativeAchievements_startGame(
     raven_achievements *achievements = bytes ? raven_achievements_create(session, NULL) : NULL;
     jlong handle = achievements ? keep(achievements, 1) : 0;
     if (handle) {
-        /* The game waits for the login; the ROM is hashed before return. */
+        /* The mode first: the game is then loaded in it, without a reset.
+         * The game waits for the login; the ROM is hashed before return. */
+        raven_achievements_set_hardcore(achievements, hardcore == JNI_TRUE);
         raven_achievements_login_token(achievements, name, secret);
         raven_achievements_load_game(achievements, (unsigned)console, bytes, (size_t)size);
         player = achievements;
@@ -400,6 +402,28 @@ Java_com_ravenemu_app_bridge_NativeAchievements_richPresence(JNIEnv *env, jclass
     jbyteArray result = (*env)->NewByteArray(env, length);
     if (result) (*env)->SetByteArrayRegion(env, result, 0, length, (const jbyte *)presence);
     return result;
+}
+
+/* Hardcore: before the login, or during a game (then "hardcore_reset"). */
+JNIEXPORT void JNICALL
+Java_com_ravenemu_app_bridge_NativeAchievements_setHardcore(JNIEnv *env, jclass clazz, jlong handle, jboolean on) {
+    (void)env; (void)clazz;
+    raven_achievements_set_hardcore(find(handle, 0, 0), on == JNI_TRUE);
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_ravenemu_app_bridge_NativeAchievements_hardcore(JNIEnv *env, jclass clazz, jlong handle) {
+    (void)env; (void)clazz;
+    return raven_achievements_hardcore(find(handle, 0, 0)) ? JNI_TRUE : JNI_FALSE;
+}
+
+/* In Hardcore, rcheevos refuses a pause too soon after the last one; it
+ * records the pause it allows. */
+JNIEXPORT jboolean JNICALL
+Java_com_ravenemu_app_bridge_NativeAchievements_canPause(JNIEnv *env, jclass clazz, jlong handle) {
+    (void)env; (void)clazz;
+    raven_achievements *achievements = find(handle, 0, 0);
+    return !achievements || raven_achievements_can_pause(achievements) ? JNI_TRUE : JNI_FALSE;
 }
 
 /* "rcheevos/x.y" and RavenCore's version, for the User-Agent. ASCII. */

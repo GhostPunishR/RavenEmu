@@ -420,6 +420,15 @@ public final class PlaybackSettingsActivityTest {
         assertNotNull(text(activity, "Mode Softcore · SDK officiel rcheevos/12.5"));
     }
 
+    @Test @Config(shadows = {FakeAchievements.class, ClearSealer.class, com.ravenemu.app.settings.ApprovedHardcore.class})
+    public void onceApprovedHardcoreHasItsSwitch() throws Exception {
+        PlaybackSettingsActivity activity = retroPage();
+        assertNull(find(activity, view -> view instanceof TextView
+                && "Mode Hardcore indisponible".contentEquals(((TextView)view).getText())));
+        toggle(activity, "Mode Hardcore").performClick();
+        assertTrue(AchievementSettings.load(activity).hardcore);
+    }
+
     @Test public void aboutOpensTheLicencesInTheAppAndTheSourcesOnline() {
         PlaybackSettingsActivity activity = open(PlaybackSettingsActivity.ABOUT, null).get();
         find(activity, view -> view.getContentDescription() != null

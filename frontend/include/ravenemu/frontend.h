@@ -71,6 +71,10 @@ void raven_frontend_set_callbacks(raven_frontend *host,
 int raven_frontend_load_rom(raven_frontend *host, const void *rom,
                             size_t size, const char *path);
 int raven_frontend_run_frame(raven_frontend *host);
+/* Restarts the game in place, as the console's reset button (retro_reset):
+ * RetroAchievements' Hardcore asks for it. 0 without a game, or a core
+ * without the call; the frames kept for preemption are forgotten. */
+int raven_frontend_reset(raven_frontend *host);
 /* Battery SRAM is owned by the loaded core. Access only on the emulation
  * thread, after load_game and before unload_game. Zero size means no battery. */
 size_t raven_frontend_battery_size(const raven_frontend *host);

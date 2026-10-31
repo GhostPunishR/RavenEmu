@@ -24,6 +24,8 @@ typedef struct raven_core_api {
     bool (*load_game)(const struct retro_game_info *);
     void (*unload_game)(void);
     void (*run)(void);
+    /* Optional here: a core without it cannot be restarted in place. */
+    void (*reset)(void);
     void *(*get_memory_data)(unsigned);
     size_t (*get_memory_size)(unsigned);
     size_t (*serialize_size)(void);
@@ -674,6 +676,10 @@ int raven_frontend_open_core(raven_frontend *host, const char *library_path,
     RESOLVE(load_game);
     RESOLVE(unload_game);
     RESOLVE(run);
+    {
+        void *symbol = dlsym(host->library, "retro_reset");
+        if (symbol) memcpy(&host->api.reset, &symbol, sizeof(host->api.reset));
+    }
     RESOLVE(get_memory_data);
     RESOLVE(get_memory_size);
     RESOLVE(serialize_size);
@@ -749,6 +755,14 @@ int raven_frontend_run_frame(raven_frontend *host) {
     }
     host->api.run();
     host->preempt_ran = 1;
+    return 1;
+}
+
+int raven_frontend_reset(raven_frontend *host) {
+    if (!host || !host->loaded || active != host || !host->api.reset) return 0;
+    /* The frames kept behind belong to the game before the restart. */
+    preempt_forget(host);
+    host->api.reset();
     return 1;
 }
 

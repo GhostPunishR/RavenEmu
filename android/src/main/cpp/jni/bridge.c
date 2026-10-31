@@ -370,6 +370,18 @@ Java_com_ravenemu_app_bridge_NativeBridge_setPaused(
     raven_sensors_set_active(!playback_paused);
 }
 
+/* GL thread: the console's reset, then RetroAchievements with it (Hardcore
+ * asks for it when it is switched on during a game). */
+JNIEXPORT jboolean JNICALL
+Java_com_ravenemu_app_bridge_NativeBridge_resetGame(JNIEnv *env, jclass clazz) {
+    (void)env; (void)clazz;
+    if (!session || !raven_frontend_reset(session)) return JNI_FALSE;
+    raven_frame_pacer_reset(&frame_pacer);
+    raven_input_clear_buttons(&input);
+    raven_bridge_achievements_state_loaded();
+    return JNI_TRUE;
+}
+
 /* GL thread: Settings → Général → Latence, 0 to RAVEN_FRONTEND_PREEMPT_MAX. */
 JNIEXPORT void JNICALL
 Java_com_ravenemu_app_bridge_NativeBridge_setPreemptiveFrames(

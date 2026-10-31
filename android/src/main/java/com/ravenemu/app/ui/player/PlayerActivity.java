@@ -12,6 +12,7 @@ import com.ravenemu.app.platform.SystemBarInsets;
 import com.ravenemu.app.settings.AchievementAccount;
 import com.ravenemu.app.settings.AchievementSettings;
 import com.ravenemu.app.settings.AwardJournal;
+import com.ravenemu.app.settings.HardcorePolicy;
 import com.ravenemu.app.settings.CartridgeSettings;
 import com.ravenemu.app.settings.ConsoleSettings;
 import com.ravenemu.app.settings.ControlLayout;
@@ -92,6 +93,8 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
     private volatile RomLibrary.Entry activeEntry;
     private volatile String activeAccount;
     private boolean achievementsRefreshQueued;
+    /** UI thread: rcheevos just allowed this pause (Hardcore). */
+    private boolean pauseGranted;
     private long nextBatterySaveNanos;
     private volatile String activeSaveKey;
     /** GL thread: the core of the open game ("gb", "gbc" or "gba"), for its options. */
@@ -228,6 +231,9 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         }), event -> {
             achievementOverlay.onEvent(event);
             refreshAchievementsSoon();
+        }, () -> {
+            // GL thread, as rcheevos asks when Hardcore starts during a game.
+            if (!NativeBridge.resetGame()) postStatus("Le redémarrage du jeu a échoué.");
         });
         if (getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE) {
             FrameLayout stage = new FrameLayout(this);
@@ -368,6 +374,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
                 final AchievementAccount account = AchievementAccount.load(this);
                 final AchievementsHttp http = account == null ? null : new AchievementsHttp(RetroUserAgent.of(this));
                 final AwardJournal journal = account == null ? null : AwardJournal.open(this);
+                final boolean hardcore = AchievementSettings.load(this).hardcore;
                 if (disposed.get()) return;
                 String nativeDir = getApplicationInfo().nativeLibraryDir;
                 String dataDir = getFilesDir().getAbsolutePath();
@@ -383,10 +390,10 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
                         failure = "SRAM incompatible : fichier original conservé";
                     }
                     // Once the SRAM is in: the ROM is identified by its hash.
-                    if (failure == null) achievements.start(http, account, journal, entry.system, rom);
+                    if (failure == null) achievements.start(http, account, journal, entry.system, rom, hardcore);
                     else achievements.stop();
                     activeEntry = failure == null ? entry : null;
-                    activeAccount = failure == null ? accountKey(account) : null;
+                    activeAccount = failure == null ? accountKey(account, hardcore) : null;
                     final double fps = failure == null ? NativeBridge.frameRate() : 0.0;
                     if (failure == null) {
                         activeSaveKey = entry.key;
@@ -450,6 +457,24 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         }
         if (activeSaveKey == null || stateCompatibility == null) {
             postStatus("Charge un jeu avant d’ouvrir le menu");
+            return;
+        }
+        // The menu pauses the game: in Hardcore, rcheevos says whether it may now.
+        if (achievements.hardcoreActive() && !pauseGranted) {
+            surface.queueEvent(() -> {
+                if (disposed.get()) return;
+                final boolean allowed = achievements.canPause();
+                runOnUiThread(() -> {
+                    if (disposed.get()) return;
+                    if (!allowed) {
+                        android.widget.Toast.makeText(this, HardcorePolicy.PAUSE_REFUSED,
+                                android.widget.Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    pauseGranted = true;
+                    try { togglePlayerMenu(); } finally { pauseGranted = false; }
+                });
+            });
             return;
         }
         menuOpen = true;
@@ -538,8 +563,10 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         }, 250);
     }
 
-    private static String accountKey(AchievementAccount account) {
-        return account == null ? null : account.user + "\n" + account.token;
+    /** The account and the mode a game's achievements run with. */
+    private static String accountKey(AchievementAccount account, boolean hardcoreRequested) {
+        return account == null ? null
+                : account.user + "\n" + account.token + "\n" + HardcorePolicy.enabled(hardcoreRequested);
     }
 
     /** The stored account now, for the game running: signed in, out, or
@@ -552,8 +579,13 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         if (entry == null || disposed.get()) return;
         submitIo(() -> {
             final AchievementAccount account = AchievementAccount.load(this);
-            final String key = accountKey(account);
-            if (!force && java.util.Objects.equals(key, activeAccount)) return;
+            final boolean hardcore = AchievementSettings.load(this).hardcore;
+            final String key = accountKey(account, hardcore);
+            final String previous = activeAccount;
+            if (!force && java.util.Objects.equals(key, previous)) return;
+            // Hardcore turned on during the game: it starts over, as in the beta.
+            final boolean restartGame = account != null && HardcorePolicy.enabled(hardcore)
+                    && (previous == null || !previous.endsWith("\ntrue"));
             byte[] rom = null;
             if (account != null) {
                 try { rom = RomLibrary.readRom(getFilesDir(), entry); }
@@ -565,7 +597,8 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
             if (disposed.get()) return;
             surface.queueEvent(() -> {
                 if (disposed.get() || activeEntry != entry) return;
-                achievements.start(http, account, journal, entry.system, game);
+                if (restartGame) NativeBridge.resetGame();
+                achievements.start(http, account, journal, entry.system, game, hardcore);
                 activeAccount = key;
                 runOnUiThread(() -> {
                     if (disposed.get()) return;
@@ -616,6 +649,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
     private void operateSlot(int slot, int action) {
         if (disposed.get() || slotBusy || stateSlots == null || activeSaveKey == null ||
                 stateCompatibility == null || slot < 0 || slot >= StateSlotRepository.SLOT_COUNT) return;
+        if (action == 1 && refuseStateLoad()) return;
         final String key = activeSaveKey, compatibility = stateCompatibility;
         final PlayerMenuSheet requestingMenu = playerMenu;
         final int requestingGeneration = menuGeneration;
@@ -669,6 +703,14 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         return new SlotBatch(slots, previews);
     }
 
+    /** Hardcore: no save state is loaded, the undo of a load included. */
+    private boolean refuseStateLoad() {
+        if (!achievements.stateLoadLocked()) return false;
+        renderPlayerMenu();
+        if (playerMenu != null && playerMenu.isShowing()) playerMenu.showMessage(HardcorePolicy.STATE_LOAD_LOCKED);
+        return true;
+    }
+
     private boolean canUndo() {
         UndoState undo = undoState;
         return undo != null && undo.key.equals(activeSaveKey) &&
@@ -684,6 +726,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
 
     private void undoLastLoad() {
         if (disposed.get() || slotBusy || !canUndo()) { renderPlayerMenu(); return; }
+        if (refuseStateLoad()) return;
         UndoState undo = undoState;
         final PlayerMenuSheet requestingMenu = playerMenu;
         final int generation = menuGeneration;
@@ -798,7 +841,8 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
     @Override
     public void onDrawFrame(GL10 gl) {
         long now = System.nanoTime();
-        int advanced = NativeBridge.drawFrame(width, height, !gamePaused);
+        // Hardcore waits for the sign-in and the ROM's identification.
+        int advanced = NativeBridge.drawFrame(width, height, !gamePaused && !achievements.holdFrames());
         // The frames shown reached RetroAchievements in the bridge: now its
         // answers, requests and events.
         achievements.pump();

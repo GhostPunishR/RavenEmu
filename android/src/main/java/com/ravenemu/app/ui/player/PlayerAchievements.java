@@ -5,6 +5,7 @@ import com.ravenemu.app.platform.AchievementsHttp;
 import com.ravenemu.app.settings.AchievementAccount;
 import com.ravenemu.app.settings.AwardJournal;
 import com.ravenemu.app.settings.AwardPolicy;
+import com.ravenemu.app.settings.HardcorePolicy;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -53,6 +54,17 @@ final class PlayerAchievements {
 
     private final Executor ui;
     private final Listener listener;
+    /** GL thread: the console's reset, which Hardcore asks for. */
+    private final Runnable resetGame;
+    /** GL thread: Hardcore as it applies to this game, and where its session stands. */
+    private boolean hardcoreWanted;
+    private HardcorePolicy.Stage stage = HardcorePolicy.Stage.IDLE;
+    private int retryAttempt, console;
+    private long retryAtMillis;
+    /** Kept only in Hardcore, to sign in again when the network comes back. */
+    private byte[] retryRom;
+    /** For the UI thread. */
+    private volatile boolean hardcoreActive, stateLoadLocked;
     private final ConcurrentLinkedQueue<Answer> answers = new ConcurrentLinkedQueue<>();
     /** GL thread. */
     private NativeAchievements engine;
@@ -73,9 +85,10 @@ final class PlayerAchievements {
     private boolean scoresAround, scoresLoading;
     private String scoresError = "";
 
-    PlayerAchievements(Executor ui, Listener listener) {
+    PlayerAchievements(Executor ui, Listener listener, Runnable resetGame) {
         this.ui = ui;
         this.listener = listener;
+        this.resetGame = resetGame;
     }
 
     /** RetroAchievements' console of the ROM, whatever core runs it; 0 for none. */
@@ -87,8 +100,10 @@ final class PlayerAchievements {
     }
 
     /** GL thread, once the game loaded: signs in with the stored token and
-     * identifies the ROM. Without an account, nothing reaches the network. */
-    void start(AchievementsHttp http, AchievementAccount account, AwardJournal journal, String system, byte[] rom) {
+     * identifies the ROM, in Hardcore only once RetroAchievements approved
+     * RavenEmu. Without an account, nothing reaches the network. */
+    void start(AchievementsHttp http, AchievementAccount account, AwardJournal journal, String system, byte[] rom,
+               boolean hardcoreRequested) {
         stop();
         final int console = console(system);
         if (http == null || account == null || console == 0 || rom == null) return;
@@ -104,9 +119,59 @@ final class PlayerAchievements {
         scoresLoading = false;
         scoresError = "";
         status = "Connexion en cours…";
-        engine = NativeAchievements.startGame(account.user, account.token, console, rom);
-        if (engine == null) status = "RetroAchievements indisponible pour ce jeu";
+        hardcoreWanted = HardcorePolicy.enabled(hardcoreRequested);
+        this.console = console;
+        retryRom = hardcoreWanted ? rom : null;
+        retryAttempt = 0;
+        stage = HardcorePolicy.Stage.SIGNING_IN;
+        engine = NativeAchievements.startGame(account.user, account.token, console, rom, hardcoreWanted);
+        if (engine == null) {
+            status = "RetroAchievements indisponible pour ce jeu";
+            stage = HardcorePolicy.Stage.IDLE;
+        }
+        updateGate();
         pump();
+    }
+
+    /** GL thread: in Hardcore, no frame while rcheevos cannot evaluate it. */
+    boolean holdFrames() { return HardcorePolicy.holdFrames(hardcoreWanted, engine != null, stage); }
+
+    /** UI thread: whether a load must be refused, whether a pause must be asked for. */
+    boolean stateLoadLocked() { return stateLoadLocked; }
+    boolean hardcoreActive() { return hardcoreActive; }
+
+    /** GL thread: Softcore always may; Hardcore as rcheevos allows, which records it. */
+    boolean canPause() { return engine == null || !engine.hardcore() || engine.canPause(); }
+
+    private void updateGate() {
+        hardcoreActive = engine != null && engine.hardcore();
+        stateLoadLocked = engine != null && (hardcoreWanted || hardcoreActive);
+    }
+
+    /** The service is out of reach, which is no refusal: Hardcore holds the
+     * game and tries again, Softcore plays on. Said once per wait. */
+    private void waitForNetwork() {
+        if (retryAttempt == 0 && hardcoreWanted) {
+            final NativeAchievements.Event notice = new NativeAchievements.Event("notice", "Mode Hardcore en attente",
+                    "RetroAchievements ne répond pas : la partie reprend dès sa réponse. Désactivez le Hardcore pour "
+                            + "jouer hors ligne.", "", "", "");
+            ui.execute(() -> listener.onEvent(notice));
+        }
+        stage = HardcorePolicy.Stage.WAITING_NETWORK;
+        retryAtMillis = System.nanoTime() / 1_000_000L + HardcorePolicy.retryDelayMillis(retryAttempt++);
+    }
+
+    /** Signs in again, the same game in the same mode; answers due to the
+     * session given up are dropped. */
+    private void retrySession() {
+        if (engine != null) engine.close();
+        generation++;
+        answers.clear();
+        replayStarted = false;
+        stage = HardcorePolicy.Stage.SIGNING_IN;
+        engine = NativeAchievements.startGame(account.user, account.token, console, retryRom, hardcoreWanted);
+        if (engine == null) stage = HardcorePolicy.Stage.IDLE;
+        updateGate();
     }
 
     boolean active() { return engine != null; }
@@ -151,6 +216,10 @@ final class PlayerAchievements {
             final NativeAchievements.Event shown = event;
             ui.execute(() -> listener.onEvent(shown));
         }
+        updateGate();
+        // Last: signing in again replaces the session used above.
+        if (stage == HardcorePolicy.Stage.WAITING_NETWORK && holdFrames()
+                && System.nanoTime() / 1_000_000L >= retryAtMillis) retrySession();
     }
 
     /** Once per session, for the account signed in: what earlier sessions
@@ -211,15 +280,29 @@ final class PlayerAchievements {
             case "login":
                 status = "Chargement des succès…";
                 if (!event.image.isEmpty()) avatarUrl = event.image;
+                stage = HardcorePolicy.Stage.LOADING;
                 break;
             case "game": case "online":
-                status = "Connecté • Mode normal (Softcore)";
+                status = engine != null && engine.hardcore() ? "Connecté • Mode Hardcore"
+                        : "Connecté • Mode normal (Softcore)";
+                if (event.kind.equals("game")) {
+                    stage = HardcorePolicy.Stage.TRACKING;
+                    retryAttempt = 0;
+                }
                 break;
             case "login_error": case "game_unknown": case "game_offline": case "game_error": case "offline": {
                 AchievementNotices.Notice notice = AchievementNotices.of(event);
                 if (notice != null) status = notice.title.isEmpty() ? notice.heading : notice.title;
+                // Nothing to evaluate: the game runs without achievements. No answer: wait in Hardcore.
+                if (event.kind.equals("game_offline") || event.kind.equals("login_error") && "offline".equals(event.extra))
+                    waitForNetwork();
+                else if (!event.kind.equals("offline")) stage = HardcorePolicy.Stage.UNTRACKED;
                 break;
             }
+            // Required by rcheevos before Hardcore resumes: the game starts over.
+            case "hardcore_reset":
+                resetGame.run();
+                break;
             case "achievement":
                 try { promote(sync, Integer.parseInt(event.id), AchievementsSnapshot.SYNC_LOCAL); }
                 catch (NumberFormatException malformed) { /* no id, nothing to follow */ }
@@ -275,7 +358,7 @@ final class PlayerAchievements {
                 summary == null ? 0 : summary.unlocked, summary == null ? 0 : summary.total,
                 summary == null ? 0 : summary.pointsUnlocked, summary == null ? 0 : summary.pointsTotal,
                 current.richPresence(), entries, states, current.boards(), current.scores(), scoresBoard,
-                scoresAround, scoresLoading, scoresError, 0);
+                scoresAround, scoresLoading, scoresError, 0, current.hardcore());
     }
 
     /** For the pending unlocks of the snapshot's account. */
@@ -295,6 +378,10 @@ final class PlayerAchievements {
     void stop() {
         if (engine != null) engine.close();
         engine = null;
+        stage = HardcorePolicy.Stage.IDLE;
+        hardcoreWanted = false;
+        retryRom = null;
+        updateGate();
         account = null;
         journal = null;
         status = AchievementsSnapshot.SIGNED_OUT.status;

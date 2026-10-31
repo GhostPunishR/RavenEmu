@@ -12,7 +12,9 @@ import com.ravenemu.app.platform.ClearSealer;
 import com.ravenemu.app.platform.FakeHttp;
 import com.ravenemu.app.settings.AchievementAccount;
 import com.ravenemu.app.settings.AchievementSettings;
+import com.ravenemu.app.settings.ApprovedHardcore;
 import com.ravenemu.app.settings.AwardJournal;
+import com.ravenemu.app.settings.HardcorePolicy;
 import com.ravenemu.app.settings.CartridgeSettings;
 import com.ravenemu.app.settings.ConsoleSettings;
 import com.ravenemu.app.settings.ControlLayout;
@@ -408,6 +410,59 @@ public final class PlayerActivityTest {
         assertEquals(PlaybackSettingsActivity.class.getName(), next.getComponent().getClassName());
         assertEquals(PlaybackSettingsActivity.RETRO, next.getStringExtra(PlaybackSettingsActivity.EXTRA_PAGE));
         assertTrue("No account, no session", FakeAchievements.log.isEmpty());
+    }
+
+    @Test public void hardcoreStaysOffUntilRetroAchievementsApprovesRavenEmu() throws Exception {
+        android.content.Context app = RuntimeEnvironment.getApplication();
+        new AchievementAccount("Raven", "TOKEN-1", "", "", 0, 0).save(app);
+        AchievementSettings.DEFAULTS.withSound(false).withHardcore(true).save(app);
+        PlayerActivity activity = loaded();
+        assertFalse("Asked for, still off", FakeAchievements.startHardcore);
+        activity.onDrawFrame(null);
+        assertTrue("Softcore never holds the game", FakeNative.lastAdvance);
+    }
+
+    @Test @Config(shadows = ApprovedHardcore.class)
+    public void hardcoreWaitsForTheServiceRefusesStateLoadsAndAsksBeforeEachPause() throws Exception {
+        android.content.Context app = RuntimeEnvironment.getApplication();
+        new AchievementAccount("Raven", "TOKEN-1", "", "", 0, 0).save(app);
+        AchievementSettings.DEFAULTS.withSound(false).withHardcore(true).save(app);
+        StateSlotRepository.write(files, key, 0, COMPATIBILITY, new byte[]{20});
+        PlayerActivity activity = loaded();
+        assertTrue("Started in Hardcore", FakeAchievements.startHardcore);
+        // Signing in, then identifying the ROM: not a frame runs.
+        activity.onDrawFrame(null);
+        assertFalse(FakeNative.lastAdvance);
+        FakeAchievements.raise("login", "Raven", "Raven", "TOKEN-1", "", "");
+        activity.onDrawFrame(null);
+        activity.onDrawFrame(null);
+        assertFalse(FakeNative.lastAdvance);
+        FakeAchievements.raise("game", "Libre", "3", "0", "", "1234");
+        activity.onDrawFrame(null);
+        activity.onDrawFrame(null);
+        assertTrue("Tracked: the game runs", FakeNative.lastAdvance);
+        // The menu asks rcheevos for the pause; a load is refused.
+        openMenu(activity);
+        assertEquals(1, FakeAchievements.pauseRequests);
+        menuButton("Charger").performClick();
+        pump(activity);
+        assertTrue("No state is loaded in Hardcore", FakeNative.restoreAttempts.isEmpty());
+        assertNotNull(menuButton(HardcorePolicy.STATE_LOAD_LOCKED));
+        menu(activity).dismiss();
+        idle();
+        // Too soon after the last pause: refused, the game plays on.
+        FakeAchievements.pauseAllowed = false;
+        ShadowToast.reset();
+        assertTrue(activity.onKeyDown(android.view.KeyEvent.KEYCODE_BUTTON_MODE,
+                new android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_BUTTON_MODE)));
+        pump(activity);
+        assertFalse(menu(activity).isShowing());
+        assertEquals(HardcorePolicy.PAUSE_REFUSED, ShadowToast.getTextOfLatestToast());
+        // rcheevos asks for a restart: the console resets on the GL thread.
+        FakeAchievements.raise("hardcore_reset", "", "", "", "", "");
+        QueuedGl.executing = true;
+        try { activity.onDrawFrame(null); } finally { QueuedGl.executing = false; }
+        assertEquals(1, FakeNative.resets);
     }
 
     @Test public void theDisplayRateReachesThePacerAndTheScreenStaysOnWhilePlaying() throws Exception {
@@ -971,7 +1026,9 @@ public final class PlayerActivityTest {
         static String message;
         static int buttons, rotation, preemptive;
         static boolean rumbling;
+        static int resets;
         static void reset() {
+            resets = 0;
             state = new byte[]{1, 2}; battery = new byte[]{3, 4};
             preview = new int[]{2, 1, 0xffff0000, 0xff00ff00};
             restoreAttempts.clear(); restoredBatteries.clear();
@@ -1037,5 +1094,6 @@ public final class PlayerActivityTest {
             draws++; lastAdvance = advance; return advance ? framesToAdvance : 0;
         }
         @Implementation protected static void closeRom() { closed = true; }
+        @Implementation protected static boolean resetGame() { requireGl(); resets++; return !closed; }
     }
 }

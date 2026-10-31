@@ -108,10 +108,12 @@ public final class NativeAchievements {
         return handle == 0 ? null : new NativeAchievements(handle, false);
     }
 
-    /** GL thread, once the game loaded: signs in with the stored token and
-     * identifies the ROM. Replaces the previous game's; null if impossible. */
-    public static NativeAchievements startGame(String user, String token, int console, byte[] rom) {
-        long handle = startGame(utf8(user), utf8(token), console, rom);
+    /** GL thread, once the game loaded: in Hardcore or not, signs in with the
+     * stored token and identifies the ROM. Replaces the previous game's;
+     * null if impossible. */
+    public static NativeAchievements startGame(String user, String token, int console, byte[] rom,
+                                               boolean hardcore) {
+        long handle = startGame(utf8(user), utf8(token), console, rom, hardcore);
         return handle == 0 ? null : new NativeAchievements(handle, true);
     }
 
@@ -196,6 +198,12 @@ public final class NativeAchievements {
                 number(text(fields[2])) != 0, scores);
     }
 
+    /** Hardcore, before the login or during a game ("hardcore_reset" follows). */
+    public void setHardcore(boolean enabled) { setHardcore(handle, enabled); }
+    public boolean hardcore() { return hardcore(handle); }
+    /** In Hardcore, whether a pause is allowed now; the SDK records it. */
+    public boolean canPause() { return canPause(handle); }
+
     /** The game's Rich Presence, as the service shows it; "" without one. */
     public String richPresence() { return text(richPresence(handle)); }
 
@@ -210,7 +218,7 @@ public final class NativeAchievements {
     public static native String engineVersion();
 
     private static native long createAccount();
-    private static native long startGame(byte[] user, byte[] token, int console, byte[] rom);
+    private static native long startGame(byte[] user, byte[] token, int console, byte[] rom, boolean hardcore);
     private static native void stopGame(long handle);
     private static native void destroy(long handle);
     private static native void loginPassword(long handle, byte[] user, byte[] password);
@@ -225,6 +233,9 @@ public final class NativeAchievements {
     private static native void fetchScores(long handle, int board, boolean around);
     private static native byte[][] scores(long handle);
     private static native byte[] richPresence(long handle);
+    private static native void setHardcore(long handle, boolean enabled);
+    private static native boolean hardcore(long handle);
+    private static native boolean canPause(long handle);
 
     private static byte[] utf8(String text) {
         return (text == null ? "" : text).getBytes(StandardCharsets.UTF_8);

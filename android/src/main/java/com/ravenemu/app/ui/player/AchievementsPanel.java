@@ -51,6 +51,7 @@ final class AchievementsPanel {
     private final Button[] filters = new Button[FILTERS.length];
     private final Button sortButton;
     private final LinearLayout controls;
+    private final TextView footer;
     private AchievementsSnapshot snapshot = AchievementsSnapshot.SIGNED_OUT;
     private int filter, sort, visible = FIRST_PAGE, visibleBoards = FIRST_PAGE, selectedBoard;
     private String query = "";
@@ -121,7 +122,8 @@ final class AchievementsPanel {
         add(root, list, 6);
         boards = column();
         add(root, boards, 14);
-        add(root, text("Mode Softcore · SDK officiel " + sdk(), 11, HomeActivity.MUTED), 14);
+        footer = text("Mode Softcore · SDK officiel " + sdk(), 11, HomeActivity.MUTED);
+        add(root, footer, 14);
     }
 
     View view() { return root; }
@@ -134,6 +136,7 @@ final class AchievementsPanel {
             visible = visibleBoards = FIRST_PAGE;
             selectedBoard = 0;
         }
+        footer.setText((snapshot.hardcore ? "Mode Hardcore" : "Mode Softcore") + " · SDK officiel " + sdk());
         renderHeader();
         controls.setVisibility(snapshot.signedIn && snapshot.entries.length > 0 ? View.VISIBLE : View.GONE);
         renderList();
@@ -364,8 +367,8 @@ final class AchievementsPanel {
         TextView title = text("Classements", 15, HomeActivity.TEXT);
         title.setTypeface(null, Typeface.BOLD);
         add(boards, title, 10);
-        add(boards, text("Consultation des scores disponible. Les tentatives officielles nécessitent le mode "
-                + "Hardcore.", 12, HomeActivity.MUTED), 4);
+        if (!snapshot.hardcore) add(boards, text("Consultation des scores disponible. Les tentatives officielles "
+                + "nécessitent le mode Hardcore.", 12, HomeActivity.MUTED), 4);
         if (snapshot.boards.length == 0) {
             add(boards, text("Aucun classement pour ce jeu.", 13, HomeActivity.MUTED), 6);
             return;

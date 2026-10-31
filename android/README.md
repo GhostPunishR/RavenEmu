@@ -259,8 +259,13 @@ changement de compte s'applique au jeu en cours dès le retour.
 Les **défis en cours et suivis de classement** restent en bas de l'image
 jusqu'à leur fin, comme dans la bêta.
 
-Écarts restants (tranche RA-3) : verrous du mode Hardcore, progression des
-succès dans les états de jeu (un chargement d'état remet
+Le **mode Hardcore** reste indisponible, comme dans la bêta, tant que
+RetroAchievements n'a pas approuvé RavenEmu : ses verrous sont prêts (pas de
+chargement d'état, pauses demandées à rcheevos, partie retenue pendant la
+connexion, redémarrage du jeu à l'activation) et testés, mais aucun
+interrupteur n'est montré.
+
+Écarts restants : progression des succès dans les états de jeu (un chargement d'état remet
 les succès à zéro, comme l'exige rcheevos sans données de progression ; la
 bêta ne les sauvegardait pas non plus).
 

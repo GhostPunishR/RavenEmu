@@ -219,7 +219,11 @@ static void hardcore_turned_on_in_game_asks_for_a_reset(void) {
     raven_achievements_set_hardcore(a, 1);
     raven_achievements_event event;
     CHECK(take(a, "hardcore_reset", &event));
+    /* The console restarts in place, then the achievements with it. */
+    CHECK(raven_frontend_reset(host) == 1 && raven_frontend_reset(NULL) == 0);
     raven_achievements_reset(a);
+    CHECK(raven_frontend_run_frame(host));
+    raven_achievements_frame(a);
     raven_achievements_destroy(a);
     raven_frontend_destroy(host);
 }

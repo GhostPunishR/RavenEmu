@@ -8,6 +8,7 @@ import com.ravenemu.app.platform.SystemBarInsets;
 import com.ravenemu.app.settings.AchievementAccount;
 import com.ravenemu.app.settings.AchievementSettings;
 import com.ravenemu.app.settings.AwardJournal;
+import com.ravenemu.app.settings.HardcorePolicy;
 import com.ravenemu.app.settings.CartridgeSettings;
 import com.ravenemu.app.settings.ConsoleSettings;
 import com.ravenemu.app.settings.ControlLayout;
@@ -266,8 +267,16 @@ public final class PlaybackSettingsActivity extends Activity {
         slider("Durée des progressions", achievementSettings.progressSeconds, AchievementSettings.PROGRESS_MIN,
                 AchievementSettings.PROGRESS_MAX, " s",
                 value -> updateAchievements(achievementSettings.withProgressSeconds(value)));
-        description("Mode Hardcore indisponible", "L'activation attend la validation de RavenEmu par "
-                + "RetroAchievements. Le mode Softcore reste disponible.");
+        // As in the beta: no switch until RetroAchievements approves RavenEmu.
+        if (HardcorePolicy.approved()) {
+            group("Mode Hardcore");
+            settingSwitch("Mode Hardcore", "Succès comptés en Hardcore. Le chargement des sauvegardes d'état est "
+                            + "désactivé et les pauses sont limitées. L'activer redémarre le jeu en cours.",
+                    achievementSettings.hardcore, value -> updateAchievements(achievementSettings.withHardcore(value)));
+        } else {
+            description("Mode Hardcore indisponible", "L'activation attend la validation de RavenEmu par "
+                    + "RetroAchievements. Le mode Softcore reste disponible.");
+        }
         add(text("Mode Softcore · SDK officiel " + sdkVersion(), 11, HomeActivity.MUTED), 14);
     }
 

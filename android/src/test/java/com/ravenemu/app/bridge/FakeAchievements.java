@@ -32,6 +32,9 @@ public class FakeAchievements {
     public static final List<String> fetched = new ArrayList<>();
     public static String startUser, startToken, lastUser, lastPassword, lastToken;
     public static int startConsole, startRomLength;
+    /** Hardcore as the game started, and as it is now; whether a pause is allowed. */
+    public static boolean startHardcore, hardcoreOn, pauseAllowed = true;
+    public static int pauseRequests;
     public static Runnable onStart;
     private static final ArrayDeque<String[]> requests = new ArrayDeque<>();
     private static final ArrayDeque<String[]> events = new ArrayDeque<>();
@@ -44,6 +47,9 @@ public class FakeAchievements {
         startConsole = startRomLength = 0;
         onStart = null;
         entries.clear(); boards.clear(); fetched.clear();
+        startHardcore = hardcoreOn = false;
+        pauseAllowed = true;
+        pauseRequests = 0;
         scores = new String[]{"0", "0", "0"};
         richPresence = "";
         summary = new String[]{"Raven", "Raven Rouge", "", "12", "34", "0", "0", "0", "0", "0"};
@@ -67,8 +73,11 @@ public class FakeAchievements {
         return handle;
     }
 
-    @Implementation protected static synchronized long startGame(byte[] user, byte[] token, int console, byte[] rom) {
+    @Implementation protected static synchronized long startGame(byte[] user, byte[] token, int console, byte[] rom,
+                                                                  boolean hardcore) {
         if (onStart != null) onStart.run();
+        hardcoreOn = hardcore;
+        startHardcore = hardcore;
         live.remove(player);
         startUser = text(user); startToken = text(token); startConsole = console; startRomLength = rom.length;
         player = ++lastHandle;
@@ -144,6 +153,19 @@ public class FakeAchievements {
         List<String> all = new ArrayList<>();
         for (String[] row : rows) java.util.Collections.addAll(all, row);
         return all.toArray(new String[0]);
+    }
+
+    @Implementation protected static synchronized void setHardcore(long handle, boolean enabled) {
+        if (live.contains(handle)) hardcoreOn = enabled;
+    }
+
+    @Implementation protected static synchronized boolean hardcore(long handle) {
+        return live.contains(handle) && hardcoreOn;
+    }
+
+    @Implementation protected static synchronized boolean canPause(long handle) {
+        pauseRequests++;
+        return !live.contains(handle) || pauseAllowed;
     }
 
     @Implementation protected static String sdkVersion() { return "rcheevos/12.5"; }

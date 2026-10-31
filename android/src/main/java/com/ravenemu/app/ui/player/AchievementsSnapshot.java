@@ -38,6 +38,8 @@ final class AchievementsSnapshot {
     final String scoresError;
     /** Unlocks this device still has to send, from the offline journal. */
     final int pendingAwards;
+    /** rcheevos counts the game in Hardcore. */
+    final boolean hardcore;
 
     AchievementsSnapshot(boolean signedIn, String status, String user, String displayName, String avatarUrl,
                          long softcorePoints, long hardcorePoints, String gameTitle, long gameId, long unlocked,
@@ -45,6 +47,18 @@ final class AchievementsSnapshot {
                          NativeAchievements.Entry[] entries, int[] sync, NativeAchievements.Board[] boards,
                          NativeAchievements.Scores scores, int scoresBoard, boolean scoresAround,
                          boolean scoresLoading, String scoresError, int pendingAwards) {
+        this(signedIn, status, user, displayName, avatarUrl, softcorePoints, hardcorePoints, gameTitle, gameId,
+                unlocked, total, pointsUnlocked, pointsTotal, richPresence, entries, sync, boards, scores, scoresBoard,
+                scoresAround, scoresLoading, scoresError, pendingAwards, false);
+    }
+
+    AchievementsSnapshot(boolean signedIn, String status, String user, String displayName, String avatarUrl,
+                         long softcorePoints, long hardcorePoints, String gameTitle, long gameId, long unlocked,
+                         long total, long pointsUnlocked, long pointsTotal, String richPresence,
+                         NativeAchievements.Entry[] entries, int[] sync, NativeAchievements.Board[] boards,
+                         NativeAchievements.Scores scores, int scoresBoard, boolean scoresAround,
+                         boolean scoresLoading, String scoresError, int pendingAwards, boolean hardcore) {
+        this.hardcore = hardcore;
         this.signedIn = signedIn; this.status = status; this.user = user; this.displayName = displayName;
         this.avatarUrl = avatarUrl; this.softcorePoints = softcorePoints; this.hardcorePoints = hardcorePoints;
         this.gameTitle = gameTitle; this.gameId = gameId; this.unlocked = unlocked; this.total = total;
@@ -58,7 +72,7 @@ final class AchievementsSnapshot {
         return new AchievementsSnapshot(signedIn, status, user, displayName, avatarUrl, softcorePoints,
                 hardcorePoints, gameTitle, gameId, unlocked, total, pointsUnlocked, pointsTotal, richPresence,
                 entries, sync, boards, scores, scoresBoard, scoresAround, scoresLoading, scoresError,
-                Math.max(0, count));
+                Math.max(0, count), hardcore);
     }
 
     String name() { return displayName.isEmpty() ? user : displayName; }
@@ -78,7 +92,7 @@ final class AchievementsSnapshot {
             game = status.startsWith("Connecté") ? "Aucun jeu reconnu pour le moment." : status;
         }
         return new String[]{name(), "Softcore " + softcorePoints + " pts  ·  Hardcore " + hardcorePoints + " pts",
-                game, "Softcore"};
+                game, hardcore ? "Hardcore" : "Softcore"};
     }
 
     /** The beta's retroAchievementList: filter, search, then sort; the

@@ -21,8 +21,9 @@ import org.json.JSONObject;
 public final class AwardPolicy {
     /** RetroAchievements Hardcore needs the approval of the RetroAchievements
      * team. Until then this stays false, as in the beta: no Hardcore switch
-     * is shown, and Hardcore award requests are never journaled or replayed. */
-    public static final boolean HARDCORE_APPROVED = false;
+     * is shown, and Hardcore award requests are never journaled or replayed.
+     * Read through HardcorePolicy.approved(). */
+    static final boolean HARDCORE_APPROVED = false;
     private static final int MAX_POST = 8192;
 
     private AwardPolicy() {}
@@ -38,7 +39,7 @@ public final class AwardPolicy {
         @Override public int hashCode() { return id * 2 + (hardcore ? 1 : 0); }
     }
 
-    public static boolean isSdkAward(String url, String post) { return isSdkAward(url, post, HARDCORE_APPROVED); }
+    public static boolean isSdkAward(String url, String post) { return isSdkAward(url, post, HardcorePolicy.approved()); }
 
     public static boolean isSdkAward(String url, String post, boolean allowHardcore) {
         if (url == null || post == null || post.isEmpty() || post.length() > MAX_POST
@@ -96,7 +97,7 @@ public final class AwardPolicy {
      * and signature stay intact (rcheevos signs the award without the token,
      * rc_api_runtime.c), and the account must be the same one. */
     public static String authenticatedReplay(String url, String post, String account, String token) {
-        return authenticatedReplay(url, post, account, token, HARDCORE_APPROVED);
+        return authenticatedReplay(url, post, account, token, HardcorePolicy.approved());
     }
 
     public static String authenticatedReplay(String url, String post, String account, String token,

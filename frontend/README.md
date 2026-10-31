@@ -112,6 +112,10 @@ réponse (`raven_achievements_respond`) ; l'interface lit les événements
 (`raven_achievements_next_event`). La fermeture règle elle-même les requêtes
 encore en cours.
 
+`raven_frontend_reset` redémarre le jeu en place (`retro_reset`, symbole
+facultatif) : le Hardcore de rcheevos le demande quand il s'active pendant un
+jeu.
+
 Sur Android, `android/src/main/cpp/jni/achievements_bridge.c` expose le module
 à Java (`NativeAchievements`) : l'instance du lecteur, liée au jeu du pont et
 évaluée à chaque image montrée, et celle de la page de compte, sans jeu. Les

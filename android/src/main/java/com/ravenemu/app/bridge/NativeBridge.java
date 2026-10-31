@@ -44,6 +44,9 @@ public final class NativeBridge {
     /** GL thread: preemptive frames, 0 (off) to 3; the player lowers them for a
      * game the phone cannot replay in time, and says so through takeMessage. */
     public static native void setPreemptiveFrames(int frames);
+    /** GL thread: the console's reset, RetroAchievements restarting with it;
+     * false without a game. */
+    public static native boolean resetGame();
     /** GL thread: Display.getRotation(), so the tilt follows the screen as shown. */
     public static native void setDisplayRotation(int rotation);
     /** GL thread, after drawFrame: the cartridge's motor runs; never while paused. */
