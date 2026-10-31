@@ -127,6 +127,14 @@ conclure à une parité avec la bêta.
 
 APK: `android/build/outputs/apk/debug/android-debug.apk`.
 
+This is Gradle's debug variant, whose native code the NDK compiles at `-O0`.
+`src/main/cpp/CMakeLists.txt` adds `-O2` to every native target (frontend,
+rcheevos, the RavenCore cores, the drivers) and keeps the debug symbols, as
+the beta does in `native/CMakeLists.txt`: at `-O0` RavenCore's GBA core runs
+about six times slower and every game crawls on a phone.
+`scripts/check_native_optimization.py` reads the compile databases Gradle
+leaves under `android/.cxx` and fails the CI on any unoptimised command.
+
 Run `./gradlew :android:testDebugUnitTest` for identity/path, insets,
 Activity recreation/import, sheet gestures and multi-touch controls tests.
 The standalone `raven_native_input_test` target in `frontend/CMakeLists.txt`

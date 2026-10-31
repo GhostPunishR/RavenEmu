@@ -103,6 +103,10 @@ jobs:
           PY
       - name: Compiler l'APK ARM64 et exécuter les tests
         run: ./gradlew :android:assembleDebug :android:testDebugUnitTest :android:lintDebug :android:collectDebugCorrespondingSources --stacktrace
+      - name: Contrôler l'optimisation du code natif
+        run: |
+          python3 scripts/test_check_native_optimization.py
+          python3 scripts/check_native_optimization.py
       - name: Vérifier et archiver les sources
         run: |
           python3 scripts/test_package_native_sources.py

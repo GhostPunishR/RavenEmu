@@ -897,3 +897,25 @@ et son activation (en attente d'approbation), liste des succès, classements,
 indicateurs de défi et de suivi, carte du compte dans le menu de jeu, journal
 hors ligne. La recréation du lecteur (rotation) reconnecte le compte et
 ré-identifie le jeu.
+
+## Correctif : code natif optimisé dans l'APK de développement
+
+Constat du propriétaire : tous les jeux (GB, GBC, GBA) étaient lents dans
+l'APK de développement, déjà avant RetroAchievements. La CI produit cet APK
+par `:android:assembleDebug`, et le NDK compile alors le code natif en `-O0`.
+La bêta avait rencontré le même problème et le corrigeait dans
+`native/CMakeLists.txt` ; la correction manquait dans `android/`.
+
+- Mesure sur l'hôte, vrai core GBA de RavenCore, 600 images : 14,7 ms par
+  image en `-O0` contre 2,4 ms en `-O2`, pour 16,7 ms de budget. Un téléphone,
+  plusieurs fois plus lent par cœur, passe sous les 60 images/s en `-O0`.
+  Le sinc ne pèse presque rien (0,8 % d'un cœur en `-O0`).
+- `android/src/main/cpp/CMakeLists.txt` ajoute `-O2` en Debug avant d'inclure
+  le frontend : le frontend, rcheevos, les cores RavenCore et les pilotes en
+  héritent ; les symboles de débogage restent. Les sources de RavenCore ne
+  changent pas.
+- `scripts/check_native_optimization.py` (et ses tests) lit les bases de
+  compilation laissées par Gradle sous `android/.cxx` : la CI échoue si une
+  commande finit sans `-O2`/`-O3` ou si l'une des cibles natives manque.
+
+À vérifier sur téléphone : vitesse réelle des jeux GB, GBC et GBA.
