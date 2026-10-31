@@ -14,7 +14,13 @@ FetchContent_MakeAvailable(ravencore)
 
 add_library(raven_frontend STATIC src/libretro_host.c src/frame_clock.c src/frame_pacer.c)
 target_compile_features(raven_frontend PUBLIC c_std_11)
-target_compile_definitions(raven_frontend PUBLIC RAVEN_CORE_REVISION="${RAVEN_CORE_REVISION}")
+# RavenCore's own version, for the User-Agent RetroAchievements asks clients to send.
+get_directory_property(RAVEN_CORE_VERSION DIRECTORY "${ravencore_SOURCE_DIR}" DEFINITION PROJECT_VERSION)
+if(NOT RAVEN_CORE_VERSION MATCHES "^[0-9]+(\\.[0-9]+)+$")
+    message(FATAL_ERROR "RavenCore version unreadable: '${RAVEN_CORE_VERSION}'")
+endif()
+target_compile_definitions(raven_frontend PUBLIC RAVEN_CORE_REVISION="${RAVEN_CORE_REVISION}"
+    RAVEN_CORE_VERSION="${RAVEN_CORE_VERSION}")
 target_include_directories(raven_frontend PUBLIC include
     PRIVATE ${ravencore_SOURCE_DIR}/libretro/include)
 target_link_libraries(raven_frontend PUBLIC ${CMAKE_DL_LIBS})
@@ -53,6 +59,9 @@ if(RAVEN_FRONTEND_TESTS AND NOT ANDROID)
     # Host-only hardware tests are maintained outside of the frontend library.
     add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../tests/hardware"
                      "${CMAKE_CURRENT_BINARY_DIR}/hardware-tests")
+    # The Android bridge's RetroAchievements JNI, on the host's JVM.
+    add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../tests/jni"
+                     "${CMAKE_CURRENT_BINARY_DIR}/jni-tests")
     add_library(raven_frontend_fake_core SHARED tests/fake_core.c)
     target_include_directories(raven_frontend_fake_core PRIVATE
         ${ravencore_SOURCE_DIR}/libretro/include)

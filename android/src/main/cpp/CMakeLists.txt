@@ -10,6 +10,7 @@ FetchContent_GetProperties(ravencore)
 
 add_library(raven_android SHARED
     jni/bridge.c
+    jni/achievements_bridge.c
     hardware/audio/audio_pipeline.c
     hardware/audio/sinc_resampler.c
     hardware/audio/aaudio/aaudio_driver.c
@@ -18,7 +19,7 @@ add_library(raven_android SHARED
     hardware/input/sensor_driver.c
     media/state_thumbnail.c)
 target_compile_features(raven_android PRIVATE c_std_11)
-target_link_libraries(raven_android PRIVATE raven_frontend GLESv2 aaudio android log m)
+target_link_libraries(raven_android PRIVATE raven_frontend raven_achievements GLESv2 aaudio android log m)
 target_include_directories(raven_android PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/hardware/audio"
     "${CMAKE_CURRENT_LIST_DIR}/hardware/audio/aaudio"

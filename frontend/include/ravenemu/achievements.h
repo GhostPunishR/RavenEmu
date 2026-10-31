@@ -32,7 +32,9 @@ void raven_achievements_login_token(raven_achievements *achievements, const char
 void raven_achievements_logout(raven_achievements *achievements);
 
 /* Once the frontend loaded the game: reads its memory map and identifies the
- * ROM by its hash. console: RetroAchievements' id (4 GB, 6 GBC, 5 GBA). */
+ * ROM by its hash. console: RetroAchievements' id (4 GB, 6 GBC, 5 GBA). The
+ * console being known, the ROM is hashed during the call and never read
+ * after it: the caller may free it on return. */
 #define RAVEN_ACHIEVEMENTS_CONSOLE_GAMEBOY 4
 #define RAVEN_ACHIEVEMENTS_CONSOLE_GAMEBOY_COLOR 6
 #define RAVEN_ACHIEVEMENTS_CONSOLE_GAMEBOY_ADVANCE 5

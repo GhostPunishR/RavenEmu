@@ -1,5 +1,9 @@
 package com.ravenemu.app.ui.settings;
+import com.ravenemu.app.bridge.FakeAchievements;
 import com.ravenemu.app.data.saves.GbaBiosRepository;
+import com.ravenemu.app.platform.ClearSealer;
+import com.ravenemu.app.settings.AchievementAccount;
+import com.ravenemu.app.settings.AchievementSettings;
 import com.ravenemu.app.settings.CartridgeSettings;
 import com.ravenemu.app.settings.ConsoleSettings;
 import com.ravenemu.app.settings.ControlLayout;
@@ -18,6 +22,8 @@ import android.os.Looper;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowInsets;
+import android.widget.Button;
+import android.widget.EditText;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
 import android.widget.Switch;
@@ -25,6 +31,8 @@ import android.widget.TextView;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -47,9 +55,10 @@ import org.robolectric.util.ReflectionHelpers;
 import static org.junit.Assert.*;
 import static org.robolectric.Shadows.shadowOf;
 
-/** Exercises the real Java controls and persistence, without JNI. */
+/** Exercises the real Java controls and persistence, without JNI: the
+ * RetroAchievements module and the Keystore are stood in for. */
 @RunWith(RobolectricTestRunner.class)
-@Config(sdk = 36, qualifiers = "fr-rFR-w320dp-h320dp-mdpi")
+@Config(sdk = 36, qualifiers = "fr-rFR-w320dp-h320dp-mdpi", shadows = {FakeAchievements.class, ClearSealer.class})
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 public final class PlaybackSettingsActivityTest {
     private final List<ActivityController<PlaybackSettingsActivity>> activities = new ArrayList<>();
@@ -60,6 +69,8 @@ public final class PlaybackSettingsActivityTest {
                 PlaybackSettings.PREFERENCES, Context.MODE_PRIVATE);
         preferences.edit().clear().commit();
         GbaBiosRepository.remove(RuntimeEnvironment.getApplication().getFilesDir());
+        AchievementAccount.clear(RuntimeEnvironment.getApplication());
+        FakeAchievements.reset();
     }
 
     @After public void close() {
@@ -301,7 +312,7 @@ public final class PlaybackSettingsActivityTest {
 
     @Test public void theCategoriesAreTheBetasInItsOrderAndEachOpensItsPage() {
         PlaybackSettingsActivity activity = open(null, null).get();
-        String[] categories = {"général", "audio", "vidéo", "console", "interface", "à propos"};
+        String[] categories = {"retroachievements", "général", "audio", "vidéo", "console", "interface", "à propos"};
         int previous = -1;
         for (String category : categories) {
             View row = described(activity, "Ouvrir les réglages " + category);
@@ -317,6 +328,90 @@ public final class PlaybackSettingsActivityTest {
         activity.onBackPressed();
         described(activity, "Ouvrir les réglages à propos").performClick();
         assertNotNull(text(activity, "À propos"));
+    }
+
+    @Test public void signingInKeepsTheTokenSealedAndNeverThePassword() throws Exception {
+        FakeAchievements.afterAnswer.add(new String[]{"login", "Raven", "Raven Rouge", "TOKEN-9", "", ""});
+        PlaybackSettingsActivity activity = retroPage();
+        EditText user = (EditText)described(activity, "Nom d'utilisateur");
+        EditText password = (EditText)described(activity, "Mot de passe");
+        Button signIn = (Button)text(activity, "Se connecter");
+        assertFalse("Nothing to send yet", signIn.isEnabled());
+        user.setText("Raven");
+        assertFalse(signIn.isEnabled());
+        password.setText("pässwörd-secret");
+        assertTrue(signIn.isEnabled());
+        signIn.performClick();
+        assertEquals("The field is emptied as it is sent", "", password.getText().toString());
+        idleNetwork(activity);
+        assertEquals("Raven", FakeAchievements.lastUser);
+        assertEquals("pässwörd-secret", FakeAchievements.lastPassword);
+        assertTrue("The account page's instance is closed", FakeAchievements.log.stream().anyMatch(l -> l.startsWith("destroy ")));
+        AchievementAccount stored = AchievementAccount.load(activity);
+        assertEquals("TOKEN-9", stored.token);
+        assertEquals("Raven Rouge", stored.displayName);
+        assertEquals(34, stored.softcorePoints);
+        assertEquals(12, stored.hardcorePoints);
+        assertNotNull(text(activity, "Raven Rouge"));
+        assertNotNull(text(activity, "@Raven"));
+        assertNotNull(text(activity, "Softcore : 34 points  ·  Hardcore : 12 points"));
+        assertTrue("Signing in writes no preference", preferences.getAll().isEmpty());
+        File data = activity.getFilesDir().getParentFile();
+        assertFalse("The password is stored nowhere", contains(data, "pässwörd-secret"));
+        assertFalse("The token is never in plain text", contains(data, "TOKEN-9"));
+        // Réessayer checks the stored token; Déconnexion forgets it.
+        FakeAchievements.afterAnswer.add(new String[]{"login", "Raven", "Raven Rouge", "TOKEN-9", "", ""});
+        described(activity, "Actualiser le compte RetroAchievements").performClick();
+        idleNetwork(activity);
+        assertEquals("TOKEN-9", FakeAchievements.lastToken);
+        assertNotNull(text(activity, "Raven Rouge"));
+        described(activity, "Se déconnecter de RetroAchievements").performClick();
+        idleIo(activity);
+        assertNull(AchievementAccount.load(activity));
+        assertNotNull(described(activity, "Nom d'utilisateur"));
+    }
+
+    @Test public void aRefusedOrUnreachableLoginSaysWhyAndStoresNothing() throws Exception {
+        FakeAchievements.afterAnswer.add(new String[]{"login_error", "Invalid User/Password combination. Please try again",
+                "", "refused", "", ""});
+        PlaybackSettingsActivity activity = retroPage();
+        ((EditText)described(activity, "Nom d'utilisateur")).setText("Raven");
+        ((EditText)described(activity, "Mot de passe")).setText("wrong");
+        text(activity, "Se connecter").performClick();
+        idleNetwork(activity);
+        assertNotNull(text(activity, "Invalid User/Password combination. Please try again"));
+        assertNull(AchievementAccount.load(activity));
+        assertEquals("The name typed is kept", "Raven",
+                ((EditText)described(activity, "Nom d'utilisateur")).getText().toString());
+        FakeAchievements.afterAnswer.add(new String[]{"login_error", "", "", "offline", "", ""});
+        ((EditText)described(activity, "Mot de passe")).setText("again");
+        text(activity, "Se connecter").performClick();
+        idleNetwork(activity);
+        assertNotNull(text(activity, "RetroAchievements est injoignable. Vérifiez la connexion puis réessayez."));
+        assertNull(AchievementAccount.load(activity));
+    }
+
+    @Test public void notificationsFollowTheBetaAndHardcoreWaitsForApproval() throws Exception {
+        PlaybackSettingsActivity activity = retroPage();
+        assertTrue("Opening the page writes nothing", preferences.getAll().isEmpty());
+        toggle(activity, "Déblocages et bilan").performClick();
+        toggle(activity, "Progression des succès").performClick();
+        toggle(activity, "Son des succès").performClick();
+        choice(activity, "Popups en bas").performClick();
+        setAsUser(slider(activity, "Durée des déblocages"), 10 - AchievementSettings.POPUP_MIN);
+        setAsUser(slider(activity, "Durée des progressions"), 0);
+        AchievementSettings saved = AchievementSettings.load(activity);
+        assertFalse(saved.unlockPopups);
+        assertFalse(saved.progressPopups);
+        assertFalse(saved.sound);
+        assertEquals(AchievementSettings.BOTTOM, saved.position);
+        assertEquals(10, saved.popupSeconds);
+        assertEquals(1, saved.progressSeconds);
+        assertNotNull(text(activity, "Mode Hardcore indisponible"));
+        assertNull("No Hardcore switch before RetroAchievements approves RavenEmu", find(activity, view ->
+                view instanceof Switch && view.getContentDescription() != null
+                        && view.getContentDescription().toString().startsWith("Mode Hardcore")));
+        assertNotNull(text(activity, "Mode Softcore · SDK officiel rcheevos/12.5"));
     }
 
     @Test public void aboutOpensTheLicencesInTheAppAndTheSourcesOnline() {
@@ -510,6 +605,38 @@ public final class PlaybackSettingsActivityTest {
         File file = new File(activity.getCacheDir(), name);
         try (FileOutputStream out = new FileOutputStream(file)) { out.write(bytes); }
         return file;
+    }
+
+    /** The RetroAchievements page, once the stored account was read. */
+    private PlaybackSettingsActivity retroPage() throws Exception {
+        PlaybackSettingsActivity activity = open(null, null).get();
+        described(activity, "Ouvrir les réglages retroachievements").performClick();
+        idleIo(activity);
+        assertNotNull(text(activity, "RetroAchievements"));
+        return activity;
+    }
+
+    private static void idleNetwork(PlaybackSettingsActivity activity) throws Exception {
+        ExecutorService network = ReflectionHelpers.getField(activity, "network");
+        network.submit(() -> {}).get(5, TimeUnit.SECONDS);
+        idleIo(activity);
+    }
+
+    /** Whether any file under `root` holds the text, in UTF-8. */
+    private static boolean contains(File root, String text) throws IOException {
+        byte[] wanted = text.getBytes(StandardCharsets.UTF_8);
+        File[] children = root.listFiles();
+        if (children == null) return false;
+        for (File child : children) {
+            if (child.isDirectory()) { if (contains(child, text)) return true; continue; }
+            byte[] bytes = Files.readAllBytes(child.toPath());
+            outer:
+            for (int i = 0; i + wanted.length <= bytes.length; i++) {
+                for (int j = 0; j < wanted.length; j++) if (bytes[i + j] != wanted[j]) continue outer;
+                return true;
+            }
+        }
+        return false;
     }
 
     private static void idleIo(PlaybackSettingsActivity activity) throws Exception {

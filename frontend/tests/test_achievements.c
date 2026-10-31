@@ -150,7 +150,14 @@ static void an_achievement_unlocks_from_ravencore_memory(int hardcore) {
     raven_achievements_set_hardcore(a, hardcore);
     CHECK(raven_achievements_hardcore(a) == hardcore);
     login(a);
-    raven_achievements_load_game(a, RAVEN_ACHIEVEMENTS_CONSOLE_GAMEBOY, rom, sizeof(rom));
+    /* As the Android bridge does: a copy, wiped and freed on return (the
+     * console being known, the ROM is hashed during the call). */
+    unsigned char *copy = (unsigned char *)malloc(sizeof(rom));
+    CHECK(copy);
+    memcpy(copy, rom, sizeof(rom));
+    raven_achievements_load_game(a, RAVEN_ACHIEVEMENTS_CONSOLE_GAMEBOY, copy, sizeof(rom));
+    memset(copy, 0xff, sizeof(rom));
+    free(copy);
     answer_game(host, a, GAME_SETS);
     raven_achievements_event event;
     CHECK(take(a, "game", &event));
@@ -200,6 +207,28 @@ static void hardcore_turned_on_in_game_asks_for_a_reset(void) {
     raven_frontend_destroy(host);
 }
 
+/* As the Android player does: the stored token's login and the game asked
+ * at once; the game's sets wait for the login. */
+static void the_game_waits_for_the_token_login(void) {
+    raven_frontend *host = open_game();
+    raven_achievements *a = raven_achievements_create(host, NULL);
+    raven_achievements_login_token(a, "SyntheticUser", "SyntheticToken");
+    raven_achievements_load_game(a, RAVEN_ACHIEVEMENTS_CONSOLE_GAMEBOY, rom, sizeof(rom));
+    const char *post = answer(a, LOGIN_OK, 200);
+    CHECK(strstr(post, "r=login2") != NULL && strstr(post, "t=SyntheticToken") != NULL);
+    raven_achievements_event event;
+    CHECK(take(a, "login", &event));
+    answer_game(host, a, GAME_SETS);
+    CHECK(take(a, "game", &event) && strcmp(event.title, "Synthetic game") == 0);
+    /* A state loaded: the achievements start over, the game stays. */
+    raven_achievements_reset(a);
+    raven_achievements_summary summary;
+    raven_achievements_get_summary(a, &summary);
+    CHECK(summary.game_id == 1234 && summary.total == 1);
+    raven_achievements_destroy(a);
+    raven_frontend_destroy(host);
+}
+
 static void a_service_out_of_reach_is_told_apart(void) {
     raven_frontend *host = open_game();
     raven_achievements *a = raven_achievements_create(host, NULL);
@@ -239,8 +268,9 @@ int main(int argc, char **argv) {
     an_achievement_unlocks_from_ravencore_memory(0);
     an_achievement_unlocks_from_ravencore_memory(1);
     hardcore_turned_on_in_game_asks_for_a_reset();
+    the_game_waits_for_the_token_login();
     a_service_out_of_reach_is_told_apart();
     closing_settles_requests_still_out();
-    puts("Achievements: 6 scenarios passed");
+    puts("Achievements: 7 scenarios passed");
     return 0;
 }

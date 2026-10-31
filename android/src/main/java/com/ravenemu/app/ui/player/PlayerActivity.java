@@ -6,7 +6,11 @@ import com.ravenemu.app.data.saves.GbaBiosRepository;
 import com.ravenemu.app.data.saves.SaveRepository;
 import com.ravenemu.app.data.saves.StatePreview;
 import com.ravenemu.app.data.saves.StateSlotRepository;
+import com.ravenemu.app.platform.AchievementsHttp;
+import com.ravenemu.app.platform.RetroUserAgent;
 import com.ravenemu.app.platform.SystemBarInsets;
+import com.ravenemu.app.settings.AchievementAccount;
+import com.ravenemu.app.settings.AchievementSettings;
 import com.ravenemu.app.settings.CartridgeSettings;
 import com.ravenemu.app.settings.ConsoleSettings;
 import com.ravenemu.app.settings.ControlLayout;
@@ -79,6 +83,9 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
     private CartridgeRumble rumble;
     /** Settings → Interface: "Vibration de la cartouche". */
     private volatile boolean rumbleEnabled = CartridgeSettings.DEFAULTS.rumble;
+    /** RetroAchievements over the game (UI thread), and its session (GL thread). */
+    private AchievementOverlay achievementOverlay;
+    private PlayerAchievements achievements;
     private long nextBatterySaveNanos;
     private volatile String activeSaveKey;
     /** GL thread: the core of the open game ("gb", "gbc" or "gba"), for its options. */
@@ -205,17 +212,25 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
 
         gameControls = new GameControlsView(this, this::setTouchButtons);
         gameControls.setEnabled(false);
+        // The picture, and RetroAchievements' banners over it.
+        FrameLayout screen = new FrameLayout(this);
+        screen.addView(surface, new FrameLayout.LayoutParams(-1, -1));
+        achievementOverlay = new AchievementOverlay(this);
+        screen.addView(achievementOverlay, new FrameLayout.LayoutParams(-1, -1));
+        achievements = new PlayerAchievements(command -> runOnUiThread(() -> {
+            if (!disposed.get()) command.run();
+        }), event -> achievementOverlay.onEvent(event));
         if (getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE) {
             FrameLayout stage = new FrameLayout(this);
             root.addView(stage, new LinearLayout.LayoutParams(-1, 0, 1));
             FrameLayout.LayoutParams video = new FrameLayout.LayoutParams(-1, -1);
             video.leftMargin = video.rightMargin = dp(116);
             video.bottomMargin = dp(44);
-            stage.addView(surface, video);
+            stage.addView(screen, video);
             // The whole stage, so a control can be moved beside or over the picture.
             stage.addView(gameControls, new FrameLayout.LayoutParams(-1, -1));
         } else {
-            root.addView(surface, new LinearLayout.LayoutParams(-1, 0, 1));
+            root.addView(screen, new LinearLayout.LayoutParams(-1, 0, 1));
             root.addView(gameControls, new LinearLayout.LayoutParams(-1, -2));
         }
         // Reserve actual status bar, cutout, nav buttons and keyboard space.
@@ -339,6 +354,10 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
                 String[] coreOptions = CoreOptions.atLoad(core, PlaybackSettings.load(this), console,
                         CartridgeSettings.load(this), bios != null);
                 String stateVariant = console.stateVariant(core, bios == null ? null : GbaBiosRepository.digest(bios));
+                // Signed in from Settings → RetroAchievements: the game's
+                // achievements follow it. Without an account, no network.
+                final AchievementAccount account = AchievementAccount.load(this);
+                final AchievementsHttp http = account == null ? null : new AchievementsHttp(RetroUserAgent.of(this));
                 if (disposed.get()) return;
                 String nativeDir = getApplicationInfo().nativeLibraryDir;
                 String dataDir = getFilesDir().getAbsolutePath();
@@ -349,9 +368,13 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
                             core, rom, entry.title, coreOptions);
                     if (failure == null && battery != null &&
                             !NativeBridge.restoreBattery(battery)) {
+                        achievements.stop();
                         NativeBridge.closeRom();
                         failure = "SRAM incompatible : fichier original conservé";
                     }
+                    // Once the SRAM is in: the ROM is identified by its hash.
+                    if (failure == null) achievements.start(http, account, entry.system, rom);
+                    else achievements.stop();
                     final double fps = failure == null ? NativeBridge.frameRate() : 0.0;
                     if (failure == null) {
                         activeSaveKey = entry.key;
@@ -362,6 +385,10 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
                     } else { activeSaveKey = null; stateCompatibility = null; activeCore = null; }
                     final String result = failure;
                     runOnUiThread(() -> {
+                        if (!disposed.get()) {
+                            achievementOverlay.clear();
+                            achievementOverlay.setHttp(http);
+                        }
                         if (!disposed.get() && result == null && gameTitle != null) {
                             gameFps = fps;
                             applyDisplayMode();
@@ -557,6 +584,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         }
         boolean restored = NativeBridge.restoreState(snapshot);
         if (!restored && !NativeBridge.restoreState(previous)) {
+            achievements.stop();
             NativeBridge.closeRom();
             undoState = null;
             activeSaveKey = stateCompatibility = null;
@@ -647,6 +675,9 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
     public void onDrawFrame(GL10 gl) {
         long now = System.nanoTime();
         int advanced = NativeBridge.drawFrame(width, height, !gamePaused);
+        // The frames shown reached RetroAchievements in the bridge: now its
+        // answers, requests and events.
+        achievements.pump();
         rumble.update(rumbleEnabled && NativeBridge.rumbling(), now);
         // What the core asks to show, as RetroArch shows it: briefly over the game.
         final String message = NativeBridge.takeMessage();
@@ -727,6 +758,8 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         final CartridgeSettings cartridge = CartridgeSettings.load(this);
         final LatencySettings latency = LatencySettings.load(this);
         rumbleEnabled = cartridge.rumble;
+        if (achievementOverlay != null)
+            achievementOverlay.setSettings(AchievementSettings.load(this), settings.audioEnabled, settings.audioVolume);
         if (surface != null) surface.queueEvent(() -> {
             if (disposed.get() || !foreground) return;
             NativeBridge.setPlaybackOptions(settings.audioEnabled, settings.audioVolume,
@@ -775,6 +808,8 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         if (playerMenu != null) playerMenu.dismiss();
         // The emulation thread was already suspended by GLSurfaceView.onPause.
         if (surface != null) surface.onPause();
+        if (achievements != null) achievements.stop();
+        if (achievementOverlay != null) achievementOverlay.release();
         NativeBridge.closeRom();
         super.onDestroy();
     }

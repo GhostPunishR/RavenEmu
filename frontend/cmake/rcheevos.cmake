@@ -7,6 +7,8 @@ FetchContent_Declare(rcheevos
     GIT_REPOSITORY https://github.com/RetroAchievements/rcheevos.git
     GIT_TAG ${RAVEN_RCHEEVOS_REVISION})
 FetchContent_MakeAvailable(rcheevos)
+# The checkout built into the app, for its source archive (scripts/package_native_sources.py).
+set(RAVEN_RCHEEVOS_SOURCE_DIR "${rcheevos_SOURCE_DIR}" CACHE INTERNAL "rcheevos checkout built into the app")
 file(GLOB RAVEN_RA_SOURCES CONFIGURE_DEPENDS
     "${rcheevos_SOURCE_DIR}/src/*.c"
     "${rcheevos_SOURCE_DIR}/src/rcheevos/*.c"

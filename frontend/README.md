@@ -111,6 +111,14 @@ réponse (`raven_achievements_respond`) ; l'interface lit les événements
 (`raven_achievements_next_event`). La fermeture règle elle-même les requêtes
 encore en cours.
 
+Sur Android, `android/src/main/cpp/jni/achievements_bridge.c` expose le module
+à Java (`NativeAchievements`) : l'instance du lecteur, liée au jeu du pont et
+évaluée à chaque image montrée, et celle de la page de compte, sans jeu. Les
+textes passent en octets UTF-8, jamais en UTF-8 « modifié » de JNI ; une
+poignée détruite ne retrouve rien. Le test `raven_jni_achievements`
+(`tests/jni/`) le vérifie sur la JVM de l'hôte, avec la vraie source Java et
+le core Game Boy de RavenCore ; il est omis sans JDK.
+
 Test : `raven_frontend_achievements`, contre un faux service aux réponses du
 format de rcheevos et le vrai core Game Boy de RavenCore, qui exécute une ROM
 construite par le test : elle compte les images en WRAM (`$C001`) et le succès

@@ -221,6 +221,37 @@ Cartouche). Le retour, par la barre ou par Android, remonte d'un niveau ; la
 page et sa position survivent à la recréation de l'activité. La bêta, elle,
 montrait chaque catégorie sur une seule page.
 
+## RetroAchievements
+
+**Paramètres → RetroAchievements** (première catégorie, comme dans la bêta) :
+connexion par nom d'utilisateur et mot de passe, puis carte du compte (nom,
+avatar, points Softcore et Hardcore), « Réessayer » et « Déconnexion ». Le
+mot de passe sert à une seule requête et n'est conservé nulle part : seul le
+**jeton** est gardé, chiffré en AES-GCM par une clé du Keystore Android, dans
+un fichier hors sauvegarde (`noBackupFilesDir`). Viennent ensuite les
+notifications de la bêta : déblocages et bilan, progression des succès, son
+des succès, popups en haut ou en bas, durées (2 à 10 s et 1 à 5 s). Le mode
+Hardcore reste indisponible, avec le texte de la bêta.
+
+Pendant une partie, si un compte est connecté, le lecteur démarre le module
+C `frontend/src/achievements.c` (rcheevos) sur le fil GL : connexion par le
+jeton, identification de la ROM, évaluation après chaque image montrée par le
+pont (`jni/achievements_bridge.c`). Ses requêtes partent en HTTPS vers
+`retroachievements.org` (et ses sous-domaines pour les badges) seulement,
+avec le User-Agent demandé par le service, sur deux fils réseau ; les réponses
+reviennent à l'image suivante. Le bandeau de la bêta s'affiche sur l'image :
+badge qui tombe puis bande qui se déplie, cadre doré pour un succès, file d'un
+bandeau à la fois, carte de progression dessous ; le carillon de la bêta
+(écrit par RavenEmu) se joue au volume du jeu. Sans compte, rien ne part sur
+le réseau. La permission `INTERNET` est la seule ajoutée.
+
+Écarts restants (tranche RA-3) : verrous du mode Hardcore, liste des succès,
+classements, indicateurs de défi et de suivi, carte du compte dans le menu de
+jeu, journal hors ligne des déblocages (aujourd'hui, rcheevos réessaie tant
+que le jeu reste ouvert), progression des succès dans les états de jeu (un
+chargement d'état remet les succès à zéro, comme l'exige rcheevos sans
+données de progression).
+
 ## Image calée sur l'écran et son sans craquement
 
 Quand l'écran bat à un multiple de la cadence du jeu (60 ou 120 Hz pour
@@ -451,7 +482,9 @@ This is an integration prototype, not a release candidate.
   implemented. Storage is private; removing the test application deletes it.
 - The Java home screen uses the RavenEmu-style grid/list; file selection
   remains Android SAF. The Java pause sheet controls the C pause/audio gate.
-- No RetroAchievements, wireless/local link cable or Delta skins yet.
+- RetroAchievements: Softcore, unlock banners and chime only; Hardcore, the
+  achievement list, leaderboards and the offline journal wait for RA-3.
+  No wireless/local link cable or Delta skins yet.
 - Cover images must be manually selected by the user from local documents.
   Import is limited to 8 MiB and 4096 x 4096 input, decoded into 512 px PNG
   thumbnails. No artwork is bundled or fetched online.
@@ -491,8 +524,9 @@ Les sources Java sont organisées en vrais packages sous `src/main/java/com/rave
 - `data/library/` : ROMs, jaquettes et métadonnées ;
 - `data/saves/` : sauvegardes SRAM, états et miniatures ;
 - `settings/` : modèle et persistance des préférences de lecture ;
-- `bridge/` : contrat JNI Java ;
-- `platform/` : adaptation aux insets Android.
+- `bridge/` : contrat JNI Java (`NativeBridge`, `NativeAchievements`) ;
+- `platform/` : adaptation aux insets Android, réseau RetroAchievements et
+  chiffrement par le Keystore.
 
 Les tests JVM reflètent les mêmes packages. Le manifeste déclare les classes d'activités avec leurs sous-packages ; le pont C utilise le préfixe JNI correspondant à `bridge.NativeBridge`.
 

@@ -31,9 +31,9 @@ import java.util.concurrent.Executors;
 /** Local, selectable legal notices. Loading a long licence never blocks UI. */
 public final class LicensesActivity extends Activity {
     private static final String[] ASSETS = {
-            "NOTICE.txt", "GPL-3.0.txt", "AGPL-3.0.txt", "MIT-LIBRETRO.txt", "APACHE-2.0.txt"
+            "NOTICE.txt", "GPL-3.0.txt", "AGPL-3.0.txt", "MIT-LIBRETRO.txt", "MIT-RCHEEVOS.txt", "APACHE-2.0.txt"
     };
-    private static final String[] LABELS = {"Crédits", "GPLv3", "AGPLv3", "MIT", "Apache 2"};
+    private static final String[] LABELS = {"Crédits", "GPLv3", "AGPLv3", "MIT", "MIT rcheevos", "Apache 2"};
     private final ExecutorService io = Executors.newSingleThreadExecutor();
     private final Button[] choices = new Button[ASSETS.length];
     private TextView body, documentTitle;

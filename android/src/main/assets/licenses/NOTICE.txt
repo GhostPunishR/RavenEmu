@@ -57,6 +57,15 @@ Effets d’écran Lissage net et Grille LCD : écrits pour RavenEmu d’après
 sharp-bilinear (Themaister) et lcd3x (Gigaherz), shaders du domaine public
 de libretro/glsl-shaders, révision cba01a48b0974a1232bea68d999a7c21bc4c233e.
 
+RetroAchievements : SDK officiel rcheevos
+Copyright (c) 2018 RetroAchievements.org
+Licence MIT (MIT-RCHEEVOS.txt).
+Source : https://github.com/RetroAchievements/rcheevos,
+révision 1433173220a7eaede6a9ed7a18e94117be1821e0.
+Compilé dans la bibliothèque native avec les correctifs de sûreté de la
+bêta RavenEmu (frontend/cmake/rcheevos.cmake) ; le module qui le relie au
+frontend, au réseau et à l'interface est écrit pour RavenEmu (AGPLv3).
+
 Palettes de compatibilité GBC incluses dans RavenCore
 Tables issues des contributeurs de The Cutting Room Floor, page
 « Notes:Game Boy Color Bootstrap ROM », révision 2183057.

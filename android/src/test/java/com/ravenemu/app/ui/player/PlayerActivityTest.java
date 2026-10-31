@@ -1,10 +1,16 @@
 package com.ravenemu.app.ui.player;
+import com.ravenemu.app.bridge.FakeAchievements;
+import com.ravenemu.app.bridge.NativeAchievements;
 import com.ravenemu.app.bridge.NativeBridge;
 import com.ravenemu.app.data.library.RomLibrary;
 import com.ravenemu.app.data.saves.GbaBiosRepository;
 import com.ravenemu.app.data.saves.SaveRepository;
 import com.ravenemu.app.data.saves.StatePreview;
 import com.ravenemu.app.data.saves.StateSlotRepository;
+import com.ravenemu.app.platform.AchievementsHttp;
+import com.ravenemu.app.platform.ClearSealer;
+import com.ravenemu.app.settings.AchievementAccount;
+import com.ravenemu.app.settings.AchievementSettings;
 import com.ravenemu.app.settings.CartridgeSettings;
 import com.ravenemu.app.settings.ConsoleSettings;
 import com.ravenemu.app.settings.ControlLayout;
@@ -56,7 +62,8 @@ import static org.robolectric.Shadows.shadowOf;
  * boundaries. No physical rendering, native core or audio hardware is emulated. */
 @RunWith(RobolectricTestRunner.class)
 @Config(sdk = 36, qualifiers = "en-rUS-w320dp-h568dp-mdpi",
-        shadows = {PlayerActivityTest.QueuedGl.class, PlayerActivityTest.FakeNative.class})
+        shadows = {PlayerActivityTest.QueuedGl.class, PlayerActivityTest.FakeNative.class,
+                FakeAchievements.class, ClearSealer.class})
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 public final class PlayerActivityTest {
     private static final String COMPATIBILITY = "RavenCore-test-pinned|gb|1";
@@ -66,6 +73,8 @@ public final class PlayerActivityTest {
 
     @Before public void setUp() throws Exception {
         FakeNative.reset();
+        FakeAchievements.reset();
+        AchievementAccount.clear(RuntimeEnvironment.getApplication());
         RuntimeEnvironment.getApplication().getSharedPreferences(PlaybackSettings.PREFERENCES, 0)
                 .edit().clear().commit();
         files = RuntimeEnvironment.getApplication().getFilesDir();
@@ -233,6 +242,55 @@ public final class PlayerActivityTest {
         coords[0].setAxisValue(android.view.MotionEvent.AXIS_Y, y);
         return android.view.MotionEvent.obtain(0, 0, android.view.MotionEvent.ACTION_MOVE, 1, properties, coords,
                 0, 0, 1f, 1f, 0, 0, android.view.InputDevice.SOURCE_JOYSTICK, 0);
+    }
+
+    @Test public void withoutAnAccountRetroAchievementsNeverStarts() throws Exception {
+        PlayerActivity activity = loaded();
+        for (int i = 0; i < 3; i++) activity.onDrawFrame(null);
+        assertTrue("No session, no request, no network", FakeAchievements.log.isEmpty());
+    }
+
+    @Test public void aSignedInAccountFollowsTheGameAndItsUnlockShowsOverThePicture() throws Exception {
+        new AchievementAccount("Raven", "TOKEN-1", "Raven Rouge", "", 34, 12).save(RuntimeEnvironment.getApplication());
+        AchievementSettings.DEFAULTS.withSound(false).save(RuntimeEnvironment.getApplication());
+        FakeAchievements.onStart = () -> assertTrue("RetroAchievements starts on the GL thread", QueuedGl.executing);
+        FakeAchievements.afterAnswer.add(new String[]{"login", "Raven", "Raven Rouge", "TOKEN-1", "", ""});
+        FakeAchievements.afterAnswer.add(new String[]{"achievement", "Premier pas", "Finir le niveau", "5", "", "77"});
+        PlayerActivity activity = loaded();
+        assertEquals("Raven", FakeAchievements.startUser);
+        assertEquals("TOKEN-1", FakeAchievements.startToken);
+        assertEquals("The ROM's console, whatever core runs it", NativeAchievements.GAME_BOY, FakeAchievements.startConsole);
+        assertEquals(0x180, FakeAchievements.startRomLength);
+        // The login goes out on a network thread; its answer comes back with a frame.
+        for (int i = 0; i < 1000 && FakeAchievements.answers.isEmpty(); i++) {
+            activity.onDrawFrame(null);
+            Thread.sleep(2);
+        }
+        assertEquals("A refused address is no answer, never a connection", AchievementsHttp.NO_ANSWER,
+                FakeAchievements.answers.get(0)[2]);
+        idle();
+        AchievementOverlay overlay = ReflectionHelpers.getField(activity, "achievementOverlay");
+        assertEquals("Succès débloqué · 5 points · Premier pas", String.valueOf(overlay.bannerText()));
+        ActivityController<PlayerActivity> controller = activities.remove(activities.size() - 1);
+        controller.pause().stop().destroy();
+        io(activity).submit(() -> {}).get(5, TimeUnit.SECONDS);
+        assertTrue("Closing the game closes its session", FakeAchievements.log.stream().anyMatch(l -> l.startsWith("stop ")));
+        assertTrue(FakeNative.closed);
+    }
+
+    @Test public void unlockBannersFollowTheSettingsButTheGameStillIntroducesItself() throws Exception {
+        new AchievementAccount("Raven", "TOKEN-1", "", "", 0, 0).save(RuntimeEnvironment.getApplication());
+        AchievementSettings.DEFAULTS.withUnlockPopups(false).withSound(false).save(RuntimeEnvironment.getApplication());
+        FakeAchievements.afterAnswer.add(new String[]{"achievement", "Premier pas", "", "5", "", "77"});
+        FakeAchievements.afterAnswer.add(new String[]{"game", "Libre", "12", "0", "", "1234"});
+        PlayerActivity activity = loaded();
+        for (int i = 0; i < 1000 && FakeAchievements.answers.isEmpty(); i++) {
+            activity.onDrawFrame(null);
+            Thread.sleep(2);
+        }
+        idle();
+        AchievementOverlay overlay = ReflectionHelpers.getField(activity, "achievementOverlay");
+        assertEquals("12 succès disponibles · Libre", String.valueOf(overlay.bannerText()));
     }
 
     @Test public void theDisplayRateReachesThePacerAndTheScreenStaysOnWhilePlaying() throws Exception {

@@ -20,5 +20,10 @@ s'appuient sur le SDK officiel de RetroAchievements, **rcheevos**, sous
   la mémoire du jeu par la carte mémoire Libretro que publie RavenCore.
 - RavenCore, le moteur, ne contient aucune ligne de rcheevos.
 
-Le texte de la licence MIT accompagnera l'APK quand le SDK y sera lié
-(tranche RA-2).
+- **Distribution** : le SDK est lié dans `libraven_android.so`. Le texte de la
+  licence MIT et l'avis de copyright accompagnent l'APK
+  (`android/src/main/assets/licenses/MIT-RCHEEVOS.txt`, onglet « MIT
+  rcheevos » de **Paramètres → À propos → Licences et crédits**, et
+  `NOTICE.txt`). L'archive de sources jointe à l'APK de test contient le
+  checkout réellement compilé, sous `rcheevos/`, vérifié contre la révision
+  épinglée (`scripts/package_native_sources.py`).

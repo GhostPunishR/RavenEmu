@@ -49,6 +49,12 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y libegl-dev libgles-dev libgl1-mesa-dri
+      # The RetroAchievements JNI bridge is tested on the host's JVM.
+      - name: Installer Java 21
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: '21'
       - name: Configurer CMake
         run: cmake -S frontend -B build/native-frontend -DCMAKE_BUILD_TYPE=Release -DRAVEN_VIDEO_PIXEL_TESTS=ON
       - name: Compiler le frontend, les pilotes et RavenCore
@@ -60,7 +66,7 @@ jobs:
             raven_frontend_fake_core_lag raven_frontend_fake_core_lag_incomplete \
             raven_native_video_pixels \
             raven_native_input_test raven_native_sensor_test raven_native_preview_test raven_native_audio_test raven_native_video_test \
-            raven_native_sinc_test \
+            raven_native_sinc_test raven_jni_achievements \
             ravenemu_gb_libretro ravenemu_gbc_libretro ravenemu_gba_libretro
       - name: Exécuter les tests C
         run: ctest --test-dir build/native-frontend --output-on-failure

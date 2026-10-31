@@ -4,6 +4,7 @@
 #include <ravenemu/frontend.h>
 #include <ravenemu/frame_pacer.h>
 #include "audio_pipeline.h"
+#include "bridge_internal.h"
 #include "gles2_renderer.h"
 #include "input_driver.h"
 #include "sensor_driver.h"
@@ -186,6 +187,8 @@ static void apply_core_options(JNIEnv *env, jobjectArray options) {
     }
 }
 
+raven_frontend *raven_bridge_session(void) { return session; }
+
 static jstring failure(JNIEnv *env, const char *error) {
     return (*env)->NewStringUTF(env, error ? error : "Unknown native error");
 }
@@ -236,6 +239,8 @@ Java_com_ravenemu_app_bridge_NativeBridge_openRom(
         result = failure(env, "Out of memory");
         goto done;
     }
+    /* The previous game's achievements read its memory: they go first. */
+    raven_bridge_achievements_close();
     raven_audio_close();
     frame_pacer = (raven_frame_pacer){0};
     raven_frame_pacer_set_display(&frame_pacer, display_rate);
@@ -319,6 +324,8 @@ Java_com_ravenemu_app_bridge_NativeBridge_drawFrame(
         raven_frame_pacer_reset(&frame_pacer);
         /* Buttons let go during a pause are not a press to replay. */
         if (session) raven_frontend_forget_preemption(session);
+        /* Paused, RetroAchievements keeps its session and retries. */
+        raven_bridge_achievements_idle();
     } else if (session) {
         struct timespec now;
         if (clock_gettime(CLOCK_MONOTONIC, &now) == 0) {
@@ -337,6 +344,8 @@ Java_com_ravenemu_app_bridge_NativeBridge_drawFrame(
                 }
                 if (raven_frontend_replayed_frames(session))
                     lower_preemption_if_slow(monotonic_ns() - started);
+                /* The frame shown, never those replayed behind it. */
+                raven_bridge_achievements_frame();
                 ++advanced;
             }
         }
@@ -511,6 +520,8 @@ Java_com_ravenemu_app_bridge_NativeBridge_restoreState(
     if (!bytes) return JNI_FALSE;
     int result = raven_frontend_load_state(session, bytes, (size_t)size);
     raven_frame_pacer_reset(&frame_pacer);
+    /* The states carry no achievement progress yet: it starts over. */
+    if (result) raven_bridge_achievements_state_loaded();
     // Keep displaying the previous frame, but never attach its pixels to a
     // restored state until the core has supplied a fresh video callback.
     preview_valid = 0;
@@ -547,6 +558,7 @@ Java_com_ravenemu_app_bridge_NativeBridge_closeRom(
     raven_audio_close();
     frame_pacer = (raven_frame_pacer){0};
     raven_frame_pacer_set_display(&frame_pacer, display_rate);
+    raven_bridge_achievements_close();
     if (session) {
         raven_frontend_destroy(session);
         session = NULL;

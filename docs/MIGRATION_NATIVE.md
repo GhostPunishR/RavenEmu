@@ -534,8 +534,8 @@ Corrections demandées par le propriétaire d'après une capture sur téléphone
 
 Écarts restants : les conditions d'utilisation et la politique de
 confidentialité s'ouvrent en ligne (dépôt GitHub), pas encore dans le lecteur
-intégré de l'application ; RetroAchievements n'a pas encore sa catégorie. La
-validation sur téléphone reste nécessaire.
+intégré de l'application. RetroAchievements a sa catégorie depuis la tranche
+RA-2. La validation sur téléphone reste nécessaire.
 
 ## Tranche A : image calée sur l'écran et son sans craquement
 
@@ -777,4 +777,50 @@ RA-1 :
   Le succès se débloque à la 60ᵉ image, en normal et en Hardcore ; ASan/UBSan
   propres.
 
-Pas encore dans l'application : RA-2 relie ce module au lecteur.
+## RetroAchievements, tranche RA-2 : compte, réseau et bandeau
+
+- **Pont JNI** `android/src/main/cpp/jni/achievements_bridge.c` et
+  `bridge/NativeAchievements.java` : instances par poignée (une poignée
+  détruite ne retrouve rien), textes en octets UTF-8 dans les deux sens.
+  L'instance du lecteur est liée au jeu du pont : `bridge.c` la nourrit après
+  chaque image montrée (jamais les images préventives), la garde vivante en
+  pause, la remet à zéro au chargement d'un état et la ferme avant de
+  décharger le jeu. La ROM est hachée pendant l'appel (console connue).
+- **Réseau** `platform/AchievementsHttp.java` : HTTPS vers
+  `retroachievements.org` et ses sous-domaines seulement, sans redirection,
+  réponses bornées (8 Mio, images 512 Kio et 512 px), User-Agent de la bêta
+  (`platform/RetroUserAgent.java`, versions de RavenEmu, RavenCore 0.14.0 et
+  rcheevos lues dans le build). Deux fils réseau ; les réponses reviennent au
+  fil GL à l'image suivante, celles d'un jeu fermé sont ignorées.
+- **Compte** `settings/AchievementAccount.java` : jeton seul, scellé en
+  AES-GCM par une clé du Keystore Android (`platform/KeystoreSealer.java`),
+  écriture atomique dans `noBackupFilesDir` ; aucune donnée de la bêta lue.
+- **Paramètres → RetroAchievements**, première catégorie comme dans la bêta :
+  formulaire de connexion (le mot de passe est vidé à l'envoi), carte du
+  compte, Réessayer, Déconnexion, notifications de la bêta
+  (`settings/AchievementSettings.java`), « Mode Hardcore indisponible ».
+- **Lecteur** : `ui/player/PlayerAchievements.java` (fil GL),
+  `AchievementOverlay.java` (bandeau et carte de progression de la bêta,
+  badges chargés en tâche de fond), `AchievementNotices.java` (textes),
+  `UnlockChime.java` (carillon de la bêta). Permission `INTERNET` ajoutée ;
+  sans compte, aucune requête.
+- **Licences** : MIT de rcheevos dans l'APK et les crédits ; l'archive de
+  sources inclut le checkout rcheevos compilé, vérifié contre l'épinglage.
+- **Tests** : `raven_jni_achievements` (`tests/jni/`, JVM de l'hôte avec
+  `-Xcheck:jni` : UTF-8 non ASCII dans les deux sens, poignées, succès
+  débloqué sur le vrai core GB, nouvelle tentative après un 503, ancienne
+  poignée sans effet sur le jeu suivant) ; scénario C « jeton et jeu demandés
+  ensemble » et ROM libérée dès le retour de `load_game` (ASan) ; Robolectric
+  : compte scellé et illisible ailleurs, réglages, page de connexion (mot de
+  passe stocké nulle part, refus, service injoignable, déconnexion),
+  bandeau (file, durées, réglages, position), lecteur avec et sans compte ;
+  JUnit : textes, User-Agent, carillon.
+
+Écarts restants pour **RA-3** : verrous du mode Hardcore (pas de chargement
+d'état, pauses limitées) et son activation, liste des succès, classements,
+indicateurs de défi et de suivi, carte du compte dans le menu de jeu, journal
+hors ligne (aujourd'hui rcheevos réessaie tant que le jeu reste ouvert ; un
+déblocage dont la requête n'est pas encore partie au moment où le lecteur est
+détruit, rotation comprise, est perdu), progression des succès dans les états.
+La recréation du lecteur (rotation) reconnecte le compte et ré-identifie le
+jeu. Validation sur téléphone et connexion à un vrai compte à faire.

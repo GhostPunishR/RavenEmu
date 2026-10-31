@@ -1,7 +1,12 @@
 package com.ravenemu.app.ui.settings;
 import com.ravenemu.app.R;
+import com.ravenemu.app.bridge.NativeAchievements;
 import com.ravenemu.app.data.saves.GbaBiosRepository;
+import com.ravenemu.app.platform.AchievementsHttp;
+import com.ravenemu.app.platform.RetroUserAgent;
 import com.ravenemu.app.platform.SystemBarInsets;
+import com.ravenemu.app.settings.AchievementAccount;
+import com.ravenemu.app.settings.AchievementSettings;
 import com.ravenemu.app.settings.CartridgeSettings;
 import com.ravenemu.app.settings.ConsoleSettings;
 import com.ravenemu.app.settings.ControlLayout;
@@ -15,6 +20,7 @@ import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
 import android.content.res.ColorStateList;
+import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
@@ -24,10 +30,16 @@ import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.net.Uri;
 import android.os.Bundle;
+import android.text.Editable;
+import android.text.InputFilter;
+import android.text.InputType;
+import android.text.TextWatcher;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
@@ -38,13 +50,14 @@ import android.window.OnBackInvokedDispatcher;
 import androidx.core.graphics.PathParser;
 import java.io.IOException;
 import java.io.InputStream;
+import java.security.GeneralSecurityException;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/** Java Views counterpart of the beta's settings: Général, Audio, Vidéo,
- * Console, Interface and À propos. The library's ⚙ opens it on its categories.
- * Only settings connected to the native drivers are presented here. */
+/** Java Views counterpart of the beta's settings: RetroAchievements, Général,
+ * Audio, Vidéo, Console, Interface and À propos. The library's ⚙ opens it on
+ * its categories. Only settings connected to the native drivers are presented. */
 public final class PlaybackSettingsActivity extends Activity {
     public static final String EXTRA_PAGE = "playback.settings.page";
     public static final String HOME = "home";
@@ -54,6 +67,7 @@ public final class PlaybackSettingsActivity extends Activity {
     public static final String INTERFACE = "interface";
     public static final String GENERAL = "general";
     public static final String ABOUT = "about";
+    public static final String RETRO = "retroachievements";
     /** Each category lists its sub-pages; "category/sub-page" goes back to its category. */
     public static final String GENERAL_EMULATION = "general/emulation";
     public static final String GENERAL_LATENCY = "general/latency";
@@ -68,11 +82,12 @@ public final class PlaybackSettingsActivity extends Activity {
     public static final String INTERFACE_CARTRIDGE = "interface/cartridge";
     private static final String[] PAGES = {HOME, AUDIO, VIDEO, CONSOLE, INTERFACE, GENERAL, ABOUT,
             GENERAL_EMULATION, GENERAL_LATENCY, AUDIO_SOUND, AUDIO_QUALITY, VIDEO_COLORS, VIDEO_RENDERING,
-            VIDEO_PICTURE, CONSOLE_GB, CONSOLE_GBA, INTERFACE_CONTROLS, INTERFACE_CARTRIDGE};
+            VIDEO_PICTURE, CONSOLE_GB, CONSOLE_GBA, INTERFACE_CONTROLS, INTERFACE_CARTRIDGE, RETRO};
     private static final String[] TITLES = {"Paramètres", "Audio", "Vidéo", "Console", "Interface",
             "Général", "À propos", "Émulation", "Latence", "Son du jeu", "Qualité du son", "Couleurs",
             "Rendu", "Taille et réglages", "Game Boy et GBC", "Game Boy Advance", "Commandes tactiles",
-            "Cartouche"};
+            "Cartouche", "RetroAchievements"};
+    private static final int ERROR = 0xffff928b;
     private static final String REPOSITORY = "https://github.com/GhostPunishR/RavenEmu";
     private static final int PICK_BIOS = 1;
 
@@ -81,8 +96,16 @@ public final class PlaybackSettingsActivity extends Activity {
     private ControlSettings controls;
     private CartridgeSettings cartridge;
     private boolean biosInstalled;
-    /** The BIOS copy and removal, off the UI thread, one at a time. */
+    /** The BIOS copy and removal, and the account file, off the UI thread, one at a time. */
     private final ExecutorService io = Executors.newSingleThreadExecutor();
+    /** RetroAchievements' sign-in and the avatar: they wait for the network. */
+    private final ExecutorService network = Executors.newSingleThreadExecutor();
+    private AchievementSettings achievementSettings;
+    /** Read from its sealed file once, then as signed in or out here. */
+    private AchievementAccount account;
+    private boolean accountRead, signingIn;
+    private String accountError, typedUser = "";
+    private Bitmap avatar;
     private LinearLayout content;
     private ScrollView scroll;
     private TextView title;
@@ -99,7 +122,16 @@ public final class PlaybackSettingsActivity extends Activity {
         console = ConsoleSettings.load(this);
         controls = ControlSettings.load(this);
         cartridge = CartridgeSettings.load(this);
+        achievementSettings = AchievementSettings.load(this);
         biosInstalled = GbaBiosRepository.installed(getFilesDir());
+        io.execute(() -> {
+            AchievementAccount stored = AchievementAccount.load(this);
+            runOnUiThread(() -> {
+                if (isDestroyed()) return;
+                accountRead = true;
+                accountChanged(stored, null);
+            });
+        });
         String initialPage = getIntent().getStringExtra(EXTRA_PAGE);
         if (state != null) {
             initialPage = state.getString("settings.page", initialPage);
@@ -169,6 +201,7 @@ public final class PlaybackSettingsActivity extends Activity {
             case CONSOLE_GBA: consoleAdvancePage(); break;
             case INTERFACE_CONTROLS: interfaceControlsPage(); break;
             case INTERFACE_CARTRIDGE: interfaceCartridgePage(); break;
+            case RETRO: retroPage(); break;
             default: homePage();
         }
         final int restoreScroll = scrollPositions[index(page)];
@@ -177,8 +210,11 @@ public final class PlaybackSettingsActivity extends Activity {
         });
     }
 
-    /** The beta's categories, in its order; RetroAchievements waits for its native port. */
+    /** The beta's categories, in its order. */
     private void homePage() {
+        category("RetroAchievements", "Compte, succès et progression", RETRO,
+                "M7,2H17V4H21V8C21,11 19,13 16,13C15,14 14,15 13,15V19H17V21H7V19H11V15C10,15 9,14 8,13"
+                        + "C5,13 3,11 3,8V4H7ZM5,6V8C5,9.5 6,10.5 7,11V6ZM17,6V11C18,10.5 19,9.5 19,8V6Z");
         category("Général", "Pause automatique et latence", GENERAL,
                 "M3,5H13V7H3ZM17,5H21V7H17ZM13,3H17V9H13ZM3,11H7V13H3ZM11,11H21V13H11ZM7,9H11V15H7Z"
                         + "M3,17H13V19H3ZM17,17H21V19H17ZM13,15H17V21H13Z");
@@ -198,6 +234,231 @@ public final class PlaybackSettingsActivity extends Activity {
         category("À propos", "Version, auteur, confidentialité et licences", ABOUT,
                 "M11,7h2v2h-2zM11,11h2v6h-2zM12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2z"
                         + "M12,20c-4.41,0 -8,-3.59 -8,-8s3.59,-8 8,-8 8,3.59 8,8 -3.59,8 -8,8z");
+    }
+
+    /** The beta's RetroAchievements page: the account (RetroAchievementsContent.kt),
+     * then how it notifies (SettingsScreen.kt). The game's achievement list,
+     * its leaderboards and Hardcore come with the next tranche. */
+    private void retroPage() {
+        if (!accountRead) add(text("Lecture du compte…", 13, HomeActivity.MUTED), 0);
+        else if (account == null) loginForm();
+        else accountCard();
+        if (accountError != null) {
+            TextView error = text(accountError, 12, ERROR);
+            error.setTag("achievements.error");
+            add(error, 10);
+        }
+        group("Notifications RetroAchievements");
+        settingSwitch("Déblocages et bilan", "Afficher les succès obtenus et le jeu terminé.",
+                achievementSettings.unlockPopups, value -> updateAchievements(achievementSettings.withUnlockPopups(value)));
+        settingSwitch("Progression des succès", "Afficher les hausses mesurées à tour de rôle.",
+                achievementSettings.progressPopups,
+                value -> updateAchievements(achievementSettings.withProgressPopups(value)));
+        settingSwitch("Son des succès", "Un court carillon, créé par RavenEmu, joué avec le son du jeu pour "
+                        + "chaque succès et le jeu terminé.",
+                achievementSettings.sound, value -> updateAchievements(achievementSettings.withSound(value)));
+        choices(new String[]{"Popups en haut", "Popups en bas"},
+                new String[]{AchievementSettings.TOP, AchievementSettings.BOTTOM}, achievementSettings.position,
+                value -> updateAchievements(achievementSettings.withPosition(value)));
+        slider("Durée des déblocages", achievementSettings.popupSeconds, AchievementSettings.POPUP_MIN,
+                AchievementSettings.POPUP_MAX, " s", value -> updateAchievements(achievementSettings.withPopupSeconds(value)));
+        slider("Durée des progressions", achievementSettings.progressSeconds, AchievementSettings.PROGRESS_MIN,
+                AchievementSettings.PROGRESS_MAX, " s",
+                value -> updateAchievements(achievementSettings.withProgressSeconds(value)));
+        description("Mode Hardcore indisponible", "L'activation attend la validation de RavenEmu par "
+                + "RetroAchievements. Le mode Softcore reste disponible.");
+        add(text("Mode Softcore · SDK officiel " + sdkVersion(), 11, HomeActivity.MUTED), 14);
+    }
+
+    /** The beta's RetroLoginForm. The password is never kept: the field is
+     * emptied as it is sent, and only the token is stored. */
+    private void loginForm() {
+        add(text("Connectez votre compte pour obtenir les succès officiels pendant vos parties Game Boy, Game "
+                + "Boy Color et Game Boy Advance. Mode normal (Softcore).", 13, HomeActivity.MUTED), 0);
+        EditText user = field("Nom d'utilisateur", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+        user.setText(typedUser);
+        user.setFilters(new InputFilter[]{new InputFilter.LengthFilter(80)});
+        EditText password = field("Mot de passe", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        Button signIn = button(signingIn ? "Connexion…" : "Se connecter");
+        signIn.setTextColor(HomeActivity.BACKGROUND);
+        signIn.setBackground(shape(HomeActivity.ACCENT));
+        Runnable enable = () -> {
+            boolean ready = !signingIn && !user.getText().toString().trim().isEmpty()
+                    && password.getText().length() > 0;
+            signIn.setEnabled(ready);
+            signIn.setAlpha(ready || signingIn ? 1f : 0.5f);
+        };
+        TextWatcher watcher = new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence text, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence text, int start, int before, int count) {}
+            @Override public void afterTextChanged(Editable text) {
+                typedUser = user.getText().toString();
+                enable.run();
+            }
+        };
+        user.addTextChangedListener(watcher);
+        password.addTextChangedListener(watcher);
+        user.setEnabled(!signingIn);
+        password.setEnabled(!signingIn);
+        enable.run();
+        signIn.setOnClickListener(view -> {
+            String name = user.getText().toString().trim();
+            String secret = password.getText().toString();
+            password.setText("");
+            if (name.isEmpty() || secret.isEmpty() || signingIn) return;
+            signIn(name, secret, null);
+        });
+        add(user, 12);
+        add(password, 10);
+        add(signIn, 12);
+        add(text("Le mot de passe n'est pas enregistré. Seul le jeton est conservé, chiffré sur cet appareil.",
+                11, HomeActivity.MUTED), 8);
+    }
+
+    /** The beta's RetroAccountSummary and RetroAccountActions. */
+    private void accountCard() {
+        LinearLayout card = column();
+        GradientDrawable surface = shape(HomeActivity.SURFACE);
+        surface.setCornerRadius(dp(14));
+        card.setBackground(surface);
+        card.setPadding(dp(14), dp(14), dp(14), dp(14));
+        LinearLayout identity = new LinearLayout(this);
+        identity.setGravity(Gravity.CENTER_VERTICAL);
+        if (avatar != null) {
+            ImageView picture = new ImageView(this);
+            picture.setImageBitmap(avatar);
+            picture.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            picture.setContentDescription("Avatar RetroAchievements");
+            LinearLayout.LayoutParams size = new LinearLayout.LayoutParams(dp(58), dp(58));
+            size.setMarginEnd(dp(12));
+            identity.addView(picture, size);
+        }
+        LinearLayout names = column();
+        TextView name = text(account.displayName, 17, HomeActivity.TEXT);
+        name.setTypeface(null, Typeface.BOLD);
+        names.addView(name);
+        names.addView(text("@" + account.user, 12, HomeActivity.MUTED));
+        identity.addView(names, new LinearLayout.LayoutParams(0, -2, 1));
+        card.addView(identity);
+        add(card, text("Softcore : " + account.softcorePoints + " points  ·  Hardcore : " + account.hardcorePoints
+                + " points", 12, HomeActivity.ACCENT), 6);
+        add(card, text("Les succès des jeux suivent ce compte à chaque lancement.", 12, HomeActivity.MUTED), 6);
+        add(card, 0);
+        LinearLayout actions = new LinearLayout(this);
+        Button retry = outlined(signingIn ? "Connexion…" : "Réessayer");
+        retry.setContentDescription("Actualiser le compte RetroAchievements");
+        retry.setEnabled(!signingIn);
+        retry.setOnClickListener(view -> signIn(account.user, null, account.token));
+        Button signOut = outlined("Déconnexion");
+        signOut.setContentDescription("Se déconnecter de RetroAchievements");
+        signOut.setEnabled(!signingIn);
+        signOut.setOnClickListener(view -> signOut());
+        actions.addView(retry, new LinearLayout.LayoutParams(0, -2, 1));
+        LinearLayout.LayoutParams second = new LinearLayout.LayoutParams(0, -2, 1);
+        second.setMarginStart(dp(8));
+        actions.addView(signOut, second);
+        add(actions, 12);
+    }
+
+    /** With a password, a new account; with the token, the stored one refreshed. */
+    private void signIn(String user, String password, String token) {
+        signingIn = true;
+        accountError = null;
+        if (RETRO.equals(page)) showPage(RETRO);
+        network.execute(() -> {
+            AchievementsHttp http = new AchievementsHttp(RetroUserAgent.of(this));
+            AchievementLogin.Result result = AchievementLogin.run(http, user, password, token);
+            String error = result.error;
+            if (result.account != null) {
+                try {
+                    result.account.save(this);
+                } catch (IOException | GeneralSecurityException unsaved) {
+                    error = "Connecté, mais le jeton n'a pas pu être chiffré sur cet appareil : "
+                            + "reconnectez-vous plus tard.";
+                }
+            }
+            Bitmap picture = result.account == null ? null : http.badge(result.account.avatarUrl);
+            final String failure = error;
+            runOnUiThread(() -> {
+                if (isDestroyed()) return;
+                signingIn = false;
+                if (picture != null) avatar = picture;
+                accountChanged(result.account != null && failure == null ? result.account : account, failure);
+            });
+        });
+    }
+
+    /** Forgets the token on this device; RetroAchievements is not told. */
+    private void signOut() {
+        if (signingIn) return;
+        io.execute(() -> {
+            AchievementAccount.clear(this);
+            runOnUiThread(() -> {
+                if (isDestroyed()) return;
+                avatar = null;
+                accountChanged(null, null);
+            });
+        });
+    }
+
+    private void accountChanged(AchievementAccount updated, String error) {
+        account = updated;
+        accountError = error;
+        if (account != null && avatar == null && !account.avatarUrl.isEmpty()) loadAvatar(account.avatarUrl);
+        if (RETRO.equals(page)) showPage(RETRO);
+    }
+
+    private void loadAvatar(String url) {
+        network.execute(() -> {
+            Bitmap picture = new AchievementsHttp(RetroUserAgent.of(this)).badge(url);
+            if (picture != null) runOnUiThread(() -> {
+                if (isDestroyed() || account == null || !url.equals(account.avatarUrl)) return;
+                avatar = picture;
+                if (RETRO.equals(page)) showPage(RETRO);
+            });
+        });
+    }
+
+    private void updateAchievements(AchievementSettings updated) {
+        achievementSettings = updated;
+        achievementSettings.save(this);
+    }
+
+    /** "rcheevos/x.y", from the native library; plain "rcheevos" without it. */
+    private static String sdkVersion() {
+        try {
+            return NativeAchievements.sdkVersion();
+        } catch (LinkageError withoutNativeLibrary) {
+            return "rcheevos";
+        }
+    }
+
+    private EditText field(String hint, int type) {
+        EditText field = new EditText(this);
+        field.setHint(hint);
+        field.setContentDescription(hint);
+        field.setSingleLine(true);
+        field.setInputType(type);
+        field.setTextSize(15);
+        field.setTextColor(HomeActivity.TEXT);
+        field.setHintTextColor(HomeActivity.MUTED);
+        field.setMinHeight(dp(52));
+        field.setPadding(dp(14), 0, dp(14), 0);
+        field.setSaveEnabled(false);
+        GradientDrawable outline = shape(HomeActivity.SURFACE);
+        outline.setStroke(dp(1), HomeActivity.OUTLINE);
+        field.setBackground(outline);
+        return field;
+    }
+
+    /** The beta's OutlinedButton. */
+    private Button outlined(String label) {
+        Button button = button(label);
+        button.setTextSize(12);
+        GradientDrawable outline = shape(android.graphics.Color.TRANSPARENT);
+        outline.setStroke(dp(1), HomeActivity.OUTLINE);
+        button.setBackground(outline);
+        return button;
     }
 
     /** The beta's Général page; its link cable, online covers and diagnostics
@@ -800,6 +1061,7 @@ public final class PlaybackSettingsActivity extends Activity {
 
     @Override protected void onDestroy() {
         io.shutdown();
+        network.shutdown();
         super.onDestroy();
     }
 
