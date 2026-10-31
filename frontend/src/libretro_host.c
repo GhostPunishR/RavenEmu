@@ -26,6 +26,9 @@ typedef struct raven_core_api {
     void (*run)(void);
     /* Optional here: a core without it cannot be restarted in place. */
     void (*reset)(void);
+    /* Optional too: a core without them takes no cheats. */
+    void (*cheat_reset)(void);
+    void (*cheat_set)(unsigned, bool, const char *);
     void *(*get_memory_data)(unsigned);
     size_t (*get_memory_size)(unsigned);
     size_t (*serialize_size)(void);
@@ -66,6 +69,7 @@ struct raven_frontend {
     int options_updated;  /* Reported once by GET_VARIABLE_UPDATE. */
     char message[RAVEN_FRONTEND_MESSAGE_MAX];
     int message_pending;
+    unsigned message_serial;  /* Counts the messages kept: a cheat's refusal is one. */
     /* Preemptive frames (raven_frontend_set_preemptive_frames): the state
      * before each of the last `preempt_frames` frames, in a ring of slots. */
     unsigned preempt_frames;     /* The setting; kept across games. */
@@ -330,6 +334,7 @@ static void keep_message(raven_frontend *host, const char *text) {
     }
     host->message[out] = 0;
     host->message_pending = out > 0;
+    if (out > 0) ++host->message_serial;
 }
 
 /* Preemptive frames, RetroArch's idea written for RavenEmu: the history is
@@ -679,6 +684,10 @@ int raven_frontend_open_core(raven_frontend *host, const char *library_path,
     {
         void *symbol = dlsym(host->library, "retro_reset");
         if (symbol) memcpy(&host->api.reset, &symbol, sizeof(host->api.reset));
+        symbol = dlsym(host->library, "retro_cheat_reset");
+        if (symbol) memcpy(&host->api.cheat_reset, &symbol, sizeof(host->api.cheat_reset));
+        symbol = dlsym(host->library, "retro_cheat_set");
+        if (symbol) memcpy(&host->api.cheat_set, &symbol, sizeof(host->api.cheat_set));
     }
     RESOLVE(get_memory_data);
     RESOLVE(get_memory_size);
@@ -764,6 +773,33 @@ int raven_frontend_reset(raven_frontend *host) {
     preempt_forget(host);
     host->api.reset();
     return 1;
+}
+
+int raven_frontend_set_cheats(raven_frontend *host, const char *const *codes, size_t count,
+                              char *reason, size_t reason_size) {
+    if (reason && reason_size) reason[0] = 0;
+    if (!host || !host->loaded || active != host || !host->api.cheat_reset || !host->api.cheat_set ||
+        (count && !codes) || count > RAVEN_FRONTEND_CHEATS_MAX)
+        return -2;
+    /* The frames kept behind ran without these cheats. */
+    preempt_forget(host);
+    host->api.cheat_reset();
+    int refused = -1;
+    for (size_t i = 0; i < count; ++i) {
+        const unsigned before = host->message_serial;
+        host->api.cheat_set((unsigned)i, codes[i] && *codes[i], codes[i] ? codes[i] : "");
+        if (host->message_serial == before) continue;
+        /* The core says why a code is refused: the caller shows it, once. */
+        if (refused < 0) {
+            refused = (int)i;
+            if (reason && reason_size) {
+                strncpy(reason, host->message, reason_size - 1);
+                reason[reason_size - 1] = 0;
+            }
+        }
+        host->message_pending = 0;
+    }
+    return refused;
 }
 
 int raven_frontend_set_preemptive_frames(raven_frontend *host, unsigned frames) {

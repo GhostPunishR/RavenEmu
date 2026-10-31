@@ -382,6 +382,52 @@ Java_com_ravenemu_app_bridge_NativeBridge_resetGame(JNIEnv *env, jclass clazz) {
     return JNI_TRUE;
 }
 
+/* The core's reason for the last refused cheat; GL thread like setCheats. */
+static char cheat_refusal[RAVEN_FRONTEND_MESSAGE_MAX];
+
+/* GL thread: the game's cheats replaced by `codes`, each one on, in order.
+ * The index of the first code the core refused (cheatRefusal says why), -1
+ * when it took them all, -2 without a game or a core that takes cheats.
+ * Each code is copied before the call: never more than one Java local
+ * reference at a time, whatever the list's length. */
+JNIEXPORT jint JNICALL
+Java_com_ravenemu_app_bridge_NativeBridge_setCheats(JNIEnv *env, jclass clazz, jobjectArray codes) {
+    (void)clazz;
+    cheat_refusal[0] = 0;
+    if (!session) return -2;
+    const jsize count = codes ? (*env)->GetArrayLength(env, codes) : 0;
+    if (count < 0 || (size_t)count > RAVEN_FRONTEND_CHEATS_MAX) return -2;
+    char **texts = calloc(count ? (size_t)count : 1u, sizeof(*texts));
+    if (!texts) return -2;
+    int result = -2;
+    jsize copied = 0;
+    for (; copied < count; ++copied) {
+        jstring code = (jstring)(*env)->GetObjectArrayElement(env, codes, copied);
+        if (!code) { texts[copied] = NULL; continue; }
+        const char *chars = (*env)->GetStringUTFChars(env, code, NULL);
+        const size_t length = chars ? strlen(chars) : 0;
+        texts[copied] = chars ? malloc(length + 1) : NULL;
+        if (texts[copied]) memcpy(texts[copied], chars, length + 1);
+        if (chars) (*env)->ReleaseStringUTFChars(env, code, chars);
+        (*env)->DeleteLocalRef(env, code);
+        if (!texts[copied]) break;  /* out of memory */
+    }
+    if (copied == count)
+        result = raven_frontend_set_cheats(session, (const char *const *)texts, (size_t)count,
+                                           cheat_refusal, sizeof(cheat_refusal));
+    for (jsize i = 0; i < count; ++i) free(texts[i]);
+    free(texts);
+    return result;
+}
+
+/* GL thread, after setCheats: why the core refused a code, or null. Valid
+ * UTF-8 without 4-byte sequences (raven_frontend_take_message). */
+JNIEXPORT jstring JNICALL
+Java_com_ravenemu_app_bridge_NativeBridge_cheatRefusal(JNIEnv *env, jclass clazz) {
+    (void)clazz;
+    return cheat_refusal[0] ? (*env)->NewStringUTF(env, cheat_refusal) : NULL;
+}
+
 /* GL thread: Settings → Général → Latence, 0 to RAVEN_FRONTEND_PREEMPT_MAX. */
 JNIEXPORT void JNICALL
 Java_com_ravenemu_app_bridge_NativeBridge_setPreemptiveFrames(

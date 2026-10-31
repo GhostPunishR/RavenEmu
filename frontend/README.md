@@ -64,6 +64,19 @@ ou `SET_MESSAGE_EXT`, hors journal seul et débogage) sont gardés par l'hôte ;
 `raven_frontend_take_message` rend chacun une fois, en UTF-8 valide sans
 caractère de 4 octets. Le test `raven_frontend_smoke` le vérifie.
 
+## Codes de triche
+
+`raven_frontend_set_cheats` remplace la liste des codes du jeu, chacun actif,
+dans l'ordre, par `retro_cheat_reset` puis `retro_cheat_set` (symboles
+facultatifs : sans eux, -2). RavenCore nomme un code refusé dans un message
+(« code de triche N refusé (raison) ») : le frontend rend l'indice du premier
+code refusé et sa raison, et garde ce message hors de
+`raven_frontend_take_message`, pour que l'application l'affiche une seule
+fois, sous le formulaire. Les images préventives repartent de zéro. Testé sur
+le faux core et sur les vrais cores GB, GBC et GBA : un code GameShark ou
+Codebreaker écrit la mémoire du jeu (l'état diffère), un code illisible est
+refusé avec sa raison.
+
 ## Vibration et capteurs
 
 `raven_frontend_callbacks` accepte trois rappels facultatifs : `rumble`

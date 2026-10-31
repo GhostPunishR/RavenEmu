@@ -92,6 +92,18 @@ void raven_frontend_unload(raven_frontend *host);
 void raven_frontend_close_core(raven_frontend *host);
 int raven_frontend_get_info(const raven_frontend *host, raven_core_info *out);
 
+/* Cheats, as entries of the core's menu (retro_cheat_reset and
+ * retro_cheat_set, both optional): the whole list is replaced by `codes`,
+ * each enabled, in order; an empty code is kept off. A core names a refused
+ * code in a message (RavenCore: « code de triche N refusé (raison) »): the
+ * index of the first refused code is returned, its message copied to `reason`
+ * and kept from take_message; -1 when every code was taken; -2 without a
+ * game, without a core that takes cheats, or with more than
+ * RAVEN_FRONTEND_CHEATS_MAX codes. Emulation thread. */
+#define RAVEN_FRONTEND_CHEATS_MAX 256u
+int raven_frontend_set_cheats(raven_frontend *host, const char *const *codes, size_t count,
+                              char *reason, size_t reason_size);
+
 /* Preemptive frames (RetroArch's idea, RavenEmu code): with n frames, the
  * host keeps the core's state before each of the last n frames; when port
  * 0's joypad differs from the previous frame's, run_frame goes back n frames

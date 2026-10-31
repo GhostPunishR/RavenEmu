@@ -47,6 +47,13 @@ public final class NativeBridge {
     /** GL thread: the console's reset, RetroAchievements restarting with it;
      * false without a game. */
     public static native boolean resetGame();
+    /** GL thread: the game's cheats replaced by `codes`, each on, in order
+     * (none, an empty array). The index of the first code the core refused,
+     * cheatRefusal() telling why; -1 when all were taken; -2 without a game or
+     * a core that takes cheats. */
+    public static native int setCheats(String[] codes);
+    /** GL thread, after setCheats: the core's reason for the refused code, or null. */
+    public static native String cheatRefusal();
     /** GL thread: Display.getRotation(), so the tilt follows the screen as shown. */
     public static native void setDisplayRotation(int rotation);
     /** GL thread, after drawFrame: the cartridge's motor runs; never while paused. */

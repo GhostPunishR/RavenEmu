@@ -192,6 +192,39 @@ static int check_preemption(raven_frontend *host, const unsigned char *game, siz
     return 0;
 }
 
+/* Cheats on RavenCore, through retro_cheat_set: a code it takes writes the
+ * game's memory, so the state after a few frames differs from a game played
+ * without it; a code it cannot read is refused, with its reason. */
+static int check_cheats(raven_frontend *host, const unsigned char *game, size_t size, const char *name,
+                        const char *code) {
+    char reason[RAVEN_FRONTEND_MESSAGE_MAX];
+    const char *const taken[] = {code};
+    const char *const unreadable[] = {"ZZZZ"};
+    unsigned char *states[2] = {NULL, NULL};
+    size_t sizes[2] = {0, 0};
+    CHECK(raven_frontend_set_cheats(host, taken, 1, reason, sizeof(reason)) == -2);  /* no game */
+    for (int with = 0; with < 2; ++with) {
+        CHECK(raven_frontend_load_rom(host, game, size, name));
+        while (raven_frontend_take_message(host)) {}
+        if (with) {
+            CHECK(raven_frontend_set_cheats(host, unreadable, 1, reason, sizeof(reason)) == 0);
+            CHECK(strstr(reason, "refusé") != NULL);
+            CHECK(raven_frontend_take_message(host) == NULL);
+            CHECK(raven_frontend_set_cheats(host, taken, 1, reason, sizeof(reason)) == -1);
+        }
+        for (int frame = 0; frame < 3; ++frame) CHECK(raven_frontend_run_frame(host));
+        sizes[with] = raven_frontend_state_size(host);
+        states[with] = malloc(sizes[with]);
+        CHECK(states[with] && raven_frontend_save_state(host, states[with], sizes[with]));
+        raven_frontend_unload(host);
+    }
+    const int changed = sizes[0] == sizes[1] && memcmp(states[0], states[1], sizes[0]) != 0;
+    free(states[0]); free(states[1]);
+    CHECK(changed);
+    printf("  cheats: %s taken and applied, an unreadable one refused\n", code);
+    return 0;
+}
+
 int main(int argc, char **argv) {
     if (argc != 4) {
         fprintf(stderr, "Expected paths to GB, GBC and GBA Libretro cores\n");
@@ -230,6 +263,12 @@ int main(int argc, char **argv) {
             fprintf(stderr, "%s: preemptive frames\n", argv[i]);
             raven_frontend_destroy(host);
             return 6;
+        }
+        if (i == 3 ? check_cheats(host, gba_rom, sizeof(gba_rom), "raventest.gba", "32000000 0042")
+                   : check_cheats(host, rom, sizeof(rom), "raventest.gb", "014200C0")) {
+            fprintf(stderr, "%s: cheats\n", argv[i]);
+            raven_frontend_destroy(host);
+            return 7;
         }
         printf("%s: %s (%s), %zu options\n", argv[i], info.name, info.version,
                raven_frontend_option_count(host));

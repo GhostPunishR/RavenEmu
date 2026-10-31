@@ -86,6 +86,9 @@ int main(int argc, char **argv) {
     const unsigned char valid[] = {'R', 'V', 'N', '1'};
     CHECK(!raven_frontend_load_rom(host, invalid, sizeof(invalid), "wrong.rvn"));
     CHECK(raven_frontend_take_message(host) == NULL);
+    char reason[RAVEN_FRONTEND_MESSAGE_MAX];
+    const char *const cheats[] = {"ok", "bad one", "bad two", ""};
+    CHECK(raven_frontend_set_cheats(host, cheats, 1, reason, sizeof(reason)) == -2);  /* no game */
     CHECK(raven_frontend_load_rom(host, valid, sizeof(valid), "demo.rvn"));
     CHECK(raven_frontend_get_info(host, &info));
     CHECK(info.width == 2 && info.height == 2);
@@ -99,6 +102,15 @@ int main(int argc, char **argv) {
     CHECK(raven_frontend_run_frame(host));
     message = raven_frontend_take_message(host);
     CHECK(message && strcmp(message, "Attention : à l'écran") == 0);
+    // Cheats: the first refused code and the core's reason, kept off the screen.
+    CHECK(raven_frontend_set_cheats(host, cheats, 4, reason, sizeof(reason)) == 1);
+    CHECK(strcmp(reason, "RavenTest : code de triche 2 refusé") == 0);
+    CHECK(raven_frontend_take_message(host) == NULL);
+    CHECK(raven_frontend_set_cheats(host, cheats, 1, reason, sizeof(reason)) == -1);
+    CHECK(reason[0] == 0);
+    CHECK(raven_frontend_set_cheats(host, NULL, 0, NULL, 0) == -1);
+    CHECK(raven_frontend_set_cheats(host, NULL, 1, reason, sizeof(reason)) == -2);
+    CHECK(raven_frontend_set_cheats(host, cheats, RAVEN_FRONTEND_CHEATS_MAX + 1, reason, sizeof(reason)) == -2);
     CHECK(raven_frontend_battery_size(host) == 4);
     unsigned char battery[4] = {0};
     CHECK(raven_frontend_read_battery(host, battery, sizeof(battery)));
