@@ -105,7 +105,8 @@ mémoire que le core déclare (`RETRO_ENVIRONMENT_SET_MEMORY_MAPS`) ; rcheevos
 la lit par `rc_libretro`, sur le fil d'émulation seulement. Le module gère le
 compte (mot de passe ou jeton), l'identification du jeu par son empreinte,
 l'évaluation à chaque image montrée (jamais pendant les images préventives),
-le mode Hardcore et un résumé. La plateforme fait le réseau : elle prend
+le mode Hardcore, un résumé, la liste des succès, les classements et leurs
+scores (meilleurs ou autour du joueur) et la Rich Presence. La plateforme fait le réseau : elle prend
 chaque requête (`raven_achievements_next_request`), l'envoie et rend la
 réponse (`raven_achievements_respond`) ; l'interface lit les événements
 (`raven_achievements_next_event`). La fermeture règle elle-même les requêtes

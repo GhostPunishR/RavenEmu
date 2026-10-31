@@ -87,6 +87,11 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
     /** RetroAchievements over the game (UI thread), and its session (GL thread). */
     private AchievementOverlay achievementOverlay;
     private PlayerAchievements achievements;
+    private final BadgeCache badges = new BadgeCache();
+    /** The game whose achievements run, and the account they run with. */
+    private volatile RomLibrary.Entry activeEntry;
+    private volatile String activeAccount;
+    private boolean achievementsRefreshQueued;
     private long nextBatterySaveNanos;
     private volatile String activeSaveKey;
     /** GL thread: the core of the open game ("gb", "gbc" or "gba"), for its options. */
@@ -216,11 +221,14 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         // The picture, and RetroAchievements' banners over it.
         FrameLayout screen = new FrameLayout(this);
         screen.addView(surface, new FrameLayout.LayoutParams(-1, -1));
-        achievementOverlay = new AchievementOverlay(this);
+        achievementOverlay = new AchievementOverlay(this, badges);
         screen.addView(achievementOverlay, new FrameLayout.LayoutParams(-1, -1));
         achievements = new PlayerAchievements(command -> runOnUiThread(() -> {
             if (!disposed.get()) command.run();
-        }), event -> achievementOverlay.onEvent(event));
+        }), event -> {
+            achievementOverlay.onEvent(event);
+            refreshAchievementsSoon();
+        });
         if (getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE) {
             FrameLayout stage = new FrameLayout(this);
             root.addView(stage, new LinearLayout.LayoutParams(-1, 0, 1));
@@ -377,6 +385,8 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
                     // Once the SRAM is in: the ROM is identified by its hash.
                     if (failure == null) achievements.start(http, account, journal, entry.system, rom);
                     else achievements.stop();
+                    activeEntry = failure == null ? entry : null;
+                    activeAccount = failure == null ? accountKey(account) : null;
                     final double fps = failure == null ? NativeBridge.frameRate() : 0.0;
                     if (failure == null) {
                         activeSaveKey = entry.key;
@@ -389,7 +399,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
                     runOnUiThread(() -> {
                         if (!disposed.get()) {
                             achievementOverlay.clear();
-                            achievementOverlay.setHttp(http);
+                            badges.setHttp(http);
                         }
                         if (!disposed.get() && result == null && gameTitle != null) {
                             gameFps = fps;
@@ -447,7 +457,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         releaseInput();
         if (playerMenu != null) selectedSlot = playerMenu.getSelectedSlot();
         final int generation = ++menuGeneration;
-        playerMenu = new PlayerMenuSheet(this, gameTitle.getText().toString(), selectedSlot,
+        playerMenu = new PlayerMenuSheet(this, gameTitle.getText().toString(), selectedSlot, badges,
                 new PlayerMenuSheet.Listener() {
                     @Override public void onSave(int slot) { operateSlot(slot, 0); }
                     @Override public void onLoad(int slot) { operateSlot(slot, 1); }
@@ -458,6 +468,30 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
                         if (!disposed.get() && foreground && !slotBusy && !settingsLaunching) {
                             settingsLaunching = true;
                             startActivity(new Intent(PlayerActivity.this, PlaybackSettingsActivity.class));
+                        }
+                    }
+                    @Override public void onAchievementsOpened() { refreshAchievements(); }
+                    @Override public void onAchievementsSignIn() {
+                        if (!disposed.get() && foreground && !slotBusy && !settingsLaunching) {
+                            settingsLaunching = true;
+                            startActivity(new Intent(PlayerActivity.this, PlaybackSettingsActivity.class)
+                                    .putExtra(PlaybackSettingsActivity.EXTRA_PAGE, PlaybackSettingsActivity.RETRO));
+                        }
+                    }
+                    @Override public void onAchievementsRetry() { restartAchievements(); }
+                    @Override public void onAchievementsSignOut() { signOutOfAchievements(); }
+                    @Override public void onFetchScores(int board, boolean around) {
+                        if (disposed.get()) return;
+                        surface.queueEvent(() -> {
+                            if (!disposed.get()) achievements.fetchScores(board, around);
+                        });
+                        refreshAchievements();
+                    }
+                    @Override public void onOpenLink(String url) {
+                        try {
+                            startActivity(new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)));
+                        } catch (android.content.ActivityNotFoundException missing) {
+                            postStatus("Aucune application pour ouvrir ce lien");
                         }
                     }
                     @Override public void onDismiss() {
@@ -472,6 +506,94 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         renderPlayerMenu();
         playerMenu.show();
         refreshSlots();
+        refreshAchievements();
+    }
+
+    /** The menu's RetroAchievements: a snapshot on the GL thread, the
+     * unlocks still waiting counted from the journal off it. */
+    private void refreshAchievements() {
+        final PlayerMenuSheet menu = playerMenu;
+        if (disposed.get() || menu == null || !menu.isShowing() || surface == null) return;
+        surface.queueEvent(() -> {
+            if (disposed.get()) return;
+            final AchievementsSnapshot snapshot = achievements.snapshot();
+            final AwardJournal journal = achievements.journal();
+            submitIo(() -> {
+                int pending = journal == null || !snapshot.signedIn ? 0 : journal.forAccount(snapshot.user).size();
+                runOnUiThread(() -> {
+                    if (!disposed.get() && playerMenu == menu && menu.isShowing())
+                        menu.setAchievements(snapshot.withPending(pending));
+                });
+            });
+        });
+    }
+
+    /** Events come in bursts (progress, scores): one refresh for them. */
+    private void refreshAchievementsSoon() {
+        if (achievementsRefreshQueued || playerMenu == null || !playerMenu.isShowing()) return;
+        achievementsRefreshQueued = true;
+        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+            achievementsRefreshQueued = false;
+            refreshAchievements();
+        }, 250);
+    }
+
+    private static String accountKey(AchievementAccount account) {
+        return account == null ? null : account.user + "\n" + account.token;
+    }
+
+    /** The stored account now, for the game running: signed in, out, or
+     * another one in Settings → RetroAchievements, as the beta applied it at
+     * once. "Réessayer" asks for the same with the same account. */
+    private void restartAchievements() { refreshAchievementAccount(true); }
+
+    private void refreshAchievementAccount(boolean force) {
+        final RomLibrary.Entry entry = activeEntry;
+        if (entry == null || disposed.get()) return;
+        submitIo(() -> {
+            final AchievementAccount account = AchievementAccount.load(this);
+            final String key = accountKey(account);
+            if (!force && java.util.Objects.equals(key, activeAccount)) return;
+            byte[] rom = null;
+            if (account != null) {
+                try { rom = RomLibrary.readRom(getFilesDir(), entry); }
+                catch (IOException unreadable) { postStatus("RetroAchievements : jeu illisible"); return; }
+            }
+            final byte[] game = rom;
+            final AchievementsHttp http = account == null ? null : new AchievementsHttp(RetroUserAgent.of(this));
+            final AwardJournal journal = account == null ? null : AwardJournal.open(this);
+            if (disposed.get()) return;
+            surface.queueEvent(() -> {
+                if (disposed.get() || activeEntry != entry) return;
+                achievements.start(http, account, journal, entry.system, game);
+                activeAccount = key;
+                runOnUiThread(() -> {
+                    if (disposed.get()) return;
+                    if (http != null) badges.setHttp(http);
+                    achievementOverlay.clear();
+                    refreshAchievements();
+                });
+            });
+        });
+    }
+
+    /** From the game menu, as in the beta: the token and the unlocks still
+     * waiting are forgotten on this device. */
+    private void signOutOfAchievements() {
+        submitIo(() -> {
+            AwardJournal.clear(this);
+            AchievementAccount.clear(this);
+            surface.queueEvent(() -> {
+                if (disposed.get()) return;
+                achievements.stop();
+                activeAccount = null;
+                runOnUiThread(() -> {
+                    if (disposed.get()) return;
+                    if (playerMenu != null && playerMenu.isShowing()) playerMenu.showMenu();
+                    refreshAchievements();
+                });
+            });
+        });
     }
 
     private void refreshSlots() {
@@ -752,6 +874,8 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         applyPlaybackSettings();
         if (pauseState != null) pauseState.foreground(true);
         dispatchRomLoad();
+        // Back from Settings → RetroAchievements: a new account applies now.
+        refreshAchievementAccount(false);
     }
 
     private void applyPlaybackSettings() {
@@ -812,6 +936,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         if (surface != null) surface.onPause();
         if (achievements != null) achievements.stop();
         if (achievementOverlay != null) achievementOverlay.release();
+        badges.release();
         NativeBridge.closeRom();
         super.onDestroy();
     }

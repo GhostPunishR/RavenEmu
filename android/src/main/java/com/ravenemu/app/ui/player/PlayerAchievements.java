@@ -7,6 +7,7 @@ import com.ravenemu.app.settings.AwardJournal;
 import com.ravenemu.app.settings.AwardPolicy;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -65,6 +66,12 @@ final class PlayerAchievements {
     /** The unlocks this session journaled itself: rcheevos owns their retries. */
     private Set<String> ownAwards = ConcurrentHashMap.newKeySet();
     private final AtomicBoolean storageWarned = new AtomicBoolean();
+    /** For the game menu (GL thread, but sync from the network threads too). */
+    private String status = AchievementsSnapshot.SIGNED_OUT.status, avatarUrl = "";
+    private Map<Integer, Integer> sync = new ConcurrentHashMap<>();
+    private int scoresBoard;
+    private boolean scoresAround, scoresLoading;
+    private String scoresError = "";
 
     PlayerAchievements(Executor ui, Listener listener) {
         this.ui = ui;
@@ -90,8 +97,15 @@ final class PlayerAchievements {
         this.journal = journal;
         closed = new AtomicBoolean(false);
         ownAwards = ConcurrentHashMap.newKeySet();
+        sync = new ConcurrentHashMap<>();
         replayStarted = false;
+        avatarUrl = account.avatarUrl;
+        scoresBoard = 0;
+        scoresLoading = false;
+        scoresError = "";
+        status = "Connexion en cours…";
         engine = NativeAchievements.startGame(account.user, account.token, console, rom);
+        if (engine == null) status = "RetroAchievements indisponible pour ce jeu";
         pump();
     }
 
@@ -105,26 +119,35 @@ final class PlayerAchievements {
         for (Answer answer; (answer = answers.poll()) != null; )
             if (answer.generation == generation) current.respond(answer.id, answer.body, answer.status);
         final AchievementsHttp network = http;
+        final AwardJournal queue = journal;
         for (NativeAchievements.Request request; (request = current.nextRequest()) != null; ) {
             final NativeAchievements.Request sent = request;
             final int sentGeneration = generation;
-            final AwardJournal.Award award = journal != null && AwardPolicy.isSdkAward(sent.url, sent.postData)
+            final AwardJournal.Award award = queue != null && AwardPolicy.isSdkAward(sent.url, sent.postData)
                     ? new AwardJournal.Award(account.user, sent.url, sent.postData, sent.contentType) : null;
             final Set<String> own = ownAwards;
+            final Map<Integer, Integer> states = sync;
             NETWORK.execute(() -> {
                 // Kept before it is sent: the app closing cannot lose it.
+                AwardPolicy.Key key = award == null ? null : AwardPolicy.requestKey(award.post);
                 if (award != null) {
-                    AwardPolicy.Key key = AwardPolicy.requestKey(award.post);
-                    if (key != null) own.add(key.id + ":" + key.hardcore);
-                    if (!journal.remember(award)) warnStorage();
+                    if (key != null) {
+                        own.add(key.id + ":" + key.hardcore);
+                        promote(states, key.id, AchievementsSnapshot.SYNC_PENDING);
+                    }
+                    if (!queue.remember(award)) warnStorage();
                 }
                 AchievementsHttp.Answer answer = network.send(sent.url, sent.postData, sent.contentType);
-                if (award != null && AwardPolicy.accepted(answer.status, answer.body)) journal.acknowledge(award);
+                if (award != null && AwardPolicy.accepted(answer.status, answer.body)) {
+                    queue.acknowledge(award);
+                    if (key != null) states.put(key.id, AchievementsSnapshot.SYNC_CONFIRMED);
+                }
                 answers.add(new Answer(sentGeneration, sent.id, answer));
             });
         }
         for (NativeAchievements.Event event; (event = current.nextEvent()) != null; ) {
             if ("login".equals(event.kind)) replayEarlierAwards(event.title, event.extra);
+            follow(event);
             final NativeAchievements.Event shown = event;
             ui.execute(() -> listener.onEvent(shown));
         }
@@ -138,13 +161,20 @@ final class PlayerAchievements {
         replayStarted = true;
         final AtomicBoolean done = closed;
         final Set<String> own = ownAwards;
+        final Map<Integer, Integer> states = sync;
         final AchievementsHttp network = http;
         REPLAY.execute(new Runnable() {
             List<AwardJournal.Award> pending;
             long delay = REPLAY_FIRST_DELAY_MILLIS;
             @Override public void run() {
                 if (done.get() || !queue.isCurrent()) return;
-                if (pending == null) pending = new ArrayList<>(queue.forAccount(user));
+                if (pending == null) {
+                    pending = new ArrayList<>(queue.forAccount(user));
+                    for (AwardJournal.Award entry : pending) {
+                        AwardPolicy.Key key = AwardPolicy.requestKey(entry.post);
+                        if (key != null) promote(states, key.id, AchievementsSnapshot.SYNC_PENDING);
+                    }
+                }
                 List<AwardJournal.Award> left = new ArrayList<>();
                 for (AwardJournal.Award entry : pending) {
                     if (done.get() || !queue.isCurrent()) return;
@@ -153,8 +183,12 @@ final class PlayerAchievements {
                     String post = AwardPolicy.authenticatedReplay(entry.url, entry.post, user, token);
                     if (post == null) continue;
                     AchievementsHttp.Answer answer = network.send(entry.url, post, entry.contentType);
-                    if (AwardPolicy.accepted(answer.status, answer.body)) queue.acknowledge(entry);
-                    else left.add(entry);
+                    if (AwardPolicy.accepted(answer.status, answer.body)) {
+                        queue.acknowledge(entry);
+                        if (key != null) states.put(key.id, AchievementsSnapshot.SYNC_CONFIRMED);
+                    } else {
+                        left.add(entry);
+                    }
                 }
                 pending = left;
                 if (pending.isEmpty() || done.get() || !queue.isCurrent()) return;
@@ -164,6 +198,88 @@ final class PlayerAchievements {
             }
         });
     }
+
+    /** A state only moves forward: confirmed stays confirmed. */
+    private static void promote(Map<Integer, Integer> states, int id, int state) {
+        states.merge(id, state, Math::max);
+    }
+
+    /** The status line, the avatar, unlocks and scores, as the beta's
+     * AchievementClient follows them. */
+    private void follow(NativeAchievements.Event event) {
+        switch (event.kind) {
+            case "login":
+                status = "Chargement des succès…";
+                if (!event.image.isEmpty()) avatarUrl = event.image;
+                break;
+            case "game": case "online":
+                status = "Connecté • Mode normal (Softcore)";
+                break;
+            case "login_error": case "game_unknown": case "game_offline": case "game_error": case "offline": {
+                AchievementNotices.Notice notice = AchievementNotices.of(event);
+                if (notice != null) status = notice.title.isEmpty() ? notice.heading : notice.title;
+                break;
+            }
+            case "achievement":
+                try { promote(sync, Integer.parseInt(event.id), AchievementsSnapshot.SYNC_LOCAL); }
+                catch (NumberFormatException malformed) { /* no id, nothing to follow */ }
+                break;
+            case "scores":
+                scoresLoading = false;
+                scoresError = "";
+                break;
+            case "scores_error":
+                scoresLoading = false;
+                scoresError = "Impossible de charger les scores. Réessayez.";
+                break;
+            default:
+                break;
+        }
+    }
+
+    /** GL thread: a leaderboard's best scores, or those around the player. */
+    void fetchScores(int board, boolean around) {
+        if (engine == null) return;
+        scoresBoard = board;
+        scoresAround = around;
+        scoresLoading = true;
+        scoresError = "";
+        engine.fetchScores(board, around);
+    }
+
+    /** GL thread: what the game menu shows now; without a session, the state
+     * it is in. The pending unlocks are counted elsewhere (disk). */
+    AchievementsSnapshot snapshot() {
+        final NativeAchievements current = engine;
+        if (current == null || account == null)
+            return account == null ? AchievementsSnapshot.SIGNED_OUT
+                    : new AchievementsSnapshot(true, status, account.user, account.displayName, avatarUrl,
+                            account.softcorePoints, account.hardcorePoints, "", 0, 0, 0, 0, 0, "",
+                            new NativeAchievements.Entry[0], new int[0], new NativeAchievements.Board[0],
+                            null, 0, false, false, "", 0);
+        NativeAchievements.Summary summary = current.summary();
+        NativeAchievements.Entry[] entries = current.entries();
+        int[] states = new int[entries.length];
+        for (int i = 0; i < entries.length; i++) {
+            Integer state = sync.get(entries[i].id);
+            states[i] = state == null ? AchievementsSnapshot.SYNC_NONE
+                    : entries[i].unlocked() || state == AchievementsSnapshot.SYNC_CONFIRMED ? state
+                    : AchievementsSnapshot.SYNC_NONE;
+        }
+        boolean known = summary != null && !summary.user.isEmpty();
+        return new AchievementsSnapshot(true, status, known ? summary.user : account.user,
+                known ? summary.displayName : account.displayName, avatarUrl,
+                known ? summary.softcorePoints : account.softcorePoints,
+                known ? summary.hardcorePoints : account.hardcorePoints,
+                summary == null ? "" : summary.gameTitle, summary == null ? 0 : summary.gameId,
+                summary == null ? 0 : summary.unlocked, summary == null ? 0 : summary.total,
+                summary == null ? 0 : summary.pointsUnlocked, summary == null ? 0 : summary.pointsTotal,
+                current.richPresence(), entries, states, current.boards(), current.scores(), scoresBoard,
+                scoresAround, scoresLoading, scoresError, 0);
+    }
+
+    /** For the pending unlocks of the snapshot's account. */
+    AwardJournal journal() { return journal; }
 
     /** Once per session, as in the beta. */
     private void warnStorage() {
@@ -179,6 +295,9 @@ final class PlayerAchievements {
     void stop() {
         if (engine != null) engine.close();
         engine = null;
+        account = null;
+        journal = null;
+        status = AchievementsSnapshot.SIGNED_OUT.status;
         closed.set(true);
         generation++;
         answers.clear();

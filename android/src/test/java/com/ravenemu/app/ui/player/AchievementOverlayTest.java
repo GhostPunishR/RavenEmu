@@ -35,7 +35,7 @@ public final class AchievementOverlayTest {
 
     @Before public void prepare() {
         Activity activity = Robolectric.buildActivity(Activity.class).setup().get();
-        overlay = new AchievementOverlay(activity);
+        overlay = new AchievementOverlay(activity, new BadgeCache());
         activity.setContentView(overlay);
         overlay.setSettings(AchievementSettings.DEFAULTS.withSound(false), true, 100);
     }

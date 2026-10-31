@@ -26,6 +26,23 @@
 #define AWARD_LAST "{\"Success\":true,\"Score\":1,\"SoftcoreScore\":7,\"AchievementID\":5501," \
                    "\"AchievementsRemaining\":0}"
 
+/* The same set with a leaderboard that never starts, and its scores. */
+#define GAME_SETS_BOARD "{\"Success\":true,\"GameId\":1234,\"Title\":\"Synthetic game\",\"ConsoleId\":4," \
+    "\"ImageIconUrl\":\"https://media.retroachievements.org/Images/000001.png\",\"RichPresenceGameId\":1234," \
+    "\"RichPresencePatch\":\"\",\"Sets\":[{\"AchievementSetId\":1111,\"GameId\":1234,\"Title\":null," \
+    "\"Type\":\"core\",\"ImageIconUrl\":\"https://media.retroachievements.org/Images/000001.png\"," \
+    "\"Achievements\":[{\"ID\":5501,\"Title\":\"Sixty frames\",\"Description\":\"Count to sixty\"," \
+    "\"Flags\":3,\"Points\":5,\"MemAddr\":\"0xHc001=60\",\"Author\":\"Test\",\"BadgeName\":\"00234\"," \
+    "\"Created\":1367266583,\"Modified\":1376929305}],\"Leaderboards\":[{\"ID\":4401,\"Title\":\"Course\"," \
+    "\"Description\":\"Le plus haut\",\"Mem\":\"STA:0=1::CAN:0=1::SUB:0=1::VAL:0xHc001\",\"Format\":\"SCORE\"," \
+    "\"LowerIsBetter\":false,\"Hidden\":false}]}]}"
+#define SCORES "{\"Success\":true,\"LeaderboardData\":{\"LBID\":4401,\"LBFormat\":\"SCORE\",\"LowerIsBetter\":0," \
+    "\"LBTitle\":\"Course\",\"LBDesc\":\"Le plus haut\",\"LBMem\":\"STA:0=1::CAN:0=1::SUB:0=1::VAL:0xHc001\"," \
+    "\"GameID\":1234,\"LBAuthor\":\"Test\",\"LBCreated\":\"2013-10-20 22:12:21\"," \
+    "\"LBUpdated\":\"2013-10-20 22:12:21\",\"Entries\":[{\"User\":\"Corbeau\",\"Rank\":1,\"Index\":1," \
+    "\"Score\":120,\"DateSubmitted\":1615654895},{\"User\":\"SyntheticUser\",\"Rank\":2,\"Index\":2," \
+    "\"Score\":60,\"DateSubmitted\":1615634566}],\"TotalEntries\":2}}"
+
 static const char *gb_core;
 static unsigned char rom[32 * 1024];
 
@@ -229,6 +246,70 @@ static void the_game_waits_for_the_token_login(void) {
     raven_frontend_destroy(host);
 }
 
+/* What the game menu lists: the achievements, the leaderboards and their
+ * scores, the best or around the player; a query replaced is dropped. */
+static void the_lists_follow_the_game_and_its_scores(void) {
+    raven_frontend *host = open_game();
+    raven_achievements *a = raven_achievements_create(host, NULL);
+    const raven_achievements_entry *entries;
+    const raven_achievements_board *boards;
+    const raven_achievements_score *scores;
+    CHECK(raven_achievements_entries(a, &entries) == 0 && raven_achievements_boards(a, &boards) == 0);
+    login(a);
+    raven_achievements_load_game(a, RAVEN_ACHIEVEMENTS_CONSOLE_GAMEBOY, rom, sizeof(rom));
+    answer_game(host, a, GAME_SETS_BOARD);
+    raven_achievements_event event;
+    CHECK(take(a, "game", &event));
+    CHECK(raven_achievements_entries(a, &entries) == 1);
+    CHECK(entries[0].id == 5501 && entries[0].points == 5 && strcmp(entries[0].title, "Sixty frames") == 0);
+    CHECK(strcmp(entries[0].description, "Count to sixty") == 0 && strstr(entries[0].badge, "00234_lock") != NULL);
+    CHECK(entries[0].state == 1 && entries[0].unlocked_at == 0);
+    CHECK(raven_achievements_boards(a, &boards) == 1);
+    CHECK(boards[0].id == 4401 && strcmp(boards[0].title, "Course") == 0 && !boards[0].lower_is_better);
+    /* The best scores, then around the player; the first query is replaced. */
+    raven_achievements_fetch_scores(a, 4401, 0);
+    raven_achievements_fetch_scores(a, 4401, 1);
+    raven_achievements_request first, second;
+    CHECK(raven_achievements_next_request(a, &first) && strstr(first.post_data, "r=lbinfo") != NULL);
+    CHECK(raven_achievements_next_request(a, &second) && strstr(second.post_data, "r=lbinfo") != NULL);
+    raven_achievements_respond(a, first.id, SCORES, strlen(SCORES), 200);
+    CHECK(!take(a, "scores", &event));
+    raven_achievements_respond(a, second.id, SCORES, strlen(SCORES), 200);
+    CHECK(take(a, "scores", &event) && strcmp(event.detail, "2") == 0 && strcmp(event.extra, "around") == 0);
+    CHECK(strcmp(event.id, "4401") == 0);
+    uint32_t board = 0, total = 0;
+    int around = 0;
+    CHECK(raven_achievements_scores(a, &board, &total, &around, &scores) == 2);
+    CHECK(board == 4401 && total == 2 && around == 1);
+    CHECK(scores[0].rank == 1 && strcmp(scores[0].user, "Corbeau") == 0 && !scores[0].is_player);
+    CHECK(scores[1].rank == 2 && scores[1].is_player && strstr(scores[1].score, "60") != NULL);
+    CHECK(scores[1].submitted == 1615634566);
+    /* A refusal or no answer says so; the scores read before go with the new query. */
+    raven_achievements_fetch_scores(a, 4401, 0);
+    answer(a, "{\"Success\":false,\"Error\":\"Unknown leaderboard\"}", 404);
+    CHECK(take(a, "scores_error", &event) && event.title[0] != 0 && strcmp(event.extra, "refused") == 0);
+    CHECK(strcmp(event.id, "4401") == 0 && raven_achievements_scores(a, NULL, NULL, NULL, &scores) == 0);
+    raven_achievements_fetch_scores(a, 4401, 1);
+    answer(a, "", -1);
+    CHECK(take(a, "scores_error", &event) && strcmp(event.extra, "offline") == 0);
+    raven_achievements_fetch_scores(a, 9999, 0);
+    CHECK(!raven_achievements_next_request(a, &first));
+    /* Unlocked: its badge in colour, its date. */
+    CHECK(play_until_award(host, a, 400) > 0);
+    CHECK(raven_achievements_entries(a, &entries) == 1);
+    CHECK(entries[0].state == 2 && entries[0].unlocked_at > 0 && strstr(entries[0].badge, "_lock") == NULL);
+    char presence[64];
+    raven_achievements_rich_presence(a, presence, sizeof(presence));
+    CHECK(strlen(presence) < sizeof(presence));
+    /* Leaving the game empties the lists. */
+    raven_achievements_unload_game(a);
+    CHECK(raven_achievements_entries(a, &entries) == 0 && raven_achievements_boards(a, &boards) == 0);
+    raven_achievements_rich_presence(a, presence, sizeof(presence));
+    CHECK(presence[0] == 0);
+    raven_achievements_destroy(a);
+    raven_frontend_destroy(host);
+}
+
 static void a_service_out_of_reach_is_told_apart(void) {
     raven_frontend *host = open_game();
     raven_achievements *a = raven_achievements_create(host, NULL);
@@ -269,8 +350,9 @@ int main(int argc, char **argv) {
     an_achievement_unlocks_from_ravencore_memory(1);
     hardcore_turned_on_in_game_asks_for_a_reset();
     the_game_waits_for_the_token_login();
+    the_lists_follow_the_game_and_its_scores();
     a_service_out_of_reach_is_told_apart();
     closing_settles_requests_still_out();
-    puts("Achievements: 7 scenarios passed");
+    puts("Achievements: 8 scenarios passed");
     return 0;
 }

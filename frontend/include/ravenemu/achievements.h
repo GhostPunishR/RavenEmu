@@ -81,6 +81,8 @@ void raven_achievements_respond(raven_achievements *achievements, unsigned id, c
  *  progress_hide
  *  tracker_show / tracker_hide   value, -, -, -, leaderboard id
  *  leaderboard_started / leaderboard_failed / leaderboard_submitted   title, description, -, -, id
+ *  leaderboard_scoreboard   title, "Score : … · Rang : r/n", best score, -, id
+ *  scores / scores_error    see raven_achievements_fetch_scores
  * Server texts come on one line, at most 200 bytes, never cut in a character. */
 typedef struct raven_achievements_event {
     const char *kind, *title, *detail, *extra, *image, *id;
@@ -94,6 +96,49 @@ typedef struct raven_achievements_summary {
     uint32_t unlocked, total, points_unlocked, points_total;
 } raven_achievements_summary;
 void raven_achievements_get_summary(raven_achievements *achievements, raven_achievements_summary *summary);
+
+/* The game's achievements, in rcheevos' order (grouped by progress: recently
+ * unlocked, challenges, almost there, locked, unlocked, unsupported). A copy,
+ * valid until the next call or the game's unload; 0 without a game. */
+typedef struct raven_achievements_entry {
+    uint32_t id, points;
+    const char *title, *description;
+    const char *badge;     /* unlocked badge if unlocked, else the locked one */
+    const char *progress;  /* measured, such as "3/10"; "" without */
+    unsigned state;        /* rcheevos: 0 inactive, 1 active, 2 unlocked, 3 disabled */
+    unsigned bucket;       /* RC_CLIENT_ACHIEVEMENT_BUCKET_* */
+    float percent;         /* measured, 0 to 100 */
+    int64_t unlocked_at;   /* seconds since 1970, 0 while locked */
+} raven_achievements_entry;
+size_t raven_achievements_entries(raven_achievements *achievements, const raven_achievements_entry **entries);
+
+/* The game's leaderboards; same lifetime. tracker: the attempt's value. */
+typedef struct raven_achievements_board {
+    uint32_t id;
+    const char *title, *description, *tracker;
+    unsigned state;
+    int lower_is_better;
+} raven_achievements_board;
+size_t raven_achievements_boards(raven_achievements *achievements, const raven_achievements_board **boards);
+
+/* Asks the service for twenty scores of a leaderboard: the best, or those
+ * around the player. The event "scores" (detail: total, extra: "top" or
+ * "around", id: board) says they came; "scores_error" (title: reason,
+ * extra: "offline" or "refused", id: board) that they did not. Replaces the
+ * query still out. Then raven_achievements_scores reads them, until the next
+ * fetch or the game's unload. */
+void raven_achievements_fetch_scores(raven_achievements *achievements, uint32_t board, int around);
+typedef struct raven_achievements_score {
+    uint32_t rank;
+    const char *user, *score;
+    int64_t submitted;
+    int is_player;
+} raven_achievements_score;
+size_t raven_achievements_scores(raven_achievements *achievements, uint32_t *board, uint32_t *total, int *around,
+                                 const raven_achievements_score **scores);
+
+/* The game's Rich Presence, on one line; "" without one. */
+void raven_achievements_rich_presence(raven_achievements *achievements, char *buffer, size_t size);
 
 /* rcheevos' clause for the User-Agent header the platform sends, such as
  * "rcheevos/12.0": RetroAchievements asks every client to name its SDK. */

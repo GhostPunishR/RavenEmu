@@ -1,7 +1,6 @@
 package com.ravenemu.app.ui.player;
 
 import com.ravenemu.app.bridge.NativeAchievements;
-import com.ravenemu.app.platform.AchievementsHttp;
 import com.ravenemu.app.settings.AchievementSettings;
 import com.ravenemu.app.ui.library.HomeActivity;
 
@@ -23,10 +22,6 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import java.util.ArrayDeque;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 /** RetroAchievements over the game, after the beta's RetroOverlays.kt: the
  * one-at-a-time banner (its badge drops in, then the band unfolds; the
@@ -36,24 +31,11 @@ import java.util.concurrent.Executors;
 final class AchievementOverlay extends FrameLayout {
     static final int GOLD = 0xfff4c152;
     static final int DROP_MILLIS = 300, UNFOLD_MILLIS = 350;
-    private static final int MAX_QUEUED = 8, MAX_IMAGES = 24;
-    private static final ExecutorService IMAGES = Executors.newSingleThreadExecutor(work -> {
-        Thread thread = new Thread(work, "RavenEmu-RetroAchievements-images");
-        thread.setDaemon(true);
-        return thread;
-    });
-
-    /** Set with the game's account: without one, nothing is fetched. */
-    private AchievementsHttp http;
+    private static final int MAX_QUEUED = 8;
     private final Handler main = new Handler(Looper.getMainLooper());
     private final UnlockChime chime = new UnlockChime();
     private final ArrayDeque<AchievementNotices.Notice> queue = new ArrayDeque<>();
-    /** The last badges and icons shown: a set's few dozen, small in memory. */
-    private final Map<String, Bitmap> images = new LinkedHashMap<String, Bitmap>(16, 0.75f, true) {
-        @Override protected boolean removeEldestEntry(Map.Entry<String, Bitmap> eldest) {
-            return size() > MAX_IMAGES;
-        }
-    };
+    private final BadgeCache badges;
     private final LinearLayout column;
     private final LinearLayout banner;
     private final FrameLayout bannerBadge;
@@ -74,8 +56,9 @@ final class AchievementOverlay extends FrameLayout {
     private final Runnable leave = this::leave;
     private final Runnable hideProgress = () -> fadeProgress(false);
 
-    AchievementOverlay(Context context) {
+    AchievementOverlay(Context context, BadgeCache badges) {
         super(context);
+        this.badges = badges;
         setClipChildren(false);
         setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
         column = new LinearLayout(context);
@@ -142,9 +125,6 @@ final class AchievementOverlay extends FrameLayout {
         column.addView(progress, below);
         placeColumn();
     }
-
-    /** The badges and icons come from RetroAchievements' image server. */
-    void setHttp(AchievementsHttp http) { this.http = http; }
 
     /** Settings → RetroAchievements; Settings → Audio for the chime. */
     void setSettings(AchievementSettings settings, boolean soundOn, int volume) {
@@ -299,22 +279,14 @@ final class AchievementOverlay extends FrameLayout {
 
     /** The image when known; the star until then, or for good. */
     private void badge(String url, ImageView image, TextView star, java.util.function.BooleanSupplier still) {
-        Bitmap known = url == null || url.isEmpty() ? null : images.get(url);
+        Bitmap known = badges.cached(url);
         image.setImageBitmap(known);
         star.setVisibility(known == null ? VISIBLE : GONE);
-        final AchievementsHttp network = http;
-        if (known != null || network == null || url == null || url.isEmpty() || !AchievementsHttp.allowed(url)) return;
-        IMAGES.execute(() -> {
-            Bitmap decoded = network.badge(url);
-            if (decoded == null) return;
-            main.post(() -> {
-                if (released) return;
-                images.put(url, decoded);
-                if (!still.getAsBoolean()) return;
-                image.setImageBitmap(decoded);
-                star.setVisibility(GONE);
-            });
-        });
+        if (known == null) badges.load(url, decoded -> {
+            if (released) return;
+            image.setImageBitmap(decoded);
+            star.setVisibility(GONE);
+        }, still);
     }
 
     /** At the top or the bottom of the picture; as in the beta, the banner

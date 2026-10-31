@@ -835,7 +835,31 @@ et `AwardSyncTracker.kt` de la bêta) :
 - la déconnexion efface le journal et révoque ceux encore ouverts, comme la
   bêta ; si le journal est indisponible ou plein, le bandeau le dit une fois.
 
-Écarts restants pour **RA-3** (après RA-3a) : verrous du mode Hardcore (pas de chargement
+**RA-3b, menu de jeu** (portage de `RetroAccountCard.kt`,
+`RetroAchievementsContent.kt` et `RetroLeaderboardsContent.kt`) :
+- module C : liste des succès dans l'ordre de rcheevos (regroupés par
+  progression), classements, vingt scores (les meilleurs ou autour du
+  joueur, événements `scores` et `scores_error`, requête remplacée
+  abandonnée), Rich Presence, résultat de classement
+  (`leaderboard_scoreboard`) ; copies, libérées avec le jeu ;
+- pont JNI et `NativeAchievements` : `entries`, `boards`, `fetchScores`,
+  `scores`, `richPresence` ; instantané lu sur le fil GL
+  (`ui/player/AchievementsSnapshot.java`), déblocages en attente comptés
+  dans le journal hors du fil GL ;
+- carte RetroAchievements sous le titre du menu de jeu ; elle ouvre le
+  panneau de la bêta dans le même menu : compte (avatar, points, jeu, Rich
+  Presence, déblocages en attente), Réessayer, Déconnexion, succès du jeu
+  (Tous, À obtenir, Obtenus ; recherche ; tri par ordre du jeu, progression
+  ou date ; dix puis quinze de plus ; fiche avec « Voir sur le site »),
+  classements (meilleurs scores, autour de moi, réessayer, lien du site),
+  « Mode Softcore · SDK officiel rcheevos » ; sans compte, la carte mène à
+  Paramètres → RetroAchievements ; un compte connecté, changé ou déconnecté
+  dans les paramètres s'applique au jeu en cours dès le retour, comme dans
+  la bêta ;
+- l'état d'envoi de chaque succès suit la bêta : débloqué localement, en
+  attente d'envoi, confirmé par RetroAchievements.
+
+Écarts restants pour **RA-3** (après RA-3a et RA-3b) : verrous du mode Hardcore (pas de chargement
 d'état, pauses limitées) et son activation, liste des succès, classements,
 indicateurs de défi et de suivi, carte du compte dans le menu de jeu, journal
 hors ligne (fait en RA-3a, ci-dessous), progression des succès dans les

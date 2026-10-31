@@ -21,6 +21,15 @@ public class FakeAchievements {
     public static final List<int[]> answers = new ArrayList<>();
     /** What the next answer leads to: kind, title, detail, extra, image, id. */
     public static final ArrayDeque<String[]> afterAnswer = new ArrayDeque<>();
+    /** The game's lists, as the module would copy them: entries of ten
+     * fields, boards of six; scores: board, total, around, then five per line. */
+    public static final List<String[]> entries = new ArrayList<>(), boards = new ArrayList<>();
+    public static String[] scores = {"0", "0", "0"};
+    public static String richPresence = "";
+    /** user, display name, game, hardcore, softcore, game id, unlocked, total, points unlocked, points total. */
+    public static String[] summary = {"Raven", "Raven Rouge", "", "12", "34", "0", "0", "0", "0", "0"};
+    /** "board around" of each scores query. */
+    public static final List<String> fetched = new ArrayList<>();
     public static String startUser, startToken, lastUser, lastPassword, lastToken;
     public static int startConsole, startRomLength;
     public static Runnable onStart;
@@ -34,6 +43,10 @@ public class FakeAchievements {
         startUser = startToken = lastUser = lastPassword = lastToken = null;
         startConsole = startRomLength = 0;
         onStart = null;
+        entries.clear(); boards.clear(); fetched.clear();
+        scores = new String[]{"0", "0", "0"};
+        richPresence = "";
+        summary = new String[]{"Raven", "Raven Rouge", "", "12", "34", "0", "0", "0", "0", "0"};
         player = 0;
     }
 
@@ -104,8 +117,33 @@ public class FakeAchievements {
     }
 
     @Implementation protected static synchronized byte[][] summary(long handle) {
-        return live.contains(handle) ? bytes(new String[]{"Raven", "Raven Rouge", "", "12", "34", "0", "0", "0", "0", "0"})
-                : null;
+        return live.contains(handle) ? bytes(summary) : null;
+    }
+
+    @Implementation protected static synchronized byte[][] entries(long handle) {
+        return live.contains(handle) ? bytes(flatten(entries)) : new byte[0][];
+    }
+
+    @Implementation protected static synchronized byte[][] boards(long handle) {
+        return live.contains(handle) ? bytes(flatten(boards)) : new byte[0][];
+    }
+
+    @Implementation protected static synchronized void fetchScores(long handle, int board, boolean around) {
+        if (live.contains(handle)) fetched.add(board + " " + around);
+    }
+
+    @Implementation protected static synchronized byte[][] scores(long handle) {
+        return live.contains(handle) ? bytes(scores) : null;
+    }
+
+    @Implementation protected static synchronized byte[] richPresence(long handle) {
+        return (live.contains(handle) ? richPresence : "").getBytes(StandardCharsets.UTF_8);
+    }
+
+    private static String[] flatten(List<String[]> rows) {
+        List<String> all = new ArrayList<>();
+        for (String[] row : rows) java.util.Collections.addAll(all, row);
+        return all.toArray(new String[0]);
     }
 
     @Implementation protected static String sdkVersion() { return "rcheevos/12.5"; }

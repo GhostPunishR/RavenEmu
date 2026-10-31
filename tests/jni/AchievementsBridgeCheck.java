@@ -37,7 +37,15 @@ public final class AchievementsBridgeCheck {
         + "\"Type\":\"core\",\"ImageIconUrl\":\"https://media.retroachievements.org/Images/000001.png\","
         + "\"Achievements\":[{\"ID\":5501,\"Title\":\"Soixante images 😀\",\"Description\":\"Compter à soixante\","
         + "\"Flags\":3,\"Points\":5,\"MemAddr\":\"0xHc001=60\",\"Author\":\"Test\",\"BadgeName\":\"00234\","
-        + "\"Created\":1367266583,\"Modified\":1376929305}],\"Leaderboards\":[]}]}";
+        + "\"Created\":1367266583,\"Modified\":1376929305}],\"Leaderboards\":[{\"ID\":4401,\"Title\":\"Course ★\","
+        + "\"Description\":\"Le plus haut\",\"Mem\":\"STA:0=1::CAN:0=1::SUB:0=1::VAL:0xHc001\",\"Format\":\"SCORE\","
+        + "\"LowerIsBetter\":false,\"Hidden\":false}]}]}";
+    static final String SCORES = "{\"Success\":true,\"LeaderboardData\":{\"LBID\":4401,\"LBFormat\":\"SCORE\","
+        + "\"LowerIsBetter\":0,\"LBTitle\":\"Course ★\",\"LBDesc\":\"Le plus haut\",\"LBMem\":\"STA:0=1\","
+        + "\"GameID\":1234,\"LBAuthor\":\"Test\",\"LBCreated\":\"2013-10-20 22:12:21\","
+        + "\"LBUpdated\":\"2013-10-20 22:12:21\",\"Entries\":[{\"User\":\"Corbeau ★\",\"Rank\":1,\"Index\":1,"
+        + "\"Score\":120,\"DateSubmitted\":1615654895},{\"User\":\"Joueur Été ★\",\"Rank\":2,\"Index\":2,"
+        + "\"Score\":60,\"DateSubmitted\":1615634566}],\"TotalEntries\":2}}";
 
     static NativeAchievements.Event take(NativeAchievements a, String kind) {
         for (NativeAchievements.Event e; (e = a.nextEvent()) != null; ) if (kind.equals(e.kind)) return e;
@@ -99,6 +107,27 @@ public final class AchievementsBridgeCheck {
             check(frame(), "frame");
         }
         check(game != null && game.title.equals("Jeu synthétique ★") && game.detail.equals("1"), "game " + (game == null ? null : game.title));
+        // The lists, as the game menu reads them once the award came: UTF-8
+        // intact, numbers in place, the badge in colour.
+        NativeAchievements.Entry[] listed = player.entries();
+        check(listed.length == 1 && listed[0].id == 5501 && listed[0].title.equals("Soixante images 😀")
+              && listed[0].description.equals("Compter à soixante") && listed[0].points == 5 && listed[0].unlocked()
+              && listed[0].unlockedAt > 0 && listed[0].badge.contains("00234") && !listed[0].badge.contains("_lock"),
+              "entries");
+        NativeAchievements.Board[] boards = player.boards();
+        check(boards.length == 1 && boards[0].id == 4401 && boards[0].title.equals("Course ★") && !boards[0].lowerIsBetter,
+              "boards");
+        player.fetchScores(4401, false);
+        NativeAchievements.Request lbinfo = player.nextRequest();
+        check(lbinfo != null && lbinfo.postData.contains("r=lbinfo"), "scores request");
+        player.respond(lbinfo.id, SCORES.getBytes(StandardCharsets.UTF_8), 200);
+        NativeAchievements.Event came = take(player, "scores");
+        check(came != null && came.id.equals("4401") && came.detail.equals("2") && came.extra.equals("top"), "scores event");
+        NativeAchievements.Scores board = player.scores();
+        check(board.board == 4401 && board.total == 2 && !board.around && board.scores.length == 2
+              && board.scores[0].user.equals("Corbeau ★") && board.scores[0].rank == 1 && !board.scores[0].player
+              && board.scores[1].player && board.scores[1].submitted == 1615634566L, "scores");
+        check(player.richPresence().length() < 256, "rich presence");
         check(award != null && award.title.equals("Soixante images 😀") && award.extra.equals("5") && award.id.equals("5501"),
               "award " + (award == null ? null : award.title));
         for (NativeAchievements.Request r; awardRequest == null && (r = player.nextRequest()) != null; )
@@ -122,6 +151,8 @@ public final class AchievementsBridgeCheck {
         // The next game's instance replaces it; the old handle cannot close the new one.
         NativeAchievements next = NativeAchievements.startGame("SyntheticUser", "SyntheticToken", 4, rom);
         check(next != null && player.summary() == null && player.nextEvent() == null, "replaced by the next game");
+        check(player.entries().length == 0 && player.boards().length == 0 && player.scores().scores.length == 0
+              && player.richPresence().isEmpty(), "an old handle lists nothing");
         player.close();
         check(next.summary() != null, "an old handle leaves the new game's instance");
         close();

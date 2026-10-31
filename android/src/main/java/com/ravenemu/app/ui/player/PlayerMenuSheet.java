@@ -37,6 +37,13 @@ final class PlayerMenuSheet {
         default void onUndo() {}
         default void onSettings() {}
         default void onMoveControls() {}
+        /** The RetroAchievements panel opened: a fresh snapshot is welcome. */
+        default void onAchievementsOpened() {}
+        default void onAchievementsSignIn() {}
+        default void onAchievementsRetry() {}
+        default void onAchievementsSignOut() {}
+        default void onFetchScores(int board, boolean around) {}
+        default void onOpenLink(String url) {}
     }
 
     private static final int CARD = 0xff202230;
@@ -54,8 +61,18 @@ final class PlayerMenuSheet {
     private AlertDialog confirmation;
     private int selectedSlot;
     private boolean busy, undoAvailable;
+    /** RetroAchievements: the card under the heading, the panel it opens. */
+    private final FrameLayout accountHost;
+    private final AchievementsPanel panel;
+    private final LinearLayout menu;
+    private final NestedScrollView scroll;
+    private AchievementsSnapshot achievements = AchievementsSnapshot.SIGNED_OUT;
 
     PlayerMenuSheet(Activity owner, String title, int selectedSlot, Listener listener) {
+        this(owner, title, selectedSlot, new BadgeCache(), listener);
+    }
+
+    PlayerMenuSheet(Activity owner, String title, int selectedSlot, BadgeCache badges, Listener listener) {
         this.owner = owner;
         this.listener = listener;
         this.selectedSlot = selectedSlot >= 0 && selectedSlot < StateSlotRepository.SLOT_COUNT
@@ -72,6 +89,9 @@ final class PlayerMenuSheet {
         TextView heading = text("Menu du jeu", 20, HomeActivity.TEXT);
         heading.setTypeface(null, Typeface.BOLD);
         content.addView(heading);
+        // As in the beta: the RetroAchievements account right under the heading.
+        accountHost = new FrameLayout(owner);
+        add(content, accountHost, 12);
         add(content, text(title, 13, SECONDARY), 12);
         add(content, text("Partie en pause · 4 emplacements de sauvegarde", 12,
                 HomeActivity.MUTED), 12);
@@ -166,16 +186,38 @@ final class PlayerMenuSheet {
             if (!busy && dialog.isShowing()) listener.onSettings();
         });
         add(content, settings, 12);
-        NestedScrollView scroll = new NestedScrollView(owner);
-        scroll.addView(content);
+        menu = content;
+        panel = new AchievementsPanel(owner, badges, new AchievementsPanel.Actions() {
+            @Override public void back() { showMenu(); }
+            @Override public void signIn() { if (dialog.isShowing()) listener.onAchievementsSignIn(); }
+            @Override public void retry() { if (dialog.isShowing()) listener.onAchievementsRetry(); }
+            @Override public void signOut() { if (dialog.isShowing()) listener.onAchievementsSignOut(); }
+            @Override public void fetchScores(int board, boolean around) {
+                if (dialog.isShowing()) listener.onFetchScores(board, around);
+            }
+            @Override public void openLink(String url) { listener.onOpenLink(url); }
+        });
+        View panelView = panel.view();
+        panelView.setPadding(dp(18), dp(12), dp(18), dp(28));
+        panelView.setVisibility(View.GONE);
+        LinearLayout pages = column();
+        pages.addView(content);
+        pages.addView(panelView);
+        scroll = new NestedScrollView(owner);
+        scroll.addView(pages);
         dialog.setContentView(scroll);
+        setAchievements(AchievementsSnapshot.SIGNED_OUT);
         dialog.setOnDismissListener(ignored -> {
             dismissConfirmation();
+            panel.dismissDetails();
             listener.onDismiss();
         });
         dialog.setOnKeyListener((ignored, key, event) -> {
-            if (key == KeyEvent.KEYCODE_BUTTON_B) {
-                if (event.getAction() == KeyEvent.ACTION_UP) dismiss();
+            if (key == KeyEvent.KEYCODE_BUTTON_B || key == KeyEvent.KEYCODE_BACK && achievementsShown()) {
+                if (event.getAction() == KeyEvent.ACTION_UP) {
+                    // The panel goes back to the menu first, as its own back button.
+                    if (achievementsShown()) showMenu(); else dismiss();
+                }
                 return true;
             }
             if (key != KeyEvent.KEYCODE_BUTTON_A) return false;
@@ -189,6 +231,37 @@ final class PlayerMenuSheet {
     }
 
     void show() { dialog.show(); }
+
+    /** The account card, and the panel if open: from the GL thread's snapshot. */
+    void setAchievements(AchievementsSnapshot snapshot) {
+        achievements = snapshot == null ? AchievementsSnapshot.SIGNED_OUT : snapshot;
+        accountHost.removeAllViews();
+        accountHost.addView(panel.card(achievements, this::showAchievements),
+                new FrameLayout.LayoutParams(-1, -2));
+        panel.show(achievements);
+    }
+
+    boolean achievementsShown() { return panel.view().getVisibility() == View.VISIBLE; }
+
+    /** Signed out, the card leads to Settings → RetroAchievements. */
+    void showAchievements() {
+        if (busy || !dialog.isShowing()) return;
+        if (!achievements.signedIn) {
+            listener.onAchievementsSignIn();
+            return;
+        }
+        menu.setVisibility(View.GONE);
+        panel.view().setVisibility(View.VISIBLE);
+        scroll.scrollTo(0, 0);
+        listener.onAchievementsOpened();
+    }
+
+    void showMenu() {
+        panel.dismissDetails();
+        panel.view().setVisibility(View.GONE);
+        menu.setVisibility(View.VISIBLE);
+        scroll.scrollTo(0, 0);
+    }
     void dismiss() { dialog.dismiss(); }
     boolean isShowing() { return dialog.isShowing(); }
     int getSelectedSlot() { return selectedSlot; }

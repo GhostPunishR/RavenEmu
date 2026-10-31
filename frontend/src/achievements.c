@@ -35,6 +35,25 @@ typedef struct event_record {
     char *field[FIELDS];
 } event_record;
 
+/* The lists the interface reads: copies, so rcheevos' own storage never
+ * outlives a call. */
+typedef struct entry_list {
+    raven_achievements_entry *entries;
+    size_t count;
+} entry_list;
+
+typedef struct board_list {
+    raven_achievements_board *boards;
+    size_t count;
+} board_list;
+
+typedef struct score_list {
+    raven_achievements_score *scores;
+    size_t count;
+    uint32_t board, total;
+    int around;
+} score_list;
+
 struct raven_achievements {
     raven_frontend *host;
     rc_client_t *rc;
@@ -51,6 +70,12 @@ struct raven_achievements {
     size_t event_count, event_capacity;
     event_record current_event;
     char *summary_text[3];
+    entry_list entries;
+    board_list boards;
+    score_list scores;
+    rc_client_async_handle_t *scores_query;
+    uint32_t scores_board;
+    int scores_around, scores_pending;
 };
 
 static const char closed_body[] = "{\"Success\":false,\"Error\":\"Session closed\"}";
@@ -299,6 +324,14 @@ static void event_handler(const rc_client_event_t *event, rc_client_t *rc) {
             push_event(a, event->type == RC_CLIENT_EVENT_LEADERBOARD_TRACKER_HIDE ? "tracker_hide" : "tracker_show",
                   event->leaderboard_tracker->display, NULL, NULL, NULL, number);
             break;
+        case RC_CLIENT_EVENT_LEADERBOARD_SCOREBOARD:
+            if (!event->leaderboard_scoreboard) return;
+            snprintf(number, sizeof(number), "%u", event->leaderboard_scoreboard->leaderboard_id);
+            snprintf(text, sizeof(text), "Score : %s · Rang : %u/%u", event->leaderboard_scoreboard->submitted_score,
+                     event->leaderboard_scoreboard->new_rank, event->leaderboard_scoreboard->num_entries);
+            push_event(a, "leaderboard_scoreboard", event->leaderboard ? event->leaderboard->title : "", text,
+                       event->leaderboard_scoreboard->best_score, NULL, number);
+            break;
         case RC_CLIENT_EVENT_LEADERBOARD_STARTED:
         case RC_CLIENT_EVENT_LEADERBOARD_FAILED:
         case RC_CLIENT_EVENT_LEADERBOARD_SUBMITTED:
@@ -333,6 +366,44 @@ raven_achievements *raven_achievements_create(raven_frontend *host, const char *
     return a;
 }
 
+static void free_entries(entry_list *list) {
+    for (size_t i = 0; i < list->count; ++i) {
+        free((char *)list->entries[i].title);
+        free((char *)list->entries[i].description);
+        free((char *)list->entries[i].badge);
+        free((char *)list->entries[i].progress);
+    }
+    free(list->entries);
+    memset(list, 0, sizeof(*list));
+}
+
+static void free_boards(board_list *list) {
+    for (size_t i = 0; i < list->count; ++i) {
+        free((char *)list->boards[i].title);
+        free((char *)list->boards[i].description);
+        free((char *)list->boards[i].tracker);
+    }
+    free(list->boards);
+    memset(list, 0, sizeof(*list));
+}
+
+static void free_scores(score_list *list) {
+    for (size_t i = 0; i < list->count; ++i) {
+        free((char *)list->scores[i].user);
+        free((char *)list->scores[i].score);
+    }
+    free(list->scores);
+    memset(list, 0, sizeof(*list));
+}
+
+/* A query still out is dropped with the game, or another query. */
+static void forget_scores(raven_achievements *a) {
+    if (a->scores_query) rc_client_abort_async(a->rc, a->scores_query);
+    a->scores_query = NULL;
+    a->scores_pending = 0;
+    free_scores(&a->scores);
+}
+
 static void forget_memory(raven_achievements *a) {
     if (a->memory_ready) rc_libretro_memory_destroy(&a->memory);
     memset(&a->memory, 0, sizeof(a->memory));
@@ -349,8 +420,13 @@ void raven_achievements_destroy(raven_achievements *a) {
         call.callback(&closed, call.data);
     }
     rc_client_idle(a->rc);
+    if (a->scores_query) rc_client_abort_async(a->rc, a->scores_query);
+    a->scores_query = NULL;
     rc_client_destroy(a->rc);
     forget_memory(a);
+    free_entries(&a->entries);
+    free_boards(&a->boards);
+    free_scores(&a->scores);
     for (size_t i = 0; i < a->request_count; ++i) free_request(&a->requests[i]);
     for (size_t i = 0; i < a->event_count; ++i) free_event(&a->events[i]);
     free_request(&a->current_request);
@@ -394,8 +470,11 @@ void raven_achievements_load_game(raven_achievements *a, unsigned console, const
 
 void raven_achievements_unload_game(raven_achievements *a) {
     if (!a) return;
+    forget_scores(a);
     rc_client_unload_game(a->rc);
     forget_memory(a);
+    free_entries(&a->entries);
+    free_boards(&a->boards);
 }
 
 void raven_achievements_reset(raven_achievements *a) {
@@ -500,4 +579,148 @@ void raven_achievements_user_agent_clause(char *buffer, size_t size) {
     if (!buffer || !size) return;
     buffer[0] = 0;
     rc_client_get_user_agent_clause(NULL, buffer, size);
+}
+
+size_t raven_achievements_entries(raven_achievements *a, const raven_achievements_entry **entries) {
+    if (entries) *entries = NULL;
+    if (!a) return 0;
+    free_entries(&a->entries);
+    rc_client_achievement_list_t *list = rc_client_create_achievement_list(a->rc,
+        RC_CLIENT_ACHIEVEMENT_CATEGORY_CORE, RC_CLIENT_ACHIEVEMENT_LIST_GROUPING_PROGRESS);
+    if (!list) return 0;
+    size_t total = 0;
+    for (uint32_t b = 0; b < list->num_buckets; ++b) total += list->buckets[b].num_achievements;
+    a->entries.entries = total ? (raven_achievements_entry *)calloc(total, sizeof(raven_achievements_entry)) : NULL;
+    char badge[256];
+    for (uint32_t b = 0; a->entries.entries && b < list->num_buckets; ++b) {
+        const rc_client_achievement_bucket_t *bucket = &list->buckets[b];
+        for (uint32_t i = 0; i < bucket->num_achievements; ++i) {
+            const rc_client_achievement_t *achievement = bucket->achievements[i];
+            raven_achievements_entry *entry = &a->entries.entries[a->entries.count];
+            achievement_image(achievement, 0, badge, sizeof(badge));
+            entry->title = copy(achievement->title);
+            entry->description = copy(achievement->description);
+            entry->badge = copy(badge);
+            entry->progress = copy(achievement->measured_progress);
+            entry->id = achievement->id;
+            entry->points = achievement->points;
+            entry->state = achievement->state;
+            entry->bucket = bucket->bucket_type;
+            entry->percent = achievement->measured_percent;
+            entry->unlocked_at = achievement->state == RC_CLIENT_ACHIEVEMENT_STATE_UNLOCKED
+                ? (int64_t)achievement->unlock_time : 0;
+            ++a->entries.count;
+            if (!entry->title || !entry->description || !entry->badge || !entry->progress) {
+                free_entries(&a->entries);
+                rc_client_destroy_achievement_list(list);
+                return 0;
+            }
+        }
+    }
+    rc_client_destroy_achievement_list(list);
+    if (entries) *entries = a->entries.entries;
+    return a->entries.count;
+}
+
+size_t raven_achievements_boards(raven_achievements *a, const raven_achievements_board **boards) {
+    if (boards) *boards = NULL;
+    if (!a) return 0;
+    free_boards(&a->boards);
+    rc_client_leaderboard_list_t *list = rc_client_create_leaderboard_list(a->rc,
+        RC_CLIENT_LEADERBOARD_LIST_GROUPING_NONE);
+    if (!list) return 0;
+    size_t total = 0;
+    for (uint32_t b = 0; b < list->num_buckets; ++b) total += list->buckets[b].num_leaderboards;
+    a->boards.boards = total ? (raven_achievements_board *)calloc(total, sizeof(raven_achievements_board)) : NULL;
+    for (uint32_t b = 0; a->boards.boards && b < list->num_buckets; ++b) {
+        for (uint32_t i = 0; i < list->buckets[b].num_leaderboards; ++i) {
+            const rc_client_leaderboard_t *source = list->buckets[b].leaderboards[i];
+            raven_achievements_board *board = &a->boards.boards[a->boards.count++];
+            board->id = source->id;
+            board->title = copy(source->title);
+            board->description = copy(source->description);
+            board->tracker = copy(source->tracker_value);
+            board->state = source->state;
+            board->lower_is_better = source->lower_is_better;
+            if (!board->title || !board->description || !board->tracker) {
+                free_boards(&a->boards);
+                rc_client_destroy_leaderboard_list(list);
+                return 0;
+            }
+        }
+    }
+    rc_client_destroy_leaderboard_list(list);
+    if (boards) *boards = a->boards.boards;
+    return a->boards.count;
+}
+
+static void scores_fetched(int result, const char *message, rc_client_leaderboard_entry_list_t *list,
+                           rc_client_t *rc, void *userdata) {
+    (void)userdata;
+    raven_achievements *a = owner(rc);
+    char number[16], reason[MAX_TEXT + 8];
+    a->scores_query = NULL;
+    a->scores_pending = 0;
+    snprintf(number, sizeof(number), "%u", a->scores_board);
+    if (a->closing) {
+        if (list) rc_client_destroy_leaderboard_entry_list(list);
+        return;
+    }
+    free_scores(&a->scores);
+    if (result != RC_OK || !list) {
+        server_text(message, reason, sizeof(reason));
+        if (list) rc_client_destroy_leaderboard_entry_list(list);
+        push_event(a, "scores_error", reason, NULL, unreachable(result) ? "offline" : "refused", NULL, number);
+        return;
+    }
+    a->scores.scores = list->num_entries
+        ? (raven_achievements_score *)calloc(list->num_entries, sizeof(raven_achievements_score)) : NULL;
+    for (uint32_t i = 0; a->scores.scores && i < list->num_entries; ++i) {
+        raven_achievements_score *score = &a->scores.scores[a->scores.count++];
+        score->rank = list->entries[i].rank;
+        score->user = copy(list->entries[i].user);
+        score->score = copy(list->entries[i].display);
+        score->submitted = (int64_t)list->entries[i].submitted;
+        score->is_player = (int32_t)i == list->user_index;
+    }
+    a->scores.board = a->scores_board;
+    a->scores.total = list->total_entries;
+    a->scores.around = a->scores_around;
+    rc_client_destroy_leaderboard_entry_list(list);
+    char total[16];
+    snprintf(total, sizeof(total), "%u", a->scores.total);
+    push_event(a, "scores", NULL, total, a->scores.around ? "around" : "top", NULL, number);
+}
+
+void raven_achievements_fetch_scores(raven_achievements *a, uint32_t board, int around) {
+    if (!a || !rc_client_get_leaderboard_info(a->rc, board)) return;
+    forget_scores(a);
+    a->scores_board = board;
+    a->scores_around = around ? 1 : 0;
+    a->scores_pending = 1;
+    rc_client_async_handle_t *query = around
+        ? rc_client_begin_fetch_leaderboard_entries_around_user(a->rc, board, 20, scores_fetched, NULL)
+        : rc_client_begin_fetch_leaderboard_entries(a->rc, board, 1, 20, scores_fetched, NULL);
+    /* The answer may already have come: then nothing is left to abort. */
+    if (a->scores_pending) a->scores_query = query;
+}
+
+size_t raven_achievements_scores(raven_achievements *a, uint32_t *board, uint32_t *total, int *around,
+                                 const raven_achievements_score **scores) {
+    if (board) *board = a ? a->scores.board : 0;
+    if (total) *total = a ? a->scores.total : 0;
+    if (around) *around = a ? a->scores.around : 0;
+    if (scores) *scores = a ? a->scores.scores : NULL;
+    return a ? a->scores.count : 0;
+}
+
+void raven_achievements_rich_presence(raven_achievements *a, char *buffer, size_t size) {
+    if (!buffer || !size) return;
+    buffer[0] = 0;
+    if (!a || !rc_client_get_game_info(a->rc)) return;
+    char raw[512];
+    raw[0] = 0;
+    rc_client_get_rich_presence_message(a->rc, raw, sizeof(raw));
+    raw[sizeof(raw) - 1] = 0;
+    server_text(raw, buffer, size);
 }

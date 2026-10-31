@@ -250,9 +250,14 @@ Chaque déblocage passe par un **journal hors ligne** scellé (comme la bêta) :
 du même compte s'il n'a pas pu partir (réseau absent, lecteur fermé ou
 tourné). La déconnexion l'efface.
 
-Écarts restants (tranche RA-3) : verrous du mode Hardcore, liste des succès,
-classements, indicateurs de défi et de suivi, carte du compte dans le menu de
-jeu, progression des succès dans les états de jeu (un chargement d'état remet
+Le **menu de jeu** montre la carte RetroAchievements de la bêta sous son
+titre ; elle ouvre le panneau du compte, des succès du jeu (filtres,
+recherche, tri, fiche) et de ses classements (meilleurs scores, autour de
+moi). Sans compte, elle mène à Paramètres → RetroAchievements ; un
+changement de compte s'applique au jeu en cours dès le retour.
+
+Écarts restants (tranche RA-3) : verrous du mode Hardcore, indicateurs de
+défi et de suivi, progression des succès dans les états de jeu (un chargement d'état remet
 les succès à zéro, comme l'exige rcheevos sans données de progression ; la
 bêta ne les sauvegardait pas non plus).
 

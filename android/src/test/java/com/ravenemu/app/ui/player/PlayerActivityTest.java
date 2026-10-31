@@ -347,6 +347,69 @@ public final class PlayerActivityTest {
         assertTrue(FakeHttp.sent.contains(AWARD_URL + " " + AWARD.replace("t=TOKEN-1", "t=TOKEN-2")));
     }
 
+    @Test public void theGameMenuShowsTheAccountItsAchievementsAndLeaderboards() throws Exception {
+        android.content.Context app = RuntimeEnvironment.getApplication();
+        new AchievementAccount("Raven", "TOKEN-1", "Raven Rouge", "", 34, 12).save(app);
+        AchievementSettings.DEFAULTS.withSound(false).save(app);
+        FakeAchievements.summary = new String[]{"Raven", "Raven Rouge", "Libre", "12", "34", "1234", "1", "2", "5", "15"};
+        FakeAchievements.entries.add(new String[]{"5501", "Premier pas", "Finir le niveau", "5", "2", "", "1700000000",
+                "5", "", "100"});
+        FakeAchievements.entries.add(new String[]{"5502", "Collectionneur", "Tout ramasser", "10", "1", "3/10", "0",
+                "1", "", "30"});
+        FakeAchievements.boards.add(new String[]{"4401", "Course", "Le plus haut", "", "1", "0"});
+        PlayerActivity activity = loaded();
+        openMenu(activity);
+        pump(activity);
+        android.view.View decor = menuDialog().getWindow().getDecorView();
+        View card = find(decor, view -> view.getContentDescription() != null
+                && view.getContentDescription().toString().startsWith("RetroAchievements. Raven Rouge"));
+        assertNotNull("The account right under the heading", card);
+        assertTrue(card.getContentDescription().toString().contains("1/2 succès  ·  5/15 pts"));
+        card.performClick();
+        pump(activity);
+        assertNotNull(find(decor, view -> view.isShown() && view.getContentDescription() != null
+                && view.getContentDescription().toString().equals("Premier pas, 5 points, Débloqué")));
+        assertNotNull(find(decor, view -> view.isShown() && view.getContentDescription() != null
+                && view.getContentDescription().toString().equals("Collectionneur, 10 points, 3/10")));
+        assertNull("The menu waits behind the panel", find(decor, view -> view.isShown() && view instanceof TextView
+                && "Reprendre le jeu".contentEquals(((TextView)view).getText())));
+        // A leaderboard: the query goes through the GL thread, the scores come back with a frame.
+        find(decor, view -> "Classement Course".contentEquals(view.getContentDescription() == null ? ""
+                : view.getContentDescription())).performClick();
+        pump(activity);
+        assertEquals(java.util.Collections.singletonList("4401 false"), FakeAchievements.fetched);
+        FakeAchievements.scores = new String[]{"4401", "2", "0", "1", "Corbeau", "000120", "1615654895", "0",
+                "2", "Raven", "000060", "1615634566", "1"};
+        FakeAchievements.raise("scores", "", "2", "top", "", "4401");
+        activity.onDrawFrame(null);
+        shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(300));
+        pump(activity);
+        assertNotNull(find(decor, view -> view.isShown() && view instanceof TextView
+                && "#2 · Raven (vous)\n000060".contentEquals(((TextView)view).getText())));
+        // Signing out from the panel: the token and the waiting unlocks go, the session stops.
+        find(decor, view -> "Se déconnecter de RetroAchievements".contentEquals(view.getContentDescription() == null
+                ? "" : view.getContentDescription())).performClick();
+        pump(activity);
+        assertNull(AchievementAccount.load(app));
+        assertTrue(FakeAchievements.log.stream().anyMatch(l -> l.startsWith("stop ")));
+        assertNotNull(find(decor, view -> view.isShown() && view.getContentDescription() != null
+                && view.getContentDescription().toString().startsWith("RetroAchievements. Non connecté")));
+    }
+
+    @Test public void signedOutTheCardLeadsToTheAccountSettings() throws Exception {
+        PlayerActivity activity = loaded();
+        openMenu(activity);
+        pump(activity);
+        View card = find(menuDialog().getWindow().getDecorView(), view -> view.getContentDescription() != null
+                && view.getContentDescription().toString().startsWith("RetroAchievements. Non connecté"));
+        assertNotNull(card);
+        card.performClick();
+        Intent next = shadowOf(activity).getNextStartedActivity();
+        assertEquals(PlaybackSettingsActivity.class.getName(), next.getComponent().getClassName());
+        assertEquals(PlaybackSettingsActivity.RETRO, next.getStringExtra(PlaybackSettingsActivity.EXTRA_PAGE));
+        assertTrue("No account, no session", FakeAchievements.log.isEmpty());
+    }
+
     @Test public void theDisplayRateReachesThePacerAndTheScreenStaysOnWhilePlaying() throws Exception {
         PlayerActivity activity = loaded();
         // Robolectric changes the refresh rate on this Display instance, not globally.

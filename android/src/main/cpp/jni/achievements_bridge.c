@@ -11,6 +11,7 @@
 #include "bridge_internal.h"
 
 #include <pthread.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -276,6 +277,129 @@ Java_com_ravenemu_app_bridge_NativeAchievements_summary(JNIEnv *env, jclass claz
                                           numbers[0], numbers[1], numbers[2], numbers[3], numbers[4],
                                           numbers[5], numbers[6]};
     return texts(env, fields, SUMMARY_FIELDS);
+}
+
+/* Fixed-size records, flattened: each field as text. */
+static jobjectArray records(JNIEnv *env, const char *const *fields, size_t count) {
+    return count > (size_t)INT32_MAX ? NULL : texts(env, fields, (int)count);
+}
+
+/* Ten fields per achievement: id, title, description, points, state,
+ * progress, unlocked at, bucket, badge, percent. */
+JNIEXPORT jobjectArray JNICALL
+Java_com_ravenemu_app_bridge_NativeAchievements_entries(JNIEnv *env, jclass clazz, jlong handle) {
+    (void)clazz;
+    const raven_achievements_entry *entries;
+    const size_t count = raven_achievements_entries(find(handle, 0, 0), &entries);
+    const size_t fields = 10;
+    const char **values = count ? (const char **)calloc(count * fields, sizeof(char *)) : NULL;
+    char (*numbers)[6][32] = count ? calloc(count, sizeof(*numbers)) : NULL;
+    if (count && (!values || !numbers)) {
+        free(values);
+        free(numbers);
+        return NULL;
+    }
+    for (size_t i = 0; i < count; ++i) {
+        const raven_achievements_entry *entry = &entries[i];
+        snprintf(numbers[i][0], 32, "%u", (unsigned)entry->id);
+        snprintf(numbers[i][1], 32, "%u", (unsigned)entry->points);
+        snprintf(numbers[i][2], 32, "%u", entry->state);
+        snprintf(numbers[i][3], 32, "%lld", (long long)entry->unlocked_at);
+        snprintf(numbers[i][4], 32, "%u", entry->bucket);
+        /* Nine significant digits keep the SDK's float, as in the beta. */
+        snprintf(numbers[i][5], 32, "%.9g", (double)entry->percent);
+        const char *row[10] = {numbers[i][0], entry->title, entry->description, numbers[i][1], numbers[i][2],
+                               entry->progress, numbers[i][3], numbers[i][4], entry->badge, numbers[i][5]};
+        memcpy(values + i * fields, row, sizeof(row));
+    }
+    jobjectArray result = records(env, values, count * fields);
+    free(values);
+    free(numbers);
+    return result;
+}
+
+/* Six fields per leaderboard: id, title, description, tracker, state, lower is better. */
+JNIEXPORT jobjectArray JNICALL
+Java_com_ravenemu_app_bridge_NativeAchievements_boards(JNIEnv *env, jclass clazz, jlong handle) {
+    (void)clazz;
+    const raven_achievements_board *boards;
+    const size_t count = raven_achievements_boards(find(handle, 0, 0), &boards);
+    const size_t fields = 6;
+    const char **values = count ? (const char **)calloc(count * fields, sizeof(char *)) : NULL;
+    char (*numbers)[3][16] = count ? calloc(count, sizeof(*numbers)) : NULL;
+    if (count && (!values || !numbers)) {
+        free(values);
+        free(numbers);
+        return NULL;
+    }
+    for (size_t i = 0; i < count; ++i) {
+        snprintf(numbers[i][0], 16, "%u", (unsigned)boards[i].id);
+        snprintf(numbers[i][1], 16, "%u", boards[i].state);
+        snprintf(numbers[i][2], 16, "%d", boards[i].lower_is_better ? 1 : 0);
+        const char *row[6] = {numbers[i][0], boards[i].title, boards[i].description, boards[i].tracker,
+                              numbers[i][1], numbers[i][2]};
+        memcpy(values + i * fields, row, sizeof(row));
+    }
+    jobjectArray result = records(env, values, count * fields);
+    free(values);
+    free(numbers);
+    return result;
+}
+
+JNIEXPORT void JNICALL
+Java_com_ravenemu_app_bridge_NativeAchievements_fetchScores(
+    JNIEnv *env, jclass clazz, jlong handle, jint board, jboolean around) {
+    (void)env; (void)clazz;
+    if (board > 0) raven_achievements_fetch_scores(find(handle, 0, 0), (uint32_t)board, around == JNI_TRUE);
+}
+
+/* board, total, around; then five fields per score: rank, user, score,
+ * submitted, is the player. */
+JNIEXPORT jobjectArray JNICALL
+Java_com_ravenemu_app_bridge_NativeAchievements_scores(JNIEnv *env, jclass clazz, jlong handle) {
+    (void)clazz;
+    raven_achievements *achievements = find(handle, 0, 0);
+    if (!achievements) return NULL;
+    uint32_t board = 0, total = 0;
+    int around = 0;
+    const raven_achievements_score *scores;
+    const size_t count = raven_achievements_scores(achievements, &board, &total, &around, &scores);
+    const size_t fields = 5, size = 3 + count * fields;
+    const char **values = (const char **)calloc(size, sizeof(char *));
+    char (*numbers)[3][32] = calloc(count + 1, sizeof(*numbers));
+    if (!values || !numbers) {
+        free(values);
+        free(numbers);
+        return NULL;
+    }
+    snprintf(numbers[count][0], 32, "%u", (unsigned)board);
+    snprintf(numbers[count][1], 32, "%u", (unsigned)total);
+    values[0] = numbers[count][0];
+    values[1] = numbers[count][1];
+    values[2] = around ? "1" : "0";
+    for (size_t i = 0; i < count; ++i) {
+        snprintf(numbers[i][0], 32, "%u", (unsigned)scores[i].rank);
+        snprintf(numbers[i][1], 32, "%lld", (long long)scores[i].submitted);
+        const char *row[5] = {numbers[i][0], scores[i].user, scores[i].score, numbers[i][1],
+                              scores[i].is_player ? "1" : "0"};
+        memcpy(values + 3 + i * fields, row, sizeof(row));
+    }
+    jobjectArray result = records(env, values, size);
+    free(values);
+    free(numbers);
+    return result;
+}
+
+/* The Rich Presence, as UTF-8 bytes; empty without one. */
+JNIEXPORT jbyteArray JNICALL
+Java_com_ravenemu_app_bridge_NativeAchievements_richPresence(JNIEnv *env, jclass clazz, jlong handle) {
+    (void)clazz;
+    char presence[256];
+    raven_achievements_rich_presence(find(handle, 0, 0), presence, sizeof(presence));
+    const jsize length = (jsize)strlen(presence);
+    jbyteArray result = (*env)->NewByteArray(env, length);
+    if (result) (*env)->SetByteArrayRegion(env, result, 0, length, (const jbyte *)presence);
+    return result;
 }
 
 /* "rcheevos/x.y" and RavenCore's version, for the User-Agent. ASCII. */
