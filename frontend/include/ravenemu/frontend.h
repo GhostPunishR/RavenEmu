@@ -70,6 +70,14 @@ void raven_frontend_set_callbacks(raven_frontend *host,
 /* The ROM is copied by the host and kept alive until unload. */
 int raven_frontend_load_rom(raven_frontend *host, const void *rom,
                             size_t size, const char *path);
+/* Two games joined by the core's "link" subsystem (RavenCore: two players
+ * and a link cable). Both ROMs are copied. Player 1's picture comes first
+ * (on the left of the frame), and port n is player n+1's controller. 0 when
+ * the core declares no such subsystem or refuses the games. */
+int raven_frontend_load_linked(raven_frontend *host, const void *const roms[2],
+                               const size_t sizes[2], const char *const paths[2]);
+/* 1 for a game alone, 2 for linked games, 0 without a game. */
+unsigned raven_frontend_players(const raven_frontend *host);
 int raven_frontend_run_frame(raven_frontend *host);
 /* Restarts the game in place, as the console's reset button (retro_reset):
  * RetroAchievements' Hardcore asks for it. 0 without a game, or a core
@@ -77,6 +85,13 @@ int raven_frontend_run_frame(raven_frontend *host);
 int raven_frontend_reset(raven_frontend *host);
 /* Battery SRAM is owned by the loaded core. Access only on the emulation
  * thread, after load_game and before unload_game. Zero size means no battery. */
+/* Each player's battery SRAM: player 0 is the game alone, or player 1 of
+ * linked games. The functions without a player are player 0's. */
+size_t raven_frontend_player_battery_size(const raven_frontend *host, unsigned player);
+int raven_frontend_read_player_battery(const raven_frontend *host, unsigned player,
+                                       void *dst, size_t size);
+int raven_frontend_restore_player_battery(raven_frontend *host, unsigned player,
+                                          const void *src, size_t size);
 size_t raven_frontend_battery_size(const raven_frontend *host);
 int raven_frontend_read_battery(const raven_frontend *host,
                                 void *dst, size_t size);

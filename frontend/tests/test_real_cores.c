@@ -225,6 +225,65 @@ static int check_cheats(raven_frontend *host, const unsigned char *game, size_t 
     return 0;
 }
 
+/* Two games joined by RavenCore's "link" subsystem: player 1 without
+ * battery, player 2 with an 8 KiB battery SRAM (MBC1+RAM+BATTERY). The
+ * picture holds both, side by side; each player's SRAM is its own. */
+static unsigned frame_width;
+static void link_video(const raven_video_frame *frame, void *opaque) {
+    (void)opaque;
+    if (frame->pixels) frame_width = frame->width;
+}
+
+static int check_link(raven_frontend *host, const unsigned char *first, size_t first_size,
+                      const unsigned char *second, size_t second_size, unsigned width,
+                      size_t second_battery) {
+    const raven_frontend_callbacks callbacks = {link_video, NULL, input, NULL, NULL, NULL, NULL};
+    raven_frontend_set_callbacks(host, &callbacks);
+    const void *const roms[2] = {first, second};
+    const size_t sizes[2] = {first_size, second_size};
+    const char *const paths[2] = {"joueur1", "joueur2"};
+    CHECK(raven_frontend_load_linked(host, roms, sizes, paths));
+    CHECK(raven_frontend_players(host) == 2);
+    raven_core_info info;
+    CHECK(raven_frontend_get_info(host, &info) && info.width == 2 * width);
+    frame_width = 0;
+    for (int i = 0; i < 3; ++i) CHECK(raven_frontend_run_frame(host));
+    CHECK(frame_width == 2 * width);
+    CHECK(raven_frontend_player_battery_size(host, 0) == 0);
+    CHECK(raven_frontend_player_battery_size(host, 1) == second_battery);
+    CHECK(raven_frontend_player_battery_size(host, 2) == 0);
+    if (second_battery) {
+        unsigned char *written = malloc(second_battery), *read = malloc(second_battery);
+        CHECK(written && read);
+        for (size_t i = 0; i < second_battery; ++i) written[i] = (unsigned char)(i * 7u + 3u);
+        CHECK(raven_frontend_restore_player_battery(host, 1, written, second_battery));
+        CHECK(raven_frontend_read_player_battery(host, 1, read, second_battery));
+        const int same = memcmp(written, read, second_battery) == 0;
+        CHECK(!raven_frontend_restore_player_battery(host, 1, written, second_battery - 1));
+        free(written);
+        free(read);
+        CHECK(same);
+    }
+    // Preemptive frames stay off while two games run.
+    CHECK(raven_frontend_set_preemptive_frames(host, 2));
+    CHECK(raven_frontend_run_frame(host) && raven_frontend_run_frame(host));
+    CHECK(raven_frontend_replayed_frames(host) == 0);
+    CHECK(raven_frontend_set_preemptive_frames(host, 0));
+    // A state holds both games.
+    const size_t state_size = raven_frontend_state_size(host);
+    unsigned char *state = malloc(state_size);
+    CHECK(state && state_size);
+    const int saved = raven_frontend_save_state(host, state, state_size) &&
+                      raven_frontend_load_state(host, state, state_size);
+    free(state);
+    CHECK(saved);
+    // A game alone afterwards is one player again.
+    CHECK(raven_frontend_load_rom(host, first, first_size, "seul"));
+    CHECK(raven_frontend_players(host) == 1);
+    raven_frontend_unload(host);
+    return 0;
+}
+
 int main(int argc, char **argv) {
     if (argc != 4) {
         fprintf(stderr, "Expected paths to GB, GBC and GBA Libretro cores\n");
@@ -269,6 +328,28 @@ int main(int argc, char **argv) {
             fprintf(stderr, "%s: cheats\n", argv[i]);
             raven_frontend_destroy(host);
             return 7;
+        }
+        if (i == 3) {
+            static unsigned char gba_second[1024];
+            memcpy(gba_second, gba_rom, sizeof(gba_second));
+            if (check_link(host, gba_rom, sizeof(gba_rom), gba_second, sizeof(gba_second), 240, 0)) {
+                fprintf(stderr, "%s: linked games\n", argv[i]);
+                raven_frontend_destroy(host);
+                return 8;
+            }
+        } else {
+            static unsigned char battery_rom[32 * 1024];
+            make_rom(battery_rom, sizeof(battery_rom));
+            battery_rom[0x147] = 0x03;  /* MBC1+RAM+BATTERY */
+            battery_rom[0x149] = 0x02;  /* 8 KiB */
+            unsigned char checksum = 0;
+            for (size_t b = 0x134; b <= 0x14c; ++b) checksum = (unsigned char)(checksum - battery_rom[b] - 1);
+            battery_rom[0x14d] = checksum;
+            if (check_link(host, rom, sizeof(rom), battery_rom, sizeof(battery_rom), 160, 8192)) {
+                fprintf(stderr, "%s: linked games\n", argv[i]);
+                raven_frontend_destroy(host);
+                return 8;
+            }
         }
         printf("%s: %s (%s), %zu options\n", argv[i], info.name, info.version,
                raven_frontend_option_count(host));

@@ -30,6 +30,16 @@ public final class NativeBridge {
      * the game loads; those the core does not offer are skipped. */
     public static native String openRom(String nativeLibraryDirectory, String filesDirectory,
                                  String system, byte[] data, String filename, String[] coreOptions);
+    /** Two games joined by the core's link cable (RavenCore's two players), as
+     * openRom: null on success. Player 1 shows first; see setLinkFocus. */
+    public static native String openLinked(String nativeLibraryDirectory, String filesDirectory,
+                                           String system, byte[] first, String firstName,
+                                           byte[] second, String secondName, String[] coreOptions);
+    /** 1 for a game alone, 2 for linked games, 0 without a game. */
+    public static native int players();
+    /** GL thread: linked games, the player shown, played and given the motor
+     * and the sensors (0 or 1); the other keeps running. */
+    public static native void setLinkFocus(int player);
     /** GL thread: change core options during the game (alternating keys and
      * values); the core takes them at its next frame. */
     public static native void setCoreOptions(String[] coreOptions);
@@ -79,6 +89,9 @@ public final class NativeBridge {
     public static native String stateCompatibility();
     public static native byte[] saveBattery();
     public static native boolean restoreBattery(byte[] battery);
+    /** Linked games: each player's battery SRAM (player 0 or 1). */
+    public static native byte[] savePlayerBattery(int player);
+    public static native boolean restorePlayerBattery(int player, byte[] battery);
     public static native byte[] saveState();
     /** GL thread: bounded width/height/ARGB copy, or null without a fresh frame. */
     public static native int[] capturePreview();

@@ -77,6 +77,20 @@ le faux core et sur les vrais cores GB, GBC et GBA : un code GameShark ou
 Codebreaker écrit la mémoire du jeu (l'état diffère), un code illisible est
 refusé avec sa raison.
 
+## Deux jeux reliés (câble link)
+
+Un core qui déclare le sous-système `link` (`SET_SUBSYSTEM_INFO` : deux jeux,
+une SRAM chacun, comme RavenCore) charge deux jeux par
+`raven_frontend_load_linked` (`retro_load_game_special`, symbole facultatif).
+L'image contient les deux joueurs côte à côte, le joueur 1 à gauche ; le port
+n est la manette du joueur n+1. `raven_frontend_players` rend 1 ou 2, et
+`raven_frontend_player_battery_size`, `read_player_battery` et
+`restore_player_battery` donnent la SRAM de chaque joueur (les fonctions sans
+joueur restent celles du joueur 1). Les images préventives restent coupées
+avec deux jeux. Testé sur le faux core (sans sous-système : refus net) et sur
+les vrais cores GB, GBC et GBA : image double, SRAM de chaque joueur, état
+des deux jeux, retour à un jeu seul.
+
 ## Vibration et capteurs
 
 `raven_frontend_callbacks` accepte trois rappels facultatifs : `rumble`

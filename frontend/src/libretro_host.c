@@ -22,6 +22,8 @@ typedef struct raven_core_api {
     void (*get_system_info)(struct retro_system_info *);
     void (*get_system_av_info)(struct retro_system_av_info *);
     bool (*load_game)(const struct retro_game_info *);
+    /* Optional: a core without it has no subsystem (no linked games). */
+    bool (*load_game_special)(unsigned, const struct retro_game_info *, size_t);
     void (*unload_game)(void);
     void (*run)(void);
     /* Optional here: a core without it cannot be restarted in place. */
@@ -61,8 +63,17 @@ struct raven_frontend {
     char *save_directory;
     char *rom_path;
     void *rom;
+    /* Player 2's game when two are linked. */
+    char *rom_path2;
+    void *rom2;
     int initialized;
     int loaded;
+    unsigned players;  /* 1 for a game alone, 2 linked; 0 without a game. */
+    /* The core's "link" subsystem (SET_SUBSYSTEM_INFO): two games joined by
+     * a cable, and the memory type of each player's battery SRAM. */
+    int link_available;
+    unsigned link_id;
+    unsigned link_memory[2];
     unsigned pixel_format;
     raven_option *options;
     size_t option_count;
@@ -355,7 +366,8 @@ static void preempt_free(raven_frontend *host) {
 /* The ring for the current state size, allocated on first use; 0 when the
  * core cannot save its state whole, or before its first frame if it says so. */
 static int preempt_prepare(raven_frontend *host) {
-    if (!host->preempt_frames ||
+    /* Linked games: two consoles to replay, and two controllers; not done. */
+    if (!host->preempt_frames || host->players > 1 ||
         (host->serialization_quirks & RETRO_SERIALIZATION_QUIRK_INCOMPLETE)) return 0;
     if ((host->serialization_quirks & RETRO_SERIALIZATION_QUIRK_MUST_INITIALIZE) && !host->preempt_ran)
         return 0;
@@ -442,9 +454,30 @@ void *raven_frontend_core_memory(const raven_frontend *host, unsigned id, size_t
     return length ? data : NULL;
 }
 
+/* Only the "link" subsystem is used: two games, each with one battery SRAM.
+ * The declaration ends at an entry without ident; at most 64 are read. */
+static bool keep_link_subsystem(raven_frontend *host, const struct retro_subsystem_info *info) {
+    host->link_available = 0;
+    if (!info) return false;
+    for (unsigned i = 0; i < 64 && info[i].ident; ++i) {
+        const struct retro_subsystem_info *one = &info[i];
+        if (strcmp(one->ident, "link") != 0 || one->num_roms != 2 || !one->roms) continue;
+        if (!one->roms[0].memory || !one->roms[0].num_memory ||
+            !one->roms[1].memory || !one->roms[1].num_memory) continue;
+        host->link_id = one->id;
+        host->link_memory[0] = one->roms[0].memory[0].type;
+        host->link_memory[1] = one->roms[1].memory[0].type;
+        host->link_available = 1;
+        break;
+    }
+    return true;
+}
+
 static bool environment(unsigned command, void *data) {
     if (!active) return false;
     switch (command) {
+        case RETRO_ENVIRONMENT_SET_SUBSYSTEM_INFO:
+            return keep_link_subsystem(active, (const struct retro_subsystem_info *)data);
         case RETRO_ENVIRONMENT_SET_MEMORY_MAPS:
             return keep_memory_map(active, (const struct retro_memory_map *)data);
         case RETRO_ENVIRONMENT_SET_SUPPORT_ACHIEVEMENTS:
@@ -554,8 +587,8 @@ static bool environment(unsigned command, void *data) {
             if (!data) return false;
             *(unsigned *)data = RETRO_LANGUAGE_FRENCH;
             return true;
-        /* Features not yet exposed: sensors, achievements, rumble, hardware
-         * rendering, option visibility, memory descriptors, and subsystems. */
+        /* Features not yet exposed: hardware rendering, option visibility,
+         * and subsystems other than "link". */
         default:
             return false;
     }
@@ -608,6 +641,11 @@ void raven_frontend_unload(raven_frontend *host) {
     host->rom = NULL;
     free(host->rom_path);
     host->rom_path = NULL;
+    free(host->rom2);
+    host->rom2 = NULL;
+    free(host->rom_path2);
+    host->rom_path2 = NULL;
+    host->players = 0;
     memset(&host->av, 0, sizeof(host->av));
 }
 
@@ -625,6 +663,7 @@ void raven_frontend_close_core(raven_frontend *host) {
     host->options_updated = 0;
     host->message_pending = 0;
     host->serialization_quirks = 0;
+    host->link_available = 0;
     free(host->system_directory);
     free(host->save_directory);
     host->system_directory = NULL;
@@ -684,6 +723,8 @@ int raven_frontend_open_core(raven_frontend *host, const char *library_path,
     {
         void *symbol = dlsym(host->library, "retro_reset");
         if (symbol) memcpy(&host->api.reset, &symbol, sizeof(host->api.reset));
+        symbol = dlsym(host->library, "retro_load_game_special");
+        if (symbol) memcpy(&host->api.load_game_special, &symbol, sizeof(host->api.load_game_special));
         symbol = dlsym(host->library, "retro_cheat_reset");
         if (symbol) memcpy(&host->api.cheat_reset, &symbol, sizeof(host->api.cheat_reset));
         symbol = dlsym(host->library, "retro_cheat_set");
@@ -740,8 +781,52 @@ int raven_frontend_load_rom(raven_frontend *host, const void *rom,
         return 0;
     }
     host->loaded = 1;
+    host->players = 1;
     host->api.get_system_av_info(&host->av);
     return 1;
+}
+
+int raven_frontend_load_linked(raven_frontend *host, const void *const roms[2],
+                               const size_t sizes[2], const char *const paths[2]) {
+    if (!host || !host->initialized || active != host || !roms || !sizes || !roms[0] || !roms[1] ||
+        !sizes[0] || !sizes[1]) {
+        set_error(host, "Core not opened or ROM is empty");
+        return 0;
+    }
+    if (!host->link_available || !host->api.load_game_special) {
+        set_error(host, "Core has no link subsystem");
+        return 0;
+    }
+    raven_frontend_unload(host);
+    host->rom = malloc(sizes[0]);
+    host->rom2 = malloc(sizes[1]);
+    host->rom_path = copy_string(paths ? paths[0] : NULL);
+    host->rom_path2 = copy_string(paths ? paths[1] : NULL);
+    if (!host->rom || !host->rom2 || !host->rom_path || !host->rom_path2) {
+        set_error(host, "Unable to allocate ROM");
+        raven_frontend_unload(host);
+        return 0;
+    }
+    memcpy(host->rom, roms[0], sizes[0]);
+    memcpy(host->rom2, roms[1], sizes[1]);
+    host->options_updated = 0;
+    struct retro_game_info games[2] = {
+        {host->rom_path, host->rom, sizes[0], NULL},
+        {host->rom_path2, host->rom2, sizes[1], NULL},
+    };
+    if (!host->api.load_game_special(host->link_id, games, 2)) {
+        set_error(host, "Libretro core rejected the linked games");
+        raven_frontend_unload(host);
+        return 0;
+    }
+    host->loaded = 1;
+    host->players = 2;
+    host->api.get_system_av_info(&host->av);
+    return 1;
+}
+
+unsigned raven_frontend_players(const raven_frontend *host) {
+    return host && host->loaded && active == host ? host->players : 0;
 }
 
 int raven_frontend_run_frame(raven_frontend *host) {
@@ -823,29 +908,39 @@ void raven_frontend_forget_preemption(raven_frontend *host) {
     if (host) preempt_forget(host);
 }
 
-size_t raven_frontend_battery_size(const raven_frontend *host) {
-    if (!host || !host->loaded || active != host) return 0;
-    return host->api.get_memory_size(RETRO_MEMORY_SAVE_RAM);
+/* The memory type of a player's battery SRAM; 0 when there is no such player. */
+static int battery_memory(const raven_frontend *host, unsigned player, unsigned *type) {
+    if (!host || !host->loaded || active != host || player >= host->players) return 0;
+    *type = host->players > 1 ? host->link_memory[player] : RETRO_MEMORY_SAVE_RAM;
+    return 1;
 }
 
-int raven_frontend_read_battery(const raven_frontend *host,
-                                void *dst, size_t size) {
-    size_t expected = raven_frontend_battery_size(host);
-    if (!expected || !dst || expected != size) return 0;
-    const void *data = host->api.get_memory_data(RETRO_MEMORY_SAVE_RAM);
+size_t raven_frontend_player_battery_size(const raven_frontend *host, unsigned player) {
+    unsigned type;
+    if (!battery_memory(host, player, &type)) return 0;
+    return host->api.get_memory_size(type);
+}
+
+int raven_frontend_read_player_battery(const raven_frontend *host, unsigned player,
+                                       void *dst, size_t size) {
+    unsigned type;
+    const size_t expected = raven_frontend_player_battery_size(host, player);
+    if (!expected || !dst || expected != size || !battery_memory(host, player, &type)) return 0;
+    const void *data = host->api.get_memory_data(type);
     if (!data) return 0;
     memcpy(dst, data, expected);
     return 1;
 }
 
-int raven_frontend_restore_battery(raven_frontend *host,
-                                   const void *src, size_t size) {
-    const size_t expected = raven_frontend_battery_size(host);
-    if (!expected || !src || expected != size) {
+int raven_frontend_restore_player_battery(raven_frontend *host, unsigned player,
+                                          const void *src, size_t size) {
+    unsigned type;
+    const size_t expected = raven_frontend_player_battery_size(host, player);
+    if (!expected || !src || expected != size || !battery_memory(host, player, &type)) {
         set_error(host, "Battery SRAM size mismatch");
         return 0;
     }
-    void *data = host->api.get_memory_data(RETRO_MEMORY_SAVE_RAM);
+    void *data = host->api.get_memory_data(type);
     if (!data) {
         set_error(host, "Core does not expose writable battery SRAM");
         return 0;
@@ -853,6 +948,18 @@ int raven_frontend_restore_battery(raven_frontend *host,
     memcpy(data, src, expected);
     preempt_forget(host);
     return 1;
+}
+
+size_t raven_frontend_battery_size(const raven_frontend *host) {
+    return raven_frontend_player_battery_size(host, 0);
+}
+
+int raven_frontend_read_battery(const raven_frontend *host, void *dst, size_t size) {
+    return raven_frontend_read_player_battery(host, 0, dst, size);
+}
+
+int raven_frontend_restore_battery(raven_frontend *host, const void *src, size_t size) {
+    return raven_frontend_restore_player_battery(host, 0, src, size);
 }
 
 size_t raven_frontend_state_size(const raven_frontend *host) {
