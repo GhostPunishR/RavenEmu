@@ -383,6 +383,41 @@ public final class HomeActivityTest {
         assertNotNull(text(review.getWindow().getDecorView(), "Jeu : Alpha.gb"));
     }
 
+    @Test public void theMenuExportsEverySaveInTheBetasLibraryArchive() throws Exception {
+        String key = seedLibrary();
+        File files = RuntimeEnvironment.getApplication().getFilesDir();
+        SaveRepository.write(files, key, "srm", new byte[]{7, 8});
+        HomeActivity activity = open(null).get();
+        described(activity.getWindow().getDecorView(), "Plus d'options").performClick();
+        ShadowPopupMenu.getLatestPopupMenu().getMenu().performIdentifierAction(75, 0);
+        idleSaves();
+        Intent create = shadowOf(activity).getNextStartedActivityForResult().intent;
+        assertEquals(Intent.ACTION_CREATE_DOCUMENT, create.getAction());
+        assertEquals("application/zip", create.getType());
+        String title = create.getStringExtra(Intent.EXTRA_TITLE);
+        assertTrue(title, title.matches("RavenEmu-sauvegardes-\\d{4}-\\d{2}-\\d{2}\\.zip"));
+        Uri target = Uri.parse("content://saves/backup.zip");
+        ByteArrayOutputStream written = new ByteArrayOutputStream();
+        shadowOf(activity.getContentResolver()).registerOutputStream(target, written);
+        activity.onActivityResult(75, Activity.RESULT_OK, new Intent().setData(target));
+        idleSaves();
+        assertEquals("Sauvegardes d'un jeu exportées", ShadowToast.getTextOfLatestToast());
+        // The beta reads it back: the game Alpha.gb only, bound to its ROM bytes.
+        String sha = SaveTransfer.sha256(new byte[0x180]);
+        SaveTransfer.Payload back = SaveTransfer.read(new ByteArrayInputStream(written.toByteArray()), "x.zip", sha);
+        assertArrayEquals(new byte[]{7, 8}, back.battery);
+    }
+
+    @Test public void theMenuSaysSoWhenNoGameHasASave() throws Exception {
+        seedLibrary();
+        HomeActivity activity = open(null).get();
+        described(activity.getWindow().getDecorView(), "Plus d'options").performClick();
+        ShadowPopupMenu.getLatestPopupMenu().getMenu().performIdentifierAction(75, 0);
+        idleSaves();
+        assertNull(shadowOf(activity).getNextStartedActivityForResult());
+        assertEquals("Aucun jeu de la bibliothèque n'a de sauvegarde à exporter.", ShadowToast.getTextOfLatestToast());
+    }
+
     /** Opens the first game's import with `bytes` as `name`, up to the review. */
     private AlertDialog reviewOf(HomeActivity activity, String name, byte[] bytes) throws Exception {
         showFirstGame(activity);

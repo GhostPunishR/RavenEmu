@@ -515,6 +515,9 @@ This is an integration prototype, not a release candidate.
   save of another size is read as RavenCore reads one, its first bytes over
   the core's fresh SRAM, then written back at the core's size; a game without
   SRAM keeps the file unread.
+- The library's ⋮ menu exports every game's SRAM in the beta's library
+  archive (lot S-2): one folder per game, bound to the ROM's SHA-256, which
+  both this app and the beta import. Native save states are not included.
 - The Java home screen uses the RavenEmu-style grid/list; file selection
   remains Android SAF. The Java pause sheet controls the C pause/audio gate.
 - RetroAchievements: Softcore with banners, chime, the achievement list,

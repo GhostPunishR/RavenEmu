@@ -4,9 +4,14 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
 import org.json.JSONObject;
 import org.junit.Test;
@@ -113,6 +118,61 @@ public final class SaveTransferTest {
         assertEquals("Jeu.sav", SaveTransfer.exportName("dossier/Jeu.gb", SaveTransfer.SAV));
         assertEquals("Zelda.sav", SaveTransfer.exportName("Ze\u0007lda.gba", SaveTransfer.SAV));
         assertEquals("GameBoy.sav", SaveTransfer.exportName("", "?"));
+    }
+
+    @Test public void theLibraryArchiveIsTheBetasAndEachGameReadsItsOwnSaveBack() throws Exception {
+        String other = SaveTransfer.sha256(new byte[]{1}), third = SaveTransfer.sha256(new byte[]{2});
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        assertEquals(3, SaveTransfer.exportLibrary(Arrays.asList(
+                new SaveTransfer.Game("Jeu.gb", ROM_SHA, BATTERY),
+                new SaveTransfer.Game("dossier/Autre.gbc", other, new byte[]{42}),
+                new SaveTransfer.Game("Poké:mon?.gba", third, new byte[]{7})), out));
+        byte[] archive = out.toByteArray();
+        assertEquals(Arrays.asList(
+                "Jeu (" + ROM_SHA.substring(0, 8) + ")/manifest.json", "Jeu (" + ROM_SHA.substring(0, 8) + ")/battery.sav",
+                "Autre (" + other.substring(0, 8) + ")/manifest.json", "Autre (" + other.substring(0, 8) + ")/battery.sav",
+                "Poké_mon_ (" + third.substring(0, 8) + ")/manifest.json",
+                "Poké_mon_ (" + third.substring(0, 8) + ")/battery.sav"), names(archive));
+        assertArrayEquals(BATTERY, read(archive, "RavenEmu-sauvegardes.zip", ROM_SHA).battery);
+        assertArrayEquals(new byte[]{42}, read(archive, "RavenEmu-sauvegardes.zip", other).battery);
+        assertArrayEquals(new byte[]{7}, read(archive, "RavenEmu-sauvegardes.zip", third).battery);
+        refused(archive, "x.zip", SaveTransfer.sha256(new byte[]{3}), "Cette archive ne contient aucune sauvegarde de ce jeu.");
+    }
+
+    @Test public void twoGamesOfTheSameFolderNameStayApart() throws Exception {
+        String first = "aaaaaaaa" + String.join("", Collections.nCopies(56, "0"));
+        String second = "aaaaaaaa" + String.join("", Collections.nCopies(56, "1"));
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        SaveTransfer.exportLibrary(Arrays.asList(new SaveTransfer.Game("Jeu.gb", first, new byte[]{1}),
+                new SaveTransfer.Game("Jeu.gbc", second, new byte[]{2})), out);
+        List<String> names = names(out.toByteArray());
+        assertEquals("Jeu (aaaaaaaa) 2/manifest.json", names.get(2));
+        assertArrayEquals(new byte[]{2}, read(out.toByteArray(), "x.zip", second).battery);
+        assertEquals("Jeu (aaaaaaaa)", SaveTransfer.libraryFolder(".gb", first));
+    }
+
+    @Test public void anEmptyLibraryOrAnInvalidSaveWritesNoArchive() {
+        try {
+            SaveTransfer.exportLibrary(new ArrayList<>(), new ByteArrayOutputStream());
+            fail();
+        } catch (IOException expected) {
+            assertEquals("Aucun jeu de la bibliothèque n'a de sauvegarde à exporter.", expected.getMessage());
+        }
+        try {
+            SaveTransfer.exportLibrary(Arrays.asList(new SaveTransfer.Game("Jeu.gb", ROM_SHA, new byte[0])),
+                    new ByteArrayOutputStream());
+            fail();
+        } catch (IOException expected) {
+            assertEquals("Sauvegarde invalide : Jeu.gb.", expected.getMessage());
+        }
+    }
+
+    private static List<String> names(byte[] archive) throws IOException {
+        List<String> names = new ArrayList<>();
+        try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(archive))) {
+            for (ZipEntry entry; (entry = zip.getNextEntry()) != null; ) names.add(entry.getName());
+        }
+        return names;
     }
 
     private static SaveTransfer.Payload read(byte[] bytes, String name, String sha) throws IOException {

@@ -4,18 +4,22 @@ import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipException;
 import java.util.zip.ZipInputStream;
+import java.util.zip.ZipOutputStream;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -55,6 +59,71 @@ public final class SaveTransfer {
             this.raw = raw;
             this.skippedSlots = skippedSlots;
         }
+    }
+
+    /** A library game with a save, as the library archive names it. */
+    public static final class Game {
+        final String title, romSha256;
+        final byte[] battery;
+
+        public Game(String title, String romSha256, byte[] battery) {
+            this.title = title;
+            this.romSha256 = romSha256;
+            this.battery = battery;
+        }
+    }
+
+    /** Every game's save in one archive, as the beta's exportLibrary writes
+     * it, so that both the beta and this app import it: a folder per game,
+     * « name (start of the ROM's SHA-256) », holding its manifest first, then
+     * its battery.sav. Only the cartridge saves, by the owner's choice: this
+     * app's save states are not the beta's. Returns the games written. */
+    public static int exportLibrary(List<Game> games, OutputStream output) throws IOException {
+        if (games.isEmpty()) throw new IOException("Aucun jeu de la bibliothèque n'a de sauvegarde à exporter.");
+        Set<String> folders = new HashSet<>();
+        ZipOutputStream zip = new ZipOutputStream(output);
+        for (Game game : games) {
+            if (game.romSha256 == null || !game.romSha256.matches("[0-9a-f]{64}") || game.battery == null
+                    || game.battery.length == 0 || game.battery.length > MAX_BATTERY)
+                throw new IOException("Sauvegarde invalide : " + game.title + ".");
+            String base = libraryFolder(game.title, game.romSha256), folder = base;
+            for (int suffix = 2; !folders.add(folder); suffix++) folder = base + " " + suffix;
+            JSONObject manifest;
+            try {
+                manifest = new JSONObject().put("format", FORMAT).put("version", VERSION)
+                        .put("romSha256", game.romSha256)
+                        .put("entries", new JSONObject().put("battery.sav", sha256(game.battery)));
+            } catch (JSONException impossible) {
+                throw new IOException("Manifeste impossible à écrire.", impossible);
+            }
+            put(zip, folder + "/manifest.json", manifest.toString().getBytes(StandardCharsets.UTF_8));
+            put(zip, folder + "/battery.sav", game.battery);
+        }
+        zip.finish();
+        return games.size();
+    }
+
+    /** Readable and unique: the ROM's name, then the start of its SHA-256. */
+    static String libraryFolder(String title, String romSha256) {
+        String stem = title == null ? "" : title.replace('\\', '/');
+        stem = stem.substring(stem.lastIndexOf('/') + 1);
+        int dot = stem.lastIndexOf('.');
+        if (dot >= 0) stem = stem.substring(0, dot);
+        StringBuilder safe = new StringBuilder();
+        for (int i = 0; i < stem.length(); i++) {
+            char c = stem.charAt(i);
+            safe.append(Character.isISOControl(c) || "/\\:*?\"<>|".indexOf(c) >= 0 ? '_' : c);
+        }
+        String name = safe.toString().trim();
+        while (name.endsWith(".")) name = name.substring(0, name.length() - 1);
+        if (name.length() > 80) name = name.substring(0, 80);
+        return (name.trim().isEmpty() ? "Jeu" : name) + " (" + romSha256.substring(0, 8) + ")";
+    }
+
+    private static void put(ZipOutputStream zip, String name, byte[] bytes) throws IOException {
+        zip.putNextEntry(new ZipEntry(name));
+        zip.write(bytes);
+        zip.closeEntry();
     }
 
     /** True for a name the import reads as a .zip archive, whose ROM must

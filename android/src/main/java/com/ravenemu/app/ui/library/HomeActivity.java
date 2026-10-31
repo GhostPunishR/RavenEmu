@@ -302,6 +302,8 @@ public final class HomeActivity extends Activity {
         });
         options.getMenu().add("Actualiser la bibliothèque de jeux")
                 .setOnMenuItemClickListener(item -> { reload(); return true; });
+        options.getMenu().add(0, SaveTransferUi.EXPORT_ALL, 2, "Exporter toutes les sauvegardes (.zip)")
+                .setOnMenuItemClickListener(item -> { saves.exportAll(); return true; });
         options.show();
     }
 

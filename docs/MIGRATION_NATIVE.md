@@ -956,6 +956,30 @@ sauvegarde de la cartouche (SRAM).
   exécuteur partagé).
 
 Écarts restants : les états de la bêta ne sont pas importés (leur conversion
-demanderait la décision du propriétaire) ; l'export de toutes les sauvegardes
-(S-2) et l'import d'un dossier (S-3) suivent. Validation sur téléphone à faire.
+demanderait la décision du propriétaire). Validation sur téléphone à faire.
+
+## Sauvegardes, lot S-2 : export de toutes les sauvegardes
+
+Menu ⋮ de la bibliothèque, « Exporter toutes les sauvegardes (.zip) », comme
+dans la bêta.
+
+- **Choix du propriétaire** : l'archive contient la SRAM seule, au format de
+  la bêta (`RavenEmu-GB-Saves` v1), pour qu'elle se réimporte dans cette
+  application **et** dans la bêta (retour arrière). Les états de jeu natifs
+  restent sur le téléphone : ceux de la bêta sont d'un autre format.
+- Disposition de la bêta (`exportLibrary`) : un dossier par jeu,
+  « nom de la ROM (8 premiers caractères de son SHA-256) », suffixé « 2 »,
+  « 3 »… en cas de doublon, avec son manifeste en premier, puis `battery.sav`.
+  Le SHA-256 est celui des octets de la ROM, l'identifiant de la bêta.
+- Nom proposé : `RavenEmu-sauvegardes-AAAA-MM-JJ.zip`. Sans aucune
+  sauvegarde, rien n'est demandé : « Aucun jeu de la bibliothèque n'a de
+  sauvegarde à exporter. »
+- Même exécuteur `SaveStorage.IO` que le lecteur : l'archive suit la dernière
+  SRAM écrite.
+- Tests : `SaveTransferTest` (disposition exacte des entrées, relecture de
+  chaque jeu par son SHA-256, dossiers en doublon, refus sans sauvegarde),
+  `HomeActivityTest` (menu, sélecteur, relecture de l'archive écrite).
+
+Écart restant : l'import d'un dossier (S-3). Validation sur téléphone, et
+import réel de l'archive dans la bêta, à faire.
 

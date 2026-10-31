@@ -22,6 +22,8 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 
 /** The game sheet's « Sauvegardes » section, after the beta's
@@ -31,7 +33,7 @@ import java.util.concurrent.ExecutorService;
  * SaveStorage.IO, after the player's last SRAM write; the host forwards its
  * picker results and saved state. */
 final class SaveTransferUi {
-    static final int EXPORT_SAVE = 73, IMPORT_SAVE = 74;
+    static final int EXPORT_SAVE = 73, IMPORT_SAVE = 74, EXPORT_ALL = 75;
     static final int DANGER = 0xffff928b;
     private static final String[] FORMATS = {SaveTransfer.SAV, SaveTransfer.SRM};
     private static final String[] FORMAT_LABELS = {
@@ -42,6 +44,8 @@ final class SaveTransferUi {
     private boolean destroyed, busy;
     /** The game a picker was opened for, and the export's extension. */
     private String pendingKey, pendingFormat;
+    /** The picker was opened for the whole library's archive. */
+    private boolean pendingAll;
     private AlertDialog review;
 
     SaveTransferUi(Activity host, Bundle state) {
@@ -49,12 +53,14 @@ final class SaveTransferUi {
         if (state != null) {
             pendingKey = state.getString("saves.game");
             pendingFormat = state.getString("saves.format");
+            pendingAll = state.getBoolean("saves.all");
         }
     }
 
     void save(Bundle state) {
         state.putString("saves.game", pendingKey);
         state.putString("saves.format", pendingFormat);
+        state.putBoolean("saves.all", pendingAll);
     }
 
     void destroy() {
@@ -144,11 +150,17 @@ final class SaveTransferUi {
 
     /** The host's onActivityResult: true when the request was one of these. */
     boolean onResult(int request, int result, Intent data) {
-        if (request != EXPORT_SAVE && request != IMPORT_SAVE) return false;
+        if (request != EXPORT_SAVE && request != IMPORT_SAVE && request != EXPORT_ALL) return false;
         String key = pendingKey, format = pendingFormat;
+        boolean all = pendingAll;
         pendingKey = null;
         pendingFormat = null;
+        pendingAll = false;
         Uri uri = result == Activity.RESULT_OK && data != null ? data.getData() : null;
+        if (request == EXPORT_ALL) {
+            if (uri != null && all) exportLibrary(uri);
+            return true;
+        }
         if (uri == null || key == null) return true;
         if (request == EXPORT_SAVE) export(key, format == null ? SaveTransfer.SAV : format, uri);
         else preview(key, uri);
@@ -174,6 +186,68 @@ final class SaveTransferUi {
             final String result = message;
             ui(() -> { busy = false; toast(result); });
         });
+    }
+
+    /** The beta's « Exporter toutes les sauvegardes (.zip) »: each game's
+     * SRAM in the beta's library archive, which both apps import. */
+    void exportAll() {
+        if (busy) return;
+        busy = true;
+        File files = host.getFilesDir();
+        io.execute(() -> {
+            String problem = null;
+            try {
+                if (gamesWithSaves(files, false).isEmpty())
+                    problem = "Aucun jeu de la bibliothèque n'a de sauvegarde à exporter.";
+            } catch (IOException unreadable) {
+                problem = "Export impossible : " + reason(unreadable);
+            }
+            final String result = problem;
+            ui(() -> {
+                busy = false;
+                if (result != null) { toast(result); return; }
+                pendingAll = true;
+                Intent create = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                create.addCategory(Intent.CATEGORY_OPENABLE);
+                create.setType("application/zip");
+                create.putExtra(Intent.EXTRA_TITLE, "RavenEmu-sauvegardes-" + java.time.LocalDate.now() + ".zip");
+                host.startActivityForResult(create, EXPORT_ALL);
+            });
+        });
+    }
+
+    private void exportLibrary(Uri uri) {
+        busy = true;
+        File files = host.getFilesDir();
+        io.execute(() -> {
+            String message;
+            try {
+                List<SaveTransfer.Game> games = gamesWithSaves(files, true);
+                int count;
+                try (OutputStream out = host.getContentResolver().openOutputStream(uri, "wt")) {
+                    if (out == null) throw new IOException("Destination d'export inaccessible.");
+                    count = SaveTransfer.exportLibrary(games, out);
+                }
+                message = count == 1 ? "Sauvegardes d'un jeu exportées" : "Sauvegardes de " + count + " jeux exportées";
+            } catch (IOException | RuntimeException failure) {
+                message = "Export impossible : " + reason(failure);
+            }
+            final String result = message;
+            ui(() -> { busy = false; toast(result); });
+        });
+    }
+
+    /** The library's games that have a save; with `hashed`, each one's ROM
+     * read once for the SHA-256 the archive names it by. */
+    private static List<SaveTransfer.Game> gamesWithSaves(File files, boolean hashed) throws IOException {
+        List<SaveTransfer.Game> games = new ArrayList<>();
+        for (RomLibrary.Entry entry : RomLibrary.list(files)) {
+            byte[] battery = SaveRepository.read(files, entry.key, "srm");
+            if (battery == null) continue;
+            String sha = hashed ? SaveTransfer.sha256(RomLibrary.readRom(files, entry)) : null;
+            games.add(new SaveTransfer.Game(entry.title, sha, battery));
+        }
+        return games;
     }
 
     private void preview(String key, Uri uri) {
