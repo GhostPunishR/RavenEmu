@@ -26,16 +26,21 @@ import java.util.ArrayDeque;
 /** RetroAchievements over the game, after the beta's RetroOverlays.kt: the
  * one-at-a-time banner (its badge drops in, then the band unfolds; the
  * reverse to leave; an award is framed in gold), and under it the measured
- * progress of an achievement. At the top of the picture, or at the bottom.
- * UI thread; it never takes a touch from the game. */
+ * progress of an achievement, at the top of the picture or at the bottom;
+ * and at the bottom, the active challenges and leaderboard trackers, each
+ * until rcheevos hides it (RetroIndicatorState.kt). UI thread; it never
+ * takes a touch from the game. */
 final class AchievementOverlay extends FrameLayout {
     static final int GOLD = 0xfff4c152;
     static final int DROP_MILLIS = 300, UNFOLD_MILLIS = 350;
-    private static final int MAX_QUEUED = 8;
+    private static final int MAX_QUEUED = 8, MAX_INDICATORS = 4;
     private final Handler main = new Handler(Looper.getMainLooper());
     private final UnlockChime chime = new UnlockChime();
     private final ArrayDeque<AchievementNotices.Notice> queue = new ArrayDeque<>();
     private final BadgeCache badges;
+    /** "family:id" to its line, oldest first, as the beta keeps them. */
+    private final java.util.LinkedHashMap<String, String> active = new java.util.LinkedHashMap<>();
+    private final LinearLayout indicators;
     private final LinearLayout column;
     private final LinearLayout banner;
     private final FrameLayout bannerBadge;
@@ -61,6 +66,14 @@ final class AchievementOverlay extends FrameLayout {
         this.badges = badges;
         setClipChildren(false);
         setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
+        indicators = new LinearLayout(context);
+        indicators.setOrientation(LinearLayout.VERTICAL);
+        indicators.setBackground(round(0xe0191b28, 10, 0, 0));
+        indicators.setPadding(dp(12), dp(8), dp(12), dp(8));
+        indicators.setVisibility(GONE);
+        LayoutParams bottom = new LayoutParams(-2, -2, Gravity.CENTER_HORIZONTAL | Gravity.BOTTOM);
+        bottom.setMargins(dp(12), 0, dp(12), dp(10));
+        addView(indicators, bottom);
         column = new LinearLayout(context);
         column.setOrientation(LinearLayout.VERTICAL);
         column.setGravity(Gravity.CENTER_HORIZONTAL);
@@ -150,6 +163,8 @@ final class AchievementOverlay extends FrameLayout {
             fadeProgress(false);
             return;
         }
+        if (indicator(event)) return;
+        if ("hardcore_reset".equals(event.kind)) clearIndicators();
         AchievementNotices.Notice notice = AchievementNotices.of(event);
         if (notice == null) return;
         if (notice.award && settings.sound && soundOn) chime.play(volume);
@@ -163,6 +178,52 @@ final class AchievementOverlay extends FrameLayout {
         queue.clear();
         leaveNow();
         fadeProgress(false);
+        clearIndicators();
+    }
+
+    /** The lines on screen, oldest first: for tests and accessibility. */
+    java.util.List<String> indicatorLines() { return new java.util.ArrayList<>(active.values()); }
+
+    /** challenge_* and tracker_*: shown until their own hide. */
+    private boolean indicator(NativeAchievements.Event event) {
+        final boolean show = event.kind.equals("challenge_show") || event.kind.equals("tracker_show");
+        final boolean hide = event.kind.equals("challenge_hide") || event.kind.equals("tracker_hide");
+        if (!show && !hide) return false;
+        final String key = event.kind.substring(0, event.kind.indexOf('_')) + ":" + event.id;
+        if (hide) {
+            active.remove(key);
+        } else {
+            // A challenge says its achievement; a tracker, its value. Both, joined, if both.
+            StringBuilder line = new StringBuilder(event.title.trim());
+            if (!event.detail.trim().isEmpty()) {
+                if (line.length() > 0) line.append(" • ");
+                line.append(event.detail.trim());
+            }
+            active.put(key, line.toString());
+        }
+        renderIndicators();
+        return true;
+    }
+
+    private void clearIndicators() {
+        active.clear();
+        renderIndicators();
+    }
+
+    private void renderIndicators() {
+        indicators.removeAllViews();
+        int shown = 0;
+        for (String line : active.values()) {
+            if (shown++ == MAX_INDICATORS) break;
+            TextView text = line(12, HomeActivity.TEXT);
+            text.setText(line);
+            LinearLayout.LayoutParams gap = new LinearLayout.LayoutParams(-2, -2);
+            if (shown > 1) gap.topMargin = dp(3);
+            indicators.addView(text, gap);
+        }
+        indicators.setVisibility(active.isEmpty() ? GONE : VISIBLE);
+        indicators.setContentDescription(active.isEmpty() ? null : String.join(". ", active.values()));
+        placeColumn();
     }
 
     void release() {
@@ -295,7 +356,8 @@ final class AchievementOverlay extends FrameLayout {
         final boolean bottom = AchievementSettings.BOTTOM.equals(settings.position);
         LayoutParams place = (LayoutParams)column.getLayoutParams();
         place.gravity = Gravity.CENTER_HORIZONTAL | (bottom ? Gravity.BOTTOM : Gravity.TOP);
-        place.setMargins(dp(12), dp(10), dp(12), dp(10));
+        // At the bottom, the popups stay above the indicators, as in the beta.
+        place.setMargins(dp(12), dp(10), dp(12), dp(bottom && !active.isEmpty() ? 90 : 10));
         column.setLayoutParams(place);
     }
 

@@ -256,8 +256,11 @@ recherche, tri, fiche) et de ses classements (meilleurs scores, autour de
 moi). Sans compte, elle mène à Paramètres → RetroAchievements ; un
 changement de compte s'applique au jeu en cours dès le retour.
 
-Écarts restants (tranche RA-3) : verrous du mode Hardcore, indicateurs de
-défi et de suivi, progression des succès dans les états de jeu (un chargement d'état remet
+Les **défis en cours et suivis de classement** restent en bas de l'image
+jusqu'à leur fin, comme dans la bêta.
+
+Écarts restants (tranche RA-3) : verrous du mode Hardcore, progression des
+succès dans les états de jeu (un chargement d'état remet
 les succès à zéro, comme l'exige rcheevos sans données de progression ; la
 bêta ne les sauvegardait pas non plus).
 

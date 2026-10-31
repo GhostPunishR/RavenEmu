@@ -859,7 +859,13 @@ et `AwardSyncTracker.kt` de la bêta) :
 - l'état d'envoi de chaque succès suit la bêta : débloqué localement, en
   attente d'envoi, confirmé par RetroAchievements.
 
-Écarts restants pour **RA-3** (après RA-3a et RA-3b) : verrous du mode Hardcore (pas de chargement
+**RA-3c, indicateurs** (portage de `RetroIndicatorState.kt`) : les défis en
+cours et les suivis de classement restent en bas de l'image, quatre lignes
+au plus, chacun jusqu'à son propre masquage par rcheevos ; une valeur de
+suivi se met à jour sur place ; en bas, les bandeaux passent au-dessus ; une
+remise à zéro Hardcore ou la fermeture du jeu les efface.
+
+Écarts restants pour **RA-3** (après RA-3a, RA-3b et RA-3c) : verrous du mode Hardcore (pas de chargement
 d'état, pauses limitées) et son activation, liste des succès, classements,
 indicateurs de défi et de suivi, carte du compte dans le menu de jeu, journal
 hors ligne (fait en RA-3a, ci-dessous), progression des succès dans les

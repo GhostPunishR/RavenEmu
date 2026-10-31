@@ -118,6 +118,35 @@ public final class AchievementOverlayTest {
         assertEquals(View.GONE, progress.getVisibility());
     }
 
+    @Test public void challengesAndTrackersStayUntilTheirOwnHide() {
+        NativeAchievements.Event challenge = new NativeAchievements.Event("challenge_show", "Sans dégât", "", "", "", "7");
+        NativeAchievements.Event tracker = new NativeAchievements.Event("tracker_show", "01:23.45", "", "", "", "4401");
+        overlay.onEvent(challenge);
+        overlay.onEvent(tracker);
+        assertEquals(java.util.Arrays.asList("Sans dégât", "01:23.45"), overlay.indicatorLines());
+        overlay.onEvent(new NativeAchievements.Event("tracker_show", "01:24.00", "", "", "", "4401"));
+        assertEquals("Updated in place", java.util.Arrays.asList("Sans dégât", "01:24.00"), overlay.indicatorLines());
+        assertNull("No banner for them", overlay.bannerText());
+        LinearLayout lines = ReflectionHelpers.getField(overlay, "indicators");
+        assertEquals(View.VISIBLE, lines.getVisibility());
+        // At the bottom, the popups stay above them.
+        overlay.setSettings(AchievementSettings.DEFAULTS.withPosition(AchievementSettings.BOTTOM).withSound(false),
+                true, 100);
+        LinearLayout column = ReflectionHelpers.getField(overlay, "column");
+        assertTrue(((FrameLayout.LayoutParams)column.getLayoutParams()).bottomMargin > lines.getPaddingTop() * 5);
+        for (int i = 0; i < 6; i++)
+            overlay.onEvent(new NativeAchievements.Event("challenge_show", "Défi " + i, "", "", "", "c" + i));
+        assertEquals("At most four lines on screen", 4, lines.getChildCount());
+        overlay.onEvent(new NativeAchievements.Event("challenge_hide", "", "", "", "", "7"));
+        assertFalse(overlay.indicatorLines().contains("Sans dégât"));
+        overlay.onEvent(new NativeAchievements.Event("hardcore_reset", "", "", "", "", ""));
+        assertTrue(overlay.indicatorLines().isEmpty());
+        assertEquals(View.GONE, lines.getVisibility());
+        overlay.onEvent(tracker);
+        overlay.clear();
+        assertTrue("The game closes: they go", overlay.indicatorLines().isEmpty());
+    }
+
     @Test public void bottomPopupsComeFromTheBottomWithTheBannerFirstAsInTheBeta() {
         overlay.setSettings(AchievementSettings.DEFAULTS.withPosition(AchievementSettings.BOTTOM).withSound(false),
                 true, 100);
