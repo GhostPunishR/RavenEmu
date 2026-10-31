@@ -10,6 +10,7 @@ required = [
     "android/src/main/cpp/jni/bridge.c",
     "android/src/main/cpp/hardware/audio/audio_pipeline.c",
     "android/src/main/cpp/hardware/audio/aaudio/aaudio_driver.c",
+    "android/src/main/cpp/hardware/audio/sinc_resampler.c",
     "android/src/main/cpp/hardware/video/gles2/gles2_renderer.c",
     "android/src/main/cpp/hardware/input/input_driver.c",
     "android/src/main/cpp/hardware/input/sensor_driver.c",

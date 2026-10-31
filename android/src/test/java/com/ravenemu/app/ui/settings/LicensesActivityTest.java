@@ -46,6 +46,8 @@ public final class LicensesActivityTest {
         assertTrue(notices.contains("RavenCore reste le moteur"));
         assertTrue(notices.contains("n’est pas le frontend officiel de RetroArch"));
         assertTrue(notices.contains("Material Components for Android 1.14.0"));
+        assertTrue(notices.contains("RetroAchievements : SDK officiel rcheevos"));
+        assertTrue(notices.contains("1433173220a7eaede6a9ed7a18e94117be1821e0"));
         assertTrue(body(activity).isTextSelectable());
         assertEquals(BuildConfig.SOURCE_MODIFIED,
                 textExists(activity, "Version locale modifiée · base " + BuildConfig.SOURCE_REVISION.substring(0, 7)));
@@ -60,6 +62,9 @@ public final class LicensesActivityTest {
         assertTrue(body(activity).getText().toString().contains("GNU AFFERO GENERAL PUBLIC LICENSE"));
         choose(activity, "MIT");
         assertTrue(body(activity).getText().toString().contains("Copyright (C) 2010-2024 The RetroArch team"));
+        assertTrue(body(activity).getText().toString().contains("Permission is hereby granted"));
+        choose(activity, "MIT rcheevos");
+        assertTrue(body(activity).getText().toString().contains("Copyright (c) 2018 RetroAchievements.org"));
         assertTrue(body(activity).getText().toString().contains("Permission is hereby granted"));
         choose(activity, "Apache 2");
         assertTrue(body(activity).getText().toString().contains("Apache License"));

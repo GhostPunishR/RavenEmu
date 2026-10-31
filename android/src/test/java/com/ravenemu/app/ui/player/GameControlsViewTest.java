@@ -4,6 +4,8 @@ import com.ravenemu.app.settings.ControlLayout;
 import com.ravenemu.app.settings.ControlSettings;
 
 import android.app.Activity;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
 import android.os.Looper;
 import android.os.SystemClock;
 import android.view.HapticFeedbackConstants;
@@ -38,6 +40,9 @@ public final class GameControlsViewTest {
     @After public void release() {
         if (controls != null) controls.releaseAll();
         if (host != null) host.pause().stop().destroy();
+        // A theme chosen by a test stays with it.
+        org.robolectric.RuntimeEnvironment.getApplication().getSharedPreferences(
+                com.ravenemu.app.settings.PlaybackSettings.PREFERENCES, 0).edit().clear().commit();
     }
 
     @Test public void portraitUsesTheOriginalStaggeredLayout() {
@@ -53,6 +58,45 @@ public final class GameControlsViewTest {
         assertTrue(labelled("START").getTop() > b.getBottom());
         assertEquals(View.GONE, labelled("L").getVisibility());
         assertEquals(View.GONE, labelled("R").getVisibility());
+    }
+
+    @Test public void onlyThePressedPartTakesTheAccent() {
+        open(320, false);
+        View dpad = labelled("Croix directionnelle"), a = labelled("A");
+        int arm = dpad.getWidth() / 3, x = dpad.getWidth() / 2 - arm * 3 / 8;
+        int up = dpad.getHeight() / 6, down = dpad.getHeight() - up;
+        Bitmap idle = render(dpad);
+        assertTrue("A dark face", red(idle.getPixel(x, up)) < 0x60);
+        assertEquals("Outside the cross, nothing", 0, android.graphics.Color.alpha(idle.getPixel(2, 2)));
+        touch(MotionEvent.ACTION_DOWN, 6, centerX(dpad), centerY(dpad) - 40);
+        assertEquals(NativeBridge.UP, current());
+        Bitmap pressed = render(dpad);
+        assertTrue("Up lit", red(pressed.getPixel(x, up)) > 0x80);
+        assertTrue("Down not", red(pressed.getPixel(x, down)) < 0x60);
+        touch(MotionEvent.ACTION_UP, 6, centerX(dpad), centerY(dpad) - 40);
+
+        int side = a.getWidth() / 4, middle = a.getHeight() / 2;
+        assertTrue(red(render(a).getPixel(side, middle)) < 0x60);
+        touch(MotionEvent.ACTION_DOWN, 7, centerX(a), centerY(a));
+        assertTrue("A pressed takes the accent", red(render(a).getPixel(side, middle)) > 0x80);
+        touch(MotionEvent.ACTION_UP, 7, centerX(a), centerY(a));
+        assertTrue(red(render(a).getPixel(side, middle)) < 0x60);
+    }
+
+    @Test public void theNvidiaThemeDrawsTheControlsInRetroArchsGreen() {
+        com.ravenemu.app.ui.common.RavenTheme.store(org.robolectric.RuntimeEnvironment.getApplication(),
+                com.ravenemu.app.ui.common.RavenTheme.NVIDIA);
+        open(320, false);
+        View a = labelled("A");
+        int side = a.getWidth() / 4, middle = a.getHeight() / 2;
+        int idle = render(a).getPixel(side, middle);
+        assertTrue("A dark face", green(idle) < 0x60);
+        touch(MotionEvent.ACTION_DOWN, 7, centerX(a), centerY(a));
+        int pressed = render(a).getPixel(side, middle);
+        assertTrue("Pressed in the green, not the violet: " + Integer.toHexString(pressed),
+                green(pressed) > 0x80 && green(pressed) > red(pressed) + 0x20
+                        && green(pressed) > android.graphics.Color.blue(pressed) + 0x40);
+        touch(MotionEvent.ACTION_UP, 7, centerX(a), centerY(a));
     }
 
     @Test public void sizeAndSpacingFollowTheInterfaceSettingsLikeTheBeta() {
@@ -112,19 +156,21 @@ public final class GameControlsViewTest {
         assertTrue(menu.isEnabled());
     }
 
-    @Test public void gbAndGbcMenuSitsBetweenSelectAndStartWithoutShoulders() {
+    @Test public void gbAndGbcMenuSitsAtTheTopCentreNeverBetweenSelectAndStart() {
         int[] menus = {0};
-        open(320, false, () -> menus[0]++);
-        View menu = labelled("Menu du jeu");
-        View select = labelled("SELECT"), start = labelled("START");
+        open(360, false, () -> menus[0]++);
+        View menu = labelled("Menu du jeu"), dpad = labelled("Croix directionnelle");
+        View select = labelled("SELECT"), start = labelled("START"), a = labelled("A");
         assertEquals(View.VISIBLE, menu.getVisibility());
         assertEquals(View.GONE, labelled("L").getVisibility());
-        assertEquals(View.GONE, labelled("R").getVisibility());
         assertEquals("No extra row takes space from the picture", 234, controls.getMeasuredHeight());
-        assertEquals(160f, centerX(menu), 0.5f);
-        assertEquals(centerY(select), centerY(menu), 0.5f);
-        assertTrue("Menu clears SELECT", select.getRight() < menu.getLeft());
-        assertTrue("Menu clears START", menu.getRight() < start.getLeft());
+        assertEquals("At the top centre", 180f, centerX(menu), 0.5f);
+        assertEquals(0, menu.getTop());
+        assertTrue("Above the Select/Start row", menu.getBottom() < select.getTop());
+        assertTrue("Clear of the D-pad", dpad.getRight() < menu.getLeft());
+        assertTrue("Clear of A", menu.getRight() < a.getLeft());
+        assertTrue("Clear of B", menu.getBottom() < labelled("B").getTop());
+        assertTrue(select.getRight() < start.getLeft());
         assertTrue(touch(MotionEvent.ACTION_DOWN, 13, centerX(menu), centerY(menu)));
         assertTrue(touch(MotionEvent.ACTION_UP, 13, centerX(menu), centerY(menu)));
         shadowOf(Looper.getMainLooper()).idle();
@@ -132,19 +178,27 @@ public final class GameControlsViewTest {
         assertTrue("Menu never sends emulator buttons", changes.isEmpty());
     }
 
-    @Test public void narrowGbLayoutKeepsAllThreeMenuRowButtonsApart() {
+    @Test public void aNarrowGbScreenKeepsTheMenuOffTheDpadAndA() {
+        open(320, false, () -> {});
+        View menu = labelled("Menu du jeu");
+        assertTrue(labelled("Croix directionnelle").getRight() < menu.getLeft());
+        assertTrue(menu.getRight() < labelled("A").getLeft());
+        assertEquals(0, menu.getTop());
+    }
+
+    @Test public void aVeryNarrowScreenSlimsTheMenuBetweenTheDpadAndA() {
         open(240, false, () -> {});
         View menu = labelled("Menu du jeu");
-        assertTrue(labelled("SELECT").getRight() < menu.getLeft());
-        assertTrue(menu.getRight() < labelled("START").getLeft());
-        assertEquals(120f, centerX(menu), 0.5f);
+        assertTrue("Slimmer, still apart", labelled("Croix directionnelle").getRight() < menu.getLeft());
+        assertTrue(menu.getRight() < labelled("A").getLeft());
+        assertTrue(menu.getWidth() >= 24);
     }
 
     @Test public void menuMovesWithTheConsoleAndStaysHiddenWithoutAnAction() {
         open(320, false, () -> {});
         View menu = labelled("Menu du jeu");
         assertEquals(View.VISIBLE, menu.getVisibility());
-        assertEquals(centerY(labelled("SELECT")), centerY(menu), 0.5f);
+        assertEquals(0, menu.getTop());
         controls.setShoulders(true);
         apply(ControlSettings.DEFAULTS);
         assertEquals(View.VISIBLE, menu.getVisibility());
@@ -152,7 +206,8 @@ public final class GameControlsViewTest {
         controls.setShoulders(false);
         apply(ControlSettings.DEFAULTS);
         assertEquals(View.VISIBLE, menu.getVisibility());
-        assertEquals(centerY(labelled("SELECT")), centerY(menu), 0.5f);
+        assertEquals(0, menu.getTop());
+        assertTrue(menu.getBottom() < labelled("SELECT").getTop());
     }
 
     @Test public void anUnwiredMenuIsNotShown() {
@@ -399,7 +454,7 @@ public final class GameControlsViewTest {
         assertEquals(0, current());
         assertTrue(labelled("SELECT").getTop() >= controls.getHeight() - 44);
         assertTrue(labelled("START").getBottom() <= controls.getHeight());
-        assertEquals(View.GONE, labelled("Menu du jeu").getVisibility());
+        assertEquals("The top centre is the picture's", View.GONE, labelled("Menu du jeu").getVisibility());
         touch(MotionEvent.ACTION_DOWN, 10, centerX(a), centerY(a));
         assertEquals(NativeBridge.A, current());
     }
@@ -447,6 +502,15 @@ public final class GameControlsViewTest {
         }
         throw new AssertionError("Missing control: " + name);
     }
+
+    private static Bitmap render(View view) {
+        Bitmap bitmap = Bitmap.createBitmap(view.getWidth(), view.getHeight(), Bitmap.Config.ARGB_8888);
+        view.draw(new Canvas(bitmap));
+        return bitmap;
+    }
+
+    private static int red(int color) { return android.graphics.Color.red(color); }
+    private static int green(int color) { return android.graphics.Color.green(color); }
 
     private int current() { return changes.isEmpty() ? 0 : changes.get(changes.size() - 1); }
     private float centerX(View view) { return view.getLeft() + view.getWidth() / 2f; }

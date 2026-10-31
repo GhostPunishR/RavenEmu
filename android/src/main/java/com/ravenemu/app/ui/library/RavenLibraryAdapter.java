@@ -1,6 +1,8 @@
 package com.ravenemu.app.ui.library;
+import com.ravenemu.app.ui.common.RavenIcon;
 import com.ravenemu.app.data.library.CoverRepository;
 import com.ravenemu.app.data.library.RomLibrary;
+import com.ravenemu.app.ui.common.RavenTheme;
 
 import android.content.Context;
 import android.graphics.Bitmap;
@@ -46,7 +48,11 @@ final class RavenLibraryAdapter extends BaseAdapter {
     private final Set<String> unavailable = new HashSet<>();
     private boolean listMode;
 
+    /** The colours of the Activity it belongs to (Settings → Interface → Thème). */
+    private final RavenTheme theme;
+
     RavenLibraryAdapter(Context context, File privateFiles, Executor executor) {
+        this.theme = RavenTheme.of(context);
         this.context = context;
         this.privateFiles = privateFiles;
         this.executor = executor;
@@ -84,6 +90,7 @@ final class RavenLibraryAdapter extends BaseAdapter {
     private static final class Holder {
         ImageView image;
         LinearLayout placeholder;
+        ImageView console;
         TextView system;
         TextView title;
         TextView secondary;
@@ -105,9 +112,9 @@ final class RavenLibraryAdapter extends BaseAdapter {
 
             FrameLayout artwork = new FrameLayout(context);
             GradientDrawable shape = HomeActivity.shape(
-                    HomeActivity.SURFACE, 10,
+                    theme.surface, 10,
                     context.getResources().getDisplayMetrics().density);
-            shape.setStroke(dp(1), HomeActivity.OUTLINE);
+            shape.setStroke(dp(1), theme.outline);
             artwork.setBackground(shape);
 
             h.image = new ImageView(context);
@@ -117,15 +124,20 @@ final class RavenLibraryAdapter extends BaseAdapter {
             h.placeholder = new LinearLayout(context);
             h.placeholder.setGravity(Gravity.CENTER);
             h.placeholder.setOrientation(LinearLayout.VERTICAL);
-            TextView stripe = label("━━", 15, HomeActivity.ACCENT);
-            h.placeholder.addView(stripe);
-            h.system = label("", 13, HomeActivity.SECONDARY);
+            // No cover yet: the console's pictogram over its name.
+            h.console = new ImageView(context);
+            h.console.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+            h.console.setScaleType(ImageView.ScaleType.CENTER);
+            LinearLayout.LayoutParams consoleSize = new LinearLayout.LayoutParams(dp(listMode ? 22 : 30), dp(listMode ? 22 : 30));
+            consoleSize.bottomMargin = dp(listMode ? 1 : 4);
+            h.placeholder.addView(h.console, consoleSize);
+            h.system = label("", 13, theme.secondary);
             h.system.setTypeface(null, Typeface.BOLD);
             h.placeholder.addView(h.system);
             artwork.addView(h.placeholder, new FrameLayout.LayoutParams(-1, -1));
 
             if (listMode) {
-                column.setBackground(HomeActivity.shape(0xff151722, 10,
+                column.setBackground(HomeActivity.shape(theme.column, 10,
                         context.getResources().getDisplayMetrics().density));
                 column.addView(artwork, new LinearLayout.LayoutParams(dp(44), dp(52)));
             } else {
@@ -137,12 +149,12 @@ final class RavenLibraryAdapter extends BaseAdapter {
             if (listMode) labels.setPadding(dp(12), 0, 0, 0);
             else labels.setPadding(0, dp(6), 0, 0);
             h.title = label("", listMode ? 15 : 11,
-                    listMode ? HomeActivity.TEXT : HomeActivity.SECONDARY);
+                    listMode ? theme.text : theme.secondary);
             h.title.setMaxLines(listMode ? 1 : 3);
             h.title.setEllipsize(android.text.TextUtils.TruncateAt.END);
             h.title.setGravity(listMode ? Gravity.LEFT : Gravity.TOP | Gravity.CENTER_HORIZONTAL);
             labels.addView(h.title, new LinearLayout.LayoutParams(-1, -2));
-            h.secondary = label("", 12, HomeActivity.MUTED);
+            h.secondary = label("", 12, theme.muted);
             h.secondary.setGravity(Gravity.LEFT);
             if (listMode) labels.addView(h.secondary);
             column.addView(labels, listMode
@@ -157,6 +169,9 @@ final class RavenLibraryAdapter extends BaseAdapter {
         h.title.setText(entry.title);
         h.secondary.setText(entry.system.toUpperCase(java.util.Locale.ROOT));
         h.system.setText(entry.system.toUpperCase(java.util.Locale.ROOT));
+        h.console.setImageDrawable(new RavenIcon("gba".equals(entry.system) ? RavenIcon.Glyph.GBA
+                : "gbc".equals(entry.system) ? RavenIcon.Glyph.GBC : RavenIcon.Glyph.GB,
+                theme.accent, dp(listMode ? 20 : 28)));
         h.image.setContentDescription("Jaquette de " + entry.title);
 
         Bitmap cached = cache.get(entry.key);

@@ -2,15 +2,20 @@ package com.ravenemu.app.ui.player;
 import com.ravenemu.app.bridge.NativeBridge;
 import com.ravenemu.app.settings.ControlLayout;
 import com.ravenemu.app.settings.ControlSettings;
+import com.ravenemu.app.ui.common.RavenIcon;
+import com.ravenemu.app.ui.common.RavenTheme;
 
 import android.content.Context;
 import android.content.res.Configuration;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.CornerPathEffect;
 import android.graphics.DashPathEffect;
 import android.graphics.LinearGradient;
 import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.RectF;
+import android.graphics.Typeface;
 import android.graphics.Shader;
 import android.os.Bundle;
 import android.os.Handler;
@@ -30,12 +35,23 @@ import android.view.accessibility.AccessibilityNodeInfo;
  * picks the style and the haptics, as the beta's GbTouchControls does.
  * Each control can also be moved: an offset from its default place, kept
  * inside this view, and dragged while editing.
+ *
+ * Drawn in the app's palette (the owner's redesign, not the beta's look):
+ * one dark face with an accent outline, labels and arrows in the accent, the
+ * pressed part filled with it. In portrait the game menu's button sits at
+ * the top centre of the controls, between L and R on the GBA, never between
+ * Select and Start (the owner's place); it never sends a console button.
  */
 final class GameControlsView extends ViewGroup {
     interface Listener { void onButtonsChanged(int mask); }
 
-    private static final int BORDER = 0xe0bbb3d4;
-    private static final int ACCENT = 0xffd7caff;
+    /** Settings → Interface → Thème: the accent draws the outlines, labels and
+     * arrows, the face goes from faceTop down to the surface, a pressed part
+     * from the light accent to the deep one with its label in ink. */
+    private final int accent, ink, edge, detail, faceTop, faceBottom, contrastTop, contrastBottom,
+            pressedTop, pressedBottom;
+    /** Round A/B, the slim Select/Start pills, the L/R shoulders. */
+    private static final int ROUND = 0, PILL = 1, SHOULDER = 2;
     private static final long ACCESSIBLE_PRESS_MILLIS = 100L;
     private final Listener listener;
     private final Handler main = new Handler(Looper.getMainLooper());
@@ -44,6 +60,8 @@ final class GameControlsView extends ViewGroup {
     private final Control a, b, select, start, leftShoulder, rightShoulder;
     private final MenuButton menuButton;
     private final Runnable onMenu;
+    /** The menu's width in dp, between L and R and at the top centre. */
+    private static final float MENU_WIDTH = 52f;
     private boolean shoulders;
     private int accessibleMask;
     private int reportedMask;
@@ -56,6 +74,17 @@ final class GameControlsView extends ViewGroup {
 
     GameControlsView(Context context, Listener listener, Runnable onMenu) {
         super(context);
+        RavenTheme theme = RavenTheme.of(context);
+        accent = theme.accent;
+        ink = theme.background;
+        edge = RavenTheme.alpha(theme.accent, 0x99);
+        detail = RavenTheme.alpha(theme.accent, 0x66);
+        faceTop = theme.faceTop;
+        faceBottom = theme.surface;
+        contrastTop = theme.contrastTop;
+        contrastBottom = theme.contrastBottom;
+        pressedTop = theme.accentLight;
+        pressedBottom = theme.accentDeep;
         this.listener = listener;
         this.onMenu = onMenu;
         setMotionEventSplittingEnabled(true);
@@ -64,12 +93,12 @@ final class GameControlsView extends ViewGroup {
         setBackgroundColor(compact() ? Color.TRANSPARENT : Color.BLACK);
         // In ControlLayout.CONTROLS order.
         dpad = new Dpad(context);
-        a = new Control(context, 1, "A", NativeBridge.A, false);
-        b = new Control(context, 2, "B", NativeBridge.B, false);
-        select = new Control(context, 3, "SELECT", NativeBridge.SELECT, true);
-        start = new Control(context, 4, "START", NativeBridge.START, true);
-        leftShoulder = new Control(context, 5, "L", NativeBridge.L, true);
-        rightShoulder = new Control(context, 6, "R", NativeBridge.R, true);
+        a = new Control(context, 1, "A", NativeBridge.A, ROUND);
+        b = new Control(context, 2, "B", NativeBridge.B, ROUND);
+        select = new Control(context, 3, "SELECT", NativeBridge.SELECT, PILL);
+        start = new Control(context, 4, "START", NativeBridge.START, PILL);
+        leftShoulder = new Control(context, 5, "L", NativeBridge.L, SHOULDER);
+        rightShoulder = new Control(context, 6, "R", NativeBridge.R, SHOULDER);
         menuButton = new MenuButton(context);
         addView(dpad);
         addView(a);
@@ -247,14 +276,12 @@ final class GameControlsView extends ViewGroup {
             place(start, width / 2 + 17, offset + (32 + pad) * scale, 84, 40 * scale, layout);
             place(leftShoulder, 16, offset, 80, 28 * scale, layout);
             place(rightShoulder, width - 96, offset, 80, 28 * scale, layout);
-            place(menuButton, (width - 48) / 2, offset, 48, 28 * scale, layout);
+            place(menuButton, (width - MENU_WIDTH) / 2, offset, MENU_WIDTH, 28 * scale, layout);
         } else {
             float size = cluster(width), button = diameter(), rows = settings.gap;
             float row = shoulders ? 40f + rows : 0f;
             float actionWidth = Math.min(144f, Math.max(60f, width - 44f - size));
-            // GB/GBC have no L/R: center the menu between SELECT and START.
-            float gap = Math.min(!shoulders && onMenu != null ? 66f : 50f,
-                    Math.max(8f, width - 168f));
+            float gap = Math.min(50f, Math.max(8f, width - 168f));
             place(dpad, 16, offset + row * scale, size, size * scale, layout);
             place(a, width - 28 - button, offset + row * scale, button, button * scale, layout);
             place(b, width - 28 - actionWidth, offset + (row + size - button) * scale, button, button * scale, layout);
@@ -262,11 +289,18 @@ final class GameControlsView extends ViewGroup {
             place(start, (width + gap) / 2, offset + (row + size + rows) * scale, 84, 40 * scale, layout);
             place(leftShoulder, 16, offset, 96, 40 * scale, layout);
             place(rightShoulder, width - 112, offset, 96, 40 * scale, layout);
-            // GBA: between L/R; GB/GBC: beside SELECT/START, without a new row.
-            float menuWidth = shoulders ? 48f : Math.min(48f, Math.max(24f, gap - 8f));
-            float menuRow = shoulders ? 0f : row + size + rows;
-            place(menuButton, (width - menuWidth) / 2, offset + menuRow * scale,
-                    menuWidth, 40 * scale, layout);
+            // The owner's place, top centre: between L and R on the GBA; on
+            // the GB/GBC in the free top between the D-pad and A, without a
+            // new row. A narrow screen moves it off the D-pad, then slims it.
+            float menuWidth = MENU_WIDTH, menuLeft = (width - menuWidth) / 2;
+            if (!shoulders) {
+                float from = 16 + size + 4, to = width - 28 - button - 4;
+                if (to - from < menuWidth) {
+                    menuWidth = Math.max(24f, Math.min(MENU_WIDTH, to - from));
+                    menuLeft = (from + to - menuWidth) / 2;
+                } else menuLeft = Math.max(from, Math.min(to - menuWidth, menuLeft));
+            }
+            place(menuButton, menuLeft, offset, menuWidth, 40 * scale, layout);
         }
     }
 
@@ -317,17 +351,25 @@ final class GameControlsView extends ViewGroup {
         menuButton.setEnabled(enabled && !editing);
     }
 
-    /** Modern game menu between L and R; it never sends an emulator input bit. */
+    /** The game menu's button: three lines on a slim pill, top centre. It
+     * stays in place while the buttons move and never sends a console bit. */
     private final class MenuButton extends View {
-        private final Paint background = new Paint(Paint.ANTI_ALIAS_FLAG);
-        private final Paint outline = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint line = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final RectF bounds = new RectF();
+        private final RavenIcon glyph;
+        private LinearGradient normal, contrast, pressed;
 
         MenuButton(Context context) {
             super(context);
             setContentDescription("Menu du jeu");
             setFocusable(true);
+            line.setStyle(Paint.Style.STROKE);
+            glyph = new RavenIcon(RavenIcon.Glyph.MENU, accent, dp(20));
             setOnClickListener(view -> {
-                if (!editing && onMenu != null) onMenu.run();
+                if (editing || onMenu == null) return;
+                if (settings.haptics) performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
+                onMenu.run();
             });
         }
 
@@ -336,26 +378,29 @@ final class GameControlsView extends ViewGroup {
             invalidate();
         }
 
+        @Override protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+            normal = new LinearGradient(0, 0, 0, Math.max(1, h), faceTop, faceBottom, Shader.TileMode.CLAMP);
+            contrast = new LinearGradient(0, 0, 0, Math.max(1, h), contrastTop, contrastBottom, Shader.TileMode.CLAMP);
+            pressed = new LinearGradient(0, 0, 0, Math.max(1, h), pressedTop, pressedBottom, Shader.TileMode.CLAMP);
+        }
+
         @Override protected void onDraw(Canvas canvas) {
-            boolean pressed = isPressed();
-            boolean contrast = settings.highContrast();
-            background.setStyle(Paint.Style.FILL);
-            background.setShader(new LinearGradient(0, 0, 0, Math.max(1, getHeight()),
-                    pressed ? 0xff735bb3 : contrast ? 0xff55546d : 0xff35334a,
-                    pressed ? 0xff33284f : contrast ? 0xff22232e : 0xff161620,
-                    Shader.TileMode.CLAMP));
-            float cx = getWidth() / 2f, cy = getHeight() / 2f;
-            float radius = Math.min(cx, cy) - dp(2);
-            canvas.drawCircle(cx, cy, radius, background);
-            outline.setShader(null);
-            outline.setStyle(Paint.Style.STROKE);
-            outline.setColor(pressed ? ACCENT : contrast ? Color.WHITE : BORDER);
-            outline.setStrokeWidth(dp(1.5f));
-            canvas.drawCircle(cx, cy, radius, outline);
-            outline.setColor(pressed ? Color.WHITE : ACCENT);
-            outline.setStrokeWidth(dp(2.2f));
-            for (int i = -1; i <= 1; i++)
-                canvas.drawLine(cx - dp(7), cy + i * dp(5), cx + dp(7), cy + i * dp(5), outline);
+            boolean down = isPressed(), contrasted = settings.highContrast();
+            fill.setShader(down ? pressed : contrasted ? contrast : normal);
+            line.setColor(down ? pressedTop : contrasted ? Color.WHITE : edge);
+            line.setStrokeWidth(dp(down ? 2f : 1.5f));
+            float edge = line.getStrokeWidth() / 2f + dp(.5f), width = getWidth(), height = getHeight();
+            float face = Math.min(height - 2 * edge, height * .72f);
+            float inset = Math.min(dp(4), Math.max(0f, (width - face) / 2f - edge));
+            bounds.set(edge + inset, (height - face) / 2f, width - edge - inset, (height + face) / 2f);
+            float radius = Math.min(bounds.width(), bounds.height()) / 2f;
+            canvas.drawRoundRect(bounds, radius, radius, fill);
+            canvas.drawRoundRect(bounds, radius, radius, line);
+            int size = Math.round(Math.min(Math.min(dp(20), face * .75f), bounds.width() * .8f));
+            glyph.setTint(down ? ink : accent);
+            glyph.setBounds(Math.round(bounds.centerX() - size / 2f), Math.round(bounds.centerY() - size / 2f),
+                    Math.round(bounds.centerX() + size / 2f), Math.round(bounds.centerY() + size / 2f));
+            glyph.draw(canvas);
         }
     }
 
@@ -377,8 +422,9 @@ final class GameControlsView extends ViewGroup {
         TouchControl(Context context, int index, String description) {
             super(context);
             this.index = index;
+            line.setStyle(Paint.Style.STROKE);
             frame.setStyle(Paint.Style.STROKE);
-            frame.setColor(ACCENT);
+            frame.setColor(accent);
             frame.setStrokeWidth(dp(1.5f));
             frame.setPathEffect(new DashPathEffect(new float[]{dp(6), dp(4)}, 0));
             setContentDescription(description);
@@ -483,20 +529,22 @@ final class GameControlsView extends ViewGroup {
         }
 
         @Override protected void onSizeChanged(int w, int h, int oldw, int oldh) {
-            normal = new LinearGradient(0, 0, 0, Math.max(1, h), 0xff35334a, 0xff161620, Shader.TileMode.CLAMP);
-            contrast = new LinearGradient(0, 0, 0, Math.max(1, h), 0xff55546d, 0xff22232e, Shader.TileMode.CLAMP);
-            pressed = new LinearGradient(0, 0, 0, Math.max(1, h), 0xff735bb3, 0xff33284f, Shader.TileMode.CLAMP);
+            normal = new LinearGradient(0, 0, 0, Math.max(1, h), faceTop, faceBottom, Shader.TileMode.CLAMP);
+            contrast = new LinearGradient(0, 0, 0, Math.max(1, h), contrastTop, contrastBottom, Shader.TileMode.CLAMP);
+            pressed = new LinearGradient(0, 0, 0, Math.max(1, h), pressedTop, pressedBottom, Shader.TileMode.CLAMP);
         }
 
-        /** The beta's style: high contrast lightens the buttons and outlines them in white. */
-        void paint() {
+        /** The face and its outline; high contrast lightens the face and
+         * outlines it in white, as the beta's style does. */
+        void paint(boolean down) {
             boolean contrasted = settings.highContrast();
-            fill.setShader(mask != 0 ? pressed : contrasted ? contrast : normal);
-            line.setShader(null);
-            line.setColor(mask != 0 ? ACCENT : contrasted ? Color.WHITE : BORDER);
-            line.setStyle(Paint.Style.STROKE);
-            line.setStrokeWidth(dp(mask == 0 ? 1.5f : 2));
+            fill.setShader(down ? pressed : contrasted ? contrast : normal);
+            line.setColor(down ? pressedTop : contrasted ? Color.WHITE : edge);
+            line.setStrokeWidth(dp(down ? 2f : 1.5f));
         }
+
+        /** Labels and arrows: the accent, dark on a pressed face. */
+        int ink(boolean down) { return down ? ink : accent; }
 
         @Override public void onInitializeAccessibilityNodeInfo(AccessibilityNodeInfo info) {
             super.onInitializeAccessibilityNodeInfo(info);
@@ -512,23 +560,25 @@ final class GameControlsView extends ViewGroup {
     private final class Control extends TouchControl {
         final String label;
         final int button;
-        final boolean pill;
+        final int kind;
         final Paint text = new Paint(Paint.ANTI_ALIAS_FLAG);
         final RectF bounds = new RectF();
 
-        Control(Context context, int index, String label, int button, boolean pill) {
+        Control(Context context, int index, String label, int button, int kind) {
             super(context, index, label);
             this.label = label;
             this.button = button;
-            this.pill = pill;
-            text.setTypeface(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL));
+            this.kind = kind;
+            text.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
             text.setTextAlign(Paint.Align.CENTER);
-            text.setTextSize((pill ? 11 : 24) * getResources().getDisplayMetrics().scaledDensity);
+            float scaled = getResources().getDisplayMetrics().scaledDensity;
+            text.setTextSize((kind == ROUND ? 22 : kind == PILL ? 11 : 15) * scaled);
+            if (kind == PILL) text.setLetterSpacing(.08f);
         }
 
         @Override int at(float x, float y) {
             if (x < 0 || y < 0 || x >= getWidth() || y >= getHeight()) return 0;
-            if (!pill) {
+            if (kind == ROUND) {
                 float dx = (x - getWidth() / 2f) / (getWidth() / 2f);
                 float dy = (y - getHeight() / 2f) / (getHeight() / 2f);
                 if (dx * dx + dy * dy > 1f) return 0;
@@ -537,15 +587,20 @@ final class GameControlsView extends ViewGroup {
         }
 
         @Override protected void onDraw(Canvas canvas) {
-            paint();
-            float inset = dp(1);
-            bounds.set(inset, inset, getWidth() - inset, getHeight() - inset);
-            float radius = Math.min(getWidth(), getHeight()) / 2f;
+            boolean down = mask != 0;
+            paint(down);
+            float edge = line.getStrokeWidth() / 2f + dp(.5f);
+            float width = getWidth(), height = getHeight();
+            if (kind == PILL) {
+                // A slim pill; the whole box still answers the finger.
+                float face = Math.min(height - 2 * edge, height * .72f);
+                bounds.set(edge + dp(3), (height - face) / 2f, width - edge - dp(3), (height + face) / 2f);
+            } else bounds.set(edge, edge, width - edge, height - edge);
+            float radius = Math.min(bounds.width(), bounds.height()) / 2f;
             canvas.drawRoundRect(bounds, radius, radius, fill);
             canvas.drawRoundRect(bounds, radius, radius, line);
-            text.setColor(mask == 0 ? ACCENT : Color.WHITE);
-            canvas.drawText(label, getWidth() / 2f,
-                    (getHeight() - text.ascent() - text.descent()) / 2f, text);
+            text.setColor(ink(down));
+            canvas.drawText(label, bounds.centerX(), bounds.centerY() - (text.ascent() + text.descent()) / 2f, text);
             paintEditing(canvas);
         }
 
@@ -561,11 +616,17 @@ final class GameControlsView extends ViewGroup {
         // Custom accessibility actions, separate from the platform's actions.
         private static final int ACTION_UP = 0x02000001, ACTION_DOWN = 0x02000002;
         private static final int ACTION_LEFT = 0x02000003, ACTION_RIGHT = 0x02000004;
-        final RectF bounds = new RectF();
+        private final int[] directions = {NativeBridge.UP, NativeBridge.DOWN, NativeBridge.LEFT, NativeBridge.RIGHT};
+        final Path cross = new Path();
+        final Path[] arrows = {new Path(), new Path(), new Path(), new Path()};
+        final RectF[] lit = {new RectF(), new RectF(), new RectF(), new RectF()};
+        final Paint detail = new Paint(Paint.ANTI_ALIAS_FLAG);
+        float cx, cy, hub;
 
         Dpad(Context context) {
             super(context, 0, "Croix directionnelle");
             setClickable(false);
+            detail.setPathEffect(new CornerPathEffect(dp(1.5f)));
         }
 
         @Override boolean acceptsDown(float x, float y) {
@@ -587,33 +648,58 @@ final class GameControlsView extends ViewGroup {
             return result;
         }
 
+        @Override protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+            super.onSizeChanged(w, h, oldw, oldh);
+            // One cross, one outline; an arrow in the middle of each arm.
+            float size = Math.min(w, h), arm = size / 3f, edge = dp(1.25f);
+            cx = w / 2f;
+            cy = h / 2f;
+            float corner = arm * .22f, reach = size / 2f - edge;
+            cross.reset();
+            Path across = new Path();
+            cross.addRoundRect(cx - arm / 2f, cy - reach, cx + arm / 2f, cy + reach, corner, corner, Path.Direction.CW);
+            across.addRoundRect(cx - reach, cy - arm / 2f, cx + reach, cy + arm / 2f, corner, corner, Path.Direction.CW);
+            cross.op(across, Path.Op.UNION);
+            float half = arm * .2f, depth = arm * .14f;
+            for (int i = 0; i < 4; i++) {
+                // Up, down, left, right: the tip outward.
+                float sx = i == 2 ? -1 : i == 3 ? 1 : 0, sy = i == 0 ? -1 : i == 1 ? 1 : 0;
+                float x = cx + sx * arm, y = cy + sy * arm;
+                arrows[i].reset();
+                arrows[i].moveTo(x + sx * depth, y + sy * depth);
+                arrows[i].lineTo(x - sx * depth + sy * half, y - sy * depth + sx * half);
+                arrows[i].lineTo(x - sx * depth - sy * half, y - sy * depth - sx * half);
+                arrows[i].close();
+            }
+            hub = arm * .2f;
+            lit[0].set(cx - arm / 2f, 0, cx + arm / 2f, cy - arm / 2f);
+            lit[1].set(cx - arm / 2f, cy + arm / 2f, cx + arm / 2f, h);
+            lit[2].set(0, cy - arm / 2f, cx - arm / 2f, cy + arm / 2f);
+            lit[3].set(cx + arm / 2f, cy - arm / 2f, w, cy + arm / 2f);
+        }
+
         @Override protected void onDraw(Canvas canvas) {
-            paint();
-            float arm = getWidth() / 3f, inset = dp(1), corner = dp(8);
-            bounds.set(arm, inset, getWidth() - arm, getHeight() - inset);
-            canvas.drawRoundRect(bounds, corner, corner, fill);
-            canvas.drawRoundRect(bounds, corner, corner, line);
-            bounds.set(inset, getHeight() / 3f, getWidth() - inset, getHeight() * 2f / 3f);
-            canvas.drawRoundRect(bounds, corner, corner, fill);
-            canvas.drawRoundRect(bounds, corner, corner, line);
-            fill.setShader(null);
-            fill.setColor(0xff0f1019);
-            canvas.drawCircle(getWidth() / 2f, getHeight() / 2f, arm * .38f, fill);
-            canvas.drawCircle(getWidth() / 2f, getHeight() / 2f, arm * .36f, line);
-            float cx = getWidth() / 2f, cy = getHeight() / 2f;
-            float offset = Math.min(getWidth(), getHeight()) * .36f;
-            float arrow = Math.min(getWidth(), getHeight()) * .045f;
-            line.setColor(ACCENT);
-            line.setStrokeWidth(dp(2.3f));
-            // Directional chevrons echo the reference controller, in the existing palette.
-            canvas.drawLine(cx - arrow, cy - offset + arrow, cx, cy - offset - arrow, line);
-            canvas.drawLine(cx, cy - offset - arrow, cx + arrow, cy - offset + arrow, line);
-            canvas.drawLine(cx - arrow, cy + offset - arrow, cx, cy + offset + arrow, line);
-            canvas.drawLine(cx, cy + offset + arrow, cx + arrow, cy + offset - arrow, line);
-            canvas.drawLine(cx - offset + arrow, cy - arrow, cx - offset - arrow, cy, line);
-            canvas.drawLine(cx - offset - arrow, cy, cx - offset + arrow, cy + arrow, line);
-            canvas.drawLine(cx + offset - arrow, cy - arrow, cx + offset + arrow, cy, line);
-            canvas.drawLine(cx + offset + arrow, cy, cx + offset - arrow, cy + arrow, line);
+            paint(false);
+            canvas.drawPath(cross, fill);
+            if (mask != 0) {
+                // Only the pressed arms take the accent.
+                canvas.save();
+                canvas.clipPath(cross);
+                fill.setShader(pressed);
+                for (int i = 0; i < 4; i++) if ((mask & directions[i]) != 0) canvas.drawRect(lit[i], fill);
+                canvas.restore();
+            }
+            line.setColor(mask != 0 ? pressedTop : settings.highContrast() ? Color.WHITE : edge);
+            canvas.drawPath(cross, line);
+            detail.setStyle(Paint.Style.STROKE);
+            detail.setStrokeWidth(dp(1.25f));
+            detail.setColor(settings.highContrast() ? 0x99ffffff : GameControlsView.this.detail);
+            canvas.drawCircle(cx, cy, hub, detail);
+            detail.setStyle(Paint.Style.FILL);
+            for (int i = 0; i < 4; i++) {
+                detail.setColor(ink((mask & directions[i]) != 0));
+                canvas.drawPath(arrows[i], detail);
+            }
             paintEditing(canvas);
         }
 

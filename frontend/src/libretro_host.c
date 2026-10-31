@@ -1,8 +1,10 @@
 #include <ravenemu/frontend.h>
 #include <libretro.h>
+#include "frontend_internal.h"
 
 #include <dlfcn.h>
 #include <stdarg.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -20,8 +22,15 @@ typedef struct raven_core_api {
     void (*get_system_info)(struct retro_system_info *);
     void (*get_system_av_info)(struct retro_system_av_info *);
     bool (*load_game)(const struct retro_game_info *);
+    /* Optional: a core without it has no subsystem (no linked games). */
+    bool (*load_game_special)(unsigned, const struct retro_game_info *, size_t);
     void (*unload_game)(void);
     void (*run)(void);
+    /* Optional here: a core without it cannot be restarted in place. */
+    void (*reset)(void);
+    /* Optional too: a core without them takes no cheats. */
+    void (*cheat_reset)(void);
+    void (*cheat_set)(unsigned, bool, const char *);
     void *(*get_memory_data)(unsigned);
     size_t (*get_memory_size)(unsigned);
     size_t (*serialize_size)(void);
@@ -54,14 +63,40 @@ struct raven_frontend {
     char *save_directory;
     char *rom_path;
     void *rom;
+    /* Player 2's game when two are linked. */
+    char *rom_path2;
+    void *rom2;
     int initialized;
     int loaded;
+    unsigned players;  /* 1 for a game alone, 2 linked; 0 without a game. */
+    /* The core's "link" subsystem (SET_SUBSYSTEM_INFO): two games joined by
+     * a cable, and the memory type of each player's battery SRAM. */
+    int link_available;
+    unsigned link_id;
+    unsigned link_memory[2];
     unsigned pixel_format;
     raven_option *options;
     size_t option_count;
     int options_updated;  /* Reported once by GET_VARIABLE_UPDATE. */
     char message[RAVEN_FRONTEND_MESSAGE_MAX];
     int message_pending;
+    unsigned message_serial;  /* Counts the messages kept: a cheat's refusal is one. */
+    /* Preemptive frames (raven_frontend_set_preemptive_frames): the state
+     * before each of the last `preempt_frames` frames, in a ring of slots. */
+    unsigned preempt_frames;     /* The setting; kept across games. */
+    unsigned preempt_valid;      /* States of the current timeline in the ring. */
+    unsigned preempt_head;       /* Slot of the coming frame. */
+    unsigned preempt_replayed;   /* By the last run_frame. */
+    int preempt_replaying;       /* Rerunning frames: no image, no sound. */
+    int preempt_ran;             /* A frame ran since the game loaded. */
+    uint16_t preempt_joypad;     /* Port 0's buttons at the last frame. */
+    uint64_t serialization_quirks;
+    /* The core's memory map (SET_MEMORY_MAPS), copied: the achievements read
+     * the game through it. Descriptors point into the core's memory. */
+    struct retro_memory_map memory_map;
+    struct retro_memory_descriptor *memory_descriptors;
+    size_t preempt_state_size;
+    unsigned char *preempt_states;
     char error[256];
 };
 
@@ -310,11 +345,143 @@ static void keep_message(raven_frontend *host, const char *text) {
     }
     host->message[out] = 0;
     host->message_pending = out > 0;
+    if (out > 0) ++host->message_serial;
+}
+
+/* Preemptive frames, RetroArch's idea written for RavenEmu: the history is
+ * dropped whenever the core's state jumps (a load, a restored state or
+ * SRAM, a pause) so a replay never goes back across the jump. */
+static void preempt_forget(raven_frontend *host) {
+    host->preempt_valid = 0;
+    host->preempt_head = 0;
+}
+
+static void preempt_free(raven_frontend *host) {
+    free(host->preempt_states);
+    host->preempt_states = NULL;
+    host->preempt_state_size = 0;
+    preempt_forget(host);
+}
+
+/* The ring for the current state size, allocated on first use; 0 when the
+ * core cannot save its state whole, or before its first frame if it says so. */
+static int preempt_prepare(raven_frontend *host) {
+    /* Linked games: two consoles to replay, and two controllers; not done. */
+    if (!host->preempt_frames || host->players > 1 ||
+        (host->serialization_quirks & RETRO_SERIALIZATION_QUIRK_INCOMPLETE)) return 0;
+    if ((host->serialization_quirks & RETRO_SERIALIZATION_QUIRK_MUST_INITIALIZE) && !host->preempt_ran)
+        return 0;
+    const size_t size = host->api.serialize_size();
+    if (!size || size > SIZE_MAX / host->preempt_frames) return 0;
+    if (host->preempt_states && size == host->preempt_state_size) return 1;
+    preempt_free(host);
+    host->preempt_states = (unsigned char *)malloc(size * host->preempt_frames);
+    if (!host->preempt_states) return 0;
+    host->preempt_state_size = size;
+    return 1;
+}
+
+/* The slot of the state before the frame `back` frames ago; 0 is the coming
+ * frame's, which also held the oldest state until now. */
+static unsigned char *preempt_slot(const raven_frontend *host, unsigned back) {
+    const unsigned slot = (host->preempt_head + host->preempt_frames - back) % host->preempt_frames;
+    return host->preempt_states + (size_t)slot * host->preempt_state_size;
+}
+
+/* Port 0's joypad as the core will read it this frame. */
+static uint16_t preempt_joypad(const raven_frontend *host) {
+    uint16_t buttons = 0;
+    if (!host->callbacks.input) return 0;
+    for (unsigned id = 0; id < 16; ++id)
+        if (host->callbacks.input(0, RETRO_DEVICE_JOYPAD, 0, id, host->callbacks.userdata))
+            buttons |= (uint16_t)(1u << id);
+    return buttons;
+}
+
+/* The buttons changed: back `depth` frames, and run them again with the
+ * buttons of now, silently, keeping the new timeline's states. */
+static void preempt_replay(raven_frontend *host, unsigned depth) {
+    if (!host->api.unserialize(preempt_slot(host, depth), host->preempt_state_size)) {
+        preempt_forget(host);
+        return;
+    }
+    int kept = 1;
+    host->preempt_replaying = 1;
+    for (unsigned back = depth; back > 0; --back) {
+        if (back < depth && kept)
+            kept = host->api.serialize(preempt_slot(host, back), host->preempt_state_size);
+        host->api.run();
+    }
+    host->preempt_replaying = 0;
+    host->preempt_replayed = depth;
+    if (!kept) preempt_forget(host);
+}
+
+static void forget_memory_map(raven_frontend *host) {
+    free(host->memory_descriptors);
+    host->memory_descriptors = NULL;
+    host->memory_map.descriptors = NULL;
+    host->memory_map.num_descriptors = 0;
+}
+
+/* RavenCore declares its achievement memory as it loads a game; RetroArch
+ * keeps the descriptors, and so do we, whole. */
+static bool keep_memory_map(raven_frontend *host, const struct retro_memory_map *map) {
+    if (!map || (map->num_descriptors && !map->descriptors) || map->num_descriptors > 4096) return false;
+    struct retro_memory_descriptor *copy = NULL;
+    if (map->num_descriptors) {
+        copy = (struct retro_memory_descriptor *)malloc(sizeof(*copy) * map->num_descriptors);
+        if (!copy) return false;
+        memcpy(copy, map->descriptors, sizeof(*copy) * map->num_descriptors);
+    }
+    forget_memory_map(host);
+    host->memory_descriptors = copy;
+    host->memory_map.descriptors = copy;
+    host->memory_map.num_descriptors = map->num_descriptors;
+    return true;
+}
+
+const struct retro_memory_map *raven_frontend_memory_map(const raven_frontend *host) {
+    return host && host->loaded && host->memory_map.num_descriptors ? &host->memory_map : NULL;
+}
+
+void *raven_frontend_core_memory(const raven_frontend *host, unsigned id, size_t *size) {
+    if (size) *size = 0;
+    if (!host || !host->loaded || active != host) return NULL;
+    void *data = host->api.get_memory_data(id);
+    const size_t length = data ? host->api.get_memory_size(id) : 0;
+    if (size) *size = length;
+    return length ? data : NULL;
+}
+
+/* Only the "link" subsystem is used: two games, each with one battery SRAM.
+ * The declaration ends at an entry without ident; at most 64 are read. */
+static bool keep_link_subsystem(raven_frontend *host, const struct retro_subsystem_info *info) {
+    host->link_available = 0;
+    if (!info) return false;
+    for (unsigned i = 0; i < 64 && info[i].ident; ++i) {
+        const struct retro_subsystem_info *one = &info[i];
+        if (strcmp(one->ident, "link") != 0 || one->num_roms != 2 || !one->roms) continue;
+        if (!one->roms[0].memory || !one->roms[0].num_memory ||
+            !one->roms[1].memory || !one->roms[1].num_memory) continue;
+        host->link_id = one->id;
+        host->link_memory[0] = one->roms[0].memory[0].type;
+        host->link_memory[1] = one->roms[1].memory[0].type;
+        host->link_available = 1;
+        break;
+    }
+    return true;
 }
 
 static bool environment(unsigned command, void *data) {
     if (!active) return false;
     switch (command) {
+        case RETRO_ENVIRONMENT_SET_SUBSYSTEM_INFO:
+            return keep_link_subsystem(active, (const struct retro_subsystem_info *)data);
+        case RETRO_ENVIRONMENT_SET_MEMORY_MAPS:
+            return keep_memory_map(active, (const struct retro_memory_map *)data);
+        case RETRO_ENVIRONMENT_SET_SUPPORT_ACHIEVEMENTS:
+            return data != NULL;
         case RETRO_ENVIRONMENT_GET_RUMBLE_INTERFACE:
             if (!data || !active->callbacks.rumble) return false;
             ((struct retro_rumble_interface *)data)->set_rumble_state = host_rumble;
@@ -402,33 +569,45 @@ static bool environment(unsigned command, void *data) {
             return true;
         case RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE:
             if (!data) return false;
-            *(int *)data = RETRO_AV_ENABLE_VIDEO | RETRO_AV_ENABLE_AUDIO;
+            /* Replayed frames are neither shown nor heard: the core may skip
+             * drawing them. */
+            *(int *)data = active->preempt_replaying ? 0 : RETRO_AV_ENABLE_VIDEO | RETRO_AV_ENABLE_AUDIO;
+            return true;
+        case RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS:
+            if (!data) return false;
+            /* Honoured: an incomplete state turns preemptive frames off, one
+             * valid only after a frame waits for it, and the size is read
+             * again before each save. */
+            *(uint64_t *)data &= RETRO_SERIALIZATION_QUIRK_INCOMPLETE |
+                                 RETRO_SERIALIZATION_QUIRK_MUST_INITIALIZE |
+                                 RETRO_SERIALIZATION_QUIRK_CORE_VARIABLE_SIZE;
+            active->serialization_quirks = *(uint64_t *)data;
             return true;
         case RETRO_ENVIRONMENT_GET_LANGUAGE:
             if (!data) return false;
             *(unsigned *)data = RETRO_LANGUAGE_FRENCH;
             return true;
-        /* Features not yet exposed: sensors, achievements, rumble, hardware
-         * rendering, option visibility, memory descriptors, and subsystems. */
+        /* Features not yet exposed: hardware rendering, option visibility,
+         * and subsystems other than "link". */
         default:
             return false;
     }
 }
 
 static void on_video(const void *pixels, unsigned width, unsigned height, size_t pitch) {
-    if (!active || !active->callbacks.video) return;
+    if (!active || !active->callbacks.video || active->preempt_replaying) return;
     raven_video_frame frame = {pixels, width, height, pitch, active->pixel_format};
     active->callbacks.video(&frame, active->callbacks.userdata);
 }
 
 static void on_audio_sample(int16_t left, int16_t right) {
-    if (!active || !active->callbacks.audio) return;
+    if (!active || !active->callbacks.audio || active->preempt_replaying) return;
     int16_t sample[] = {left, right};
     active->callbacks.audio(sample, 1, active->callbacks.userdata);
 }
 
 static size_t on_audio_batch(const int16_t *samples, size_t frames) {
-    if (active && active->callbacks.audio && samples)
+    if (active && active->callbacks.audio && samples && !active->preempt_replaying)
         active->callbacks.audio(samples, frames, active->callbacks.userdata);
     return frames;
 }
@@ -455,10 +634,18 @@ void raven_frontend_unload(raven_frontend *host) {
     if (!host) return;
     if (host->loaded && host->api.unload_game) host->api.unload_game();
     host->loaded = 0;
+    host->preempt_ran = 0;
+    preempt_free(host);
+    forget_memory_map(host);
     free(host->rom);
     host->rom = NULL;
     free(host->rom_path);
     host->rom_path = NULL;
+    free(host->rom2);
+    host->rom2 = NULL;
+    free(host->rom_path2);
+    host->rom_path2 = NULL;
+    host->players = 0;
     memset(&host->av, 0, sizeof(host->av));
 }
 
@@ -475,6 +662,8 @@ void raven_frontend_close_core(raven_frontend *host) {
     host->option_count = 0;
     host->options_updated = 0;
     host->message_pending = 0;
+    host->serialization_quirks = 0;
+    host->link_available = 0;
     free(host->system_directory);
     free(host->save_directory);
     host->system_directory = NULL;
@@ -531,6 +720,16 @@ int raven_frontend_open_core(raven_frontend *host, const char *library_path,
     RESOLVE(load_game);
     RESOLVE(unload_game);
     RESOLVE(run);
+    {
+        void *symbol = dlsym(host->library, "retro_reset");
+        if (symbol) memcpy(&host->api.reset, &symbol, sizeof(host->api.reset));
+        symbol = dlsym(host->library, "retro_load_game_special");
+        if (symbol) memcpy(&host->api.load_game_special, &symbol, sizeof(host->api.load_game_special));
+        symbol = dlsym(host->library, "retro_cheat_reset");
+        if (symbol) memcpy(&host->api.cheat_reset, &symbol, sizeof(host->api.cheat_reset));
+        symbol = dlsym(host->library, "retro_cheat_set");
+        if (symbol) memcpy(&host->api.cheat_set, &symbol, sizeof(host->api.cheat_set));
+    }
     RESOLVE(get_memory_data);
     RESOLVE(get_memory_size);
     RESOLVE(serialize_size);
@@ -582,8 +781,52 @@ int raven_frontend_load_rom(raven_frontend *host, const void *rom,
         return 0;
     }
     host->loaded = 1;
+    host->players = 1;
     host->api.get_system_av_info(&host->av);
     return 1;
+}
+
+int raven_frontend_load_linked(raven_frontend *host, const void *const roms[2],
+                               const size_t sizes[2], const char *const paths[2]) {
+    if (!host || !host->initialized || active != host || !roms || !sizes || !roms[0] || !roms[1] ||
+        !sizes[0] || !sizes[1]) {
+        set_error(host, "Core not opened or ROM is empty");
+        return 0;
+    }
+    if (!host->link_available || !host->api.load_game_special) {
+        set_error(host, "Core has no link subsystem");
+        return 0;
+    }
+    raven_frontend_unload(host);
+    host->rom = malloc(sizes[0]);
+    host->rom2 = malloc(sizes[1]);
+    host->rom_path = copy_string(paths ? paths[0] : NULL);
+    host->rom_path2 = copy_string(paths ? paths[1] : NULL);
+    if (!host->rom || !host->rom2 || !host->rom_path || !host->rom_path2) {
+        set_error(host, "Unable to allocate ROM");
+        raven_frontend_unload(host);
+        return 0;
+    }
+    memcpy(host->rom, roms[0], sizes[0]);
+    memcpy(host->rom2, roms[1], sizes[1]);
+    host->options_updated = 0;
+    struct retro_game_info games[2] = {
+        {host->rom_path, host->rom, sizes[0], NULL},
+        {host->rom_path2, host->rom2, sizes[1], NULL},
+    };
+    if (!host->api.load_game_special(host->link_id, games, 2)) {
+        set_error(host, "Libretro core rejected the linked games");
+        raven_frontend_unload(host);
+        return 0;
+    }
+    host->loaded = 1;
+    host->players = 2;
+    host->api.get_system_av_info(&host->av);
+    return 1;
+}
+
+unsigned raven_frontend_players(const raven_frontend *host) {
+    return host && host->loaded && active == host ? host->players : 0;
 }
 
 int raven_frontend_run_frame(raven_frontend *host) {
@@ -591,39 +834,132 @@ int raven_frontend_run_frame(raven_frontend *host) {
         set_error(host, "No active game");
         return 0;
     }
+    host->preempt_replayed = 0;
+    if (preempt_prepare(host)) {
+        const uint16_t joypad = preempt_joypad(host);
+        if (host->preempt_valid && joypad != host->preempt_joypad)
+            preempt_replay(host, host->preempt_valid);
+        host->preempt_joypad = joypad;
+        if (host->api.serialize(preempt_slot(host, 0), host->preempt_state_size)) {
+            host->preempt_head = (host->preempt_head + 1) % host->preempt_frames;
+            if (host->preempt_valid < host->preempt_frames) ++host->preempt_valid;
+        } else {
+            preempt_forget(host);
+        }
+    }
     host->api.run();
+    host->preempt_ran = 1;
     return 1;
 }
 
-size_t raven_frontend_battery_size(const raven_frontend *host) {
-    if (!host || !host->loaded || active != host) return 0;
-    return host->api.get_memory_size(RETRO_MEMORY_SAVE_RAM);
+int raven_frontend_reset(raven_frontend *host) {
+    if (!host || !host->loaded || active != host || !host->api.reset) return 0;
+    /* The frames kept behind belong to the game before the restart. */
+    preempt_forget(host);
+    host->api.reset();
+    return 1;
 }
 
-int raven_frontend_read_battery(const raven_frontend *host,
-                                void *dst, size_t size) {
-    size_t expected = raven_frontend_battery_size(host);
-    if (!expected || !dst || expected != size) return 0;
-    const void *data = host->api.get_memory_data(RETRO_MEMORY_SAVE_RAM);
+int raven_frontend_set_cheats(raven_frontend *host, const char *const *codes, size_t count,
+                              char *reason, size_t reason_size) {
+    if (reason && reason_size) reason[0] = 0;
+    if (!host || !host->loaded || active != host || !host->api.cheat_reset || !host->api.cheat_set ||
+        (count && !codes) || count > RAVEN_FRONTEND_CHEATS_MAX)
+        return -2;
+    /* The frames kept behind ran without these cheats. */
+    preempt_forget(host);
+    host->api.cheat_reset();
+    int refused = -1;
+    for (size_t i = 0; i < count; ++i) {
+        const unsigned before = host->message_serial;
+        host->api.cheat_set((unsigned)i, codes[i] && *codes[i], codes[i] ? codes[i] : "");
+        if (host->message_serial == before) continue;
+        /* The core says why a code is refused: the caller shows it, once. */
+        if (refused < 0) {
+            refused = (int)i;
+            if (reason && reason_size) {
+                strncpy(reason, host->message, reason_size - 1);
+                reason[reason_size - 1] = 0;
+            }
+        }
+        host->message_pending = 0;
+    }
+    return refused;
+}
+
+int raven_frontend_set_preemptive_frames(raven_frontend *host, unsigned frames) {
+    if (!host || frames > RAVEN_FRONTEND_PREEMPT_MAX) return 0;
+    if (frames != host->preempt_frames) {
+        preempt_free(host);
+        host->preempt_frames = frames;
+    }
+    return 1;
+}
+
+unsigned raven_frontend_preemptive_frames(const raven_frontend *host) {
+    return host ? host->preempt_frames : 0;
+}
+
+unsigned raven_frontend_replayed_frames(const raven_frontend *host) {
+    return host ? host->preempt_replayed : 0;
+}
+
+void raven_frontend_forget_preemption(raven_frontend *host) {
+    if (host) preempt_forget(host);
+}
+
+/* The memory type of a player's battery SRAM; 0 when there is no such player. */
+static int battery_memory(const raven_frontend *host, unsigned player, unsigned *type) {
+    if (!host || !host->loaded || active != host || player >= host->players) return 0;
+    *type = host->players > 1 ? host->link_memory[player] : RETRO_MEMORY_SAVE_RAM;
+    return 1;
+}
+
+size_t raven_frontend_player_battery_size(const raven_frontend *host, unsigned player) {
+    unsigned type;
+    if (!battery_memory(host, player, &type)) return 0;
+    return host->api.get_memory_size(type);
+}
+
+int raven_frontend_read_player_battery(const raven_frontend *host, unsigned player,
+                                       void *dst, size_t size) {
+    unsigned type;
+    const size_t expected = raven_frontend_player_battery_size(host, player);
+    if (!expected || !dst || expected != size || !battery_memory(host, player, &type)) return 0;
+    const void *data = host->api.get_memory_data(type);
     if (!data) return 0;
     memcpy(dst, data, expected);
     return 1;
 }
 
-int raven_frontend_restore_battery(raven_frontend *host,
-                                   const void *src, size_t size) {
-    const size_t expected = raven_frontend_battery_size(host);
-    if (!expected || !src || expected != size) {
+int raven_frontend_restore_player_battery(raven_frontend *host, unsigned player,
+                                          const void *src, size_t size) {
+    unsigned type;
+    const size_t expected = raven_frontend_player_battery_size(host, player);
+    if (!expected || !src || expected != size || !battery_memory(host, player, &type)) {
         set_error(host, "Battery SRAM size mismatch");
         return 0;
     }
-    void *data = host->api.get_memory_data(RETRO_MEMORY_SAVE_RAM);
+    void *data = host->api.get_memory_data(type);
     if (!data) {
         set_error(host, "Core does not expose writable battery SRAM");
         return 0;
     }
     memcpy(data, src, expected);
+    preempt_forget(host);
     return 1;
+}
+
+size_t raven_frontend_battery_size(const raven_frontend *host) {
+    return raven_frontend_player_battery_size(host, 0);
+}
+
+int raven_frontend_read_battery(const raven_frontend *host, void *dst, size_t size) {
+    return raven_frontend_read_player_battery(host, 0, dst, size);
+}
+
+int raven_frontend_restore_battery(raven_frontend *host, const void *src, size_t size) {
+    return raven_frontend_restore_player_battery(host, 0, src, size);
 }
 
 size_t raven_frontend_state_size(const raven_frontend *host) {
@@ -643,6 +979,7 @@ int raven_frontend_load_state(raven_frontend *host, const void *src, size_t size
         set_error(host, "Core rejected save-state data");
         return 0;
     }
+    preempt_forget(host);
     return 1;
 }
 

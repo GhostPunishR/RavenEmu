@@ -67,7 +67,9 @@ arrondis. Sa licence Apache 2.0 et les attributions sont incluses dans
 applicative Kotlin.
 
 `GameControlsView.java` reprend la croix, les boutons A/B décalés et les
-touches SELECT/START ; L/R apparaissent pour la GBA. La croix permet les
+touches SELECT/START ; L/R apparaissent pour la GBA. Elles sont dessinées dans
+la couleur d'accent (lot B-1) et, en portrait, un bouton **Menu** se trouve en
+haut au centre (entre L et R en GBA) ; il ouvre le menu du jeu. La croix permet les
 diagonales et le glissement, avec plusieurs doigts sur les commandes.
 Le mode paysage réserve les côtés aux commandes et garde le centre pour
 l'image. Les contrôles libèrent leurs appuis sur annulation, perte de focus,
@@ -126,6 +128,14 @@ conclure à une parité avec la bêta.
 ```
 
 APK: `android/build/outputs/apk/debug/android-debug.apk`.
+
+This is Gradle's debug variant, whose native code the NDK compiles at `-O0`.
+`src/main/cpp/CMakeLists.txt` adds `-O2` to every native target (frontend,
+rcheevos, the RavenCore cores, the drivers) and keeps the debug symbols, as
+the beta does in `native/CMakeLists.txt`: at `-O0` RavenCore's GBA core runs
+about six times slower and every game crawls on a phone.
+`scripts/check_native_optimization.py` reads the compile databases Gradle
+leaves under `android/.cxx` and fails the CI on any unoptimised command.
 
 Run `./gradlew :android:testDebugUnitTest` for identity/path, insets,
 Activity recreation/import, sheet gestures and multi-touch controls tests.
@@ -197,7 +207,7 @@ No ROM or BIOS is bundled; no broad storage permission is requested.
 
 ## Options des cores et réglages d'image
 
-**Paramètres → Vidéo** reprend trois groupes de la bêta, traités par RavenCore
+**Paramètres → Vidéo → Couleurs** et **→ Rendu** reprennent trois groupes de la bêta, traités par RavenCore
 lui-même au travers de ses options Libretro : **Profil de couleurs** des jeux
 Game Boy (Original, le vert de la console comme dans la bêta ; Pocket gris ;
 Gris neutre), **Correction des couleurs LCD** pour la Game Boy Color et la Game
@@ -209,6 +219,65 @@ au frontend C avant le chargement du jeu ; au retour des paramètres,
 suivante, sans rouvrir le jeu. Ni la SRAM ni les états ne changent de format.
 Le filtre « DMG vert » de la bêta n'a pas d'équivalent exact ; les options
 de cartouche (type de sauvegarde, RTC) restent à porter.
+
+## Paramètres en sous-pages
+
+À la demande du propriétaire, chaque catégorie des **Paramètres** liste ses
+sous-pages au lieu de tout empiler : **Général** (Émulation, Latence),
+**Audio** (Son du jeu, Qualité du son), **Vidéo** (Couleurs, Rendu, Taille et
+réglages, et « Rétablir l'affichage d'origine » pour les trois), **Console**
+(Game Boy et GBC, Game Boy Advance) et **Interface** (Commandes tactiles,
+Cartouche). Le retour, par la barre ou par Android, remonte d'un niveau ; la
+page et sa position survivent à la recréation de l'activité. La bêta, elle,
+montrait chaque catégorie sur une seule page.
+
+## RetroAchievements
+
+**Paramètres → RetroAchievements** (première catégorie, comme dans la bêta) :
+connexion par nom d'utilisateur et mot de passe, puis carte du compte (nom,
+avatar, points Softcore et Hardcore), « Réessayer » et « Déconnexion ». Le
+mot de passe sert à une seule requête et n'est conservé nulle part : seul le
+**jeton** est gardé, chiffré en AES-GCM par une clé du Keystore Android, dans
+un fichier hors sauvegarde (`noBackupFilesDir`). Viennent ensuite les
+notifications de la bêta : déblocages et bilan, progression des succès, son
+des succès, popups en haut ou en bas, durées (2 à 10 s et 1 à 5 s). Le mode
+Hardcore reste indisponible, avec le texte de la bêta.
+
+Pendant une partie, si un compte est connecté, le lecteur démarre le module
+C `frontend/src/achievements.c` (rcheevos) sur le fil GL : connexion par le
+jeton, identification de la ROM, évaluation après chaque image montrée par le
+pont (`jni/achievements_bridge.c`). Ses requêtes partent en HTTPS vers
+`retroachievements.org` (et ses sous-domaines pour les badges) seulement,
+avec le User-Agent demandé par le service, sur deux fils réseau ; les réponses
+reviennent à l'image suivante. Le bandeau de la bêta s'affiche sur l'image :
+badge qui tombe puis bande qui se déplie, cadre doré pour un succès, file d'un
+bandeau à la fois, carte de progression dessous ; le carillon de la bêta
+(écrit par RavenEmu) se joue au volume du jeu. Sans compte, rien ne part sur
+le réseau. La permission `INTERNET` est la seule ajoutée.
+
+Chaque déblocage passe par un **journal hors ligne** scellé (comme la bêta) :
+écrit avant l'envoi, effacé une fois accepté, renvoyé à la session suivante
+du même compte s'il n'a pas pu partir (réseau absent, lecteur fermé ou
+tourné). La déconnexion l'efface.
+
+Le **menu de jeu** montre la carte RetroAchievements de la bêta sous son
+titre ; elle ouvre le panneau du compte, des succès du jeu (filtres,
+recherche, tri, fiche) et de ses classements (meilleurs scores, autour de
+moi). Sans compte, elle mène à Paramètres → RetroAchievements ; un
+changement de compte s'applique au jeu en cours dès le retour.
+
+Les **défis en cours et suivis de classement** restent en bas de l'image
+jusqu'à leur fin, comme dans la bêta.
+
+Le **mode Hardcore** reste indisponible, comme dans la bêta, tant que
+RetroAchievements n'a pas approuvé RavenEmu : ses verrous sont prêts (pas de
+chargement d'état, pauses demandées à rcheevos, partie retenue pendant la
+connexion, redémarrage du jeu à l'activation) et testés, mais aucun
+interrupteur n'est montré.
+
+Écarts restants : progression des succès dans les états de jeu (un chargement d'état remet
+les succès à zéro, comme l'exige rcheevos sans données de progression ; la
+bêta ne les sauvegardait pas non plus).
 
 ## Image calée sur l'écran et son sans craquement
 
@@ -226,7 +295,7 @@ Bluetooth perdu rouvre la sortie audio, en gardant la pause.
 
 ## Effets d'écran
 
-**Paramètres → Vidéo → Effet d'écran** propose, en plus du rendu au plus
+**Paramètres → Vidéo → Rendu → Effet d'écran** propose, en plus du rendu au plus
 proche par défaut, le **Lissage net** (pixels nets et réguliers à toute
 taille) et la **Grille LCD** (trame d'un écran de console portable), dessinés
 par le pilote GLES2 d'après deux shaders libretro du domaine public
@@ -240,9 +309,31 @@ course), A/B, Start/Select, L1/L2 et R1/R2, touche Home pour le menu
 (`GamepadMapper`). Les messages du core (capteur absent, code de triche
 refusé…) s'affichent brièvement par-dessus le jeu.
 
+## Rééchantillonnage sinc
+
+**Paramètres → Audio → Qualité du son** choisit comment le son du jeu passe
+à la fréquence du téléphone : **Sinc** par défaut (`sinc_resampler.c`, écrit
+pour RavenEmu, filtre à fenêtre de Kaiser), qui garde les notes aiguës des
+ondes carrées Game Boy nettes là où l'interpolation **Linéaire**, toujours
+proposée pour comparer, ajoute un sifflement d'images. Les deux gardent la
+même cadence de sortie et le contrôle dynamique du débit. Coût mesuré en
+local : 0,2 % d'un cœur x86 ; reste à mesurer sur téléphone, à l'oreille.
+
+## Latence : images préventives
+
+**Paramètres → Général → Latence** propose les images préventives (désactivées
+par défaut ; 1, 2 ou 3 images), idée de RetroArch écrite pour RavenEmu dans le
+frontend C : à chaque changement de touche, les dernières images sont
+rejouées avec elle, et le jeu répond d'autant plus tôt, dans la limite de son
+propre retard. Si le téléphone ne rejoue pas ces images à temps (trois
+dépassements des trois quarts d'une image sur huit rejeux), le lecteur en
+retire une pour le jeu en cours et le dit par un message bref. La pause oublie
+l'historique : relâcher les touches pendant le menu ne réécrit pas le passé.
+Le gain réel et le coût restent à mesurer sur téléphone.
+
 ## Commandes tactiles
 
-**Paramètres → Interface** règle les commandes comme la bêta : retour
+**Paramètres → Interface → Commandes tactiles** règle les commandes comme la bêta : retour
 haptique, taille de la croix et de A/B (80 à 115 %), espacement vertical des
 rangées (20 à 80 dp, en portrait), style classique ou contraste élevé, et
 réinitialisation (`ControlSettings`, `GameControlsView.setSettings`). Le
@@ -254,11 +345,28 @@ les places d'origine. Le portrait et le paysage ont chacun la leur
 (`ControlLayout`), chaque commande reste entière dans sa zone (sous l'image en
 portrait, toute la zone de jeu en paysage). La réinitialisation des commandes
 remet aussi les places. Le retour arrière et l'avance rapide ne sont pas portés,
-au choix du propriétaire ; les skins Delta restent à porter.
+au choix du propriétaire.
+
+**Paramètres → Interface → Skin Delta** importe un fichier `.deltaskin`
+(vérifié comme dans la bêta, stocké en privé), le choisit pour sa console ou le
+supprime. En portrait, le skin choisi remplace les commandes tactiles : son PDF
+en bas, l'image du jeu au-dessus, ses boutons et son bouton menu actifs
+(`data/skins`, `DeltaSkinView`). Aucun skin n'est fourni.
+
+**Jouer à deux (câble link)**, dans la fiche d'un jeu, relie ce jeu à un autre
+de la bibliothèque (Game Boy et GBC ensemble, ou deux GBA) dans le sous-système
+`link` de RavenCore : un joueur affiché à la fois, le bouton « Joueur N » de
+la barre passe à l'autre, chaque jeu garde sa propre sauvegarde.
+
+**Paramètres → Interface → Thème** choisit les couleurs de toute l'interface :
+**RavenEmu** (violet sur fond sombre, celles de la bêta) ou **NVIDIA** (vert
+sur noir, d'après le thème « NVIDIA Shield » du menu MaterialUI de RetroArch).
+Écrans, icônes, menus et commandes tactiles suivent (`ui/common/RavenTheme`) ;
+un jeu déjà ouvert garde les siennes jusqu'à sa fermeture.
 
 ## Vibration et capteurs de la cartouche
 
-**Paramètres → Interface** reprend la bêta : **Vibration de la cartouche**
+**Paramètres → Interface → Cartouche** reprend la bêta : **Vibration de la cartouche**
 (Drill Dozer, WarioWare: Twisted!, cartouches Game Boy Rumble) et le groupe
 **Capteurs de la cartouche** (capteurs du téléphone, soleil automatique et
 niveau de soleil de Boktai). Le pilote C `hardware/input/sensor_driver.c`
@@ -270,7 +378,7 @@ sens des inclinaisons restent à vérifier sur téléphone.
 
 ## Console
 
-**Paramètres → Console** reprend la page de la bêta. **Jeux Game Boy en
+**Paramètres → Console** (sous-pages **Game Boy et GBC** et **Game Boy Advance**) reprend la page de la bêta. **Jeux Game Boy en
 couleurs** ouvre les jeux Game Boy sur le core Game Boy Color, avec les
 couleurs choisies (celles de la boot ROM ou une combinaison de touches),
 changées aussitôt même en jeu. **Game Boy Color d'une Game Boy Advance** et le
@@ -294,7 +402,7 @@ GPLv3 ou ultérieure ; RavenEmu et RavenCore restent AGPLv3.
 AAudio demande la fréquence native du périphérique, deux bursts de buffer,
 et une file PCM16 stéréo bornée avec purge à la pause/reprise. Le producteur
 ne bloque pas ; un manque de données produit du silence. Le rééchantillonnage
-linéaire RavenEmu reste distinct. Le pilote GLES2 conserve une texture entre
+(sinc ou linéaire) reste celui de RavenEmu. Le pilote GLES2 conserve une texture entre
 images et utilise `glTexSubImage2D` pour les nouvelles images de même taille,
 avec les shaders opaques de base adaptés. Aspect, orientation, nearest et
 miniatures CPU sont conservés.
@@ -406,7 +514,8 @@ mélange d'images et autres pages de paramètres restent à porter.
 
 This is an integration prototype, not a release candidate.
 - Audio is played through native AAudio (the core's reported sample rate is
-  linearly resampled to the device stream rate, normally 48 kHz). Low-latency
+  resampled by a windowed sinc, or linearly if chosen, to the device stream
+  rate, normally 48 kHz). Low-latency
   hardware behavior and underruns still need testing on phones.
 - SRAM (`.srm`) is captured at app pause, state save and approximately every
   30 seconds while playing, then written atomically off the GL/UI threads.
@@ -415,9 +524,37 @@ This is an integration prototype, not a release candidate.
 - Saves and the newly imported ROM library are **isolated** from the original
   RavenEmu beta. Automatic import of that beta's ROMs and saves is not
   implemented. Storage is private; removing the test application deletes it.
+- The game sheet's **Sauvegardes** section (lot S-1) exports the game's SRAM
+  as `.sav` or `.srm` and imports a `.sav`, a `.srm` or a beta RavenEmu
+  `.zip` after a review, as the beta does (`data/saves/SaveTransfer`,
+  `ui/library/SaveTransferUi`). An archive is matched to the SHA-256 of the
+  ROM bytes; its save states are checked but not imported (the beta's states
+  carry no core identity). Transfers run on `SaveStorage.IO`, the player's
+  own save executor, so they always follow the game's last SRAM write. A
+  save of another size is read as RavenCore reads one, its first bytes over
+  the core's fresh SRAM, then written back at the core's size; a game without
+  SRAM keeps the file unread.
+- The library's ⋮ menu exports every game's SRAM in the beta's library
+  archive (lot S-2): one folder per game, bound to the ROM's SHA-256, which
+  both this app and the beta import. Native save states are not included.
+- « Importer un dossier » (lot S-3) copies the GB, GBC and GBA ROMs of a
+  chosen folder and its subfolders, within the beta's limits, then shows the
+  beta's summary (`data/library/FolderImport`, `platform/DocumentTree`,
+  `ui/library/FolderImportUi`).
+- The game menu's « Codes de triche » page (lots T-1, T-2) lists, turns on
+  or off, deletes and adds the game's cheats, each new code checked by the
+  core first; RavenEmu PC's `.cheats` file per game; none runs in Hardcore
+  (`data/saves/CheatList`, `CheatRepository`, `ui/player/CheatsPanel`).
+- Icons are drawn by `ui/common/RavenIcon` (lot I-1): one line style on a
+  24-unit grid, never a font's symbol; the library pages use the beta's
+  console pictograms and every settings category, Console included, has its
+  own icon.
 - The Java home screen uses the RavenEmu-style grid/list; file selection
   remains Android SAF. The Java pause sheet controls the C pause/audio gate.
-- No RetroAchievements, wireless/local link cable or Delta skins yet.
+- RetroAchievements: Softcore with banners, chime, the achievement list,
+  leaderboards, challenge indicators and the offline journal; Hardcore waits
+  for RetroAchievements' approval of RavenEmu, as in the beta.
+  No wireless/local link cable or Delta skins yet.
 - Cover images must be manually selected by the user from local documents.
   Import is limited to 8 MiB and 4096 x 4096 input, decoded into 512 px PNG
   thumbnails. No artwork is bundled or fetched online.
@@ -457,8 +594,9 @@ Les sources Java sont organisées en vrais packages sous `src/main/java/com/rave
 - `data/library/` : ROMs, jaquettes et métadonnées ;
 - `data/saves/` : sauvegardes SRAM, états et miniatures ;
 - `settings/` : modèle et persistance des préférences de lecture ;
-- `bridge/` : contrat JNI Java ;
-- `platform/` : adaptation aux insets Android.
+- `bridge/` : contrat JNI Java (`NativeBridge`, `NativeAchievements`) ;
+- `platform/` : adaptation aux insets Android, réseau RetroAchievements et
+  chiffrement par le Keystore.
 
 Les tests JVM reflètent les mêmes packages. Le manifeste déclare les classes d'activités avec leurs sous-packages ; le pont C utilise le préfixe JNI correspondant à `bridge.NativeBridge`.
 

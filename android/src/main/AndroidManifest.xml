@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- Rumble cartridges (GB MBC5 Rumble, Drill Dozer, WarioWare: Twisted!). -->
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- RetroAchievements, once signed in: HTTPS to retroachievements.org only. -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <application android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher"

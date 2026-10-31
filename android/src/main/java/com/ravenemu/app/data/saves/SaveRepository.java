@@ -16,7 +16,9 @@ import java.security.NoSuchAlgorithmException;
  * Filename is system + SHA-256 of ROM bytes, never user-controlled ROM path.
  * AtomicFile protects previous SRAM/state if power is lost during a write. */
 public final class SaveRepository {
-    private static final long BATTERY_LIMIT = 1024L * 1024L;
+    /** The largest SRAM kept for a game (GBA flash is 128 KiB). */
+    public static final int BATTERY_LIMIT_BYTES = 1024 * 1024;
+    private static final long BATTERY_LIMIT = BATTERY_LIMIT_BYTES;
     private static final long STATE_LIMIT = 16L * 1024L * 1024L;
 
     private SaveRepository() {}

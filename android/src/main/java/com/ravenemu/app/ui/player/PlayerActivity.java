@@ -1,19 +1,35 @@
 package com.ravenemu.app.ui.player;
 import com.ravenemu.app.bridge.NativeBridge;
 import com.ravenemu.app.data.library.CoverRepository;
+import com.ravenemu.app.data.library.LinkCable;
 import com.ravenemu.app.data.library.RomLibrary;
+import com.ravenemu.app.data.saves.CheatList;
+import com.ravenemu.app.data.saves.CheatRepository;
 import com.ravenemu.app.data.saves.GbaBiosRepository;
 import com.ravenemu.app.data.saves.SaveRepository;
+import com.ravenemu.app.data.saves.SaveStorage;
+import com.ravenemu.app.data.saves.SaveTransfer;
 import com.ravenemu.app.data.saves.StatePreview;
 import com.ravenemu.app.data.saves.StateSlotRepository;
+import com.ravenemu.app.data.skins.DeltaSkin;
+import com.ravenemu.app.data.skins.DeltaSkinException;
+import com.ravenemu.app.data.skins.DeltaSkins;
+import com.ravenemu.app.platform.AchievementsHttp;
+import com.ravenemu.app.platform.RetroUserAgent;
 import com.ravenemu.app.platform.SystemBarInsets;
+import com.ravenemu.app.settings.AchievementAccount;
+import com.ravenemu.app.settings.AchievementSettings;
+import com.ravenemu.app.settings.AwardJournal;
+import com.ravenemu.app.settings.HardcorePolicy;
 import com.ravenemu.app.settings.CartridgeSettings;
 import com.ravenemu.app.settings.ConsoleSettings;
 import com.ravenemu.app.settings.ControlLayout;
 import com.ravenemu.app.settings.ControlSettings;
 import com.ravenemu.app.settings.CoreOptions;
+import com.ravenemu.app.settings.LatencySettings;
 import com.ravenemu.app.settings.PlaybackSettings;
-import com.ravenemu.app.ui.library.HomeActivity;
+import com.ravenemu.app.ui.common.RavenIcon;
+import com.ravenemu.app.ui.common.RavenTheme;
 import com.ravenemu.app.ui.settings.PlaybackSettingsActivity;
 
 import android.app.Activity;
@@ -37,8 +53,10 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.microedition.khronos.egl.EGLConfig;
@@ -47,11 +65,14 @@ import javax.microedition.khronos.opengles.GL10;
 /** Separate, non-distributable Java/NDK proof of concept.
  * Core calls use the GL thread while running, or a paused session during
  * lifecycle cleanup; button input uses an atomic mask. */
-public final class PlayerActivity extends Activity implements GLSurfaceView.Renderer {
+public final class PlayerActivity extends Activity implements GLSurfaceView.Renderer, RavenTheme.Host {
     public static final String EXTRA_ROM_KEY = "com.ravenemu.app.ROM_KEY";
+    /** With EXTRA_ROM_KEY: the second game, joined to the first by the link cable. */
+    public static final String EXTRA_LINK_ROM_KEY = "com.ravenemu.app.LINK_ROM_KEY";
     // Shared ordering: a recreated Activity must read SRAM only after the
     // previous Activity's queued pause snapshot has been written.
-    private static final ExecutorService STORAGE_IO = Executors.newSingleThreadExecutor();
+    /** Shared with the library's save transfers: one order for every save write. */
+    private static final ExecutorService STORAGE_IO = SaveStorage.IO;
     private final ExecutorService io = STORAGE_IO;
     private final AtomicBoolean disposed = new AtomicBoolean(false);
     private GLSurfaceView surface;
@@ -60,6 +81,25 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
     /** UI thread: a physical controller's keys and axes. */
     private final GamepadMapper gamepad = new GamepadMapper();
     private GameControlsView gameControls;
+    /** Two games joined by the link cable (the beta's LinkPlayerScreen): one
+     * shown at a time, the other running behind; no game menu. */
+    private boolean linkMode;
+    /** Each player's save key while linked games run; null otherwise. */
+    private volatile String[] linkKeys;
+    /** UI thread: the linked games, the player shown, its switch in the bar. */
+    private RomLibrary.Entry[] linkEntries;
+    private int linkFocus;
+    private TextView linkSwitch;
+    /** Portrait: the Delta skin chosen for the game's console, drawn over the
+     * picture's column instead of the touch controls; null in landscape. */
+    private DeltaSkinView skinView;
+    /** The picture and the achievements over it: the skin's game area when it shows. */
+    private FrameLayout pictureFrame;
+    /** UI thread: the open game's system, for its console's skin; null before a game. */
+    private String loadedSystem;
+    private int skinRequest;
+    /** Skins are read and checked off the UI thread, apart from the saves. */
+    private static final ExecutorService SKINS = java.util.concurrent.Executors.newSingleThreadExecutor();
     /** Shown under the bar while the controls are moved. */
     private LinearLayout editBar;
     private boolean editingLandscape;
@@ -78,7 +118,22 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
     private CartridgeRumble rumble;
     /** Settings → Interface: "Vibration de la cartouche". */
     private volatile boolean rumbleEnabled = CartridgeSettings.DEFAULTS.rumble;
+    /** RetroAchievements over the game (UI thread), and its session (GL thread). */
+    private AchievementOverlay achievementOverlay;
+    private PlayerAchievements achievements;
+    private final BadgeCache badges = new BadgeCache();
+    /** The game whose achievements run, and the account they run with. */
+    private volatile RomLibrary.Entry activeEntry;
+    private volatile String activeAccount;
+    private boolean achievementsRefreshQueued;
+    /** UI thread: rcheevos just allowed this pause (Hardcore). */
+    private boolean pauseGranted;
     private long nextBatterySaveNanos;
+    /** The game's cheats: written on the UI thread only, read on the GL one. */
+    private volatile List<CheatList.Cheat> cheats = Collections.emptyList();
+    private volatile String cheatsKey;
+    /** GL thread: the Hardcore lock the core's cheats were last set for. */
+    private boolean cheatsLockApplied;
     private volatile String activeSaveKey;
     /** GL thread: the core of the open game ("gb", "gbc" or "gba"), for its options. */
     private String activeCore;
@@ -113,17 +168,27 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
     private int menuGeneration;
     private Runnable pendingRomLoad;
     private boolean settingsLaunching;
+    /** Settings → Interface → Thème, as it was when the game opened: a game
+     * keeps its colours until it is closed, never restarted for a theme. */
+    private RavenTheme theme;
+
+    @Override public RavenTheme theme() { return theme; }
 
     @Override
     public void onCreate(Bundle state) {
+        theme = RavenTheme.apply(this);
         super.onCreate(state);
         if (state != null) {
             restoreMenu = state.getBoolean("player.menu");
             selectedSlot = Math.max(0, Math.min(3, state.getInt("player.slot")));
+            linkFocus = state.getInt("player.link_focus") == 1 ? 1 : 0;
         }
+        String linkKey = getIntent().getStringExtra(EXTRA_LINK_ROM_KEY);
+        linkMode = linkKey != null && CoverRepository.validKey(linkKey);
+        if (linkMode) restoreMenu = false;
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(HomeActivity.BACKGROUND);
+        root.setBackgroundColor(theme.background);
         surface = new GLSurfaceView(this);
         surface.setEGLContextClientVersion(2);
         surface.setRenderer(this);
@@ -134,6 +199,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
             gamePaused = paused;
             releaseInput();
             if (gameControls != null) gameControls.setEnabled(!paused);
+            if (skinView != null) skinView.setEnabled(!paused);
             // As in the beta: the screen stays on while the game runs, a game
             // played on a controller included; the menu lets it sleep.
             if (paused) getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
@@ -148,16 +214,11 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         // and the three-dot game menu. The GL/C frontend is unchanged.
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.VERTICAL);
-        header.setBackgroundColor(HomeActivity.BACKGROUND);
+        header.setBackgroundColor(theme.background);
 
         LinearLayout toolbar = new LinearLayout(this);
         toolbar.setGravity(Gravity.CENTER_VERTICAL);
-        TextView back = new TextView(this);
-        back.setText("‹");
-        back.setGravity(Gravity.CENTER);
-        back.setTextSize(32);
-        back.setTextColor(HomeActivity.TEXT);
-        back.setContentDescription("Retour à la bibliothèque");
+        View back = RavenIcon.button(this, RavenIcon.Glyph.BACK, theme.accent, 24, "Retour à la bibliothèque");
         back.setOnClickListener(view -> finish());
         toolbar.addView(back, new LinearLayout.LayoutParams(dp(48), dp(48)));
         gameTitle = new TextView(this);
@@ -165,29 +226,47 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         gameTitle.setSingleLine(true);
         gameTitle.setEllipsize(android.text.TextUtils.TruncateAt.END);
         gameTitle.setTextSize(16);
-        gameTitle.setTextColor(HomeActivity.TEXT);
+        gameTitle.setTextColor(theme.text);
         gameTitle.setGravity(Gravity.CENTER_VERTICAL);
         toolbar.addView(gameTitle, new LinearLayout.LayoutParams(0, dp(48), 1));
 
-        TextView menu = new TextView(this);
-        menu.setText("⋮");
-        menu.setGravity(Gravity.CENTER);
-        menu.setTextSize(28);
-        menu.setTextColor(HomeActivity.TEXT);
-        menu.setContentDescription("Menu du jeu");
-        menu.setOnClickListener(view -> togglePlayerMenu());
-        toolbar.addView(menu, new LinearLayout.LayoutParams(dp(48), dp(48)));
+        if (linkMode) {
+            // The beta's link bar: the other player in place of the game menu.
+            gameTitle.setSingleLine(false);
+            gameTitle.setMaxLines(2);
+            linkSwitch = new TextView(this);
+            linkSwitch.setTextColor(theme.accent);
+            linkSwitch.setTextSize(13);
+            linkSwitch.setGravity(Gravity.CENTER);
+            linkSwitch.setPadding(dp(10), 0, dp(12), 0);
+            linkSwitch.setCompoundDrawablePadding(dp(6));
+            linkSwitch.setCompoundDrawablesRelativeWithIntrinsicBounds(
+                    new RavenIcon(RavenIcon.Glyph.SWAP, theme.accent, dp(18)), null, null, null);
+            android.graphics.drawable.GradientDrawable outline = new android.graphics.drawable.GradientDrawable();
+            outline.setCornerRadius(dp(18));
+            outline.setStroke(Math.max(1, dp(1)), theme.accent);
+            linkSwitch.setBackground(outline);
+            linkSwitch.setOnClickListener(view -> switchLinkedPlayer());
+            LinearLayout.LayoutParams switchSize = new LinearLayout.LayoutParams(-2, dp(36));
+            switchSize.setMarginEnd(dp(8));
+            toolbar.addView(linkSwitch, switchSize);
+            showLinkTitle();
+        } else {
+            View menu = RavenIcon.button(this, RavenIcon.Glyph.MORE, theme.accent, 24, "Menu du jeu");
+            menu.setOnClickListener(view -> togglePlayerMenu());
+            toolbar.addView(menu, new LinearLayout.LayoutParams(dp(48), dp(48)));
+        }
         header.addView(toolbar);
 
         // As in the beta, nothing between the bar and the picture; messages
         // show in the game menu, or briefly over the game.
         editBar = new LinearLayout(this);
         editBar.setGravity(Gravity.CENTER_VERTICAL);
-        editBar.setBackgroundColor(HomeActivity.SURFACE);
+        editBar.setBackgroundColor(theme.surface);
         editBar.setPadding(dp(12), 0, dp(4), 0);
         TextView hint = new TextView(this);
         hint.setText("Faites glisser les boutons");
-        hint.setTextColor(HomeActivity.MUTED);
+        hint.setTextColor(theme.muted);
         hint.setTextSize(12);
         editBar.addView(hint, new LinearLayout.LayoutParams(0, -2, 1));
         TextView restore = barButton("Rétablir");
@@ -202,21 +281,52 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         header.addView(editBar, new LinearLayout.LayoutParams(-1, dp(48)));
         root.addView(header, new LinearLayout.LayoutParams(-1, -2));
 
-        gameControls = new GameControlsView(this, this::setTouchButtons, this::togglePlayerMenu);
+        // Linked games have no game menu: no Menu button among the controls.
+        gameControls = new GameControlsView(this, this::setTouchButtons, linkMode ? null : this::togglePlayerMenu);
         gameControls.setEnabled(false);
+        // The picture, and RetroAchievements' banners over it.
+        FrameLayout screen = new FrameLayout(this);
+        screen.addView(surface, new FrameLayout.LayoutParams(-1, -1));
+        achievementOverlay = new AchievementOverlay(this, badges);
+        screen.addView(achievementOverlay, new FrameLayout.LayoutParams(-1, -1));
+        achievements = new PlayerAchievements(command -> runOnUiThread(() -> {
+            if (!disposed.get()) command.run();
+        }), event -> {
+            achievementOverlay.onEvent(event);
+            refreshAchievementsSoon();
+        }, () -> {
+            // GL thread, as rcheevos asks when Hardcore starts during a game.
+            if (!NativeBridge.resetGame()) postStatus("Le redémarrage du jeu a échoué.");
+        });
         if (getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE) {
             FrameLayout stage = new FrameLayout(this);
             root.addView(stage, new LinearLayout.LayoutParams(-1, 0, 1));
             FrameLayout.LayoutParams video = new FrameLayout.LayoutParams(-1, -1);
             video.leftMargin = video.rightMargin = dp(116);
             video.bottomMargin = dp(44);
-            stage.addView(surface, video);
+            stage.addView(screen, video);
             // The whole stage, so a control can be moved beside or over the picture.
             stage.addView(gameControls, new FrameLayout.LayoutParams(-1, -1));
         } else {
-            root.addView(surface, new LinearLayout.LayoutParams(-1, 0, 1));
-            root.addView(gameControls, new LinearLayout.LayoutParams(-1, -2));
+            // The picture over the touch controls; a Delta skin covers both
+            // and gives the picture its place.
+            FrameLayout stage = new FrameLayout(this);
+            LinearLayout column = new LinearLayout(this);
+            column.setOrientation(LinearLayout.VERTICAL);
+            column.addView(screen, new LinearLayout.LayoutParams(-1, 0, 1));
+            column.addView(gameControls, new LinearLayout.LayoutParams(-1, -2));
+            stage.addView(column, new FrameLayout.LayoutParams(-1, -1));
+            skinView = new DeltaSkinView(this, new DeltaSkinView.Listener() {
+                @Override public void onButtons(int mask) { setTouchButtons(mask); }
+                @Override public void onMenu() { togglePlayerMenu(); }
+                @Override public void onReady(DeltaSkinLayout layout) { showSkin(layout); }
+                @Override public void onError(DeltaSkinException.Code code) { skinFailed(); }
+            });
+            skinView.setEnabled(false);
+            stage.addView(skinView, new FrameLayout.LayoutParams(-1, -1));
+            root.addView(stage, new LinearLayout.LayoutParams(-1, 0, 1));
         }
+        pictureFrame = screen;
         // Reserve actual status bar, cutout, nav buttons and keyboard space.
         // Android 15 edge-to-edge would otherwise overlay the toolbar/footer.
         SystemBarInsets.install(this, root);
@@ -224,7 +334,24 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         // The RavenEmu-style Java library selects a private ROM; only JNI/C
         // executes it, preserving the Java -> C -> RavenCore C++ architecture.
         String launchKey = getIntent().getStringExtra(EXTRA_ROM_KEY);
-        if (launchKey != null && CoverRepository.validKey(launchKey)) {
+        if (linkMode && launchKey != null && CoverRepository.validKey(launchKey)) {
+            submitIo(() -> {
+                try {
+                    RomLibrary.Entry first = null, second = null;
+                    for (RomLibrary.Entry entry : RomLibrary.list(getFilesDir())) {
+                        if (launchKey.equals(entry.key)) first = entry;
+                        if (linkKey.equals(entry.key)) second = entry;
+                    }
+                    if (first == null || second == null) postStatus("Jeu absent de la bibliothèque");
+                    else if (first.key.equals(second.key) || !LinkCable.compatible(first.system, second.system))
+                        postStatus("Ces deux jeux ne se relient pas : Game Boy et Game Boy Color ensemble, "
+                                + "ou deux Game Boy Advance.");
+                    else loadLinkedFromLibrary(first, second);
+                } catch (IOException error) {
+                    postStatus("Chargement impossible : " + error.getMessage());
+                }
+            });
+        } else if (launchKey != null && CoverRepository.validKey(launchKey)) {
             submitIo(() -> {
                 try {
                     for (RomLibrary.Entry entry : RomLibrary.list(getFilesDir())) {
@@ -281,15 +408,85 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         button.setText(label);
         button.setGravity(Gravity.CENTER);
         button.setTextSize(14);
-        button.setTextColor(HomeActivity.ACCENT);
+        button.setTextColor(theme.accent);
         button.setPadding(dp(12), 0, dp(12), 0);
         button.setMinWidth(dp(48));
         return button;
     }
 
+    /** UI thread: the skin of the open game's console, read again (back from
+     * the settings, it may have changed); classic controls without one. */
+    private void refreshSkin() {
+        if (skinView == null || loadedSystem == null || disposed.get()) return;
+        final DeltaSkin.Console console = DeltaSkins.console(loadedSystem);
+        final boolean haptics = ControlSettings.load(this).haptics;
+        final int request = ++skinRequest;
+        final android.content.Context context = getApplicationContext();
+        SKINS.execute(() -> {
+            DeltaSkins.Configuration found;
+            try {
+                found = new DeltaSkins(context).configuration(console);
+            } catch (RuntimeException unreadable) {
+                found = null;
+            }
+            final DeltaSkins.Configuration configuration = found;
+            runOnUiThread(() -> {
+                if (disposed.get() || request != skinRequest || skinView == null) return;
+                if (configuration == null) {
+                    showClassicControls();
+                    return;
+                }
+                DeltaSkins.Configuration current = skinView.configuration();
+                // The same archive keeps its drawn page.
+                skinView.setConfiguration(current != null && current.sha256.equals(configuration.sha256)
+                        ? current : configuration, haptics);
+            });
+        });
+    }
+
+    /** The skin is drawn: the picture takes the game's area above it. */
+    private void showSkin(DeltaSkinLayout layout) {
+        if (pictureFrame == null || gameControls == null) return;
+        if (gameControls.isEditing()) finishMovingControls();
+        releaseInput();
+        gameControls.setVisibility(View.GONE);
+        LinearLayout.LayoutParams area = new LinearLayout.LayoutParams(
+                (int) Math.round(layout.gameArea.width()), (int) Math.round(layout.gameArea.height()));
+        area.leftMargin = (int) Math.round(layout.gameArea.left);
+        area.topMargin = (int) Math.round(layout.gameArea.top);
+        pictureFrame.setLayoutParams(area);
+    }
+
+    private void showClassicControls() {
+        // Landscape has no skin: its picture is not in the portrait column.
+        if (skinView == null) return;
+        skinView.setConfiguration(null, false);
+        if (pictureFrame == null || gameControls == null) return;
+        if (gameControls.getVisibility() == View.VISIBLE) return;
+        releaseInput();
+        pictureFrame.setLayoutParams(new LinearLayout.LayoutParams(-1, 0, 1));
+        gameControls.setVisibility(View.VISIBLE);
+    }
+
+    /** A skin that cannot be drawn is unselected, as in the beta. */
+    private void skinFailed() {
+        DeltaSkins.Configuration failed = skinView != null ? skinView.configuration() : null;
+        showClassicControls();
+        if (failed == null) return;
+        final android.content.Context context = getApplicationContext();
+        SKINS.execute(() -> new DeltaSkins(context).fallback(failed.console, failed.sha256));
+        android.widget.Toast.makeText(this, "Skin invalide : commandes classiques restaurées",
+                android.widget.Toast.LENGTH_LONG).show();
+    }
+
     /** From the game menu: the game waits while the player drags the controls. */
     private void startMovingControls() {
         if (disposed.get() || gameControls == null || gameControls.isEditing()) return;
+        if (skinView != null && skinView.configuration() != null) {
+            android.widget.Toast.makeText(this, "Un skin Delta place lui-même ses boutons.",
+                    android.widget.Toast.LENGTH_SHORT).show();
+            return;
+        }
         pauseState.editing(true);
         if (playerMenu != null) playerMenu.dismiss();
         editingLandscape = gameControls.isLandscape();
@@ -316,6 +513,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         gamepad.reset();
         touchButtons = 0;
         if (gameControls != null) gameControls.releaseAll();
+        if (skinView != null) skinView.releaseAll();
         NativeBridge.clearButtons();
     }
 
@@ -324,6 +522,14 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
             try {
                 byte[] rom = RomLibrary.readRom(getFilesDir(), entry);
                 byte[] battery = SaveRepository.read(getFilesDir(), entry.key, "srm");
+                List<CheatList.Cheat> stored;
+                try {
+                    stored = CheatRepository.read(getFilesDir(), entry.key);
+                } catch (IOException | RuntimeException unreadable) {
+                    stored = Collections.emptyList();
+                    postStatus("Codes de triche illisibles : " + unreadable.getMessage());
+                }
+                final List<CheatList.Cheat> storedCheats = stored;
                 // Settings → Console picks the core; it and the image options
                 // apply as the game loads. The SRAM stays the game's own.
                 ConsoleSettings console = ConsoleSettings.load(this);
@@ -338,6 +544,12 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
                 String[] coreOptions = CoreOptions.atLoad(core, PlaybackSettings.load(this), console,
                         CartridgeSettings.load(this), bios != null);
                 String stateVariant = console.stateVariant(core, bios == null ? null : GbaBiosRepository.digest(bios));
+                // Signed in from Settings → RetroAchievements: the game's
+                // achievements follow it. Without an account, no network.
+                final AchievementAccount account = AchievementAccount.load(this);
+                final AchievementsHttp http = account == null ? null : new AchievementsHttp(RetroUserAgent.of(this));
+                final AwardJournal journal = account == null ? null : AwardJournal.open(this);
+                final boolean hardcore = AchievementSettings.load(this).hardcore;
                 if (disposed.get()) return;
                 String nativeDir = getApplicationInfo().nativeLibraryDir;
                 String dataDir = getFilesDir().getAbsolutePath();
@@ -346,11 +558,47 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
                     undoState = null;
                     String failure = NativeBridge.openRom(nativeDir, dataDir,
                             core, rom, entry.title, coreOptions);
-                    if (failure == null && battery != null &&
-                            !NativeBridge.restoreBattery(battery)) {
-                        NativeBridge.closeRom();
-                        failure = "SRAM incompatible : fichier original conservé";
+                    String notice = null;
+                    if (failure == null && battery != null && !NativeBridge.restoreBattery(battery)) {
+                        // A file of another size, from another emulator or an
+                        // import: read as RavenCore reads one, its first bytes
+                        // over the core's fresh SRAM (SaveTransfer.fit).
+                        byte[] fitted = SaveTransfer.fit(battery, NativeBridge.saveBattery());
+                        if (fitted == null) {
+                            notice = "Ce jeu n'a pas de mémoire de sauvegarde : fichier conservé, non chargé";
+                        } else if (fitted != battery && NativeBridge.restoreBattery(fitted)) {
+                            notice = "Sauvegarde de " + battery.length + " octets lue sur les "
+                                    + fitted.length + " octets du jeu";
+                        } else {
+                            achievements.stop();
+                            NativeBridge.closeRom();
+                            failure = "SRAM incompatible : fichier original conservé";
+                        }
                     }
+                    if (failure == null && notice != null) postStatus(notice);
+                    // Once the SRAM is in: the ROM is identified by its hash.
+                    if (failure == null) achievements.start(http, account, journal, entry.system, rom, hardcore);
+                    else achievements.stop();
+                    if (failure == null) {
+                        // The game's cheats, none while Hardcore is asked for or runs.
+                        cheatsLockApplied = achievements.cheatsLocked();
+                        if (NativeBridge.setCheats(cheatsLockApplied ? new String[0]
+                                : CheatList.active(storedCheats)) >= 0) {
+                            String reason = NativeBridge.cheatRefusal();
+                            if (reason != null) postStatus(reason);
+                        }
+                        final boolean locked = cheatsLockApplied;
+                        runOnUiThread(() -> {
+                            if (disposed.get()) return;
+                            cheats = storedCheats;
+                            cheatsKey = entry.key;
+                            if (playerMenu != null) playerMenu.setCheats(storedCheats, !locked);
+                        });
+                    } else {
+                        runOnUiThread(() -> { cheats = Collections.emptyList(); cheatsKey = null; });
+                    }
+                    activeEntry = failure == null ? entry : null;
+                    activeAccount = failure == null ? accountKey(account, hardcore) : null;
                     final double fps = failure == null ? NativeBridge.frameRate() : 0.0;
                     if (failure == null) {
                         activeSaveKey = entry.key;
@@ -361,11 +609,17 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
                     } else { activeSaveKey = null; stateCompatibility = null; activeCore = null; }
                     final String result = failure;
                     runOnUiThread(() -> {
+                        if (!disposed.get()) {
+                            achievementOverlay.clear();
+                            badges.setHttp(http);
+                        }
                         if (!disposed.get() && result == null && gameTitle != null) {
                             gameFps = fps;
                             applyDisplayMode();
                             releaseInput();
                             gameControls.setShoulders("gba".equals(entry.system));
+                            loadedSystem = entry.system;
+                            refreshSkin();
                             gameTitle.setText(entry.title);
                             if (biosMissing) android.widget.Toast.makeText(this,
                                     "Vrai BIOS GBA absent : RavenCore utilise le sien. Choisissez son fichier "
@@ -379,6 +633,114 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
                 postStatus("Chargement impossible : " + error.getMessage());
             }
         });
+    }
+
+    /** IO thread: the beta's launchLinked. Both games run in RavenCore's link
+     * subsystem, each with its own save; no achievements, cheats or states. */
+    private void loadLinkedFromLibrary(RomLibrary.Entry first, RomLibrary.Entry second) {
+        try {
+            byte[] firstRom = RomLibrary.readRom(getFilesDir(), first);
+            byte[] secondRom = RomLibrary.readRom(getFilesDir(), second);
+            final byte[][] batteries = {SaveRepository.read(getFilesDir(), first.key, "srm"),
+                    SaveRepository.read(getFilesDir(), second.key, "srm")};
+            ConsoleSettings console = ConsoleSettings.load(this);
+            final String core = LinkCable.core(console.coreFor(first.system), console.coreFor(second.system));
+            if (core == null) {
+                postStatus("Ces deux jeux ne se relient pas : Game Boy et Game Boy Color ensemble, "
+                        + "ou deux Game Boy Advance.");
+                return;
+            }
+            byte[] bios = null;
+            if ("gba".equals(core) && console.gbaBios != ConsoleSettings.BIOS_RAVENCORE) {
+                try { bios = GbaBiosRepository.read(getFilesDir()); }
+                catch (IOException unreadable) { bios = null; }
+            }
+            String[] coreOptions = CoreOptions.atLoad(core, PlaybackSettings.load(this), console,
+                    CartridgeSettings.load(this), bios != null);
+            if (disposed.get()) return;
+            String nativeDir = getApplicationInfo().nativeLibraryDir;
+            String dataDir = getFilesDir().getAbsolutePath();
+            final int focus = linkFocus;
+            queueRomLoad(() -> {
+                if (disposed.get()) return;
+                undoState = null;
+                achievements.stop();
+                String failure = NativeBridge.openLinked(nativeDir, dataDir, core, firstRom, first.title,
+                        secondRom, second.title, coreOptions);
+                String notice = null;
+                for (int player = 0; failure == null && player < 2; player++) {
+                    byte[] battery = batteries[player];
+                    if (battery == null || NativeBridge.restorePlayerBattery(player, battery)) continue;
+                    // As for a game alone: a save of another size, read as RavenCore reads one.
+                    byte[] fitted = SaveTransfer.fit(battery, NativeBridge.savePlayerBattery(player));
+                    if (fitted == null) {
+                        notice = "Joueur " + (player + 1) + " : ce jeu n'a pas de mémoire de sauvegarde, "
+                                + "fichier conservé";
+                    } else if (fitted != battery && NativeBridge.restorePlayerBattery(player, fitted)) {
+                        notice = "Joueur " + (player + 1) + " : sauvegarde de " + battery.length
+                                + " octets lue sur les " + fitted.length + " octets du jeu";
+                    } else {
+                        NativeBridge.closeRom();
+                        failure = "SRAM incompatible (joueur " + (player + 1) + ") : fichier original conservé";
+                    }
+                }
+                if (failure == null && notice != null) postStatus(notice);
+                if (failure == null) NativeBridge.setLinkFocus(focus);
+                activeEntry = null;
+                activeAccount = null;
+                activeSaveKey = null;
+                stateCompatibility = null;
+                activeCore = failure == null ? core : null;
+                linkKeys = failure == null ? new String[]{first.key, second.key} : null;
+                nextBatterySaveNanos = 0;
+                final double fps = failure == null ? NativeBridge.frameRate() : 0.0;
+                final String result = failure;
+                runOnUiThread(() -> {
+                    cheats = Collections.emptyList();
+                    cheatsKey = null;
+                    if (disposed.get()) return;
+                    achievementOverlay.clear();
+                    if (result != null || gameTitle == null) return;
+                    gameFps = fps;
+                    applyDisplayMode();
+                    releaseInput();
+                    gameControls.setShoulders("gba".equals(first.system));
+                    linkEntries = new RomLibrary.Entry[]{first, second};
+                    showLinkTitle();
+                });
+                if (result != null) postStatus("Échec : " + result);
+            });
+        } catch (Exception error) {
+            postStatus("Chargement impossible : " + error.getMessage());
+        }
+    }
+
+    /** UI thread: the bar of linked games, as the beta wrote it. */
+    private void showLinkTitle() {
+        if (gameTitle == null || linkSwitch == null) return;
+        android.text.SpannableStringBuilder title =
+                new android.text.SpannableStringBuilder("Câble link · Joueur " + (linkFocus + 1));
+        if (linkEntries != null) {
+            int start = title.length();
+            title.append('\n').append(linkEntries[linkFocus].title);
+            title.setSpan(new android.text.style.RelativeSizeSpan(0.72f), start, title.length(), 0);
+            title.setSpan(new android.text.style.ForegroundColorSpan(theme.muted), start, title.length(), 0);
+        }
+        gameTitle.setText(title);
+        linkSwitch.setText("Joueur " + (2 - linkFocus));
+        linkSwitch.setContentDescription("Passer au joueur " + (2 - linkFocus));
+    }
+
+    /** The other player shows and plays; the one left keeps running. */
+    private void switchLinkedPlayer() {
+        if (linkKeys == null || disposed.get()) return;
+        linkFocus = 1 - linkFocus;
+        final int focus = linkFocus;
+        releaseInput();
+        surface.queueEvent(() -> {
+            if (!disposed.get()) NativeBridge.setLinkFocus(focus);
+        });
+        showLinkTitle();
     }
 
     private void queueRomLoad(Runnable load) {
@@ -404,6 +766,8 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
 
     private void togglePlayerMenu() {
         finishMovingControls();
+        // Linked games: no game menu, as in the beta; the bar switches players.
+        if (linkMode) return;
         if (playerMenu != null && playerMenu.isShowing()) {
             playerMenu.dismiss();
             return;
@@ -412,12 +776,30 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
             postStatus("Charge un jeu avant d’ouvrir le menu");
             return;
         }
+        // The menu pauses the game: in Hardcore, rcheevos says whether it may now.
+        if (achievements.hardcoreActive() && !pauseGranted) {
+            surface.queueEvent(() -> {
+                if (disposed.get()) return;
+                final boolean allowed = achievements.canPause();
+                runOnUiThread(() -> {
+                    if (disposed.get()) return;
+                    if (!allowed) {
+                        android.widget.Toast.makeText(this, HardcorePolicy.PAUSE_REFUSED,
+                                android.widget.Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    pauseGranted = true;
+                    try { togglePlayerMenu(); } finally { pauseGranted = false; }
+                });
+            });
+            return;
+        }
         menuOpen = true;
         pauseState.menu(true);
         releaseInput();
         if (playerMenu != null) selectedSlot = playerMenu.getSelectedSlot();
         final int generation = ++menuGeneration;
-        playerMenu = new PlayerMenuSheet(this, gameTitle.getText().toString(), selectedSlot,
+        playerMenu = new PlayerMenuSheet(this, gameTitle.getText().toString(), selectedSlot, badges,
                 new PlayerMenuSheet.Listener() {
                     @Override public void onSave(int slot) { operateSlot(slot, 0); }
                     @Override public void onLoad(int slot) { operateSlot(slot, 1); }
@@ -430,6 +812,43 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
                             startActivity(new Intent(PlayerActivity.this, PlaybackSettingsActivity.class));
                         }
                     }
+                    @Override public void onAchievementsOpened() { refreshAchievements(); }
+                    @Override public void onAchievementsSignIn() {
+                        if (!disposed.get() && foreground && !slotBusy && !settingsLaunching) {
+                            settingsLaunching = true;
+                            startActivity(new Intent(PlayerActivity.this, PlaybackSettingsActivity.class)
+                                    .putExtra(PlaybackSettingsActivity.EXTRA_PAGE, PlaybackSettingsActivity.RETRO));
+                        }
+                    }
+                    @Override public void onAchievementsRetry() { restartAchievements(); }
+                    @Override public void onAchievementsSignOut() { signOutOfAchievements(); }
+                    @Override public void onFetchScores(int board, boolean around) {
+                        if (disposed.get()) return;
+                        surface.queueEvent(() -> {
+                            if (!disposed.get()) achievements.fetchScores(board, around);
+                        });
+                        refreshAchievements();
+                    }
+                    @Override public void onOpenLink(String url) {
+                        try {
+                            startActivity(new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)));
+                        } catch (android.content.ActivityNotFoundException missing) {
+                            postStatus("Aucune application pour ouvrir ce lien");
+                        }
+                    }
+                    @Override public void onCheatAdd(String name, String code) { addCheat(name, code); }
+                    @Override public void onCheatToggle(int index) {
+                        List<CheatList.Cheat> list = new ArrayList<>(cheats);
+                        if (index < 0 || index >= list.size() || achievements.cheatsLocked()) return;
+                        list.set(index, list.get(index).withEnabled(!list.get(index).enabled));
+                        changeCheats(list);
+                    }
+                    @Override public void onCheatDelete(int index) {
+                        List<CheatList.Cheat> list = new ArrayList<>(cheats);
+                        if (index < 0 || index >= list.size()) return;
+                        list.remove(index);
+                        changeCheats(list);
+                    }
                     @Override public void onDismiss() {
                         if (generation != menuGeneration) return;
                         selectedSlot = playerMenu.getSelectedSlot();
@@ -440,8 +859,163 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         stateSlots = null;
         statePreviews = new Bitmap[StateSlotRepository.SLOT_COUNT];
         renderPlayerMenu();
+        playerMenu.setCheats(cheats, !achievements.cheatsLocked());
         playerMenu.show();
         refreshSlots();
+        refreshAchievements();
+    }
+
+    /** The beta's GbCheatsUi.add: a code the core takes is kept, on; a refused
+     * one stays in the form with the core's reason. UI thread. */
+    private void addCheat(String name, String code) {
+        final PlayerMenuSheet menu = playerMenu;
+        if (menu == null || disposed.get()) return;
+        final String line = CheatList.oneLine(code);
+        final String key = cheatsKey;
+        if (line.isEmpty()) { menu.cheatRefused("Saisissez un code."); return; }
+        if (key == null) { menu.cheatRefused("Codes de triche pas encore prêts."); return; }
+        if (achievements.cheatsLocked()) { menu.cheatRefused(CheatsPanel.HARDCORE); return; }
+        final List<CheatList.Cheat> before = cheats;
+        final CheatList.Cheat added = new CheatList.Cheat(
+                name == null || name.trim().isEmpty() ? "Code " + (before.size() + 1) : name.trim(), line, true);
+        List<CheatList.Cheat> candidate = new ArrayList<>(before);
+        candidate.add(added);
+        final String[] codes = CheatList.active(candidate);
+        surface.queueEvent(() -> {
+            if (disposed.get() || !key.equals(activeSaveKey)) return;
+            final int refused = NativeBridge.setCheats(codes);
+            final String reason = NativeBridge.cheatRefusal();
+            runOnUiThread(() -> {
+                if (disposed.get() || !key.equals(cheatsKey)) return;
+                if (refused == -2) {
+                    menu.cheatRefused("Codes de triche indisponibles pour ce jeu.");
+                } else if (refused == codes.length - 1) {
+                    // The core keeps the others as they were.
+                    menu.cheatRefused(reason == null ? "Code refusé par le core." : reason);
+                } else {
+                    List<CheatList.Cheat> now = new ArrayList<>(cheats);
+                    now.add(added);
+                    changeCheats(now);
+                    menu.cheatAdded();
+                }
+            });
+        });
+    }
+
+    /** A new list: shown at once, then given to the core and written whole. */
+    private void changeCheats(List<CheatList.Cheat> list) {
+        final String key = cheatsKey;
+        if (key == null || disposed.get()) return;
+        final List<CheatList.Cheat> kept = Collections.unmodifiableList(new ArrayList<>(list));
+        cheats = kept;
+        if (playerMenu != null) playerMenu.setCheats(kept, !achievements.cheatsLocked());
+        surface.queueEvent(() -> {
+            if (disposed.get() || !key.equals(activeSaveKey) || cheatsLockApplied) return;
+            NativeBridge.setCheats(CheatList.active(kept));
+            String reason = NativeBridge.cheatRefusal();
+            if (reason != null) postStatus(reason);
+        });
+        submitIo(() -> {
+            try { CheatRepository.write(getFilesDir(), key, kept); }
+            catch (IOException | RuntimeException failure) {
+                postStatus("Codes de triche non enregistrés : " + failure.getMessage());
+            }
+        });
+    }
+
+    /** The menu's RetroAchievements: a snapshot on the GL thread, the
+     * unlocks still waiting counted from the journal off it. */
+    private void refreshAchievements() {
+        final PlayerMenuSheet menu = playerMenu;
+        if (disposed.get() || menu == null || !menu.isShowing() || surface == null) return;
+        surface.queueEvent(() -> {
+            if (disposed.get()) return;
+            final AchievementsSnapshot snapshot = achievements.snapshot();
+            final AwardJournal journal = achievements.journal();
+            submitIo(() -> {
+                int pending = journal == null || !snapshot.signedIn ? 0 : journal.forAccount(snapshot.user).size();
+                runOnUiThread(() -> {
+                    if (!disposed.get() && playerMenu == menu && menu.isShowing())
+                        menu.setAchievements(snapshot.withPending(pending));
+                });
+            });
+        });
+    }
+
+    /** Events come in bursts (progress, scores): one refresh for them. */
+    private void refreshAchievementsSoon() {
+        if (achievementsRefreshQueued || playerMenu == null || !playerMenu.isShowing()) return;
+        achievementsRefreshQueued = true;
+        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+            achievementsRefreshQueued = false;
+            refreshAchievements();
+        }, 250);
+    }
+
+    /** The account and the mode a game's achievements run with. */
+    private static String accountKey(AchievementAccount account, boolean hardcoreRequested) {
+        return account == null ? null
+                : account.user + "\n" + account.token + "\n" + HardcorePolicy.enabled(hardcoreRequested);
+    }
+
+    /** The stored account now, for the game running: signed in, out, or
+     * another one in Settings → RetroAchievements, as the beta applied it at
+     * once. "Réessayer" asks for the same with the same account. */
+    private void restartAchievements() { refreshAchievementAccount(true); }
+
+    private void refreshAchievementAccount(boolean force) {
+        final RomLibrary.Entry entry = activeEntry;
+        if (entry == null || disposed.get()) return;
+        submitIo(() -> {
+            final AchievementAccount account = AchievementAccount.load(this);
+            final boolean hardcore = AchievementSettings.load(this).hardcore;
+            final String key = accountKey(account, hardcore);
+            final String previous = activeAccount;
+            if (!force && java.util.Objects.equals(key, previous)) return;
+            // Hardcore turned on during the game: it starts over, as in the beta.
+            final boolean restartGame = account != null && HardcorePolicy.enabled(hardcore)
+                    && (previous == null || !previous.endsWith("\ntrue"));
+            byte[] rom = null;
+            if (account != null) {
+                try { rom = RomLibrary.readRom(getFilesDir(), entry); }
+                catch (IOException unreadable) { postStatus("RetroAchievements : jeu illisible"); return; }
+            }
+            final byte[] game = rom;
+            final AchievementsHttp http = account == null ? null : new AchievementsHttp(RetroUserAgent.of(this));
+            final AwardJournal journal = account == null ? null : AwardJournal.open(this);
+            if (disposed.get()) return;
+            surface.queueEvent(() -> {
+                if (disposed.get() || activeEntry != entry) return;
+                if (restartGame) NativeBridge.resetGame();
+                achievements.start(http, account, journal, entry.system, game, hardcore);
+                activeAccount = key;
+                runOnUiThread(() -> {
+                    if (disposed.get()) return;
+                    if (http != null) badges.setHttp(http);
+                    achievementOverlay.clear();
+                    refreshAchievements();
+                });
+            });
+        });
+    }
+
+    /** From the game menu, as in the beta: the token and the unlocks still
+     * waiting are forgotten on this device. */
+    private void signOutOfAchievements() {
+        submitIo(() -> {
+            AwardJournal.clear(this);
+            AchievementAccount.clear(this);
+            surface.queueEvent(() -> {
+                if (disposed.get()) return;
+                achievements.stop();
+                activeAccount = null;
+                runOnUiThread(() -> {
+                    if (disposed.get()) return;
+                    if (playerMenu != null && playerMenu.isShowing()) playerMenu.showMenu();
+                    refreshAchievements();
+                });
+            });
+        });
     }
 
     private void refreshSlots() {
@@ -464,6 +1038,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
     private void operateSlot(int slot, int action) {
         if (disposed.get() || slotBusy || stateSlots == null || activeSaveKey == null ||
                 stateCompatibility == null || slot < 0 || slot >= StateSlotRepository.SLOT_COUNT) return;
+        if (action == 1 && refuseStateLoad()) return;
         final String key = activeSaveKey, compatibility = stateCompatibility;
         final PlayerMenuSheet requestingMenu = playerMenu;
         final int requestingGeneration = menuGeneration;
@@ -517,6 +1092,14 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         return new SlotBatch(slots, previews);
     }
 
+    /** Hardcore: no save state is loaded, the undo of a load included. */
+    private boolean refuseStateLoad() {
+        if (!achievements.stateLoadLocked()) return false;
+        renderPlayerMenu();
+        if (playerMenu != null && playerMenu.isShowing()) playerMenu.showMessage(HardcorePolicy.STATE_LOAD_LOCKED);
+        return true;
+    }
+
     private boolean canUndo() {
         UndoState undo = undoState;
         return undo != null && undo.key.equals(activeSaveKey) &&
@@ -532,6 +1115,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
 
     private void undoLastLoad() {
         if (disposed.get() || slotBusy || !canUndo()) { renderPlayerMenu(); return; }
+        if (refuseStateLoad()) return;
         UndoState undo = undoState;
         final PlayerMenuSheet requestingMenu = playerMenu;
         final int generation = menuGeneration;
@@ -556,6 +1140,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         }
         boolean restored = NativeBridge.restoreState(snapshot);
         if (!restored && !NativeBridge.restoreState(previous)) {
+            achievements.stop();
             NativeBridge.closeRom();
             undoState = null;
             activeSaveKey = stateCompatibility = null;
@@ -622,6 +1207,19 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
     }
 
     private void persistBattery() throws IOException {
+        final String[] players = linkKeys;
+        if (players != null) {
+            // Each player's SRAM in its own game's save, in the saves' order.
+            for (int player = 0; player < 2; player++) {
+                final String saveKey = players[player];
+                final byte[] saved = NativeBridge.savePlayerBattery(player);
+                if (saved != null) submitIo(() -> {
+                    try { SaveRepository.write(getFilesDir(), saveKey, "srm", saved); }
+                    catch (IOException error) { postStatus("Sauvegarde impossible : " + error.getMessage()); }
+                });
+            }
+            return;
+        }
         final String key = activeSaveKey;
         if (key == null) return;
         byte[] battery = NativeBridge.saveBattery();
@@ -645,14 +1243,27 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
     @Override
     public void onDrawFrame(GL10 gl) {
         long now = System.nanoTime();
-        int advanced = NativeBridge.drawFrame(width, height, !gamePaused);
+        // Hardcore waits for the sign-in and the ROM's identification.
+        int advanced = NativeBridge.drawFrame(width, height, !gamePaused && !achievements.holdFrames());
+        // The frames shown reached RetroAchievements in the bridge: now its
+        // answers, requests and events.
+        achievements.pump();
+        final boolean cheatsLock = achievements.cheatsLocked();
+        if (activeSaveKey != null && cheatsLock != cheatsLockApplied) {
+            // Hardcore came or went: no cheat runs in it.
+            cheatsLockApplied = cheatsLock;
+            NativeBridge.setCheats(cheatsLock ? new String[0] : CheatList.active(cheats));
+            runOnUiThread(() -> {
+                if (!disposed.get() && playerMenu != null) playerMenu.setCheats(cheats, !cheatsLock);
+            });
+        }
         rumble.update(rumbleEnabled && NativeBridge.rumbling(), now);
         // What the core asks to show, as RetroArch shows it: briefly over the game.
         final String message = NativeBridge.takeMessage();
         if (message != null) runOnUiThread(() -> {
             if (!disposed.get()) android.widget.Toast.makeText(this, message, android.widget.Toast.LENGTH_LONG).show();
         });
-        if (advanced > 0 && activeSaveKey != null && now >= nextBatterySaveNanos) {
+        if (advanced > 0 && (activeSaveKey != null || linkKeys != null) && now >= nextBatterySaveNanos) {
             nextBatterySaveNanos = now + 30_000_000_000L;
             try {
                 persistBattery();
@@ -715,20 +1326,29 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
             gameControls.setSettings(ControlSettings.load(this));
             gameControls.setControlLayout(ControlLayout.load(this, gameControls.isLandscape()));
         }
+        // Back from Settings → Interface: another skin, or none.
+        refreshSkin();
         applyPlaybackSettings();
         if (pauseState != null) pauseState.foreground(true);
         dispatchRomLoad();
+        // Back from Settings → RetroAchievements: a new account applies now.
+        refreshAchievementAccount(false);
     }
 
     private void applyPlaybackSettings() {
         final PlaybackSettings settings = PlaybackSettings.load(this);
         final ConsoleSettings console = ConsoleSettings.load(this);
         final CartridgeSettings cartridge = CartridgeSettings.load(this);
+        final LatencySettings latency = LatencySettings.load(this);
         rumbleEnabled = cartridge.rumble;
+        if (achievementOverlay != null)
+            achievementOverlay.setSettings(AchievementSettings.load(this), settings.audioEnabled, settings.audioVolume);
         if (surface != null) surface.queueEvent(() -> {
             if (disposed.get() || !foreground) return;
             NativeBridge.setPlaybackOptions(settings.audioEnabled, settings.audioVolume,
-                    settings.integerScale, settings.brightness, settings.contrast, settings.effectCode());
+                    settings.integerScale, settings.brightness, settings.contrast, settings.effectCode(),
+                    settings.resamplerCode());
+            NativeBridge.setPreemptiveFrames(latency.preemptiveFrames);
             // Changed in the settings during the game: the core takes them at
             // its next frame. The console and the BIOS wait for the next launch.
             if (activeCore != null)
@@ -758,6 +1378,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         super.onSaveInstanceState(state);
         state.putBoolean("player.menu", menuOpen || restoreMenu);
         state.putInt("player.slot", playerMenu != null ? playerMenu.getSelectedSlot() : selectedSlot);
+        state.putInt("player.link_focus", linkFocus);
     }
 
     @Override protected void onDestroy() {
@@ -771,6 +1392,9 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         if (playerMenu != null) playerMenu.dismiss();
         // The emulation thread was already suspended by GLSurfaceView.onPause.
         if (surface != null) surface.onPause();
+        if (achievements != null) achievements.stop();
+        if (achievementOverlay != null) achievementOverlay.release();
+        badges.release();
         NativeBridge.closeRom();
         super.onDestroy();
     }

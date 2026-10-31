@@ -1,19 +1,32 @@
 package com.ravenemu.app.ui.settings;
 import com.ravenemu.app.R;
+import com.ravenemu.app.bridge.NativeAchievements;
 import com.ravenemu.app.data.saves.GbaBiosRepository;
+import com.ravenemu.app.data.skins.DeltaSkinException;
+import com.ravenemu.app.data.skins.DeltaSkins;
+import com.ravenemu.app.platform.AchievementsHttp;
+import com.ravenemu.app.platform.RetroUserAgent;
 import com.ravenemu.app.platform.SystemBarInsets;
+import com.ravenemu.app.settings.AchievementAccount;
+import com.ravenemu.app.settings.AchievementSettings;
+import com.ravenemu.app.settings.AwardJournal;
+import com.ravenemu.app.settings.HardcorePolicy;
 import com.ravenemu.app.settings.CartridgeSettings;
 import com.ravenemu.app.settings.ConsoleSettings;
 import com.ravenemu.app.settings.ControlLayout;
 import com.ravenemu.app.settings.ControlSettings;
+import com.ravenemu.app.settings.LatencySettings;
 import com.ravenemu.app.settings.PlaybackSettings;
-import com.ravenemu.app.ui.library.HomeActivity;
+import com.ravenemu.app.ui.common.RavenIcon;
+import com.ravenemu.app.ui.common.RavenTheme;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
 import android.content.res.ColorStateList;
+import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
@@ -23,10 +36,16 @@ import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.net.Uri;
 import android.os.Bundle;
+import android.text.Editable;
+import android.text.InputFilter;
+import android.text.InputType;
+import android.text.TextWatcher;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
@@ -34,17 +53,19 @@ import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.window.OnBackInvokedDispatcher;
-import androidx.core.graphics.PathParser;
 import java.io.IOException;
 import java.io.InputStream;
+import java.security.GeneralSecurityException;
+import java.util.Collections;
+import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/** Java Views counterpart of the beta's settings: Général, Audio, Vidéo,
- * Console, Interface and À propos. The library's ⚙ opens it on its categories.
- * Only settings connected to the native drivers are presented here. */
-public final class PlaybackSettingsActivity extends Activity {
+/** Java Views counterpart of the beta's settings: RetroAchievements, Général,
+ * Audio, Vidéo, Console, Interface and À propos. The library's ⚙ opens it on
+ * its categories. Only settings connected to the native drivers are presented. */
+public final class PlaybackSettingsActivity extends Activity implements RavenTheme.Host {
     public static final String EXTRA_PAGE = "playback.settings.page";
     public static final String HOME = "home";
     public static final String AUDIO = "audio";
@@ -53,36 +74,87 @@ public final class PlaybackSettingsActivity extends Activity {
     public static final String INTERFACE = "interface";
     public static final String GENERAL = "general";
     public static final String ABOUT = "about";
-    private static final String[] PAGES = {HOME, AUDIO, VIDEO, CONSOLE, INTERFACE, GENERAL, ABOUT};
+    public static final String RETRO = "retroachievements";
+    /** Each category lists its sub-pages; "category/sub-page" goes back to its category. */
+    public static final String GENERAL_EMULATION = "general/emulation";
+    public static final String GENERAL_LATENCY = "general/latency";
+    public static final String AUDIO_SOUND = "audio/sound";
+    public static final String AUDIO_QUALITY = "audio/quality";
+    public static final String VIDEO_COLORS = "video/colors";
+    public static final String VIDEO_RENDERING = "video/rendering";
+    public static final String VIDEO_PICTURE = "video/picture";
+    public static final String CONSOLE_GB = "console/gb";
+    public static final String CONSOLE_GBA = "console/gba";
+    public static final String INTERFACE_CONTROLS = "interface/controls";
+    public static final String INTERFACE_CARTRIDGE = "interface/cartridge";
+    public static final String INTERFACE_SKINS = "interface/skins";
+    public static final String INTERFACE_THEME = "interface/theme";
+    private static final String[] PAGES = {HOME, AUDIO, VIDEO, CONSOLE, INTERFACE, GENERAL, ABOUT,
+            GENERAL_EMULATION, GENERAL_LATENCY, AUDIO_SOUND, AUDIO_QUALITY, VIDEO_COLORS, VIDEO_RENDERING,
+            VIDEO_PICTURE, CONSOLE_GB, CONSOLE_GBA, INTERFACE_CONTROLS, INTERFACE_CARTRIDGE, INTERFACE_SKINS, RETRO,
+            INTERFACE_THEME};
     private static final String[] TITLES = {"Paramètres", "Audio", "Vidéo", "Console", "Interface",
-            "Général", "À propos"};
+            "Général", "À propos", "Émulation", "Latence", "Son du jeu", "Qualité du son", "Couleurs",
+            "Rendu", "Taille et réglages", "Game Boy et GBC", "Game Boy Advance", "Commandes tactiles",
+            "Cartouche", "Skin Delta", "RetroAchievements", "Thème"};
+    private static final int ERROR = 0xffff928b;
     private static final String REPOSITORY = "https://github.com/GhostPunishR/RavenEmu";
     private static final int PICK_BIOS = 1;
+    private static final int PICK_SKIN = 2;
 
     private PlaybackSettings settings;
     private ConsoleSettings console;
     private ControlSettings controls;
     private CartridgeSettings cartridge;
     private boolean biosInstalled;
-    /** The BIOS copy and removal, off the UI thread, one at a time. */
+    /** The installed Delta skins, read on the IO executor; an import or a change in progress. */
+    private DeltaSkins skins;
+    private List<DeltaSkins.Entry> skinEntries = Collections.emptyList();
+    private boolean skinsRead, skinBusy, skinImporting;
+    private AlertDialog skinDialog;
+    /** The BIOS copy and removal, and the account file, off the UI thread, one at a time. */
     private final ExecutorService io = Executors.newSingleThreadExecutor();
+    /** RetroAchievements' sign-in and the avatar: they wait for the network. */
+    private final ExecutorService network = Executors.newSingleThreadExecutor();
+    private AchievementSettings achievementSettings;
+    /** Read from its sealed file once, then as signed in or out here. */
+    private AchievementAccount account;
+    private boolean accountRead, signingIn;
+    private String accountError, typedUser = "";
+    private Bitmap avatar;
     private LinearLayout content;
     private ScrollView scroll;
     private TextView title;
-    private Button back;
+    private View back;
     private SeekBar volume;
     private String page;
     private final int[] scrollPositions = new int[PAGES.length];
     private int pageSerial;
     private boolean rendered;
+    /** Settings → Interface → Thème, as it was when the page opened; choosing
+     * another one creates the settings again in its colours. */
+    private RavenTheme theme;
+
+    @Override public RavenTheme theme() { return theme; }
 
     @Override public void onCreate(Bundle state) {
+        theme = RavenTheme.apply(this);
         super.onCreate(state);
         settings = PlaybackSettings.load(this);
         console = ConsoleSettings.load(this);
         controls = ControlSettings.load(this);
         cartridge = CartridgeSettings.load(this);
+        achievementSettings = AchievementSettings.load(this);
         biosInstalled = GbaBiosRepository.installed(getFilesDir());
+        skins = new DeltaSkins(this);
+        io.execute(() -> {
+            AchievementAccount stored = AchievementAccount.load(this);
+            runOnUiThread(() -> {
+                if (isDestroyed()) return;
+                accountRead = true;
+                accountChanged(stored, null);
+            });
+        });
         String initialPage = getIntent().getStringExtra(EXTRA_PAGE);
         if (state != null) {
             initialPage = state.getString("settings.page", initialPage);
@@ -92,16 +164,14 @@ public final class PlaybackSettingsActivity extends Activity {
 
         LinearLayout root = column();
         root.setTag("playback.settings.root");
-        root.setBackgroundColor(HomeActivity.BACKGROUND);
+        root.setBackgroundColor(theme.background);
         LinearLayout toolbar = new LinearLayout(this);
         toolbar.setGravity(Gravity.CENTER_VERTICAL);
-        toolbar.setBackgroundColor(HomeActivity.SURFACE);
-        back = button("‹");
-        back.setTextSize(30);
-        back.setContentDescription("Retour aux paramètres");
+        toolbar.setBackgroundColor(theme.surface);
+        back = RavenIcon.button(this, RavenIcon.Glyph.BACK, theme.accent, 24, "Retour aux paramètres");
         back.setOnClickListener(view -> navigateBack());
         toolbar.addView(back, new LinearLayout.LayoutParams(dp(48), -1));
-        title = text("", 20, HomeActivity.TEXT);
+        title = text("", 20, theme.text);
         title.setTypeface(null, Typeface.BOLD);
         toolbar.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
         root.addView(toolbar, new LinearLayout.LayoutParams(-1, dp(54)));
@@ -129,7 +199,10 @@ public final class PlaybackSettingsActivity extends Activity {
         rendered = true;
         final int request = ++pageSerial;
         title.setText(TITLES[index(page)]);
-        back.setContentDescription(HOME.equals(page) ? "Fermer les paramètres" : "Retour aux paramètres");
+        final String parent = parent(page);
+        back.setContentDescription(HOME.equals(page) ? "Fermer les paramètres"
+                : HOME.equals(parent) ? "Retour aux paramètres"
+                : "Retour aux réglages " + TITLES[index(parent)].toLowerCase(Locale.ROOT));
         content.removeAllViews();
         switch (page) {
             case AUDIO: audioPage(); break;
@@ -138,6 +211,20 @@ public final class PlaybackSettingsActivity extends Activity {
             case INTERFACE: interfacePage(); break;
             case GENERAL: generalPage(); break;
             case ABOUT: aboutPage(); break;
+            case GENERAL_EMULATION: generalEmulationPage(); break;
+            case GENERAL_LATENCY: generalLatencyPage(); break;
+            case AUDIO_SOUND: audioSoundPage(); break;
+            case AUDIO_QUALITY: audioQualityPage(); break;
+            case VIDEO_COLORS: videoColorsPage(); break;
+            case VIDEO_RENDERING: videoRenderingPage(); break;
+            case VIDEO_PICTURE: videoPicturePage(); break;
+            case CONSOLE_GB: consoleGameBoyPage(); break;
+            case CONSOLE_GBA: consoleAdvancePage(); break;
+            case INTERFACE_CONTROLS: interfaceControlsPage(); break;
+            case INTERFACE_CARTRIDGE: interfaceCartridgePage(); break;
+            case INTERFACE_SKINS: interfaceSkinsPage(); break;
+            case INTERFACE_THEME: interfaceThemePage(); break;
+            case RETRO: retroPage(); break;
             default: homePage();
         }
         final int restoreScroll = scrollPositions[index(page)];
@@ -146,72 +233,315 @@ public final class PlaybackSettingsActivity extends Activity {
         });
     }
 
-    /** The beta's categories, in its order; RetroAchievements waits for its native port. */
+    /** The beta's categories, in its order. */
     private void homePage() {
-        category("Général", "Pause automatique", GENERAL,
-                "M3,5H13V7H3ZM17,5H21V7H17ZM13,3H17V9H13ZM3,11H7V13H3ZM11,11H21V13H11ZM7,9H11V15H7Z"
-                        + "M3,17H13V19H3ZM17,17H21V19H17ZM13,15H17V21H13Z");
-        category("Audio", "Son du jeu et volume", AUDIO,
-                "M3,9H7L12,4V20L7,15H3ZM15,8V16C17,15 17,9 15,8ZM15,3V5C21,7 21,17 15,19V21C24,18 24,6 15,3Z");
-        category("Vidéo", "Couleurs, correction LCD, mélange d'images, taille, luminosité et contraste", VIDEO,
-                "M3,3H21V17H13V19H17V21H7V19H11V17H3ZM5,5V15H19V5Z");
-        // The beta draws Console with its default (About) icon.
-        category("Console", "Jeux Game Boy en couleurs, GBC d'une GBA, BIOS GBA", CONSOLE,
-                "M11,7h2v2h-2zM11,11h2v6h-2zM12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2z"
-                        + "M12,20c-4.41,0 -8,-3.59 -8,-8s3.59,-8 8,-8 8,3.59 8,8 -3.59,8 -8,8z");
+        category("RetroAchievements", "Compte, succès et progression", RETRO, RavenIcon.Glyph.TROPHY);
+        category("Général", "Pause automatique et latence", GENERAL, RavenIcon.Glyph.SLIDERS);
+        category("Audio", "Son du jeu, volume et qualité", AUDIO, RavenIcon.Glyph.SPEAKER);
+        category("Vidéo", "Couleurs, rendu, taille, luminosité et contraste", VIDEO, RavenIcon.Glyph.MONITOR);
+        // The beta drew Console with About's icon; the owner wanted its own: a handheld.
+        category("Console", "Jeux Game Boy en couleurs, GBC d'une GBA, BIOS GBA", CONSOLE, RavenIcon.Glyph.GB);
         // The beta says "Vibrations, capteurs, commandes, retour arrière, style et
         // Skin Delta": the owner left rewind out of the native player, and the
         // Delta skins wait for their port, so neither is announced.
-        category("Interface", "Vibrations, capteurs, commandes et style", INTERFACE,
-                "M3,3H11V11H3ZM13,3H21V11H13ZM3,13H11V21H3ZM13,13H21V21H13Z");
-        category("À propos", "Version, auteur, confidentialité et licences", ABOUT,
-                "M11,7h2v2h-2zM11,11h2v6h-2zM12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2z"
-                        + "M12,20c-4.41,0 -8,-3.59 -8,-8s3.59,-8 8,-8 8,3.59 8,8 -3.59,8 -8,8z");
+        category("Interface", "Thème, vibrations, capteurs, commandes, style et skin Delta", INTERFACE,
+                RavenIcon.Glyph.GAMEPAD);
+        category("À propos", "Version, auteur, confidentialité et licences", ABOUT, RavenIcon.Glyph.INFO);
+    }
+
+    /** The beta's RetroAchievements page: the account (RetroAchievementsContent.kt),
+     * then how it notifies (SettingsScreen.kt). The game's achievement list,
+     * its leaderboards and Hardcore come with the next tranche. */
+    private void retroPage() {
+        if (!accountRead) add(text("Lecture du compte…", 13, theme.muted), 0);
+        else if (account == null) loginForm();
+        else accountCard();
+        if (accountError != null) {
+            TextView error = text(accountError, 12, ERROR);
+            error.setTag("achievements.error");
+            add(error, 10);
+        }
+        group("Notifications RetroAchievements");
+        settingSwitch("Déblocages et bilan", "Afficher les succès obtenus et le jeu terminé.",
+                achievementSettings.unlockPopups, value -> updateAchievements(achievementSettings.withUnlockPopups(value)));
+        settingSwitch("Progression des succès", "Afficher les hausses mesurées à tour de rôle.",
+                achievementSettings.progressPopups,
+                value -> updateAchievements(achievementSettings.withProgressPopups(value)));
+        settingSwitch("Son des succès", "Un court carillon, créé par RavenEmu, joué avec le son du jeu pour "
+                        + "chaque succès et le jeu terminé.",
+                achievementSettings.sound, value -> updateAchievements(achievementSettings.withSound(value)));
+        choices(new String[]{"Popups en haut", "Popups en bas"},
+                new String[]{AchievementSettings.TOP, AchievementSettings.BOTTOM}, achievementSettings.position,
+                value -> updateAchievements(achievementSettings.withPosition(value)));
+        slider("Durée des déblocages", achievementSettings.popupSeconds, AchievementSettings.POPUP_MIN,
+                AchievementSettings.POPUP_MAX, " s", value -> updateAchievements(achievementSettings.withPopupSeconds(value)));
+        slider("Durée des progressions", achievementSettings.progressSeconds, AchievementSettings.PROGRESS_MIN,
+                AchievementSettings.PROGRESS_MAX, " s",
+                value -> updateAchievements(achievementSettings.withProgressSeconds(value)));
+        // As in the beta: no switch until RetroAchievements approves RavenEmu.
+        if (HardcorePolicy.approved()) {
+            group("Mode Hardcore");
+            settingSwitch("Mode Hardcore", "Succès comptés en Hardcore. Le chargement des sauvegardes d'état est "
+                            + "désactivé et les pauses sont limitées. L'activer redémarre le jeu en cours.",
+                    achievementSettings.hardcore, value -> updateAchievements(achievementSettings.withHardcore(value)));
+        } else {
+            description("Mode Hardcore indisponible", "L'activation attend la validation de RavenEmu par "
+                    + "RetroAchievements. Le mode Softcore reste disponible.");
+        }
+        add(text("Mode Softcore · SDK officiel " + sdkVersion(), 11, theme.muted), 14);
+    }
+
+    /** The beta's RetroLoginForm. The password is never kept: the field is
+     * emptied as it is sent, and only the token is stored. */
+    private void loginForm() {
+        add(text("Connectez votre compte pour obtenir les succès officiels pendant vos parties Game Boy, Game "
+                + "Boy Color et Game Boy Advance. Mode normal (Softcore).", 13, theme.muted), 0);
+        EditText user = field("Nom d'utilisateur", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+        user.setText(typedUser);
+        user.setFilters(new InputFilter[]{new InputFilter.LengthFilter(80)});
+        EditText password = field("Mot de passe", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        Button signIn = button(signingIn ? "Connexion…" : "Se connecter");
+        signIn.setTextColor(theme.background);
+        signIn.setBackground(shape(theme.accent));
+        Runnable enable = () -> {
+            boolean ready = !signingIn && !user.getText().toString().trim().isEmpty()
+                    && password.getText().length() > 0;
+            signIn.setEnabled(ready);
+            signIn.setAlpha(ready || signingIn ? 1f : 0.5f);
+        };
+        TextWatcher watcher = new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence text, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence text, int start, int before, int count) {}
+            @Override public void afterTextChanged(Editable text) {
+                typedUser = user.getText().toString();
+                enable.run();
+            }
+        };
+        user.addTextChangedListener(watcher);
+        password.addTextChangedListener(watcher);
+        user.setEnabled(!signingIn);
+        password.setEnabled(!signingIn);
+        enable.run();
+        signIn.setOnClickListener(view -> {
+            String name = user.getText().toString().trim();
+            String secret = password.getText().toString();
+            password.setText("");
+            if (name.isEmpty() || secret.isEmpty() || signingIn) return;
+            signIn(name, secret, null);
+        });
+        add(user, 12);
+        add(password, 10);
+        add(signIn, 12);
+        add(text("Le mot de passe n'est pas enregistré. Seul le jeton est conservé, chiffré sur cet appareil.",
+                11, theme.muted), 8);
+    }
+
+    /** The beta's RetroAccountSummary and RetroAccountActions. */
+    private void accountCard() {
+        LinearLayout card = column();
+        GradientDrawable surface = shape(theme.surface);
+        surface.setCornerRadius(dp(14));
+        card.setBackground(surface);
+        card.setPadding(dp(14), dp(14), dp(14), dp(14));
+        LinearLayout identity = new LinearLayout(this);
+        identity.setGravity(Gravity.CENTER_VERTICAL);
+        if (avatar != null) {
+            ImageView picture = new ImageView(this);
+            picture.setImageBitmap(avatar);
+            picture.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            picture.setContentDescription("Avatar RetroAchievements");
+            LinearLayout.LayoutParams size = new LinearLayout.LayoutParams(dp(58), dp(58));
+            size.setMarginEnd(dp(12));
+            identity.addView(picture, size);
+        }
+        LinearLayout names = column();
+        TextView name = text(account.displayName, 17, theme.text);
+        name.setTypeface(null, Typeface.BOLD);
+        names.addView(name);
+        names.addView(text("@" + account.user, 12, theme.muted));
+        identity.addView(names, new LinearLayout.LayoutParams(0, -2, 1));
+        card.addView(identity);
+        add(card, text("Softcore : " + account.softcorePoints + " points  ·  Hardcore : " + account.hardcorePoints
+                + " points", 12, theme.accent), 6);
+        add(card, text("Les succès des jeux suivent ce compte à chaque lancement.", 12, theme.muted), 6);
+        add(card, 0);
+        LinearLayout actions = new LinearLayout(this);
+        Button retry = outlined(signingIn ? "Connexion…" : "Réessayer");
+        retry.setContentDescription("Actualiser le compte RetroAchievements");
+        retry.setEnabled(!signingIn);
+        retry.setOnClickListener(view -> signIn(account.user, null, account.token));
+        Button signOut = outlined("Déconnexion");
+        signOut.setContentDescription("Se déconnecter de RetroAchievements");
+        signOut.setEnabled(!signingIn);
+        signOut.setOnClickListener(view -> signOut());
+        actions.addView(retry, new LinearLayout.LayoutParams(0, -2, 1));
+        LinearLayout.LayoutParams second = new LinearLayout.LayoutParams(0, -2, 1);
+        second.setMarginStart(dp(8));
+        actions.addView(signOut, second);
+        add(actions, 12);
+    }
+
+    /** With a password, a new account; with the token, the stored one refreshed. */
+    private void signIn(String user, String password, String token) {
+        signingIn = true;
+        accountError = null;
+        if (RETRO.equals(page)) showPage(RETRO);
+        network.execute(() -> {
+            AchievementsHttp http = new AchievementsHttp(RetroUserAgent.of(this));
+            AchievementLogin.Result result = AchievementLogin.run(http, user, password, token);
+            String error = result.error;
+            if (result.account != null) {
+                try {
+                    result.account.save(this);
+                } catch (IOException | GeneralSecurityException unsaved) {
+                    error = "Connecté, mais le jeton n'a pas pu être chiffré sur cet appareil : "
+                            + "reconnectez-vous plus tard.";
+                }
+            }
+            Bitmap picture = result.account == null ? null : http.badge(result.account.avatarUrl);
+            final String failure = error;
+            runOnUiThread(() -> {
+                if (isDestroyed()) return;
+                signingIn = false;
+                if (picture != null) avatar = picture;
+                accountChanged(result.account != null && failure == null ? result.account : account, failure);
+            });
+        });
+    }
+
+    /** Forgets the token on this device; RetroAchievements is not told. */
+    private void signOut() {
+        if (signingIn) return;
+        io.execute(() -> {
+            // The unlocks still waiting go with the account, as in the beta.
+            AwardJournal.clear(this);
+            AchievementAccount.clear(this);
+            runOnUiThread(() -> {
+                if (isDestroyed()) return;
+                avatar = null;
+                accountChanged(null, null);
+            });
+        });
+    }
+
+    private void accountChanged(AchievementAccount updated, String error) {
+        account = updated;
+        accountError = error;
+        if (account != null && avatar == null && !account.avatarUrl.isEmpty()) loadAvatar(account.avatarUrl);
+        if (RETRO.equals(page)) showPage(RETRO);
+    }
+
+    private void loadAvatar(String url) {
+        network.execute(() -> {
+            Bitmap picture = new AchievementsHttp(RetroUserAgent.of(this)).badge(url);
+            if (picture != null) runOnUiThread(() -> {
+                if (isDestroyed() || account == null || !url.equals(account.avatarUrl)) return;
+                avatar = picture;
+                if (RETRO.equals(page)) showPage(RETRO);
+            });
+        });
+    }
+
+    private void updateAchievements(AchievementSettings updated) {
+        achievementSettings = updated;
+        achievementSettings.save(this);
+    }
+
+    /** "rcheevos/x.y", from the native library; plain "rcheevos" without it. */
+    private static String sdkVersion() {
+        try {
+            return NativeAchievements.sdkVersion();
+        } catch (LinkageError withoutNativeLibrary) {
+            return "rcheevos";
+        }
+    }
+
+    private EditText field(String hint, int type) {
+        EditText field = new EditText(this);
+        field.setHint(hint);
+        field.setContentDescription(hint);
+        field.setSingleLine(true);
+        field.setInputType(type);
+        field.setTextSize(15);
+        field.setTextColor(theme.text);
+        field.setHintTextColor(theme.muted);
+        field.setMinHeight(dp(52));
+        field.setPadding(dp(14), 0, dp(14), 0);
+        field.setSaveEnabled(false);
+        GradientDrawable outline = shape(theme.surface);
+        outline.setStroke(dp(1), theme.outline);
+        field.setBackground(outline);
+        return field;
+    }
+
+    /** The beta's OutlinedButton. */
+    private Button outlined(String label) {
+        Button button = button(label);
+        button.setTextSize(12);
+        GradientDrawable outline = shape(android.graphics.Color.TRANSPARENT);
+        outline.setStroke(dp(1), theme.outline);
+        button.setBackground(outline);
+        return button;
     }
 
     /** The beta's Général page; its link cable, online covers and diagnostics
      * wait for those native features, as the beta hides them without them. */
     private void generalPage() {
-        group("Émulation");
+        category("Émulation", "Pause automatique", GENERAL_EMULATION, null);
+        category("Latence", "Images préventives", GENERAL_LATENCY, null);
+    }
+
+    private void generalEmulationPage() {
         description("Pause automatique",
                 "Le jeu et son audio sont suspendus lorsque RavenEmu passe en arrière-plan ou lorsque le "
                         + "panneau de jeu est ouvert. Ce comportement est fixe pour protéger la partie.");
+    }
+
+    /** A native addition after RetroArch's preemptive frames (the C frontend). */
+    private void generalLatencyPage() {
+        description("Images préventives",
+                "Quand une touche change, RavenEmu rejoue aussitôt les dernières images avec elle : le jeu "
+                        + "répond une à trois images plus tôt (environ 17 ms chacune). Chaque appui fait émuler "
+                        + "ces images en plus ; si le téléphone ne suit pas, le réglage baisse de lui-même pour "
+                        + "le jeu en cours. Au-delà du retard propre au jeu, l'image saute : commencez par une.");
+        choices(new String[]{"Désactivées (défaut)", "1 image", "2 images", "3 images"},
+                new String[]{"0", "1", "2", "3"}, String.valueOf(LatencySettings.load(this).preemptiveFrames),
+                value -> new LatencySettings(Integer.parseInt(value)).save(this));
     }
 
     /** The beta's À propos: who makes RavenEmu, its licences and its source.
      * The terms and the privacy policy are read online until the native
      * reader carries them. */
     private void aboutPage() {
-        TextView name = text("RavenEmu", 18, HomeActivity.TEXT);
+        TextView name = text("RavenEmu", 18, theme.text);
         name.setTypeface(null, Typeface.BOLD);
         add(name, 0);
-        add(text("Par GhostPunishR · version native expérimentale Java / C / C++", 13, HomeActivity.MUTED), 4);
+        add(text("Par GhostPunishR · version native expérimentale Java / C / C++", 13, theme.muted), 4);
         group("Informations légales");
-        aboutRow("Conditions d'utilisation", "Ce que RavenEmu fournit, et votre responsabilité", "↗",
+        aboutRow("Conditions d'utilisation", "Ce que RavenEmu fournit, et votre responsabilité", RavenIcon.Glyph.EXTERNAL,
                 view -> openLink(REPOSITORY + "/blob/main/TERMS.md"));
-        aboutRow("Politique de confidentialité", "Données échangées et services tiers", "↗",
+        aboutRow("Politique de confidentialité", "Données échangées et services tiers", RavenIcon.Glyph.EXTERNAL,
                 view -> openLink(REPOSITORY + "/blob/main/PRIVACY.md"));
         group("Licences et crédits");
-        aboutRow("Licences et crédits", "Crédits, GPLv3, AGPLv3, MIT et Apache 2, lus dans l'application", "›",
+        aboutRow("Licences et crédits", "Crédits, GPLv3, AGPLv3, MIT et Apache 2, lus dans l'application",
+                RavenIcon.Glyph.CHEVRON,
                 view -> startActivity(new Intent(this, LicensesActivity.class)));
         group("Code source");
-        aboutRow("RavenEmu", "github.com/GhostPunishR/RavenEmu", "↗", view -> openLink(REPOSITORY));
-        aboutRow("RavenCore", "github.com/GhostPunishR/RavenCore", "↗",
+        aboutRow("RavenEmu", "github.com/GhostPunishR/RavenEmu", RavenIcon.Glyph.EXTERNAL, view -> openLink(REPOSITORY));
+        aboutRow("RavenCore", "github.com/GhostPunishR/RavenCore", RavenIcon.Glyph.EXTERNAL,
                 view -> openLink("https://github.com/GhostPunishR/RavenCore"));
     }
 
-    private void aboutRow(String label, String summary, String trailing, View.OnClickListener open) {
+    private void aboutRow(String label, String summary, RavenIcon.Glyph trailing, View.OnClickListener open) {
         LinearLayout row = new LinearLayout(this);
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setMinimumHeight(dp(56));
         row.setPadding(0, dp(8), 0, dp(8));
         LinearLayout description = column();
-        description.addView(text(label, 15, HomeActivity.TEXT));
-        add(description, text(summary, 12, HomeActivity.MUTED), 3);
+        description.addView(text(label, 15, theme.text));
+        add(description, text(summary, 12, theme.muted), 3);
         row.addView(description, new LinearLayout.LayoutParams(0, -2, 1));
-        TextView mark = text(trailing, 18, HomeActivity.ACCENT);
-        mark.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-        row.addView(mark);
+        row.addView(RavenIcon.image(this, trailing, theme.accent, 20), new LinearLayout.LayoutParams(dp(24), dp(24)));
         row.setContentDescription(label + ". " + summary);
         row.setOnClickListener(open);
         add(row, 6);
@@ -225,44 +555,58 @@ public final class PlaybackSettingsActivity extends Activity {
         }
     }
 
-    private void category(String label, String summary, String destination, String iconPath) {
+    private void category(String label, String summary, String destination, RavenIcon.Glyph icon) {
         LinearLayout row = new LinearLayout(this);
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(dp(14), dp(15), dp(14), dp(15));
         row.setMinimumHeight(dp(72));
-        GradientDrawable surface = shape(HomeActivity.SURFACE);
+        GradientDrawable surface = shape(theme.surface);
         surface.setCornerRadius(dp(16));
-        surface.setStroke(dp(1), 0xb33c4052);
+        surface.setStroke(dp(1), RavenTheme.alpha(theme.outline, 0xb3));
         row.setBackground(surface);
         row.setContentDescription("Ouvrir les réglages " + label.toLowerCase(Locale.ROOT));
         row.setOnClickListener(view -> showPage(destination));
 
-        FrameLayout iconBox = new FrameLayout(this);
-        iconBox.setBackground(shape(0x21a78bfa));
-        iconBox.addView(new SettingsIcon(this, iconPath),
-                new FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER));
-        row.addView(iconBox, new LinearLayout.LayoutParams(dp(42), dp(42)));
+        // The categories carry the beta's icons; their sub-pages, text alone.
+        if (icon != null) {
+            FrameLayout iconBox = new FrameLayout(this);
+            iconBox.setBackground(shape(RavenTheme.alpha(theme.accent, 0x21)));
+            iconBox.addView(RavenIcon.image(this, icon, theme.accent, 24),
+                    new FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER));
+            row.addView(iconBox, new LinearLayout.LayoutParams(dp(42), dp(42)));
+        }
         LinearLayout description = column();
-        TextView name = text(label, 16, HomeActivity.TEXT);
+        TextView name = text(label, 16, theme.text);
         name.setTypeface(null, Typeface.BOLD);
         description.addView(name);
-        add(description, text(summary, 12, HomeActivity.MUTED), 4);
+        add(description, text(summary, 12, theme.muted), 4);
         LinearLayout.LayoutParams details = new LinearLayout.LayoutParams(0, -2, 1);
-        details.setMarginStart(dp(13));
+        details.setMarginStart(icon != null ? dp(13) : dp(4));
         details.setMarginEnd(dp(13));
         row.addView(description, details);
-        row.addView(text("›", 23, HomeActivity.ACCENT));
+        row.addView(RavenIcon.image(this, RavenIcon.Glyph.CHEVRON, theme.accent, 20),
+                new LinearLayout.LayoutParams(dp(24), dp(24)));
         add(row, content.getChildCount() == 0 ? 0 : 14);
     }
 
+    /** A sub-page goes back to its category, a category to the categories. */
     private void navigateBack() {
-        if (HOME.equals(page)) finish(); else showPage(HOME);
+        if (HOME.equals(page)) finish(); else showPage(parent(page));
+    }
+
+    private static String parent(String page) {
+        final int slash = page.indexOf('/');
+        return slash < 0 ? HOME : page.substring(0, slash);
     }
 
     @Override public void onBackPressed() { navigateBack(); }
 
     private void audioPage() {
-        group("Son du jeu");
+        category("Son du jeu", "Activer le son et volume", AUDIO_SOUND, null);
+        category("Qualité du son", "Rééchantillonnage sinc ou linéaire", AUDIO_QUALITY, null);
+    }
+
+    private void audioSoundPage() {
         settingSwitch("Activer le son",
                 "Conserve l'horloge d'émulation et coupe uniquement la sortie audio.",
                 settings.audioEnabled, enabled -> {
@@ -274,9 +618,35 @@ public final class PlaybackSettingsActivity extends Activity {
         volume.setEnabled(settings.audioEnabled);
     }
 
+    /** A native addition: the beta's player had linear interpolation only. */
+    private void audioQualityPage() {
+        description("Rééchantillonnage",
+                "Le son du jeu est converti à la fréquence du téléphone. Le filtre sinc garde les notes "
+                        + "aiguës nettes, sans le sifflement métallique de l'interpolation linéaire, pour moins "
+                        + "de 1 % d'un cœur du processeur ; l'interpolation linéaire reste au choix pour comparer.");
+        choices(new String[]{"Sinc (défaut)", "Linéaire"},
+                new String[]{PlaybackSettings.RESAMPLER_SINC, PlaybackSettings.RESAMPLER_LINEAR},
+                settings.resampler, value -> update(settings.withResampler(value)));
+    }
+
+    /** The beta's Vidéo groups, by theme. Its reset brings every one back. */
     private void videoPage() {
-        // The beta's groups and wording. The colors, the LCD correction and the
-        // frame blending are RavenCore's, set through its Libretro options.
+        category("Couleurs", "Profil Game Boy et correction LCD", VIDEO_COLORS, null);
+        category("Rendu", "Mélange d'images et effet d'écran", VIDEO_RENDERING, null);
+        category("Taille et réglages", "Pixels entiers, luminosité et contraste", VIDEO_PICTURE, null);
+        Button reset = button("Rétablir l'affichage d'origine");
+        reset.setTextColor(theme.accent);
+        reset.setOnClickListener(view -> {
+            update(settings.withPicture(false, 0, 100).withImage(PlaybackSettings.PALETTE_ORIGINAL,
+                    false, false, PlaybackSettings.BLENDING_OFF).withEffect(PlaybackSettings.EFFECT_NONE));
+            showPage(VIDEO);
+        });
+        add(reset, 14);
+    }
+
+    /** The beta's wording. The colors, the LCD correction and the frame
+     * blending are RavenCore's, set through its Libretro options. */
+    private void videoColorsPage() {
         group("Écran");
         description("Profil de couleurs",
                 "Original garde le vert de la Game Boy ; Pocket gris imite la Game Boy Pocket ; "
@@ -296,6 +666,9 @@ public final class PlaybackSettingsActivity extends Activity {
                 "Même correction, réglée à part pour la Game Boy Advance.",
                 settings.lcdCorrectionGba, enabled -> update(settings.withImage(settings.gbPalette,
                         settings.lcdCorrectionGbc, enabled, settings.frameBlending)));
+    }
+
+    private void videoRenderingPage() {
         group("Mélange d'images");
         description("Rémanence de l'écran",
                 "Certains jeux font clignoter un objet d'une image à l'autre pour le rendre transparent, "
@@ -315,6 +688,9 @@ public final class PlaybackSettingsActivity extends Activity {
         choices(new String[]{"Aucun (défaut)", "Lissage net", "Grille LCD"},
                 new String[]{PlaybackSettings.EFFECT_NONE, PlaybackSettings.EFFECT_SHARP, PlaybackSettings.EFFECT_LCD},
                 settings.screenEffect, effect -> update(settings.withEffect(effect)));
+    }
+
+    private void videoPicturePage() {
         group("Taille de l'image");
         settingSwitch("Pixels entiers",
                 "L'image prend un multiple entier de sa taille : tous les pixels sont identiques, avec des bords noirs autour.",
@@ -325,20 +701,16 @@ public final class PlaybackSettingsActivity extends Activity {
                 update(settings.withPicture(settings.integerScale, value, settings.contrast)));
         slider("Contraste", settings.contrast, 50, 150, true, value ->
                 update(settings.withPicture(settings.integerScale, settings.brightness, value)));
-        Button reset = button("Rétablir l'affichage d'origine");
-        reset.setTextColor(HomeActivity.ACCENT);
-        reset.setOnClickListener(view -> {
-            update(settings.withPicture(false, 0, 100).withImage(PlaybackSettings.PALETTE_ORIGINAL,
-                    false, false, PlaybackSettings.BLENDING_OFF).withEffect(PlaybackSettings.EFFECT_NONE));
-            showPage(VIDEO);
-        });
-        add(reset, 14);
     }
 
     /** The beta's Console page: the console that runs the games. Taken at the
      * game's launch, except the Game Boy colors, which change at once. */
     private void consolePage() {
-        group("Game Boy et Game Boy Color");
+        category("Game Boy et GBC", "Jeux Game Boy en couleurs et GBC d'une GBA", CONSOLE_GB, null);
+        category("Game Boy Advance", "BIOS et son fichier", CONSOLE_GBA, null);
+    }
+
+    private void consoleGameBoyPage() {
         LinearLayout[] colors = new LinearLayout[1];
         settingSwitch("Jeux Game Boy en couleurs",
                 "Les jeux Game Boy tournent sur une Game Boy Color, qui leur donne des couleurs : celles que sa "
@@ -362,7 +734,9 @@ public final class PlaybackSettingsActivity extends Activity {
                         + "leurs bonus. Un état pris avec l'autre console ne se recharge pas. Pris en compte au "
                         + "lancement du jeu.",
                 console.gbcOnGba, enabled -> updateConsole(console.withGbcOnGba(enabled)));
-        group("Game Boy Advance");
+    }
+
+    private void consoleAdvancePage() {
         description("BIOS",
                 "RavenCore répond lui-même aux appels du BIOS. Le vrai BIOS, celui de votre console, joue son "
                         + "animation de démarrage (sauf si vous la sautez) : choisissez son fichier (16 Kio), aucun "
@@ -373,13 +747,13 @@ public final class PlaybackSettingsActivity extends Activity {
                         String.valueOf(ConsoleSettings.BIOS_REAL_SKIP_INTRO)},
                 String.valueOf(console.gbaBios), value -> updateConsole(console.withGbaBios(Integer.parseInt(value))));
         TextView file = text(biosInstalled ? "Fichier du BIOS : installé" : "Fichier du BIOS : absent", 13,
-                biosInstalled ? HomeActivity.TEXT : HomeActivity.MUTED);
+                biosInstalled ? theme.text : theme.muted);
         add(file, 10);
         Button choose = textButton(biosInstalled ? "Remplacer le fichier du BIOS" : "Choisir le fichier du BIOS",
-                HomeActivity.ACCENT);
+                theme.accent);
         choose.setOnClickListener(view -> pickBios());
         if (biosInstalled) {
-            Button remove = textButton("Retirer le fichier du BIOS", HomeActivity.MUTED);
+            Button remove = textButton("Retirer le fichier du BIOS", theme.muted);
             remove.setOnClickListener(view -> io.execute(() -> {
                 GbaBiosRepository.remove(getFilesDir());
                 biosChanged(null);
@@ -388,17 +762,169 @@ public final class PlaybackSettingsActivity extends Activity {
     }
 
     /** The beta's Interface page: the touch controls, where the buttons were
-     * moved, and the cartridge hardware the phone stands in for. Its Delta skin
-     * section waits for that native feature; rewind is left out at the
-     * owner's request. */
+     * moved, the cartridge hardware the phone stands in for, and the Delta
+     * skins; rewind is left out at the owner's request. The theme comes first:
+     * the owner's addition, the beta had RavenEmu's colours only. */
     private void interfacePage() {
-        group("Commandes tactiles");
+        category("Thème", "RavenEmu ou NVIDIA : écrans, icônes et boutons", INTERFACE_THEME, null);
+        category("Commandes tactiles", "Retour haptique, taille, espacement et style", INTERFACE_CONTROLS, null);
+        category("Cartouche", "Vibration et capteurs du téléphone", INTERFACE_CARTRIDGE, null);
+        category("Skin Delta", "Importer et choisir un skin .deltaskin", INTERFACE_SKINS, null);
+    }
+
+    /** RavenEmu's violet on its dark background, or the green on black of
+     * RetroArch's "NVIDIA Shield" theme: every screen, icon, sheet and touch
+     * control takes it at once; a game already open keeps its colours until it
+     * is closed, so that it never restarts for a colour. */
+    private void interfaceThemePage() {
+        RavenTheme[] themes = RavenTheme.all();
+        String[] labels = new String[themes.length], values = new String[themes.length];
+        for (int i = 0; i < themes.length; i++) {
+            labels[i] = themes[i] == RavenTheme.RAVENEMU ? themes[i].name + " (défaut)" : themes[i].name;
+            values[i] = themes[i].id;
+        }
+        choices(labels, values, theme.id, id -> changeTheme(RavenTheme.forId(id)));
+        add(text("RavenEmu : violet sur fond sombre, les couleurs de la bêta. NVIDIA : vert sur noir, d'après "
+                + "le thème « NVIDIA Shield » de RetroArch. Les écrans, les icônes, les menus et les boutons "
+                + "tactiles prennent les couleurs du thème ; un jeu déjà ouvert garde les siennes jusqu'à sa "
+                + "fermeture. Les skins Delta gardent leurs propres images.", 12, theme.muted), 8);
+    }
+
+    private void changeTheme(RavenTheme chosen) {
+        if (chosen == theme) return;
+        RavenTheme.store(this, chosen);
+        // Created again on the same page, in the new colours.
+        recreate();
+    }
+
+    /** The beta's Skin Delta section: import a .deltaskin, use it for its
+     * console or go back to the classic controls, delete it. In portrait only. */
+    private void interfaceSkinsPage() {
+        add(text("RavenEmu lit les skins au format .deltaskin, en portrait. Ce projet n'est ni affilié à Delta, "
+                + "ni approuvé par ses auteurs : aucun skin n'est fourni, vous importez les vôtres. Game Boy et "
+                + "Game Boy Color partagent leur skin.", 13, theme.muted), 0);
+        Button pick = textButton("Importer un fichier .deltaskin", theme.accent);
+        pick.setEnabled(!skinBusy);
+        pick.setOnClickListener(view -> pickSkin());
+        if (skinImporting) add(text("Importation du skin…", 12, theme.muted), 4);
+        if (!skinsRead) {
+            add(text("Lecture des skins…", 12, theme.muted), 8);
+            if (!skinBusy) reloadSkins(null);
+            return;
+        }
+        if (skinEntries.isEmpty()) add(text("Aucun skin installé : commandes classiques.", 12, theme.muted), 8);
+        for (DeltaSkins.Entry skin : skinEntries) {
+            LinearLayout row = new LinearLayout(this);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setMinimumHeight(dp(56));
+            LinearLayout texts = column();
+            TextView name = text(skin.name, 14, theme.text);
+            name.setTypeface(null, Typeface.BOLD);
+            name.setSingleLine(true);
+            name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            texts.addView(name);
+            texts.addView(text(skin.console + (skin.selected ? " · utilisé" : ""), 12,
+                    skin.selected ? theme.accent : theme.muted));
+            row.addView(texts, new LinearLayout.LayoutParams(0, -2, 1));
+            Button use = rowButton(skin.selected ? "Retirer" : "Utiliser", theme.accent);
+            use.setContentDescription((skin.selected ? "Retirer le skin " : "Utiliser le skin ") + skin.name);
+            use.setEnabled(!skinBusy);
+            use.setOnClickListener(view -> changeSkins(() -> skins.toggle(skin.id), null));
+            row.addView(use, new LinearLayout.LayoutParams(-2, -2));
+            Button delete = rowButton("Supprimer", theme.muted);
+            delete.setContentDescription("Supprimer le skin " + skin.name);
+            delete.setEnabled(!skinBusy);
+            delete.setOnClickListener(view -> confirmSkinDeletion(skin));
+            row.addView(delete, new LinearLayout.LayoutParams(-2, -2));
+            add(row, 8);
+        }
+    }
+
+    private void confirmSkinDeletion(DeltaSkins.Entry skin) {
+        if (skinDialog != null && skinDialog.isShowing()) return;
+        skinDialog = new AlertDialog.Builder(this).setTitle("Supprimer ce skin ?")
+                .setMessage(skin.name + " sera supprimé de l'appareil. Les commandes classiques reviennent s'il "
+                        + "était utilisé.")
+                .setPositiveButton("Supprimer", (dialog, which) -> changeSkins(() -> {
+                    try {
+                        skins.delete(skin.id);
+                        return "Skin supprimé";
+                    } catch (DeltaSkinException error) {
+                        return DeltaSkinException.userMessage(error.code);
+                    }
+                }))
+                .setNegativeButton("Annuler", null).create();
+        skinDialog.show();
+        skinDialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(theme.accent);
+        skinDialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(theme.secondary);
+    }
+
+    private interface SkinChange { String run(); }
+
+    private void changeSkins(Runnable change, String message) {
+        changeSkins(() -> {
+            change.run();
+            return message;
+        });
+    }
+
+    /** IO executor: the change, then the list read again and the message shown. */
+    private void changeSkins(SkinChange change) {
+        if (skinBusy) return;
+        skinBusy = true;
+        if (INTERFACE_SKINS.equals(page)) showPage(INTERFACE_SKINS);
+        io.execute(() -> {
+            String message;
+            try {
+                message = change.run();
+            } catch (RuntimeException error) {
+                message = DeltaSkinException.userMessage(DeltaSkinException.Code.STORAGE_ERROR);
+            }
+            reloadSkins(message);
+        });
+    }
+
+    /** Off the UI thread when called from the IO executor; from the UI thread it queues the read. */
+    private void reloadSkins(String message) {
+        Runnable read = () -> {
+            List<DeltaSkins.Entry> entries;
+            try {
+                entries = skins.entries();
+            } catch (RuntimeException unreadable) {
+                entries = Collections.emptyList();
+            }
+            final List<DeltaSkins.Entry> listed = entries;
+            runOnUiThread(() -> {
+                if (isDestroyed()) return;
+                skinEntries = listed;
+                skinsRead = true;
+                skinBusy = false;
+                skinImporting = false;
+                if (message != null) Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+                if (INTERFACE_SKINS.equals(page)) showPage(INTERFACE_SKINS);
+            });
+        };
+        if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+            skinBusy = true;
+            io.execute(read);
+        } else read.run();
+    }
+
+    private void pickSkin() {
+        if (skinBusy) return;
+        Intent pick = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        pick.addCategory(Intent.CATEGORY_OPENABLE);
+        pick.setType("*/*");
+        try {
+            startActivityForResult(pick, PICK_SKIN);
+        } catch (ActivityNotFoundException missing) {
+            Toast.makeText(this, "Aucune application pour choisir un fichier", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void interfaceControlsPage() {
         settingSwitch("Retour haptique", "Petite vibration à la pression des boutons.", controls.haptics,
                 enabled -> updateControls(controls.withHaptics(enabled)));
-        settingSwitch("Vibration de la cartouche",
-                "Fait vibrer le téléphone avec les jeux équipés d'un moteur de vibration (Drill Dozer, "
-                        + "WarioWare: Twisted!, cartouches Game Boy Rumble).",
-                cartridge.rumble, enabled -> updateCartridge(cartridge.withRumble(enabled)));
         slider("Taille des commandes", controls.scale, ControlSettings.SCALE_MIN, ControlSettings.SCALE_MAX,
                 " %", value -> updateControls(controls.withScale(value)));
         slider("Espacement vertical", controls.gap, ControlSettings.GAP_MIN, ControlSettings.GAP_MAX,
@@ -408,14 +934,23 @@ public final class PlaybackSettingsActivity extends Activity {
                 new String[]{ControlSettings.STYLE_CLASSIC, ControlSettings.STYLE_CONTRAST}, controls.style,
                 style -> updateControls(controls.withStyle(style)));
         add(text("Pour déplacer les boutons, ouvrez le menu du jeu puis « Déplacer les boutons ». Le "
-                + "portrait et le paysage gardent chacun leur disposition.", 12, HomeActivity.MUTED), 8);
-        Button reset = textButton("Réinitialiser les commandes", HomeActivity.ACCENT);
+                + "portrait et le paysage gardent chacun leur disposition.", 12, theme.muted), 8);
+        Button reset = textButton("Réinitialiser les commandes", theme.accent);
         reset.setOnClickListener(view -> {
             updateControls(ControlSettings.DEFAULTS);
             ControlLayout.reset(this);
-            showPage(INTERFACE);
+            showPage(INTERFACE_CONTROLS);
         });
-        // RavenCore's Libretro sensors, fed by the native sensor driver.
+    }
+
+    /** The cartridge hardware the phone stands in for: its motor, and
+     * RavenCore's Libretro sensors fed by the native sensor driver. */
+    private void interfaceCartridgePage() {
+        group("Vibration");
+        settingSwitch("Vibration de la cartouche",
+                "Fait vibrer le téléphone avec les jeux équipés d'un moteur de vibration (Drill Dozer, "
+                        + "WarioWare: Twisted!, cartouches Game Boy Rumble).",
+                cartridge.rumble, enabled -> updateCartridge(cartridge.withRumble(enabled)));
         group("Capteurs de la cartouche");
         Switch[] solarAuto = new Switch[1];
         SeekBar[] solarLevel = new SeekBar[1];
@@ -469,8 +1004,15 @@ public final class PlaybackSettingsActivity extends Activity {
 
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
-        if (request != PICK_BIOS || result != RESULT_OK || data == null || data.getData() == null) return;
+        if (result != RESULT_OK || data == null || data.getData() == null) return;
         Uri uri = data.getData();
+        if (request == PICK_SKIN) {
+            if (skinBusy) return;
+            skinImporting = true;
+            changeSkins(() -> skins.importSkin(uri));
+            return;
+        }
+        if (request != PICK_BIOS) return;
         io.execute(() -> {
             String message = "BIOS GBA installé";
             try (InputStream input = getContentResolver().openInputStream(uri)) {
@@ -489,18 +1031,18 @@ public final class PlaybackSettingsActivity extends Activity {
             if (isDestroyed()) return;
             biosInstalled = installed;
             if (message != null) Toast.makeText(this, message, Toast.LENGTH_LONG).show();
-            if (CONSOLE.equals(page)) showPage(CONSOLE);
+            if (CONSOLE_GBA.equals(page)) showPage(CONSOLE_GBA);
         });
     }
 
     private void description(String label, String summary) {
         LinearLayout block = column();
-        block.addView(text(label, 15, HomeActivity.TEXT));
-        add(block, text(summary, 13, HomeActivity.MUTED), 4);
+        block.addView(text(label, 15, theme.text));
+        add(block, text(summary, 13, theme.muted), 4);
         add(block, 14);
     }
 
-    /** The beta's ChoiceRow: ● or ○ then the label, the chosen row on the surface color. */
+    /** The beta's ChoiceRow: a radio mark then the label, the chosen row on the surface color. */
     private LinearLayout choices(String[] labels, String[] values, String selected, StringChange change) {
         LinearLayout list = column();
         for (int i = 0; i < labels.length; i++) {
@@ -510,11 +1052,10 @@ public final class PlaybackSettingsActivity extends Activity {
             row.setGravity(Gravity.CENTER_VERTICAL);
             row.setMinimumHeight(dp(48));
             row.setPadding(dp(12), dp(10), dp(12), dp(10));
-            row.setBackgroundColor(chosen ? HomeActivity.SURFACE : HomeActivity.BACKGROUND);
-            TextView mark = text(chosen ? "●" : "○", 17, HomeActivity.ACCENT);
-            mark.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-            row.addView(mark);
-            TextView name = text(labels[i], 14, HomeActivity.TEXT);
+            row.setBackgroundColor(chosen ? theme.selected : theme.background);
+            row.addView(RavenIcon.image(this, chosen ? RavenIcon.Glyph.RADIO_ON : RavenIcon.Glyph.RADIO_OFF,
+                    theme.accent, 20), new LinearLayout.LayoutParams(dp(24), dp(24)));
+            TextView name = text(labels[i], 14, theme.text);
             LinearLayout.LayoutParams gap = new LinearLayout.LayoutParams(0, -2, 1);
             gap.setMarginStart(dp(12));
             row.addView(name, gap);
@@ -546,9 +1087,9 @@ public final class PlaybackSettingsActivity extends Activity {
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setMinimumHeight(dp(64));
         LinearLayout description = column();
-        TextView name = text(label, 15, HomeActivity.TEXT);
+        TextView name = text(label, 15, theme.text);
         description.addView(name);
-        TextView detail = text(summary, 13, HomeActivity.MUTED);
+        TextView detail = text(summary, 13, theme.muted);
         add(description, detail, 4);
         row.addView(description, new LinearLayout.LayoutParams(0, -2, 1));
         Switch control = new Switch(this);
@@ -559,9 +1100,9 @@ public final class PlaybackSettingsActivity extends Activity {
         control.setMinWidth(dp(48));
         int[][] states = {{android.R.attr.state_checked}, {}};
         control.setThumbTintList(new ColorStateList(states,
-                new int[]{HomeActivity.ACCENT, HomeActivity.SECONDARY}));
+                new int[]{theme.switchOn, theme.switchOff}));
         control.setTrackTintList(new ColorStateList(states,
-                new int[]{0x66a78bfa, HomeActivity.OUTLINE}));
+                new int[]{theme.switchOnTrack, theme.switchOffTrack}));
         control.setChecked(checked);
         control.setOnCheckedChangeListener((button, value) -> change.accept(value));
         name.setLabelFor(control.getId());
@@ -591,8 +1132,8 @@ public final class PlaybackSettingsActivity extends Activity {
         LinearLayout block = column();
         LinearLayout heading = new LinearLayout(this);
         heading.setGravity(Gravity.CENTER_VERTICAL);
-        heading.addView(text(label, 15, HomeActivity.TEXT), new LinearLayout.LayoutParams(0, -2, 1));
-        TextView valueText = text(value + unit, 14, HomeActivity.ACCENT);
+        heading.addView(text(label, 15, theme.text), new LinearLayout.LayoutParams(0, -2, 1));
+        TextView valueText = text(value + unit, 14, theme.accent);
         heading.addView(valueText);
         block.addView(heading);
         SeekBar control = new SeekBar(this);
@@ -600,8 +1141,8 @@ public final class PlaybackSettingsActivity extends Activity {
         control.setMax((maximum - minimum) / step);
         control.setProgress((value - minimum) / step);
         control.setContentDescription(label + ", " + value + unit);
-        control.setProgressTintList(ColorStateList.valueOf(HomeActivity.ACCENT));
-        control.setThumbTintList(ColorStateList.valueOf(HomeActivity.ACCENT));
+        control.setProgressTintList(ColorStateList.valueOf(theme.accent));
+        control.setThumbTintList(ColorStateList.valueOf(theme.accent));
         control.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 // Android view-state restoration must never save a stale value.
@@ -620,11 +1161,11 @@ public final class PlaybackSettingsActivity extends Activity {
     }
 
     private void group(String label) {
-        TextView heading = text(label, 14, HomeActivity.ACCENT);
+        TextView heading = text(label, 14, theme.accent);
         heading.setTypeface(null, Typeface.BOLD);
         add(heading, content.getChildCount() == 0 ? 0 : 14);
         View divider = new View(this);
-        divider.setBackgroundColor(HomeActivity.OUTLINE);
+        divider.setBackgroundColor(theme.outline);
         LinearLayout.LayoutParams line = new LinearLayout.LayoutParams(-1, dp(1));
         line.topMargin = dp(6);
         content.addView(divider, line);
@@ -636,8 +1177,17 @@ public final class PlaybackSettingsActivity extends Activity {
         button.setTextSize(14);
         button.setAllCaps(false);
         button.setMinHeight(dp(48));
-        button.setTextColor(HomeActivity.TEXT);
-        button.setBackground(shape(HomeActivity.SURFACE));
+        button.setTextColor(theme.text);
+        button.setBackground(shape(theme.surface));
+        return button;
+    }
+
+    /** A TextButton for a row, not added to the page. */
+    private Button rowButton(String label, int color) {
+        Button button = button(label);
+        button.setTextColor(color);
+        button.setTextSize(13);
+        button.setBackgroundColor(Color.TRANSPARENT);
         return button;
     }
 
@@ -673,7 +1223,8 @@ public final class PlaybackSettingsActivity extends Activity {
         return layout;
     }
 
-    private void add(View view, int top) { add(content, view, top); }
+    /** Nothing above a page's first block. */
+    private void add(View view, int top) { add(content, view, content.getChildCount() == 0 ? 0 : top); }
 
     private void add(LinearLayout parent, View view, int top) {
         LinearLayout.LayoutParams size = new LinearLayout.LayoutParams(-1, -2);
@@ -699,28 +1250,9 @@ public final class PlaybackSettingsActivity extends Activity {
     }
 
     @Override protected void onDestroy() {
+        if (skinDialog != null) skinDialog.dismiss();
         io.shutdown();
+        network.shutdown();
         super.onDestroy();
-    }
-
-    /** Exact 24x24 paths from the beta's theme/RavenIcons.kt. */
-    private static final class SettingsIcon extends View {
-        private final Path path;
-        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-
-        SettingsIcon(Context context, String pathData) {
-            super(context);
-            path = PathParser.createPathFromPathData(pathData);
-            paint.setColor(HomeActivity.ACCENT);
-            setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-        }
-
-        @Override protected void onDraw(Canvas canvas) {
-            super.onDraw(canvas);
-            canvas.save();
-            canvas.scale(getWidth() / 24f, getHeight() / 24f);
-            canvas.drawPath(path, paint);
-            canvas.restore();
-        }
     }
 }

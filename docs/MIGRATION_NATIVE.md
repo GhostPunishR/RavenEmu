@@ -534,8 +534,8 @@ Corrections demandées par le propriétaire d'après une capture sur téléphone
 
 Écarts restants : les conditions d'utilisation et la politique de
 confidentialité s'ouvrent en ligne (dépôt GitHub), pas encore dans le lecteur
-intégré de l'application ; RetroAchievements n'a pas encore sa catégorie. La
-validation sur téléphone reste nécessaire.
+intégré de l'application. RetroAchievements a sa catégorie depuis la tranche
+RA-2. La validation sur téléphone reste nécessaire.
 
 ## Tranche A : image calée sur l'écran et son sans craquement
 
@@ -654,3 +654,605 @@ comportement des écrans à fréquence variable restent à vérifier sur télép
 seuil de lumière de Boktai et le ressenti de la vibration restent à vérifier
 sur téléphone, avec les jeux concernés. Les manettes ne vibrent pas encore et
 leurs capteurs ne sont pas lus : seuls ceux du téléphone servent.
+
+## Piste 7 : images préventives (latence)
+
+- **Frontend C** (`libretro_host.c`, idée des « preemptive frames » de
+  RetroArch, code RavenEmu) : `raven_frontend_set_preemptive_frames` (0 à 3)
+  garde l'état du core avant chacune des n dernières images, dans un anneau
+  alloué à la taille des états. Quand la croix ou les boutons du port 0
+  changent, l'image revient n images en arrière et les rejoue avec les
+  nouveaux boutons, sans image ni son (`GET_AUDIO_VIDEO_ENABLE` à 0, que
+  RavenCore utilise pour sauter son rendu), en gardant les états de la
+  nouvelle chronologie. Un appui d'une image reste un appui d'une image. Les
+  états chargés, la SRAM restaurée, un nouveau jeu et la pause effacent
+  l'historique ; un core aux états incomplets (`SET_SERIALIZATION_QUIRKS`)
+  n'est jamais rejoué.
+- **Garde de coût** (`raven_replay_guard_overloaded`, `frame_pacer.c`) : une
+  image rejouée qui dépasse les trois quarts de la période du jeu est un
+  dépassement ; trois sur huit rejeux, et le pont JNI retire une image
+  préventive pour ce jeu, avec un message bref.
+- **Paramètres → Général → Latence** : « Images préventives », désactivées
+  par défaut, 1, 2 ou 3 images (`LatencySettings`), appliquées sans rouvrir
+  le jeu.
+- Mesures locales (x86, ROM de test vides) : un état GB fait 204 Kio et se
+  sauvegarde en 0,05 ms, un état GBA 682 Kio en 0,13 ms. Sur téléphone, le
+  coût dominant sera celui des images rejouées à chaque changement de touche.
+- Tests : `raven_frontend_preempt` (faux core à deux images de retard : la
+  réaction arrive 1 ou 2 images plus tôt, et 3 fait sauter l'image ; une
+  image et un son par appel quoi qu'on rejoue ; chronologie identique à une
+  partie aux appuis avancés de n images ; historique effacé après un état,
+  la SRAM, la pause, un changement de réglage ou un nouveau jeu ; quirks),
+  `raven_frontend_real_cores` (GB, GBC et GBA de RavenCore finissent dans le
+  même état octet pour octet que la référence), `raven_frame_pacer` (garde),
+  Java (`LatencySettingsTest`, page Général, réglage transmis au lecteur).
+  Dix mutations de l'implémentation sont toutes détectées.
+
+Écarts restants : le gain ressenti, le coût sur téléphone et le bon nombre
+d'images par jeu restent à mesurer. Le mode Hardcore de RetroAchievements,
+pas encore porté, devra vérifier sa compatibilité avec les images préventives.
+
+## Piste 9 : rééchantillonneur sinc
+
+- **Choix de mise en œuvre** : le sinc de libretro-common (MIT) a été
+  examiné, en version flottante et entière, sur la révision d48b3aa de
+  RetroArch, vérifiée octet pour octet contre le dépôt officiel. Il entraîne
+  environ 2 700 lignes d'en-têtes de libretro-common, dont un fichier sans
+  aucune mention de licence (`sinc_resampler_internal.h`). Le filtre est donc
+  écrit pour RavenEmu (`hardware/audio/sinc_resampler.c`, AGPLv3), d'après la
+  méthode classique d'interpolation à bande limitée : sinc fenêtré par Kaiser
+  (β = 8, 16 passages par zéro de chaque côté), table polyphasée de 256 lignes
+  interpolées, normalisée pour qu'une constante reste exacte. La bande passe à
+  90 % de la plus basse des deux fréquences de Nyquist, et le noyau s'élargit
+  quand le core émet plus vite que le téléphone ne joue.
+- **Pipeline audio** : `raven_audio_set_resampler` choisit sinc (par défaut)
+  ou linéaire ; les deux gardent exactement la même cadence de sortie, donc le
+  même contrôle dynamique du débit et la même vitesse d'écran. Le filtre est
+  construit à l'ouverture du flux (hors du rappel AAudio) et remis à zéro à la
+  pause. Le début d'un flux tient sa première trame : pas de clic.
+- **Paramètres → Audio → Qualité du son** : « Sinc (défaut) » ou « Linéaire »
+  (`PlaybackSettings.resampler`), appliqué sans rouvrir le jeu.
+- **Mesures locales** : une note de 10 kHz à 32 768 Hz vers 48 kHz garde un
+  rapport signal/bruit de 88,7 dB, contre 13,8 dB en linéaire ; une note de
+  30 kHz venue d'un core à 131 072 Hz se replie à 18 kHz à −98 dB, contre
+  −1,5 dB en linéaire. Coût : 2,2 ms par seconde de son (0,2 % d'un cœur
+  x86), 5,4 ms pour 131 072 Hz ; retard ajouté : 17 trames d'entrée, environ
+  0,5 ms.
+- Tests : `raven_native_sinc` (constante exacte et cadence linéaire sur cinq
+  rapports et des lots irréguliers, images et repliement, saturation sans
+  retournement, retard exact, remise à zéro, canaux indépendants, entrées
+  invalides ; huit mutations détectées), `raven_native_audio` (cadence, niveau
+  et gain dans le pipeline, choix gardé à la réouverture), Java
+  (`PlaybackSettingsTest`, page Audio, réglage transmis au lecteur).
+
+Écarts restants : l'écoute et le coût sur téléphone restent à vérifier.
+
+## Paramètres en sous-pages
+
+Demande du propriétaire : à l'intérieur de chaque catégorie, les réglages
+étaient empilés sans ordre. Chaque catégorie liste maintenant ses sous-pages,
+dans le style des lignes de catégories :
+
+| Catégorie | Sous-pages |
+| --- | --- |
+| Général | Émulation (pause automatique), Latence (images préventives) |
+| Audio | Son du jeu (son, volume), Qualité du son (rééchantillonnage) |
+| Vidéo | Couleurs (profil Game Boy, correction LCD), Rendu (mélange d'images, effet d'écran), Taille et réglages (pixels entiers, luminosité, contraste) ; « Rétablir l'affichage d'origine » reste sur la page Vidéo, pour les trois |
+| Console | Game Boy et GBC (couleurs, GBC d'une GBA), Game Boy Advance (BIOS et son fichier) |
+| Interface | Commandes tactiles (haptique, taille, espacement, style, réinitialisation), Cartouche (vibration, capteurs, soleil de Boktai) |
+
+À propos garde sa liste. Le retour remonte d'un niveau (sous-page, catégorie,
+catégories, puis fermeture) ; la page et sa position de défilement survivent à
+la recréation. « Vibration de la cartouche » quitte les commandes tactiles pour
+la sous-page Cartouche. Aucune préférence ne change de nom ni de valeur.
+
+Tests : parcours de toutes les sous-pages dans l'ordre, retour d'un niveau par
+la barre et par Android, sans écriture ; tests existants adaptés aux nouveaux
+chemins (réinitialisation de la vidéo depuis sa catégorie, BIOS sur la
+sous-page Game Boy Advance, recréation sur une sous-page).
+
+Écart assumé avec la bêta, qui montrait chaque catégorie sur une seule page.
+
+## RetroAchievements, tranche RA-1 : le cœur C
+
+Le chantier RetroAchievements (parité avec la bêta, `ARCHITECTURE.md` §7) est
+découpé en trois tranches : **RA-1**, le cœur dans le frontend C ; **RA-2**,
+le réseau Java, le compte et la page Paramètres → RetroAchievements, le
+bandeau de succès ; **RA-3**, les verrous du mode Hardcore dans le lecteur,
+la liste des succès, les classements et le journal hors ligne.
+
+RA-1 :
+- **SDK** : rcheevos (MIT), révision `1433173` de la bêta, avec ses deux
+  correctifs de sûreté appliqués à une copie (`frontend/cmake/rcheevos.cmake`,
+  [provenance](../legal/attributions/rcheevos.md)).
+- **Hôte Libretro** : `RETRO_ENVIRONMENT_SET_MEMORY_MAPS` est gardé (copie des
+  descripteurs, oubliée au déchargement) et `SET_SUPPORT_ACHIEVEMENTS` accepté.
+- **Module** `frontend/src/achievements.c` (code RavenEmu, d'après
+  l'adaptateur de la bêta) : compte par mot de passe ou jeton, identification
+  du jeu par son empreinte, évaluation après chaque image montrée, Hardcore,
+  résumé ; files de requêtes (pour le réseau de la plateforme) et
+  d'événements (pour l'interface), textes du serveur sur une ligne et bornés.
+- Tests : `raven_frontend_achievements`, avec le vrai core Game Boy de
+  RavenCore et une ROM construite par le test (voir `frontend/README.md`).
+  Le succès se débloque à la 60ᵉ image, en normal et en Hardcore ; ASan/UBSan
+  propres.
+
+## RetroAchievements, tranche RA-2 : compte, réseau et bandeau
+
+- **Pont JNI** `android/src/main/cpp/jni/achievements_bridge.c` et
+  `bridge/NativeAchievements.java` : instances par poignée (une poignée
+  détruite ne retrouve rien), textes en octets UTF-8 dans les deux sens.
+  L'instance du lecteur est liée au jeu du pont : `bridge.c` la nourrit après
+  chaque image montrée (jamais les images préventives), la garde vivante en
+  pause, la remet à zéro au chargement d'un état et la ferme avant de
+  décharger le jeu. La ROM est hachée pendant l'appel (console connue).
+- **Réseau** `platform/AchievementsHttp.java` : HTTPS vers
+  `retroachievements.org` et ses sous-domaines seulement, sans redirection,
+  réponses bornées (8 Mio, images 512 Kio et 512 px), User-Agent de la bêta
+  (`platform/RetroUserAgent.java`, versions de RavenEmu, RavenCore 0.14.0 et
+  rcheevos lues dans le build). Deux fils réseau ; les réponses reviennent au
+  fil GL à l'image suivante, celles d'un jeu fermé sont ignorées.
+- **Compte** `settings/AchievementAccount.java` : jeton seul, scellé en
+  AES-GCM par une clé du Keystore Android (`platform/KeystoreSealer.java`),
+  écriture atomique dans `noBackupFilesDir` ; aucune donnée de la bêta lue.
+- **Paramètres → RetroAchievements**, première catégorie comme dans la bêta :
+  formulaire de connexion (le mot de passe est vidé à l'envoi), carte du
+  compte, Réessayer, Déconnexion, notifications de la bêta
+  (`settings/AchievementSettings.java`), « Mode Hardcore indisponible ».
+- **Lecteur** : `ui/player/PlayerAchievements.java` (fil GL),
+  `AchievementOverlay.java` (bandeau et carte de progression de la bêta,
+  badges chargés en tâche de fond), `AchievementNotices.java` (textes),
+  `UnlockChime.java` (carillon de la bêta). Permission `INTERNET` ajoutée ;
+  sans compte, aucune requête.
+- **Licences** : MIT de rcheevos dans l'APK et les crédits ; l'archive de
+  sources inclut le checkout rcheevos compilé, vérifié contre l'épinglage.
+- **Tests** : `raven_jni_achievements` (`tests/jni/`, JVM de l'hôte avec
+  `-Xcheck:jni` : UTF-8 non ASCII dans les deux sens, poignées, succès
+  débloqué sur le vrai core GB, nouvelle tentative après un 503, ancienne
+  poignée sans effet sur le jeu suivant) ; scénario C « jeton et jeu demandés
+  ensemble » et ROM libérée dès le retour de `load_game` (ASan) ; Robolectric
+  : compte scellé et illisible ailleurs, réglages, page de connexion (mot de
+  passe stocké nulle part, refus, service injoignable, déconnexion),
+  bandeau (file, durées, réglages, position), lecteur avec et sans compte ;
+  JUnit : textes, User-Agent, carillon.
+
+## RetroAchievements, tranche RA-3
+
+**RA-3a, journal hors ligne** (portage de `AwardJournal.kt`, `AwardPolicy.kt`
+et `AwardSyncTracker.kt` de la bêta) :
+- chaque requête de déblocage construite par rcheevos (Softcore, HTTPS vers
+  `retroachievements.org` exactement) est écrite dans le journal **avant**
+  d'être envoyée, et en sort quand le service l'accepte (ou répond qu'il l'a
+  déjà) ;
+- le journal (`settings/AwardJournal.java`, `noBackupFilesDir`) est scellé
+  par le Keystore et lié à son fichier (données associées) : le fichier du
+  compte ne s'ouvre pas comme journal, ni l'inverse ; une seule tentative
+  gardée par déblocage, 256 au plus ;
+- à la session suivante du même compte, une fois connecté, ce qu'une session
+  précédente a laissé est renvoyé avec le nouveau jeton (signature et délai
+  de rcheevos intacts), de 5 s en 5 s doublées jusqu'à 2 min ; les déblocages
+  de la session en cours restent à rcheevos ;
+- la déconnexion efface le journal et révoque ceux encore ouverts, comme la
+  bêta ; si le journal est indisponible ou plein, le bandeau le dit une fois.
+
+**RA-3b, menu de jeu** (portage de `RetroAccountCard.kt`,
+`RetroAchievementsContent.kt` et `RetroLeaderboardsContent.kt`) :
+- module C : liste des succès dans l'ordre de rcheevos (regroupés par
+  progression), classements, vingt scores (les meilleurs ou autour du
+  joueur, événements `scores` et `scores_error`, requête remplacée
+  abandonnée), Rich Presence, résultat de classement
+  (`leaderboard_scoreboard`) ; copies, libérées avec le jeu ;
+- pont JNI et `NativeAchievements` : `entries`, `boards`, `fetchScores`,
+  `scores`, `richPresence` ; instantané lu sur le fil GL
+  (`ui/player/AchievementsSnapshot.java`), déblocages en attente comptés
+  dans le journal hors du fil GL ;
+- carte RetroAchievements sous le titre du menu de jeu ; elle ouvre le
+  panneau de la bêta dans le même menu : compte (avatar, points, jeu, Rich
+  Presence, déblocages en attente), Réessayer, Déconnexion, succès du jeu
+  (Tous, À obtenir, Obtenus ; recherche ; tri par ordre du jeu, progression
+  ou date ; dix puis quinze de plus ; fiche avec « Voir sur le site »),
+  classements (meilleurs scores, autour de moi, réessayer, lien du site),
+  « Mode Softcore · SDK officiel rcheevos » ; sans compte, la carte mène à
+  Paramètres → RetroAchievements ; un compte connecté, changé ou déconnecté
+  dans les paramètres s'applique au jeu en cours dès le retour, comme dans
+  la bêta ;
+- l'état d'envoi de chaque succès suit la bêta : débloqué localement, en
+  attente d'envoi, confirmé par RetroAchievements.
+
+**RA-3c, indicateurs** (portage de `RetroIndicatorState.kt`) : les défis en
+cours et les suivis de classement restent en bas de l'image, quatre lignes
+au plus, chacun jusqu'à son propre masquage par rcheevos ; une valeur de
+suivi se met à jour sur place ; en bas, les bandeaux passent au-dessus ; une
+remise à zéro Hardcore ou la fermeture du jeu les efface.
+
+**RA-3d, verrous du mode Hardcore** (portage de `RetroHardcorePolicy.kt` et
+`HardcoreGate.kt`) : comme dans la bêta, le Hardcore attend l'approbation de
+RavenEmu par l'équipe RetroAchievements ; tant qu'elle manque
+(`settings/HardcorePolicy.approved()`), aucun interrupteur n'est montré et
+rien ne l'active. Une fois approuvé :
+- la session démarre dans son mode avant la connexion (pas de remise à zéro
+  au chargement) ; activé pendant un jeu, il le redémarre
+  (`raven_frontend_reset`, nouveau, puis rcheevos) ;
+- aucune image ne tourne pendant la connexion et l'identification de la ROM ;
+  sans réseau, la partie attend et réessaie (5 s doublées, 1 min au plus),
+  avec le message de la bêta ;
+- aucun état n'est chargé, l'annulation d'un chargement comprise ;
+- chaque pause du menu est demandée à rcheevos, qui la refuse trop tôt après
+  la précédente (« Mode Hardcore : pause indisponible pour le moment. ») ;
+- les requêtes de déblocage Hardcore entrent alors dans le journal ;
+- `retro_reset` est un symbole facultatif pour l'hôte : sans lui, pas de redémarrage.
+
+Ces verrous sont testés en simulant l'approbation (doublure Robolectric de
+`HardcorePolicy.approved()`), et le pont JNI démarre réellement une session
+Hardcore sur le core GB dans `raven_jni_achievements`.
+
+Écarts restants (RA-3 terminée) : progression des succès dans les états de
+jeu (un chargement d'état remet les succès à zéro ; la bêta ne la sauvegardait
+pas non plus), avatars des classements, validation sur téléphone avec un vrai
+compte, et la demande d'approbation Hardcore à RetroAchievements, qui revient
+au propriétaire.
+
+Les écarts que RA-2 laissait sont ainsi traités : verrous du mode Hardcore
+et son activation (en attente d'approbation), liste des succès, classements,
+indicateurs de défi et de suivi, carte du compte dans le menu de jeu, journal
+hors ligne. La recréation du lecteur (rotation) reconnecte le compte et
+ré-identifie le jeu.
+
+## Correctif : code natif optimisé dans l'APK de développement
+
+Constat du propriétaire : tous les jeux (GB, GBC, GBA) étaient lents dans
+l'APK de développement, déjà avant RetroAchievements. La CI produit cet APK
+par `:android:assembleDebug`, et le NDK compile alors le code natif en `-O0`.
+La bêta avait rencontré le même problème et le corrigeait dans
+`native/CMakeLists.txt` ; la correction manquait dans `android/`.
+
+- Mesure sur l'hôte, vrai core GBA de RavenCore, 600 images : 14,7 ms par
+  image en `-O0` contre 2,4 ms en `-O2`, pour 16,7 ms de budget. Un téléphone,
+  plusieurs fois plus lent par cœur, passe sous les 60 images/s en `-O0`.
+  Le sinc ne pèse presque rien (0,8 % d'un cœur en `-O0`).
+- `android/src/main/cpp/CMakeLists.txt` ajoute `-O2` en Debug avant d'inclure
+  le frontend : le frontend, rcheevos, les cores RavenCore et les pilotes en
+  héritent ; les symboles de débogage restent. Les sources de RavenCore ne
+  changent pas.
+- `scripts/check_native_optimization.py` (et ses tests) lit les bases de
+  compilation laissées par Gradle sous `android/.cxx` : la CI échoue si une
+  commande finit sans `-O2`/`-O3` ou si l'une des cibles natives manque.
+
+À vérifier sur téléphone : vitesse réelle des jeux GB, GBC et GBA.
+
+## Sauvegardes, lot S-1 : import et export depuis la fiche du jeu
+
+Portage de `GbSaveTransfer` et `GbSaveTransfersUi` de la bêta 0.8.1, pour la
+sauvegarde de la cartouche (SRAM).
+
+- **Fiche du jeu**, section « Sauvegardes » de la bêta : « Exporter » propose
+  `.sav` (la plupart des émulateurs) ou `.srm` (RetroArch), sous le nom de la
+  ROM ; « Importer » lit un `.sav`, un `.srm` ou une archive `.zip` RavenEmu.
+- **Revue avant écriture**, avec les textes de la bêta : jeu visé, contenu,
+  avertissement pour un fichier seul qui ne nomme pas sa ROM, données
+  remplacées. Rien n'est écrit avant « Confirmer l'import ».
+- **Archives de la bêta** (`RavenEmu-GB-Saves` v1 et la génération V3, paquet
+  d'un jeu ou archive de bibliothèque avec un dossier par jeu) : liées au
+  SHA-256 des octets de la ROM, manifeste et sommes de contrôle vérifiés,
+  noms, dossiers et tailles bornés (archive piégée refusée). Seule la SRAM est
+  importée : les états de l'archive sont vérifiés puis nommés comme non
+  importés, car ceux de la bêta ne portent pas l'identité du core qui les a
+  écrits.
+- **Ordre des écritures** : l'exécuteur de sauvegarde du lecteur devient
+  `SaveStorage.IO`, partagé avec la bibliothèque. Le lecteur met sa dernière
+  SRAM en file dans `onPause`, avant que la bibliothèque reprenne la main :
+  un import la suit toujours et n'est jamais écrasé par elle.
+- **Taille différente** : un `.sav` d'un autre émulateur peut porter une autre
+  fin d'horloge, ou aucune. Le lecteur ne refuse plus le jeu : il lit le
+  fichier comme RavenCore le lit, ses premiers octets sur la SRAM neuve du
+  core, l'annonce, puis la réécrit à la taille du core. Un jeu sans SRAM
+  garde le fichier sans le lire. Une restauration refusée à taille égale
+  arrête toujours le jeu en conservant le fichier.
+- Tests : `SaveTransferTest` (fichiers bruts, archives d'un jeu et de
+  bibliothèque, autre ROM, fichier altéré, chemins, états seuls, adaptation
+  de taille, nom d'export), `HomeActivityTest` (export `.srm`, export sans
+  sauvegarde, revue puis confirmation, refus et annulation, archive, reprise
+  après recréation), `PlayerActivityTest` (taille différente, jeu sans SRAM,
+  exécuteur partagé).
+
+Écarts restants : les états de la bêta ne sont pas importés (leur conversion
+demanderait la décision du propriétaire). Validation sur téléphone à faire.
+
+## Sauvegardes, lot S-2 : export de toutes les sauvegardes
+
+Menu ⋮ de la bibliothèque, « Exporter toutes les sauvegardes (.zip) », comme
+dans la bêta.
+
+- **Choix du propriétaire** : l'archive contient la SRAM seule, au format de
+  la bêta (`RavenEmu-GB-Saves` v1), pour qu'elle se réimporte dans cette
+  application **et** dans la bêta (retour arrière). Les états de jeu natifs
+  restent sur le téléphone : ceux de la bêta sont d'un autre format.
+- Disposition de la bêta (`exportLibrary`) : un dossier par jeu,
+  « nom de la ROM (8 premiers caractères de son SHA-256) », suffixé « 2 »,
+  « 3 »… en cas de doublon, avec son manifeste en premier, puis `battery.sav`.
+  Le SHA-256 est celui des octets de la ROM, l'identifiant de la bêta.
+- Nom proposé : `RavenEmu-sauvegardes-AAAA-MM-JJ.zip`. Sans aucune
+  sauvegarde, rien n'est demandé : « Aucun jeu de la bibliothèque n'a de
+  sauvegarde à exporter. »
+- Même exécuteur `SaveStorage.IO` que le lecteur : l'archive suit la dernière
+  SRAM écrite.
+- Tests : `SaveTransferTest` (disposition exacte des entrées, relecture de
+  chaque jeu par son SHA-256, dossiers en doublon, refus sans sauvegarde),
+  `HomeActivityTest` (menu, sélecteur, relecture de l'archive écrite).
+
+Validation sur téléphone, et import réel de l'archive dans la bêta, à faire.
+
+## Bibliothèque, lot S-3 : import d'un dossier
+
+Menu ⋮, « Importer un dossier », après « Vue grille/liste » comme dans la
+bêta (`GbFolderImporter`, `FolderImportSummaryDialog`).
+
+- Sélecteur de dossier Android (`ACTION_OPEN_DOCUMENT_TREE`) : l'autorisation
+  vaut pour cet import ; les ROM sont copiées dans la bibliothèque privée,
+  aucune permission persistante n'est gardée (`platform/DocumentTree`).
+- Parcours en largeur des sous-dossiers, aux limites de la bêta : profondeur
+  8, 128 dossiers, 4 000 entrées, 256 ROM examinées, 256 Mio lus, 256 jeux
+  dans la bibliothèque. Un dossier déjà vu (boucle) n'est relu qu'une fois.
+  Le dossier choisi doit s'ouvrir ; un sous-dossier illisible est compté.
+- Chaque ROM suit les règles du bouton « + » (extension, taille, empreinte
+  par console) ; un doublon est ignoré, la partie et les sauvegardes ne sont
+  jamais touchées. La bêta validait chaque ROM avec un core temporaire ;
+  l'hôte natif n'ouvre qu'une instance Libretro par processus, il vérifie donc
+  les en-têtes que RavenCore exige (marqueur `0x96` d'une ROM GBA, en-tête
+  d'une ROM Game Boy) et compte le reste comme ROM invalides.
+- Ligne de progression sous la recherche (« Analyse du dossier… »,
+  « Importation du dossier… N ROM examinées »), puis le bilan de la bêta :
+  jeux ajoutés, doublons, ROM invalides, illisibles, autres fichiers, dossiers
+  parcourus, arrêt sur limite.
+- Tests : `FolderImportTest` (comptes sur un dossier fictif, doublon, limites
+  de profondeur et d'entrées, boucle, dossier illisible, en-têtes),
+  `HomeActivityTest` (menu, sélecteur, bilan, dossier illisible).
+
+Écart : la bêta ne propose pas de sélection de plusieurs fichiers avec « + » ;
+elle n'est pas ajoutée. Validation sur téléphone à faire.
+
+## Codes de triche, lots T-1 et T-2
+
+Portage de `GbCheatList`, `GbCheatStore`, `GbCheatsUi` et `GbCheatsPanel` de
+la bêta 0.8.1 ; les cores RavenCore lisent déjà les codes par Libretro
+(`retro_cheat_set`).
+
+- **T-1, frontend C et JNI** : `raven_frontend_set_cheats` remplace la liste
+  (`retro_cheat_reset` puis `retro_cheat_set`, symboles facultatifs). RavenCore
+  nomme un code refusé dans un message : le frontend rend l'indice du premier
+  refusé et sa raison, et garde ce message hors de l'écran pour qu'il
+  s'affiche une seule fois, sous le formulaire. `NativeBridge.setCheats` et
+  `cheatRefusal` (fil GL) copient les codes un à un. Tests : faux core, et
+  vrais cores GB, GBC et GBA (un code GameShark ou Codebreaker change la
+  mémoire du jeu, un code illisible est refusé) ; ASan/UBSan propre.
+- **T-2, menu de jeu** : « Codes de triche » (ou « · N actif(s) ») après
+  « Annuler le chargement », comme dans la bêta, ouvre la page : liste avec
+  interrupteur et « Supprimer », formulaire « Nom (facultatif) » et « Code »
+  avec l'aide de la bêta sur les formats. Un code ajouté est d'abord soumis au
+  core : refusé, il reste dans le formulaire avec la raison de RavenCore ;
+  accepté, il est gardé, actif.
+- **Fichier** : `native-cheats/<clé>.cheats`, au format de RavenEmu PC
+  (« 1⇥nom⇥code » par ligne, comme la bêta), écrit en entier et
+  atomiquement, supprimé quand la liste est vide ; lu au chargement du jeu,
+  un code devenu illisible est annoncé.
+- **Hardcore** : aucun code ne tourne tant que le Hardcore est demandé ou
+  actif, la liste reste visible, interrupteurs et ajout désactivés ; le
+  verrou est suivi à chaque image et la liste réappliquée à sa levée.
+- Tests : `CheatListTest`, `CheatRepositoryTest`, `PlayerActivityTest`
+  (codes enregistrés appliqués et comptés, ajout accepté ou refusé avec sa
+  raison, désactivation et suppression, Hardcore).
+
+Écart : la bêta acceptait d'ajouter un code en Hardcore (sans l'exécuter) ;
+l'application native ne peut le vérifier qu'en le donnant au core, l'ajout
+y est donc désactivé. Validation sur téléphone à faire.
+
+## Icônes RavenEmu, lot I-1
+
+Demande du propriétaire : les icônes faisaient « brouillon », et la catégorie
+Console des Paramètres n'avait pas d'icône à elle (comme dans la bêta, elle
+reprenait celle d'« À propos »).
+
+- `ui/common/RavenIcon` : un jeu d'icônes dessinées pour RavenEmu sur une
+  grille de 24, un trait de 2 aux bouts et angles arrondis et quelques
+  détails pleins, toutes dans la couleur d'accent violette (demande du
+  propriétaire : plus aucune icône blanche ou grise ; seul le doré marque un
+  succès débloqué) ; même rendu sur tout téléphone et à toute densité, jamais
+  un caractère d'une police. L'onglet actif se distingue par son fond et sa
+  taille.
+- Remplacements : `⚙`, `+`, `⋮` de la bibliothèque ; la loupe `⌕` de la
+  recherche ; `‹` et `⋮` du lecteur ; `‹` des Paramètres, des licences et des
+  pages du menu de jeu ; les chevrons `›` et liens `↗` ; les marques radio
+  `●`/`○` ; l'étoile `★` du bandeau des succès (dorée pour un déblocage) ; le
+  trait `━━` des jaquettes absentes, devenu le pictogramme de la console.
+- Onglets de la bibliothèque : les pictogrammes de console de la bêta
+  (`PageIndicator`, `ConsoleIcons`) au lieu de « ● GB GBC GBA » : case de
+  36 dp, fond violet à 16 % et icône plus grande pour la page active, écran
+  en couleur de la GBC atténué sur une page inactive.
+- Catégories des Paramètres : trophée, réglages, haut-parleur, écran,
+  **console portable pour Console**, manette pour Interface, information.
+- Les descriptions d'accessibilité restent celles d'avant.
+- Tests : `RavenIconTest` (chaque glyphe dessiné dans sa couleur et dans son
+  cadre, écran GBC en couleur et atténué, radio pleine ou vide),
+  `HomeActivityTest` (barre, recherche et onglets sans caractère),
+  `PlaybackSettingsActivityTest` (une icône par catégorie, Console comprise).
+
+Écart voulu par le propriétaire : ces icônes modernisent celles de la bêta,
+qui n'est pas modifiée. Validation sur téléphone à faire.
+
+## Boutons tactiles redessinés et bouton Menu, lot B-1
+
+Demande du propriétaire : les boutons en jeu faisaient « brouillon », et en
+Game Boy / Game Boy Color le menu, que la #42 avait mis entre Select et
+Start, devait aller en **haut, au centre** des commandes.
+
+- `GameControlsView` dessine toutes les commandes dans la palette de
+  l'application : face sombre (`#2B2D40` → `#191B28`), contour d'accent à
+  60 %, lettres, flèches et pictogrammes dans l'accent `#A78BFA` ; la partie
+  appuyée se remplit d'accent et son libellé passe en sombre. Le style
+  « contraste élevé » éclaircit la face et trace le contour en blanc, comme
+  avant.
+- Croix d'un seul tenant (un seul contour au lieu de deux barres superposées),
+  une flèche au milieu de chaque branche, un moyeu discret ; seules les
+  branches appuyées s'allument, diagonales comprises. A/B ronds, Select/Start
+  en pastilles fines (la zone tactile reste de 84 × 40 dp), L/R en pastilles.
+- **Bouton Menu** de la #42 (« Menu du jeu »), redessiné en pastille à trois
+  traits (`RavenIcon.Glyph.MENU`) : en portrait, en haut au centre des
+  commandes, entre L et R en GBA et, en GB/GBC, dans le haut libre entre la
+  croix et A, sans rangée de plus ; jamais entre Select et Start. Sur un
+  écran étroit il se décale hors de la croix, puis s'amincit (24 dp au
+  moins). Il ouvre le menu du jeu, n'envoie aucun bouton à la console et
+  reste fixe pendant « Déplacer les boutons » (comme dans la #42 :
+  `ControlLayout` ne garde que les sept commandes de jeu). Masqué en
+  paysage, où le haut du centre appartient à l'image ; le `⋮` de la barre
+  reste dans les deux orientations.
+- Tests : `GameControlsViewTest` (place du menu en GB/GBC, sur écran étroit
+  et en GBA, aucun masque console, masqué en paysage et sans action, rendu :
+  seule la branche ou le bouton appuyé prend l'accent), `PlayerActivityTest`
+  (le bouton ouvre le menu et met le jeu en pause).
+
+Écart voulu par le propriétaire : le dessin et le bouton Menu diffèrent de
+`GbTouchControls` de la bêta, qui n'est pas modifiée. Validation sur téléphone
+à faire (lisibilité, place du menu sur les petits écrans).
+
+## Skins Delta, lot K
+
+Portage en Java des skins Delta de la bêta 0.8.1 (`androidApp/.../deltaskin`),
+au choix du propriétaire. Aucun skin n'est fourni : l'utilisateur importe les
+siens.
+
+- **Données** (`data/skins`) : `DeltaSkin` lit `info.json` comme la bêta
+  (propriétés obligatoires, types stricts, clés inconnues ignorées) ;
+  `DeltaSkinValidator` garde ses limites (GB/GBC ou GBA, au moins une
+  représentation iPhone portrait, cadres dans `mappingSize` à 1 % près,
+  nombres finis, PDF nommé à la racine, entrées inconnues mises de côté) ;
+  `DeltaSkinArchive` relit l'archive sous les mêmes limites (25 Mio, 64
+  entrées, 50 Mio décompressés, taux de compression, chemins, liens
+  symboliques, archives imbriquées, doublons, un seul `info.json`, PDF d'une
+  page au ratio de la représentation) puis prépare l'installation dans un
+  dossier temporaire privé, les PDF portrait sous des noms fixes ;
+  `DeltaSkinRepository` installe d'un bloc dans `files/delta-skins/<SHA-256 de
+  l'identifiant>`, remplace en gardant l'ancien dossier jusqu'à relecture du
+  nouveau, et n'affiche qu'un skin qui se relit en entier. Le choix par console
+  (GB/GBC partagent le leur) est dans les préférences de l'application ; les
+  skins de la bêta ne sont jamais lus.
+- **Paramètres → Interface → Skin Delta** : texte de la bêta, « Importer un
+  fichier .deltaskin » (sélecteur Android, copie bornée dans le cache privé),
+  liste avec « Utiliser » / « Retirer » et « Supprimer » (confirmation), messages
+  de la bêta. Un skin importé est choisi pour sa console. Tout se fait hors du
+  fil d'interface.
+- **Lecteur, en portrait** : le skin choisi pour la console du jeu remplace les
+  commandes tactiles. Comme dans la bêta, son PDF est dessiné en bas, à la
+  largeur de l'écran, et l'image du jeu se place au-dessus, centrée à son
+  format. La page est rendue par `PdfRenderer` hors du fil d'interface et
+  gardée en cache. Toucher, glisser et plusieurs doigts suivent la bêta : cadre
+  dessiné prioritaire sur les zones étendues, croix découpée en 3 × 3 pour les
+  diagonales, bouton relâché avec son dernier doigt, entrée `menu` qui ouvre le
+  menu du jeu, marque discrète sur la partie appuyée, retour haptique des
+  réglages. Un skin qui ne se dessine pas est retiré pour sa console
+  (« Skin invalide : commandes classiques restaurées »). En paysage, les
+  commandes classiques restent (la bêta n'affiche les skins qu'en portrait) ;
+  « Déplacer les boutons » ne s'applique pas à un skin.
+- Tests : `DeltaSkinTest` (manifeste et validation), `DeltaSkinArchiveTest`
+  (préparation, quinze refus dont chemins, lien symbolique, archive imbriquée
+  ou déguisée, bombe de compression), `DeltaSkinRepositoryTest` (installation,
+  doublon, conflit, remplacement, suppression, dossier abîmé), `DeltaSkinInputTest`
+  (mise en page, choix standard ou bord à bord, toucher, plusieurs doigts,
+  menu), `PlaybackSettingsActivityTest` (page Skin Delta, refus d'un fichier
+  qui n'est pas un .deltaskin), `PlayerActivityTest` (le skin remplace les
+  commandes, A et le menu du skin, repli sur les commandes classiques).
+
+Écarts restants : les bandeaux RetroAchievements restent dans la zone de
+l'image au lieu de toute la zone du skin ; les représentations paysage et les
+écrans multiples (`screens`, `gameScreenFrame`) sont lus et vérifiés mais pas
+utilisés, comme dans la bêta. Validation sur téléphone à faire avec de vrais
+skins (rendu des PDF, précision du toucher, bord à bord sur un écran haut).
+
+## Câble link local, lots L-1 et L-2
+
+Portage du câble link de la bêta (`LinkCable`, `LinkPartnerDialog`,
+`LinkPlayerScreen`) : deux jeux de la bibliothèque tournent ensemble sur le
+téléphone, reliés par un câble virtuel, pour les échanges et combats entre
+ses propres sauvegardes. RavenCore le fait déjà par son sous-système Libretro
+`link` ; aucun code de RavenCore n'est modifié.
+
+- **Frontend C (L-1)** : `raven_frontend_load_linked` charge les deux jeux par
+  `retro_load_game_special` après lecture de `SET_SUBSYSTEM_INFO`,
+  `raven_frontend_players` dit 1 ou 2, et chaque joueur a sa SRAM
+  (`raven_frontend_*_player_battery`). Les images préventives restent coupées
+  avec deux jeux. Testé sur les vrais cores GB, GBC et GBA (image double, SRAM
+  de chaque joueur, état, retour à un jeu seul) et sous ASan/UBSan.
+- **Pont JNI (L-1)** : `openLinked`, `setLinkFocus` (le joueur montré : sa
+  moitié de l'image, la manette et les commandes tactiles sur son port, la
+  vibration et les capteurs), `savePlayerBattery` / `restorePlayerBattery`.
+- **Bibliothèque (L-2)** : la fiche du jeu gagne « Jouer à deux (câble link) »
+  ; la fenêtre « Jouer à deux » de la bêta liste les jeux compatibles (Game Boy
+  et Game Boy Color ensemble, ou deux Game Boy Advance ; jamais le même jeu,
+  une cartouche n'a qu'une sauvegarde), avec son texte et ses messages.
+- **Lecteur (L-2)** : la barre dit « Câble link · Joueur N » et le nom du jeu
+  ; le bouton « Joueur M » (icône dessinée à deux flèches, au lieu du « ⇄ »
+  de la bêta) passe à l'autre joueur, qui continue de tourner pendant ce
+  temps. Les deux jeux tournent dans le core GBA, ou dans le core GBC dès que
+  l'un en a besoin (jeu GBC ou « Jeux Game Boy en couleurs »). Chaque
+  sauvegarde est lue et réécrite pour son propre jeu (à l'ouverture, toutes les
+  30 s et à la pause), une sauvegarde d'une autre taille lue comme pour un jeu
+  seul. Comme dans la bêta, pas de menu de jeu : ni ⋮, ni bouton Menu des
+  commandes, ni touche Home ; donc ni états, ni codes de triche, ni
+  RetroAchievements, ni skin Delta en mode câble.
+- Tests : `LinkCableTest` (compatibilités, partenaires, core choisi),
+  `HomeActivityTest` (fenêtre des partenaires et lancement),
+  `PlayerActivityTest` (deux jeux ouverts, sauvegarde de chacun restaurée et
+  réécrite, bascule de joueur, pas de menu, jeux incompatibles refusés).
+
+Écarts restants : le son est toujours celui du joueur 1, car le sous-système
+de RavenCore ne fait entendre que lui ; la bêta faisait entendre le joueur
+montré. Il faudrait une option dans RavenCore (PR à part), à décider par le
+propriétaire. Validation sur téléphone à faire avec deux vraies cartouches
+(échange Pokémon, par exemple).
+
+## Thèmes RavenEmu et NVIDIA, lot TH
+
+Demande du propriétaire : un système de thème, avec le thème RavenEmu actuel
+et un thème NVIDIA aux couleurs de RetroArch ; les icônes et les boutons des
+consoles prennent eux aussi la couleur du thème. La bêta n'avait que les
+couleurs de RavenEmu : c'est un ajout voulu par le propriétaire.
+
+- **Palette** (`ui/common/RavenTheme.java`) : un seul endroit pour les couleurs
+  de l'interface, par rôle (fond, surface, carte, accent clair et profond,
+  texte, ligne choisie, interrupteurs, faces des commandes). **RavenEmu** garde
+  les valeurs de la bêta (`RavenColors.kt`). **NVIDIA** reprend les valeurs du
+  thème « NVIDIA Shield » du menu MaterialUI de RetroArch
+  (`menu/drivers/materialui.c`) : fond 121212, surface 1D1D1D, barres 242424,
+  icônes 7AB547, ligne choisie 255D00, texte DEDEDE, indications 999999,
+  interrupteurs 85BB5C sur 498515 et 33691E sur 003D00. Seules des valeurs de
+  couleur sont reprises, aucun code. Les quelques rôles que MaterialUI ne
+  couvre pas (boutons en relief, colonne de la liste, faces des commandes) sont
+  des gris pris entre les siens.
+- **Styles Android** : `RavenEmuNativeTheme.Nvidia` et
+  `RavenGameSheetTheme.Nvidia` donnent les mêmes couleurs aux widgets du
+  système (curseur, dialogues, feuilles).
+- **Tout suit le thème** : bibliothèque, fiche du jeu, dialogues, paramètres,
+  licences, barre du lecteur, menu de jeu, succès, codes de triche, bandeaux
+  RetroAchievements, toutes les icônes dessinées et les commandes tactiles
+  (contour, lettres, flèches, partie pressée, bouton Menu). Gardent leur
+  couleur : l'or d'un succès débloqué, le rouge des erreurs, l'écran coloré du
+  pictogramme Game Boy Color, l'image du jeu, les skins Delta (leurs propres
+  images) et l'icône de l'application.
+- **Paramètres → Interface → Thème** : « RavenEmu (défaut) » ou « NVIDIA »
+  (préférence `interface.theme`). Les paramètres se redessinent aussitôt sur la
+  même page, la bibliothèque au retour. **Un jeu déjà ouvert garde ses couleurs
+  jusqu'à sa fermeture** : recréer le lecteur relancerait le jeu et perdrait la
+  partie non sauvegardée. Chaque écran lit le thème de l'Activity qui l'a créé
+  (`RavenTheme.of`), donc jamais deux palettes mélangées.
+- Tests : `RavenThemeTest` (valeurs de la bêta et de RetroArch, contraste du
+  texte d'au moins 4,5:1 dans chaque thème, préférence absente ou invalide,
+  thème de l'Activity pour ses dialogues), `PlaybackSettingsActivityTest`
+  (page Thème, recréation sur la même page, interrupteurs NVIDIA),
+  `HomeActivityTest` (bibliothèque, icônes et fiche recolorées au retour),
+  `PlayerActivityTest` (nouvelle partie dans le thème choisi, partie en cours
+  jamais recréée), `GameControlsViewTest` (bouton A pressé en vert).
+
+Écarts restants : validation sur téléphone à faire (lisibilité au soleil,
+captures des deux thèmes). NVIDIA et Shield sont des marques de NVIDIA
+Corporation ; RavenEmu n'est ni affilié à NVIDIA ni approuvé par elle, le nom
+désigne seulement la palette.
+

@@ -164,6 +164,28 @@ static void reset_and_invalid_rates(void) {
     CHECK(pacer.display_hz == 60.0 && pacer.vsyncs_per_frame == 1 && !raven_frame_pacer_locked(&pacer));
 }
 
+static void slow_replays_lower_the_preemptive_frames(void) {
+    raven_replay_guard guard = {0};
+    const uint64_t period = 16742706; /* one GBA frame */
+    /* Within budget: never. A lone overrun among eight: forgotten. */
+    for (unsigned i = 0; i < 100; ++i)
+        CHECK(!raven_replay_guard_overloaded(&guard, period / 2 + (i % 8 == 0 ? period : 0), GBA_FPS));
+    /* Three overruns within eight replays: one frame less, then again. */
+    guard = (raven_replay_guard){0};
+    CHECK(!raven_replay_guard_overloaded(&guard, period, GBA_FPS));
+    CHECK(!raven_replay_guard_overloaded(&guard, period / 4, GBA_FPS));
+    CHECK(!raven_replay_guard_overloaded(&guard, period, GBA_FPS));
+    CHECK(raven_replay_guard_overloaded(&guard, period, GBA_FPS));
+    CHECK(guard.replays == 0 && guard.overruns == 0);
+    /* The budget is three quarters of the frame. */
+    CHECK(!raven_replay_guard_overloaded(&guard, period * 3 / 4 - 1000, GBA_FPS));
+    CHECK(guard.overruns == 0);
+    CHECK(!raven_replay_guard_overloaded(&guard, period * 3 / 4 + 1000, GBA_FPS));
+    CHECK(guard.overruns == 1);
+    CHECK(!raven_replay_guard_overloaded(&guard, UINT64_MAX, NAN));
+    CHECK(!raven_replay_guard_overloaded(NULL, UINT64_MAX, GBA_FPS));
+}
+
 int main(void) {
     cadences();
     sixty_hertz_runs_one_frame_per_refresh();
@@ -173,6 +195,7 @@ int main(void) {
     a_missed_refresh_is_caught_up_and_stays_locked();
     a_new_rate_relocks_and_an_unannounced_one_unlocks();
     reset_and_invalid_rates();
-    puts("Frame pacer: 8 scenarios passed");
+    slow_replays_lower_the_preemptive_frames();
+    puts("Frame pacer: 9 scenarios passed");
     return 0;
 }

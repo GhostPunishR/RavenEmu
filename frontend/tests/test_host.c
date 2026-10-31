@@ -86,6 +86,17 @@ int main(int argc, char **argv) {
     const unsigned char valid[] = {'R', 'V', 'N', '1'};
     CHECK(!raven_frontend_load_rom(host, invalid, sizeof(invalid), "wrong.rvn"));
     CHECK(raven_frontend_take_message(host) == NULL);
+    char reason[RAVEN_FRONTEND_MESSAGE_MAX];
+    const char *const cheats[] = {"ok", "bad one", "bad two", ""};
+    CHECK(raven_frontend_set_cheats(host, cheats, 1, reason, sizeof(reason)) == -2);  /* no game */
+    {
+        // Linked games need the core's "link" subsystem: this one has none.
+        const void *const roms[2] = {valid, valid};
+        const size_t sizes[2] = {sizeof(valid), sizeof(valid)};
+        CHECK(!raven_frontend_load_linked(host, roms, sizes, NULL));
+        CHECK(strcmp(raven_frontend_last_error(host), "Core has no link subsystem") == 0);
+        CHECK(raven_frontend_players(host) == 0);
+    }
     CHECK(raven_frontend_load_rom(host, valid, sizeof(valid), "demo.rvn"));
     CHECK(raven_frontend_get_info(host, &info));
     CHECK(info.width == 2 && info.height == 2);
@@ -99,7 +110,25 @@ int main(int argc, char **argv) {
     CHECK(raven_frontend_run_frame(host));
     message = raven_frontend_take_message(host);
     CHECK(message && strcmp(message, "Attention : à l'écran") == 0);
+    // Cheats: the first refused code and the core's reason, kept off the screen.
+    CHECK(raven_frontend_set_cheats(host, cheats, 4, reason, sizeof(reason)) == 1);
+    CHECK(strcmp(reason, "RavenTest : code de triche 2 refusé") == 0);
+    CHECK(raven_frontend_take_message(host) == NULL);
+    CHECK(raven_frontend_set_cheats(host, cheats, 1, reason, sizeof(reason)) == -1);
+    CHECK(reason[0] == 0);
+    CHECK(raven_frontend_set_cheats(host, NULL, 0, NULL, 0) == -1);
+    CHECK(raven_frontend_set_cheats(host, NULL, 1, reason, sizeof(reason)) == -2);
+    CHECK(raven_frontend_set_cheats(host, cheats, RAVEN_FRONTEND_CHEATS_MAX + 1, reason, sizeof(reason)) == -2);
     CHECK(raven_frontend_battery_size(host) == 4);
+    // A game alone is player 1 only; this core declares no link subsystem.
+    CHECK(raven_frontend_players(host) == 1);
+    CHECK(raven_frontend_player_battery_size(host, 0) == 4);
+    CHECK(raven_frontend_player_battery_size(host, 1) == 0);
+    {
+        unsigned char spare[4];
+        CHECK(!raven_frontend_read_player_battery(host, 1, spare, sizeof(spare)));
+        CHECK(!raven_frontend_restore_player_battery(host, 1, spare, sizeof(spare)));
+    }
     unsigned char battery[4] = {0};
     CHECK(raven_frontend_read_battery(host, battery, sizeof(battery)));
     CHECK(battery[0] == 1 && battery[3] == 4);
@@ -142,6 +171,7 @@ int main(int argc, char **argv) {
     CHECK(!obs.invalid_video);
     raven_frontend_unload(host);
     CHECK(!raven_frontend_run_frame(host));
+    CHECK(raven_frontend_players(host) == 0);
     raven_frontend_destroy(host);
 
     // A platform with a vibrator and sensors: the core finds them through

@@ -25,7 +25,7 @@ import java.text.Normalizer;
  * The catalogue never reads or modifies the existing RavenEmu beta library. */
 public final class RomLibrary {
     public static final int MAX_ROM_BYTES = 64 * 1024 * 1024;
-    private static final int MAX_GAMES = 256;
+    public static final int MAX_GAMES = 256;
     private static final int MAX_INDEX_BYTES = 256 * 1024;
 
     public static final class Entry {

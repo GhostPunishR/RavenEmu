@@ -1,14 +1,31 @@
 package com.ravenemu.app.ui.player;
+import com.ravenemu.app.bridge.FakeAchievements;
+import com.ravenemu.app.bridge.NativeAchievements;
 import com.ravenemu.app.bridge.NativeBridge;
 import com.ravenemu.app.data.library.RomLibrary;
 import com.ravenemu.app.data.saves.GbaBiosRepository;
+import com.ravenemu.app.data.saves.CheatList;
+import com.ravenemu.app.data.saves.CheatRepository;
 import com.ravenemu.app.data.saves.SaveRepository;
+import com.ravenemu.app.data.saves.SaveStorage;
 import com.ravenemu.app.data.saves.StatePreview;
 import com.ravenemu.app.data.saves.StateSlotRepository;
+import com.ravenemu.app.platform.AchievementsHttp;
+import com.ravenemu.app.platform.ClearSealer;
+import com.ravenemu.app.platform.FakeHttp;
+import com.ravenemu.app.settings.AchievementAccount;
+import com.ravenemu.app.settings.AchievementSettings;
+import com.ravenemu.app.settings.ApprovedHardcore;
+import com.ravenemu.app.settings.AwardJournal;
+import com.ravenemu.app.settings.HardcorePolicy;
 import com.ravenemu.app.settings.CartridgeSettings;
 import com.ravenemu.app.settings.ConsoleSettings;
 import com.ravenemu.app.settings.ControlLayout;
+import com.ravenemu.app.settings.LatencySettings;
 import com.ravenemu.app.settings.PlaybackSettings;
+import com.ravenemu.app.ui.common.GameDetailsSheet;
+import com.ravenemu.app.ui.common.RavenIcon;
+import com.ravenemu.app.ui.common.RavenTheme;
 import com.ravenemu.app.ui.settings.PlaybackSettingsActivity;
 
 import android.app.Dialog;
@@ -17,8 +34,10 @@ import android.content.Intent;
 import android.opengl.GLSurfaceView;
 import android.os.Bundle;
 import android.os.Looper;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.EditText;
 import android.widget.TextView;
 import java.io.ByteArrayInputStream;
 import java.io.File;
@@ -55,7 +74,8 @@ import static org.robolectric.Shadows.shadowOf;
  * boundaries. No physical rendering, native core or audio hardware is emulated. */
 @RunWith(RobolectricTestRunner.class)
 @Config(sdk = 36, qualifiers = "en-rUS-w320dp-h568dp-mdpi",
-        shadows = {PlayerActivityTest.QueuedGl.class, PlayerActivityTest.FakeNative.class})
+        shadows = {PlayerActivityTest.QueuedGl.class, PlayerActivityTest.FakeNative.class,
+                FakeAchievements.class, ClearSealer.class, FakeHttp.class})
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 public final class PlayerActivityTest {
     private static final String COMPATIBILITY = "RavenCore-test-pinned|gb|1";
@@ -65,6 +85,10 @@ public final class PlayerActivityTest {
 
     @Before public void setUp() throws Exception {
         FakeNative.reset();
+        FakeAchievements.reset();
+        FakeHttp.reset();
+        AchievementAccount.clear(RuntimeEnvironment.getApplication());
+        AwardJournal.clear(RuntimeEnvironment.getApplication());
         RuntimeEnvironment.getApplication().getSharedPreferences(PlaybackSettings.PREFERENCES, 0)
                 .edit().clear().commit();
         files = RuntimeEnvironment.getApplication().getFilesDir();
@@ -102,6 +126,7 @@ public final class PlayerActivityTest {
         PlayerActivity activity = controller.get();
         activity.onWindowFocusChanged(true); pump(activity);
         assertEquals("The LCD grid reaches the GLES2 driver", 2, FakeNative.appliedEffect);
+        assertEquals("The sinc filter by default", 1, FakeNative.appliedResampler);
         assertFalse(FakeNative.appliedSettings.audioEnabled);
         assertEquals(27, FakeNative.appliedSettings.audioVolume);
         assertTrue(FakeNative.appliedSettings.integerScale);
@@ -143,6 +168,35 @@ public final class PlayerActivityTest {
         assertArrayEquals(new String[]{"ravenemu_gb_palette", "gray", "ravenemu_gb_frame_blending", "ghosting",
                 "ravenemu_gb_device_sensors", "enabled"}, FakeNative.liveOptions);
         assertEquals("Changing an image option must not reopen the game", 1, FakeNative.opens);
+    }
+
+    @Test public void aGameOpensInTheChosenThemeItsBarItsButtonsAndItsMenu() throws Exception {
+        RavenTheme.store(RuntimeEnvironment.getApplication(), RavenTheme.NVIDIA);
+        PlayerActivity activity = loaded();
+        assertSame(RavenTheme.NVIDIA, activity.theme());
+        View back = find(activity.getWindow().getDecorView(), view ->
+                "Retour à la bibliothèque".contentEquals(view.getContentDescription() == null ? "" : view.getContentDescription()));
+        assertEquals(RavenTheme.NVIDIA.accent, ((RavenIcon) ((android.widget.ImageView) back).getDrawable()).tint());
+        GameControlsView controls = ReflectionHelpers.getField(activity, "gameControls");
+        assertEquals("The touch controls take the theme", RavenTheme.NVIDIA.accent,
+                (int) ReflectionHelpers.getField(controls, "accent"));
+        assertEquals(RavenTheme.NVIDIA.accentLight, (int) ReflectionHelpers.getField(controls, "pressedTop"));
+        openMenu(activity);
+        GameDetailsSheet sheet = ReflectionHelpers.getField(menu(activity), "dialog");
+        assertSame("The game menu too", RavenTheme.NVIDIA, RavenTheme.of(sheet.getContext()));
+    }
+
+    @Test public void aGameKeepsItsColoursUntilItClosesAndNeverRestartsForATheme() throws Exception {
+        PlayerActivity activity = loaded();
+        ActivityController<PlayerActivity> controller = activities.get(0);
+        assertSame(RavenTheme.RAVENEMU, activity.theme());
+        // Settings opened from the game's menu, then another theme chosen there.
+        RavenTheme.store(activity, RavenTheme.NVIDIA);
+        controller.pause().resume();
+        pump(activity);
+        assertSame("Never created again: the game would restart", activity, controller.get());
+        assertSame(RavenTheme.RAVENEMU, activity.theme());
+        assertSame(RavenTheme.RAVENEMU, RavenTheme.of(activity));
     }
 
     @Test public void theGameWaitsWhileTheButtonsAreMovedAndTheirPlacesAreKept() throws Exception {
@@ -231,6 +285,221 @@ public final class PlayerActivityTest {
         coords[0].setAxisValue(android.view.MotionEvent.AXIS_Y, y);
         return android.view.MotionEvent.obtain(0, 0, android.view.MotionEvent.ACTION_MOVE, 1, properties, coords,
                 0, 0, 1f, 1f, 0, 0, android.view.InputDevice.SOURCE_JOYSTICK, 0);
+    }
+
+    @Test public void withoutAnAccountRetroAchievementsNeverStarts() throws Exception {
+        PlayerActivity activity = loaded();
+        for (int i = 0; i < 3; i++) activity.onDrawFrame(null);
+        assertTrue("No session, no request, no network", FakeAchievements.log.isEmpty());
+    }
+
+    @Test public void aSignedInAccountFollowsTheGameAndItsUnlockShowsOverThePicture() throws Exception {
+        new AchievementAccount("Raven", "TOKEN-1", "Raven Rouge", "", 34, 12).save(RuntimeEnvironment.getApplication());
+        AchievementSettings.DEFAULTS.withSound(false).save(RuntimeEnvironment.getApplication());
+        FakeAchievements.onStart = () -> assertTrue("RetroAchievements starts on the GL thread", QueuedGl.executing);
+        FakeAchievements.afterAnswer.add(new String[]{"login", "Raven", "Raven Rouge", "TOKEN-1", "", ""});
+        FakeAchievements.afterAnswer.add(new String[]{"achievement", "Premier pas", "Finir le niveau", "5", "", "77"});
+        PlayerActivity activity = loaded();
+        assertEquals("Raven", FakeAchievements.startUser);
+        assertEquals("TOKEN-1", FakeAchievements.startToken);
+        assertEquals("The ROM's console, whatever core runs it", NativeAchievements.GAME_BOY, FakeAchievements.startConsole);
+        assertEquals(0x180, FakeAchievements.startRomLength);
+        // The login goes out on a network thread; its answer comes back with a frame.
+        for (int i = 0; i < 1000 && FakeAchievements.answers.isEmpty(); i++) {
+            activity.onDrawFrame(null);
+            Thread.sleep(2);
+        }
+        assertEquals("A refused address is no answer, never a connection", AchievementsHttp.NO_ANSWER,
+                FakeAchievements.answers.get(0)[2]);
+        idle();
+        AchievementOverlay overlay = ReflectionHelpers.getField(activity, "achievementOverlay");
+        assertEquals("Succès débloqué · 5 points · Premier pas", String.valueOf(overlay.bannerText()));
+        ActivityController<PlayerActivity> controller = activities.remove(activities.size() - 1);
+        controller.pause().stop().destroy();
+        io(activity).submit(() -> {}).get(5, TimeUnit.SECONDS);
+        assertTrue("Closing the game closes its session", FakeAchievements.log.stream().anyMatch(l -> l.startsWith("stop ")));
+        assertTrue(FakeNative.closed);
+    }
+
+    @Test public void unlockBannersFollowTheSettingsButTheGameStillIntroducesItself() throws Exception {
+        new AchievementAccount("Raven", "TOKEN-1", "", "", 0, 0).save(RuntimeEnvironment.getApplication());
+        AchievementSettings.DEFAULTS.withUnlockPopups(false).withSound(false).save(RuntimeEnvironment.getApplication());
+        FakeAchievements.afterAnswer.add(new String[]{"achievement", "Premier pas", "", "5", "", "77"});
+        FakeAchievements.afterAnswer.add(new String[]{"game", "Libre", "12", "0", "", "1234"});
+        PlayerActivity activity = loaded();
+        for (int i = 0; i < 1000 && FakeAchievements.answers.isEmpty(); i++) {
+            activity.onDrawFrame(null);
+            Thread.sleep(2);
+        }
+        idle();
+        AchievementOverlay overlay = ReflectionHelpers.getField(activity, "achievementOverlay");
+        assertEquals("12 succès disponibles · Libre", String.valueOf(overlay.bannerText()));
+    }
+
+    private static final String AWARD_URL = "https://retroachievements.org/dorequest.php";
+    private static final String AWARD = "r=awardachievement&u=Raven&t=TOKEN-1&a=5501&h=0&m=abc&o=3&v=sig";
+
+    /** Frames until the condition holds; the network threads are real. */
+    private static void framesUntil(PlayerActivity activity, java.util.function.BooleanSupplier condition)
+            throws Exception {
+        for (int i = 0; i < 2500 && !condition.getAsBoolean(); i++) {
+            activity.onDrawFrame(null);
+            idle();
+            Thread.sleep(2);
+        }
+        assertTrue("Condition reached within five seconds", condition.getAsBoolean());
+    }
+
+    @Test public void anUnlockWaitsInTheJournalWhenThePlayerClosesThenReachesTheService() throws Exception {
+        android.content.Context app = RuntimeEnvironment.getApplication();
+        new AchievementAccount("Raven", "TOKEN-1", "", "", 0, 0).save(app);
+        AchievementSettings.DEFAULTS.withSound(false).save(app);
+        FakeAchievements.afterAnswer.add(new String[]{"login", "Raven", "Raven", "TOKEN-1", "", ""});
+        final boolean[] journaledFirst = {false};
+        FakeHttp.onSend = (url, post) -> {
+            if (post.startsWith("r=awardachievement"))
+                journaledFirst[0] = AwardJournal.open(app).forAccount("Raven").size() == 1;
+        };
+        PlayerActivity activity = loaded();
+        framesUntil(activity, () -> FakeAchievements.answers.size() >= 1);
+        // The award the module asks for: the network never answers.
+        FakeAchievements.request(2, AWARD_URL, AWARD);
+        framesUntil(activity, () -> FakeAchievements.answers.size() >= 2);
+        assertTrue("Journaled before it is sent", journaledFirst[0]);
+        assertEquals(AchievementsHttp.NO_ANSWER, FakeAchievements.answers.get(1)[2]);
+        assertEquals(1, AwardJournal.open(app).forAccount("Raven").size());
+        // The player closes, as a rotation does.
+        ActivityController<PlayerActivity> controller = activities.remove(activities.size() - 1);
+        controller.pause().stop().destroy();
+        io(activity).submit(() -> {}).get(5, TimeUnit.SECONDS);
+        assertEquals("Kept for the next session", 1, AwardJournal.open(app).forAccount("Raven").size());
+
+        // Next session, a new token: the unlock is sent again with it, and accepted.
+        FakeHttp.reset();
+        FakeAchievements.reset();
+        new AchievementAccount("Raven", "TOKEN-2", "", "", 0, 0).save(app);
+        FakeAchievements.afterAnswer.add(new String[]{"login", "Raven", "Raven", "TOKEN-2", "", ""});
+        FakeHttp.answer(200, "{\"Success\":true,\"User\":\"Raven\"}");
+        FakeHttp.answer(200, "{\"Success\":true,\"Score\":5,\"AchievementID\":5501}");
+        PlayerActivity next = loaded();
+        framesUntil(next, () -> AwardJournal.open(app).forAccount("Raven").isEmpty());
+        assertTrue(FakeHttp.sent.contains(AWARD_URL + " " + AWARD.replace("t=TOKEN-1", "t=TOKEN-2")));
+    }
+
+    @Test public void theGameMenuShowsTheAccountItsAchievementsAndLeaderboards() throws Exception {
+        android.content.Context app = RuntimeEnvironment.getApplication();
+        new AchievementAccount("Raven", "TOKEN-1", "Raven Rouge", "", 34, 12).save(app);
+        AchievementSettings.DEFAULTS.withSound(false).save(app);
+        FakeAchievements.summary = new String[]{"Raven", "Raven Rouge", "Libre", "12", "34", "1234", "1", "2", "5", "15"};
+        FakeAchievements.entries.add(new String[]{"5501", "Premier pas", "Finir le niveau", "5", "2", "", "1700000000",
+                "5", "", "100"});
+        FakeAchievements.entries.add(new String[]{"5502", "Collectionneur", "Tout ramasser", "10", "1", "3/10", "0",
+                "1", "", "30"});
+        FakeAchievements.boards.add(new String[]{"4401", "Course", "Le plus haut", "", "1", "0"});
+        PlayerActivity activity = loaded();
+        openMenu(activity);
+        pump(activity);
+        android.view.View decor = menuDialog().getWindow().getDecorView();
+        View card = find(decor, view -> view.getContentDescription() != null
+                && view.getContentDescription().toString().startsWith("RetroAchievements. Raven Rouge"));
+        assertNotNull("The account right under the heading", card);
+        assertTrue(card.getContentDescription().toString().contains("1/2 succès  ·  5/15 pts"));
+        card.performClick();
+        pump(activity);
+        assertNotNull(find(decor, view -> view.isShown() && view.getContentDescription() != null
+                && view.getContentDescription().toString().equals("Premier pas, 5 points, Débloqué")));
+        assertNotNull(find(decor, view -> view.isShown() && view.getContentDescription() != null
+                && view.getContentDescription().toString().equals("Collectionneur, 10 points, 3/10")));
+        assertNull("The menu waits behind the panel", find(decor, view -> view.isShown() && view instanceof TextView
+                && "Reprendre le jeu".contentEquals(((TextView)view).getText())));
+        // A leaderboard: the query goes through the GL thread, the scores come back with a frame.
+        find(decor, view -> "Classement Course".contentEquals(view.getContentDescription() == null ? ""
+                : view.getContentDescription())).performClick();
+        pump(activity);
+        assertEquals(java.util.Collections.singletonList("4401 false"), FakeAchievements.fetched);
+        FakeAchievements.scores = new String[]{"4401", "2", "0", "1", "Corbeau", "000120", "1615654895", "0",
+                "2", "Raven", "000060", "1615634566", "1"};
+        FakeAchievements.raise("scores", "", "2", "top", "", "4401");
+        activity.onDrawFrame(null);
+        shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(300));
+        pump(activity);
+        assertNotNull(find(decor, view -> view.isShown() && view instanceof TextView
+                && "#2 · Raven (vous)\n000060".contentEquals(((TextView)view).getText())));
+        // Signing out from the panel: the token and the waiting unlocks go, the session stops.
+        find(decor, view -> "Se déconnecter de RetroAchievements".contentEquals(view.getContentDescription() == null
+                ? "" : view.getContentDescription())).performClick();
+        pump(activity);
+        assertNull(AchievementAccount.load(app));
+        assertTrue(FakeAchievements.log.stream().anyMatch(l -> l.startsWith("stop ")));
+        assertNotNull(find(decor, view -> view.isShown() && view.getContentDescription() != null
+                && view.getContentDescription().toString().startsWith("RetroAchievements. Non connecté")));
+    }
+
+    @Test public void signedOutTheCardLeadsToTheAccountSettings() throws Exception {
+        PlayerActivity activity = loaded();
+        openMenu(activity);
+        pump(activity);
+        View card = find(menuDialog().getWindow().getDecorView(), view -> view.getContentDescription() != null
+                && view.getContentDescription().toString().startsWith("RetroAchievements. Non connecté"));
+        assertNotNull(card);
+        card.performClick();
+        Intent next = shadowOf(activity).getNextStartedActivity();
+        assertEquals(PlaybackSettingsActivity.class.getName(), next.getComponent().getClassName());
+        assertEquals(PlaybackSettingsActivity.RETRO, next.getStringExtra(PlaybackSettingsActivity.EXTRA_PAGE));
+        assertTrue("No account, no session", FakeAchievements.log.isEmpty());
+    }
+
+    @Test public void hardcoreStaysOffUntilRetroAchievementsApprovesRavenEmu() throws Exception {
+        android.content.Context app = RuntimeEnvironment.getApplication();
+        new AchievementAccount("Raven", "TOKEN-1", "", "", 0, 0).save(app);
+        AchievementSettings.DEFAULTS.withSound(false).withHardcore(true).save(app);
+        PlayerActivity activity = loaded();
+        assertFalse("Asked for, still off", FakeAchievements.startHardcore);
+        activity.onDrawFrame(null);
+        assertTrue("Softcore never holds the game", FakeNative.lastAdvance);
+    }
+
+    @Test @Config(shadows = ApprovedHardcore.class)
+    public void hardcoreWaitsForTheServiceRefusesStateLoadsAndAsksBeforeEachPause() throws Exception {
+        android.content.Context app = RuntimeEnvironment.getApplication();
+        new AchievementAccount("Raven", "TOKEN-1", "", "", 0, 0).save(app);
+        AchievementSettings.DEFAULTS.withSound(false).withHardcore(true).save(app);
+        StateSlotRepository.write(files, key, 0, COMPATIBILITY, new byte[]{20});
+        PlayerActivity activity = loaded();
+        assertTrue("Started in Hardcore", FakeAchievements.startHardcore);
+        // Signing in, then identifying the ROM: not a frame runs.
+        activity.onDrawFrame(null);
+        assertFalse(FakeNative.lastAdvance);
+        FakeAchievements.raise("login", "Raven", "Raven", "TOKEN-1", "", "");
+        activity.onDrawFrame(null);
+        activity.onDrawFrame(null);
+        assertFalse(FakeNative.lastAdvance);
+        FakeAchievements.raise("game", "Libre", "3", "0", "", "1234");
+        activity.onDrawFrame(null);
+        activity.onDrawFrame(null);
+        assertTrue("Tracked: the game runs", FakeNative.lastAdvance);
+        // The menu asks rcheevos for the pause; a load is refused.
+        openMenu(activity);
+        assertEquals(1, FakeAchievements.pauseRequests);
+        menuButton("Charger").performClick();
+        pump(activity);
+        assertTrue("No state is loaded in Hardcore", FakeNative.restoreAttempts.isEmpty());
+        assertNotNull(menuButton(HardcorePolicy.STATE_LOAD_LOCKED));
+        menu(activity).dismiss();
+        idle();
+        // Too soon after the last pause: refused, the game plays on.
+        FakeAchievements.pauseAllowed = false;
+        ShadowToast.reset();
+        assertTrue(activity.onKeyDown(android.view.KeyEvent.KEYCODE_BUTTON_MODE,
+                new android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_BUTTON_MODE)));
+        pump(activity);
+        assertFalse(menu(activity).isShowing());
+        assertEquals(HardcorePolicy.PAUSE_REFUSED, ShadowToast.getTextOfLatestToast());
+        // rcheevos asks for a restart: the console resets on the GL thread.
+        FakeAchievements.raise("hardcore_reset", "", "", "", "", "");
+        QueuedGl.executing = true;
+        try { activity.onDrawFrame(null); } finally { QueuedGl.executing = false; }
+        assertEquals(1, FakeNative.resets);
     }
 
     @Test public void theDisplayRateReachesThePacerAndTheScreenStaysOnWhilePlaying() throws Exception {
@@ -330,6 +599,18 @@ public final class PlayerActivityTest {
         ShadowVibrator.reset();
         activity.onDrawFrame(null);
         assertFalse(vibrator.isVibrating());
+    }
+
+    @Test public void preemptiveFramesReachTheNativePlayerOffByDefault() throws Exception {
+        ActivityController<PlayerActivity> controller = open(null);
+        PlayerActivity activity = controller.get();
+        activity.onWindowFocusChanged(true); pump(activity);
+        assertEquals(0, FakeNative.preemptive);
+        controller.pause();
+        new LatencySettings(2).save(activity);
+        controller.resume(); activity.onWindowFocusChanged(true); pump(activity);
+        assertEquals("Changed in the settings, taken without reopening the game", 2, FakeNative.preemptive);
+        assertEquals(1, FakeNative.opens);
     }
 
     @Test public void theTiltFollowsTheScreenAsItTurns() throws Exception {
@@ -514,6 +795,130 @@ public final class PlayerActivityTest {
         assertFalse(activity.isFinishing());
     }
 
+    /** The game's next SRAM write, the first frame's or the pause's, keeps the core's size. */
+    @Test public void aSaveOfAnotherSizeIsReadAsTheCoreReadsItThenKeptAtItsSize() throws Exception {
+        FakeNative.sramSize = 4;
+        SaveRepository.write(files, key, "srm", new byte[]{1, 2, 3, 4, 5, 6});
+        ShadowToast.reset();
+        PlayerActivity activity = loaded();
+        assertFalse("The game plays", FakeNative.closed);
+        assertArrayEquals(new byte[]{1, 2, 3, 4},
+                FakeNative.restoredBatteries.get(FakeNative.restoredBatteries.size() - 1));
+        assertEquals("Sauvegarde de 6 octets lue sur les 4 octets du jeu", ShadowToast.getTextOfLatestToast());
+        activities.remove(activities.size() - 1).pause().stop().destroy();
+        io(activity).submit(() -> {}).get(5, TimeUnit.SECONDS);
+        assertArrayEquals(new byte[]{1, 2, 3, 4}, SaveRepository.read(files, key, "srm"));
+
+        // Shorter: the rest of the SRAM stays the core's.
+        SaveRepository.write(files, key, "srm", new byte[]{1, 2});
+        loaded();
+        assertArrayEquals(new byte[]{1, 2, 0x7f, 0x7f},
+                FakeNative.restoredBatteries.get(FakeNative.restoredBatteries.size() - 1));
+    }
+
+    @Test public void aGameWithoutSramStillPlaysAndKeepsItsFile() throws Exception {
+        FakeNative.sramSize = 0;
+        SaveRepository.write(files, key, "srm", new byte[]{1, 2, 3});
+        ShadowToast.reset();
+        PlayerActivity activity = loaded();
+        assertFalse(FakeNative.closed);
+        assertEquals("Ce jeu n'a pas de mémoire de sauvegarde : fichier conservé, non chargé",
+                ShadowToast.getTextOfLatestToast());
+        activities.remove(activities.size() - 1).pause().stop().destroy();
+        io(activity).submit(() -> {}).get(5, TimeUnit.SECONDS);
+        assertArrayEquals(new byte[]{1, 2, 3}, SaveRepository.read(files, key, "srm"));
+    }
+
+    @Test public void thePlayersSaveWritesShareTheLibrarysExecutor() throws Exception {
+        assertSame(SaveStorage.IO, io(loaded()));
+    }
+
+    @Test public void storedCheatsRunAtLoadAndTheMenuCountsTheActiveOnes() throws Exception {
+        CheatRepository.write(files, key, Arrays.asList(new CheatList.Cheat("Vies", "010238CD", true),
+                new CheatList.Cheat("Éteint", "01FF47FF", false)));
+        PlayerActivity activity = loaded();
+        assertArrayEquals(new String[]{"010238CD"}, lastCheats());
+        openMenu(activity);
+        menuButton("Codes de triche · 1 actif").performClick();
+        assertNotNull(menuButton("Vies"));
+        assertNotNull(menuButton("01FF47FF"));
+        assertNotNull(menuButton(CheatsPanel.HELP));
+    }
+
+    @Test public void anAddedCodeIsCheckedByTheCoreThenKeptOrRefusedWithItsReason() throws Exception {
+        PlayerActivity activity = loaded();
+        assertArrayEquals("No cheat yet", new String[0], lastCheats());
+        openMenu(activity);
+        menuButton("Codes de triche").performClick();
+        EditText name = field("Nom (facultatif)"), code = field("Code");
+        name.setText("Argent");
+        code.setText(" 0199B5D0\n0199B6D0 ");
+        menuButton("Ajouter").performClick();
+        pump(activity);
+        assertArrayEquals(new String[]{"0199B5D0 0199B6D0"}, lastCheats());
+        assertEquals(Arrays.asList(new CheatList.Cheat("Argent", "0199B5D0 0199B6D0", true)),
+                CheatRepository.read(files, key));
+        assertEquals("The form starts again", "", code.getText().toString());
+        assertNotNull(menuButton("Codes de triche · 1 actif"));
+
+        code.setText("BAD-CODE");
+        menuButton("Ajouter").performClick();
+        pump(activity);
+        assertNotNull(menuButton("RavenGB : code de triche 2 refusé (code illisible)"));
+        assertEquals("Kept in the form to fix", "BAD-CODE", code.getText().toString());
+        assertEquals(1, CheatRepository.read(files, key).size());
+        assertNotNull("The refused code is not counted", menuButton("Codes de triche · 1 actif"));
+    }
+
+    @Test public void aCodeTurnedOffOrDeletedLeavesTheCoreAndTheFile() throws Exception {
+        CheatRepository.write(files, key, Arrays.asList(new CheatList.Cheat("Vies", "010238CD", true),
+                new CheatList.Cheat("Argent", "0199B5D0", true)));
+        PlayerActivity activity = loaded();
+        openMenu(activity);
+        menuButton("Codes de triche · 2 actifs").performClick();
+        described("Vies, actif").performClick();
+        pump(activity);
+        assertArrayEquals(new String[]{"0199B5D0"}, lastCheats());
+        assertFalse(CheatRepository.read(files, key).get(0).enabled);
+        described("Supprimer le code Argent").performClick();
+        pump(activity);
+        assertArrayEquals(new String[0], lastCheats());
+        assertEquals(Arrays.asList(new CheatList.Cheat("Vies", "010238CD", false)), CheatRepository.read(files, key));
+        assertNotNull(menuButton("Codes de triche"));
+    }
+
+    @Test @Config(shadows = ApprovedHardcore.class)
+    public void noCheatRunsOrIsAddedInHardcore() throws Exception {
+        android.content.Context app = RuntimeEnvironment.getApplication();
+        new AchievementAccount("Raven", "TOKEN-1", "", "", 0, 0).save(app);
+        AchievementSettings.DEFAULTS.withSound(false).withHardcore(true).save(app);
+        CheatRepository.write(files, key, Arrays.asList(new CheatList.Cheat("Vies", "010238CD", true)));
+        PlayerActivity activity = loaded();
+        assertArrayEquals("Hardcore asked for: none runs", new String[0], lastCheats());
+        openMenu(activity);
+        menuButton("Codes de triche · 1 actif").performClick();
+        assertNotNull(menuButton(CheatsPanel.HARDCORE));
+        assertFalse(menuButton("Ajouter").isEnabled());
+        assertFalse(described("Vies, actif").isEnabled());
+    }
+
+    private static String[] lastCheats() {
+        assertFalse("The core was given cheats", FakeNative.cheatCalls.isEmpty());
+        return FakeNative.cheatCalls.get(FakeNative.cheatCalls.size() - 1);
+    }
+    private EditText field(String hint) {
+        View result = find(menuDialog().getWindow().getDecorView(), view ->
+                view instanceof EditText && hint.contentEquals(((EditText) view).getHint()));
+        assertNotNull(hint, result);
+        return (EditText) result;
+    }
+    private View described(String label) {
+        View result = find(menuDialog().getWindow().getDecorView(), view ->
+                view.getContentDescription() != null && label.contentEquals(view.getContentDescription()));
+        assertNotNull(label, result);
+        return result;
+    }
+
     @Test public void failedLoadAndRollbackStopTheGameWithoutDeletingSramOrSlot() throws Exception {
         PlayerActivity activity = loaded();
         SaveRepository.write(files, key, "srm", new byte[]{50, 51});
@@ -556,6 +961,164 @@ public final class PlayerActivityTest {
             assertArrayEquals(latest, FakeNative.restoredBatteries.get(FakeNative.restoredBatteries.size() - 1));
             assertArrayEquals(latest, SaveRepository.read(files, key, "srm"));
         } finally { release.countDown(); }
+    }
+
+    @Test public void aChosenDeltaSkinReplacesTheControlsAndItsButtonsPlay() throws Exception {
+        android.content.Context app = RuntimeEnvironment.getApplication();
+        File work = new File(app.getCacheDir(), "skin-work");
+        assertTrue(work.isDirectory() || work.mkdirs());
+        com.ravenemu.app.data.skins.DeltaSkinFixtures.install(com.ravenemu.app.data.skins.DeltaSkins.root(app), work, "Test");
+        app.getSharedPreferences(PlaybackSettings.PREFERENCES, 0).edit()
+                .putString("skins.selected.gb_gbc", com.ravenemu.app.data.skins.DeltaSkinFixtures.IDENTIFIER).commit();
+        DeltaSkinView.Renderer previous = DeltaSkinView.renderer;
+        DeltaSkinView.renderer = (pdf, sha, kind, w, h) ->
+                android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888);
+        try {
+            PlayerActivity activity = loaded();
+            settleSkin(activity);
+            GameControlsView controls = ReflectionHelpers.getField(activity, "gameControls");
+            DeltaSkinView skin = ReflectionHelpers.getField(activity, "skinView");
+            View picture = ReflectionHelpers.getField(activity, "pictureFrame");
+            assertTrue(skin.ready());
+            assertEquals(View.VISIBLE, skin.getVisibility());
+            assertEquals("The skin replaces the touch controls", View.GONE, controls.getVisibility());
+            DeltaSkinLayout layout = skin.layout();
+            assertEquals("The picture takes the game's area", Math.round(layout.gameArea.height()),
+                    picture.getLayoutParams().height);
+            assertEquals(Math.round(layout.panel.height()), Math.round(320 * 300 / 400.0));
+
+            // The A item (320, 80, 60 × 60 of 400 × 300) at the panel's scale.
+            float scale = (float) layout.scale, top = (float) layout.panel.top;
+            touchSkin(skin, MotionEvent.ACTION_DOWN, 350 * scale, top + 110 * scale);
+            assertEquals(NativeBridge.A, FakeNative.buttons & NativeBridge.A);
+            touchSkin(skin, MotionEvent.ACTION_UP, 350 * scale, top + 110 * scale);
+            assertEquals(0, FakeNative.buttons);
+
+            ShadowToast.reset();
+            openMenu(activity);
+            menuButton("Déplacer les boutons").performClick();
+            idle();
+            assertEquals("Un skin Delta place lui-même ses boutons.", ShadowToast.getTextOfLatestToast());
+            assertFalse(controls.isEditing());
+            menu(activity).dismiss();
+            pump(activity);
+
+            touchSkin(skin, MotionEvent.ACTION_DOWN, 200 * scale, top + 25 * scale);
+            touchSkin(skin, MotionEvent.ACTION_UP, 200 * scale, top + 25 * scale);
+            pump(activity);
+            assertTrue("The skin's menu button opens the game menu", menu(activity).isShowing());
+            assertTrue(FakeNative.paused);
+        } finally {
+            DeltaSkinView.renderer = previous;
+        }
+    }
+
+    @Test public void aSkinThatCannotBeDrawnGivesTheClassicControlsBack() throws Exception {
+        android.content.Context app = RuntimeEnvironment.getApplication();
+        File work = new File(app.getCacheDir(), "skin-work");
+        assertTrue(work.isDirectory() || work.mkdirs());
+        com.ravenemu.app.data.skins.DeltaSkinFixtures.install(com.ravenemu.app.data.skins.DeltaSkins.root(app), work, "Test");
+        android.content.SharedPreferences preferences = app.getSharedPreferences(PlaybackSettings.PREFERENCES, 0);
+        preferences.edit().putString("skins.selected.gb_gbc", com.ravenemu.app.data.skins.DeltaSkinFixtures.IDENTIFIER)
+                .commit();
+        DeltaSkinView.Renderer previous = DeltaSkinView.renderer;
+        DeltaSkinView.renderer = (pdf, sha, kind, w, h) -> {
+            throw new com.ravenemu.app.data.skins.DeltaSkinException(
+                    com.ravenemu.app.data.skins.DeltaSkinException.Code.PDF_INVALID, "test");
+        };
+        try {
+            ShadowToast.reset();
+            PlayerActivity activity = loaded();
+            settleSkin(activity);
+            GameControlsView controls = ReflectionHelpers.getField(activity, "gameControls");
+            DeltaSkinView skin = ReflectionHelpers.getField(activity, "skinView");
+            assertEquals(View.VISIBLE, controls.getVisibility());
+            assertEquals(View.GONE, skin.getVisibility());
+            assertEquals("Skin invalide : commandes classiques restaurées", ShadowToast.getTextOfLatestToast());
+            assertNull("The console goes back to the classic controls",
+                    preferences.getString("skins.selected.gb_gbc", null));
+        } finally {
+            DeltaSkinView.renderer = previous;
+        }
+    }
+
+    @Test public void twoLinkedGamesRunTogetherEachWithItsOwnSaveOnePlayerShown() throws Exception {
+        byte[] other = new byte[0x180];
+        other[0x134] = 'B';
+        String second = RomLibrary.importRom(files, "Autre.gb", other).key;
+        SaveRepository.write(files, key, "srm", new byte[]{1, 2});
+        Intent intent = new Intent(RuntimeEnvironment.getApplication(), PlayerActivity.class)
+                .putExtra(PlayerActivity.EXTRA_ROM_KEY, key).putExtra(PlayerActivity.EXTRA_LINK_ROM_KEY, second);
+        ActivityController<PlayerActivity> controller = Robolectric.buildActivity(PlayerActivity.class, intent)
+                .create().start().resume().visible();
+        activities.add(controller);
+        PlayerActivity activity = controller.get();
+        activity.onWindowFocusChanged(true);
+        pump(activity);
+        assertTrue(FakeNative.linked);
+        assertEquals("gb", FakeNative.openCore);
+        assertEquals(Arrays.asList("Libre.gb", "Autre.gb"), Arrays.asList(FakeNative.linkedTitles));
+        assertEquals("Player 1's save restored; player 2 has none yet",
+                Arrays.asList("0:[1, 2]"), FakeNative.restoredPlayers);
+        assertEquals(0, FakeNative.linkFocus);
+        TextView title = ReflectionHelpers.getField(activity, "gameTitle");
+        assertTrue(title.getText().toString().startsWith("Câble link · Joueur 1\nLibre.gb"));
+
+        View swap = find(activity.getWindow().getDecorView(), view ->
+                "Passer au joueur 2".contentEquals(view.getContentDescription() == null ? "" : view.getContentDescription()));
+        assertNotNull(swap);
+        swap.performClick();
+        pump(activity);
+        assertEquals(1, FakeNative.linkFocus);
+        assertTrue(title.getText().toString().startsWith("Câble link · Joueur 2\nAutre.gb"));
+        assertNotNull(find(activity.getWindow().getDecorView(), view ->
+                "Passer au joueur 1".contentEquals(view.getContentDescription() == null ? "" : view.getContentDescription())));
+
+        // No game menu, as in the beta: neither the bar nor the controls nor Home.
+        assertNull(find(activity.getWindow().getDecorView(), view -> view.isShown()
+                && "Menu du jeu".contentEquals(view.getContentDescription() == null ? "" : view.getContentDescription())));
+        assertTrue(activity.onKeyDown(android.view.KeyEvent.KEYCODE_BUTTON_MODE,
+                new android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_BUTTON_MODE)));
+        idle();
+        assertNull(menu(activity));
+
+        // Each player's SRAM goes back to its own game's save.
+        controller.pause();
+        io(activity).submit(() -> {}).get(5, TimeUnit.SECONDS);
+        assertArrayEquals(new byte[]{1, 2}, SaveRepository.read(files, key, "srm"));
+        assertArrayEquals(new byte[]{0x22, 0x22}, SaveRepository.read(files, second, "srm"));
+        controller.resume();
+    }
+
+    @Test public void gamesThatDoNotLinkAreRefusedBeforeAnyCoreOpens() throws Exception {
+        byte[] advance = new byte[0x200];
+        advance[0xb2] = (byte) 0x96;
+        String gba = RomLibrary.importRom(files, "Avance.gba", advance).key;
+        ShadowToast.reset();
+        Intent intent = new Intent(RuntimeEnvironment.getApplication(), PlayerActivity.class)
+                .putExtra(PlayerActivity.EXTRA_ROM_KEY, key).putExtra(PlayerActivity.EXTRA_LINK_ROM_KEY, gba);
+        ActivityController<PlayerActivity> controller = Robolectric.buildActivity(PlayerActivity.class, intent)
+                .create().start().resume().visible();
+        activities.add(controller);
+        PlayerActivity activity = controller.get();
+        activity.onWindowFocusChanged(true);
+        pump(activity);
+        assertEquals(0, FakeNative.opens);
+        assertTrue(ShadowToast.getTextOfLatestToast().startsWith("Ces deux jeux ne se relient pas"));
+    }
+
+    @Test public void theMenuButtonAmongTheControlsOpensTheGameMenu() throws Exception {
+        PlayerActivity activity = loaded();
+        GameControlsView controls = ReflectionHelpers.getField(activity, "gameControls");
+        View button = find(controls, view -> "Menu du jeu".contentEquals(
+                view.getContentDescription() == null ? "" : view.getContentDescription()));
+        assertNotNull(button);
+        assertTrue(button.isShown());
+        assertEquals("At the top centre of the controls", 0, button.getTop());
+        assertTrue(button.performClick());
+        pump(activity);
+        assertTrue(menu(activity).isShowing());
+        assertTrue(FakeNative.paused);
     }
 
     @Test public void completedLoadCannotDismissANewPauseMenuOpenedWhileReading() throws Exception {
@@ -715,6 +1278,27 @@ public final class PlayerActivityTest {
     }
 
     private static void idle() { shadowOf(Looper.getMainLooper()).idle(); }
+
+    /** The skin read off the UI thread, laid out, its page drawn, the picture placed. */
+    private void settleSkin(PlayerActivity activity) throws Exception {
+        ExecutorService skins = ReflectionHelpers.getStaticField(PlayerActivity.class, "SKINS");
+        for (int i = 0; i < 3; i++) {
+            skins.submit(() -> {}).get(5, TimeUnit.SECONDS);
+            idle();
+            View decor = activity.getWindow().getDecorView();
+            decor.measure(View.MeasureSpec.makeMeasureSpec(320, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(568, View.MeasureSpec.EXACTLY));
+            decor.layout(0, 0, 320, 568);
+            DeltaSkinView.RENDER.submit(() -> {}).get(5, TimeUnit.SECONDS);
+            idle();
+        }
+    }
+
+    private static void touchSkin(DeltaSkinView skin, int action, float x, float y) {
+        long now = android.os.SystemClock.uptimeMillis();
+        MotionEvent event = MotionEvent.obtain(now, now, action, x, y, 0);
+        try { skin.dispatchTouchEvent(event); } finally { event.recycle(); }
+    }
     private View menuButton(String label) {
         View result = find(menuDialog().getWindow().getDecorView(), view ->
                 view instanceof TextView && label.contentEquals(((TextView)view).getText()));
@@ -772,23 +1356,43 @@ public final class PlayerActivityTest {
         static int opens, failRestores;
         static boolean closed, paused, lastAdvance;
         static int framesToAdvance, draws, batteryReads;
+        /** Each list of codes given to the core; a code starting with BAD is refused. */
+        static final List<String[]> cheatCalls = new ArrayList<>();
+        static String cheatRefusal;
+        /** The core's SRAM size, as the bridge checks it; -1 takes any size. */
+        static int sramSize = -1;
         static int settingsApplies;
         static PlaybackSettings appliedSettings;
-        static int appliedEffect = -1;
+        static int appliedEffect = -1, appliedResampler = -1;
         static String[] openOptions, liveOptions;
         static String openCore;
         static float displayRate;
         static double fps;
         static String message;
-        static int buttons, rotation;
+        static int buttons, rotation, preemptive;
         static boolean rumbling;
+        static int resets;
+        /** Linked games: the titles given, each player's SRAM, the player shown. */
+        static boolean linked;
+        static String[] linkedTitles;
+        static byte[][] playerBatteries = new byte[2][];
+        static final List<String> restoredPlayers = new ArrayList<>();
+        static int linkFocus;
         static void reset() {
+            resets = 0;
+            linked = false;
+            linkedTitles = null;
+            playerBatteries = new byte[2][];
+            restoredPlayers.clear();
+            linkFocus = -1;
             state = new byte[]{1, 2}; battery = new byte[]{3, 4};
             preview = new int[]{2, 1, 0xffff0000, 0xff00ff00};
             restoreAttempts.clear(); restoredBatteries.clear();
             opens = failRestores = 0; closed = lastAdvance = false; paused = true;
             framesToAdvance = 1; draws = batteryReads = 0;
-            settingsApplies = 0; appliedSettings = null; appliedEffect = -1;
+            sramSize = -1;
+            cheatCalls.clear(); cheatRefusal = null;
+            settingsApplies = 0; appliedSettings = null; appliedEffect = -1; appliedResampler = -1;
             openOptions = liveOptions = null;
             openCore = null;
             displayRate = 0f;
@@ -796,6 +1400,7 @@ public final class PlayerActivityTest {
             message = null;
             buttons = 0;
             rotation = -1;
+            preemptive = -1;
             rumbling = false;
         }
         private static void requireGl() { assertTrue("Core operation must use the queued GL boundary", QueuedGl.executing); }
@@ -803,11 +1408,36 @@ public final class PlayerActivityTest {
         @Implementation protected static void initGl() {}
         @Implementation protected static String openRom(String nativeDir, String filesDir, String system, byte[] rom,
                                                         String title, String[] coreOptions) {
-            requireGl(); opens++; closed = false; state = new byte[]{1, 2}; battery = new byte[]{0};
+            requireGl(); opens++; closed = false; linked = false; state = new byte[]{1, 2};
+            if (sramSize < 0) battery = new byte[]{0};
+            else if (sramSize == 0) battery = null;
+            else { battery = new byte[sramSize]; Arrays.fill(battery, (byte)0x7f); }
             openCore = system; openOptions = coreOptions.clone(); return null;
+        }
+        /** RavenCore's link subsystem: two players, each with a 2-byte SRAM. */
+        @Implementation protected static String openLinked(String nativeDir, String filesDir, String system,
+                byte[] first, String firstName, byte[] second, String secondName, String[] coreOptions) {
+            requireGl(); opens++; closed = false; linked = true;
+            openCore = system; openOptions = coreOptions.clone();
+            linkedTitles = new String[]{firstName, secondName};
+            playerBatteries = new byte[][]{{0x11, 0x11}, {0x22, 0x22}};
+            return null;
+        }
+        @Implementation protected static int players() { return closed ? 0 : linked ? 2 : 1; }
+        @Implementation protected static void setLinkFocus(int player) { requireGl(); linkFocus = player; }
+        @Implementation protected static byte[] savePlayerBattery(int player) {
+            return closed || !linked || playerBatteries[player] == null ? null : playerBatteries[player].clone();
+        }
+        @Implementation protected static boolean restorePlayerBattery(int player, byte[] value) {
+            requireGl();
+            if (!linked || value.length != 2) return false;
+            restoredPlayers.add(player + ":" + Arrays.toString(value));
+            playerBatteries[player] = value.clone();
+            return true;
         }
         @Implementation protected static void setDisplayRate(float hertz) { requireGl(); displayRate = hertz; }
         @Implementation protected static void setDisplayRotation(int value) { requireGl(); rotation = value; }
+        @Implementation protected static void setPreemptiveFrames(int frames) { requireGl(); preemptive = frames; }
         /** As the bridge: a paused or closed game never vibrates. */
         @Implementation protected static boolean rumbling() { return rumbling && !paused && !closed; }
         @Implementation protected static String takeMessage() {
@@ -822,10 +1452,29 @@ public final class PlayerActivityTest {
         @Implementation protected static int[] capturePreview() {
             requireGl(); return preview == null ? null : preview.clone();
         }
-        @Implementation protected static byte[] saveBattery() { batteryReads++; return closed ? null : battery.clone(); }
-        @Implementation protected static boolean restoreBattery(byte[] value) {
-            requireGl(); restoredBatteries.add(value.clone()); battery = value.clone(); return true;
+        @Implementation protected static byte[] saveBattery() {
+            batteryReads++; return closed || battery == null ? null : battery.clone();
         }
+        @Implementation protected static boolean restoreBattery(byte[] value) {
+            requireGl();
+            if (sramSize >= 0 && value.length != sramSize) return false;
+            restoredBatteries.add(value.clone()); battery = value.clone(); return true;
+        }
+        /** As RavenCore through the frontend: the first refused code and its reason. */
+        @Implementation protected static int setCheats(String[] codes) {
+            requireGl();
+            cheatCalls.add(codes.clone());
+            cheatRefusal = null;
+            if (closed) return -2;
+            for (int i = 0; i < codes.length; i++) {
+                if (codes[i].startsWith("BAD")) {
+                    cheatRefusal = "RavenGB : code de triche " + (i + 1) + " refusé (code illisible)";
+                    return i;
+                }
+            }
+            return -1;
+        }
+        @Implementation protected static String cheatRefusal() { requireGl(); return cheatRefusal; }
         @Implementation protected static boolean restoreState(byte[] value) {
             requireGl(); restoreAttempts.add(value.clone());
             if (failRestores > 0) { failRestores--; state = new byte[]{127}; return false; }
@@ -833,7 +1482,8 @@ public final class PlayerActivityTest {
         }
         @Implementation protected static void setPaused(boolean value) { requireGl(); paused = value; }
         @Implementation protected static void setPlaybackOptions(boolean audioEnabled, int volume,
-                boolean integerScale, int brightness, int contrast, int screenEffect) {
+                boolean integerScale, int brightness, int contrast, int screenEffect, int resampler) {
+            appliedResampler = resampler;
             requireGl(); settingsApplies++;
             appliedSettings = new PlaybackSettings(audioEnabled, volume, integerScale, brightness, contrast);
             appliedEffect = screenEffect;
@@ -845,5 +1495,6 @@ public final class PlayerActivityTest {
             draws++; lastAdvance = advance; return advance ? framesToAdvance : 0;
         }
         @Implementation protected static void closeRom() { closed = true; }
+        @Implementation protected static boolean resetGame() { requireGl(); resets++; return !closed; }
     }
 }
