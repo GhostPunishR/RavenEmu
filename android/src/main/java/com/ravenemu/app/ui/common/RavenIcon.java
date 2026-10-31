@@ -31,7 +31,7 @@ public final class RavenIcon extends Drawable {
         SETTINGS, ADD, MORE, SEARCH, BACK, CHEVRON, EXTERNAL,
         ALL, GB, GBC, GBA,
         TROPHY, SLIDERS, SPEAKER, MONITOR, GAMEPAD, INFO,
-        STAR, RADIO_ON, RADIO_OFF,
+        STAR, RADIO_ON, RADIO_OFF, MENU,
     }
 
     private static final float STROKE = 2f;
@@ -83,6 +83,7 @@ public final class RavenIcon extends Drawable {
         SPECS.put(Glyph.STAR, new String[]{star, star});
         SPECS.put(Glyph.RADIO_ON, new String[]{circle(12, 12, 8), circle(12, 12, 4)});
         SPECS.put(Glyph.RADIO_OFF, new String[]{circle(12, 12, 8), ""});
+        SPECS.put(Glyph.MENU, new String[]{"M5,7H19M5,12H19M5,17H19", ""});
     }
 
     private final Glyph glyph;

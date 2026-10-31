@@ -223,6 +223,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         root.addView(header, new LinearLayout.LayoutParams(-1, -2));
 
         gameControls = new GameControlsView(this, this::setTouchButtons);
+        gameControls.setMenuListener(this::togglePlayerMenu);
         gameControls.setEnabled(false);
         // The picture, and RetroAchievements' banners over it.
         FrameLayout screen = new FrameLayout(this);

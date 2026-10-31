@@ -1079,3 +1079,39 @@ reprenait celle d'« À propos »).
 Écart voulu par le propriétaire : ces icônes modernisent celles de la bêta,
 qui n'est pas modifiée. Validation sur téléphone à faire.
 
+## Boutons tactiles redessinés et bouton Menu, lot B-1
+
+Demande du propriétaire : les boutons en jeu faisaient « brouillon », et en
+Game Boy / Game Boy Color le menu devait quitter la rangée Select/Start pour
+le **haut, au centre** des commandes.
+
+- `GameControlsView` dessine toutes les commandes dans la palette de
+  l'application : face sombre (`#2B2D40` → `#191B28`), contour d'accent à
+  60 %, lettres, flèches et pictogrammes dans l'accent `#A78BFA` ; la partie
+  appuyée se remplit d'accent et son libellé passe en sombre. Le style
+  « contraste élevé » éclaircit la face et trace le contour en blanc, comme
+  avant.
+- Croix d'un seul tenant (un seul contour au lieu de deux barres superposées),
+  une flèche au milieu de chaque branche, un moyeu discret ; seules les
+  branches appuyées s'allument, diagonales comprises. A/B ronds, Select/Start
+  en pastilles fines (la zone tactile reste de 84 × 40 dp), L/R en pastilles.
+- **Bouton Menu** (trois traits, `RavenIcon.Glyph.MENU`) : en portrait, en
+  haut au centre des commandes, entre la croix et A en GB/GBC, entre L et R
+  en GBA ; jamais entre Select et Start. Il ouvre le menu du jeu au
+  relâchement sur lui, n'envoie aucun bouton à la console, se déplace comme
+  les autres commandes et répond au clic d'accessibilité (« Ouvrir le menu
+  du jeu »). Masqué en paysage, où le haut du centre appartient à l'image ;
+  le `⋮` de la barre reste dans les deux orientations.
+- `ControlLayout` compte huit commandes (`menu` en dernier) ; une disposition
+  enregistrée avant ce lot (sept commandes) garde ses places, le menu à la
+  sienne.
+- Tests : `GameControlsViewTest` (place du menu en GB/GBC et en GBA, ouverture
+  au relâchement seulement, aucun masque console, déplacement, masqué en
+  paysage, rendu : seule la branche ou le bouton appuyé prend l'accent),
+  `ControlLayoutTest` (ancienne disposition à sept commandes),
+  `PlayerActivityTest` (le bouton ouvre le menu et met le jeu en pause).
+
+Écart voulu par le propriétaire : le dessin et le bouton Menu diffèrent de
+`GbTouchControls` de la bêta, qui n'est pas modifiée. Validation sur téléphone
+à faire (lisibilité, place du menu sur les petits écrans).
+

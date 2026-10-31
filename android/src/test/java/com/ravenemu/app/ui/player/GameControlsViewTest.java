@@ -4,6 +4,8 @@ import com.ravenemu.app.settings.ControlLayout;
 import com.ravenemu.app.settings.ControlSettings;
 
 import android.app.Activity;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
 import android.os.Looper;
 import android.os.SystemClock;
 import android.view.HapticFeedbackConstants;
@@ -53,6 +55,77 @@ public final class GameControlsViewTest {
         assertTrue(labelled("START").getTop() > b.getBottom());
         assertEquals(View.GONE, labelled("L").getVisibility());
         assertEquals(View.GONE, labelled("R").getVisibility());
+    }
+
+    @Test public void theMenuButtonSitsAtTheTopCentreAndOnlyOpensTheMenu() {
+        open(320, false);
+        int[] opened = {0};
+        controls.setMenuListener(() -> opened[0]++);
+        View menu = labelled("Ouvrir le menu du jeu"), select = labelled("SELECT");
+        assertEquals(View.VISIBLE, menu.getVisibility());
+        assertEquals("At the top centre", 160, centerX(menu), 1);
+        assertEquals(0, menu.getTop());
+        assertTrue("Never between Select and Start", menu.getBottom() <= select.getTop());
+        assertTrue(menu.getBottom() <= labelled("B").getTop());
+        assertTrue(menu.getRight() <= labelled("A").getLeft());
+
+        touch(MotionEvent.ACTION_DOWN, 3, centerX(menu), centerY(menu));
+        assertEquals("It opens on release", 0, opened[0]);
+        touch(MotionEvent.ACTION_UP, 3, centerX(menu), centerY(menu));
+        assertEquals(1, opened[0]);
+        touch(MotionEvent.ACTION_DOWN, 4, centerX(menu), centerY(menu));
+        touch(MotionEvent.ACTION_MOVE, 4, menu.getRight() + 30, centerY(menu));
+        touch(MotionEvent.ACTION_UP, 4, menu.getRight() + 30, centerY(menu));
+        assertEquals("Released away from it, nothing opens", 1, opened[0]);
+        assertTrue(menu.performAccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, null));
+        assertEquals(2, opened[0]);
+        assertEquals("android.widget.Button", menu.createAccessibilityNodeInfo().getClassName());
+        assertTrue("No console button", changes.isEmpty());
+
+        controls.setEditing(true);
+        touch(MotionEvent.ACTION_DOWN, 5, centerX(menu), centerY(menu));
+        touch(MotionEvent.ACTION_MOVE, 5, centerX(menu), centerY(menu) + 30);
+        touch(MotionEvent.ACTION_UP, 5, centerX(menu), centerY(menu) + 30);
+        relayout();
+        assertEquals("While editing it moves like the others", 30, menu.getTop());
+        assertEquals(30f, controls.controlLayout().dy(7), 1f);
+        assertEquals(2, opened[0]);
+        controls.setEditing(false);
+        controls.setEnabled(false);
+        assertFalse(menu.performClick());
+        assertEquals(2, opened[0]);
+    }
+
+    @Test public void onTheGbaTheMenuSitsBetweenLAndR() {
+        open(320, true);
+        View menu = labelled("Ouvrir le menu du jeu"), l = labelled("L"), r = labelled("R");
+        assertTrue(l.getRight() <= menu.getLeft());
+        assertTrue(menu.getRight() <= r.getLeft());
+        assertEquals(centerY(l), centerY(menu), 1);
+        assertEquals(160, centerX(menu), 1);
+    }
+
+    @Test public void onlyThePressedPartTakesTheAccent() {
+        open(320, false);
+        View dpad = labelled("Croix directionnelle"), a = labelled("A");
+        int arm = dpad.getWidth() / 3, x = dpad.getWidth() / 2 - arm * 3 / 8;
+        int up = dpad.getHeight() / 6, down = dpad.getHeight() - up;
+        Bitmap idle = render(dpad);
+        assertTrue("A dark face", red(idle.getPixel(x, up)) < 0x60);
+        assertEquals("Outside the cross, nothing", 0, android.graphics.Color.alpha(idle.getPixel(2, 2)));
+        touch(MotionEvent.ACTION_DOWN, 6, centerX(dpad), centerY(dpad) - 40);
+        assertEquals(NativeBridge.UP, current());
+        Bitmap pressed = render(dpad);
+        assertTrue("Up lit", red(pressed.getPixel(x, up)) > 0x80);
+        assertTrue("Down not", red(pressed.getPixel(x, down)) < 0x60);
+        touch(MotionEvent.ACTION_UP, 6, centerX(dpad), centerY(dpad) - 40);
+
+        int side = a.getWidth() / 4, middle = a.getHeight() / 2;
+        assertTrue(red(render(a).getPixel(side, middle)) < 0x60);
+        touch(MotionEvent.ACTION_DOWN, 7, centerX(a), centerY(a));
+        assertTrue("A pressed takes the accent", red(render(a).getPixel(side, middle)) > 0x80);
+        touch(MotionEvent.ACTION_UP, 7, centerX(a), centerY(a));
+        assertTrue(red(render(a).getPixel(side, middle)) < 0x60);
     }
 
     @Test public void sizeAndSpacingFollowTheInterfaceSettingsLikeTheBeta() {
@@ -325,6 +398,7 @@ public final class GameControlsViewTest {
         assertEquals(0, current());
         assertTrue(labelled("SELECT").getTop() >= controls.getHeight() - 44);
         assertTrue(labelled("START").getBottom() <= controls.getHeight());
+        assertEquals("The top centre is the picture's", View.GONE, labelled("Ouvrir le menu du jeu").getVisibility());
         touch(MotionEvent.ACTION_DOWN, 10, centerX(a), centerY(a));
         assertEquals(NativeBridge.A, current());
     }
@@ -368,6 +442,14 @@ public final class GameControlsViewTest {
         }
         throw new AssertionError("Missing control: " + name);
     }
+
+    private static Bitmap render(View view) {
+        Bitmap bitmap = Bitmap.createBitmap(view.getWidth(), view.getHeight(), Bitmap.Config.ARGB_8888);
+        view.draw(new Canvas(bitmap));
+        return bitmap;
+    }
+
+    private static int red(int color) { return android.graphics.Color.red(color); }
 
     private int current() { return changes.isEmpty() ? 0 : changes.get(changes.size() - 1); }
     private float centerX(View view) { return view.getLeft() + view.getWidth() / 2f; }

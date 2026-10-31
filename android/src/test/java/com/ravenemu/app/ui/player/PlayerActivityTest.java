@@ -930,6 +930,19 @@ public final class PlayerActivityTest {
         } finally { release.countDown(); }
     }
 
+    @Test public void theMenuButtonAmongTheControlsOpensTheGameMenu() throws Exception {
+        PlayerActivity activity = loaded();
+        GameControlsView controls = ReflectionHelpers.getField(activity, "gameControls");
+        View button = find(controls, view -> "Ouvrir le menu du jeu".contentEquals(
+                view.getContentDescription() == null ? "" : view.getContentDescription()));
+        assertNotNull(button);
+        assertTrue(button.isShown());
+        assertTrue(button.performClick());
+        pump(activity);
+        assertTrue(menu(activity).isShowing());
+        assertTrue(FakeNative.paused);
+    }
+
     @Test public void completedLoadCannotDismissANewPauseMenuOpenedWhileReading() throws Exception {
         PlayerActivity activity = loaded();
         StateSlotRepository.write(files, key, 0, COMPATIBILITY, new byte[]{70});

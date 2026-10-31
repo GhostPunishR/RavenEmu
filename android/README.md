@@ -67,7 +67,9 @@ arrondis. Sa licence Apache 2.0 et les attributions sont incluses dans
 applicative Kotlin.
 
 `GameControlsView.java` reprend la croix, les boutons A/B décalés et les
-touches SELECT/START ; L/R apparaissent pour la GBA. La croix permet les
+touches SELECT/START ; L/R apparaissent pour la GBA. Elles sont dessinées dans
+la couleur d'accent (lot B-1) et, en portrait, un bouton **Menu** se trouve en
+haut au centre (entre L et R en GBA) ; il ouvre le menu du jeu. La croix permet les
 diagonales et le glissement, avec plusieurs doigts sur les commandes.
 Le mode paysage réserve les côtés aux commandes et garde le centre pour
 l'image. Les contrôles libèrent leurs appuis sur annulation, perte de focus,
