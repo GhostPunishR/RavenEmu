@@ -2,7 +2,7 @@ package com.ravenemu.app.ui.player;
 
 import com.ravenemu.app.data.saves.CheatList;
 import com.ravenemu.app.ui.common.RavenIcon;
-import com.ravenemu.app.ui.library.HomeActivity;
+import com.ravenemu.app.ui.common.RavenTheme;
 
 import android.app.Activity;
 import android.graphics.Typeface;
@@ -50,29 +50,33 @@ final class CheatsPanel {
     private List<CheatList.Cheat> cheats = Collections.emptyList();
     private boolean allowed = true, checking;
 
+    /** The colours of the Activity it belongs to (Settings → Interface → Thème). */
+    private final RavenTheme theme;
+
     CheatsPanel(Activity owner, Actions actions) {
+        this.theme = RavenTheme.of(owner);
         this.owner = owner;
         this.actions = actions;
         root = column();
-        Button back = textButton("Retour au menu du jeu", HomeActivity.ACCENT);
+        Button back = textButton("Retour au menu du jeu", theme.accent);
         back.setCompoundDrawablesRelativeWithIntrinsicBounds(
-                new RavenIcon(RavenIcon.Glyph.BACK, HomeActivity.ACCENT, dp(18)), null, null, null);
+                new RavenIcon(RavenIcon.Glyph.BACK, theme.accent, dp(18)), null, null, null);
         back.setCompoundDrawablePadding(dp(6));
         back.setOnClickListener(view -> actions.back());
         root.addView(back, new LinearLayout.LayoutParams(-2, -2));
-        TextView title = text("Codes de triche", 20, HomeActivity.TEXT);
+        TextView title = text("Codes de triche", 20, theme.text);
         title.setTypeface(null, Typeface.BOLD);
         add(root, title, 4);
         notice = text(HARDCORE, 13, AchievementsPanel.ERROR);
         add(root, notice, 6);
-        empty = text("Aucun code pour ce jeu.", 13, HomeActivity.MUTED);
+        empty = text("Aucun code pour ce jeu.", 13, theme.muted);
         add(root, empty, 6);
         list = column();
         add(root, list, 4);
-        TextView heading = text("Ajouter un code", 15, HomeActivity.TEXT);
+        TextView heading = text("Ajouter un code", 15, theme.text);
         heading.setTypeface(null, Typeface.BOLD);
         add(root, heading, 16);
-        TextView help = text(HELP, 12, HomeActivity.MUTED);
+        TextView help = text(HELP, 12, theme.muted);
         add(root, help, 4);
         name = field("Nom (facultatif)", 60, true);
         add(root, name, 8);
@@ -144,16 +148,16 @@ final class CheatsPanel {
         LinearLayout row = new LinearLayout(owner);
         row.setGravity(Gravity.CENTER_VERTICAL);
         LinearLayout texts = column();
-        TextView label = text(cheat.name, 15, HomeActivity.TEXT);
+        TextView label = text(cheat.name, 15, theme.text);
         label.setSingleLine(true);
         label.setEllipsize(TextUtils.TruncateAt.END);
         texts.addView(label);
-        TextView line = text(cheat.code, 12, HomeActivity.MUTED);
+        TextView line = text(cheat.code, 12, theme.muted);
         line.setSingleLine(true);
         line.setEllipsize(TextUtils.TruncateAt.END);
         texts.addView(line);
         row.addView(texts, new LinearLayout.LayoutParams(0, -2, 1));
-        Button delete = textButton("Supprimer", HomeActivity.MUTED);
+        Button delete = textButton("Supprimer", theme.muted);
         delete.setTextSize(12);
         delete.setContentDescription("Supprimer le code " + cheat.name);
         delete.setOnClickListener(view -> actions.delete(index));
@@ -180,14 +184,14 @@ final class CheatsPanel {
                     | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS | InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
         }
         field.setFilters(new InputFilter[]{new InputFilter.LengthFilter(max)});
-        field.setTextColor(HomeActivity.TEXT);
-        field.setHintTextColor(HomeActivity.MUTED);
+        field.setTextColor(theme.text);
+        field.setHintTextColor(theme.muted);
         field.setTextSize(14);
         field.setMinHeight(dp(48));
         field.setPadding(dp(12), dp(8), dp(12), dp(8));
         field.setSaveEnabled(false);
-        GradientDrawable outline = shape(HomeActivity.SURFACE, 10);
-        outline.setStroke(Math.max(1, dp(1)), HomeActivity.OUTLINE);
+        GradientDrawable outline = shape(theme.surface, 10);
+        outline.setStroke(Math.max(1, dp(1)), theme.outline);
         field.setBackground(outline);
         return field;
     }
@@ -203,12 +207,12 @@ final class CheatsPanel {
     private Button button(String label) {
         Button button = new Button(owner);
         button.setText(label);
-        button.setTextColor(HomeActivity.BACKGROUND);
+        button.setTextColor(theme.background);
         button.setTextSize(14);
         button.setAllCaps(false);
         button.setMinHeight(dp(48));
         button.setMinimumHeight(dp(48));
-        button.setBackground(shape(HomeActivity.ACCENT, 12));
+        button.setBackground(shape(theme.accent, 12));
         return button;
     }
 

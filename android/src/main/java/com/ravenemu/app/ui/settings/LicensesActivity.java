@@ -3,7 +3,7 @@ import com.ravenemu.app.BuildConfig;
 import com.ravenemu.app.R;
 import com.ravenemu.app.platform.SystemBarInsets;
 import com.ravenemu.app.ui.common.RavenIcon;
-import com.ravenemu.app.ui.library.HomeActivity;
+import com.ravenemu.app.ui.common.RavenTheme;
 
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
@@ -30,7 +30,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /** Local, selectable legal notices. Loading a long licence never blocks UI. */
-public final class LicensesActivity extends Activity {
+public final class LicensesActivity extends Activity implements RavenTheme.Host {
     private static final String[] ASSETS = {
             "NOTICE.txt", "GPL-3.0.txt", "AGPL-3.0.txt", "MIT-LIBRETRO.txt", "MIT-RCHEEVOS.txt", "APACHE-2.0.txt"
     };
@@ -42,8 +42,13 @@ public final class LicensesActivity extends Activity {
     private int selectedDocument, requestSerial;
     private int restoredStart = -1, restoredEnd = -1, restoredScroll;
     private boolean destroyed;
+    /** Settings → Interface → Thème, as it was when the page opened. */
+    private RavenTheme theme;
+
+    @Override public RavenTheme theme() { return theme; }
 
     @Override public void onCreate(Bundle state) {
+        theme = RavenTheme.apply(this);
         super.onCreate(state);
         if (state != null) {
             selectedDocument = Math.max(0, Math.min(ASSETS.length - 1, state.getInt("legal.document")));
@@ -53,21 +58,21 @@ public final class LicensesActivity extends Activity {
         }
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(HomeActivity.BACKGROUND);
+        root.setBackgroundColor(theme.background);
 
         LinearLayout toolbar = new LinearLayout(this);
         toolbar.setGravity(Gravity.CENTER_VERTICAL);
-        View back = RavenIcon.button(this, RavenIcon.Glyph.BACK, HomeActivity.ACCENT, 24, "Retour aux paramètres");
+        View back = RavenIcon.button(this, RavenIcon.Glyph.BACK, theme.accent, 24, "Retour aux paramètres");
         back.setOnClickListener(view -> finish());
         toolbar.addView(back, new LinearLayout.LayoutParams(dp(48), dp(48)));
-        TextView heading = text("Licences et crédits", 19, HomeActivity.TEXT);
+        TextView heading = text("Licences et crédits", 19, theme.text);
         heading.setTypeface(null, Typeface.BOLD);
         toolbar.addView(heading, new LinearLayout.LayoutParams(0, -2, 1));
         root.addView(toolbar, new LinearLayout.LayoutParams(-1, -2));
 
         TextView revision = text(BuildConfig.SOURCE_MODIFIED
                 ? "Version locale modifiée · base " + shortRevision()
-                : "Révision " + shortRevision(), 12, HomeActivity.MUTED);
+                : "Révision " + shortRevision(), 12, theme.muted);
         revision.setTextIsSelectable(true);
         revision.setPadding(dp(16), dp(8), dp(16), dp(8));
         root.addView(revision, new LinearLayout.LayoutParams(-1, -2));
@@ -106,12 +111,12 @@ public final class LicensesActivity extends Activity {
         }
         tabs.addView(row);
         root.addView(tabs, new LinearLayout.LayoutParams(-1, -2));
-        documentTitle = text("", 16, HomeActivity.TEXT);
+        documentTitle = text("", 16, theme.text);
         documentTitle.setTypeface(null, Typeface.BOLD);
         documentTitle.setPadding(dp(16), dp(8), dp(16), dp(8));
         root.addView(documentTitle);
         documentScroll = new ScrollView(this);
-        body = text("", 13, HomeActivity.TEXT);
+        body = text("", 13, theme.text);
         body.setId(android.R.id.text1);
         body.setTextIsSelectable(true);
         body.setPadding(dp(16), dp(8), dp(16), dp(24));
@@ -130,8 +135,8 @@ public final class LicensesActivity extends Activity {
         for (int i = 0; i < choices.length; i++) {
             boolean selected = i == document;
             choices[i].setSelected(selected);
-            choices[i].setTextColor(selected ? HomeActivity.BACKGROUND : HomeActivity.TEXT);
-            choices[i].setBackground(background(selected ? HomeActivity.ACCENT : HomeActivity.SURFACE));
+            choices[i].setTextColor(selected ? theme.background : theme.text);
+            choices[i].setBackground(background(selected ? theme.accent : theme.surface));
         }
         body.setText("Chargement…");
         io.execute(() -> {
@@ -187,15 +192,15 @@ public final class LicensesActivity extends Activity {
     private Button action(String title) {
         Button button = new Button(this);
         button.setText(title); button.setAllCaps(false); button.setTextSize(13);
-        button.setTextColor(HomeActivity.TEXT); button.setMinHeight(dp(48));
-        button.setBackground(background(HomeActivity.SURFACE));
+        button.setTextColor(theme.text); button.setMinHeight(dp(48));
+        button.setBackground(background(theme.surface));
         return button;
     }
 
     private GradientDrawable background(int color) {
         GradientDrawable drawable = new GradientDrawable();
         drawable.setColor(color); drawable.setCornerRadius(dp(10));
-        drawable.setStroke(dp(1), HomeActivity.OUTLINE);
+        drawable.setStroke(dp(1), theme.outline);
         return drawable;
     }
 

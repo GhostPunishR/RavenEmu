@@ -3,7 +3,7 @@ import com.ravenemu.app.bridge.NativeBridge;
 import com.ravenemu.app.settings.ControlLayout;
 import com.ravenemu.app.settings.ControlSettings;
 import com.ravenemu.app.ui.common.RavenIcon;
-import com.ravenemu.app.ui.library.HomeActivity;
+import com.ravenemu.app.ui.common.RavenTheme;
 
 import android.content.Context;
 import android.content.res.Configuration;
@@ -45,13 +45,11 @@ import android.view.accessibility.AccessibilityNodeInfo;
 final class GameControlsView extends ViewGroup {
     interface Listener { void onButtonsChanged(int mask); }
 
-    private static final int ACCENT = HomeActivity.ACCENT;
-    /** The label on a pressed button. */
-    private static final int INK = HomeActivity.BACKGROUND;
-    private static final int EDGE = 0x99a78bfa;
-    private static final int FACE_TOP = 0xff2b2d40, FACE_BOTTOM = 0xff191b28;
-    private static final int CONTRAST_TOP = 0xff474a63, CONTRAST_BOTTOM = 0xff2d2f42;
-    private static final int PRESSED_TOP = 0xffbca8ff, PRESSED_BOTTOM = 0xff8d6ff0;
+    /** Settings → Interface → Thème: the accent draws the outlines, labels and
+     * arrows, the face goes from faceTop down to the surface, a pressed part
+     * from the light accent to the deep one with its label in ink. */
+    private final int accent, ink, edge, detail, faceTop, faceBottom, contrastTop, contrastBottom,
+            pressedTop, pressedBottom;
     /** Round A/B, the slim Select/Start pills, the L/R shoulders. */
     private static final int ROUND = 0, PILL = 1, SHOULDER = 2;
     private static final long ACCESSIBLE_PRESS_MILLIS = 100L;
@@ -76,6 +74,17 @@ final class GameControlsView extends ViewGroup {
 
     GameControlsView(Context context, Listener listener, Runnable onMenu) {
         super(context);
+        RavenTheme theme = RavenTheme.of(context);
+        accent = theme.accent;
+        ink = theme.background;
+        edge = RavenTheme.alpha(theme.accent, 0x99);
+        detail = RavenTheme.alpha(theme.accent, 0x66);
+        faceTop = theme.faceTop;
+        faceBottom = theme.surface;
+        contrastTop = theme.contrastTop;
+        contrastBottom = theme.contrastBottom;
+        pressedTop = theme.accentLight;
+        pressedBottom = theme.accentDeep;
         this.listener = listener;
         this.onMenu = onMenu;
         setMotionEventSplittingEnabled(true);
@@ -356,7 +365,7 @@ final class GameControlsView extends ViewGroup {
             setContentDescription("Menu du jeu");
             setFocusable(true);
             line.setStyle(Paint.Style.STROKE);
-            glyph = new RavenIcon(RavenIcon.Glyph.MENU, ACCENT, dp(20));
+            glyph = new RavenIcon(RavenIcon.Glyph.MENU, accent, dp(20));
             setOnClickListener(view -> {
                 if (editing || onMenu == null) return;
                 if (settings.haptics) performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
@@ -370,15 +379,15 @@ final class GameControlsView extends ViewGroup {
         }
 
         @Override protected void onSizeChanged(int w, int h, int oldw, int oldh) {
-            normal = new LinearGradient(0, 0, 0, Math.max(1, h), FACE_TOP, FACE_BOTTOM, Shader.TileMode.CLAMP);
-            contrast = new LinearGradient(0, 0, 0, Math.max(1, h), CONTRAST_TOP, CONTRAST_BOTTOM, Shader.TileMode.CLAMP);
-            pressed = new LinearGradient(0, 0, 0, Math.max(1, h), PRESSED_TOP, PRESSED_BOTTOM, Shader.TileMode.CLAMP);
+            normal = new LinearGradient(0, 0, 0, Math.max(1, h), faceTop, faceBottom, Shader.TileMode.CLAMP);
+            contrast = new LinearGradient(0, 0, 0, Math.max(1, h), contrastTop, contrastBottom, Shader.TileMode.CLAMP);
+            pressed = new LinearGradient(0, 0, 0, Math.max(1, h), pressedTop, pressedBottom, Shader.TileMode.CLAMP);
         }
 
         @Override protected void onDraw(Canvas canvas) {
             boolean down = isPressed(), contrasted = settings.highContrast();
             fill.setShader(down ? pressed : contrasted ? contrast : normal);
-            line.setColor(down ? PRESSED_TOP : contrasted ? Color.WHITE : EDGE);
+            line.setColor(down ? pressedTop : contrasted ? Color.WHITE : edge);
             line.setStrokeWidth(dp(down ? 2f : 1.5f));
             float edge = line.getStrokeWidth() / 2f + dp(.5f), width = getWidth(), height = getHeight();
             float face = Math.min(height - 2 * edge, height * .72f);
@@ -388,7 +397,7 @@ final class GameControlsView extends ViewGroup {
             canvas.drawRoundRect(bounds, radius, radius, fill);
             canvas.drawRoundRect(bounds, radius, radius, line);
             int size = Math.round(Math.min(Math.min(dp(20), face * .75f), bounds.width() * .8f));
-            glyph.setTint(down ? INK : ACCENT);
+            glyph.setTint(down ? ink : accent);
             glyph.setBounds(Math.round(bounds.centerX() - size / 2f), Math.round(bounds.centerY() - size / 2f),
                     Math.round(bounds.centerX() + size / 2f), Math.round(bounds.centerY() + size / 2f));
             glyph.draw(canvas);
@@ -415,7 +424,7 @@ final class GameControlsView extends ViewGroup {
             this.index = index;
             line.setStyle(Paint.Style.STROKE);
             frame.setStyle(Paint.Style.STROKE);
-            frame.setColor(ACCENT);
+            frame.setColor(accent);
             frame.setStrokeWidth(dp(1.5f));
             frame.setPathEffect(new DashPathEffect(new float[]{dp(6), dp(4)}, 0));
             setContentDescription(description);
@@ -520,9 +529,9 @@ final class GameControlsView extends ViewGroup {
         }
 
         @Override protected void onSizeChanged(int w, int h, int oldw, int oldh) {
-            normal = new LinearGradient(0, 0, 0, Math.max(1, h), FACE_TOP, FACE_BOTTOM, Shader.TileMode.CLAMP);
-            contrast = new LinearGradient(0, 0, 0, Math.max(1, h), CONTRAST_TOP, CONTRAST_BOTTOM, Shader.TileMode.CLAMP);
-            pressed = new LinearGradient(0, 0, 0, Math.max(1, h), PRESSED_TOP, PRESSED_BOTTOM, Shader.TileMode.CLAMP);
+            normal = new LinearGradient(0, 0, 0, Math.max(1, h), faceTop, faceBottom, Shader.TileMode.CLAMP);
+            contrast = new LinearGradient(0, 0, 0, Math.max(1, h), contrastTop, contrastBottom, Shader.TileMode.CLAMP);
+            pressed = new LinearGradient(0, 0, 0, Math.max(1, h), pressedTop, pressedBottom, Shader.TileMode.CLAMP);
         }
 
         /** The face and its outline; high contrast lightens the face and
@@ -530,12 +539,12 @@ final class GameControlsView extends ViewGroup {
         void paint(boolean down) {
             boolean contrasted = settings.highContrast();
             fill.setShader(down ? pressed : contrasted ? contrast : normal);
-            line.setColor(down ? PRESSED_TOP : contrasted ? Color.WHITE : EDGE);
+            line.setColor(down ? pressedTop : contrasted ? Color.WHITE : edge);
             line.setStrokeWidth(dp(down ? 2f : 1.5f));
         }
 
         /** Labels and arrows: the accent, dark on a pressed face. */
-        int ink(boolean down) { return down ? INK : ACCENT; }
+        int ink(boolean down) { return down ? ink : accent; }
 
         @Override public void onInitializeAccessibilityNodeInfo(AccessibilityNodeInfo info) {
             super.onInitializeAccessibilityNodeInfo(info);
@@ -680,11 +689,11 @@ final class GameControlsView extends ViewGroup {
                 for (int i = 0; i < 4; i++) if ((mask & directions[i]) != 0) canvas.drawRect(lit[i], fill);
                 canvas.restore();
             }
-            line.setColor(mask != 0 ? PRESSED_TOP : settings.highContrast() ? Color.WHITE : EDGE);
+            line.setColor(mask != 0 ? pressedTop : settings.highContrast() ? Color.WHITE : edge);
             canvas.drawPath(cross, line);
             detail.setStyle(Paint.Style.STROKE);
             detail.setStrokeWidth(dp(1.25f));
-            detail.setColor(settings.highContrast() ? 0x99ffffff : 0x66a78bfa);
+            detail.setColor(settings.highContrast() ? 0x99ffffff : GameControlsView.this.detail);
             canvas.drawCircle(cx, cy, hub, detail);
             detail.setStyle(Paint.Style.FILL);
             for (int i = 0; i < 4; i++) {

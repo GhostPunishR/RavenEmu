@@ -358,6 +358,12 @@ de la bibliothèque (Game Boy et GBC ensemble, ou deux GBA) dans le sous-systèm
 `link` de RavenCore : un joueur affiché à la fois, le bouton « Joueur N » de
 la barre passe à l'autre, chaque jeu garde sa propre sauvegarde.
 
+**Paramètres → Interface → Thème** choisit les couleurs de toute l'interface :
+**RavenEmu** (violet sur fond sombre, celles de la bêta) ou **NVIDIA** (vert
+sur noir, d'après le thème « NVIDIA Shield » du menu MaterialUI de RetroArch).
+Écrans, icônes, menus et commandes tactiles suivent (`ui/common/RavenTheme`) ;
+un jeu déjà ouvert garde les siennes jusqu'à sa fermeture.
+
 ## Vibration et capteurs de la cartouche
 
 **Paramètres → Interface → Cartouche** reprend la bêta : **Vibration de la cartouche**

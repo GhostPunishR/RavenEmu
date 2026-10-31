@@ -40,6 +40,9 @@ public final class GameControlsViewTest {
     @After public void release() {
         if (controls != null) controls.releaseAll();
         if (host != null) host.pause().stop().destroy();
+        // A theme chosen by a test stays with it.
+        org.robolectric.RuntimeEnvironment.getApplication().getSharedPreferences(
+                com.ravenemu.app.settings.PlaybackSettings.PREFERENCES, 0).edit().clear().commit();
     }
 
     @Test public void portraitUsesTheOriginalStaggeredLayout() {
@@ -78,6 +81,22 @@ public final class GameControlsViewTest {
         assertTrue("A pressed takes the accent", red(render(a).getPixel(side, middle)) > 0x80);
         touch(MotionEvent.ACTION_UP, 7, centerX(a), centerY(a));
         assertTrue(red(render(a).getPixel(side, middle)) < 0x60);
+    }
+
+    @Test public void theNvidiaThemeDrawsTheControlsInRetroArchsGreen() {
+        com.ravenemu.app.ui.common.RavenTheme.store(org.robolectric.RuntimeEnvironment.getApplication(),
+                com.ravenemu.app.ui.common.RavenTheme.NVIDIA);
+        open(320, false);
+        View a = labelled("A");
+        int side = a.getWidth() / 4, middle = a.getHeight() / 2;
+        int idle = render(a).getPixel(side, middle);
+        assertTrue("A dark face", green(idle) < 0x60);
+        touch(MotionEvent.ACTION_DOWN, 7, centerX(a), centerY(a));
+        int pressed = render(a).getPixel(side, middle);
+        assertTrue("Pressed in the green, not the violet: " + Integer.toHexString(pressed),
+                green(pressed) > 0x80 && green(pressed) > red(pressed) + 0x20
+                        && green(pressed) > android.graphics.Color.blue(pressed) + 0x40);
+        touch(MotionEvent.ACTION_UP, 7, centerX(a), centerY(a));
     }
 
     @Test public void sizeAndSpacingFollowTheInterfaceSettingsLikeTheBeta() {
@@ -491,6 +510,7 @@ public final class GameControlsViewTest {
     }
 
     private static int red(int color) { return android.graphics.Color.red(color); }
+    private static int green(int color) { return android.graphics.Color.green(color); }
 
     private int current() { return changes.isEmpty() ? 0 : changes.get(changes.size() - 1); }
     private float centerX(View view) { return view.getLeft() + view.getWidth() / 2f; }

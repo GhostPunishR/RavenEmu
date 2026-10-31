@@ -23,6 +23,9 @@ import com.ravenemu.app.settings.ConsoleSettings;
 import com.ravenemu.app.settings.ControlLayout;
 import com.ravenemu.app.settings.LatencySettings;
 import com.ravenemu.app.settings.PlaybackSettings;
+import com.ravenemu.app.ui.common.GameDetailsSheet;
+import com.ravenemu.app.ui.common.RavenIcon;
+import com.ravenemu.app.ui.common.RavenTheme;
 import com.ravenemu.app.ui.settings.PlaybackSettingsActivity;
 
 import android.app.Dialog;
@@ -165,6 +168,35 @@ public final class PlayerActivityTest {
         assertArrayEquals(new String[]{"ravenemu_gb_palette", "gray", "ravenemu_gb_frame_blending", "ghosting",
                 "ravenemu_gb_device_sensors", "enabled"}, FakeNative.liveOptions);
         assertEquals("Changing an image option must not reopen the game", 1, FakeNative.opens);
+    }
+
+    @Test public void aGameOpensInTheChosenThemeItsBarItsButtonsAndItsMenu() throws Exception {
+        RavenTheme.store(RuntimeEnvironment.getApplication(), RavenTheme.NVIDIA);
+        PlayerActivity activity = loaded();
+        assertSame(RavenTheme.NVIDIA, activity.theme());
+        View back = find(activity.getWindow().getDecorView(), view ->
+                "Retour à la bibliothèque".contentEquals(view.getContentDescription() == null ? "" : view.getContentDescription()));
+        assertEquals(RavenTheme.NVIDIA.accent, ((RavenIcon) ((android.widget.ImageView) back).getDrawable()).tint());
+        GameControlsView controls = ReflectionHelpers.getField(activity, "gameControls");
+        assertEquals("The touch controls take the theme", RavenTheme.NVIDIA.accent,
+                (int) ReflectionHelpers.getField(controls, "accent"));
+        assertEquals(RavenTheme.NVIDIA.accentLight, (int) ReflectionHelpers.getField(controls, "pressedTop"));
+        openMenu(activity);
+        GameDetailsSheet sheet = ReflectionHelpers.getField(menu(activity), "dialog");
+        assertSame("The game menu too", RavenTheme.NVIDIA, RavenTheme.of(sheet.getContext()));
+    }
+
+    @Test public void aGameKeepsItsColoursUntilItClosesAndNeverRestartsForATheme() throws Exception {
+        PlayerActivity activity = loaded();
+        ActivityController<PlayerActivity> controller = activities.get(0);
+        assertSame(RavenTheme.RAVENEMU, activity.theme());
+        // Settings opened from the game's menu, then another theme chosen there.
+        RavenTheme.store(activity, RavenTheme.NVIDIA);
+        controller.pause().resume();
+        pump(activity);
+        assertSame("Never created again: the game would restart", activity, controller.get());
+        assertSame(RavenTheme.RAVENEMU, activity.theme());
+        assertSame(RavenTheme.RAVENEMU, RavenTheme.of(activity));
     }
 
     @Test public void theGameWaitsWhileTheButtonsAreMovedAndTheirPlacesAreKept() throws Exception {

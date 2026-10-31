@@ -5,6 +5,7 @@ import com.ravenemu.app.data.library.FolderImport;
 import com.ravenemu.app.data.library.RomLibrary;
 import com.ravenemu.app.ui.common.GameDetailsSheet;
 import com.ravenemu.app.ui.common.RavenIcon;
+import com.ravenemu.app.ui.common.RavenTheme;
 import com.ravenemu.app.ui.player.PlayerActivity;
 import com.ravenemu.app.ui.settings.PlaybackSettingsActivity;
 import com.ravenemu.app.data.saves.SaveRepository;
@@ -66,6 +67,9 @@ public final class HomeActivityTest {
     @After public void closeActivities() {
         for (ActivityController<HomeActivity> activity : activities)
             activity.pause().stop().destroy();
+        // A theme chosen by a test stays with it.
+        RuntimeEnvironment.getApplication().getSharedPreferences(
+                com.ravenemu.app.settings.PlaybackSettings.PREFERENCES, 0).edit().clear().commit();
     }
 
     @Test public void settingsOpenTheRealPageOnItsCategoriesWithoutAFloatingMenu() throws Exception {
@@ -509,9 +513,44 @@ public final class HomeActivityTest {
         // Every icon in the one accent colour, the owner's choice.
         for (String label : new String[]{"Paramètres", "Ajouter une ROM", "Plus d'options", "Tous les jeux",
                 "Game Boy", "Game Boy Color"})
-            assertEquals(label, HomeActivity.ACCENT,
+            assertEquals(label, RavenTheme.RAVENEMU.accent,
                     ((RavenIcon) ((android.widget.ImageView) described(root, label)).getDrawable()).tint());
-        assertEquals(HomeActivity.ACCENT, ((RavenIcon) search.getCompoundDrawablesRelative()[0]).tint());
+        assertEquals(RavenTheme.RAVENEMU.accent, ((RavenIcon) search.getCompoundDrawablesRelative()[0]).tint());
+    }
+
+    @Test public void anotherThemeChosenInTheSettingsRecolorsTheLibraryOnReturn() throws Exception {
+        seedLibrary();
+        ActivityController<HomeActivity> controller = open(null);
+        HomeActivity activity = controller.get();
+        assertSame(RavenTheme.RAVENEMU, activity.theme());
+        RavenTheme.store(activity, RavenTheme.NVIDIA);
+        controller.pause().resume();
+        shadowOf(Looper.getMainLooper()).idle();
+        HomeActivity recreated = controller.get();
+        assertNotSame("Created again in the new colours", activity, recreated);
+        idleIo(recreated);
+        assertSame(RavenTheme.NVIDIA, recreated.theme());
+        View root = recreated.getWindow().getDecorView();
+        for (String label : new String[]{"Paramètres", "Ajouter une ROM", "Plus d'options", "Tous les jeux",
+                "Game Boy", "Game Boy Color"})
+            assertEquals(label, RavenTheme.NVIDIA.accent,
+                    ((RavenIcon) ((android.widget.ImageView) described(root, label)).getDrawable()).tint());
+        EditText search = find(root, EditText.class);
+        assertEquals(RavenTheme.NVIDIA.text, search.getCurrentTextColor());
+        assertEquals(RavenTheme.NVIDIA.accent, ((RavenIcon) search.getCompoundDrawablesRelative()[0]).tint());
+
+        // The game's sheet, its Play button and its Android style follow the library.
+        showFirstGame(recreated);
+        shadowOf(Looper.getMainLooper()).idle();
+        GameDetailsSheet sheet = (GameDetailsSheet) ShadowDialog.getLatestDialog();
+        assertSame(RavenTheme.NVIDIA, RavenTheme.of(sheet.getContext()));
+        TextView play = (TextView) text(sheet.getWindow().getDecorView(), "Jouer");
+        assertEquals(RavenTheme.NVIDIA.background, play.getCurrentTextColor());
+
+        // Unchanged settings: the library is not created again.
+        controller.pause().resume();
+        shadowOf(Looper.getMainLooper()).idle();
+        assertSame(recreated, controller.get());
     }
 
     private static RavenIcon.Glyph glyph(View view) {

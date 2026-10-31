@@ -4,7 +4,7 @@ import com.ravenemu.app.data.library.RomLibrary;
 import com.ravenemu.app.data.saves.CheatList;
 import com.ravenemu.app.data.saves.StateSlotRepository;
 import com.ravenemu.app.ui.common.GameDetailsSheet;
-import com.ravenemu.app.ui.library.HomeActivity;
+import com.ravenemu.app.ui.common.RavenTheme;
 
 import android.app.Activity;
 import android.app.AlertDialog;
@@ -51,8 +51,6 @@ final class PlayerMenuSheet {
         default void onCheatDelete(int index) {}
     }
 
-    private static final int CARD = 0xff202230;
-    private static final int SECONDARY = 0xffcbc4dc;
     private final Activity owner;
     private final Listener listener;
     private final GameDetailsSheet dialog;
@@ -80,7 +78,11 @@ final class PlayerMenuSheet {
         this(owner, title, selectedSlot, new BadgeCache(), listener);
     }
 
+    /** The colours of the Activity it belongs to (Settings → Interface → Thème). */
+    private final RavenTheme theme;
+
     PlayerMenuSheet(Activity owner, String title, int selectedSlot, BadgeCache badges, Listener listener) {
+        this.theme = RavenTheme.of(owner);
         this.owner = owner;
         this.listener = listener;
         this.selectedSlot = selectedSlot >= 0 && selectedSlot < StateSlotRepository.SLOT_COUNT
@@ -89,20 +91,20 @@ final class PlayerMenuSheet {
         LinearLayout content = column();
         content.setPadding(dp(18), dp(12), dp(18), dp(28));
         View handle = new View(owner);
-        handle.setBackground(shape(HomeActivity.MUTED, 2));
+        handle.setBackground(shape(theme.muted, 2));
         LinearLayout.LayoutParams handleSize = new LinearLayout.LayoutParams(dp(32), dp(4));
         handleSize.gravity = Gravity.CENTER_HORIZONTAL;
         handleSize.bottomMargin = dp(20);
         content.addView(handle, handleSize);
-        TextView heading = text("Menu du jeu", 20, HomeActivity.TEXT);
+        TextView heading = text("Menu du jeu", 20, theme.text);
         heading.setTypeface(null, Typeface.BOLD);
         content.addView(heading);
         // As in the beta: the RetroAchievements account right under the heading.
         accountHost = new FrameLayout(owner);
         add(content, accountHost, 12);
-        add(content, text(title, 13, SECONDARY), 12);
+        add(content, text(title, 13, theme.secondary), 12);
         add(content, text("Partie en pause · 4 emplacements de sauvegarde", 12,
-                HomeActivity.MUTED), 12);
+                theme.muted), 12);
 
         LinearLayout switcher = new LinearLayout(owner);
         for (int i = 0; i < choices.length; i++) {
@@ -124,17 +126,17 @@ final class PlayerMenuSheet {
 
         LinearLayout card = column();
         card.setPadding(dp(12), dp(12), dp(12), dp(12));
-        card.setBackground(shape(CARD, 14));
+        card.setBackground(shape(theme.card, 14));
         LinearLayout summary = new LinearLayout(owner);
         summary.setGravity(Gravity.CENTER_VERTICAL);
         String system = RomLibrary.detectSystem(title);
         FrameLayout preview = new FrameLayout(owner);
         previewBadge = text(system == null ? "—" : system.toUpperCase(Locale.ROOT),
-                16, HomeActivity.MUTED);
+                16, theme.muted);
         previewBadge.setGravity(Gravity.CENTER);
         preview.setContentDescription("Aperçu de sauvegarde indisponible");
-        GradientDrawable frame = shape(0xff10111b, 9);
-        frame.setStroke(dp(1), HomeActivity.OUTLINE);
+        GradientDrawable frame = shape(theme.frame, 9);
+        frame.setStroke(dp(1), theme.outline);
         preview.setBackground(frame);
         preview.setClipToOutline(true);
         preview.addView(previewBadge, new FrameLayout.LayoutParams(-1, -1));
@@ -146,14 +148,14 @@ final class PlayerMenuSheet {
         summary.addView(preview, new LinearLayout.LayoutParams(dp(94), dp(84)));
         LinearLayout description = column();
         description.setPadding(dp(12), 0, 0, 0);
-        slotTitle = text("", 15, HomeActivity.TEXT);
+        slotTitle = text("", 15, theme.text);
         slotTitle.setTypeface(null, Typeface.BOLD);
         description.addView(slotTitle);
-        savedAt = text("", 12, HomeActivity.MUTED);
+        savedAt = text("", 12, theme.muted);
         add(description, savedAt, 5);
         summary.addView(description, new LinearLayout.LayoutParams(0, -2, 1));
         card.addView(summary);
-        warning = text("", 12, HomeActivity.MUTED);
+        warning = text("", 12, theme.muted);
         add(card, warning, 10);
         LinearLayout actions = new LinearLayout(owner);
         save = button("Sauver", 12);
@@ -167,7 +169,7 @@ final class PlayerMenuSheet {
         }
         add(card, actions, 10);
         add(content, card, 12);
-        operationMessage = text("", 12, HomeActivity.MUTED);
+        operationMessage = text("", 12, theme.muted);
         operationMessage.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
         operationMessage.setVisibility(View.GONE);
         add(content, operationMessage, 8);
@@ -184,8 +186,8 @@ final class PlayerMenuSheet {
         load.setOnClickListener(view -> requestLoad());
         delete.setOnClickListener(view -> requestDelete());
         Button resume = button("Reprendre le jeu", 14);
-        resume.setTextColor(HomeActivity.BACKGROUND);
-        resume.setBackground(buttonBackground(HomeActivity.ACCENT));
+        resume.setTextColor(theme.background);
+        resume.setBackground(buttonBackground(theme.accent));
         resume.setOnClickListener(view -> dismiss());
         add(content, resume, 12);
         Button move = button("Déplacer les boutons", 14);
@@ -349,8 +351,8 @@ final class PlayerMenuSheet {
             choices[i].setText(String.valueOf(i + 1) + (occupied ? "  •" : ""));
             choices[i].setContentDescription("Emplacement " + (i + 1) + (occupied ? ", occupé" : ", vide"));
             choices[i].setSelected(selected);
-            choices[i].setTextColor(selected ? HomeActivity.BACKGROUND : HomeActivity.TEXT);
-            choices[i].setBackground(buttonBackground(selected ? HomeActivity.ACCENT : 0xff292a38));
+            choices[i].setTextColor(selected ? theme.background : theme.text);
+            choices[i].setBackground(buttonBackground(selected ? theme.accent : theme.raised));
             choices[i].setEnabled(!busy);
             choices[i].setAlpha(busy ? .5f : 1f);
         }
@@ -443,9 +445,9 @@ final class PlayerMenuSheet {
             return true;
         });
         confirmation.show();
-        confirmation.getWindow().setBackgroundDrawable(shape(HomeActivity.SURFACE, 18));
-        confirmation.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(HomeActivity.ACCENT);
-        confirmation.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(HomeActivity.ACCENT);
+        confirmation.getWindow().setBackgroundDrawable(shape(theme.surface, 18));
+        confirmation.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(theme.accent);
+        confirmation.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(theme.accent);
     }
 
     private void dismissConfirmation() {
@@ -477,7 +479,7 @@ final class PlayerMenuSheet {
     private Button button(String label, int size) {
         Button button = new Button(owner);
         button.setText(label);
-        button.setTextColor(HomeActivity.TEXT);
+        button.setTextColor(theme.text);
         button.setTextSize(size);
         button.setAllCaps(false);
         button.setMinWidth(0);
@@ -485,7 +487,7 @@ final class PlayerMenuSheet {
         button.setMinHeight(dp(48));
         button.setMinimumHeight(dp(48));
         button.setPadding(dp(6), dp(4), dp(6), dp(4));
-        button.setBackground(buttonBackground(0xff292a38));
+        button.setBackground(buttonBackground(theme.raised));
         return button;
     }
 
@@ -511,10 +513,10 @@ final class PlayerMenuSheet {
     private Drawable buttonBackground(int color) {
         StateListDrawable states = new StateListDrawable();
         states.addState(new int[]{android.R.attr.state_pressed},
-                shape(color == HomeActivity.ACCENT ? 0xffbca6ff : 0xff3c3454, 12));
+                shape(color == theme.accent ? theme.accentLight : theme.accentDim, 12));
         GradientDrawable focused = shape(color, 12);
-        focused.setStroke(dp(2), color == HomeActivity.ACCENT
-                ? HomeActivity.TEXT : HomeActivity.ACCENT);
+        focused.setStroke(dp(2), color == theme.accent
+                ? theme.text : theme.accent);
         states.addState(new int[]{android.R.attr.state_focused}, focused);
         states.addState(new int[]{}, shape(color, 12));
         return states;

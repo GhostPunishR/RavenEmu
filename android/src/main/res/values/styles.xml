@@ -13,6 +13,15 @@
         <item name="android:navigationBarColor">#000000</item>
         <item name="android:windowLightStatusBar">false</item>
     </style>
+    <!-- Settings → Interface → Thème, NVIDIA: the colours of RetroArch's
+         MaterialUI "NVIDIA Shield" theme (see ui/common/RavenTheme.java). -->
+    <style name="RavenEmuNativeTheme.Nvidia">
+        <item name="android:colorAccent">#7AB547</item>
+        <item name="android:colorBackground">#121212</item>
+        <item name="android:windowBackground">#121212</item>
+        <item name="android:textColorPrimary">#DEDEDE</item>
+        <item name="android:textColorSecondary">#999999</item>
+    </style>
     <!-- Dedicated Java Views dialog theme; the Activity theme stays unchanged. -->
     <style name="RavenGameSheetTheme" parent="Theme.MaterialComponents.BottomSheetDialog">
         <item name="colorPrimary">#A78BFA</item>
@@ -31,6 +40,17 @@
         <item name="paddingBottomSystemWindowInsets">true</item>
         <item name="paddingLeftSystemWindowInsets">true</item>
         <item name="paddingRightSystemWindowInsets">true</item>
+    </style>
+    <style name="RavenGameSheetTheme.Nvidia">
+        <item name="colorPrimary">#7AB547</item>
+        <item name="colorSecondary">#7AB547</item>
+        <item name="colorSurface">#1D1D1D</item>
+        <item name="android:textColorPrimary">#DEDEDE</item>
+        <item name="android:textColorSecondary">#999999</item>
+        <item name="bottomSheetStyle">@style/RavenGameSheet.Nvidia</item>
+    </style>
+    <style name="RavenGameSheet.Nvidia">
+        <item name="backgroundTint">#1D1D1D</item>
     </style>
     <style name="RavenGameSheetShape">
         <item name="cornerFamily">rounded</item>

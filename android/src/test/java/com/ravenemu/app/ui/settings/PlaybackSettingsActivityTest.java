@@ -1,5 +1,6 @@
 package com.ravenemu.app.ui.settings;
 import com.ravenemu.app.ui.common.RavenIcon;
+import com.ravenemu.app.ui.common.RavenTheme;
 import com.ravenemu.app.bridge.FakeAchievements;
 import com.ravenemu.app.data.saves.GbaBiosRepository;
 import com.ravenemu.app.platform.ClearSealer;
@@ -96,7 +97,7 @@ public final class PlaybackSettingsActivityTest {
             assertTrue("One icon per category: " + row[0], seen.add(glyph));
         }
         View close = described(activity, "Fermer les paramètres");
-        assertEquals(com.ravenemu.app.ui.library.HomeActivity.ACCENT,
+        assertEquals(RavenTheme.RAVENEMU.accent,
                 ((RavenIcon) ((android.widget.ImageView) close).getDrawable()).tint());
         assertNull("No chevron typed as text", find(activity, view -> view instanceof TextView
                 && "›".contentEquals(((TextView) view).getText())));
@@ -577,6 +578,49 @@ public final class PlaybackSettingsActivityTest {
         idleIo(activity);
         assertEquals("Le fichier doit porter l'extension .deltaskin", ShadowToast.getTextOfLatestToast());
         assertNotNull(text(activity, "Aucun skin installé : commandes classiques."));
+    }
+
+    @Test public void theThemePageRecolorsTheSettingsAtOnceAndStaysOnItsPage() {
+        ActivityController<PlaybackSettingsActivity> controller = open(PlaybackSettingsActivity.INTERFACE, null);
+        PlaybackSettingsActivity activity = controller.get();
+        assertSame(RavenTheme.RAVENEMU, activity.theme());
+        described(activity, "Ouvrir les réglages thème").performClick();
+        assertNotNull(described(activity, "Retour aux réglages interface"));
+        assertNotNull(described(activity, "RavenEmu (défaut), choisi"));
+        assertNotNull(described(activity, "NVIDIA"));
+        assertNull("Opening the page writes nothing", preferences.getString("interface.theme", null));
+
+        described(activity, "NVIDIA").performClick();
+        assertEquals("nvidia", preferences.getString("interface.theme", null));
+        shadowOf(Looper.getMainLooper()).idle();
+        PlaybackSettingsActivity recreated = controller.get();
+        assertNotSame("Created again in the new colours", activity, recreated);
+        layout(recreated);
+        assertSame(RavenTheme.NVIDIA, recreated.theme());
+        View chosen = described(recreated, "NVIDIA, choisi");
+        assertEquals("MaterialUI's highlight", RavenTheme.NVIDIA.selected,
+                ((android.graphics.drawable.ColorDrawable) chosen.getBackground()).getColor());
+        View back = described(recreated, "Retour aux réglages interface");
+        assertEquals(RavenTheme.NVIDIA.accent, ((RavenIcon) ((android.widget.ImageView) back).getDrawable()).tint());
+        View root = find(recreated, view -> "playback.settings.root".equals(view.getTag()));
+        assertEquals(RavenTheme.NVIDIA.background,
+                ((android.graphics.drawable.ColorDrawable) root.getBackground()).getColor());
+
+        described(recreated, "RavenEmu (défaut)").performClick();
+        shadowOf(Looper.getMainLooper()).idle();
+        assertEquals("ravenemu", preferences.getString("interface.theme", null));
+        assertSame(RavenTheme.RAVENEMU, controller.get().theme());
+    }
+
+    @Test public void nvidiaSwitchesTakeRetroArchsColours() {
+        RavenTheme.store(RuntimeEnvironment.getApplication(), RavenTheme.NVIDIA);
+        PlaybackSettingsActivity activity = open(PlaybackSettingsActivity.INTERFACE_CARTRIDGE, null).get();
+        Switch rumble = toggle(activity, "Vibration de la cartouche");
+        int[] on = {android.R.attr.state_checked}, off = {};
+        assertEquals(RavenTheme.NVIDIA.switchOn, rumble.getThumbTintList().getColorForState(on, 0));
+        assertEquals(RavenTheme.NVIDIA.switchOnTrack, rumble.getTrackTintList().getColorForState(on, 0));
+        assertEquals(RavenTheme.NVIDIA.switchOff, rumble.getThumbTintList().getColorForState(off, 0));
+        assertEquals(RavenTheme.NVIDIA.switchOffTrack, rumble.getTrackTintList().getColorForState(off, 0));
     }
 
     @Test public void interfacePageSetsTheCartridgeMotorTheSensorsAndTheSun() {

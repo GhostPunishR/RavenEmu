@@ -3,7 +3,7 @@ package com.ravenemu.app.ui.player;
 import com.ravenemu.app.bridge.NativeAchievements;
 import com.ravenemu.app.settings.AchievementSettings;
 import com.ravenemu.app.ui.common.RavenIcon;
-import com.ravenemu.app.ui.library.HomeActivity;
+import com.ravenemu.app.ui.common.RavenTheme;
 
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
@@ -64,14 +64,18 @@ final class AchievementOverlay extends FrameLayout {
     private final Runnable leave = this::leave;
     private final Runnable hideProgress = () -> fadeProgress(false);
 
+    /** The colours of the Activity it belongs to (Settings → Interface → Thème). */
+    private final RavenTheme theme;
+
     AchievementOverlay(Context context, BadgeCache badges) {
         super(context);
+        this.theme = RavenTheme.of(context);
         this.badges = badges;
         setClipChildren(false);
         setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
         indicators = new LinearLayout(context);
         indicators.setOrientation(LinearLayout.VERTICAL);
-        indicators.setBackground(round(0xe0191b28, 10, 0, 0));
+        indicators.setBackground(round(RavenTheme.alpha(theme.surface, 0xe0), 10, 0, 0));
         indicators.setPadding(dp(12), dp(8), dp(12), dp(8));
         indicators.setVisibility(GONE);
         LayoutParams bottom = new LayoutParams(-2, -2, Gravity.CENTER_HORIZONTAL | Gravity.BOTTOM);
@@ -85,7 +89,7 @@ final class AchievementOverlay extends FrameLayout {
 
         banner = new LinearLayout(context);
         banner.setGravity(Gravity.CENTER_VERTICAL);
-        banner.setBackground(round(0xf00b0c12, 10, 0, 0));
+        banner.setBackground(round(RavenTheme.alpha(theme.background, 0xf0), 10, 0, 0));
         banner.setElevation(dp(6));
         banner.setVisibility(GONE);
         banner.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_YES);
@@ -94,7 +98,7 @@ final class AchievementOverlay extends FrameLayout {
         bannerImage = new ImageView(context);
         bannerImage.setScaleType(ImageView.ScaleType.CENTER_CROP);
         bannerBadge.addView(bannerImage, new LayoutParams(-1, -1));
-        bannerStar = RavenIcon.image(context, RavenIcon.Glyph.STAR, HomeActivity.ACCENT, 26);
+        bannerStar = RavenIcon.image(context, RavenIcon.Glyph.STAR, theme.accent, 26);
         bannerBadge.addView(bannerStar, new LayoutParams(-1, -1));
         LinearLayout.LayoutParams badgeSize = new LinearLayout.LayoutParams(dp(46), dp(46));
         badgeSize.setMargins(dp(5), dp(5), dp(5), dp(5));
@@ -102,8 +106,8 @@ final class AchievementOverlay extends FrameLayout {
         LinearLayout lines = new LinearLayout(context);
         lines.setOrientation(LinearLayout.VERTICAL);
         lines.setPadding(dp(8), 0, dp(16), 0);
-        bannerHeading = line(12, HomeActivity.SECONDARY);
-        bannerTitle = line(15, HomeActivity.TEXT);
+        bannerHeading = line(12, theme.secondary);
+        bannerTitle = line(15, theme.text);
         bannerTitle.setTypeface(null, Typeface.BOLD);
         lines.addView(bannerHeading);
         lines.addView(bannerTitle);
@@ -113,7 +117,7 @@ final class AchievementOverlay extends FrameLayout {
 
         progress = new LinearLayout(context);
         progress.setGravity(Gravity.CENTER_VERTICAL);
-        progress.setBackground(round(HomeActivity.SURFACE, 12, 1, HomeActivity.ACCENT));
+        progress.setBackground(round(theme.surface, 12, 1, theme.accent));
         progress.setPadding(dp(14), dp(10), dp(14), dp(10));
         progress.setVisibility(GONE);
         progress.setAlpha(0f);
@@ -121,13 +125,13 @@ final class AchievementOverlay extends FrameLayout {
         progressImage = new ImageView(context);
         progressImage.setScaleType(ImageView.ScaleType.FIT_CENTER);
         progressBadgeBox.addView(progressImage, new LayoutParams(-1, -1));
-        progressStar = RavenIcon.image(context, RavenIcon.Glyph.STAR, HomeActivity.ACCENT, 22);
+        progressStar = RavenIcon.image(context, RavenIcon.Glyph.STAR, theme.accent, 22);
         progressBadgeBox.addView(progressStar, new LayoutParams(-1, -1));
         progress.addView(progressBadgeBox, new LinearLayout.LayoutParams(dp(40), dp(40)));
         LinearLayout progressLines = new LinearLayout(context);
         progressLines.setOrientation(LinearLayout.VERTICAL);
-        progressTitle = line(12, HomeActivity.TEXT);
-        progressDetail = line(12, HomeActivity.TEXT);
+        progressTitle = line(12, theme.text);
+        progressDetail = line(12, theme.text);
         progressLines.addView(progressTitle);
         progressLines.addView(progressDetail);
         LinearLayout.LayoutParams gap = new LinearLayout.LayoutParams(-2, -2);
@@ -216,7 +220,7 @@ final class AchievementOverlay extends FrameLayout {
         int shown = 0;
         for (String line : active.values()) {
             if (shown++ == MAX_INDICATORS) break;
-            TextView text = line(12, HomeActivity.TEXT);
+            TextView text = line(12, theme.text);
             text.setText(line);
             LinearLayout.LayoutParams gap = new LinearLayout.LayoutParams(-2, -2);
             if (shown > 1) gap.topMargin = dp(3);
@@ -243,11 +247,11 @@ final class AchievementOverlay extends FrameLayout {
         final int shown = ++serial;
         bannerHeading.setText(showing.heading);
         bannerHeading.setVisibility(showing.heading.isEmpty() ? GONE : VISIBLE);
-        bannerHeading.setTextColor(showing.award ? GOLD : HomeActivity.SECONDARY);
+        bannerHeading.setTextColor(showing.award ? GOLD : theme.secondary);
         bannerTitle.setText(showing.title);
         bannerTitle.setVisibility(showing.title.isEmpty() ? GONE : VISIBLE);
-        ((RavenIcon) bannerStar.getDrawable()).setTint(showing.award ? GOLD : HomeActivity.ACCENT);
-        bannerBadge.setBackground(round(HomeActivity.SURFACE, 7, 2, showing.award ? GOLD : HomeActivity.OUTLINE));
+        ((RavenIcon) bannerStar.getDrawable()).setTint(showing.award ? GOLD : theme.accent);
+        bannerBadge.setBackground(round(theme.surface, 7, 2, showing.award ? GOLD : theme.outline));
         banner.setContentDescription(showing.heading + ". " + showing.title);
         badge(showing.image, bannerImage, bannerStar, () -> shown == serial);
         banner.setVisibility(VISIBLE);

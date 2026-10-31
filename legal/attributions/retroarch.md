@@ -61,6 +61,16 @@ n'y est reprise. De même, les images préventives reprennent l'idée des
 est écrit pour RavenEmu ; aucune ligne de `runahead.c` n'y est reprise. La
 validation sur téléphone reste un travail de migration.
 
+Le thème NVIDIA de **Paramètres → Interface → Thème** reprend les valeurs de
+couleur du thème « NVIDIA Shield » du menu MaterialUI de RetroArch
+(`menu/drivers/materialui.c`, `materialui_theme_nvidia_shield`, [révision
+d48b3aacabf8b09a7307a26f5fca78d06a8488ef](https://github.com/libretro/RetroArch/blob/d48b3aacabf8b09a7307a26f5fca78d06a8488ef/menu/drivers/materialui.c)).
+Seules des valeurs hexadécimales sont reprises, rangées sur les rôles de
+RavenEmu dans `android/src/main/java/com/ravenemu/app/ui/common/RavenTheme.java`
+et `android/src/main/res/values/styles.xml` ; aucun code de MaterialUI n'est
+porté. NVIDIA et Shield sont des marques de NVIDIA Corporation ; RavenEmu
+n'est ni affilié à NVIDIA ni approuvé par elle.
+
 ## Licences et distribution
 
 Le [texte intégral GPLv3](../../android/src/main/assets/licenses/GPL-3.0.txt)

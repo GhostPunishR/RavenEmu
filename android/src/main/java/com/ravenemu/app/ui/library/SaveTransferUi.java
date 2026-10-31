@@ -4,6 +4,7 @@ import com.ravenemu.app.data.library.RomLibrary;
 import com.ravenemu.app.data.saves.SaveRepository;
 import com.ravenemu.app.data.saves.SaveStorage;
 import com.ravenemu.app.data.saves.SaveTransfer;
+import com.ravenemu.app.ui.common.RavenTheme;
 
 import android.app.Activity;
 import android.app.AlertDialog;
@@ -48,7 +49,11 @@ final class SaveTransferUi {
     private boolean pendingAll;
     private AlertDialog review;
 
+    /** The colours of the Activity it belongs to (Settings → Interface → Thème). */
+    private final RavenTheme theme;
+
     SaveTransferUi(Activity host, Bundle state) {
+        this.theme = RavenTheme.of(host);
         this.host = host;
         if (state != null) {
             pendingKey = state.getString("saves.game");
@@ -72,12 +77,12 @@ final class SaveTransferUi {
     /** Adds the section under the sheet's actions; `close` dismisses the sheet. */
     void addSection(LinearLayout panel, RomLibrary.Entry entry, Runnable close) {
         float density = host.getResources().getDisplayMetrics().density;
-        TextView heading = label("Sauvegardes", 16, HomeActivity.TEXT);
+        TextView heading = label("Sauvegardes", 16, theme.text);
         heading.setTypeface(null, android.graphics.Typeface.BOLD);
         LinearLayout.LayoutParams top = new LinearLayout.LayoutParams(-1, -2);
         top.topMargin = Math.round(18 * density);
         panel.addView(heading, top);
-        panel.addView(label("Transférez votre progression sans exporter la ROM.", 12, HomeActivity.MUTED));
+        panel.addView(label("Transférez votre progression sans exporter la ROM.", 12, theme.muted));
         LinearLayout row = new LinearLayout(host);
         LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(-1, -2);
         rowParams.topMargin = Math.round(6 * density);
@@ -280,12 +285,12 @@ final class SaveTransferUi {
         body.setOrientation(LinearLayout.VERTICAL);
         int pad = Math.round(22 * density);
         body.setPadding(pad, Math.round(8 * density), pad, 0);
-        body.addView(line("Jeu : " + game.title, 14, HomeActivity.TEXT, density));
+        body.addView(line("Jeu : " + game.title, 14, theme.text, density));
         body.addView(line("Contenu : sauvegarde du jeu (" + payload.battery.length + " octets)",
-                14, HomeActivity.TEXT, density));
+                14, theme.text, density));
         if (payload.skippedSlots.length > 0)
             body.addView(line("États " + slots(payload.skippedSlots) + " de l'archive non importés : "
-                    + "ce sont des états de la bêta, liés à son propre core.", 13, HomeActivity.SECONDARY, density));
+                    + "ce sont des états de la bêta, liés à son propre core.", 13, theme.secondary, density));
         if (payload.raw)
             body.addView(line("Un fichier .sav ou .srm seul n'identifie pas sa ROM. "
                     + "Vérifiez que vous avez choisi le bon jeu.", 13, DANGER, density));
@@ -293,9 +298,9 @@ final class SaveTransferUi {
             body.addView(line("Des données existantes seront remplacées : sauvegarde du jeu.", 13, DANGER, density));
             if (current.length != payload.battery.length)
                 body.addView(line("Le jeu utilise " + current.length + " octets : RavenEmu lira le début du "
-                        + "fichier, comme le jeu le ferait.", 13, HomeActivity.SECONDARY, density));
+                        + "fichier, comme le jeu le ferait.", 13, theme.secondary, density));
         } else {
-            body.addView(line("Les autres sauvegardes resteront inchangées.", 13, HomeActivity.SECONDARY, density));
+            body.addView(line("Les autres sauvegardes resteront inchangées.", 13, theme.secondary, density));
         }
         review = new AlertDialog.Builder(host).setTitle("Importer les sauvegardes ?").setView(body)
                 .setNegativeButton("Annuler", null)
@@ -304,9 +309,9 @@ final class SaveTransferUi {
         AlertDialog shown = review;
         shown.setOnDismissListener(ignored -> { if (review == shown) review = null; });
         shown.show();
-        shown.getWindow().setBackgroundDrawable(HomeActivity.shape(HomeActivity.SURFACE, 18, density));
-        shown.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(HomeActivity.ACCENT);
-        shown.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(HomeActivity.SECONDARY);
+        shown.getWindow().setBackgroundDrawable(HomeActivity.shape(theme.surface, 18, density));
+        shown.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(theme.accent);
+        shown.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(theme.secondary);
     }
 
     private void apply(RomLibrary.Entry game, SaveTransfer.Payload payload) {
@@ -383,10 +388,10 @@ final class SaveTransferUi {
         button.setText(text);
         button.setTextSize(12);
         button.setAllCaps(false);
-        button.setTextColor(HomeActivity.ACCENT);
+        button.setTextColor(theme.accent);
         android.graphics.drawable.GradientDrawable outline =
-                HomeActivity.shape(HomeActivity.BACKGROUND, 12, density);
-        outline.setStroke(Math.max(1, Math.round(density)), HomeActivity.OUTLINE);
+                HomeActivity.shape(theme.background, 12, density);
+        outline.setStroke(Math.max(1, Math.round(density)), theme.outline);
         button.setBackground(outline);
         return button;
     }

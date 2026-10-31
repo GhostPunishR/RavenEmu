@@ -21,7 +21,8 @@ import java.util.Map;
 
 /** RavenEmu's icons, drawn for it on a 24 × 24 grid: one 2-unit line with
  * round ends and corners, and a few filled details, all in the accent colour
- * (the owner's choice; gold only marks an unlock in the banner), so that
+ * of the theme (the owner's choice; gold only marks an unlock in the banner,
+ * and the Game Boy Color's screen keeps its colours), so that
  * every screen draws the same crisp shapes at any density, never a font's
  * symbol. The console pictograms follow the beta's ConsoleIcons (portrait
  * handheld, the same with a colour screen, landscape handheld, a grid for
@@ -164,7 +165,8 @@ public final class RavenIcon extends Drawable {
         view.setContentDescription(description);
         view.setClickable(true);
         view.setFocusable(true);
-        view.setBackground(new RippleDrawable(ColorStateList.valueOf(0x33a78bfa), null, null));
+        int ripple = RavenTheme.alpha(RavenTheme.of(context).accent, 0x33);
+        view.setBackground(new RippleDrawable(ColorStateList.valueOf(ripple), null, null));
         return view;
     }
 

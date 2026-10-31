@@ -29,7 +29,7 @@ import com.ravenemu.app.settings.CoreOptions;
 import com.ravenemu.app.settings.LatencySettings;
 import com.ravenemu.app.settings.PlaybackSettings;
 import com.ravenemu.app.ui.common.RavenIcon;
-import com.ravenemu.app.ui.library.HomeActivity;
+import com.ravenemu.app.ui.common.RavenTheme;
 import com.ravenemu.app.ui.settings.PlaybackSettingsActivity;
 
 import android.app.Activity;
@@ -65,7 +65,7 @@ import javax.microedition.khronos.opengles.GL10;
 /** Separate, non-distributable Java/NDK proof of concept.
  * Core calls use the GL thread while running, or a paused session during
  * lifecycle cleanup; button input uses an atomic mask. */
-public final class PlayerActivity extends Activity implements GLSurfaceView.Renderer {
+public final class PlayerActivity extends Activity implements GLSurfaceView.Renderer, RavenTheme.Host {
     public static final String EXTRA_ROM_KEY = "com.ravenemu.app.ROM_KEY";
     /** With EXTRA_ROM_KEY: the second game, joined to the first by the link cable. */
     public static final String EXTRA_LINK_ROM_KEY = "com.ravenemu.app.LINK_ROM_KEY";
@@ -168,9 +168,15 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
     private int menuGeneration;
     private Runnable pendingRomLoad;
     private boolean settingsLaunching;
+    /** Settings → Interface → Thème, as it was when the game opened: a game
+     * keeps its colours until it is closed, never restarted for a theme. */
+    private RavenTheme theme;
+
+    @Override public RavenTheme theme() { return theme; }
 
     @Override
     public void onCreate(Bundle state) {
+        theme = RavenTheme.apply(this);
         super.onCreate(state);
         if (state != null) {
             restoreMenu = state.getBoolean("player.menu");
@@ -182,7 +188,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         if (linkMode) restoreMenu = false;
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(HomeActivity.BACKGROUND);
+        root.setBackgroundColor(theme.background);
         surface = new GLSurfaceView(this);
         surface.setEGLContextClientVersion(2);
         surface.setRenderer(this);
@@ -208,11 +214,11 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         // and the three-dot game menu. The GL/C frontend is unchanged.
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.VERTICAL);
-        header.setBackgroundColor(HomeActivity.BACKGROUND);
+        header.setBackgroundColor(theme.background);
 
         LinearLayout toolbar = new LinearLayout(this);
         toolbar.setGravity(Gravity.CENTER_VERTICAL);
-        View back = RavenIcon.button(this, RavenIcon.Glyph.BACK, HomeActivity.ACCENT, 24, "Retour à la bibliothèque");
+        View back = RavenIcon.button(this, RavenIcon.Glyph.BACK, theme.accent, 24, "Retour à la bibliothèque");
         back.setOnClickListener(view -> finish());
         toolbar.addView(back, new LinearLayout.LayoutParams(dp(48), dp(48)));
         gameTitle = new TextView(this);
@@ -220,7 +226,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         gameTitle.setSingleLine(true);
         gameTitle.setEllipsize(android.text.TextUtils.TruncateAt.END);
         gameTitle.setTextSize(16);
-        gameTitle.setTextColor(HomeActivity.TEXT);
+        gameTitle.setTextColor(theme.text);
         gameTitle.setGravity(Gravity.CENTER_VERTICAL);
         toolbar.addView(gameTitle, new LinearLayout.LayoutParams(0, dp(48), 1));
 
@@ -229,16 +235,16 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
             gameTitle.setSingleLine(false);
             gameTitle.setMaxLines(2);
             linkSwitch = new TextView(this);
-            linkSwitch.setTextColor(HomeActivity.ACCENT);
+            linkSwitch.setTextColor(theme.accent);
             linkSwitch.setTextSize(13);
             linkSwitch.setGravity(Gravity.CENTER);
             linkSwitch.setPadding(dp(10), 0, dp(12), 0);
             linkSwitch.setCompoundDrawablePadding(dp(6));
             linkSwitch.setCompoundDrawablesRelativeWithIntrinsicBounds(
-                    new RavenIcon(RavenIcon.Glyph.SWAP, HomeActivity.ACCENT, dp(18)), null, null, null);
+                    new RavenIcon(RavenIcon.Glyph.SWAP, theme.accent, dp(18)), null, null, null);
             android.graphics.drawable.GradientDrawable outline = new android.graphics.drawable.GradientDrawable();
             outline.setCornerRadius(dp(18));
-            outline.setStroke(Math.max(1, dp(1)), HomeActivity.ACCENT);
+            outline.setStroke(Math.max(1, dp(1)), theme.accent);
             linkSwitch.setBackground(outline);
             linkSwitch.setOnClickListener(view -> switchLinkedPlayer());
             LinearLayout.LayoutParams switchSize = new LinearLayout.LayoutParams(-2, dp(36));
@@ -246,7 +252,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
             toolbar.addView(linkSwitch, switchSize);
             showLinkTitle();
         } else {
-            View menu = RavenIcon.button(this, RavenIcon.Glyph.MORE, HomeActivity.ACCENT, 24, "Menu du jeu");
+            View menu = RavenIcon.button(this, RavenIcon.Glyph.MORE, theme.accent, 24, "Menu du jeu");
             menu.setOnClickListener(view -> togglePlayerMenu());
             toolbar.addView(menu, new LinearLayout.LayoutParams(dp(48), dp(48)));
         }
@@ -256,11 +262,11 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         // show in the game menu, or briefly over the game.
         editBar = new LinearLayout(this);
         editBar.setGravity(Gravity.CENTER_VERTICAL);
-        editBar.setBackgroundColor(HomeActivity.SURFACE);
+        editBar.setBackgroundColor(theme.surface);
         editBar.setPadding(dp(12), 0, dp(4), 0);
         TextView hint = new TextView(this);
         hint.setText("Faites glisser les boutons");
-        hint.setTextColor(HomeActivity.MUTED);
+        hint.setTextColor(theme.muted);
         hint.setTextSize(12);
         editBar.addView(hint, new LinearLayout.LayoutParams(0, -2, 1));
         TextView restore = barButton("Rétablir");
@@ -402,7 +408,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         button.setText(label);
         button.setGravity(Gravity.CENTER);
         button.setTextSize(14);
-        button.setTextColor(HomeActivity.ACCENT);
+        button.setTextColor(theme.accent);
         button.setPadding(dp(12), 0, dp(12), 0);
         button.setMinWidth(dp(48));
         return button;
@@ -718,7 +724,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
             int start = title.length();
             title.append('\n').append(linkEntries[linkFocus].title);
             title.setSpan(new android.text.style.RelativeSizeSpan(0.72f), start, title.length(), 0);
-            title.setSpan(new android.text.style.ForegroundColorSpan(HomeActivity.MUTED), start, title.length(), 0);
+            title.setSpan(new android.text.style.ForegroundColorSpan(theme.muted), start, title.length(), 0);
         }
         gameTitle.setText(title);
         linkSwitch.setText("Joueur " + (2 - linkFocus));

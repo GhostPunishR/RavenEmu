@@ -2,6 +2,7 @@ package com.ravenemu.app.ui.library;
 
 import com.ravenemu.app.data.library.FolderImport;
 import com.ravenemu.app.platform.DocumentTree;
+import com.ravenemu.app.ui.common.RavenTheme;
 
 import android.app.Activity;
 import android.app.AlertDialog;
@@ -37,7 +38,11 @@ final class FolderImportUi {
     private boolean destroyed, busy;
     private AlertDialog summary;
 
+    /** The colours of the Activity it belongs to (Settings → Interface → Thème). */
+    private final RavenTheme theme;
+
     FolderImportUi(Activity host, ExecutorService io, Runnable reload) {
+        this.theme = RavenTheme.of(host);
         this.host = host;
         this.io = io;
         this.reload = reload;
@@ -52,7 +57,7 @@ final class FolderImportUi {
         row.addView(spinner, new LinearLayout.LayoutParams(size, size));
         line = new TextView(host);
         line.setTextSize(12);
-        line.setTextColor(HomeActivity.MUTED);
+        line.setTextColor(theme.muted);
         LinearLayout.LayoutParams text = new LinearLayout.LayoutParams(0, -2, 1);
         text.leftMargin = Math.round(10 * density);
         row.addView(line, text);
@@ -121,25 +126,25 @@ final class FolderImportUi {
         body.setOrientation(LinearLayout.VERTICAL);
         int pad = Math.round(22 * density);
         body.setPadding(pad, Math.round(8 * density), pad, 0);
-        body.addView(line("Jeux ajoutés : " + result.added, 14, HomeActivity.TEXT, density));
-        body.addView(line("Doublons ignorés : " + result.duplicate, 14, HomeActivity.TEXT, density));
-        body.addView(line("ROM invalides : " + result.invalid, 14, HomeActivity.TEXT, density));
+        body.addView(line("Jeux ajoutés : " + result.added, 14, theme.text, density));
+        body.addView(line("Doublons ignorés : " + result.duplicate, 14, theme.text, density));
+        body.addView(line("ROM invalides : " + result.invalid, 14, theme.text, density));
         if (result.unreadable > 0)
-            body.addView(line("Fichiers ou dossiers illisibles : " + result.unreadable, 14, HomeActivity.TEXT, density));
-        body.addView(line("Autres fichiers ignorés : " + result.otherFiles, 13, HomeActivity.MUTED, density));
-        body.addView(line("Dossiers parcourus : " + result.folders, 13, HomeActivity.MUTED, density));
+            body.addView(line("Fichiers ou dossiers illisibles : " + result.unreadable, 14, theme.text, density));
+        body.addView(line("Autres fichiers ignorés : " + result.otherFiles, 13, theme.muted, density));
+        body.addView(line("Dossiers parcourus : " + result.folders, 13, theme.muted, density));
         if (result.limited)
             body.addView(line("Parcours arrêté par une limite de sécurité ou de stockage. "
                     + "Les jeux déjà ajoutés sont conservés.", 13, SaveTransferUi.DANGER, density));
         body.addView(line("Les jeux existants, leurs sauvegardes et la partie en cours n'ont pas été modifiés.",
-                12, HomeActivity.SECONDARY, density));
+                12, theme.secondary, density));
         summary = new AlertDialog.Builder(host).setTitle("Importation du dossier terminée").setView(body)
                 .setPositiveButton("Terminer", null).create();
         AlertDialog shown = summary;
         shown.setOnDismissListener(ignored -> { if (summary == shown) summary = null; });
         shown.show();
-        shown.getWindow().setBackgroundDrawable(HomeActivity.shape(HomeActivity.SURFACE, 18, density));
-        shown.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(HomeActivity.ACCENT);
+        shown.getWindow().setBackgroundDrawable(HomeActivity.shape(theme.surface, 18, density));
+        shown.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(theme.accent);
     }
 
     private TextView line(String value, int size, int color, float density) {

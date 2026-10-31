@@ -5,6 +5,7 @@ import com.ravenemu.app.data.library.RomLibrary;
 import com.ravenemu.app.platform.SystemBarInsets;
 import com.ravenemu.app.ui.common.GameDetailsSheet;
 import com.ravenemu.app.ui.common.RavenIcon;
+import com.ravenemu.app.ui.common.RavenTheme;
 import com.ravenemu.app.ui.player.PlayerActivity;
 import com.ravenemu.app.ui.settings.PlaybackSettingsActivity;
 
@@ -48,14 +49,7 @@ import java.util.concurrent.Executors;
  * The shell uses Android Views; the emulation path remains C/JNI/C++.
  * Never reads the beta package's library or saved data.
  */
-public final class HomeActivity extends Activity {
-    public static final int BACKGROUND = 0xff0b0c12;
-    public static final int SURFACE = 0xff191b28;
-    public static final int ACCENT = 0xffa78bfa;
-    public static final int TEXT = 0xfff5f2ff;
-    public static final int SECONDARY = 0xffcbc4dc;
-    public static final int MUTED = 0xffaaa2bc;
-    public static final int OUTLINE = 0xff3c4052;
+public final class HomeActivity extends Activity implements RavenTheme.Host {
 
     private static final int PICK_ROM = 71;
     private static final int PICK_COVER = 72;
@@ -80,8 +74,13 @@ public final class HomeActivity extends Activity {
     private String restoredDetailsKey;
     private SaveTransferUi saves;
     private FolderImportUi folders;
+    /** Settings → Interface → Thème, as it was when the library was created. */
+    private RavenTheme theme;
+
+    @Override public RavenTheme theme() { return theme; }
 
     @Override public void onCreate(Bundle state) {
+        theme = RavenTheme.apply(this);
         super.onCreate(state);
         if (state != null) {
             searchText = state.getString("library.search", "");
@@ -100,6 +99,11 @@ public final class HomeActivity extends Activity {
 
     @Override protected void onResume() {
         super.onResume();
+        // Back from the settings with another theme: drawn again in its colours.
+        if (RavenTheme.stored(this) != theme) {
+            recreate();
+            return;
+        }
         if (cards != null) reload();
     }
 
@@ -133,13 +137,13 @@ public final class HomeActivity extends Activity {
     private void createLibrary() {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(BACKGROUND);
+        root.setBackgroundColor(theme.background);
 
         // RavenEmu 0.8.1: settings left, centered page title, + and ⋮ right.
         FrameLayout toolbar = new FrameLayout(this);
         root.addView(toolbar, new LinearLayout.LayoutParams(-1, dp(48)));
 
-        heading = text("Tous les jeux", 20, TEXT);
+        heading = text("Tous les jeux", 20, theme.text);
         heading.setGravity(Gravity.CENTER);
         heading.setSingleLine(true);
         heading.setEllipsize(android.text.TextUtils.TruncateAt.END);
@@ -149,30 +153,30 @@ public final class HomeActivity extends Activity {
         center.rightMargin = dp(102);
         toolbar.addView(heading, center);
 
-        View settings = iconButton(RavenIcon.Glyph.SETTINGS, ACCENT, "Paramètres", view -> showSettings());
+        View settings = iconButton(RavenIcon.Glyph.SETTINGS, theme.accent, "Paramètres", view -> showSettings());
         toolbar.addView(settings, new FrameLayout.LayoutParams(dp(48), -1, Gravity.LEFT));
 
         LinearLayout actions = new LinearLayout(this);
         FrameLayout.LayoutParams right = new FrameLayout.LayoutParams(-2, -1, Gravity.RIGHT);
         toolbar.addView(actions, right);
-        actions.addView(iconButton(RavenIcon.Glyph.ADD, ACCENT, "Ajouter une ROM", view -> pickRom()),
+        actions.addView(iconButton(RavenIcon.Glyph.ADD, theme.accent, "Ajouter une ROM", view -> pickRom()),
                 new LinearLayout.LayoutParams(dp(48), -1));
-        actions.addView(iconButton(RavenIcon.Glyph.MORE, ACCENT, "Plus d'options", this::showOptions),
+        actions.addView(iconButton(RavenIcon.Glyph.MORE, theme.accent, "Plus d'options", this::showOptions),
                 new LinearLayout.LayoutParams(dp(48), -1));
 
         search = new EditText(this);
         search.setSingleLine(true);
-        search.setTextColor(TEXT);
-        search.setHintTextColor(MUTED);
+        search.setTextColor(theme.text);
+        search.setHintTextColor(theme.muted);
         search.setTextSize(15);
         search.setHint("Rechercher un jeu");
         search.setCompoundDrawablesRelativeWithIntrinsicBounds(
-                new RavenIcon(RavenIcon.Glyph.SEARCH, ACCENT, dp(20)), null, null, null);
+                new RavenIcon(RavenIcon.Glyph.SEARCH, theme.accent, dp(20)), null, null, null);
         search.setCompoundDrawablePadding(dp(10));
         search.setContentDescription("Rechercher un jeu");
         search.setText(searchText);
         search.setPadding(dp(12), 0, dp(12), 0);
-        search.setBackground(shape(SURFACE, 14, getResources().getDisplayMetrics().density));
+        search.setBackground(shape(theme.surface, 14, getResources().getDisplayMetrics().density));
         LinearLayout.LayoutParams field = new LinearLayout.LayoutParams(-1, dp(44));
         field.setMargins(dp(12), 0, dp(12), dp(8));
         root.addView(search, field);
@@ -187,7 +191,7 @@ public final class HomeActivity extends Activity {
         });
 
         cards = new GridView(this);
-        cards.setBackgroundColor(BACKGROUND);
+        cards.setBackgroundColor(theme.background);
         cards.setVerticalScrollBarEnabled(false);
         cards.setStretchMode(GridView.STRETCH_COLUMN_WIDTH);
         cards.setGravity(Gravity.CENTER_HORIZONTAL);
@@ -204,7 +208,7 @@ public final class HomeActivity extends Activity {
         tabs.setGravity(Gravity.CENTER);
         root.addView(tabs, new LinearLayout.LayoutParams(-1, dp(40)));
 
-        footnote = text("RavenEmu By GhostPunishR", 10, MUTED);
+        footnote = text("RavenEmu By GhostPunishR", 10, theme.muted);
         footnote.setLetterSpacing(.08f);
         footnote.setGravity(Gravity.CENTER);
         root.addView(footnote, new LinearLayout.LayoutParams(-1, dp(28)));
@@ -266,11 +270,11 @@ public final class HomeActivity extends Activity {
             boolean active = page.equals(selectedPage);
             RavenIcon.Glyph glyph = page.isEmpty() ? RavenIcon.Glyph.ALL : "gb".equals(page) ? RavenIcon.Glyph.GB
                     : "gbc".equals(page) ? RavenIcon.Glyph.GBC : RavenIcon.Glyph.GBA;
-            android.widget.ImageView option = RavenIcon.button(this, glyph, ACCENT,
+            android.widget.ImageView option = RavenIcon.button(this, glyph, theme.accent,
                     active ? 24 : 21, pageTitle(page));
             ((RavenIcon) option.getDrawable()).setScreenAlpha(active ? 255 : 128);
             option.setSelected(active);
-            option.setBackground(shape(active ? 0x29a78bfa : 0x00000000, 10, getResources().getDisplayMetrics().density));
+            option.setBackground(shape(active ? RavenTheme.alpha(theme.accent, 0x29) : 0x00000000, 10, getResources().getDisplayMetrics().density));
             LinearLayout.LayoutParams parameter = new LinearLayout.LayoutParams(dp(36), dp(36));
             parameter.setMargins(dp(4), 0, dp(4), 0);
             tabs.addView(option, parameter);
@@ -291,23 +295,23 @@ public final class HomeActivity extends Activity {
         body.setPadding(dp(22), dp(8), dp(22), 0);
         body.addView(text(game.title + " et un second jeu tournent ensemble, reliés par un câble link virtuel : "
                 + "échanges et combats entre vos propres sauvegardes. Un jeu est affiché à la fois : le bouton "
-                + "Joueur de la barre passe à l'autre, qui continue de tourner.", 13, SECONDARY));
+                + "Joueur de la barre passe à l'autre, qui continue de tourner.", 13, theme.secondary));
         if (partners.isEmpty()) {
             TextView none = text("gba".equals(game.system)
                     ? "Ajoutez un autre jeu Game Boy Advance à la bibliothèque."
-                    : "Ajoutez un autre jeu Game Boy ou Game Boy Color à la bibliothèque.", 13, MUTED);
+                    : "Ajoutez un autre jeu Game Boy ou Game Boy Color à la bibliothèque.", 13, theme.muted);
             none.setPadding(0, dp(10), 0, 0);
             body.addView(none);
         }
         float density = getResources().getDisplayMetrics().density;
         for (RomLibrary.Entry partner : partners) {
             Button pick = action(partner.title + " · " + pageTitle(partner.system));
-            pick.setTextColor(TEXT);
+            pick.setTextColor(theme.text);
             pick.setSingleLine(true);
             pick.setEllipsize(android.text.TextUtils.TruncateAt.END);
             GradientDrawable outline = new GradientDrawable();
             outline.setCornerRadius(12 * density);
-            outline.setStroke(Math.max(1, dp(1)), OUTLINE);
+            outline.setStroke(Math.max(1, dp(1)), theme.outline);
             pick.setBackground(outline);
             pick.setOnClickListener(view -> {
                 if (partnerDialog != null) partnerDialog.dismiss();
@@ -324,7 +328,7 @@ public final class HomeActivity extends Activity {
         partnerDialog = new AlertDialog.Builder(this).setTitle("Jouer à deux").setView(scroll)
                 .setNegativeButton("Annuler", null).create();
         partnerDialog.show();
-        partnerDialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(ACCENT);
+        partnerDialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(theme.accent);
     }
 
     private String pageTitle(String system) {
@@ -372,16 +376,16 @@ public final class HomeActivity extends Activity {
         panel.setPadding(dp(20), dp(12), dp(20), dp(16));
 
         View handle = new View(this);
-        handle.setBackground(shape(MUTED, 2, density));
+        handle.setBackground(shape(theme.muted, 2, density));
         LinearLayout.LayoutParams handleParams = new LinearLayout.LayoutParams(dp(32), dp(4));
         handleParams.gravity = Gravity.CENTER_HORIZONTAL;
         handleParams.bottomMargin = dp(20);
         panel.addView(handle, handleParams);
 
-        TextView title = text(entry.title, 18, TEXT);
+        TextView title = text(entry.title, 18, theme.text);
         title.setTypeface(null, android.graphics.Typeface.BOLD);
         panel.addView(title);
-        panel.addView(text(pageTitle(entry.system), 13, SECONDARY));
+        panel.addView(text(pageTitle(entry.system), 13, theme.secondary));
 
         LinearLayout coverRow = new LinearLayout(this);
         coverRow.setGravity(Gravity.CENTER_VERTICAL);
@@ -390,7 +394,7 @@ public final class HomeActivity extends Activity {
         panel.addView(coverRow, spacing);
 
         android.widget.ImageView cover = new android.widget.ImageView(this);
-        cover.setBackground(shape(OUTLINE, 10, density));
+        cover.setBackground(shape(theme.outline, 10, density));
         cover.setScaleType(android.widget.ImageView.ScaleType.CENTER_CROP);
         coverRow.addView(cover, new LinearLayout.LayoutParams(dp(90), dp(105)));
         io.execute(() -> {
@@ -406,25 +410,25 @@ public final class HomeActivity extends Activity {
         controls.setOrientation(LinearLayout.VERTICAL);
         controls.setPadding(dp(14), 0, 0, 0);
         coverRow.addView(controls, new LinearLayout.LayoutParams(0, -2, 1));
-        controls.addView(text("Jaquette enregistrée localement ou facultative", 12, MUTED));
+        controls.addView(text("Jaquette enregistrée localement ou facultative", 12, theme.muted));
         Button changeCover = action("Image manuelle (facultatif)");
         controls.addView(changeCover);
-        TextView removeCover = text("Retirer la jaquette", 12, ACCENT);
+        TextView removeCover = text("Retirer la jaquette", 12, theme.accent);
         removeCover.setPadding(dp(8), dp(8), 0, dp(8));
         controls.addView(removeCover);
 
         Button play = action("Jouer");
-        play.setTextColor(BACKGROUND);
-        play.setBackground(shape(ACCENT, 12, density));
+        play.setTextColor(theme.background);
+        play.setBackground(shape(theme.accent, 12, density));
         LinearLayout.LayoutParams playParams = new LinearLayout.LayoutParams(-1, dp(48));
         playParams.topMargin = dp(16);
         panel.addView(play, playParams);
         // The beta's second button: a game alongside, joined by the link cable.
         Button linked = action("Jouer à deux (câble link)");
-        linked.setTextColor(ACCENT);
+        linked.setTextColor(theme.accent);
         GradientDrawable linkedOutline = new GradientDrawable();
         linkedOutline.setCornerRadius(12 * density);
-        linkedOutline.setStroke(Math.max(1, dp(1)), ACCENT);
+        linkedOutline.setStroke(Math.max(1, dp(1)), theme.accent);
         linked.setBackground(linkedOutline);
         LinearLayout.LayoutParams linkedParams = new LinearLayout.LayoutParams(-1, dp(48));
         linkedParams.topMargin = dp(8);

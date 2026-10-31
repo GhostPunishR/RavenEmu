@@ -46,6 +46,12 @@ RavenEmu n’est pas le frontend officiel de RetroArch. Le portage ciblé de
 ces portions ne constitue pas une affiliation, une approbation ou une
 intégration de l’ensemble de RetroArch.
 
+Thème NVIDIA (Paramètres → Interface → Thème) : valeurs de couleur du thème
+« NVIDIA Shield » du menu MaterialUI de RetroArch (menu/drivers/materialui.c,
+révision d48b3aacabf8b09a7307a26f5fca78d06a8488ef). Aucun code n’est repris.
+NVIDIA et Shield sont des marques de NVIDIA Corporation ; RavenEmu n’est ni
+affilié à NVIDIA ni approuvé par elle.
+
 Interface Libretro (libretro.h)
 Copyright (C) 2010-2024 The RetroArch team
 Licence MIT (MIT-LIBRETRO.txt).

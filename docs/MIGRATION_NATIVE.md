@@ -1209,3 +1209,50 @@ montré. Il faudrait une option dans RavenCore (PR à part), à décider par le
 propriétaire. Validation sur téléphone à faire avec deux vraies cartouches
 (échange Pokémon, par exemple).
 
+## Thèmes RavenEmu et NVIDIA, lot TH
+
+Demande du propriétaire : un système de thème, avec le thème RavenEmu actuel
+et un thème NVIDIA aux couleurs de RetroArch ; les icônes et les boutons des
+consoles prennent eux aussi la couleur du thème. La bêta n'avait que les
+couleurs de RavenEmu : c'est un ajout voulu par le propriétaire.
+
+- **Palette** (`ui/common/RavenTheme.java`) : un seul endroit pour les couleurs
+  de l'interface, par rôle (fond, surface, carte, accent clair et profond,
+  texte, ligne choisie, interrupteurs, faces des commandes). **RavenEmu** garde
+  les valeurs de la bêta (`RavenColors.kt`). **NVIDIA** reprend les valeurs du
+  thème « NVIDIA Shield » du menu MaterialUI de RetroArch
+  (`menu/drivers/materialui.c`) : fond 121212, surface 1D1D1D, barres 242424,
+  icônes 7AB547, ligne choisie 255D00, texte DEDEDE, indications 999999,
+  interrupteurs 85BB5C sur 498515 et 33691E sur 003D00. Seules des valeurs de
+  couleur sont reprises, aucun code. Les quelques rôles que MaterialUI ne
+  couvre pas (boutons en relief, colonne de la liste, faces des commandes) sont
+  des gris pris entre les siens.
+- **Styles Android** : `RavenEmuNativeTheme.Nvidia` et
+  `RavenGameSheetTheme.Nvidia` donnent les mêmes couleurs aux widgets du
+  système (curseur, dialogues, feuilles).
+- **Tout suit le thème** : bibliothèque, fiche du jeu, dialogues, paramètres,
+  licences, barre du lecteur, menu de jeu, succès, codes de triche, bandeaux
+  RetroAchievements, toutes les icônes dessinées et les commandes tactiles
+  (contour, lettres, flèches, partie pressée, bouton Menu). Gardent leur
+  couleur : l'or d'un succès débloqué, le rouge des erreurs, l'écran coloré du
+  pictogramme Game Boy Color, l'image du jeu, les skins Delta (leurs propres
+  images) et l'icône de l'application.
+- **Paramètres → Interface → Thème** : « RavenEmu (défaut) » ou « NVIDIA »
+  (préférence `interface.theme`). Les paramètres se redessinent aussitôt sur la
+  même page, la bibliothèque au retour. **Un jeu déjà ouvert garde ses couleurs
+  jusqu'à sa fermeture** : recréer le lecteur relancerait le jeu et perdrait la
+  partie non sauvegardée. Chaque écran lit le thème de l'Activity qui l'a créé
+  (`RavenTheme.of`), donc jamais deux palettes mélangées.
+- Tests : `RavenThemeTest` (valeurs de la bêta et de RetroArch, contraste du
+  texte d'au moins 4,5:1 dans chaque thème, préférence absente ou invalide,
+  thème de l'Activity pour ses dialogues), `PlaybackSettingsActivityTest`
+  (page Thème, recréation sur la même page, interrupteurs NVIDIA),
+  `HomeActivityTest` (bibliothèque, icônes et fiche recolorées au retour),
+  `PlayerActivityTest` (nouvelle partie dans le thème choisi, partie en cours
+  jamais recréée), `GameControlsViewTest` (bouton A pressé en vert).
+
+Écarts restants : validation sur téléphone à faire (lisibilité au soleil,
+captures des deux thèmes). NVIDIA et Shield sont des marques de NVIDIA
+Corporation ; RavenEmu n'est ni affilié à NVIDIA ni approuvé par elle, le nom
+désigne seulement la palette.
+
