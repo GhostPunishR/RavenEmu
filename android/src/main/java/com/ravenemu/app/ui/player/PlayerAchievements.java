@@ -139,6 +139,8 @@ final class PlayerAchievements {
     /** UI thread: whether a load must be refused, whether a pause must be asked for. */
     boolean stateLoadLocked() { return stateLoadLocked; }
     boolean hardcoreActive() { return hardcoreActive; }
+    /** Hardcore asked for or running: no cheat runs, none is added (as in the beta). */
+    boolean cheatsLocked() { return stateLoadLocked; }
 
     /** GL thread: Softcore always may; Hardcore as rcheevos allows, which records it. */
     boolean canPause() { return engine == null || !engine.hardcore() || engine.canPause(); }

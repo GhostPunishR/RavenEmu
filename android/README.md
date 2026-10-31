@@ -522,6 +522,10 @@ This is an integration prototype, not a release candidate.
   chosen folder and its subfolders, within the beta's limits, then shows the
   beta's summary (`data/library/FolderImport`, `platform/DocumentTree`,
   `ui/library/FolderImportUi`).
+- The game menu's « Codes de triche » page (lots T-1, T-2) lists, turns on
+  or off, deletes and adds the game's cheats, each new code checked by the
+  core first; RavenEmu PC's `.cheats` file per game; none runs in Hardcore
+  (`data/saves/CheatList`, `CheatRepository`, `ui/player/CheatsPanel`).
 - The Java home screen uses the RavenEmu-style grid/list; file selection
   remains Android SAF. The Java pause sheet controls the C pause/audio gate.
 - RetroAchievements: Softcore with banners, chime, the achievement list,

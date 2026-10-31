@@ -1,6 +1,7 @@
 package com.ravenemu.app.ui.player;
 import com.ravenemu.app.R;
 import com.ravenemu.app.data.library.RomLibrary;
+import com.ravenemu.app.data.saves.CheatList;
 import com.ravenemu.app.data.saves.StateSlotRepository;
 import com.ravenemu.app.ui.common.GameDetailsSheet;
 import com.ravenemu.app.ui.library.HomeActivity;
@@ -44,6 +45,10 @@ final class PlayerMenuSheet {
         default void onAchievementsSignOut() {}
         default void onFetchScores(int board, boolean around) {}
         default void onOpenLink(String url) {}
+        /** A code to check with the core, then cheatAdded() or cheatRefused(). */
+        default void onCheatAdd(String name, String code) {}
+        default void onCheatToggle(int index) {}
+        default void onCheatDelete(int index) {}
     }
 
     private static final int CARD = 0xff202230;
@@ -65,6 +70,9 @@ final class PlayerMenuSheet {
     private final FrameLayout accountHost;
     private final AchievementsPanel panel;
     private final LinearLayout menu;
+    /** The game's cheats: the entry in the menu, the page it opens. */
+    private final Button cheatsButton;
+    private final CheatsPanel cheats;
     private final NestedScrollView scroll;
     private AchievementsSnapshot achievements = AchievementsSnapshot.SIGNED_OUT;
 
@@ -168,6 +176,10 @@ final class PlayerMenuSheet {
             if (!busy && undoAvailable && dialog.isShowing()) begin(listener::onUndo);
         });
         add(content, undo, 12);
+        // As in the beta: the cheats right after « Annuler le chargement ».
+        cheatsButton = button(CheatList.menuLabel(java.util.Collections.emptyList()), 14);
+        cheatsButton.setOnClickListener(view -> showCheats());
+        add(content, cheatsButton, 12);
         save.setOnClickListener(view -> requestSave());
         load.setOnClickListener(view -> requestLoad());
         delete.setOnClickListener(view -> requestDelete());
@@ -200,9 +212,21 @@ final class PlayerMenuSheet {
         View panelView = panel.view();
         panelView.setPadding(dp(18), dp(12), dp(18), dp(28));
         panelView.setVisibility(View.GONE);
+        cheats = new CheatsPanel(owner, new CheatsPanel.Actions() {
+            @Override public void back() { showMenu(); }
+            @Override public void add(String name, String code) {
+                if (dialog.isShowing()) listener.onCheatAdd(name, code);
+            }
+            @Override public void toggle(int index) { if (dialog.isShowing()) listener.onCheatToggle(index); }
+            @Override public void delete(int index) { if (dialog.isShowing()) listener.onCheatDelete(index); }
+        });
+        View cheatsView = cheats.view();
+        cheatsView.setPadding(dp(18), dp(12), dp(18), dp(28));
+        cheatsView.setVisibility(View.GONE);
         LinearLayout pages = column();
         pages.addView(content);
         pages.addView(panelView);
+        pages.addView(cheatsView);
         scroll = new NestedScrollView(owner);
         scroll.addView(pages);
         dialog.setContentView(scroll);
@@ -213,10 +237,11 @@ final class PlayerMenuSheet {
             listener.onDismiss();
         });
         dialog.setOnKeyListener((ignored, key, event) -> {
-            if (key == KeyEvent.KEYCODE_BUTTON_B || key == KeyEvent.KEYCODE_BACK && achievementsShown()) {
+            boolean page = achievementsShown() || cheatsShown();
+            if (key == KeyEvent.KEYCODE_BUTTON_B || key == KeyEvent.KEYCODE_BACK && page) {
                 if (event.getAction() == KeyEvent.ACTION_UP) {
-                    // The panel goes back to the menu first, as its own back button.
-                    if (achievementsShown()) showMenu(); else dismiss();
+                    // A page goes back to the menu first, as its own back button.
+                    if (page) showMenu(); else dismiss();
                 }
                 return true;
             }
@@ -242,6 +267,24 @@ final class PlayerMenuSheet {
     }
 
     boolean achievementsShown() { return panel.view().getVisibility() == View.VISIBLE; }
+    boolean cheatsShown() { return cheats.view().getVisibility() == View.VISIBLE; }
+
+    /** The game's cheats, and whether they may run (not in Hardcore). */
+    void setCheats(java.util.List<CheatList.Cheat> list, boolean allowed) {
+        cheatsButton.setText(CheatList.menuLabel(list));
+        cheats.show(list, allowed);
+    }
+
+    void cheatAdded() { cheats.added(); }
+    void cheatRefused(String reason) { cheats.refused(reason); }
+
+    void showCheats() {
+        if (busy || !dialog.isShowing()) return;
+        menu.setVisibility(View.GONE);
+        panel.view().setVisibility(View.GONE);
+        cheats.view().setVisibility(View.VISIBLE);
+        scroll.scrollTo(0, 0);
+    }
 
     /** Signed out, the card leads to Settings → RetroAchievements. */
     void showAchievements() {
@@ -259,6 +302,7 @@ final class PlayerMenuSheet {
     void showMenu() {
         panel.dismissDetails();
         panel.view().setVisibility(View.GONE);
+        cheats.view().setVisibility(View.GONE);
         menu.setVisibility(View.VISIBLE);
         scroll.scrollTo(0, 0);
     }

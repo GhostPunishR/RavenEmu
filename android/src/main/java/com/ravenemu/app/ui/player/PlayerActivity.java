@@ -2,6 +2,8 @@ package com.ravenemu.app.ui.player;
 import com.ravenemu.app.bridge.NativeBridge;
 import com.ravenemu.app.data.library.CoverRepository;
 import com.ravenemu.app.data.library.RomLibrary;
+import com.ravenemu.app.data.saves.CheatList;
+import com.ravenemu.app.data.saves.CheatRepository;
 import com.ravenemu.app.data.saves.GbaBiosRepository;
 import com.ravenemu.app.data.saves.SaveRepository;
 import com.ravenemu.app.data.saves.SaveStorage;
@@ -46,6 +48,9 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -98,6 +103,11 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
     /** UI thread: rcheevos just allowed this pause (Hardcore). */
     private boolean pauseGranted;
     private long nextBatterySaveNanos;
+    /** The game's cheats: written on the UI thread only, read on the GL one. */
+    private volatile List<CheatList.Cheat> cheats = Collections.emptyList();
+    private volatile String cheatsKey;
+    /** GL thread: the Hardcore lock the core's cheats were last set for. */
+    private boolean cheatsLockApplied;
     private volatile String activeSaveKey;
     /** GL thread: the core of the open game ("gb", "gbc" or "gba"), for its options. */
     private String activeCore;
@@ -357,6 +367,14 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
             try {
                 byte[] rom = RomLibrary.readRom(getFilesDir(), entry);
                 byte[] battery = SaveRepository.read(getFilesDir(), entry.key, "srm");
+                List<CheatList.Cheat> stored;
+                try {
+                    stored = CheatRepository.read(getFilesDir(), entry.key);
+                } catch (IOException | RuntimeException unreadable) {
+                    stored = Collections.emptyList();
+                    postStatus("Codes de triche illisibles : " + unreadable.getMessage());
+                }
+                final List<CheatList.Cheat> storedCheats = stored;
                 // Settings → Console picks the core; it and the image options
                 // apply as the game loads. The SRAM stays the game's own.
                 ConsoleSettings console = ConsoleSettings.load(this);
@@ -406,6 +424,24 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
                     // Once the SRAM is in: the ROM is identified by its hash.
                     if (failure == null) achievements.start(http, account, journal, entry.system, rom, hardcore);
                     else achievements.stop();
+                    if (failure == null) {
+                        // The game's cheats, none while Hardcore is asked for or runs.
+                        cheatsLockApplied = achievements.cheatsLocked();
+                        if (NativeBridge.setCheats(cheatsLockApplied ? new String[0]
+                                : CheatList.active(storedCheats)) >= 0) {
+                            String reason = NativeBridge.cheatRefusal();
+                            if (reason != null) postStatus(reason);
+                        }
+                        final boolean locked = cheatsLockApplied;
+                        runOnUiThread(() -> {
+                            if (disposed.get()) return;
+                            cheats = storedCheats;
+                            cheatsKey = entry.key;
+                            if (playerMenu != null) playerMenu.setCheats(storedCheats, !locked);
+                        });
+                    } else {
+                        runOnUiThread(() -> { cheats = Collections.emptyList(); cheatsKey = null; });
+                    }
                     activeEntry = failure == null ? entry : null;
                     activeAccount = failure == null ? accountKey(account, hardcore) : null;
                     final double fps = failure == null ? NativeBridge.frameRate() : 0.0;
@@ -533,6 +569,19 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
                             postStatus("Aucune application pour ouvrir ce lien");
                         }
                     }
+                    @Override public void onCheatAdd(String name, String code) { addCheat(name, code); }
+                    @Override public void onCheatToggle(int index) {
+                        List<CheatList.Cheat> list = new ArrayList<>(cheats);
+                        if (index < 0 || index >= list.size() || achievements.cheatsLocked()) return;
+                        list.set(index, list.get(index).withEnabled(!list.get(index).enabled));
+                        changeCheats(list);
+                    }
+                    @Override public void onCheatDelete(int index) {
+                        List<CheatList.Cheat> list = new ArrayList<>(cheats);
+                        if (index < 0 || index >= list.size()) return;
+                        list.remove(index);
+                        changeCheats(list);
+                    }
                     @Override public void onDismiss() {
                         if (generation != menuGeneration) return;
                         selectedSlot = playerMenu.getSelectedSlot();
@@ -543,9 +592,68 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         stateSlots = null;
         statePreviews = new Bitmap[StateSlotRepository.SLOT_COUNT];
         renderPlayerMenu();
+        playerMenu.setCheats(cheats, !achievements.cheatsLocked());
         playerMenu.show();
         refreshSlots();
         refreshAchievements();
+    }
+
+    /** The beta's GbCheatsUi.add: a code the core takes is kept, on; a refused
+     * one stays in the form with the core's reason. UI thread. */
+    private void addCheat(String name, String code) {
+        final PlayerMenuSheet menu = playerMenu;
+        if (menu == null || disposed.get()) return;
+        final String line = CheatList.oneLine(code);
+        final String key = cheatsKey;
+        if (line.isEmpty()) { menu.cheatRefused("Saisissez un code."); return; }
+        if (key == null) { menu.cheatRefused("Codes de triche pas encore prêts."); return; }
+        if (achievements.cheatsLocked()) { menu.cheatRefused(CheatsPanel.HARDCORE); return; }
+        final List<CheatList.Cheat> before = cheats;
+        final CheatList.Cheat added = new CheatList.Cheat(
+                name == null || name.trim().isEmpty() ? "Code " + (before.size() + 1) : name.trim(), line, true);
+        List<CheatList.Cheat> candidate = new ArrayList<>(before);
+        candidate.add(added);
+        final String[] codes = CheatList.active(candidate);
+        surface.queueEvent(() -> {
+            if (disposed.get() || !key.equals(activeSaveKey)) return;
+            final int refused = NativeBridge.setCheats(codes);
+            final String reason = NativeBridge.cheatRefusal();
+            runOnUiThread(() -> {
+                if (disposed.get() || !key.equals(cheatsKey)) return;
+                if (refused == -2) {
+                    menu.cheatRefused("Codes de triche indisponibles pour ce jeu.");
+                } else if (refused == codes.length - 1) {
+                    // The core keeps the others as they were.
+                    menu.cheatRefused(reason == null ? "Code refusé par le core." : reason);
+                } else {
+                    List<CheatList.Cheat> now = new ArrayList<>(cheats);
+                    now.add(added);
+                    changeCheats(now);
+                    menu.cheatAdded();
+                }
+            });
+        });
+    }
+
+    /** A new list: shown at once, then given to the core and written whole. */
+    private void changeCheats(List<CheatList.Cheat> list) {
+        final String key = cheatsKey;
+        if (key == null || disposed.get()) return;
+        final List<CheatList.Cheat> kept = Collections.unmodifiableList(new ArrayList<>(list));
+        cheats = kept;
+        if (playerMenu != null) playerMenu.setCheats(kept, !achievements.cheatsLocked());
+        surface.queueEvent(() -> {
+            if (disposed.get() || !key.equals(activeSaveKey) || cheatsLockApplied) return;
+            NativeBridge.setCheats(CheatList.active(kept));
+            String reason = NativeBridge.cheatRefusal();
+            if (reason != null) postStatus(reason);
+        });
+        submitIo(() -> {
+            try { CheatRepository.write(getFilesDir(), key, kept); }
+            catch (IOException | RuntimeException failure) {
+                postStatus("Codes de triche non enregistrés : " + failure.getMessage());
+            }
+        });
     }
 
     /** The menu's RetroAchievements: a snapshot on the GL thread, the
@@ -860,6 +968,15 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         // The frames shown reached RetroAchievements in the bridge: now its
         // answers, requests and events.
         achievements.pump();
+        final boolean cheatsLock = achievements.cheatsLocked();
+        if (activeSaveKey != null && cheatsLock != cheatsLockApplied) {
+            // Hardcore came or went: no cheat runs in it.
+            cheatsLockApplied = cheatsLock;
+            NativeBridge.setCheats(cheatsLock ? new String[0] : CheatList.active(cheats));
+            runOnUiThread(() -> {
+                if (!disposed.get() && playerMenu != null) playerMenu.setCheats(cheats, !cheatsLock);
+            });
+        }
         rumble.update(rumbleEnabled && NativeBridge.rumbling(), now);
         // What the core asks to show, as RetroArch shows it: briefly over the game.
         final String message = NativeBridge.takeMessage();

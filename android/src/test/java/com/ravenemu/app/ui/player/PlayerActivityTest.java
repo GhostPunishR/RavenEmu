@@ -4,6 +4,8 @@ import com.ravenemu.app.bridge.NativeAchievements;
 import com.ravenemu.app.bridge.NativeBridge;
 import com.ravenemu.app.data.library.RomLibrary;
 import com.ravenemu.app.data.saves.GbaBiosRepository;
+import com.ravenemu.app.data.saves.CheatList;
+import com.ravenemu.app.data.saves.CheatRepository;
 import com.ravenemu.app.data.saves.SaveRepository;
 import com.ravenemu.app.data.saves.SaveStorage;
 import com.ravenemu.app.data.saves.StatePreview;
@@ -31,6 +33,7 @@ import android.os.Bundle;
 import android.os.Looper;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.EditText;
 import android.widget.TextView;
 import java.io.ByteArrayInputStream;
 import java.io.File;
@@ -797,6 +800,92 @@ public final class PlayerActivityTest {
         assertSame(SaveStorage.IO, io(loaded()));
     }
 
+    @Test public void storedCheatsRunAtLoadAndTheMenuCountsTheActiveOnes() throws Exception {
+        CheatRepository.write(files, key, Arrays.asList(new CheatList.Cheat("Vies", "010238CD", true),
+                new CheatList.Cheat("Éteint", "01FF47FF", false)));
+        PlayerActivity activity = loaded();
+        assertArrayEquals(new String[]{"010238CD"}, lastCheats());
+        openMenu(activity);
+        menuButton("Codes de triche · 1 actif").performClick();
+        assertNotNull(menuButton("Vies"));
+        assertNotNull(menuButton("01FF47FF"));
+        assertNotNull(menuButton(CheatsPanel.HELP));
+    }
+
+    @Test public void anAddedCodeIsCheckedByTheCoreThenKeptOrRefusedWithItsReason() throws Exception {
+        PlayerActivity activity = loaded();
+        assertArrayEquals("No cheat yet", new String[0], lastCheats());
+        openMenu(activity);
+        menuButton("Codes de triche").performClick();
+        EditText name = field("Nom (facultatif)"), code = field("Code");
+        name.setText("Argent");
+        code.setText(" 0199B5D0\n0199B6D0 ");
+        menuButton("Ajouter").performClick();
+        pump(activity);
+        assertArrayEquals(new String[]{"0199B5D0 0199B6D0"}, lastCheats());
+        assertEquals(Arrays.asList(new CheatList.Cheat("Argent", "0199B5D0 0199B6D0", true)),
+                CheatRepository.read(files, key));
+        assertEquals("The form starts again", "", code.getText().toString());
+        assertNotNull(menuButton("Codes de triche · 1 actif"));
+
+        code.setText("BAD-CODE");
+        menuButton("Ajouter").performClick();
+        pump(activity);
+        assertNotNull(menuButton("RavenGB : code de triche 2 refusé (code illisible)"));
+        assertEquals("Kept in the form to fix", "BAD-CODE", code.getText().toString());
+        assertEquals(1, CheatRepository.read(files, key).size());
+        assertNotNull("The refused code is not counted", menuButton("Codes de triche · 1 actif"));
+    }
+
+    @Test public void aCodeTurnedOffOrDeletedLeavesTheCoreAndTheFile() throws Exception {
+        CheatRepository.write(files, key, Arrays.asList(new CheatList.Cheat("Vies", "010238CD", true),
+                new CheatList.Cheat("Argent", "0199B5D0", true)));
+        PlayerActivity activity = loaded();
+        openMenu(activity);
+        menuButton("Codes de triche · 2 actifs").performClick();
+        described("Vies, actif").performClick();
+        pump(activity);
+        assertArrayEquals(new String[]{"0199B5D0"}, lastCheats());
+        assertFalse(CheatRepository.read(files, key).get(0).enabled);
+        described("Supprimer le code Argent").performClick();
+        pump(activity);
+        assertArrayEquals(new String[0], lastCheats());
+        assertEquals(Arrays.asList(new CheatList.Cheat("Vies", "010238CD", false)), CheatRepository.read(files, key));
+        assertNotNull(menuButton("Codes de triche"));
+    }
+
+    @Test @Config(shadows = ApprovedHardcore.class)
+    public void noCheatRunsOrIsAddedInHardcore() throws Exception {
+        android.content.Context app = RuntimeEnvironment.getApplication();
+        new AchievementAccount("Raven", "TOKEN-1", "", "", 0, 0).save(app);
+        AchievementSettings.DEFAULTS.withSound(false).withHardcore(true).save(app);
+        CheatRepository.write(files, key, Arrays.asList(new CheatList.Cheat("Vies", "010238CD", true)));
+        PlayerActivity activity = loaded();
+        assertArrayEquals("Hardcore asked for: none runs", new String[0], lastCheats());
+        openMenu(activity);
+        menuButton("Codes de triche · 1 actif").performClick();
+        assertNotNull(menuButton(CheatsPanel.HARDCORE));
+        assertFalse(menuButton("Ajouter").isEnabled());
+        assertFalse(described("Vies, actif").isEnabled());
+    }
+
+    private static String[] lastCheats() {
+        assertFalse("The core was given cheats", FakeNative.cheatCalls.isEmpty());
+        return FakeNative.cheatCalls.get(FakeNative.cheatCalls.size() - 1);
+    }
+    private EditText field(String hint) {
+        View result = find(menuDialog().getWindow().getDecorView(), view ->
+                view instanceof EditText && hint.contentEquals(((EditText) view).getHint()));
+        assertNotNull(hint, result);
+        return (EditText) result;
+    }
+    private View described(String label) {
+        View result = find(menuDialog().getWindow().getDecorView(), view ->
+                view.getContentDescription() != null && label.contentEquals(view.getContentDescription()));
+        assertNotNull(label, result);
+        return result;
+    }
+
     @Test public void failedLoadAndRollbackStopTheGameWithoutDeletingSramOrSlot() throws Exception {
         PlayerActivity activity = loaded();
         SaveRepository.write(files, key, "srm", new byte[]{50, 51});
@@ -1055,6 +1144,9 @@ public final class PlayerActivityTest {
         static int opens, failRestores;
         static boolean closed, paused, lastAdvance;
         static int framesToAdvance, draws, batteryReads;
+        /** Each list of codes given to the core; a code starting with BAD is refused. */
+        static final List<String[]> cheatCalls = new ArrayList<>();
+        static String cheatRefusal;
         /** The core's SRAM size, as the bridge checks it; -1 takes any size. */
         static int sramSize = -1;
         static int settingsApplies;
@@ -1076,6 +1168,7 @@ public final class PlayerActivityTest {
             opens = failRestores = 0; closed = lastAdvance = false; paused = true;
             framesToAdvance = 1; draws = batteryReads = 0;
             sramSize = -1;
+            cheatCalls.clear(); cheatRefusal = null;
             settingsApplies = 0; appliedSettings = null; appliedEffect = -1; appliedResampler = -1;
             openOptions = liveOptions = null;
             openCore = null;
@@ -1123,6 +1216,21 @@ public final class PlayerActivityTest {
             if (sramSize >= 0 && value.length != sramSize) return false;
             restoredBatteries.add(value.clone()); battery = value.clone(); return true;
         }
+        /** As RavenCore through the frontend: the first refused code and its reason. */
+        @Implementation protected static int setCheats(String[] codes) {
+            requireGl();
+            cheatCalls.add(codes.clone());
+            cheatRefusal = null;
+            if (closed) return -2;
+            for (int i = 0; i < codes.length; i++) {
+                if (codes[i].startsWith("BAD")) {
+                    cheatRefusal = "RavenGB : code de triche " + (i + 1) + " refusé (code illisible)";
+                    return i;
+                }
+            }
+            return -1;
+        }
+        @Implementation protected static String cheatRefusal() { requireGl(); return cheatRefusal; }
         @Implementation protected static boolean restoreState(byte[] value) {
             requireGl(); restoreAttempts.add(value.clone());
             if (failRestores > 0) { failRestores--; state = new byte[]{127}; return false; }

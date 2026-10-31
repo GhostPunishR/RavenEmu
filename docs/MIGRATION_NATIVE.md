@@ -1011,3 +1011,38 @@ bêta (`GbFolderImporter`, `FolderImportSummaryDialog`).
 Écart : la bêta ne propose pas de sélection de plusieurs fichiers avec « + » ;
 elle n'est pas ajoutée. Validation sur téléphone à faire.
 
+## Codes de triche, lots T-1 et T-2
+
+Portage de `GbCheatList`, `GbCheatStore`, `GbCheatsUi` et `GbCheatsPanel` de
+la bêta 0.8.1 ; les cores RavenCore lisent déjà les codes par Libretro
+(`retro_cheat_set`).
+
+- **T-1, frontend C et JNI** : `raven_frontend_set_cheats` remplace la liste
+  (`retro_cheat_reset` puis `retro_cheat_set`, symboles facultatifs). RavenCore
+  nomme un code refusé dans un message : le frontend rend l'indice du premier
+  refusé et sa raison, et garde ce message hors de l'écran pour qu'il
+  s'affiche une seule fois, sous le formulaire. `NativeBridge.setCheats` et
+  `cheatRefusal` (fil GL) copient les codes un à un. Tests : faux core, et
+  vrais cores GB, GBC et GBA (un code GameShark ou Codebreaker change la
+  mémoire du jeu, un code illisible est refusé) ; ASan/UBSan propre.
+- **T-2, menu de jeu** : « Codes de triche » (ou « · N actif(s) ») après
+  « Annuler le chargement », comme dans la bêta, ouvre la page : liste avec
+  interrupteur et « Supprimer », formulaire « Nom (facultatif) » et « Code »
+  avec l'aide de la bêta sur les formats. Un code ajouté est d'abord soumis au
+  core : refusé, il reste dans le formulaire avec la raison de RavenCore ;
+  accepté, il est gardé, actif.
+- **Fichier** : `native-cheats/<clé>.cheats`, au format de RavenEmu PC
+  (« 1⇥nom⇥code » par ligne, comme la bêta), écrit en entier et
+  atomiquement, supprimé quand la liste est vide ; lu au chargement du jeu,
+  un code devenu illisible est annoncé.
+- **Hardcore** : aucun code ne tourne tant que le Hardcore est demandé ou
+  actif, la liste reste visible, interrupteurs et ajout désactivés ; le
+  verrou est suivi à chaque image et la liste réappliquée à sa levée.
+- Tests : `CheatListTest`, `CheatRepositoryTest`, `PlayerActivityTest`
+  (codes enregistrés appliqués et comptés, ajout accepté ou refusé avec sa
+  raison, désactivation et suppression, Hardcore).
+
+Écart : la bêta acceptait d'ajouter un code en Hardcore (sans l'exécuter) ;
+l'application native ne peut le vérifier qu'en le donnant au core, l'ajout
+y est donc désactivé. Validation sur téléphone à faire.
+
