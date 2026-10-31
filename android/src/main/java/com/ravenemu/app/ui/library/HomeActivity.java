@@ -74,6 +74,7 @@ public final class HomeActivity extends Activity {
     private String detailsKey;
     private String restoredDetailsKey;
     private SaveTransferUi saves;
+    private FolderImportUi folders;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -85,6 +86,7 @@ public final class HomeActivity extends Activity {
             restoredDetailsKey = state.getString("library.details");
         }
         saves = new SaveTransferUi(this, state);
+        folders = new FolderImportUi(this, io, this::reload);
         getWindow().setStatusBarColor(Color.BLACK);
         getWindow().setNavigationBarColor(Color.BLACK);
         createLibrary();
@@ -169,6 +171,7 @@ public final class HomeActivity extends Activity {
         LinearLayout.LayoutParams field = new LinearLayout.LayoutParams(-1, dp(44));
         field.setMargins(dp(12), 0, dp(12), dp(8));
         root.addView(search, field);
+        root.addView(folders.progressRow(), new LinearLayout.LayoutParams(-1, -2));
         search.addTextChangedListener(new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence value, int start, int count, int after) {}
             @Override public void onTextChanged(CharSequence value, int start, int before, int count) {
@@ -300,6 +303,8 @@ public final class HomeActivity extends Activity {
             updateCards();
             return true;
         });
+        options.getMenu().add(0, FolderImportUi.PICK_FOLDER, 0, "Importer un dossier")
+                .setOnMenuItemClickListener(item -> { folders.pick(); return true; });
         options.getMenu().add("Actualiser la bibliothèque de jeux")
                 .setOnMenuItemClickListener(item -> { reload(); return true; });
         options.getMenu().add(0, SaveTransferUi.EXPORT_ALL, 2, "Exporter toutes les sauvegardes (.zip)")
@@ -428,7 +433,7 @@ public final class HomeActivity extends Activity {
 
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
-        if (saves.onResult(request, result, data)) return;
+        if (saves.onResult(request, result, data) || folders.onResult(request, result, data)) return;
         if (result != RESULT_OK || data == null || data.getData() == null) {
             if (request == PICK_COVER) selectedCoverKey = null;
             return;
@@ -518,6 +523,7 @@ public final class HomeActivity extends Activity {
         destroyed = true;
         if (details != null) details.dismiss();
         saves.destroy();
+        folders.destroy();
         io.shutdown();
         super.onDestroy();
     }

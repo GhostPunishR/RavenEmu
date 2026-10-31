@@ -518,6 +518,10 @@ This is an integration prototype, not a release candidate.
 - The library's ⋮ menu exports every game's SRAM in the beta's library
   archive (lot S-2): one folder per game, bound to the ROM's SHA-256, which
   both this app and the beta import. Native save states are not included.
+- « Importer un dossier » (lot S-3) copies the GB, GBC and GBA ROMs of a
+  chosen folder and its subfolders, within the beta's limits, then shows the
+  beta's summary (`data/library/FolderImport`, `platform/DocumentTree`,
+  `ui/library/FolderImportUi`).
 - The Java home screen uses the RavenEmu-style grid/list; file selection
   remains Android SAF. The Java pause sheet controls the C pause/audio gate.
 - RetroAchievements: Softcore with banners, chime, the achievement list,

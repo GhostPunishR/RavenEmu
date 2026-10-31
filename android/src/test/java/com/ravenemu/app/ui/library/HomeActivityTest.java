@@ -1,6 +1,7 @@
 package com.ravenemu.app.ui.library;
 import com.ravenemu.app.R;
 import com.ravenemu.app.data.library.CoverRepository;
+import com.ravenemu.app.data.library.FolderImport;
 import com.ravenemu.app.data.library.RomLibrary;
 import com.ravenemu.app.ui.common.GameDetailsSheet;
 import com.ravenemu.app.ui.player.PlayerActivity;
@@ -416,6 +417,50 @@ public final class HomeActivityTest {
         idleSaves();
         assertNull(shadowOf(activity).getNextStartedActivityForResult());
         assertEquals("Aucun jeu de la bibliothèque n'a de sauvegarde à exporter.", ShadowToast.getTextOfLatestToast());
+    }
+
+    @Test public void theMenuImportsAFolderAndSummarizesItAsTheBeta() throws Exception {
+        HomeActivity activity = open(null).get();
+        byte[] rom = new byte[0x150];
+        FolderImportUi folders = ReflectionHelpers.getField(activity, "folders");
+        folders.trees = uri -> new FolderImport.Tree() {
+            @Override public String root() { return "root"; }
+            @Override public java.util.List<FolderImport.Child> children(String id) {
+                return java.util.Arrays.asList(new FolderImport.Child("rom", "Jeu libre.gb", false, rom.length),
+                        new FolderImport.Child("txt", "lisez-moi.txt", false, 3));
+            }
+            @Override public java.io.InputStream open(String id) { return new ByteArrayInputStream(rom); }
+        };
+        described(activity.getWindow().getDecorView(), "Plus d'options").performClick();
+        ShadowPopupMenu.getLatestPopupMenu().getMenu().performIdentifierAction(76, 0);
+        assertEquals(Intent.ACTION_OPEN_DOCUMENT_TREE,
+                shadowOf(activity).getNextStartedActivityForResult().intent.getAction());
+        activity.onActivityResult(76, Activity.RESULT_OK, new Intent().setData(Uri.parse("content://tree/root")));
+        idleIo(activity);
+        idleIo(activity);
+        AlertDialog summary = (AlertDialog) ShadowDialog.getLatestDialog();
+        assertTrue(summary.isShowing());
+        assertEquals("Importation du dossier terminée", shadowOf(summary).getTitle().toString());
+        View body = summary.getWindow().getDecorView();
+        assertNotNull(text(body, "Jeux ajoutés : 1"));
+        assertNotNull(text(body, "Doublons ignorés : 0"));
+        assertNotNull(text(body, "Autres fichiers ignorés : 1"));
+        assertNotNull(text(body, "Dossiers parcourus : 1"));
+        assertNull("Nothing unreadable", text(body, "Fichiers ou dossiers illisibles : 0"));
+        assertNotNull(text(body, "Les jeux existants, leurs sauvegardes et la partie en cours n'ont pas été modifiés."));
+        assertEquals(1, RomLibrary.list(activity.getFilesDir()).size());
+        assertEquals(1, find(activity.getWindow().getDecorView(), GridView.class).getAdapter().getCount());
+    }
+
+    @Test public void aFolderThatCannotBeReadIsSaidSo() throws Exception {
+        HomeActivity activity = open(null).get();
+        FolderImportUi folders = ReflectionHelpers.getField(activity, "folders");
+        folders.trees = uri -> { throw new java.io.IOException("Dossier Android invalide."); };
+        activity.onActivityResult(76, Activity.RESULT_OK, new Intent().setData(Uri.parse("content://tree/x")));
+        idleIo(activity);
+        idleIo(activity);
+        assertEquals("Importation du dossier impossible : Dossier Android invalide.",
+                ShadowToast.getTextOfLatestToast());
     }
 
     /** Opens the first game's import with `bytes` as `name`, up to the review. */

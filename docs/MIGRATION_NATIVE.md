@@ -980,6 +980,34 @@ dans la bêta.
   chaque jeu par son SHA-256, dossiers en doublon, refus sans sauvegarde),
   `HomeActivityTest` (menu, sélecteur, relecture de l'archive écrite).
 
-Écart restant : l'import d'un dossier (S-3). Validation sur téléphone, et
-import réel de l'archive dans la bêta, à faire.
+Validation sur téléphone, et import réel de l'archive dans la bêta, à faire.
+
+## Bibliothèque, lot S-3 : import d'un dossier
+
+Menu ⋮, « Importer un dossier », après « Vue grille/liste » comme dans la
+bêta (`GbFolderImporter`, `FolderImportSummaryDialog`).
+
+- Sélecteur de dossier Android (`ACTION_OPEN_DOCUMENT_TREE`) : l'autorisation
+  vaut pour cet import ; les ROM sont copiées dans la bibliothèque privée,
+  aucune permission persistante n'est gardée (`platform/DocumentTree`).
+- Parcours en largeur des sous-dossiers, aux limites de la bêta : profondeur
+  8, 128 dossiers, 4 000 entrées, 256 ROM examinées, 256 Mio lus, 256 jeux
+  dans la bibliothèque. Un dossier déjà vu (boucle) n'est relu qu'une fois.
+  Le dossier choisi doit s'ouvrir ; un sous-dossier illisible est compté.
+- Chaque ROM suit les règles du bouton « + » (extension, taille, empreinte
+  par console) ; un doublon est ignoré, la partie et les sauvegardes ne sont
+  jamais touchées. La bêta validait chaque ROM avec un core temporaire ;
+  l'hôte natif n'ouvre qu'une instance Libretro par processus, il vérifie donc
+  les en-têtes que RavenCore exige (marqueur `0x96` d'une ROM GBA, en-tête
+  d'une ROM Game Boy) et compte le reste comme ROM invalides.
+- Ligne de progression sous la recherche (« Analyse du dossier… »,
+  « Importation du dossier… N ROM examinées »), puis le bilan de la bêta :
+  jeux ajoutés, doublons, ROM invalides, illisibles, autres fichiers, dossiers
+  parcourus, arrêt sur limite.
+- Tests : `FolderImportTest` (comptes sur un dossier fictif, doublon, limites
+  de profondeur et d'entrées, boucle, dossier illisible, en-têtes),
+  `HomeActivityTest` (menu, sélecteur, bilan, dossier illisible).
+
+Écart : la bêta ne propose pas de sélection de plusieurs fichiers avec « + » ;
+elle n'est pas ajoutée. Validation sur téléphone à faire.
 
