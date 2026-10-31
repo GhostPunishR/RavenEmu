@@ -1046,3 +1046,33 @@ la bêta 0.8.1 ; les cores RavenCore lisent déjà les codes par Libretro
 l'application native ne peut le vérifier qu'en le donnant au core, l'ajout
 y est donc désactivé. Validation sur téléphone à faire.
 
+## Icônes RavenEmu, lot I-1
+
+Demande du propriétaire : les icônes faisaient « brouillon », et la catégorie
+Console des Paramètres n'avait pas d'icône à elle (comme dans la bêta, elle
+reprenait celle d'« À propos »).
+
+- `ui/common/RavenIcon` : un jeu d'icônes dessinées pour RavenEmu sur une
+  grille de 24, un trait de 2 aux bouts et angles arrondis et quelques
+  détails pleins, d'une seule couleur ; même rendu sur tout téléphone et à
+  toute densité, jamais un caractère d'une police.
+- Remplacements : `⚙`, `+`, `⋮` de la bibliothèque ; la loupe `⌕` de la
+  recherche ; `‹` et `⋮` du lecteur ; `‹` des Paramètres, des licences et des
+  pages du menu de jeu ; les chevrons `›` et liens `↗` ; les marques radio
+  `●`/`○` ; l'étoile `★` du bandeau des succès (dorée pour un déblocage) ; le
+  trait `━━` des jaquettes absentes, devenu le pictogramme de la console.
+- Onglets de la bibliothèque : les pictogrammes de console de la bêta
+  (`PageIndicator`, `ConsoleIcons`) au lieu de « ● GB GBC GBA » : case de
+  36 dp, fond violet à 16 % et icône plus grande pour la page active, écran
+  en couleur de la GBC atténué sur une page inactive.
+- Catégories des Paramètres : trophée, réglages, haut-parleur, écran,
+  **console portable pour Console**, manette pour Interface, information.
+- Les descriptions d'accessibilité restent celles d'avant.
+- Tests : `RavenIconTest` (chaque glyphe dessiné dans sa couleur et dans son
+  cadre, écran GBC en couleur et atténué, radio pleine ou vide),
+  `HomeActivityTest` (barre, recherche et onglets sans caractère),
+  `PlaybackSettingsActivityTest` (une icône par catégorie, Console comprise).
+
+Écart voulu par le propriétaire : ces icônes modernisent celles de la bêta,
+qui n'est pas modifiée. Validation sur téléphone à faire.
+

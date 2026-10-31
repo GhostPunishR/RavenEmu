@@ -4,6 +4,7 @@ import com.ravenemu.app.data.library.CoverRepository;
 import com.ravenemu.app.data.library.FolderImport;
 import com.ravenemu.app.data.library.RomLibrary;
 import com.ravenemu.app.ui.common.GameDetailsSheet;
+import com.ravenemu.app.ui.common.RavenIcon;
 import com.ravenemu.app.ui.player.PlayerActivity;
 import com.ravenemu.app.ui.settings.PlaybackSettingsActivity;
 import com.ravenemu.app.data.saves.SaveRepository;
@@ -461,6 +462,27 @@ public final class HomeActivityTest {
         idleIo(activity);
         assertEquals("Importation du dossier impossible : Dossier Android invalide.",
                 ShadowToast.getTextOfLatestToast());
+    }
+
+    @Test public void theToolbarSearchAndPagesUseDrawnIconsNotSymbols() throws Exception {
+        seedLibrary();
+        HomeActivity activity = open(null).get();
+        View root = activity.getWindow().getDecorView();
+        for (String symbol : new String[]{"⚙", "+", "⋮", "●", "⌕  Rechercher un jeu"})
+            assertNull("No symbol for an icon: " + symbol, text(root, symbol));
+        assertEquals(RavenIcon.Glyph.SETTINGS, glyph(described(root, "Paramètres")));
+        assertEquals(RavenIcon.Glyph.ADD, glyph(described(root, "Ajouter une ROM")));
+        assertEquals(RavenIcon.Glyph.MORE, glyph(described(root, "Plus d'options")));
+        assertEquals(RavenIcon.Glyph.ALL, glyph(described(root, "Tous les jeux")));
+        assertEquals(RavenIcon.Glyph.GB, glyph(described(root, "Game Boy")));
+        assertEquals(RavenIcon.Glyph.GBC, glyph(described(root, "Game Boy Color")));
+        EditText search = find(root, EditText.class);
+        assertEquals("Rechercher un jeu", search.getHint().toString());
+        assertTrue(search.getCompoundDrawablesRelative()[0] instanceof RavenIcon);
+    }
+
+    private static RavenIcon.Glyph glyph(View view) {
+        return ((RavenIcon) ((android.widget.ImageView) view).getDrawable()).glyph();
     }
 
     /** Opens the first game's import with `bytes` as `name`, up to the review. */

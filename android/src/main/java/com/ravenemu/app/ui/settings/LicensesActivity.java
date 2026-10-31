@@ -2,6 +2,7 @@ package com.ravenemu.app.ui.settings;
 import com.ravenemu.app.BuildConfig;
 import com.ravenemu.app.R;
 import com.ravenemu.app.platform.SystemBarInsets;
+import com.ravenemu.app.ui.common.RavenIcon;
 import com.ravenemu.app.ui.library.HomeActivity;
 
 import android.app.Activity;
@@ -56,9 +57,7 @@ public final class LicensesActivity extends Activity {
 
         LinearLayout toolbar = new LinearLayout(this);
         toolbar.setGravity(Gravity.CENTER_VERTICAL);
-        Button back = action("‹");
-        back.setTextSize(28);
-        back.setContentDescription("Retour aux paramètres");
+        View back = RavenIcon.button(this, RavenIcon.Glyph.BACK, HomeActivity.TEXT, 24, "Retour aux paramètres");
         back.setOnClickListener(view -> finish());
         toolbar.addView(back, new LinearLayout.LayoutParams(dp(48), dp(48)));
         TextView heading = text("Licences et crédits", 19, HomeActivity.TEXT);

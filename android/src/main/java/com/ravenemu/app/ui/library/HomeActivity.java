@@ -3,6 +3,7 @@ import com.ravenemu.app.data.library.CoverRepository;
 import com.ravenemu.app.data.library.RomLibrary;
 import com.ravenemu.app.platform.SystemBarInsets;
 import com.ravenemu.app.ui.common.GameDetailsSheet;
+import com.ravenemu.app.ui.common.RavenIcon;
 import com.ravenemu.app.ui.player.PlayerActivity;
 import com.ravenemu.app.ui.settings.PlaybackSettingsActivity;
 
@@ -118,11 +119,10 @@ public final class HomeActivity extends Activity {
         return result;
     }
 
-    private TextView iconButton(String symbol, String description, Runnable click) {
-        TextView button = text(symbol, 27, ACCENT);
-        button.setGravity(Gravity.CENTER);
-        button.setContentDescription(description);
-        button.setOnClickListener(view -> click.run());
+    /** The beta's toolbar icons, drawn (RavenIcon), never a font's symbol. */
+    private View iconButton(RavenIcon.Glyph glyph, int tint, String description, View.OnClickListener click) {
+        View button = RavenIcon.button(this, glyph, tint, 24, description);
+        button.setOnClickListener(click);
         return button;
     }
 
@@ -145,25 +145,26 @@ public final class HomeActivity extends Activity {
         center.rightMargin = dp(102);
         toolbar.addView(heading, center);
 
-        TextView settings = iconButton("⚙", "Paramètres", this::showSettings);
+        View settings = iconButton(RavenIcon.Glyph.SETTINGS, TEXT, "Paramètres", view -> showSettings());
         toolbar.addView(settings, new FrameLayout.LayoutParams(dp(48), -1, Gravity.LEFT));
 
         LinearLayout actions = new LinearLayout(this);
         FrameLayout.LayoutParams right = new FrameLayout.LayoutParams(-2, -1, Gravity.RIGHT);
         toolbar.addView(actions, right);
-        actions.addView(iconButton("+", "Ajouter une ROM", this::pickRom),
+        actions.addView(iconButton(RavenIcon.Glyph.ADD, ACCENT, "Ajouter une ROM", view -> pickRom()),
                 new LinearLayout.LayoutParams(dp(48), -1));
-        TextView more = iconButton("⋮", "Plus d'options", () -> {});
-        more.setTextColor(TEXT);
-        more.setOnClickListener(this::showOptions);
-        actions.addView(more, new LinearLayout.LayoutParams(dp(48), -1));
+        actions.addView(iconButton(RavenIcon.Glyph.MORE, TEXT, "Plus d'options", this::showOptions),
+                new LinearLayout.LayoutParams(dp(48), -1));
 
         search = new EditText(this);
         search.setSingleLine(true);
         search.setTextColor(TEXT);
         search.setHintTextColor(MUTED);
         search.setTextSize(15);
-        search.setHint("⌕  Rechercher un jeu");
+        search.setHint("Rechercher un jeu");
+        search.setCompoundDrawablesRelativeWithIntrinsicBounds(
+                new RavenIcon(RavenIcon.Glyph.SEARCH, MUTED, dp(20)), null, null, null);
+        search.setCompoundDrawablePadding(dp(10));
         search.setContentDescription("Rechercher un jeu");
         search.setText(searchText);
         search.setPadding(dp(12), 0, dp(12), 0);
@@ -256,15 +257,16 @@ public final class HomeActivity extends Activity {
         tabs.removeAllViews();
         if (pages.size() <= 1) return;
         for (String page : pages) {
-            TextView option = text(page.isEmpty() ? "●" : page.toUpperCase(Locale.ROOT),
-                    13, page.equals(selectedPage) ? ACCENT : MUTED);
-            option.setGravity(Gravity.CENTER);
-            option.setContentDescription(pageTitle(page));
-            option.setTypeface(null, page.equals(selectedPage)
-                    ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
-            option.setBackground(shape(page.equals(selectedPage)
-                    ? 0xff28213f : BACKGROUND, 10, getResources().getDisplayMetrics().density));
-            LinearLayout.LayoutParams parameter = new LinearLayout.LayoutParams(dp(54), dp(36));
+            // The beta's PageIndicator: a console pictogram per page, larger when active.
+            boolean active = page.equals(selectedPage);
+            RavenIcon.Glyph glyph = page.isEmpty() ? RavenIcon.Glyph.ALL : "gb".equals(page) ? RavenIcon.Glyph.GB
+                    : "gbc".equals(page) ? RavenIcon.Glyph.GBC : RavenIcon.Glyph.GBA;
+            android.widget.ImageView option = RavenIcon.button(this, glyph, active ? ACCENT : MUTED,
+                    active ? 24 : 21, pageTitle(page));
+            ((RavenIcon) option.getDrawable()).setScreenAlpha(active ? 255 : 128);
+            option.setSelected(active);
+            option.setBackground(shape(active ? 0x29a78bfa : 0x00000000, 10, getResources().getDisplayMetrics().density));
+            LinearLayout.LayoutParams parameter = new LinearLayout.LayoutParams(dp(36), dp(36));
             parameter.setMargins(dp(4), 0, dp(4), 0);
             tabs.addView(option, parameter);
             option.setOnClickListener(view -> {

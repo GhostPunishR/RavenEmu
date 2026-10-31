@@ -80,7 +80,7 @@ public final class AchievementsPanelTest {
         assertNotNull(text("Mode Softcore · SDK officiel rcheevos/12.5"));
         described("Reconnecter RetroAchievements pour ce jeu").performClick();
         described("Se déconnecter de RetroAchievements").performClick();
-        text("‹ Retour au menu du jeu").performClick();
+        text("Retour au menu du jeu").performClick();
         assertEquals(java.util.Arrays.asList("retry", "signOut", "back"), actions);
     }
 

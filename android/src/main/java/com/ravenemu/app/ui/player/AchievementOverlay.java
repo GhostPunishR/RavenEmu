@@ -2,6 +2,7 @@ package com.ravenemu.app.ui.player;
 
 import com.ravenemu.app.bridge.NativeAchievements;
 import com.ravenemu.app.settings.AchievementSettings;
+import com.ravenemu.app.ui.common.RavenIcon;
 import com.ravenemu.app.ui.library.HomeActivity;
 
 import android.animation.Animator;
@@ -45,11 +46,13 @@ final class AchievementOverlay extends FrameLayout {
     private final LinearLayout banner;
     private final FrameLayout bannerBadge;
     private final ImageView bannerImage;
-    private final TextView bannerStar, bannerHeading, bannerTitle;
+    private final TextView bannerHeading, bannerTitle;
+    /** Shown until the badge arrives; gold for an unlock, as the beta's ★. */
+    private final ImageView bannerStar, progressStar;
     private final Unfold bannerText;
     private final LinearLayout progress;
     private final ImageView progressImage;
-    private final TextView progressStar, progressTitle, progressDetail;
+    private final TextView progressTitle, progressDetail;
     private AchievementSettings settings = AchievementSettings.DEFAULTS;
     private boolean soundOn = true;
     private int volume = 100;
@@ -91,8 +94,7 @@ final class AchievementOverlay extends FrameLayout {
         bannerImage = new ImageView(context);
         bannerImage.setScaleType(ImageView.ScaleType.CENTER_CROP);
         bannerBadge.addView(bannerImage, new LayoutParams(-1, -1));
-        bannerStar = text("★", 24, HomeActivity.ACCENT);
-        bannerStar.setGravity(Gravity.CENTER);
+        bannerStar = RavenIcon.image(context, RavenIcon.Glyph.STAR, HomeActivity.ACCENT, 26);
         bannerBadge.addView(bannerStar, new LayoutParams(-1, -1));
         LinearLayout.LayoutParams badgeSize = new LinearLayout.LayoutParams(dp(46), dp(46));
         badgeSize.setMargins(dp(5), dp(5), dp(5), dp(5));
@@ -119,8 +121,7 @@ final class AchievementOverlay extends FrameLayout {
         progressImage = new ImageView(context);
         progressImage.setScaleType(ImageView.ScaleType.FIT_CENTER);
         progressBadgeBox.addView(progressImage, new LayoutParams(-1, -1));
-        progressStar = text("★", 21, HomeActivity.ACCENT);
-        progressStar.setGravity(Gravity.CENTER);
+        progressStar = RavenIcon.image(context, RavenIcon.Glyph.STAR, HomeActivity.ACCENT, 22);
         progressBadgeBox.addView(progressStar, new LayoutParams(-1, -1));
         progress.addView(progressBadgeBox, new LinearLayout.LayoutParams(dp(40), dp(40)));
         LinearLayout progressLines = new LinearLayout(context);
@@ -245,7 +246,7 @@ final class AchievementOverlay extends FrameLayout {
         bannerHeading.setTextColor(showing.award ? GOLD : HomeActivity.SECONDARY);
         bannerTitle.setText(showing.title);
         bannerTitle.setVisibility(showing.title.isEmpty() ? GONE : VISIBLE);
-        bannerStar.setTextColor(showing.award ? GOLD : HomeActivity.ACCENT);
+        ((RavenIcon) bannerStar.getDrawable()).setTint(showing.award ? GOLD : HomeActivity.ACCENT);
         bannerBadge.setBackground(round(HomeActivity.SURFACE, 7, 2, showing.award ? GOLD : HomeActivity.OUTLINE));
         banner.setContentDescription(showing.heading + ". " + showing.title);
         badge(showing.image, bannerImage, bannerStar, () -> shown == serial);
@@ -339,7 +340,7 @@ final class AchievementOverlay extends FrameLayout {
     }
 
     /** The image when known; the star until then, or for good. */
-    private void badge(String url, ImageView image, TextView star, java.util.function.BooleanSupplier still) {
+    private void badge(String url, ImageView image, View star, java.util.function.BooleanSupplier still) {
         Bitmap known = badges.cached(url);
         image.setImageBitmap(known);
         star.setVisibility(known == null ? VISIBLE : GONE);

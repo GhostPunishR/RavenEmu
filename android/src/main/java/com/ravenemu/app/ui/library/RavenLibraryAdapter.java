@@ -1,4 +1,5 @@
 package com.ravenemu.app.ui.library;
+import com.ravenemu.app.ui.common.RavenIcon;
 import com.ravenemu.app.data.library.CoverRepository;
 import com.ravenemu.app.data.library.RomLibrary;
 
@@ -84,6 +85,7 @@ final class RavenLibraryAdapter extends BaseAdapter {
     private static final class Holder {
         ImageView image;
         LinearLayout placeholder;
+        ImageView console;
         TextView system;
         TextView title;
         TextView secondary;
@@ -117,8 +119,13 @@ final class RavenLibraryAdapter extends BaseAdapter {
             h.placeholder = new LinearLayout(context);
             h.placeholder.setGravity(Gravity.CENTER);
             h.placeholder.setOrientation(LinearLayout.VERTICAL);
-            TextView stripe = label("━━", 15, HomeActivity.ACCENT);
-            h.placeholder.addView(stripe);
+            // No cover yet: the console's pictogram over its name.
+            h.console = new ImageView(context);
+            h.console.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+            h.console.setScaleType(ImageView.ScaleType.CENTER);
+            LinearLayout.LayoutParams consoleSize = new LinearLayout.LayoutParams(dp(listMode ? 22 : 30), dp(listMode ? 22 : 30));
+            consoleSize.bottomMargin = dp(listMode ? 1 : 4);
+            h.placeholder.addView(h.console, consoleSize);
             h.system = label("", 13, HomeActivity.SECONDARY);
             h.system.setTypeface(null, Typeface.BOLD);
             h.placeholder.addView(h.system);
@@ -157,6 +164,9 @@ final class RavenLibraryAdapter extends BaseAdapter {
         h.title.setText(entry.title);
         h.secondary.setText(entry.system.toUpperCase(java.util.Locale.ROOT));
         h.system.setText(entry.system.toUpperCase(java.util.Locale.ROOT));
+        h.console.setImageDrawable(new RavenIcon("gba".equals(entry.system) ? RavenIcon.Glyph.GBA
+                : "gbc".equals(entry.system) ? RavenIcon.Glyph.GBC : RavenIcon.Glyph.GB,
+                HomeActivity.ACCENT, dp(listMode ? 20 : 28)));
         h.image.setContentDescription("Jaquette de " + entry.title);
 
         Bitmap cached = cache.get(entry.key);

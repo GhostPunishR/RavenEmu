@@ -526,6 +526,10 @@ This is an integration prototype, not a release candidate.
   or off, deletes and adds the game's cheats, each new code checked by the
   core first; RavenEmu PC's `.cheats` file per game; none runs in Hardcore
   (`data/saves/CheatList`, `CheatRepository`, `ui/player/CheatsPanel`).
+- Icons are drawn by `ui/common/RavenIcon` (lot I-1): one line style on a
+  24-unit grid, never a font's symbol; the library pages use the beta's
+  console pictograms and every settings category, Console included, has its
+  own icon.
 - The Java home screen uses the RavenEmu-style grid/list; file selection
   remains Android SAF. The Java pause sheet controls the C pause/audio gate.
 - RetroAchievements: Softcore with banners, chime, the achievement list,

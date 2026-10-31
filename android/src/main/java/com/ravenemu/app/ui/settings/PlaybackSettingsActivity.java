@@ -15,6 +15,7 @@ import com.ravenemu.app.settings.ControlLayout;
 import com.ravenemu.app.settings.ControlSettings;
 import com.ravenemu.app.settings.LatencySettings;
 import com.ravenemu.app.settings.PlaybackSettings;
+import com.ravenemu.app.ui.common.RavenIcon;
 import com.ravenemu.app.ui.library.HomeActivity;
 
 import android.app.Activity;
@@ -49,7 +50,6 @@ import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.window.OnBackInvokedDispatcher;
-import androidx.core.graphics.PathParser;
 import java.io.IOException;
 import java.io.InputStream;
 import java.security.GeneralSecurityException;
@@ -111,7 +111,7 @@ public final class PlaybackSettingsActivity extends Activity {
     private LinearLayout content;
     private ScrollView scroll;
     private TextView title;
-    private Button back;
+    private View back;
     private SeekBar volume;
     private String page;
     private final int[] scrollPositions = new int[PAGES.length];
@@ -147,9 +147,7 @@ public final class PlaybackSettingsActivity extends Activity {
         LinearLayout toolbar = new LinearLayout(this);
         toolbar.setGravity(Gravity.CENTER_VERTICAL);
         toolbar.setBackgroundColor(HomeActivity.SURFACE);
-        back = button("‹");
-        back.setTextSize(30);
-        back.setContentDescription("Retour aux paramètres");
+        back = RavenIcon.button(this, RavenIcon.Glyph.BACK, HomeActivity.TEXT, 24, "Retour aux paramètres");
         back.setOnClickListener(view -> navigateBack());
         toolbar.addView(back, new LinearLayout.LayoutParams(dp(48), -1));
         title = text("", 20, HomeActivity.TEXT);
@@ -214,28 +212,17 @@ public final class PlaybackSettingsActivity extends Activity {
 
     /** The beta's categories, in its order. */
     private void homePage() {
-        category("RetroAchievements", "Compte, succès et progression", RETRO,
-                "M7,2H17V4H21V8C21,11 19,13 16,13C15,14 14,15 13,15V19H17V21H7V19H11V15C10,15 9,14 8,13"
-                        + "C5,13 3,11 3,8V4H7ZM5,6V8C5,9.5 6,10.5 7,11V6ZM17,6V11C18,10.5 19,9.5 19,8V6Z");
-        category("Général", "Pause automatique et latence", GENERAL,
-                "M3,5H13V7H3ZM17,5H21V7H17ZM13,3H17V9H13ZM3,11H7V13H3ZM11,11H21V13H11ZM7,9H11V15H7Z"
-                        + "M3,17H13V19H3ZM17,17H21V19H17ZM13,15H17V21H13Z");
-        category("Audio", "Son du jeu, volume et qualité", AUDIO,
-                "M3,9H7L12,4V20L7,15H3ZM15,8V16C17,15 17,9 15,8ZM15,3V5C21,7 21,17 15,19V21C24,18 24,6 15,3Z");
-        category("Vidéo", "Couleurs, rendu, taille, luminosité et contraste", VIDEO,
-                "M3,3H21V17H13V19H17V21H7V19H11V17H3ZM5,5V15H19V5Z");
-        // The beta draws Console with its default (About) icon.
-        category("Console", "Jeux Game Boy en couleurs, GBC d'une GBA, BIOS GBA", CONSOLE,
-                "M11,7h2v2h-2zM11,11h2v6h-2zM12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2z"
-                        + "M12,20c-4.41,0 -8,-3.59 -8,-8s3.59,-8 8,-8 8,3.59 8,8 -3.59,8 -8,8z");
+        category("RetroAchievements", "Compte, succès et progression", RETRO, RavenIcon.Glyph.TROPHY);
+        category("Général", "Pause automatique et latence", GENERAL, RavenIcon.Glyph.SLIDERS);
+        category("Audio", "Son du jeu, volume et qualité", AUDIO, RavenIcon.Glyph.SPEAKER);
+        category("Vidéo", "Couleurs, rendu, taille, luminosité et contraste", VIDEO, RavenIcon.Glyph.MONITOR);
+        // The beta drew Console with About's icon; the owner wanted its own: a handheld.
+        category("Console", "Jeux Game Boy en couleurs, GBC d'une GBA, BIOS GBA", CONSOLE, RavenIcon.Glyph.GB);
         // The beta says "Vibrations, capteurs, commandes, retour arrière, style et
         // Skin Delta": the owner left rewind out of the native player, and the
         // Delta skins wait for their port, so neither is announced.
-        category("Interface", "Vibrations, capteurs, commandes et style", INTERFACE,
-                "M3,3H11V11H3ZM13,3H21V11H13ZM3,13H11V21H3ZM13,13H21V21H13Z");
-        category("À propos", "Version, auteur, confidentialité et licences", ABOUT,
-                "M11,7h2v2h-2zM11,11h2v6h-2zM12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2z"
-                        + "M12,20c-4.41,0 -8,-3.59 -8,-8s3.59,-8 8,-8 8,3.59 8,8 -3.59,8 -8,8z");
+        category("Interface", "Vibrations, capteurs, commandes et style", INTERFACE, RavenIcon.Glyph.GAMEPAD);
+        category("À propos", "Version, auteur, confidentialité et licences", ABOUT, RavenIcon.Glyph.INFO);
     }
 
     /** The beta's RetroAchievements page: the account (RetroAchievementsContent.kt),
@@ -507,20 +494,21 @@ public final class PlaybackSettingsActivity extends Activity {
         add(name, 0);
         add(text("Par GhostPunishR · version native expérimentale Java / C / C++", 13, HomeActivity.MUTED), 4);
         group("Informations légales");
-        aboutRow("Conditions d'utilisation", "Ce que RavenEmu fournit, et votre responsabilité", "↗",
+        aboutRow("Conditions d'utilisation", "Ce que RavenEmu fournit, et votre responsabilité", RavenIcon.Glyph.EXTERNAL,
                 view -> openLink(REPOSITORY + "/blob/main/TERMS.md"));
-        aboutRow("Politique de confidentialité", "Données échangées et services tiers", "↗",
+        aboutRow("Politique de confidentialité", "Données échangées et services tiers", RavenIcon.Glyph.EXTERNAL,
                 view -> openLink(REPOSITORY + "/blob/main/PRIVACY.md"));
         group("Licences et crédits");
-        aboutRow("Licences et crédits", "Crédits, GPLv3, AGPLv3, MIT et Apache 2, lus dans l'application", "›",
+        aboutRow("Licences et crédits", "Crédits, GPLv3, AGPLv3, MIT et Apache 2, lus dans l'application",
+                RavenIcon.Glyph.CHEVRON,
                 view -> startActivity(new Intent(this, LicensesActivity.class)));
         group("Code source");
-        aboutRow("RavenEmu", "github.com/GhostPunishR/RavenEmu", "↗", view -> openLink(REPOSITORY));
-        aboutRow("RavenCore", "github.com/GhostPunishR/RavenCore", "↗",
+        aboutRow("RavenEmu", "github.com/GhostPunishR/RavenEmu", RavenIcon.Glyph.EXTERNAL, view -> openLink(REPOSITORY));
+        aboutRow("RavenCore", "github.com/GhostPunishR/RavenCore", RavenIcon.Glyph.EXTERNAL,
                 view -> openLink("https://github.com/GhostPunishR/RavenCore"));
     }
 
-    private void aboutRow(String label, String summary, String trailing, View.OnClickListener open) {
+    private void aboutRow(String label, String summary, RavenIcon.Glyph trailing, View.OnClickListener open) {
         LinearLayout row = new LinearLayout(this);
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setMinimumHeight(dp(56));
@@ -529,9 +517,7 @@ public final class PlaybackSettingsActivity extends Activity {
         description.addView(text(label, 15, HomeActivity.TEXT));
         add(description, text(summary, 12, HomeActivity.MUTED), 3);
         row.addView(description, new LinearLayout.LayoutParams(0, -2, 1));
-        TextView mark = text(trailing, 18, HomeActivity.ACCENT);
-        mark.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-        row.addView(mark);
+        row.addView(RavenIcon.image(this, trailing, HomeActivity.ACCENT, 20), new LinearLayout.LayoutParams(dp(24), dp(24)));
         row.setContentDescription(label + ". " + summary);
         row.setOnClickListener(open);
         add(row, 6);
@@ -545,7 +531,7 @@ public final class PlaybackSettingsActivity extends Activity {
         }
     }
 
-    private void category(String label, String summary, String destination, String iconPath) {
+    private void category(String label, String summary, String destination, RavenIcon.Glyph icon) {
         LinearLayout row = new LinearLayout(this);
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(dp(14), dp(15), dp(14), dp(15));
@@ -558,10 +544,10 @@ public final class PlaybackSettingsActivity extends Activity {
         row.setOnClickListener(view -> showPage(destination));
 
         // The categories carry the beta's icons; their sub-pages, text alone.
-        if (iconPath != null) {
+        if (icon != null) {
             FrameLayout iconBox = new FrameLayout(this);
             iconBox.setBackground(shape(0x21a78bfa));
-            iconBox.addView(new SettingsIcon(this, iconPath),
+            iconBox.addView(RavenIcon.image(this, icon, HomeActivity.ACCENT, 24),
                     new FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER));
             row.addView(iconBox, new LinearLayout.LayoutParams(dp(42), dp(42)));
         }
@@ -571,10 +557,11 @@ public final class PlaybackSettingsActivity extends Activity {
         description.addView(name);
         add(description, text(summary, 12, HomeActivity.MUTED), 4);
         LinearLayout.LayoutParams details = new LinearLayout.LayoutParams(0, -2, 1);
-        details.setMarginStart(iconPath != null ? dp(13) : dp(4));
+        details.setMarginStart(icon != null ? dp(13) : dp(4));
         details.setMarginEnd(dp(13));
         row.addView(description, details);
-        row.addView(text("›", 23, HomeActivity.ACCENT));
+        row.addView(RavenIcon.image(this, RavenIcon.Glyph.CHEVRON, HomeActivity.ACCENT, 20),
+                new LinearLayout.LayoutParams(dp(24), dp(24)));
         add(row, content.getChildCount() == 0 ? 0 : 14);
     }
 
@@ -872,7 +859,7 @@ public final class PlaybackSettingsActivity extends Activity {
         add(block, 14);
     }
 
-    /** The beta's ChoiceRow: ● or ○ then the label, the chosen row on the surface color. */
+    /** The beta's ChoiceRow: a radio mark then the label, the chosen row on the surface color. */
     private LinearLayout choices(String[] labels, String[] values, String selected, StringChange change) {
         LinearLayout list = column();
         for (int i = 0; i < labels.length; i++) {
@@ -883,9 +870,8 @@ public final class PlaybackSettingsActivity extends Activity {
             row.setMinimumHeight(dp(48));
             row.setPadding(dp(12), dp(10), dp(12), dp(10));
             row.setBackgroundColor(chosen ? HomeActivity.SURFACE : HomeActivity.BACKGROUND);
-            TextView mark = text(chosen ? "●" : "○", 17, HomeActivity.ACCENT);
-            mark.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-            row.addView(mark);
+            row.addView(RavenIcon.image(this, chosen ? RavenIcon.Glyph.RADIO_ON : RavenIcon.Glyph.RADIO_OFF,
+                    HomeActivity.ACCENT, 20), new LinearLayout.LayoutParams(dp(24), dp(24)));
             TextView name = text(labels[i], 14, HomeActivity.TEXT);
             LinearLayout.LayoutParams gap = new LinearLayout.LayoutParams(0, -2, 1);
             gap.setMarginStart(dp(12));
@@ -1075,26 +1061,5 @@ public final class PlaybackSettingsActivity extends Activity {
         io.shutdown();
         network.shutdown();
         super.onDestroy();
-    }
-
-    /** Exact 24x24 paths from the beta's theme/RavenIcons.kt. */
-    private static final class SettingsIcon extends View {
-        private final Path path;
-        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-
-        SettingsIcon(Context context, String pathData) {
-            super(context);
-            path = PathParser.createPathFromPathData(pathData);
-            paint.setColor(HomeActivity.ACCENT);
-            setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-        }
-
-        @Override protected void onDraw(Canvas canvas) {
-            super.onDraw(canvas);
-            canvas.save();
-            canvas.scale(getWidth() / 24f, getHeight() / 24f);
-            canvas.drawPath(path, paint);
-            canvas.restore();
-        }
     }
 }

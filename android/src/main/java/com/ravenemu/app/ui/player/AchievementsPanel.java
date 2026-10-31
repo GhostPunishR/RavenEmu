@@ -1,6 +1,7 @@
 package com.ravenemu.app.ui.player;
 
 import com.ravenemu.app.bridge.NativeAchievements;
+import com.ravenemu.app.ui.common.RavenIcon;
 import com.ravenemu.app.ui.library.HomeActivity;
 
 import android.app.Activity;
@@ -62,7 +63,10 @@ final class AchievementsPanel {
         this.badges = badges;
         this.actions = actions;
         root = column();
-        Button back = textButton("‹ Retour au menu du jeu", HomeActivity.ACCENT);
+        Button back = textButton("Retour au menu du jeu", HomeActivity.ACCENT);
+        back.setCompoundDrawablesRelativeWithIntrinsicBounds(
+                new RavenIcon(RavenIcon.Glyph.BACK, HomeActivity.ACCENT, dp(18)), null, null, null);
+        back.setCompoundDrawablePadding(dp(6));
         back.setOnClickListener(view -> actions.back());
         root.addView(back, new LinearLayout.LayoutParams(-2, -2));
         header = column();
@@ -191,7 +195,8 @@ final class AchievementsPanel {
         middle.setMarginStart(dp(12));
         middle.setMarginEnd(dp(8));
         card.addView(text, middle);
-        card.addView(text("›", 22, HomeActivity.MUTED));
+        card.addView(RavenIcon.image(owner, RavenIcon.Glyph.CHEVRON, HomeActivity.MUTED, 20),
+                new LinearLayout.LayoutParams(dp(24), dp(24)));
         card.setContentDescription("RetroAchievements. " + lines[0] + ". " + lines[1]
                 + (lines[2].isEmpty() ? "" : ". " + lines[2]) + ". Ouvrir RetroAchievements");
         card.setFocusable(true);

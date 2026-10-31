@@ -1,6 +1,7 @@
 package com.ravenemu.app.ui.player;
 
 import com.ravenemu.app.data.saves.CheatList;
+import com.ravenemu.app.ui.common.RavenIcon;
 import com.ravenemu.app.ui.library.HomeActivity;
 
 import android.app.Activity;
@@ -53,7 +54,10 @@ final class CheatsPanel {
         this.owner = owner;
         this.actions = actions;
         root = column();
-        Button back = textButton("‹ Retour au menu du jeu", HomeActivity.ACCENT);
+        Button back = textButton("Retour au menu du jeu", HomeActivity.ACCENT);
+        back.setCompoundDrawablesRelativeWithIntrinsicBounds(
+                new RavenIcon(RavenIcon.Glyph.BACK, HomeActivity.ACCENT, dp(18)), null, null, null);
+        back.setCompoundDrawablePadding(dp(6));
         back.setOnClickListener(view -> actions.back());
         root.addView(back, new LinearLayout.LayoutParams(-2, -2));
         TextView title = text("Codes de triche", 20, HomeActivity.TEXT);

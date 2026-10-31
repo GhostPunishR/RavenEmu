@@ -1,4 +1,5 @@
 package com.ravenemu.app.ui.settings;
+import com.ravenemu.app.ui.common.RavenIcon;
 import com.ravenemu.app.bridge.FakeAchievements;
 import com.ravenemu.app.data.saves.GbaBiosRepository;
 import com.ravenemu.app.platform.ClearSealer;
@@ -77,6 +78,25 @@ public final class PlaybackSettingsActivityTest {
     @After public void close() {
         for (ActivityController<PlaybackSettingsActivity> controller : activities)
             controller.pause().stop().destroy();
+    }
+
+    @Test public void everyCategoryHasItsOwnDrawnIconConsoleIncluded() {
+        PlaybackSettingsActivity activity = open(null, null).get();
+        String[][] expected = {{"retroachievements", "TROPHY"}, {"général", "SLIDERS"}, {"audio", "SPEAKER"},
+                {"vidéo", "MONITOR"}, {"console", "GB"}, {"interface", "GAMEPAD"}, {"à propos", "INFO"}};
+        java.util.Set<RavenIcon.Glyph> seen = new java.util.HashSet<>();
+        for (String[] row : expected) {
+            View category = described(activity, "Ouvrir les réglages " + row[0]);
+            View icon = find(category, view -> view instanceof android.widget.ImageView
+                    && ((android.widget.ImageView) view).getDrawable() instanceof RavenIcon
+                    && ((RavenIcon) ((android.widget.ImageView) view).getDrawable()).glyph() != RavenIcon.Glyph.CHEVRON);
+            assertNotNull(row[0], icon);
+            RavenIcon.Glyph glyph = ((RavenIcon) ((android.widget.ImageView) icon).getDrawable()).glyph();
+            assertEquals(row[0], RavenIcon.Glyph.valueOf(row[1]), glyph);
+            assertTrue("One icon per category: " + row[0], seen.add(glyph));
+        }
+        assertNull("No chevron typed as text", find(activity, view -> view instanceof TextView
+                && "›".contentEquals(((TextView) view).getText())));
     }
 
     @Test public void openingAnInvalidPageUsesCategoriesWithoutWritingDefaults() {

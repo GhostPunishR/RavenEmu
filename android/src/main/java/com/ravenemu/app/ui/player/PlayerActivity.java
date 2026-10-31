@@ -24,6 +24,7 @@ import com.ravenemu.app.settings.ControlSettings;
 import com.ravenemu.app.settings.CoreOptions;
 import com.ravenemu.app.settings.LatencySettings;
 import com.ravenemu.app.settings.PlaybackSettings;
+import com.ravenemu.app.ui.common.RavenIcon;
 import com.ravenemu.app.ui.library.HomeActivity;
 import com.ravenemu.app.ui.settings.PlaybackSettingsActivity;
 
@@ -181,12 +182,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
 
         LinearLayout toolbar = new LinearLayout(this);
         toolbar.setGravity(Gravity.CENTER_VERTICAL);
-        TextView back = new TextView(this);
-        back.setText("‹");
-        back.setGravity(Gravity.CENTER);
-        back.setTextSize(32);
-        back.setTextColor(HomeActivity.TEXT);
-        back.setContentDescription("Retour à la bibliothèque");
+        View back = RavenIcon.button(this, RavenIcon.Glyph.BACK, HomeActivity.TEXT, 24, "Retour à la bibliothèque");
         back.setOnClickListener(view -> finish());
         toolbar.addView(back, new LinearLayout.LayoutParams(dp(48), dp(48)));
         gameTitle = new TextView(this);
@@ -198,12 +194,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         gameTitle.setGravity(Gravity.CENTER_VERTICAL);
         toolbar.addView(gameTitle, new LinearLayout.LayoutParams(0, dp(48), 1));
 
-        TextView menu = new TextView(this);
-        menu.setText("⋮");
-        menu.setGravity(Gravity.CENTER);
-        menu.setTextSize(28);
-        menu.setTextColor(HomeActivity.TEXT);
-        menu.setContentDescription("Menu du jeu");
+        View menu = RavenIcon.button(this, RavenIcon.Glyph.MORE, HomeActivity.TEXT, 24, "Menu du jeu");
         menu.setOnClickListener(view -> togglePlayerMenu());
         toolbar.addView(menu, new LinearLayout.LayoutParams(dp(48), dp(48)));
         header.addView(toolbar);
