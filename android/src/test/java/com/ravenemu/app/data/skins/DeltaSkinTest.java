@@ -16,7 +16,7 @@ import static org.junit.Assert.*;
 @Config(sdk = 36)
 public final class DeltaSkinTest {
     @Test public void theManifestReadsLikeTheBetasAndKeepsUnknownInputsAside() throws Exception {
-        DeltaSkin.Manifest manifest = DeltaSkin.parse("﻿" + DeltaSkinFixtures.manifest("Test"));
+        DeltaSkin.Manifest manifest = DeltaSkin.parse((char) 0xfeff + DeltaSkinFixtures.manifest("Test"));
         assertEquals("Test", manifest.name);
         assertEquals(DeltaSkinFixtures.IDENTIFIER, manifest.identifier);
         assertNull(manifest.edgePortrait);

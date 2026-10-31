@@ -17,6 +17,8 @@ import org.json.JSONObject;
  * size and its items. Unknown keys are ignored; a missing required property
  * or a value of the wrong type refuses the skin. Immutable. */
 public final class DeltaSkin {
+    private static final char BYTE_ORDER_MARK = (char) 0xfeff;
+
     private DeltaSkin() {}
 
     /** The consoles this version takes; GB and GBC share their skins, as in Delta. */
@@ -164,7 +166,8 @@ public final class DeltaSkin {
     }
 
     public static Manifest parse(String source) throws DeltaSkinException {
-        String text = source.startsWith("﻿") ? source.substring(1) : source;
+        // A UTF-8 byte-order mark before the JSON, as some editors write it.
+        String text = !source.isEmpty() && source.charAt(0) == BYTE_ORDER_MARK ? source.substring(1) : source;
         try {
             JSONObject root = new JSONObject(text);
             String name = string(root, "name", true);
