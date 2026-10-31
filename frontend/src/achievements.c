@@ -108,7 +108,7 @@ static void server_text(const char *message, char *out, size_t size) {
 }
 
 /* Six texts, NULL for "". A failed allocation drops the event, never half of it. */
-static void raise(raven_achievements *a, const char *kind, const char *title, const char *detail,
+static void push_event(raven_achievements *a, const char *kind, const char *title, const char *detail,
                   const char *extra, const char *image, const char *id) {
     if (a->closing) return;
     if (!grow((void **)&a->events, &a->event_capacity, a->event_count, sizeof(event_record))) return;
@@ -199,12 +199,12 @@ static void logged_in(int result, const char *message, rc_client_t *rc, void *us
         const rc_client_user_t *user = rc_client_get_user_info(rc);
         char avatar[256];
         user_image(user, avatar, sizeof(avatar));
-        raise(a, "login", user ? user->username : "", user ? user->display_name : "",
+        push_event(a, "login", user ? user->username : "", user ? user->display_name : "",
               user ? user->token : "", avatar, NULL);
     } else {
         char reason[MAX_TEXT + 8];
         server_text(message, reason, sizeof(reason));
-        raise(a, "login_error", reason, NULL, unreachable(result) ? "offline" : "refused", NULL, NULL);
+        push_event(a, "login_error", reason, NULL, unreachable(result) ? "offline" : "refused", NULL, NULL);
     }
 }
 
@@ -223,17 +223,17 @@ static void loaded(int result, const char *message, rc_client_t *rc, void *userd
         snprintf(unsupported, sizeof(unsupported), "%u", summary.num_unsupported_achievements);
         snprintf(id, sizeof(id), "%u", game->id);
         game_image(game, badge, sizeof(badge));
-        raise(a, "game", game->title, count, unsupported, badge, id);
+        push_event(a, "game", game->title, count, unsupported, badge, id);
     } else if (result == RC_ABORTED) {
         /* Superseded by an unload or another game: nothing to say. */
     } else if (result == RC_NO_GAME_LOADED || result == RC_OK) {
-        raise(a, "game_unknown", NULL, NULL, NULL, NULL, NULL);
+        push_event(a, "game_unknown", NULL, NULL, NULL, NULL, NULL);
     } else if (unreachable(result)) {
-        raise(a, "game_offline", NULL, NULL, NULL, NULL, NULL);
+        push_event(a, "game_offline", NULL, NULL, NULL, NULL, NULL);
     } else {
         char reason[MAX_TEXT + 8];
         server_text(message, reason, sizeof(reason));
-        raise(a, "game_error", reason, NULL, NULL, NULL, NULL);
+        push_event(a, "game_error", reason, NULL, NULL, NULL, NULL);
     }
 }
 
@@ -249,7 +249,7 @@ static void event_handler(const rc_client_event_t *event, rc_client_t *rc) {
             snprintf(points, sizeof(points), "%u", achievement->points);
             snprintf(number, sizeof(number), "%u", achievement->id);
             achievement_image(achievement, 0, badge, sizeof(badge));
-            raise(a, "achievement", achievement->title, achievement->description, points, badge, number);
+            push_event(a, "achievement", achievement->title, achievement->description, points, badge, number);
             break;
         }
         case RC_CLIENT_EVENT_GAME_COMPLETED: {
@@ -262,20 +262,20 @@ static void event_handler(const rc_client_event_t *event, rc_client_t *rc) {
             snprintf(total, sizeof(total), "%u", summary.num_core_achievements);
             snprintf(points, sizeof(points), "%u", summary.points_unlocked);
             game_image(game, badge, sizeof(badge));
-            raise(a, rc_client_get_hardcore_enabled(rc) ? "mastered" : "completed",
+            push_event(a, rc_client_get_hardcore_enabled(rc) ? "mastered" : "completed",
                   game ? game->title : "", unlocked, total, badge, points);
             break;
         }
-        case RC_CLIENT_EVENT_DISCONNECTED: raise(a, "offline", NULL, NULL, NULL, NULL, NULL); break;
-        case RC_CLIENT_EVENT_RECONNECTED: raise(a, "online", NULL, NULL, NULL, NULL, NULL); break;
+        case RC_CLIENT_EVENT_DISCONNECTED: push_event(a, "offline", NULL, NULL, NULL, NULL, NULL); break;
+        case RC_CLIENT_EVENT_RECONNECTED: push_event(a, "online", NULL, NULL, NULL, NULL, NULL); break;
         case RC_CLIENT_EVENT_SERVER_ERROR:
             server_text(event->server_error ? event->server_error->error_message : NULL, text, sizeof(text));
-            raise(a, "server_error", text, NULL, NULL, NULL, NULL);
+            push_event(a, "server_error", text, NULL, NULL, NULL, NULL);
             break;
-        case RC_CLIENT_EVENT_RESET: raise(a, "hardcore_reset", NULL, NULL, NULL, NULL, NULL); break;
+        case RC_CLIENT_EVENT_RESET: push_event(a, "hardcore_reset", NULL, NULL, NULL, NULL, NULL); break;
         case RC_CLIENT_EVENT_ACHIEVEMENT_PROGRESS_INDICATOR_HIDE:
             /* The SDK's timer sends one global hide, without achievement. */
-            raise(a, "progress_hide", NULL, NULL, NULL, NULL, NULL);
+            push_event(a, "progress_hide", NULL, NULL, NULL, NULL, NULL);
             break;
         case RC_CLIENT_EVENT_ACHIEVEMENT_CHALLENGE_INDICATOR_SHOW:
         case RC_CLIENT_EVENT_ACHIEVEMENT_CHALLENGE_INDICATOR_HIDE:
@@ -288,7 +288,7 @@ static void event_handler(const rc_client_event_t *event, rc_client_t *rc) {
                 : "progress_show";
             snprintf(number, sizeof(number), "%u", achievement->id);
             achievement_image(achievement, kind[0] == 'p', badge, sizeof(badge));
-            raise(a, kind, achievement->title, achievement->measured_progress, NULL, badge, number);
+            push_event(a, kind, achievement->title, achievement->measured_progress, NULL, badge, number);
             break;
         }
         case RC_CLIENT_EVENT_LEADERBOARD_TRACKER_SHOW:
@@ -296,7 +296,7 @@ static void event_handler(const rc_client_event_t *event, rc_client_t *rc) {
         case RC_CLIENT_EVENT_LEADERBOARD_TRACKER_HIDE:
             if (!event->leaderboard_tracker) return;
             snprintf(number, sizeof(number), "%u", event->leaderboard_tracker->id);
-            raise(a, event->type == RC_CLIENT_EVENT_LEADERBOARD_TRACKER_HIDE ? "tracker_hide" : "tracker_show",
+            push_event(a, event->type == RC_CLIENT_EVENT_LEADERBOARD_TRACKER_HIDE ? "tracker_hide" : "tracker_show",
                   event->leaderboard_tracker->display, NULL, NULL, NULL, number);
             break;
         case RC_CLIENT_EVENT_LEADERBOARD_STARTED:
@@ -304,7 +304,7 @@ static void event_handler(const rc_client_event_t *event, rc_client_t *rc) {
         case RC_CLIENT_EVENT_LEADERBOARD_SUBMITTED:
             if (!event->leaderboard) return;
             snprintf(number, sizeof(number), "%u", event->leaderboard->id);
-            raise(a, event->type == RC_CLIENT_EVENT_LEADERBOARD_STARTED ? "leaderboard_started"
+            push_event(a, event->type == RC_CLIENT_EVENT_LEADERBOARD_STARTED ? "leaderboard_started"
                      : event->type == RC_CLIENT_EVENT_LEADERBOARD_FAILED ? "leaderboard_failed"
                      : "leaderboard_submitted",
                   event->leaderboard->title, event->leaderboard->description, NULL, NULL, number);
