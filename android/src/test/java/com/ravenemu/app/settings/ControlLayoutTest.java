@@ -50,20 +50,6 @@ public final class ControlLayoutTest {
         assertEquals(ControlLayout.DEFAULT, ControlLayout.load(context, true));
     }
 
-    @Test public void aLayoutSavedBeforeTheMenuButtonKeepsItsPlaces() {
-        assertEquals("dpad, a, b, select, start, l, r, menu", String.join(", ", ControlLayout.CONTROLS));
-        preferences.edit().putString("controls.layout.portrait", "1,2,3,4,5,6,7,8,9,10,11,12,13,14").commit();
-        ControlLayout layout = ControlLayout.load(context, false);
-        assertEquals(1f, layout.dx(0), 0f);
-        assertEquals(14f, layout.dy(6), 0f);
-        assertEquals("The menu at its own place", 0f, layout.dx(7), 0f);
-        assertEquals(0f, layout.dy(7), 0f);
-        layout.with(7, 5f, -6f).save(context, false);
-        assertEquals(16, preferences.getString("controls.layout.portrait", "").split(",").length);
-        assertEquals(-6f, ControlLayout.load(context, false).dy(7), 0f);
-        assertEquals(14f, ControlLayout.load(context, false).dy(6), 0f);
-    }
-
     @Test public void aDamagedLayoutIsTheDefaultOne() {
         String[] damaged = {"", "1,2,3", "a,b,c,d,e,f,g,h,i,j,k,l,m,n", "0,0,0,0,0,0,0,0,0,0,0,0,0,NaN",
                 "0,0,0,0,0,0,0,0,0,0,0,0,0,1e9", "0,0,0,0,0,0,0,0,0,0,0,0,0,Infinity",

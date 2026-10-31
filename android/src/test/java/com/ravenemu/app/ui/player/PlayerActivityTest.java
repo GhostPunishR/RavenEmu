@@ -933,10 +933,11 @@ public final class PlayerActivityTest {
     @Test public void theMenuButtonAmongTheControlsOpensTheGameMenu() throws Exception {
         PlayerActivity activity = loaded();
         GameControlsView controls = ReflectionHelpers.getField(activity, "gameControls");
-        View button = find(controls, view -> "Ouvrir le menu du jeu".contentEquals(
+        View button = find(controls, view -> "Menu du jeu".contentEquals(
                 view.getContentDescription() == null ? "" : view.getContentDescription()));
         assertNotNull(button);
         assertTrue(button.isShown());
+        assertEquals("At the top centre of the controls", 0, button.getTop());
         assertTrue(button.performClick());
         pump(activity);
         assertTrue(menu(activity).isShowing());

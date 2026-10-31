@@ -57,54 +57,6 @@ public final class GameControlsViewTest {
         assertEquals(View.GONE, labelled("R").getVisibility());
     }
 
-    @Test public void theMenuButtonSitsAtTheTopCentreAndOnlyOpensTheMenu() {
-        open(320, false);
-        int[] opened = {0};
-        controls.setMenuListener(() -> opened[0]++);
-        View menu = labelled("Ouvrir le menu du jeu"), select = labelled("SELECT");
-        assertEquals(View.VISIBLE, menu.getVisibility());
-        assertEquals("At the top centre", 160, centerX(menu), 1);
-        assertEquals(0, menu.getTop());
-        assertTrue("Never between Select and Start", menu.getBottom() <= select.getTop());
-        assertTrue(menu.getBottom() <= labelled("B").getTop());
-        assertTrue(menu.getRight() <= labelled("A").getLeft());
-
-        touch(MotionEvent.ACTION_DOWN, 3, centerX(menu), centerY(menu));
-        assertEquals("It opens on release", 0, opened[0]);
-        touch(MotionEvent.ACTION_UP, 3, centerX(menu), centerY(menu));
-        assertEquals(1, opened[0]);
-        touch(MotionEvent.ACTION_DOWN, 4, centerX(menu), centerY(menu));
-        touch(MotionEvent.ACTION_MOVE, 4, menu.getRight() + 30, centerY(menu));
-        touch(MotionEvent.ACTION_UP, 4, menu.getRight() + 30, centerY(menu));
-        assertEquals("Released away from it, nothing opens", 1, opened[0]);
-        assertTrue(menu.performAccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, null));
-        assertEquals(2, opened[0]);
-        assertEquals("android.widget.Button", menu.createAccessibilityNodeInfo().getClassName());
-        assertTrue("No console button", changes.isEmpty());
-
-        controls.setEditing(true);
-        touch(MotionEvent.ACTION_DOWN, 5, centerX(menu), centerY(menu));
-        touch(MotionEvent.ACTION_MOVE, 5, centerX(menu), centerY(menu) + 30);
-        touch(MotionEvent.ACTION_UP, 5, centerX(menu), centerY(menu) + 30);
-        relayout();
-        assertEquals("While editing it moves like the others", 30, menu.getTop());
-        assertEquals(30f, controls.controlLayout().dy(7), 1f);
-        assertEquals(2, opened[0]);
-        controls.setEditing(false);
-        controls.setEnabled(false);
-        assertFalse(menu.performClick());
-        assertEquals(2, opened[0]);
-    }
-
-    @Test public void onTheGbaTheMenuSitsBetweenLAndR() {
-        open(320, true);
-        View menu = labelled("Ouvrir le menu du jeu"), l = labelled("L"), r = labelled("R");
-        assertTrue(l.getRight() <= menu.getLeft());
-        assertTrue(menu.getRight() <= r.getLeft());
-        assertEquals(centerY(l), centerY(menu), 1);
-        assertEquals(160, centerX(menu), 1);
-    }
-
     @Test public void onlyThePressedPartTakesTheAccent() {
         open(320, false);
         View dpad = labelled("Croix directionnelle"), a = labelled("A");
@@ -159,6 +111,91 @@ public final class GameControlsViewTest {
         assertEquals(0, l.getTop());
         assertEquals(l.getBottom() + 20, dpad.getTop(), 1);
         assertEquals(40 + 20 + 132 + 20 + 40 + 16, controls.getMeasuredHeight());
+    }
+
+    @Test public void gbaPortraitHasACenteredMenuWithoutExtraGameInput() {
+        int[] menus = {0};
+        open(320, true, () -> menus[0]++);
+        View l = labelled("L"), r = labelled("R"), menu = labelled("Menu du jeu");
+        assertEquals(View.VISIBLE, menu.getVisibility());
+        assertEquals("The menu is centered", 160f, centerX(menu), 0.5f);
+        assertEquals("Aligned with shoulder buttons", centerY(l), centerY(menu), 0.5f);
+        assertTrue("No overlap with L", l.getRight() < menu.getLeft());
+        assertTrue("No overlap with R", menu.getRight() < r.getLeft());
+        assertEquals("Only the seven game controls and the menu", 8, controls.getChildCount());
+
+        assertTrue(touch(MotionEvent.ACTION_DOWN, 12, centerX(menu), centerY(menu)));
+        assertTrue(touch(MotionEvent.ACTION_UP, 12, centerX(menu), centerY(menu)));
+        // View posts its click to the UI loop; controls publish their input synchronously.
+        shadowOf(Looper.getMainLooper()).idle();
+        assertEquals(1, menus[0]);
+        assertTrue("Opening the menu must never press a core button", changes.isEmpty());
+
+        controls.setEditing(true);
+        assertFalse("The menu must not open during control editing", menu.isEnabled());
+        controls.setEditing(false);
+        assertTrue(menu.isEnabled());
+    }
+
+    @Test public void gbAndGbcMenuSitsAtTheTopCentreNeverBetweenSelectAndStart() {
+        int[] menus = {0};
+        open(360, false, () -> menus[0]++);
+        View menu = labelled("Menu du jeu"), dpad = labelled("Croix directionnelle");
+        View select = labelled("SELECT"), start = labelled("START"), a = labelled("A");
+        assertEquals(View.VISIBLE, menu.getVisibility());
+        assertEquals(View.GONE, labelled("L").getVisibility());
+        assertEquals("No extra row takes space from the picture", 234, controls.getMeasuredHeight());
+        assertEquals("At the top centre", 180f, centerX(menu), 0.5f);
+        assertEquals(0, menu.getTop());
+        assertTrue("Above the Select/Start row", menu.getBottom() < select.getTop());
+        assertTrue("Clear of the D-pad", dpad.getRight() < menu.getLeft());
+        assertTrue("Clear of A", menu.getRight() < a.getLeft());
+        assertTrue("Clear of B", menu.getBottom() < labelled("B").getTop());
+        assertTrue(select.getRight() < start.getLeft());
+        assertTrue(touch(MotionEvent.ACTION_DOWN, 13, centerX(menu), centerY(menu)));
+        assertTrue(touch(MotionEvent.ACTION_UP, 13, centerX(menu), centerY(menu)));
+        shadowOf(Looper.getMainLooper()).idle();
+        assertEquals(1, menus[0]);
+        assertTrue("Menu never sends emulator buttons", changes.isEmpty());
+    }
+
+    @Test public void aNarrowGbScreenKeepsTheMenuOffTheDpadAndA() {
+        open(320, false, () -> {});
+        View menu = labelled("Menu du jeu");
+        assertTrue(labelled("Croix directionnelle").getRight() < menu.getLeft());
+        assertTrue(menu.getRight() < labelled("A").getLeft());
+        assertEquals(0, menu.getTop());
+    }
+
+    @Test public void aVeryNarrowScreenSlimsTheMenuBetweenTheDpadAndA() {
+        open(240, false, () -> {});
+        View menu = labelled("Menu du jeu");
+        assertTrue("Slimmer, still apart", labelled("Croix directionnelle").getRight() < menu.getLeft());
+        assertTrue(menu.getRight() < labelled("A").getLeft());
+        assertTrue(menu.getWidth() >= 24);
+    }
+
+    @Test public void menuMovesWithTheConsoleAndStaysHiddenWithoutAnAction() {
+        open(320, false, () -> {});
+        View menu = labelled("Menu du jeu");
+        assertEquals(View.VISIBLE, menu.getVisibility());
+        assertEquals(0, menu.getTop());
+        controls.setShoulders(true);
+        apply(ControlSettings.DEFAULTS);
+        assertEquals(View.VISIBLE, menu.getVisibility());
+        assertEquals(centerY(labelled("L")), centerY(menu), 0.5f);
+        controls.setShoulders(false);
+        apply(ControlSettings.DEFAULTS);
+        assertEquals(View.VISIBLE, menu.getVisibility());
+        assertEquals(0, menu.getTop());
+        assertTrue(menu.getBottom() < labelled("SELECT").getTop());
+    }
+
+    @Test public void anUnwiredMenuIsNotShown() {
+        open(320, false);
+        assertEquals(View.GONE, labelled("Menu du jeu").getVisibility());
+        controls.setShoulders(true);
+        assertEquals(View.GONE, labelled("Menu du jeu").getVisibility());
     }
 
     @Test public void changingTheSizeReleasesAHeldButton() {
@@ -398,14 +435,18 @@ public final class GameControlsViewTest {
         assertEquals(0, current());
         assertTrue(labelled("SELECT").getTop() >= controls.getHeight() - 44);
         assertTrue(labelled("START").getBottom() <= controls.getHeight());
-        assertEquals("The top centre is the picture's", View.GONE, labelled("Ouvrir le menu du jeu").getVisibility());
+        assertEquals("The top centre is the picture's", View.GONE, labelled("Menu du jeu").getVisibility());
         touch(MotionEvent.ACTION_DOWN, 10, centerX(a), centerY(a));
         assertEquals(NativeBridge.A, current());
     }
 
     private void open(int width, boolean shoulders) {
+        open(width, shoulders, null);
+    }
+
+    private void open(int width, boolean shoulders, Runnable menuAction) {
         host = Robolectric.buildActivity(Activity.class).setup().visible();
-        controls = new GameControlsView(host.get(), changes::add);
+        controls = new GameControlsView(host.get(), changes::add, menuAction);
         controls.setShoulders(shoulders);
         controls.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
                 View.MeasureSpec.makeMeasureSpec(600, View.MeasureSpec.AT_MOST));

@@ -9,10 +9,8 @@ import java.util.Locale;
  * default place, one layout for portrait and one for landscape. The view
  * keeps every control inside its own bounds. */
 public final class ControlLayout {
-    /** The controls, in the order of the offsets; the menu came last. */
-    public static final String[] CONTROLS = {"dpad", "a", "b", "select", "start", "l", "r", "menu"};
-    /** A layout saved before the menu button: its seven controls. */
-    private static final int LEGACY_CONTROLS = 7;
+    /** The controls, in the order of the offsets. */
+    public static final String[] CONTROLS = {"dpad", "a", "b", "select", "start", "l", "r"};
     public static final ControlLayout DEFAULT = new ControlLayout(new float[CONTROLS.length * 2]);
     /** Far beyond any screen: a larger stored value is not a layout. */
     private static final float LIMIT = 4000f;
@@ -57,12 +55,11 @@ public final class ControlLayout {
         return landscape ? "controls.layout.landscape" : "controls.layout.portrait";
     }
 
-    /** Two numbers per control; a layout saved before the menu button keeps
-     * its places, the menu at its own. Anything else is the default layout. */
+    /** Fourteen numbers, two per control; anything else is the default layout. */
     static ControlLayout parse(String stored) {
         String[] parts = stored.split(",", -1);
-        if (parts.length != CONTROLS.length * 2 && parts.length != LEGACY_CONTROLS * 2) return DEFAULT;
-        float[] offsets = new float[CONTROLS.length * 2];
+        if (parts.length != CONTROLS.length * 2) return DEFAULT;
+        float[] offsets = new float[parts.length];
         try {
             for (int i = 0; i < parts.length; i++) {
                 float offset = Float.parseFloat(parts[i].trim());

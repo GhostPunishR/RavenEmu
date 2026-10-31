@@ -38,9 +38,9 @@ import android.view.accessibility.AccessibilityNodeInfo;
  *
  * Drawn in the app's palette (the owner's redesign, not the beta's look):
  * one dark face with an accent outline, labels and arrows in the accent, the
- * pressed part filled with it. In portrait a Menu button sits at the top
- * centre, between L and R on the GBA, never between Select and Start; it
- * opens the game menu and is no console button.
+ * pressed part filled with it. In portrait the game menu's button sits at
+ * the top centre of the controls, between L and R on the GBA, never between
+ * Select and Start (the owner's place); it never sends a console button.
  */
 final class GameControlsView extends ViewGroup {
     interface Listener { void onButtonsChanged(int mask); }
@@ -52,16 +52,18 @@ final class GameControlsView extends ViewGroup {
     private static final int FACE_TOP = 0xff2b2d40, FACE_BOTTOM = 0xff191b28;
     private static final int CONTRAST_TOP = 0xff474a63, CONTRAST_BOTTOM = 0xff2d2f42;
     private static final int PRESSED_TOP = 0xffbca8ff, PRESSED_BOTTOM = 0xff8d6ff0;
-    private static final long ACCESSIBLE_PRESS_MILLIS = 100L;
-    /** Round A/B, the small Select/Start pills, the L/R shoulders. */
+    /** Round A/B, the slim Select/Start pills, the L/R shoulders. */
     private static final int ROUND = 0, PILL = 1, SHOULDER = 2;
+    private static final long ACCESSIBLE_PRESS_MILLIS = 100L;
     private final Listener listener;
     private final Handler main = new Handler(Looper.getMainLooper());
     private final SparseArray<Runnable> accessibleReleases = new SparseArray<>();
     private final Dpad dpad;
     private final Control a, b, select, start, leftShoulder, rightShoulder;
-    private final MenuControl menu;
-    private Runnable menuListener;
+    private final MenuButton menuButton;
+    private final Runnable onMenu;
+    /** The menu's width in dp, between L and R and at the top centre. */
+    private static final float MENU_WIDTH = 52f;
     private boolean shoulders;
     private int accessibleMask;
     private int reportedMask;
@@ -69,8 +71,13 @@ final class GameControlsView extends ViewGroup {
     private boolean editing;
 
     GameControlsView(Context context, Listener listener) {
+        this(context, listener, null);
+    }
+
+    GameControlsView(Context context, Listener listener, Runnable onMenu) {
         super(context);
         this.listener = listener;
+        this.onMenu = onMenu;
         setMotionEventSplittingEnabled(true);
         setClipChildren(false);
         setClipToPadding(false);
@@ -83,7 +90,7 @@ final class GameControlsView extends ViewGroup {
         start = new Control(context, 4, "START", NativeBridge.START, PILL);
         leftShoulder = new Control(context, 5, "L", NativeBridge.L, SHOULDER);
         rightShoulder = new Control(context, 6, "R", NativeBridge.R, SHOULDER);
-        menu = new MenuControl(context);
+        menuButton = new MenuButton(context);
         addView(dpad);
         addView(a);
         addView(b);
@@ -91,22 +98,22 @@ final class GameControlsView extends ViewGroup {
         addView(start);
         addView(leftShoulder);
         addView(rightShoulder);
-        // Last: on top of the D-pad's empty corner on a narrow screen.
-        addView(menu);
+        addView(menuButton);
         leftShoulder.setVisibility(GONE);
         rightShoulder.setVisibility(GONE);
-        menu.setVisibility(compact() ? GONE : VISIBLE);
+        menuButton.setVisibility(GONE);
     }
 
-    /** What the Menu button opens; landscape keeps the bar's ⋮ only. */
-    void setMenuListener(Runnable listener) { menuListener = listener; }
-
     void setShoulders(boolean value) {
-        if (shoulders == value) return;
+        if (shoulders == value) {
+            menuButton.setVisibility(!compact() && onMenu != null ? VISIBLE : GONE);
+            return;
+        }
         releaseAll();
         shoulders = value;
         leftShoulder.setVisibility(value ? VISIBLE : GONE);
         rightShoulder.setVisibility(value ? VISIBLE : GONE);
+        menuButton.setVisibility(!compact() && onMenu != null ? VISIBLE : GONE);
         requestLayout();
     }
 
@@ -128,6 +135,7 @@ final class GameControlsView extends ViewGroup {
         if (layout.equals(controlLayout())) return;
         releaseAll();
         for (int i = 0; i < getChildCount(); i++) {
+            if (!(getChildAt(i) instanceof TouchControl)) continue;
             TouchControl child = (TouchControl) getChildAt(i);
             child.dx = layout.dx(child.index);
             child.dy = layout.dy(child.index);
@@ -139,6 +147,7 @@ final class GameControlsView extends ViewGroup {
     ControlLayout controlLayout() {
         ControlLayout layout = ControlLayout.DEFAULT;
         for (int i = 0; i < getChildCount(); i++) {
+            if (!(getChildAt(i) instanceof TouchControl)) continue;
             TouchControl child = (TouchControl) getChildAt(i);
             layout = layout.with(child.index, child.dx, child.dy);
         }
@@ -150,7 +159,9 @@ final class GameControlsView extends ViewGroup {
         if (editing == value) return;
         releaseAll();
         editing = value;
+        menuButton.setEnabled(isEnabled() && !editing);
         for (int i = 0; i < getChildCount(); i++) {
+            if (!(getChildAt(i) instanceof TouchControl)) continue;
             TouchControl child = (TouchControl) getChildAt(i);
             child.dragging = false;
             child.invalidate();
@@ -169,8 +180,10 @@ final class GameControlsView extends ViewGroup {
         accessibleReleases.clear();
         accessibleMask = 0;
         for (int i = 0; i < getChildCount(); i++) {
+            if (!(getChildAt(i) instanceof TouchControl)) continue;
             TouchControl child = (TouchControl) getChildAt(i);
-            child.clear();
+            child.mask = 0;
+            child.tracking = false;
             child.invalidate();
         }
         publish();
@@ -179,7 +192,8 @@ final class GameControlsView extends ViewGroup {
     private void publish() {
         int combined = accessibleMask;
         for (int i = 0; i < getChildCount(); i++)
-            combined |= ((TouchControl) getChildAt(i)).mask;
+            if (getChildAt(i) instanceof TouchControl)
+                combined |= ((TouchControl) getChildAt(i)).mask;
         if (combined == reportedMask) return;
         reportedMask = combined;
         listener.onButtonsChanged(combined);
@@ -253,8 +267,7 @@ final class GameControlsView extends ViewGroup {
             place(start, width / 2 + 17, offset + (32 + pad) * scale, 84, 40 * scale, layout);
             place(leftShoulder, 16, offset, 80, 28 * scale, layout);
             place(rightShoulder, width - 96, offset, 80, 28 * scale, layout);
-            // Hidden: the top centre is the picture's.
-            place(menu, (width - 56) / 2, offset, 56, 40 * scale, layout);
+            place(menuButton, (width - MENU_WIDTH) / 2, offset, MENU_WIDTH, 28 * scale, layout);
         } else {
             float size = cluster(width), button = diameter(), rows = settings.gap;
             float row = shoulders ? 40f + rows : 0f;
@@ -267,13 +280,23 @@ final class GameControlsView extends ViewGroup {
             place(start, (width + gap) / 2, offset + (row + size + rows) * scale, 84, 40 * scale, layout);
             place(leftShoulder, 16, offset, 96, 40 * scale, layout);
             place(rightShoulder, width - 112, offset, 96, 40 * scale, layout);
-            // The owner's place: top centre, in the shoulders' row on the GBA.
-            place(menu, (width - 56) / 2, offset, 56, 40 * scale, layout);
+            // The owner's place, top centre: between L and R on the GBA; on
+            // the GB/GBC in the free top between the D-pad and A, without a
+            // new row. A narrow screen moves it off the D-pad, then slims it.
+            float menuWidth = MENU_WIDTH, menuLeft = (width - menuWidth) / 2;
+            if (!shoulders) {
+                float from = 16 + size + 4, to = width - 28 - button - 4;
+                if (to - from < menuWidth) {
+                    menuWidth = Math.max(24f, Math.min(MENU_WIDTH, to - from));
+                    menuLeft = (from + to - menuWidth) / 2;
+                } else menuLeft = Math.max(from, Math.min(to - menuWidth, menuLeft));
+            }
+            place(menuButton, menuLeft, offset, menuWidth, 40 * scale, layout);
         }
     }
 
     /** At its default place moved by the player's offset, never outside this view. */
-    private void place(TouchControl child, float x, float y, float width, float height, boolean layout) {
+    private void place(View child, float x, float y, float width, float height, boolean layout) {
         int w = dp(width), h = dp(height);
         if (!layout) {
             child.measure(MeasureSpec.makeMeasureSpec(w, MeasureSpec.EXACTLY),
@@ -282,10 +305,11 @@ final class GameControlsView extends ViewGroup {
         }
         float density = getResources().getDisplayMetrics().density;
         float maxX = Math.max(0f, getWidth() / density - width), maxY = Math.max(0f, getHeight() / density - height);
-        float left = Math.max(0f, Math.min(maxX, x + child.dx));
-        float top = Math.max(0f, Math.min(maxY, y + child.dy));
-        // While editing, the offset is the place the control could take.
-        if (editing) { child.dx = left - x; child.dy = top - y; }
+        TouchControl movable = child instanceof TouchControl ? (TouchControl) child : null;
+        float left = Math.max(0f, Math.min(maxX, x + (movable == null ? 0f : movable.dx)));
+        float top = Math.max(0f, Math.min(maxY, y + (movable == null ? 0f : movable.dy)));
+        // The menu is fixed; stored offsets continue to cover only game buttons.
+        if (editing && movable != null) { movable.dx = left - x; movable.dy = top - y; }
         child.layout(dp(left), dp(top), dp(left) + w, dp(top) + h);
     }
 
@@ -297,7 +321,7 @@ final class GameControlsView extends ViewGroup {
         super.onConfigurationChanged(configuration);
         releaseAll();
         setBackgroundColor(compact() ? Color.TRANSPARENT : Color.BLACK);
-        menu.setVisibility(compact() ? GONE : VISIBLE);
+        menuButton.setVisibility(!compact() && onMenu != null ? VISIBLE : GONE);
         requestLayout();
     }
 
@@ -315,6 +339,60 @@ final class GameControlsView extends ViewGroup {
         super.setEnabled(enabled);
         if (!enabled) releaseAll();
         for (int i = 0; i < getChildCount(); i++) getChildAt(i).setEnabled(enabled);
+        menuButton.setEnabled(enabled && !editing);
+    }
+
+    /** The game menu's button: three lines on a slim pill, top centre. It
+     * stays in place while the buttons move and never sends a console bit. */
+    private final class MenuButton extends View {
+        private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint line = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final RectF bounds = new RectF();
+        private final RavenIcon glyph;
+        private LinearGradient normal, contrast, pressed;
+
+        MenuButton(Context context) {
+            super(context);
+            setContentDescription("Menu du jeu");
+            setFocusable(true);
+            line.setStyle(Paint.Style.STROKE);
+            glyph = new RavenIcon(RavenIcon.Glyph.MENU, ACCENT, dp(20));
+            setOnClickListener(view -> {
+                if (editing || onMenu == null) return;
+                if (settings.haptics) performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
+                onMenu.run();
+            });
+        }
+
+        @Override protected void drawableStateChanged() {
+            super.drawableStateChanged();
+            invalidate();
+        }
+
+        @Override protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+            normal = new LinearGradient(0, 0, 0, Math.max(1, h), FACE_TOP, FACE_BOTTOM, Shader.TileMode.CLAMP);
+            contrast = new LinearGradient(0, 0, 0, Math.max(1, h), CONTRAST_TOP, CONTRAST_BOTTOM, Shader.TileMode.CLAMP);
+            pressed = new LinearGradient(0, 0, 0, Math.max(1, h), PRESSED_TOP, PRESSED_BOTTOM, Shader.TileMode.CLAMP);
+        }
+
+        @Override protected void onDraw(Canvas canvas) {
+            boolean down = isPressed(), contrasted = settings.highContrast();
+            fill.setShader(down ? pressed : contrasted ? contrast : normal);
+            line.setColor(down ? PRESSED_TOP : contrasted ? Color.WHITE : EDGE);
+            line.setStrokeWidth(dp(down ? 2f : 1.5f));
+            float edge = line.getStrokeWidth() / 2f + dp(.5f), width = getWidth(), height = getHeight();
+            float face = Math.min(height - 2 * edge, height * .72f);
+            float inset = Math.min(dp(4), Math.max(0f, (width - face) / 2f - edge));
+            bounds.set(edge + inset, (height - face) / 2f, width - edge - inset, (height + face) / 2f);
+            float radius = Math.min(bounds.width(), bounds.height()) / 2f;
+            canvas.drawRoundRect(bounds, radius, radius, fill);
+            canvas.drawRoundRect(bounds, radius, radius, line);
+            int size = Math.round(Math.min(Math.min(dp(20), face * .75f), bounds.width() * .8f));
+            glyph.setTint(down ? INK : ACCENT);
+            glyph.setBounds(Math.round(bounds.centerX() - size / 2f), Math.round(bounds.centerY() - size / 2f),
+                    Math.round(bounds.centerX() + size / 2f), Math.round(bounds.centerY() + size / 2f));
+            glyph.draw(canvas);
+        }
     }
 
     private abstract class TouchControl extends View {
@@ -349,20 +427,9 @@ final class GameControlsView extends ViewGroup {
         abstract int at(float x, float y);
         boolean acceptsDown(float x, float y) { return at(x, y) != 0; }
 
-        /** Nothing held, nothing tracked: the next gesture starts afresh. */
-        void clear() {
-            mask = 0;
-            tracking = false;
-        }
-
         @Override public boolean onTouchEvent(MotionEvent event) {
             if (editing) return drag(event);
             if (!isEnabled()) return false;
-            return press(event);
-        }
-
-        /** Console buttons: every finger on this control makes its mask. */
-        boolean press(MotionEvent event) {
             int action = event.getActionMasked();
             if (action == MotionEvent.ACTION_DOWN) {
                 if (!acceptsDown(event.getX(), event.getY())) return false;
@@ -467,7 +534,7 @@ final class GameControlsView extends ViewGroup {
             line.setStrokeWidth(dp(down ? 2f : 1.5f));
         }
 
-        /** Labels, arrows and glyphs: the accent, dark on a pressed face. */
+        /** Labels and arrows: the accent, dark on a pressed face. */
         int ink(boolean down) { return down ? INK : ACCENT; }
 
         @Override public void onInitializeAccessibilityNodeInfo(AccessibilityNodeInfo info) {
@@ -532,71 +599,6 @@ final class GameControlsView extends ViewGroup {
             if (editing || !isEnabled() || getVisibility() != VISIBLE) return false;
             accessiblePress(button);
             super.performClick();
-            return true;
-        }
-    }
-
-    /** Opens the game menu: a tap, released on it, never a console button. */
-    private final class MenuControl extends TouchControl {
-        final RectF bounds = new RectF();
-        final RavenIcon glyph;
-        boolean held;
-
-        MenuControl(Context context) {
-            super(context, 7, "Ouvrir le menu du jeu");
-            glyph = new RavenIcon(RavenIcon.Glyph.MENU, ACCENT, dp(20));
-        }
-
-        @Override int at(float x, float y) {
-            return x >= 0 && y >= 0 && x < getWidth() && y < getHeight() ? 1 : 0;
-        }
-
-        @Override void clear() {
-            super.clear();
-            held = false;
-        }
-
-        @Override boolean press(MotionEvent event) {
-            int action = event.getActionMasked();
-            if (action == MotionEvent.ACTION_DOWN) {
-                if (at(event.getX(), event.getY()) == 0) return false;
-                tracking = true;
-                if (settings.haptics) performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
-                if (getParent() != null) getParent().requestDisallowInterceptTouchEvent(true);
-            } else if (!tracking) return false;
-            boolean inside = at(event.getX(), event.getY()) != 0;
-            boolean open = action == MotionEvent.ACTION_UP && held && inside;
-            boolean next = inside && action != MotionEvent.ACTION_UP && action != MotionEvent.ACTION_CANCEL;
-            if (next != held) {
-                held = next;
-                invalidate();
-            }
-            if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) tracking = false;
-            if (open) performClick();
-            return true;
-        }
-
-        @Override protected void onDraw(Canvas canvas) {
-            paint(held);
-            float edge = line.getStrokeWidth() / 2f + dp(.5f);
-            float width = getWidth(), height = getHeight();
-            float face = Math.min(height - 2 * edge, height * .72f);
-            bounds.set(edge + dp(4), (height - face) / 2f, width - edge - dp(4), (height + face) / 2f);
-            float radius = bounds.height() / 2f;
-            canvas.drawRoundRect(bounds, radius, radius, fill);
-            canvas.drawRoundRect(bounds, radius, radius, line);
-            int size = Math.round(Math.min(dp(20), face * .75f));
-            glyph.setTint(ink(held));
-            glyph.setBounds(Math.round(bounds.centerX() - size / 2f), Math.round(bounds.centerY() - size / 2f),
-                    Math.round(bounds.centerX() + size / 2f), Math.round(bounds.centerY() + size / 2f));
-            glyph.draw(canvas);
-            paintEditing(canvas);
-        }
-
-        @Override public boolean performClick() {
-            if (editing || !isEnabled() || getVisibility() != VISIBLE) return false;
-            super.performClick();
-            if (menuListener != null) menuListener.run();
             return true;
         }
     }
