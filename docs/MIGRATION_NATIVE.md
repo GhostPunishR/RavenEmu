@@ -1167,3 +1167,45 @@ l'image au lieu de toute la zone du skin ; les représentations paysage et les
 utilisés, comme dans la bêta. Validation sur téléphone à faire avec de vrais
 skins (rendu des PDF, précision du toucher, bord à bord sur un écran haut).
 
+## Câble link local, lots L-1 et L-2
+
+Portage du câble link de la bêta (`LinkCable`, `LinkPartnerDialog`,
+`LinkPlayerScreen`) : deux jeux de la bibliothèque tournent ensemble sur le
+téléphone, reliés par un câble virtuel, pour les échanges et combats entre
+ses propres sauvegardes. RavenCore le fait déjà par son sous-système Libretro
+`link` ; aucun code de RavenCore n'est modifié.
+
+- **Frontend C (L-1)** : `raven_frontend_load_linked` charge les deux jeux par
+  `retro_load_game_special` après lecture de `SET_SUBSYSTEM_INFO`,
+  `raven_frontend_players` dit 1 ou 2, et chaque joueur a sa SRAM
+  (`raven_frontend_*_player_battery`). Les images préventives restent coupées
+  avec deux jeux. Testé sur les vrais cores GB, GBC et GBA (image double, SRAM
+  de chaque joueur, état, retour à un jeu seul) et sous ASan/UBSan.
+- **Pont JNI (L-1)** : `openLinked`, `setLinkFocus` (le joueur montré : sa
+  moitié de l'image, la manette et les commandes tactiles sur son port, la
+  vibration et les capteurs), `savePlayerBattery` / `restorePlayerBattery`.
+- **Bibliothèque (L-2)** : la fiche du jeu gagne « Jouer à deux (câble link) »
+  ; la fenêtre « Jouer à deux » de la bêta liste les jeux compatibles (Game Boy
+  et Game Boy Color ensemble, ou deux Game Boy Advance ; jamais le même jeu,
+  une cartouche n'a qu'une sauvegarde), avec son texte et ses messages.
+- **Lecteur (L-2)** : la barre dit « Câble link · Joueur N » et le nom du jeu
+  ; le bouton « Joueur M » (icône dessinée à deux flèches, au lieu du « ⇄ »
+  de la bêta) passe à l'autre joueur, qui continue de tourner pendant ce
+  temps. Les deux jeux tournent dans le core GBA, ou dans le core GBC dès que
+  l'un en a besoin (jeu GBC ou « Jeux Game Boy en couleurs »). Chaque
+  sauvegarde est lue et réécrite pour son propre jeu (à l'ouverture, toutes les
+  30 s et à la pause), une sauvegarde d'une autre taille lue comme pour un jeu
+  seul. Comme dans la bêta, pas de menu de jeu : ni ⋮, ni bouton Menu des
+  commandes, ni touche Home ; donc ni états, ni codes de triche, ni
+  RetroAchievements, ni skin Delta en mode câble.
+- Tests : `LinkCableTest` (compatibilités, partenaires, core choisi),
+  `HomeActivityTest` (fenêtre des partenaires et lancement),
+  `PlayerActivityTest` (deux jeux ouverts, sauvegarde de chacun restaurée et
+  réécrite, bascule de joueur, pas de menu, jeux incompatibles refusés).
+
+Écarts restants : le son est toujours celui du joueur 1, car le sous-système
+de RavenCore ne fait entendre que lui ; la bêta faisait entendre le joueur
+montré. Il faudrait une option dans RavenCore (PR à part), à décider par le
+propriétaire. Validation sur téléphone à faire avec deux vraies cartouches
+(échange Pokémon, par exemple).
+

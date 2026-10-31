@@ -1,6 +1,7 @@
 package com.ravenemu.app.ui.player;
 import com.ravenemu.app.bridge.NativeBridge;
 import com.ravenemu.app.data.library.CoverRepository;
+import com.ravenemu.app.data.library.LinkCable;
 import com.ravenemu.app.data.library.RomLibrary;
 import com.ravenemu.app.data.saves.CheatList;
 import com.ravenemu.app.data.saves.CheatRepository;
@@ -66,6 +67,8 @@ import javax.microedition.khronos.opengles.GL10;
  * lifecycle cleanup; button input uses an atomic mask. */
 public final class PlayerActivity extends Activity implements GLSurfaceView.Renderer {
     public static final String EXTRA_ROM_KEY = "com.ravenemu.app.ROM_KEY";
+    /** With EXTRA_ROM_KEY: the second game, joined to the first by the link cable. */
+    public static final String EXTRA_LINK_ROM_KEY = "com.ravenemu.app.LINK_ROM_KEY";
     // Shared ordering: a recreated Activity must read SRAM only after the
     // previous Activity's queued pause snapshot has been written.
     /** Shared with the library's save transfers: one order for every save write. */
@@ -78,6 +81,15 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
     /** UI thread: a physical controller's keys and axes. */
     private final GamepadMapper gamepad = new GamepadMapper();
     private GameControlsView gameControls;
+    /** Two games joined by the link cable (the beta's LinkPlayerScreen): one
+     * shown at a time, the other running behind; no game menu. */
+    private boolean linkMode;
+    /** Each player's save key while linked games run; null otherwise. */
+    private volatile String[] linkKeys;
+    /** UI thread: the linked games, the player shown, its switch in the bar. */
+    private RomLibrary.Entry[] linkEntries;
+    private int linkFocus;
+    private TextView linkSwitch;
     /** Portrait: the Delta skin chosen for the game's console, drawn over the
      * picture's column instead of the touch controls; null in landscape. */
     private DeltaSkinView skinView;
@@ -163,7 +175,11 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         if (state != null) {
             restoreMenu = state.getBoolean("player.menu");
             selectedSlot = Math.max(0, Math.min(3, state.getInt("player.slot")));
+            linkFocus = state.getInt("player.link_focus") == 1 ? 1 : 0;
         }
+        String linkKey = getIntent().getStringExtra(EXTRA_LINK_ROM_KEY);
+        linkMode = linkKey != null && CoverRepository.validKey(linkKey);
+        if (linkMode) restoreMenu = false;
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(HomeActivity.BACKGROUND);
@@ -208,9 +224,32 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         gameTitle.setGravity(Gravity.CENTER_VERTICAL);
         toolbar.addView(gameTitle, new LinearLayout.LayoutParams(0, dp(48), 1));
 
-        View menu = RavenIcon.button(this, RavenIcon.Glyph.MORE, HomeActivity.ACCENT, 24, "Menu du jeu");
-        menu.setOnClickListener(view -> togglePlayerMenu());
-        toolbar.addView(menu, new LinearLayout.LayoutParams(dp(48), dp(48)));
+        if (linkMode) {
+            // The beta's link bar: the other player in place of the game menu.
+            gameTitle.setSingleLine(false);
+            gameTitle.setMaxLines(2);
+            linkSwitch = new TextView(this);
+            linkSwitch.setTextColor(HomeActivity.ACCENT);
+            linkSwitch.setTextSize(13);
+            linkSwitch.setGravity(Gravity.CENTER);
+            linkSwitch.setPadding(dp(10), 0, dp(12), 0);
+            linkSwitch.setCompoundDrawablePadding(dp(6));
+            linkSwitch.setCompoundDrawablesRelativeWithIntrinsicBounds(
+                    new RavenIcon(RavenIcon.Glyph.SWAP, HomeActivity.ACCENT, dp(18)), null, null, null);
+            android.graphics.drawable.GradientDrawable outline = new android.graphics.drawable.GradientDrawable();
+            outline.setCornerRadius(dp(18));
+            outline.setStroke(Math.max(1, dp(1)), HomeActivity.ACCENT);
+            linkSwitch.setBackground(outline);
+            linkSwitch.setOnClickListener(view -> switchLinkedPlayer());
+            LinearLayout.LayoutParams switchSize = new LinearLayout.LayoutParams(-2, dp(36));
+            switchSize.setMarginEnd(dp(8));
+            toolbar.addView(linkSwitch, switchSize);
+            showLinkTitle();
+        } else {
+            View menu = RavenIcon.button(this, RavenIcon.Glyph.MORE, HomeActivity.ACCENT, 24, "Menu du jeu");
+            menu.setOnClickListener(view -> togglePlayerMenu());
+            toolbar.addView(menu, new LinearLayout.LayoutParams(dp(48), dp(48)));
+        }
         header.addView(toolbar);
 
         // As in the beta, nothing between the bar and the picture; messages
@@ -236,7 +275,8 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         header.addView(editBar, new LinearLayout.LayoutParams(-1, dp(48)));
         root.addView(header, new LinearLayout.LayoutParams(-1, -2));
 
-        gameControls = new GameControlsView(this, this::setTouchButtons, this::togglePlayerMenu);
+        // Linked games have no game menu: no Menu button among the controls.
+        gameControls = new GameControlsView(this, this::setTouchButtons, linkMode ? null : this::togglePlayerMenu);
         gameControls.setEnabled(false);
         // The picture, and RetroAchievements' banners over it.
         FrameLayout screen = new FrameLayout(this);
@@ -288,7 +328,24 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         // The RavenEmu-style Java library selects a private ROM; only JNI/C
         // executes it, preserving the Java -> C -> RavenCore C++ architecture.
         String launchKey = getIntent().getStringExtra(EXTRA_ROM_KEY);
-        if (launchKey != null && CoverRepository.validKey(launchKey)) {
+        if (linkMode && launchKey != null && CoverRepository.validKey(launchKey)) {
+            submitIo(() -> {
+                try {
+                    RomLibrary.Entry first = null, second = null;
+                    for (RomLibrary.Entry entry : RomLibrary.list(getFilesDir())) {
+                        if (launchKey.equals(entry.key)) first = entry;
+                        if (linkKey.equals(entry.key)) second = entry;
+                    }
+                    if (first == null || second == null) postStatus("Jeu absent de la bibliothèque");
+                    else if (first.key.equals(second.key) || !LinkCable.compatible(first.system, second.system))
+                        postStatus("Ces deux jeux ne se relient pas : Game Boy et Game Boy Color ensemble, "
+                                + "ou deux Game Boy Advance.");
+                    else loadLinkedFromLibrary(first, second);
+                } catch (IOException error) {
+                    postStatus("Chargement impossible : " + error.getMessage());
+                }
+            });
+        } else if (launchKey != null && CoverRepository.validKey(launchKey)) {
             submitIo(() -> {
                 try {
                     for (RomLibrary.Entry entry : RomLibrary.list(getFilesDir())) {
@@ -572,6 +629,114 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         });
     }
 
+    /** IO thread: the beta's launchLinked. Both games run in RavenCore's link
+     * subsystem, each with its own save; no achievements, cheats or states. */
+    private void loadLinkedFromLibrary(RomLibrary.Entry first, RomLibrary.Entry second) {
+        try {
+            byte[] firstRom = RomLibrary.readRom(getFilesDir(), first);
+            byte[] secondRom = RomLibrary.readRom(getFilesDir(), second);
+            final byte[][] batteries = {SaveRepository.read(getFilesDir(), first.key, "srm"),
+                    SaveRepository.read(getFilesDir(), second.key, "srm")};
+            ConsoleSettings console = ConsoleSettings.load(this);
+            final String core = LinkCable.core(console.coreFor(first.system), console.coreFor(second.system));
+            if (core == null) {
+                postStatus("Ces deux jeux ne se relient pas : Game Boy et Game Boy Color ensemble, "
+                        + "ou deux Game Boy Advance.");
+                return;
+            }
+            byte[] bios = null;
+            if ("gba".equals(core) && console.gbaBios != ConsoleSettings.BIOS_RAVENCORE) {
+                try { bios = GbaBiosRepository.read(getFilesDir()); }
+                catch (IOException unreadable) { bios = null; }
+            }
+            String[] coreOptions = CoreOptions.atLoad(core, PlaybackSettings.load(this), console,
+                    CartridgeSettings.load(this), bios != null);
+            if (disposed.get()) return;
+            String nativeDir = getApplicationInfo().nativeLibraryDir;
+            String dataDir = getFilesDir().getAbsolutePath();
+            final int focus = linkFocus;
+            queueRomLoad(() -> {
+                if (disposed.get()) return;
+                undoState = null;
+                achievements.stop();
+                String failure = NativeBridge.openLinked(nativeDir, dataDir, core, firstRom, first.title,
+                        secondRom, second.title, coreOptions);
+                String notice = null;
+                for (int player = 0; failure == null && player < 2; player++) {
+                    byte[] battery = batteries[player];
+                    if (battery == null || NativeBridge.restorePlayerBattery(player, battery)) continue;
+                    // As for a game alone: a save of another size, read as RavenCore reads one.
+                    byte[] fitted = SaveTransfer.fit(battery, NativeBridge.savePlayerBattery(player));
+                    if (fitted == null) {
+                        notice = "Joueur " + (player + 1) + " : ce jeu n'a pas de mémoire de sauvegarde, "
+                                + "fichier conservé";
+                    } else if (fitted != battery && NativeBridge.restorePlayerBattery(player, fitted)) {
+                        notice = "Joueur " + (player + 1) + " : sauvegarde de " + battery.length
+                                + " octets lue sur les " + fitted.length + " octets du jeu";
+                    } else {
+                        NativeBridge.closeRom();
+                        failure = "SRAM incompatible (joueur " + (player + 1) + ") : fichier original conservé";
+                    }
+                }
+                if (failure == null && notice != null) postStatus(notice);
+                if (failure == null) NativeBridge.setLinkFocus(focus);
+                activeEntry = null;
+                activeAccount = null;
+                activeSaveKey = null;
+                stateCompatibility = null;
+                activeCore = failure == null ? core : null;
+                linkKeys = failure == null ? new String[]{first.key, second.key} : null;
+                nextBatterySaveNanos = 0;
+                final double fps = failure == null ? NativeBridge.frameRate() : 0.0;
+                final String result = failure;
+                runOnUiThread(() -> {
+                    cheats = Collections.emptyList();
+                    cheatsKey = null;
+                    if (disposed.get()) return;
+                    achievementOverlay.clear();
+                    if (result != null || gameTitle == null) return;
+                    gameFps = fps;
+                    applyDisplayMode();
+                    releaseInput();
+                    gameControls.setShoulders("gba".equals(first.system));
+                    linkEntries = new RomLibrary.Entry[]{first, second};
+                    showLinkTitle();
+                });
+                if (result != null) postStatus("Échec : " + result);
+            });
+        } catch (Exception error) {
+            postStatus("Chargement impossible : " + error.getMessage());
+        }
+    }
+
+    /** UI thread: the bar of linked games, as the beta wrote it. */
+    private void showLinkTitle() {
+        if (gameTitle == null || linkSwitch == null) return;
+        android.text.SpannableStringBuilder title =
+                new android.text.SpannableStringBuilder("Câble link · Joueur " + (linkFocus + 1));
+        if (linkEntries != null) {
+            int start = title.length();
+            title.append('\n').append(linkEntries[linkFocus].title);
+            title.setSpan(new android.text.style.RelativeSizeSpan(0.72f), start, title.length(), 0);
+            title.setSpan(new android.text.style.ForegroundColorSpan(HomeActivity.MUTED), start, title.length(), 0);
+        }
+        gameTitle.setText(title);
+        linkSwitch.setText("Joueur " + (2 - linkFocus));
+        linkSwitch.setContentDescription("Passer au joueur " + (2 - linkFocus));
+    }
+
+    /** The other player shows and plays; the one left keeps running. */
+    private void switchLinkedPlayer() {
+        if (linkKeys == null || disposed.get()) return;
+        linkFocus = 1 - linkFocus;
+        final int focus = linkFocus;
+        releaseInput();
+        surface.queueEvent(() -> {
+            if (!disposed.get()) NativeBridge.setLinkFocus(focus);
+        });
+        showLinkTitle();
+    }
+
     private void queueRomLoad(Runnable load) {
         runOnUiThread(() -> {
             if (disposed.get()) return;
@@ -595,6 +760,8 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
 
     private void togglePlayerMenu() {
         finishMovingControls();
+        // Linked games: no game menu, as in the beta; the bar switches players.
+        if (linkMode) return;
         if (playerMenu != null && playerMenu.isShowing()) {
             playerMenu.dismiss();
             return;
@@ -1034,6 +1201,19 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
     }
 
     private void persistBattery() throws IOException {
+        final String[] players = linkKeys;
+        if (players != null) {
+            // Each player's SRAM in its own game's save, in the saves' order.
+            for (int player = 0; player < 2; player++) {
+                final String saveKey = players[player];
+                final byte[] saved = NativeBridge.savePlayerBattery(player);
+                if (saved != null) submitIo(() -> {
+                    try { SaveRepository.write(getFilesDir(), saveKey, "srm", saved); }
+                    catch (IOException error) { postStatus("Sauvegarde impossible : " + error.getMessage()); }
+                });
+            }
+            return;
+        }
         final String key = activeSaveKey;
         if (key == null) return;
         byte[] battery = NativeBridge.saveBattery();
@@ -1077,7 +1257,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         if (message != null) runOnUiThread(() -> {
             if (!disposed.get()) android.widget.Toast.makeText(this, message, android.widget.Toast.LENGTH_LONG).show();
         });
-        if (advanced > 0 && activeSaveKey != null && now >= nextBatterySaveNanos) {
+        if (advanced > 0 && (activeSaveKey != null || linkKeys != null) && now >= nextBatterySaveNanos) {
             nextBatterySaveNanos = now + 30_000_000_000L;
             try {
                 persistBattery();
@@ -1192,6 +1372,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         super.onSaveInstanceState(state);
         state.putBoolean("player.menu", menuOpen || restoreMenu);
         state.putInt("player.slot", playerMenu != null ? playerMenu.getSelectedSlot() : selectedSlot);
+        state.putInt("player.link_focus", linkFocus);
     }
 
     @Override protected void onDestroy() {

@@ -353,6 +353,11 @@ supprime. En portrait, le skin choisi remplace les commandes tactiles : son PDF
 en bas, l'image du jeu au-dessus, ses boutons et son bouton menu actifs
 (`data/skins`, `DeltaSkinView`). Aucun skin n'est fourni.
 
+**Jouer à deux (câble link)**, dans la fiche d'un jeu, relie ce jeu à un autre
+de la bibliothèque (Game Boy et GBC ensemble, ou deux GBA) dans le sous-système
+`link` de RavenCore : un joueur affiché à la fois, le bouton « Joueur N » de
+la barre passe à l'autre, chaque jeu garde sa propre sauvegarde.
+
 ## Vibration et capteurs de la cartouche
 
 **Paramètres → Interface → Cartouche** reprend la bêta : **Vibration de la cartouche**

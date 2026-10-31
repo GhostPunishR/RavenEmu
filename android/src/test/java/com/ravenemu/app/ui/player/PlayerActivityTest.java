@@ -1010,6 +1010,71 @@ public final class PlayerActivityTest {
         }
     }
 
+    @Test public void twoLinkedGamesRunTogetherEachWithItsOwnSaveOnePlayerShown() throws Exception {
+        byte[] other = new byte[0x180];
+        other[0x134] = 'B';
+        String second = RomLibrary.importRom(files, "Autre.gb", other).key;
+        SaveRepository.write(files, key, "srm", new byte[]{1, 2});
+        Intent intent = new Intent(RuntimeEnvironment.getApplication(), PlayerActivity.class)
+                .putExtra(PlayerActivity.EXTRA_ROM_KEY, key).putExtra(PlayerActivity.EXTRA_LINK_ROM_KEY, second);
+        ActivityController<PlayerActivity> controller = Robolectric.buildActivity(PlayerActivity.class, intent)
+                .create().start().resume().visible();
+        activities.add(controller);
+        PlayerActivity activity = controller.get();
+        activity.onWindowFocusChanged(true);
+        pump(activity);
+        assertTrue(FakeNative.linked);
+        assertEquals("gb", FakeNative.openCore);
+        assertEquals(Arrays.asList("Libre.gb", "Autre.gb"), Arrays.asList(FakeNative.linkedTitles));
+        assertEquals("Player 1's save restored; player 2 has none yet",
+                Arrays.asList("0:[1, 2]"), FakeNative.restoredPlayers);
+        assertEquals(0, FakeNative.linkFocus);
+        TextView title = ReflectionHelpers.getField(activity, "gameTitle");
+        assertTrue(title.getText().toString().startsWith("Câble link · Joueur 1\nLibre.gb"));
+
+        View swap = find(activity.getWindow().getDecorView(), view ->
+                "Passer au joueur 2".contentEquals(view.getContentDescription() == null ? "" : view.getContentDescription()));
+        assertNotNull(swap);
+        swap.performClick();
+        pump(activity);
+        assertEquals(1, FakeNative.linkFocus);
+        assertTrue(title.getText().toString().startsWith("Câble link · Joueur 2\nAutre.gb"));
+        assertNotNull(find(activity.getWindow().getDecorView(), view ->
+                "Passer au joueur 1".contentEquals(view.getContentDescription() == null ? "" : view.getContentDescription())));
+
+        // No game menu, as in the beta: neither the bar nor the controls nor Home.
+        assertNull(find(activity.getWindow().getDecorView(), view -> view.isShown()
+                && "Menu du jeu".contentEquals(view.getContentDescription() == null ? "" : view.getContentDescription())));
+        assertTrue(activity.onKeyDown(android.view.KeyEvent.KEYCODE_BUTTON_MODE,
+                new android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_BUTTON_MODE)));
+        idle();
+        assertNull(menu(activity));
+
+        // Each player's SRAM goes back to its own game's save.
+        controller.pause();
+        io(activity).submit(() -> {}).get(5, TimeUnit.SECONDS);
+        assertArrayEquals(new byte[]{1, 2}, SaveRepository.read(files, key, "srm"));
+        assertArrayEquals(new byte[]{0x22, 0x22}, SaveRepository.read(files, second, "srm"));
+        controller.resume();
+    }
+
+    @Test public void gamesThatDoNotLinkAreRefusedBeforeAnyCoreOpens() throws Exception {
+        byte[] advance = new byte[0x200];
+        advance[0xb2] = (byte) 0x96;
+        String gba = RomLibrary.importRom(files, "Avance.gba", advance).key;
+        ShadowToast.reset();
+        Intent intent = new Intent(RuntimeEnvironment.getApplication(), PlayerActivity.class)
+                .putExtra(PlayerActivity.EXTRA_ROM_KEY, key).putExtra(PlayerActivity.EXTRA_LINK_ROM_KEY, gba);
+        ActivityController<PlayerActivity> controller = Robolectric.buildActivity(PlayerActivity.class, intent)
+                .create().start().resume().visible();
+        activities.add(controller);
+        PlayerActivity activity = controller.get();
+        activity.onWindowFocusChanged(true);
+        pump(activity);
+        assertEquals(0, FakeNative.opens);
+        assertTrue(ShadowToast.getTextOfLatestToast().startsWith("Ces deux jeux ne se relient pas"));
+    }
+
     @Test public void theMenuButtonAmongTheControlsOpensTheGameMenu() throws Exception {
         PlayerActivity activity = loaded();
         GameControlsView controls = ReflectionHelpers.getField(activity, "gameControls");
@@ -1275,8 +1340,19 @@ public final class PlayerActivityTest {
         static int buttons, rotation, preemptive;
         static boolean rumbling;
         static int resets;
+        /** Linked games: the titles given, each player's SRAM, the player shown. */
+        static boolean linked;
+        static String[] linkedTitles;
+        static byte[][] playerBatteries = new byte[2][];
+        static final List<String> restoredPlayers = new ArrayList<>();
+        static int linkFocus;
         static void reset() {
             resets = 0;
+            linked = false;
+            linkedTitles = null;
+            playerBatteries = new byte[2][];
+            restoredPlayers.clear();
+            linkFocus = -1;
             state = new byte[]{1, 2}; battery = new byte[]{3, 4};
             preview = new int[]{2, 1, 0xffff0000, 0xff00ff00};
             restoreAttempts.clear(); restoredBatteries.clear();
@@ -1300,11 +1376,32 @@ public final class PlayerActivityTest {
         @Implementation protected static void initGl() {}
         @Implementation protected static String openRom(String nativeDir, String filesDir, String system, byte[] rom,
                                                         String title, String[] coreOptions) {
-            requireGl(); opens++; closed = false; state = new byte[]{1, 2};
+            requireGl(); opens++; closed = false; linked = false; state = new byte[]{1, 2};
             if (sramSize < 0) battery = new byte[]{0};
             else if (sramSize == 0) battery = null;
             else { battery = new byte[sramSize]; Arrays.fill(battery, (byte)0x7f); }
             openCore = system; openOptions = coreOptions.clone(); return null;
+        }
+        /** RavenCore's link subsystem: two players, each with a 2-byte SRAM. */
+        @Implementation protected static String openLinked(String nativeDir, String filesDir, String system,
+                byte[] first, String firstName, byte[] second, String secondName, String[] coreOptions) {
+            requireGl(); opens++; closed = false; linked = true;
+            openCore = system; openOptions = coreOptions.clone();
+            linkedTitles = new String[]{firstName, secondName};
+            playerBatteries = new byte[][]{{0x11, 0x11}, {0x22, 0x22}};
+            return null;
+        }
+        @Implementation protected static int players() { return closed ? 0 : linked ? 2 : 1; }
+        @Implementation protected static void setLinkFocus(int player) { requireGl(); linkFocus = player; }
+        @Implementation protected static byte[] savePlayerBattery(int player) {
+            return closed || !linked || playerBatteries[player] == null ? null : playerBatteries[player].clone();
+        }
+        @Implementation protected static boolean restorePlayerBattery(int player, byte[] value) {
+            requireGl();
+            if (!linked || value.length != 2) return false;
+            restoredPlayers.add(player + ":" + Arrays.toString(value));
+            playerBatteries[player] = value.clone();
+            return true;
         }
         @Implementation protected static void setDisplayRate(float hertz) { requireGl(); displayRate = hertz; }
         @Implementation protected static void setDisplayRotation(int value) { requireGl(); rotation = value; }

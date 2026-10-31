@@ -163,6 +163,33 @@ public final class HomeActivityTest {
     }
 
 
+    @Test public void playingTwoLinkedGamesOffersOnlyTheGamesThatLink() throws Exception {
+        String key = seedLibrary();
+        File files = RuntimeEnvironment.getApplication().getFilesDir();
+        byte[] advance = new byte[0x200];
+        advance[0xb2] = (byte) 0x96;
+        RomLibrary.importRom(files, "Gamma.gba", advance);
+        String color = RomLibrary.list(files).get(1).key;
+        HomeActivity activity = open(null).get();
+        showFirstGame(activity);
+        Dialog sheet = ShadowDialog.getLatestDialog();
+        View linked = text(sheet.getWindow().getDecorView(), "Jouer à deux (câble link)");
+        assertNotNull(linked);
+        linked.performClick();
+        shadowOf(Looper.getMainLooper()).idle();
+        Dialog partners = ShadowDialog.getLatestDialog();
+        assertNotSame(sheet, partners);
+        View decor = partners.getWindow().getDecorView();
+        assertNotNull(text(decor, "Bêta.gbc · Game Boy Color"));
+        assertNull("A GBA game does not link to a Game Boy one", text(decor, "Gamma.gba · Game Boy Advance"));
+        assertNull("A game is never linked to itself", text(decor, "Alpha.gb · Game Boy"));
+        text(decor, "Bêta.gbc · Game Boy Color").performClick();
+        Intent launched = shadowOf(activity).getNextStartedActivity();
+        assertEquals(key, launched.getStringExtra(PlayerActivity.EXTRA_ROM_KEY));
+        assertEquals(color, launched.getStringExtra(PlayerActivity.EXTRA_LINK_ROM_KEY));
+        assertFalse(partners.isShowing());
+    }
+
     @Test public void expandedSheetAndSelectedGameSurviveRecreationAndBackDismisses() throws Exception {
         seedLibrary();
         ActivityController<HomeActivity> first = open(null);

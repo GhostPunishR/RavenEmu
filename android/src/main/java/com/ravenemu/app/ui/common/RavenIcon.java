@@ -31,7 +31,7 @@ public final class RavenIcon extends Drawable {
         SETTINGS, ADD, MORE, SEARCH, BACK, CHEVRON, EXTERNAL,
         ALL, GB, GBC, GBA,
         TROPHY, SLIDERS, SPEAKER, MONITOR, GAMEPAD, INFO,
-        STAR, RADIO_ON, RADIO_OFF, MENU,
+        STAR, RADIO_ON, RADIO_OFF, MENU, SWAP,
     }
 
     private static final float STROKE = 2f;
@@ -84,6 +84,8 @@ public final class RavenIcon extends Drawable {
         SPECS.put(Glyph.RADIO_ON, new String[]{circle(12, 12, 8), circle(12, 12, 4)});
         SPECS.put(Glyph.RADIO_OFF, new String[]{circle(12, 12, 8), ""});
         SPECS.put(Glyph.MENU, new String[]{"M5,7H19M5,12H19M5,17H19", ""});
+        // Two players of a link cable: one arrow each way.
+        SPECS.put(Glyph.SWAP, new String[]{"M5,8H18M15,5L18,8L15,11M19,16H6M9,13L6,16L9,19", ""});
     }
 
     private final Glyph glyph;

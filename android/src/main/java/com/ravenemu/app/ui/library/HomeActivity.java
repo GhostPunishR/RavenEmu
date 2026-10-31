@@ -1,5 +1,6 @@
 package com.ravenemu.app.ui.library;
 import com.ravenemu.app.data.library.CoverRepository;
+import com.ravenemu.app.data.library.LinkCable;
 import com.ravenemu.app.data.library.RomLibrary;
 import com.ravenemu.app.platform.SystemBarInsets;
 import com.ravenemu.app.ui.common.GameDetailsSheet;
@@ -8,6 +9,7 @@ import com.ravenemu.app.ui.player.PlayerActivity;
 import com.ravenemu.app.ui.settings.PlaybackSettingsActivity;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.database.Cursor;
 import android.graphics.Color;
@@ -61,6 +63,8 @@ public final class HomeActivity extends Activity {
     private final List<RomLibrary.Entry> all = new ArrayList<>();
     private final List<RomLibrary.Entry> shown = new ArrayList<>();
     private boolean destroyed;
+    /** The second game of a linked session, chosen in the beta's dialog. */
+    private AlertDialog partnerDialog;
     private String selectedCoverKey;
     private String searchText = "";
     private String selectedPage = "";
@@ -278,6 +282,51 @@ public final class HomeActivity extends Activity {
         }
     }
 
+    /** The beta's LinkPartnerDialog: the library's games this one can be linked to. */
+    private void choosePartner(RomLibrary.Entry game) {
+        if (destroyed || (partnerDialog != null && partnerDialog.isShowing())) return;
+        List<RomLibrary.Entry> partners = LinkCable.partners(game, new ArrayList<>(all));
+        LinearLayout body = new LinearLayout(this);
+        body.setOrientation(LinearLayout.VERTICAL);
+        body.setPadding(dp(22), dp(8), dp(22), 0);
+        body.addView(text(game.title + " et un second jeu tournent ensemble, reliés par un câble link virtuel : "
+                + "échanges et combats entre vos propres sauvegardes. Un jeu est affiché à la fois : le bouton "
+                + "Joueur de la barre passe à l'autre, qui continue de tourner.", 13, SECONDARY));
+        if (partners.isEmpty()) {
+            TextView none = text("gba".equals(game.system)
+                    ? "Ajoutez un autre jeu Game Boy Advance à la bibliothèque."
+                    : "Ajoutez un autre jeu Game Boy ou Game Boy Color à la bibliothèque.", 13, MUTED);
+            none.setPadding(0, dp(10), 0, 0);
+            body.addView(none);
+        }
+        float density = getResources().getDisplayMetrics().density;
+        for (RomLibrary.Entry partner : partners) {
+            Button pick = action(partner.title + " · " + pageTitle(partner.system));
+            pick.setTextColor(TEXT);
+            pick.setSingleLine(true);
+            pick.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            GradientDrawable outline = new GradientDrawable();
+            outline.setCornerRadius(12 * density);
+            outline.setStroke(Math.max(1, dp(1)), OUTLINE);
+            pick.setBackground(outline);
+            pick.setOnClickListener(view -> {
+                if (partnerDialog != null) partnerDialog.dismiss();
+                startActivity(new Intent(this, PlayerActivity.class)
+                        .putExtra(PlayerActivity.EXTRA_ROM_KEY, game.key)
+                        .putExtra(PlayerActivity.EXTRA_LINK_ROM_KEY, partner.key));
+            });
+            LinearLayout.LayoutParams size = new LinearLayout.LayoutParams(-1, dp(48));
+            size.topMargin = dp(8);
+            body.addView(pick, size);
+        }
+        NestedScrollView scroll = new NestedScrollView(this);
+        scroll.addView(body);
+        partnerDialog = new AlertDialog.Builder(this).setTitle("Jouer à deux").setView(scroll)
+                .setNegativeButton("Annuler", null).create();
+        partnerDialog.show();
+        partnerDialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(ACCENT);
+    }
+
     private String pageTitle(String system) {
         switch (system) {
             case "gb": return "Game Boy";
@@ -370,6 +419,16 @@ public final class HomeActivity extends Activity {
         LinearLayout.LayoutParams playParams = new LinearLayout.LayoutParams(-1, dp(48));
         playParams.topMargin = dp(16);
         panel.addView(play, playParams);
+        // The beta's second button: a game alongside, joined by the link cable.
+        Button linked = action("Jouer à deux (câble link)");
+        linked.setTextColor(ACCENT);
+        GradientDrawable linkedOutline = new GradientDrawable();
+        linkedOutline.setCornerRadius(12 * density);
+        linkedOutline.setStroke(Math.max(1, dp(1)), ACCENT);
+        linked.setBackground(linkedOutline);
+        LinearLayout.LayoutParams linkedParams = new LinearLayout.LayoutParams(-1, dp(48));
+        linkedParams.topMargin = dp(8);
+        panel.addView(linked, linkedParams);
         saves.addSection(panel, entry, () -> {
             GameDetailsSheet sheet = details;
             if (sheet != null) sheet.dismiss();
@@ -392,6 +451,10 @@ public final class HomeActivity extends Activity {
             dialog.dismiss();
             startActivity(new Intent(this, PlayerActivity.class)
                     .putExtra(PlayerActivity.EXTRA_ROM_KEY, entry.key));
+        });
+        linked.setOnClickListener(view -> {
+            dialog.dismiss();
+            choosePartner(entry);
         });
         changeCover.setOnClickListener(view -> {
             dialog.dismiss();
@@ -525,6 +588,7 @@ public final class HomeActivity extends Activity {
     @Override protected void onDestroy() {
         destroyed = true;
         if (details != null) details.dismiss();
+        if (partnerDialog != null) partnerDialog.dismiss();
         saves.destroy();
         folders.destroy();
         io.shutdown();
