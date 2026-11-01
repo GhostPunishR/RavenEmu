@@ -342,8 +342,8 @@ lecteur les applique en revenant des paramètres.
 **Menu du jeu → Déplacer les boutons** met le jeu en pause et laisse faire
 glisser chaque commande ; **Terminé** garde la disposition, **Rétablir** remet
 les places d'origine. Le portrait et le paysage ont chacun la leur
-(`ControlLayout`), chaque commande reste entière dans sa zone (sous l'image en
-portrait, toute la zone de jeu en paysage). La réinitialisation des commandes
+(`ControlLayout`), chaque commande reste entière dans la zone de jeu (image
+comprise, en portrait comme en paysage). La réinitialisation des commandes
 remet aussi les places. Le retour arrière et l'avance rapide ne sont pas portés,
 au choix du propriétaire.
 

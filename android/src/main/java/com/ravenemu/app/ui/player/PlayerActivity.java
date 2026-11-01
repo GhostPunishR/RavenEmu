@@ -325,8 +325,11 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
             LinearLayout column = new LinearLayout(this);
             column.setOrientation(LinearLayout.VERTICAL);
             column.addView(screen, new LinearLayout.LayoutParams(-1, 0, 1));
-            column.addView(gameControls, new LinearLayout.LayoutParams(-1, -2));
+            // The controls' room below the picture; the controls themselves
+            // cover the whole stage, so that one can be moved over the picture.
+            column.addView(gameControls.footprint(), new LinearLayout.LayoutParams(-1, -2));
             stage.addView(column, new FrameLayout.LayoutParams(-1, -1));
+            stage.addView(gameControls, new FrameLayout.LayoutParams(-1, -1));
             skinView = newSkinView(false);
             stage.addView(skinView, new FrameLayout.LayoutParams(-1, -1));
             root.addView(stage, new LinearLayout.LayoutParams(-1, 0, 1));
@@ -471,6 +474,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         if (gameControls.isEditing()) finishMovingControls();
         releaseInput();
         gameControls.setVisibility(View.GONE);
+        gameControls.footprint().setVisibility(View.GONE);
         int width = (int) Math.round(layout.gameArea.width()), height = (int) Math.round(layout.gameArea.height());
         int left = (int) Math.round(layout.gameArea.left), top = (int) Math.round(layout.gameArea.top);
         if (pictureFrame.getLayoutParams() instanceof FrameLayout.LayoutParams) {
@@ -507,6 +511,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         if (classicLandscapePicture != null) pictureFrame.setLayoutParams(classicLandscapePicture);
         else pictureFrame.setLayoutParams(new LinearLayout.LayoutParams(-1, 0, 1));
         gameControls.setVisibility(View.VISIBLE);
+        gameControls.footprint().setVisibility(View.VISIBLE);
     }
 
     /** A skin that cannot be drawn is unselected, as in the beta. */

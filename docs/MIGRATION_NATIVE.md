@@ -1361,3 +1361,21 @@ paysage quand ils ont une représentation paysage.
   derrière les commandes classiques) ; une mutation détectée.
 
 Écart restant : rendu à vérifier sur téléphone avec de vrais skins paysage.
+
+## Petits écarts, lot E-4 : boutons déplaçables sur l'image en portrait
+
+En portrait, **Menu du jeu → Déplacer les boutons** permet maintenant de
+mettre un bouton sur l'image, comme en paysage. La vue des commandes couvre
+toute la scène (image comprise, fond transparent) ; à leurs places d'origine,
+les commandes restent en bas, et l'image garde sa place au-dessus d'un espace
+noir de leur hauteur (`GameControlsView.footprint()`, qui suit la taille,
+l'espacement et les gâchettes L/R). Les dispositions déjà enregistrées ne
+bougent pas : leurs décalages partent des mêmes places.
+
+- Tests : `GameControlsViewTest` (espace sous l'image de la hauteur des
+  commandes et plus haut à 115 %, commandes en bas d'une scène plus haute,
+  fond transparent, bouton glissé jusqu'en haut de la scène) ;
+  `PlayerActivityTest` (vue des commandes sur toute la scène, A monté
+  au-dessus de l'image et gardé).
+
+Écart restant : précision du glissement à vérifier sur téléphone.

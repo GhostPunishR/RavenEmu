@@ -199,6 +199,30 @@ public final class PlayerActivityTest {
         assertSame(RavenTheme.RAVENEMU, RavenTheme.of(activity));
     }
 
+    @Test public void inPortraitAButtonCanBeMovedOverThePicture() throws Exception {
+        PlayerActivity activity = loaded();
+        settleSkin(activity);
+        GameControlsView controls = ReflectionHelpers.getField(activity, "gameControls");
+        View picture = ReflectionHelpers.getField(activity, "pictureFrame");
+        View footprint = controls.footprint();
+        assertSame("The controls cover the stage, picture included", picture.getParent().getParent(),
+                controls.getParent());
+        assertSame("Their room below the picture", picture.getParent(), footprint.getParent());
+        assertEquals(picture.getBottom(), footprint.getTop());
+        View a = find(controls, view -> "A".contentEquals(
+                view.getContentDescription() == null ? "" : view.getContentDescription()));
+        assertTrue("At its default place, below the picture", a.getTop() >= picture.getBottom());
+        openMenu(activity);
+        menuButton("Déplacer les boutons").performClick(); pump(activity);
+        for (int i = 0; i < 40; i++) assertTrue(a.performAccessibilityAction(0x02000013, null)); // 8 dp up
+        settleSkin(activity);
+        assertTrue("Over the picture now", a.getTop() < picture.getBottom());
+        View done = find(activity.getWindow().getDecorView(), view ->
+                view instanceof TextView && "Terminé".contentEquals(((TextView)view).getText()));
+        done.performClick(); pump(activity);
+        assertTrue("The place is kept", ControlLayout.load(activity, false).dy(1) < -100f);
+    }
+
     @Test public void theGameWaitsWhileTheButtonsAreMovedAndTheirPlacesAreKept() throws Exception {
         PlayerActivity activity = loaded();
         openMenu(activity);

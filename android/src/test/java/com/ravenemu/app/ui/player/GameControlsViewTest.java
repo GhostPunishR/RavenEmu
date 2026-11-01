@@ -246,6 +246,37 @@ public final class GameControlsViewTest {
         touch(MotionEvent.ACTION_UP, 5, x, y - 40);
     }
 
+    @Test public void overTheWholeStageTheControlsKeepTheirPlaceBelowAndMayMoveOverThePicture() {
+        open(320, false);
+        View footprint = controls.footprint();
+        footprint.measure(View.MeasureSpec.makeMeasureSpec(320, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+        assertEquals("The room below the picture", controls.getMeasuredHeight(), footprint.getMeasuredHeight());
+        View a = labelled("A");
+        int bottomGap = controls.getHeight() - a.getTop();
+        // Over a 500-pixel stage, as in the player: at their default places, at its bottom.
+        controls.getLayoutParams().height = 500;
+        controls.requestLayout();
+        shadowOf(Looper.getMainLooper()).idle();
+        assertEquals(500, controls.getHeight());
+        assertEquals(500 - bottomGap, a.getTop());
+        assertEquals("Transparent over the picture", 0,
+                ((android.graphics.drawable.ColorDrawable) controls.getBackground()).getAlpha());
+        controls.setEditing(true);
+        touch(MotionEvent.ACTION_DOWN, 8, centerX(a), centerY(a));
+        touch(MotionEvent.ACTION_MOVE, 8, centerX(a), centerY(a) - 1000);
+        relayout();
+        assertEquals("Up to the top of the stage, over the picture", 0, a.getTop());
+        touch(MotionEvent.ACTION_UP, 8, centerX(a), centerY(a));
+        controls.setEditing(false);
+        assertTrue("Kept above its zone", controls.controlLayout().dy(1) < -(500 - bottomGap) / 2f);
+        // A larger size makes the room below the picture taller.
+        controls.setSettings(ControlSettings.DEFAULTS.withScale(ControlSettings.SCALE_MAX));
+        footprint.measure(View.MeasureSpec.makeMeasureSpec(320, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+        assertTrue(footprint.getMeasuredHeight() > 234);
+    }
+
     @Test public void editingDragsAControlWithoutPressingItAndKeepsItInside() {
         open(320, false);
         View a = labelled("A");

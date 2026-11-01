@@ -60,6 +60,8 @@ final class GameControlsView extends ViewGroup {
     private final Control a, b, select, start, leftShoulder, rightShoulder;
     private final MenuButton menuButton;
     private final Runnable onMenu;
+    /** See footprint(); null until asked for. */
+    private View footprint;
     /** The menu's width in dp, between L and R and at the top centre. */
     private static final float MENU_WIDTH = 52f;
     private boolean shoulders;
@@ -90,7 +92,7 @@ final class GameControlsView extends ViewGroup {
         setMotionEventSplittingEnabled(true);
         setClipChildren(false);
         setClipToPadding(false);
-        setBackgroundColor(compact() ? Color.TRANSPARENT : Color.BLACK);
+        setBackgroundColor(Color.TRANSPARENT);
         // In ControlLayout.CONTROLS order.
         dpad = new Dpad(context);
         a = new Control(context, 1, "A", NativeBridge.A, ROUND);
@@ -120,6 +122,7 @@ final class GameControlsView extends ViewGroup {
         }
         releaseAll();
         shoulders = value;
+        footprintChanged();
         leftShoulder.setVisibility(value ? VISIBLE : GONE);
         rightShoulder.setVisibility(value ? VISIBLE : GONE);
         menuButton.setVisibility(!compact() && onMenu != null ? VISIBLE : GONE);
@@ -134,6 +137,7 @@ final class GameControlsView extends ViewGroup {
         if (moved) {
             releaseAll();
             requestLayout();
+            footprintChanged();
         }
         for (int i = 0; i < getChildCount(); i++) getChildAt(i).invalidate();
     }
@@ -181,6 +185,27 @@ final class GameControlsView extends ViewGroup {
 
     /** Landscape lays the controls over the picture, with its own layout. */
     boolean isLandscape() { return compact(); }
+
+    /** Portrait: the room the controls take below the picture at their
+     * default places, black as the beta's, for the column under this view.
+     * The controls themselves cover the whole stage, the picture included, so
+     * that one can be moved over it; at their default places they stay below. */
+    View footprint() {
+        if (footprint == null) {
+            footprint = new View(getContext()) {
+                @Override protected void onMeasure(int widthSpec, int heightSpec) {
+                    int width = MeasureSpec.getSize(widthSpec);
+                    float widthDp = width / getResources().getDisplayMetrics().density;
+                    setMeasuredDimension(width, compact() ? 0 : dp(desiredHeight(widthDp)));
+                }
+            };
+            footprint.setBackgroundColor(Color.BLACK);
+            footprint.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
+        }
+        return footprint;
+    }
+
+    private void footprintChanged() { if (footprint != null) footprint.requestLayout(); }
 
     /** Menu, focus loss and detachment must never leave a touch button held. */
     void releaseAll() {
@@ -329,9 +354,10 @@ final class GameControlsView extends ViewGroup {
     @Override protected void onConfigurationChanged(Configuration configuration) {
         super.onConfigurationChanged(configuration);
         releaseAll();
-        setBackgroundColor(compact() ? Color.TRANSPARENT : Color.BLACK);
+        setBackgroundColor(Color.TRANSPARENT);
         menuButton.setVisibility(!compact() && onMenu != null ? VISIBLE : GONE);
         requestLayout();
+        footprintChanged();
     }
 
     @Override public void onWindowFocusChanged(boolean focused) {
