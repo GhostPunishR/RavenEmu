@@ -64,6 +64,10 @@ public final class DeltaSkin {
             return kind == Kind.STANDARD ? standardPortrait : edgePortrait;
         }
 
+        public Representation landscape(Kind kind) {
+            return kind == Kind.STANDARD ? standardLandscape : edgeLandscape;
+        }
+
         /** Every representation the skin declares, landscape kept for later. */
         public List<Representation> representations() {
             List<Representation> all = new ArrayList<>();

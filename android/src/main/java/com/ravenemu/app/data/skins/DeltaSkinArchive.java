@@ -57,6 +57,8 @@ public final class DeltaSkinArchive {
     static final String ASSETS_DIRECTORY = "assets";
     static final String STANDARD_PORTRAIT_FILE = "standard-portrait.pdf";
     static final String EDGE_PORTRAIT_FILE = "edge-to-edge-portrait.pdf";
+    static final String STANDARD_LANDSCAPE_FILE = "standard-landscape.pdf";
+    static final String EDGE_LANDSCAPE_FILE = "edge-to-edge-landscape.pdf";
     static final String STAGING_DIRECTORY = ".staging";
 
     private static final int COPY_BUFFER = 32 * 1024;
@@ -119,10 +121,13 @@ public final class DeltaSkinArchive {
         Manifest manifest = DeltaSkin.parse(utf8(manifestBytes));
         DeltaSkinValidator.Validation validation = DeltaSkinValidator.validate(manifest);
 
-        String standardAsset = manifest.standardPortrait != null ? manifest.standardPortrait.resizable : null;
-        String edgeAsset = manifest.edgePortrait != null ? manifest.edgePortrait.resizable : null;
-        // Every representation's PDF, landscape included: all are checked, the
-        // portrait ones kept.
+        // The four iPhone representations' PDFs, kept under fixed names: portrait
+        // and landscape, standard and edge to edge.
+        final Representation[] kept = {manifest.standardPortrait, manifest.edgePortrait,
+                manifest.standardLandscape, manifest.edgeLandscape};
+        final String[] keptFiles = {STANDARD_PORTRAIT_FILE, EDGE_PORTRAIT_FILE, STANDARD_LANDSCAPE_FILE,
+                EDGE_LANDSCAPE_FILE};
+        // Every representation's PDF is checked.
         Set<String> referenced = new LinkedHashSet<>();
         for (Representation representation : manifest.representations()) referenced.add(representation.resizable);
         Map<String, ZipEntry> available = new HashMap<>();
@@ -152,12 +157,20 @@ public final class DeltaSkinArchive {
             if (!assets.mkdir()) throw new DeltaSkinException(Code.STORAGE_ERROR, "Impossible de préparer les assets du skin");
             Map<String, PdfInfo> infos = new HashMap<>();
             try (ZipFile zip = new ZipFile(archive, StandardCharsets.UTF_8)) {
-                if (standardAsset != null)
-                    infos.put(standardAsset, extract(zip, standardAsset, new File(assets, STANDARD_PORTRAIT_FILE)));
-                if (edgeAsset != null && !infos.containsKey(edgeAsset))
-                    infos.put(edgeAsset, extract(zip, edgeAsset, new File(assets, EDGE_PORTRAIT_FILE)));
-                else if (edgeAsset != null)
-                    Files.copy(new File(assets, STANDARD_PORTRAIT_FILE).toPath(), new File(assets, EDGE_PORTRAIT_FILE).toPath());
+                // A PDF several representations share is extracted once, then copied.
+                Map<String, File> extracted = new HashMap<>();
+                for (int i = 0; i < kept.length; i++) {
+                    if (kept[i] == null) continue;
+                    String name = kept[i].resizable;
+                    File target = new File(assets, keptFiles[i]);
+                    File first = extracted.get(name);
+                    if (first != null) {
+                        Files.copy(first.toPath(), target.toPath());
+                    } else {
+                        infos.put(name, extract(zip, name, target));
+                        extracted.put(name, target);
+                    }
+                }
                 int index = 0;
                 for (String name : referenced) {
                     if (infos.containsKey(name)) continue;
@@ -171,8 +184,9 @@ public final class DeltaSkinArchive {
 
             DeltaSkinRepository.Metadata metadata = new DeltaSkinRepository.Metadata(
                     storageKey(manifest.identifier), manifest.identifier, validation.console, sha256(copy),
-                    clock.now(), copy.length(), standardAsset != null ? STANDARD_PORTRAIT_FILE : null,
-                    edgeAsset != null ? EDGE_PORTRAIT_FILE : null, validation.ignoredInputs);
+                    clock.now(), copy.length(), kept[0] != null ? keptFiles[0] : null,
+                    kept[1] != null ? keptFiles[1] : null, kept[2] != null ? keptFiles[2] : null,
+                    kept[3] != null ? keptFiles[3] : null, validation.ignoredInputs);
             write(new File(staging, METADATA_FILE), metadata.toJson().getBytes(StandardCharsets.UTF_8));
             return new Prepared(staging, metadata, manifest);
         } catch (DeltaSkinException error) {

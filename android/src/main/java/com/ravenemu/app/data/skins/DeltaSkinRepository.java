@@ -38,12 +38,14 @@ public final class DeltaSkinRepository {
         public final String storageKey, identifier, archiveSha256;
         public final Console console;
         public final long importedAt, archiveSize;
-        /** The fixed names of the portrait PDFs, null when the skin has none of that kind. */
-        public final String standardPortrait, edgePortrait;
+        /** The fixed names of the PDFs, null when the skin has none of that
+         * kind; a skin imported before the landscape ones has none of those. */
+        public final String standardPortrait, edgePortrait, standardLandscape, edgeLandscape;
         public final List<String> ignoredInputs;
 
         Metadata(String storageKey, String identifier, Console console, String archiveSha256, long importedAt,
-                 long archiveSize, String standardPortrait, String edgePortrait, List<String> ignoredInputs) {
+                 long archiveSize, String standardPortrait, String edgePortrait, String standardLandscape,
+                 String edgeLandscape, List<String> ignoredInputs) {
             this.storageKey = storageKey;
             this.identifier = identifier;
             this.console = console;
@@ -52,10 +54,17 @@ public final class DeltaSkinRepository {
             this.archiveSize = archiveSize;
             this.standardPortrait = standardPortrait;
             this.edgePortrait = edgePortrait;
+            this.standardLandscape = standardLandscape;
+            this.edgeLandscape = edgeLandscape;
             this.ignoredInputs = Collections.unmodifiableList(new ArrayList<>(ignoredInputs));
         }
 
-        public String asset(Kind kind) { return kind == Kind.STANDARD ? standardPortrait : edgePortrait; }
+        public String asset(Kind kind) { return asset(kind, false); }
+
+        public String asset(Kind kind, boolean landscape) {
+            if (landscape) return kind == Kind.STANDARD ? standardLandscape : edgeLandscape;
+            return kind == Kind.STANDARD ? standardPortrait : edgePortrait;
+        }
 
         String toJson() {
             try {
@@ -69,6 +78,8 @@ public final class DeltaSkinRepository {
                 json.put("archiveSizeBytes", archiveSize);
                 if (standardPortrait != null) json.put("standardPortraitAsset", standardPortrait);
                 if (edgePortrait != null) json.put("edgeToEdgePortraitAsset", edgePortrait);
+                if (standardLandscape != null) json.put("standardLandscapeAsset", standardLandscape);
+                if (edgeLandscape != null) json.put("edgeToEdgeLandscapeAsset", edgeLandscape);
                 json.put("ignoredInputs", new JSONArray(ignoredInputs));
                 return json.toString(2);
             } catch (JSONException impossible) {
@@ -86,6 +97,7 @@ public final class DeltaSkinRepository {
                     Console.valueOf(json.getString("console")), json.getString("archiveSha256"),
                     json.getLong("importedAtEpochMillis"), json.getLong("archiveSizeBytes"),
                     json.optString("standardPortraitAsset", null), json.optString("edgeToEdgePortraitAsset", null),
+                    json.optString("standardLandscapeAsset", null), json.optString("edgeToEdgeLandscapeAsset", null),
                     inputs);
         }
     }
@@ -104,10 +116,18 @@ public final class DeltaSkinRepository {
         }
 
         /** The portrait PDF of this kind, or null when the skin has none. */
-        public File pdf(Kind kind) {
-            String name = metadata.asset(kind);
+        public File pdf(Kind kind) { return pdf(kind, false); }
+
+        /** The PDF of this kind and orientation, or null when the skin has none. */
+        public File pdf(Kind kind, boolean landscape) {
+            String name = metadata.asset(kind, landscape);
             return name == null ? null : new File(new File(directory, DeltaSkinArchive.ASSETS_DIRECTORY), name);
         }
+    }
+
+    private static boolean usablePdf(File directory, String name) {
+        File pdf = new File(new File(directory, DeltaSkinArchive.ASSETS_DIRECTORY), name);
+        return pdf.isFile() && pdf.length() >= 1 && pdf.length() <= DeltaSkinArchive.MAX_ENTRY_UNCOMPRESSED_BYTES;
     }
 
     public enum Outcome { INSTALLED, REPLACED, DUPLICATE, CONFLICT }
@@ -255,9 +275,15 @@ public final class DeltaSkinRepository {
                 String name = metadata.asset(kind);
                 if (name == null || !name.equals(kind == Kind.STANDARD ? DeltaSkinArchive.STANDARD_PORTRAIT_FILE
                         : DeltaSkinArchive.EDGE_PORTRAIT_FILE)) return null;
-                File pdf = new File(new File(directory, DeltaSkinArchive.ASSETS_DIRECTORY), name);
-                if (!pdf.isFile() || pdf.length() < 1 || pdf.length() > DeltaSkinArchive.MAX_ENTRY_UNCOMPRESSED_BYTES)
-                    return null;
+                if (!usablePdf(directory, name)) return null;
+            }
+            // The landscape PDFs are optional; one named must be the one expected.
+            for (Kind kind : Kind.values()) {
+                String name = metadata.asset(kind, true);
+                if (name == null) continue;
+                if (manifest.landscape(kind) == null || !name.equals(kind == Kind.STANDARD
+                        ? DeltaSkinArchive.STANDARD_LANDSCAPE_FILE : DeltaSkinArchive.EDGE_LANDSCAPE_FILE)
+                        || !usablePdf(directory, name)) return null;
             }
             return new Installed(directory, metadata, manifest, size(directory));
         } catch (IOException | JSONException | DeltaSkinException | RuntimeException unreadable) {

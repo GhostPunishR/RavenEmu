@@ -43,6 +43,37 @@ public final class DeltaSkinFixtures {
         return manifest(name, DeltaSkin.Console.GB_GBC.gameType);
     }
 
+    /** The same skin with a standard landscape representation (600 × 300, wide.pdf):
+     * D-pad, A and menu, and the picture in the screen's output frame. */
+    public static String landscapeManifest(String name) {
+        return manifest(name).replace("{\"portrait\":" + representation("skin.pdf") + "}",
+                "{\"portrait\":" + representation("skin.pdf") + ",\"landscape\":" + landscape() + "}");
+    }
+
+    static String landscape() {
+        return "{\"assets\":{\"resizable\":\"wide.pdf\"},\"mappingSize\":{\"width\":600,\"height\":300},"
+                + "\"screens\":[{\"outputFrame\":{\"x\":150,\"y\":30,\"width\":300,\"height\":240}}],"
+                + "\"items\":["
+                + "{\"inputs\":{\"up\":\"up\",\"down\":\"down\",\"left\":\"left\",\"right\":\"right\"},"
+                + "\"frame\":{\"x\":15,\"y\":90,\"width\":120,\"height\":120}},"
+                + "{\"inputs\":[\"a\"],\"frame\":{\"x\":510,\"y\":120,\"width\":60,\"height\":60}},"
+                + "{\"inputs\":[\"menu\"],\"frame\":{\"x\":275,\"y\":272,\"width\":50,\"height\":25}}]}";
+    }
+
+    /** The landscape skin's entries: both PDFs at their mapping's aspect. */
+    public static Map<String, byte[]> landscapeSkin(String name) {
+        Map<String, byte[]> entries = skin(landscapeManifest(name));
+        entries.put("wide.pdf", pdf(1, 1200, 600));
+        return entries;
+    }
+
+    /** An installed skin with a landscape representation. */
+    public static DeltaSkinRepository.Installed installLandscape(File root, File work, String name) throws Exception {
+        File archive = zip(work, name.replace(' ', '_') + "-wide.deltaskin", landscapeSkin(name));
+        DeltaSkinArchive.Prepared prepared = new DeltaSkinArchive(root, INSPECTOR).prepare(archive, archive.getName());
+        return new DeltaSkinRepository(root).install(prepared, true).skin;
+    }
+
     static String representation(String pdf) {
         return "{\"assets\":{\"resizable\":\"" + pdf + "\"},\"mappingSize\":{\"width\":400,\"height\":300},"
                 + "\"extendedEdges\":{\"top\":5,\"bottom\":5,\"left\":5,\"right\":5},\"items\":["

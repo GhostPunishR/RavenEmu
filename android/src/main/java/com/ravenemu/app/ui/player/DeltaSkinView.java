@@ -22,8 +22,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /** A Delta skin in the player, after the beta's DeltaSkinControllerView: the
- * skin's PDF as it is, at the bottom of the area, and only a faint mark over
- * what is pressed; never a RavenEmu button. The page is drawn off the UI
+ * skin's PDF as it is, at the bottom of the area in portrait, fitted whole in
+ * landscape (the beta had none), and only a faint mark over what is pressed;
+ * never a RavenEmu button. The page is drawn off the UI
  * thread; until then, or when it fails, the view shows nothing and takes no
  * touch. The listener places the picture in the game's area. UI thread. */
 final class DeltaSkinView extends View {
@@ -45,6 +46,8 @@ final class DeltaSkinView extends View {
     private static final long FADE_MILLIS = 90;
 
     private final Listener listener;
+    /** The Activity's orientation: the skin's landscape representations, or its portrait ones. */
+    private final boolean landscape;
     private final DeltaSkinInput.Fingers fingers;
     private final Paint feedbackFill = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint feedbackLine = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -63,8 +66,13 @@ final class DeltaSkinView extends View {
     private final java.util.Map<Integer, DeltaSkinInput.Mapped> pointers = new java.util.HashMap<>();
 
     DeltaSkinView(Context context, Listener listener) {
+        this(context, listener, false);
+    }
+
+    DeltaSkinView(Context context, Listener listener, boolean landscape) {
         super(context);
         this.listener = listener;
+        this.landscape = landscape;
         fingers = new DeltaSkinInput.Fingers(new DeltaSkinInput.Fingers.Listener() {
             @Override public void buttons(int mask) { listener.onButtons(mask); }
             @Override public void menu() { listener.onMenu(); }
@@ -135,7 +143,16 @@ final class DeltaSkinView extends View {
         if (layout == null || page == null) return;
         destination.set((float) layout.panel.left, (float) layout.panel.top, (float) layout.panel.right,
                 (float) layout.panel.bottom);
+        // The game shows through the skin where its screen goes, unless the
+        // skin is drawn to be translucent over it.
+        boolean clip = asset != null && !asset.representation.translucent;
+        if (clip) {
+            canvas.save();
+            canvas.clipOutRect((float) layout.gameArea.left, (float) layout.gameArea.top,
+                    (float) layout.gameArea.right, (float) layout.gameArea.bottom);
+        }
         canvas.drawBitmap(page, null, destination, null);
+        if (clip) canvas.restore();
         for (DeltaSkinInput.Target target : active) mark(canvas, target, 1f);
         if (!fading.isEmpty()) {
             float alpha = 1f - (SystemClock.uptimeMillis() - fadeStarted) / (float) FADE_MILLIS;
@@ -215,14 +232,20 @@ final class DeltaSkinView extends View {
     private void update() {
         DeltaSkins.Configuration config = configuration;
         if (config == null || getWidth() <= 0 || getHeight() <= 0) return;
-        Kind chosen = DeltaSkinLayout.select(config.assets.keySet(), getWidth(), getHeight());
+        java.util.Map<Kind, DeltaSkins.Asset> assets = config.assets(landscape);
+        // Wide screens take the edge-to-edge kind in landscape, tall ones in portrait.
+        Kind chosen = landscape ? DeltaSkinLayout.select(assets.keySet(), getHeight(), getWidth())
+                : DeltaSkinLayout.select(assets.keySet(), getWidth(), getHeight());
         if (chosen == null) {
             fail(DeltaSkinException.Code.PORTRAIT_REPRESENTATION_MISSING);
             return;
         }
-        DeltaSkins.Asset chosenAsset = config.assets.get(chosen);
-        DeltaSkinLayout next = DeltaSkinLayout.calculate(getWidth(), getHeight(), chosenAsset.representation.mapping,
-                config.screenWidth, config.screenHeight);
+        DeltaSkins.Asset chosenAsset = assets.get(chosen);
+        DeltaSkinLayout next = landscape
+                ? DeltaSkinLayout.calculateLandscape(getWidth(), getHeight(), chosenAsset.representation,
+                        config.screenWidth, config.screenHeight)
+                : DeltaSkinLayout.calculate(getWidth(), getHeight(), chosenAsset.representation.mapping,
+                        config.screenWidth, config.screenHeight);
         if (next == null) {
             fail(DeltaSkinException.Code.INVALID_MAPPING_SIZE);
             return;

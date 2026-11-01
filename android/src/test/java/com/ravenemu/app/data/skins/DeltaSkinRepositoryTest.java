@@ -20,6 +20,19 @@ import static org.junit.Assert.*;
 public final class DeltaSkinRepositoryTest {
     @Rule public TemporaryFolder temporary = new TemporaryFolder();
 
+    @Test public void aLandscapeSkinReadsBackWithItsPdfAndAMissingOneIsRefused() throws Exception {
+        File root = temporary.newFolder("skins"), work = temporary.newFolder("work");
+        DeltaSkinRepository.Installed installed = DeltaSkinFixtures.installLandscape(root, work, "Large");
+        DeltaSkinRepository repository = new DeltaSkinRepository(root);
+        DeltaSkinRepository.Installed found = repository.find(DeltaSkinFixtures.IDENTIFIER);
+        assertNotNull(found);
+        assertTrue(found.pdf(DeltaSkin.Kind.STANDARD, true).isFile());
+        assertNull(found.pdf(DeltaSkin.Kind.EDGE_TO_EDGE, true));
+        // Its landscape PDF gone: the skin no longer reads back.
+        assertTrue(installed.pdf(DeltaSkin.Kind.STANDARD, true).delete());
+        assertNull(repository.find(DeltaSkinFixtures.IDENTIFIER));
+    }
+
     @Test public void installDuplicateConflictReplaceAndDelete() throws Exception {
         File root = temporary.newFolder("skins"), work = temporary.newFolder("work");
         DeltaSkinRepository repository = new DeltaSkinRepository(root);
@@ -32,6 +45,7 @@ public final class DeltaSkinRepositoryTest {
         assertEquals(DeltaSkinArchive.storageKey(DeltaSkinFixtures.IDENTIFIER), installed.directory.getName());
         assertTrue(installed.pdf(DeltaSkin.Kind.STANDARD).isFile());
         assertNull(installed.pdf(DeltaSkin.Kind.EDGE_TO_EDGE));
+        assertNull("A skin without landscape", installed.pdf(DeltaSkin.Kind.STANDARD, true));
         assertTrue(installed.occupiedBytes > 0);
 
         DeltaSkinArchive.Prepared again = prepare(root, premier);

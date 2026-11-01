@@ -22,6 +22,32 @@ import static org.junit.Assert.*;
 public final class DeltaSkinArchiveTest {
     @Rule public TemporaryFolder temporary = new TemporaryFolder();
 
+    @Test public void aLandscapeRepresentationKeepsItsOwnPdf() throws Exception {
+        File root = temporary.newFolder("skins"), work = temporary.newFolder("work");
+        File archive = DeltaSkinFixtures.zip(work, "large.deltaskin", DeltaSkinFixtures.landscapeSkin("Large"));
+        DeltaSkinArchive.Prepared prepared = new DeltaSkinArchive(root, DeltaSkinFixtures.INSPECTOR)
+                .prepare(archive, archive.getName());
+        assertTrue(new File(prepared.staging, "assets/standard-portrait.pdf").isFile());
+        assertTrue(new File(prepared.staging, "assets/standard-landscape.pdf").isFile());
+        assertEquals("standard-landscape.pdf", prepared.metadata.standardLandscape);
+        assertNull(prepared.metadata.edgeLandscape);
+        assertEquals("PDF 1 1200 600", new String(Files.readAllBytes(
+                new File(prepared.staging, "assets/standard-landscape.pdf").toPath()), StandardCharsets.US_ASCII));
+        JSONObject stored = new JSONObject(new String(Files.readAllBytes(
+                new File(prepared.staging, "metadata.json").toPath()), StandardCharsets.UTF_8));
+        assertEquals("standard-landscape.pdf", stored.getString("standardLandscapeAsset"));
+        // A landscape PDF at the wrong aspect refuses the whole skin.
+        Map<String, byte[]> wrong = DeltaSkinFixtures.landscapeSkin("Large");
+        wrong.put("wide.pdf", DeltaSkinFixtures.pdf(1, 800, 600));
+        File refused = DeltaSkinFixtures.zip(work, "faux.deltaskin", wrong);
+        try {
+            new DeltaSkinArchive(root, DeltaSkinFixtures.INSPECTOR).prepare(refused, refused.getName());
+            fail("accepted");
+        } catch (DeltaSkinException expected) {
+            assertNotNull(expected.code);
+        }
+    }
+
     @Test public void aCheckedSkinWaitsInStagingUnderFixedNames() throws Exception {
         File root = temporary.newFolder("skins"), work = temporary.newFolder("work");
         Map<String, byte[]> entries = DeltaSkinFixtures.skin(DeltaSkinFixtures.manifest("Test"));

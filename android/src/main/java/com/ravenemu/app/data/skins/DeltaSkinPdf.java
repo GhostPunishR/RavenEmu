@@ -37,7 +37,8 @@ public final class DeltaSkinPdf {
     /** The page at this size, transparent where the skin is. */
     public static Bitmap render(File pdf, String sha256, Kind kind, int width, int height) throws DeltaSkinException {
         if (width <= 0 || height <= 0) throw new DeltaSkinException(Code.INVALID_MAPPING_SIZE, "Taille du skin nulle");
-        String key = sha256 + "|" + kind.name() + "|portrait|" + width + "|" + height;
+        // The file's fixed name tells the kind and the orientation apart.
+        String key = sha256 + "|" + kind.name() + "|" + pdf.getName() + "|" + width + "|" + height;
         synchronized (CACHE) {
             Bitmap cached = CACHE.get(key);
             if (cached != null && !cached.isRecycled()) return cached;

@@ -2,14 +2,17 @@ package com.ravenemu.app.ui.player;
 
 import com.ravenemu.app.data.skins.DeltaSkin.Frame;
 import com.ravenemu.app.data.skins.DeltaSkin.Kind;
+import com.ravenemu.app.data.skins.DeltaSkin.Representation;
 import com.ravenemu.app.data.skins.DeltaSkin.Size;
 
 import java.util.Set;
 
 /** Where a Delta skin goes in the player, after the beta's
- * DeltaSkinLayoutCalculator and DeltaSkinRepresentationSelector: the skin's
- * panel as wide as the area and at its bottom, the game's area above it, and
- * the picture centred in that area at the console's aspect. Pure geometry. */
+ * DeltaSkinLayoutCalculator and DeltaSkinRepresentationSelector. Portrait:
+ * the skin's panel as wide as the area and at its bottom, the game's area
+ * above it. Landscape (the beta had none): the whole skin fitted in the area
+ * and centred, the game's area the screen frame the skin names. The picture
+ * is centred in the game's area at the console's aspect. Pure geometry. */
 final class DeltaSkinLayout {
     /** A tall phone (twice as high as wide) takes the edge-to-edge representation. */
     static final double EDGE_TO_EDGE_ASPECT = 2.0;
@@ -82,6 +85,29 @@ final class DeltaSkinLayout {
         double gameWidth = screenWidth * gameScale, gameHeight = screenHeight * gameScale;
         double left = (area.width() - gameWidth) / 2, top = (area.height() - gameHeight) / 2;
         return new DeltaSkinLayout(panel, area, new Box(left, top, left + gameWidth, top + gameHeight), scale);
+    }
+
+    /** Landscape: the skin fitted whole and centred; the picture in its first
+     * screen's output frame, else its gameScreenFrame, else over the whole
+     * skin. Null when the skin cannot fit. */
+    static DeltaSkinLayout calculateLandscape(double width, double height, Representation representation,
+                                              double screenWidth, double screenHeight) {
+        Size mapping = representation.mapping;
+        if (width <= 0 || height <= 0 || mapping.width <= 0 || mapping.height <= 0 || screenWidth <= 0
+                || screenHeight <= 0) return null;
+        double scale = Math.min(width / mapping.width, height / mapping.height);
+        double panelWidth = mapping.width * scale, panelHeight = mapping.height * scale;
+        double left = (width - panelWidth) / 2, top = (height - panelHeight) / 2;
+        Box panel = new Box(left, top, left + panelWidth, top + panelHeight);
+        Frame frame = !representation.screens.isEmpty() ? representation.screens.get(0).outputFrame
+                : representation.gameScreenFrame;
+        Box area = frame != null ? map(frame, panel, mapping) : panel;
+        if (area.width() <= 0 || area.height() <= 0) return null;
+        double gameScale = Math.min(area.width() / screenWidth, area.height() / screenHeight);
+        double gameWidth = screenWidth * gameScale, gameHeight = screenHeight * gameScale;
+        double gameLeft = area.left + (area.width() - gameWidth) / 2, gameTop = area.top + (area.height() - gameHeight) / 2;
+        return new DeltaSkinLayout(panel, area, new Box(gameLeft, gameTop, gameLeft + gameWidth, gameTop + gameHeight),
+                scale);
     }
 
     /** A frame of the skin, in the panel's place. */

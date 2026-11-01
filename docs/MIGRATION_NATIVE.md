@@ -1327,3 +1327,37 @@ aucun toucher : les boutons du skin restent actifs sous elle.
 - Tests : `PlayerActivityTest` (surcouche au-dessus du skin, sur toute sa
   taille, un toucher sur la scène atteint encore le bouton A ; retour sur
   l'image quand le skin ne peut pas se dessiner).
+
+## Petits écarts, lot E-3 : skins Delta en paysage
+
+La bêta n'affichait les skins qu'en portrait ; ils servent maintenant aussi en
+paysage quand ils ont une représentation paysage.
+
+- **Import** : les PDF des quatre représentations iPhone (portrait et
+  paysage, standard et bord à bord) sont gardés sous des noms fixes
+  (`standard-landscape.pdf`, `edge-to-edge-landscape.pdf`) ; ceux du paysage
+  étaient déjà vérifiés (cadres, rapport du PDF) et sont maintenant conservés.
+  Les métadonnées les notent (`standardLandscapeAsset`,
+  `edgeToEdgeLandscapeAsset`, champs facultatifs, même schéma). **Un skin
+  importé avant cette version n'a pas ses PDF paysage : il faut le
+  réimporter** pour l'avoir en paysage.
+- **Mise en page** (`DeltaSkinLayout.calculateLandscape`) : le skin entier est
+  ajusté à la scène et centré ; l'image du jeu va dans la sortie du premier
+  écran du skin (`screens[0].outputFrame`), sinon dans `gameScreenFrame`,
+  sinon sur tout le skin, au format de la console. Un écran large prend la
+  représentation bord à bord quand le skin l'a.
+- **Dessin** : l'image du jeu reste visible à travers le skin à l'endroit de
+  son écran, sauf pour un skin déclaré `translucent`, dessiné par-dessus. Le
+  cache des pages distingue maintenant le portrait du paysage.
+- **Lecteur** : en paysage, le skin remplace les commandes tactiles comme en
+  portrait (boutons, bouton menu, bandeaux des succès sur tout le skin). Un
+  skin sans paysage **reste choisi** : les commandes classiques le remplacent
+  en paysage, sans message d'erreur, et il revient en portrait.
+- Tests : `DeltaSkinArchiveTest` (PDF paysage gardé, mauvais rapport refusé),
+  `DeltaSkinRepositoryTest` (relecture, PDF paysage manquant refusé),
+  `DeltaSkinInputTest` (cadre de l'écran, `gameScreenFrame`, skin entier,
+  centrage sur écran large, boutons), `PlayerActivityTest` (paysage : PDF
+  paysage dessiné, image dans le cadre, bouton A ; skin portrait seul gardé
+  derrière les commandes classiques) ; une mutation détectée.
+
+Écart restant : rendu à vérifier sur téléphone avec de vrais skins paysage.

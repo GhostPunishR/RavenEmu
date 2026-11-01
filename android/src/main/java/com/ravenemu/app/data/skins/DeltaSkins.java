@@ -43,7 +43,7 @@ public final class DeltaSkins {
         }
     }
 
-    /** One portrait representation and its PDF. */
+    /** One representation and its PDF. */
     public static final class Asset {
         public final DeltaSkin.Representation representation;
         public final File pdf;
@@ -54,21 +54,29 @@ public final class DeltaSkins {
         }
     }
 
-    /** What the player shows for a console: the skin's portrait PDFs, and the
-     * console's own screen size for the picture. */
+    /** What the player shows for a console: the skin's PDFs, portrait and
+     * landscape, and the console's own screen size for the picture. */
     public static final class Configuration {
         public final String sha256;
         public final Console console;
-        public final Map<Kind, Asset> assets;
+        /** Portrait: never empty. Landscape: empty when the skin has none. */
+        public final Map<Kind, Asset> assets, landscape;
         public final double screenWidth, screenHeight;
 
         Configuration(String sha256, Console console, Map<Kind, Asset> assets) {
+            this(sha256, console, assets, Collections.emptyMap());
+        }
+
+        Configuration(String sha256, Console console, Map<Kind, Asset> assets, Map<Kind, Asset> landscape) {
             this.sha256 = sha256;
             this.console = console;
             this.assets = Collections.unmodifiableMap(assets);
+            this.landscape = Collections.unmodifiableMap(landscape);
             screenWidth = console == Console.GBA ? 240 : 160;
             screenHeight = console == Console.GBA ? 160 : 144;
         }
+
+        public Map<Kind, Asset> assets(boolean inLandscape) { return inLandscape ? landscape : assets; }
     }
 
     private final Context context;
@@ -172,19 +180,22 @@ public final class DeltaSkins {
         String identifier = selected(console);
         if (identifier == null) return null;
         DeltaSkinRepository.Installed installed = repository.find(identifier);
-        Map<Kind, Asset> assets = new EnumMap<>(Kind.class);
+        Map<Kind, Asset> assets = new EnumMap<>(Kind.class), landscape = new EnumMap<>(Kind.class);
         if (installed != null && installed.metadata.console == console) {
             for (Kind kind : Kind.values()) {
                 DeltaSkin.Representation representation = installed.manifest.portrait(kind);
                 File pdf = installed.pdf(kind);
                 if (representation != null && pdf != null) assets.put(kind, new Asset(representation, pdf));
+                DeltaSkin.Representation wide = installed.manifest.landscape(kind);
+                File widePdf = installed.pdf(kind, true);
+                if (wide != null && widePdf != null) landscape.put(kind, new Asset(wide, widePdf));
             }
         }
         if (installed == null || assets.isEmpty()) {
             select(console, null);
             return null;
         }
-        return new Configuration(installed.metadata.archiveSha256, console, assets);
+        return new Configuration(installed.metadata.archiveSha256, console, assets, landscape);
     }
 
     /** The skin failed while playing: that console goes back to the classic controls. */

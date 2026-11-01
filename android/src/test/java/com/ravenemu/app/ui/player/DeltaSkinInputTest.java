@@ -31,6 +31,39 @@ public final class DeltaSkinInputTest {
         assertEquals(new Box(40, 920, 280, 1160), DeltaSkinLayout.map(skin.items.get(0).frame, layout.panel, skin.mapping));
     }
 
+    @Test public void inLandscapeTheWholeSkinFitsAndThePictureGoesInItsScreenFrame() throws Exception {
+        DeltaSkin.Representation wide = DeltaSkin.parse(DeltaSkinFixtures.landscapeManifest("Test"))
+                .landscape(DeltaSkin.Kind.STANDARD);
+        DeltaSkinLayout layout = DeltaSkinLayout.calculateLandscape(1200, 600, wide, 160, 144);
+        assertEquals(2.0, layout.scale, 0);
+        assertEquals(new Box(0, 0, 1200, 600), layout.panel);
+        assertEquals("The screen's output frame", new Box(300, 60, 900, 540), layout.gameArea);
+        assertEquals(333.333, layout.gameScreen.left, 0.001);
+        assertEquals(60, layout.gameScreen.top, 0.001);
+        assertEquals(480, layout.gameScreen.height(), 0.001);
+        // A wider phone: the skin keeps its aspect, centred.
+        DeltaSkinLayout centred = DeltaSkinLayout.calculateLandscape(1600, 600, wide, 160, 144);
+        assertEquals(new Box(200, 0, 1400, 600), centred.panel);
+        assertEquals(new Box(500, 60, 1100, 540), centred.gameArea);
+        // Without a screen, gameScreenFrame; without either, the whole skin.
+        DeltaSkin.Representation framed = DeltaSkin.parse(DeltaSkinFixtures.landscapeManifest("Test").replace(
+                "\"screens\":[{\"outputFrame\":{\"x\":150,\"y\":30,\"width\":300,\"height\":240}}]",
+                "\"gameScreenFrame\":{\"x\":100,\"y\":0,\"width\":400,\"height\":300}"))
+                .landscape(DeltaSkin.Kind.STANDARD);
+        assertEquals(new Box(200, 0, 1000, 600), DeltaSkinLayout.calculateLandscape(1200, 600, framed, 160, 144).gameArea);
+        DeltaSkin.Representation bare = DeltaSkin.parse(DeltaSkinFixtures.landscapeManifest("Test").replace(
+                "\"screens\":[{\"outputFrame\":{\"x\":150,\"y\":30,\"width\":300,\"height\":240}}],", ""))
+                .landscape(DeltaSkin.Kind.STANDARD);
+        DeltaSkinLayout whole = DeltaSkinLayout.calculateLandscape(1200, 600, bare, 160, 144);
+        assertEquals(whole.panel, whole.gameArea);
+        assertNull(DeltaSkinLayout.calculateLandscape(0, 600, wide, 160, 144));
+        // Its buttons where the skin draws them.
+        DeltaSkinInput input = new DeltaSkinInput(DeltaSkin.Console.GB_GBC, wide, layout.panel);
+        assertEquals(NativeBridge.A, input.at(1080, 300).mask);
+        assertTrue(input.at(600, 570).menu);
+        assertEquals("The picture is not a button", 0, input.at(600, 300).mask);
+    }
+
     @Test public void aTallPhoneTakesTheEdgeToEdgeKindWhenTheSkinHasIt() {
         Set<DeltaSkin.Kind> both = EnumSet.allOf(DeltaSkin.Kind.class);
         assertEquals(DeltaSkin.Kind.STANDARD, DeltaSkinLayout.select(both, 1000, 1900));

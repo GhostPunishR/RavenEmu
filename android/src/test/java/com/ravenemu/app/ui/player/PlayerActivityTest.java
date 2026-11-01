@@ -1026,6 +1026,78 @@ public final class PlayerActivityTest {
         }
     }
 
+    @Test @Config(qualifiers = "en-rUS-w640dp-h360dp-land-mdpi")
+    public void inLandscapeASkinsLandscapeRepresentationCoversTheStage() throws Exception {
+        android.content.Context app = RuntimeEnvironment.getApplication();
+        File work = new File(app.getCacheDir(), "skin-work");
+        assertTrue(work.isDirectory() || work.mkdirs());
+        com.ravenemu.app.data.skins.DeltaSkinFixtures.installLandscape(
+                com.ravenemu.app.data.skins.DeltaSkins.root(app), work, "Large");
+        app.getSharedPreferences(PlaybackSettings.PREFERENCES, 0).edit()
+                .putString("skins.selected.gb_gbc", com.ravenemu.app.data.skins.DeltaSkinFixtures.IDENTIFIER).commit();
+        DeltaSkinView.Renderer previous = DeltaSkinView.renderer;
+        java.util.List<String> drawn = new java.util.ArrayList<>();
+        DeltaSkinView.renderer = (pdf, sha, kind, w, h) -> {
+            drawn.add(pdf.getName());
+            return android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888);
+        };
+        try {
+            PlayerActivity activity = loaded();
+            settleSkin(activity, 640, 360);
+            GameControlsView controls = ReflectionHelpers.getField(activity, "gameControls");
+            DeltaSkinView skin = ReflectionHelpers.getField(activity, "skinView");
+            View picture = ReflectionHelpers.getField(activity, "pictureFrame");
+            assertTrue(skin.ready());
+            assertEquals("The landscape PDF", "standard-landscape.pdf", drawn.get(drawn.size() - 1));
+            assertEquals(View.GONE, controls.getVisibility());
+            DeltaSkinLayout layout = skin.layout();
+            assertEquals("The whole skin, at its 2:1 aspect", layout.panel.width(), layout.panel.height() * 2, 1);
+            android.widget.FrameLayout.LayoutParams area =
+                    (android.widget.FrameLayout.LayoutParams) picture.getLayoutParams();
+            assertEquals("The picture in the screen's output frame", Math.round(layout.gameArea.width()), area.width);
+            assertEquals(Math.round(layout.gameArea.left), area.leftMargin);
+            assertEquals(Math.round(layout.gameArea.top), area.topMargin);
+            // A at (510, 120, 60 × 60 of 600 × 300).
+            float scale = (float) layout.scale, left = (float) layout.panel.left, top = (float) layout.panel.top;
+            touchSkin(skin, MotionEvent.ACTION_DOWN, left + 540 * scale, top + 150 * scale);
+            assertEquals(NativeBridge.A, FakeNative.buttons & NativeBridge.A);
+            touchSkin(skin, MotionEvent.ACTION_UP, left + 540 * scale, top + 150 * scale);
+            assertEquals(0, FakeNative.buttons);
+            View overlay = ReflectionHelpers.getField(activity, "achievementOverlay");
+            assertSame("The banners over the whole skin", skin.getParent(), overlay.getParent());
+        } finally {
+            DeltaSkinView.renderer = previous;
+        }
+    }
+
+    @Test @Config(qualifiers = "en-rUS-w640dp-h360dp-land-mdpi")
+    public void inLandscapeAPortraitOnlySkinStaysChosenBehindTheClassicControls() throws Exception {
+        android.content.Context app = RuntimeEnvironment.getApplication();
+        File work = new File(app.getCacheDir(), "skin-work");
+        assertTrue(work.isDirectory() || work.mkdirs());
+        com.ravenemu.app.data.skins.DeltaSkinFixtures.install(com.ravenemu.app.data.skins.DeltaSkins.root(app), work, "Test");
+        android.content.SharedPreferences preferences = app.getSharedPreferences(PlaybackSettings.PREFERENCES, 0);
+        preferences.edit().putString("skins.selected.gb_gbc", com.ravenemu.app.data.skins.DeltaSkinFixtures.IDENTIFIER)
+                .commit();
+        DeltaSkinView.Renderer previous = DeltaSkinView.renderer;
+        DeltaSkinView.renderer = (pdf, sha, kind, w, h) ->
+                android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888);
+        try {
+            ShadowToast.reset();
+            PlayerActivity activity = loaded();
+            settleSkin(activity, 640, 360);
+            GameControlsView controls = ReflectionHelpers.getField(activity, "gameControls");
+            DeltaSkinView skin = ReflectionHelpers.getField(activity, "skinView");
+            assertEquals(View.VISIBLE, controls.getVisibility());
+            assertEquals(View.GONE, skin.getVisibility());
+            assertEquals("Still chosen for the portrait", com.ravenemu.app.data.skins.DeltaSkinFixtures.IDENTIFIER,
+                    preferences.getString("skins.selected.gb_gbc", null));
+            assertNull("No failure announced", ShadowToast.getTextOfLatestToast());
+        } finally {
+            DeltaSkinView.renderer = previous;
+        }
+    }
+
     @Test public void aSkinThatCannotBeDrawnGivesTheClassicControlsBack() throws Exception {
         android.content.Context app = RuntimeEnvironment.getApplication();
         File work = new File(app.getCacheDir(), "skin-work");
@@ -1297,14 +1369,18 @@ public final class PlayerActivityTest {
 
     /** The skin read off the UI thread, laid out, its page drawn, the picture placed. */
     private void settleSkin(PlayerActivity activity) throws Exception {
+        settleSkin(activity, 320, 568);
+    }
+
+    private void settleSkin(PlayerActivity activity, int width, int height) throws Exception {
         ExecutorService skins = ReflectionHelpers.getStaticField(PlayerActivity.class, "SKINS");
         for (int i = 0; i < 3; i++) {
             skins.submit(() -> {}).get(5, TimeUnit.SECONDS);
             idle();
             View decor = activity.getWindow().getDecorView();
-            decor.measure(View.MeasureSpec.makeMeasureSpec(320, View.MeasureSpec.EXACTLY),
-                    View.MeasureSpec.makeMeasureSpec(568, View.MeasureSpec.EXACTLY));
-            decor.layout(0, 0, 320, 568);
+            decor.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY));
+            decor.layout(0, 0, width, height);
             DeltaSkinView.RENDER.submit(() -> {}).get(5, TimeUnit.SECONDS);
             idle();
         }

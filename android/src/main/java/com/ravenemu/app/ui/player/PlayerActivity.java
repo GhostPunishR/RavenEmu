@@ -95,9 +95,11 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
     private DeltaSkinView skinView;
     /** The picture and the achievements over it: the skin's game area when it shows. */
     private FrameLayout pictureFrame;
-    /** Portrait: the picture's column and the skin over it; RetroAchievements'
+    /** The picture, the touch controls and the skin over them; RetroAchievements'
      * banners and indicators cover it whole while a skin is shown. */
     private FrameLayout skinStage;
+    /** Landscape: where the picture sits beside the classic controls. */
+    private FrameLayout.LayoutParams classicLandscapePicture;
     /** UI thread: the open game's system, for its console's skin; null before a game. */
     private String loadedSystem;
     private int skinRequest;
@@ -307,9 +309,15 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
             FrameLayout.LayoutParams video = new FrameLayout.LayoutParams(-1, -1);
             video.leftMargin = video.rightMargin = dp(116);
             video.bottomMargin = dp(44);
+            classicLandscapePicture = video;
             stage.addView(screen, video);
             // The whole stage, so a control can be moved beside or over the picture.
             stage.addView(gameControls, new FrameLayout.LayoutParams(-1, -1));
+            // A skin's landscape representation covers the whole stage and
+            // places the picture in its screen frame.
+            skinView = newSkinView(true);
+            stage.addView(skinView, new FrameLayout.LayoutParams(-1, -1));
+            skinStage = stage;
         } else {
             // The picture over the touch controls; a Delta skin covers both
             // and gives the picture its place.
@@ -319,13 +327,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
             column.addView(screen, new LinearLayout.LayoutParams(-1, 0, 1));
             column.addView(gameControls, new LinearLayout.LayoutParams(-1, -2));
             stage.addView(column, new FrameLayout.LayoutParams(-1, -1));
-            skinView = new DeltaSkinView(this, new DeltaSkinView.Listener() {
-                @Override public void onButtons(int mask) { setTouchButtons(mask); }
-                @Override public void onMenu() { togglePlayerMenu(); }
-                @Override public void onReady(DeltaSkinLayout layout) { showSkin(layout); }
-                @Override public void onError(DeltaSkinException.Code code) { skinFailed(); }
-            });
-            skinView.setEnabled(false);
+            skinView = newSkinView(false);
             stage.addView(skinView, new FrameLayout.LayoutParams(-1, -1));
             root.addView(stage, new LinearLayout.LayoutParams(-1, 0, 1));
             skinStage = stage;
@@ -436,7 +438,10 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
             final DeltaSkins.Configuration configuration = found;
             runOnUiThread(() -> {
                 if (disposed.get() || request != skinRequest || skinView == null) return;
-                if (configuration == null) {
+                // A skin without landscape representations stays chosen: the
+                // classic controls stand in for it until the phone turns back.
+                if (configuration == null
+                        || (classicLandscapePicture != null && configuration.landscape.isEmpty())) {
                     showClassicControls();
                     return;
                 }
@@ -448,17 +453,37 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         });
     }
 
-    /** The skin is drawn: the picture takes the game's area above it. */
+    private DeltaSkinView newSkinView(boolean landscape) {
+        DeltaSkinView view = new DeltaSkinView(this, new DeltaSkinView.Listener() {
+            @Override public void onButtons(int mask) { setTouchButtons(mask); }
+            @Override public void onMenu() { togglePlayerMenu(); }
+            @Override public void onReady(DeltaSkinLayout layout) { showSkin(layout); }
+            @Override public void onError(DeltaSkinException.Code code) { skinFailed(); }
+        }, landscape);
+        view.setEnabled(false);
+        return view;
+    }
+
+    /** The skin is drawn: the picture takes the game's area, above the skin
+     * in portrait, in its screen frame in landscape. */
     private void showSkin(DeltaSkinLayout layout) {
         if (pictureFrame == null || gameControls == null) return;
         if (gameControls.isEditing()) finishMovingControls();
         releaseInput();
         gameControls.setVisibility(View.GONE);
-        LinearLayout.LayoutParams area = new LinearLayout.LayoutParams(
-                (int) Math.round(layout.gameArea.width()), (int) Math.round(layout.gameArea.height()));
-        area.leftMargin = (int) Math.round(layout.gameArea.left);
-        area.topMargin = (int) Math.round(layout.gameArea.top);
-        pictureFrame.setLayoutParams(area);
+        int width = (int) Math.round(layout.gameArea.width()), height = (int) Math.round(layout.gameArea.height());
+        int left = (int) Math.round(layout.gameArea.left), top = (int) Math.round(layout.gameArea.top);
+        if (pictureFrame.getLayoutParams() instanceof FrameLayout.LayoutParams) {
+            FrameLayout.LayoutParams area = new FrameLayout.LayoutParams(width, height);
+            area.leftMargin = left;
+            area.topMargin = top;
+            pictureFrame.setLayoutParams(area);
+        } else {
+            LinearLayout.LayoutParams area = new LinearLayout.LayoutParams(width, height);
+            area.leftMargin = left;
+            area.topMargin = top;
+            pictureFrame.setLayoutParams(area);
+        }
         // As in the beta, the banners use the whole skin, not the picture alone.
         placeAchievementOverlay(skinStage);
     }
@@ -473,14 +498,14 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
     }
 
     private void showClassicControls() {
-        // Landscape has no skin: its picture is not in the portrait column.
         if (skinView == null) return;
         skinView.setConfiguration(null, false);
         if (pictureFrame == null || gameControls == null) return;
         placeAchievementOverlay(pictureFrame);
         if (gameControls.getVisibility() == View.VISIBLE) return;
         releaseInput();
-        pictureFrame.setLayoutParams(new LinearLayout.LayoutParams(-1, 0, 1));
+        if (classicLandscapePicture != null) pictureFrame.setLayoutParams(classicLandscapePicture);
+        else pictureFrame.setLayoutParams(new LinearLayout.LayoutParams(-1, 0, 1));
         gameControls.setVisibility(View.VISIBLE);
     }
 
