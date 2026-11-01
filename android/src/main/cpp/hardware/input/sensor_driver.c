@@ -21,6 +21,14 @@ static const ASensor *sensors[KINDS];
 static int wanted[KINDS], enabled[KINDS], running = 1, rotation;
 static unsigned rates[KINDS];
 static float acceleration[3], turning[3], lux;
+/* The controller played with: which sensors it has, and their readings. */
+static unsigned controller_kinds;
+static float controller_acceleration[3], controller_turning[3];
+
+/* The controller has this kind (accelerometer or gyroscope). */
+static int from_controller(int kind) {
+    return kind < LIGHT && (controller_kinds & (1u << kind)) != 0;
+}
 
 static int open_queue(void) {
     if (queue) return 1;
@@ -70,12 +78,12 @@ int raven_sensors_set_state(unsigned action, unsigned rate) {
         apply(kind);
         return 1;
     }
-    if (!sensor_for(kind)) return 0;
+    if (!sensor_for(kind) && !from_controller(kind)) return 0;
     wanted[kind] = 1;
     rates[kind] = rate > 1000 ? 1000 : rate;
     apply(kind);
-    /* Paused, it comes on with the game. */
-    return enabled[kind] || !running;
+    /* Paused, it comes on with the game; the controller's needs no queue. */
+    return enabled[kind] || !running || from_controller(kind);
 }
 
 void raven_sensors_poll(void) {
@@ -120,6 +128,15 @@ static float screen_y(const float *v) {
 }
 
 float raven_sensors_read(unsigned id) {
+    /* The controller's, as it reads, while the core wants them and the game runs. */
+    const int accel = id <= RETRO_SENSOR_ACCELEROMETER_Z;  /* RETRO_SENSOR_ACCELEROMETER_X is 0 */
+    const int gyro = id >= RETRO_SENSOR_GYROSCOPE_X && id <= RETRO_SENSOR_GYROSCOPE_Z;
+    if ((accel && from_controller(ACCELEROMETER)) || (gyro && from_controller(GYROSCOPE))) {
+        const int kind = accel ? ACCELEROMETER : GYROSCOPE;
+        if (!wanted[kind] || !running) return 0.0f;
+        const float *values = accel ? controller_acceleration : controller_turning;
+        return values[id - (accel ? RETRO_SENSOR_ACCELEROMETER_X : RETRO_SENSOR_GYROSCOPE_X)];
+    }
     switch (id) {
         case RETRO_SENSOR_ACCELEROMETER_X: return screen_x(acceleration);
         case RETRO_SENSOR_ACCELEROMETER_Y: return screen_y(acceleration);
@@ -129,6 +146,14 @@ float raven_sensors_read(unsigned id) {
         case RETRO_SENSOR_GYROSCOPE_Z: return turning[2];
         case RETRO_SENSOR_ILLUMINANCE: return lux;
         default: return 0.0f;
+    }
+}
+
+void raven_sensors_feed_controller(unsigned kinds, const float acceleration_in[3], const float turning_in[3]) {
+    controller_kinds = kinds & (RAVEN_SENSORS_CONTROLLER_ACCELEROMETER | RAVEN_SENSORS_CONTROLLER_GYROSCOPE);
+    for (int i = 0; i < 3; ++i) {
+        controller_acceleration[i] = acceleration_in && (controller_kinds & 1u) ? acceleration_in[i] : 0.0f;
+        controller_turning[i] = turning_in && (controller_kinds & 2u) ? turning_in[i] : 0.0f;
     }
 }
 
@@ -150,4 +175,5 @@ void raven_sensors_close(void) {
     }
     if (queue && manager) ASensorManager_destroyEventQueue(manager, queue);
     queue = NULL;
+    raven_sensors_feed_controller(0, NULL, NULL);
 }

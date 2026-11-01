@@ -21,6 +21,10 @@ public final class PlaybackSettings {
     public static final String EFFECT_NONE = "none";
     public static final String EFFECT_SHARP = "sharp";
     public static final String EFFECT_LCD = "lcd";
+    /** How the core's sound reaches the device's rate: windowed sinc (clean
+     * high notes) or linear interpolation, lighter. */
+    public static final String RESAMPLER_SINC = "sinc";
+    public static final String RESAMPLER_LINEAR = "linear";
 
     public static final PlaybackSettings DEFAULTS = new PlaybackSettings(true, 100, false, 0, 100);
 
@@ -35,6 +39,7 @@ public final class PlaybackSettings {
     public final boolean lcdCorrectionGba;
     public final String frameBlending;
     public final String screenEffect;
+    public final String resampler;
 
     /** Sound and picture, with the cores' own image options at their defaults. */
     public PlaybackSettings(boolean audioEnabled, int audioVolume, boolean integerScale,
@@ -54,6 +59,14 @@ public final class PlaybackSettings {
                      int brightness, int contrast, String gbPalette,
                      boolean lcdCorrectionGbc, boolean lcdCorrectionGba, String frameBlending,
                      String screenEffect) {
+        this(audioEnabled, audioVolume, integerScale, brightness, contrast, gbPalette,
+                lcdCorrectionGbc, lcdCorrectionGba, frameBlending, screenEffect, RESAMPLER_SINC);
+    }
+
+    public PlaybackSettings(boolean audioEnabled, int audioVolume, boolean integerScale,
+                     int brightness, int contrast, String gbPalette,
+                     boolean lcdCorrectionGbc, boolean lcdCorrectionGba, String frameBlending,
+                     String screenEffect, String resampler) {
         this.audioEnabled = audioEnabled;
         this.audioVolume = clamp(audioVolume, 0, 100);
         this.integerScale = integerScale;
@@ -64,27 +77,38 @@ public final class PlaybackSettings {
         this.lcdCorrectionGba = lcdCorrectionGba;
         this.frameBlending = oneOf(frameBlending, BLENDING_OFF, BLENDING_MIX, BLENDING_GHOSTING);
         this.screenEffect = oneOf(screenEffect, EFFECT_NONE, EFFECT_SHARP, EFFECT_LCD);
+        this.resampler = oneOf(resampler, RESAMPLER_SINC, RESAMPLER_LINEAR);
     }
 
     public PlaybackSettings withAudio(boolean enabled, int volume) {
         return new PlaybackSettings(enabled, volume, integerScale, brightness, contrast,
-                gbPalette, lcdCorrectionGbc, lcdCorrectionGba, frameBlending, screenEffect);
+                gbPalette, lcdCorrectionGbc, lcdCorrectionGba, frameBlending, screenEffect, resampler);
     }
 
     public PlaybackSettings withPicture(boolean integerScale, int brightness, int contrast) {
         return new PlaybackSettings(audioEnabled, audioVolume, integerScale, brightness, contrast,
-                gbPalette, lcdCorrectionGbc, lcdCorrectionGba, frameBlending, screenEffect);
+                gbPalette, lcdCorrectionGbc, lcdCorrectionGba, frameBlending, screenEffect, resampler);
     }
 
     public PlaybackSettings withImage(String gbPalette, boolean lcdCorrectionGbc,
                                       boolean lcdCorrectionGba, String frameBlending) {
         return new PlaybackSettings(audioEnabled, audioVolume, integerScale, brightness, contrast,
-                gbPalette, lcdCorrectionGbc, lcdCorrectionGba, frameBlending, screenEffect);
+                gbPalette, lcdCorrectionGbc, lcdCorrectionGba, frameBlending, screenEffect, resampler);
     }
 
     public PlaybackSettings withEffect(String effect) {
         return new PlaybackSettings(audioEnabled, audioVolume, integerScale, brightness, contrast,
-                gbPalette, lcdCorrectionGbc, lcdCorrectionGba, frameBlending, effect);
+                gbPalette, lcdCorrectionGbc, lcdCorrectionGba, frameBlending, effect, resampler);
+    }
+
+    public PlaybackSettings withResampler(String value) {
+        return new PlaybackSettings(audioEnabled, audioVolume, integerScale, brightness, contrast,
+                gbPalette, lcdCorrectionGbc, lcdCorrectionGba, frameBlending, screenEffect, value);
+    }
+
+    /** RAVEN_AUDIO_RESAMPLER_LINEAR or _SINC, for NativeBridge. */
+    public int resamplerCode() {
+        return RESAMPLER_LINEAR.equals(resampler) ? 0 : 1;
     }
 
     /** RAVEN_VIDEO_EFFECT_NONE, _SHARP or _LCD, for NativeBridge. */
@@ -103,7 +127,8 @@ public final class PlaybackSettings {
                 string(values, "video.gb_palette", PALETTE_ORIGINAL),
                 bool(values, "video.lcd_gbc", false), bool(values, "video.lcd_gba", false),
                 string(values, "video.frame_blending", BLENDING_OFF),
-                string(values, "video.screen_effect", EFFECT_NONE));
+                string(values, "video.screen_effect", EFFECT_NONE),
+                string(values, "audio.resampler", RESAMPLER_SINC));
     }
 
     public void save(Context context) {
@@ -115,6 +140,7 @@ public final class PlaybackSettings {
                 .putBoolean("video.lcd_gbc", lcdCorrectionGbc).putBoolean("video.lcd_gba", lcdCorrectionGba)
                 .putString("video.frame_blending", frameBlending)
                 .putString("video.screen_effect", screenEffect)
+                .putString("audio.resampler", resampler)
                 .apply();
     }
 

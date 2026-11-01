@@ -1,6 +1,7 @@
 package com.ravenemu.app.ui.library;
 import com.ravenemu.app.data.library.CoverRepository;
 import com.ravenemu.app.data.library.RomLibrary;
+import com.ravenemu.app.ui.common.RavenTheme;
 
 import android.content.Context;
 import android.graphics.Bitmap;
@@ -46,8 +47,12 @@ final class CoverAdapter extends ArrayAdapter<RomLibrary.Entry> {
         TextView platform;
     }
 
+    /** The colours of the Activity it belongs to (Settings → Interface → Thème). */
+    private final RavenTheme theme;
+
     CoverAdapter(Context context, File files, Executor executor) {
         super(context, 0);
+        this.theme = RavenTheme.of(context);
         this.files = files;
         this.executor = executor;
     }
@@ -102,7 +107,7 @@ final class CoverAdapter extends ArrayAdapter<RomLibrary.Entry> {
         holder.platform.setText(entry.system.toUpperCase(java.util.Locale.ROOT) +
                 (entry.cartridgeTitle.isEmpty() ? "" : " · " + entry.cartridgeTitle));
         holder.image.setContentDescription("Jaquette de " + entry.title);
-        holder.image.setBackgroundColor(0xff233044);
+        holder.image.setBackgroundColor(theme.cover);
         holder.image.setImageDrawable(null);
 
         Bitmap bitmap = thumbnails.get(entry.key);

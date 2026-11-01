@@ -60,6 +60,24 @@ int raven_frame_pacer_locked(const raven_frame_pacer *pacer);
 /* The game's speed against the console: 1.0, or the display's when locked. */
 double raven_frame_pacer_speed(const raven_frame_pacer *pacer);
 
+/* Preemptive frames rerun up to three frames within one: a phone too slow
+ * for that misses refreshes at every press. A frame that replayed and took
+ * more than RAVEN_REPLAY_BUDGET of the core's frame period overran; at
+ * RAVEN_REPLAY_OVERRUNS overruns within RAVEN_REPLAY_WINDOW replays, the
+ * guard says to replay one frame less. Pure, emulation owner only. */
+#define RAVEN_REPLAY_BUDGET 0.75
+#define RAVEN_REPLAY_WINDOW 8u
+#define RAVEN_REPLAY_OVERRUNS 3u
+
+typedef struct raven_replay_guard {
+    unsigned replays;
+    unsigned overruns;
+} raven_replay_guard;
+
+/* After each frame that replayed, with its whole cost: 1 when the frames
+ * should be lowered (the count then starts again), else 0. */
+int raven_replay_guard_overloaded(raven_replay_guard *guard, uint64_t cost_ns, double core_fps);
+
 #ifdef __cplusplus
 }
 #endif

@@ -57,6 +57,9 @@ android {
                 providers.gradleProperty("ravenCoreSource").orNull?.let {
                     arguments += "-DFETCHCONTENT_SOURCE_DIR_RAVENCORE=${rootProject.file(it).absolutePath}"
                 }
+                providers.gradleProperty("ravenRcheevosSource").orNull?.let {
+                    arguments += "-DFETCHCONTENT_SOURCE_DIR_RCHEEVOS=${rootProject.file(it).absolutePath}"
+                }
                 targets += listOf(
                     "raven_android", "ravenemu_gb_libretro",
                     "ravenemu_gbc_libretro", "ravenemu_gba_libretro"
@@ -84,6 +87,35 @@ android {
     }
     testOptions {
         unitTests.isIncludeAndroidResources = true
+    }
+}
+
+// Settings → À propos reads the repository's own TERMS.md and PRIVACY.md,
+// copied into the APK's assets (legal/) at build time as the beta embeds
+// them: one source of truth, never a hand-kept copy that could drift from
+// what GitHub publishes.
+abstract class LegalDocuments : DefaultTask() {
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.NAME_ONLY)
+    abstract val documents: ConfigurableFileCollection
+
+    @get:OutputDirectory
+    abstract val outputDirectory: DirectoryProperty
+
+    @TaskAction
+    fun copy() {
+        val target = outputDirectory.get().asFile.resolve("legal")
+        target.deleteRecursively()
+        target.mkdirs()
+        for (document in documents.files) document.copyTo(target.resolve(document.name), overwrite = true)
+    }
+}
+val legalDocuments by tasks.registering(LegalDocuments::class) {
+    documents.from(rootProject.file("TERMS.md"), rootProject.file("PRIVACY.md"))
+}
+androidComponents {
+    onVariants { variant ->
+        variant.sources.assets?.addGeneratedSourceDirectory(legalDocuments, LegalDocuments::outputDirectory)
     }
 }
 

@@ -36,6 +36,8 @@ public final class PlaybackSettingsTest {
         assertEquals(PlaybackSettings.BLENDING_OFF, value.frameBlending);
         assertEquals(PlaybackSettings.EFFECT_NONE, value.screenEffect);
         assertEquals(0, value.effectCode());
+        assertEquals(PlaybackSettings.RESAMPLER_SINC, value.resampler);
+        assertEquals(1, value.resamplerCode());
         assertTrue(preferences.getAll().isEmpty());
     }
 
@@ -111,6 +113,19 @@ public final class PlaybackSettingsTest {
         assertEquals(50, value.contrast);
         value.save(context);
         assertEquals("keep", preferences.getString("future.setting", ""));
+    }
+
+    @Test public void theResamplerPersistsAndFallsBackOnItsOwn() {
+        PlaybackSettings.DEFAULTS.withAudio(true, 55).withResampler(PlaybackSettings.RESAMPLER_LINEAR).save(context);
+        PlaybackSettings saved = PlaybackSettings.load(context);
+        assertEquals(PlaybackSettings.RESAMPLER_LINEAR, saved.resampler);
+        assertEquals(0, saved.resamplerCode());
+        assertEquals(55, saved.audioVolume);
+        assertEquals("Other changes keep it", PlaybackSettings.RESAMPLER_LINEAR,
+                saved.withAudio(false, 10).withEffect(PlaybackSettings.EFFECT_LCD).withPicture(true, 0, 100).resampler);
+        preferences.edit().putString("audio.resampler", "cubic").commit();
+        assertEquals(PlaybackSettings.RESAMPLER_SINC, PlaybackSettings.load(context).resampler);
+        assertEquals(55, PlaybackSettings.load(context).audioVolume);
     }
 
     @Test public void theScreenEffectPersistsAndFallsBackOnItsOwn() {

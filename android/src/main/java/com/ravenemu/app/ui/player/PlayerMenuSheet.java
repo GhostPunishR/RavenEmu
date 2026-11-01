@@ -1,9 +1,10 @@
 package com.ravenemu.app.ui.player;
 import com.ravenemu.app.R;
 import com.ravenemu.app.data.library.RomLibrary;
+import com.ravenemu.app.data.saves.CheatList;
 import com.ravenemu.app.data.saves.StateSlotRepository;
 import com.ravenemu.app.ui.common.GameDetailsSheet;
-import com.ravenemu.app.ui.library.HomeActivity;
+import com.ravenemu.app.ui.common.RavenTheme;
 
 import android.app.Activity;
 import android.app.AlertDialog;
@@ -37,10 +38,19 @@ final class PlayerMenuSheet {
         default void onUndo() {}
         default void onSettings() {}
         default void onMoveControls() {}
+        /** The RetroAchievements panel opened: a fresh snapshot is welcome. */
+        default void onAchievementsOpened() {}
+        default void onAchievementsSignIn() {}
+        default void onAchievementsRetry() {}
+        default void onAchievementsSignOut() {}
+        default void onFetchScores(int board, boolean around) {}
+        default void onOpenLink(String url) {}
+        /** A code to check with the core, then cheatAdded() or cheatRefused(). */
+        default void onCheatAdd(String name, String code) {}
+        default void onCheatToggle(int index) {}
+        default void onCheatDelete(int index) {}
     }
 
-    private static final int CARD = 0xff202230;
-    private static final int SECONDARY = 0xffcbc4dc;
     private final Activity owner;
     private final Listener listener;
     private final GameDetailsSheet dialog;
@@ -54,8 +64,25 @@ final class PlayerMenuSheet {
     private AlertDialog confirmation;
     private int selectedSlot;
     private boolean busy, undoAvailable;
+    /** RetroAchievements: the card under the heading, the panel it opens. */
+    private final FrameLayout accountHost;
+    private final AchievementsPanel panel;
+    private final LinearLayout menu;
+    /** The game's cheats: the entry in the menu, the page it opens. */
+    private final Button cheatsButton;
+    private final CheatsPanel cheats;
+    private final NestedScrollView scroll;
+    private AchievementsSnapshot achievements = AchievementsSnapshot.SIGNED_OUT;
 
     PlayerMenuSheet(Activity owner, String title, int selectedSlot, Listener listener) {
+        this(owner, title, selectedSlot, new BadgeCache(), listener);
+    }
+
+    /** The colours of the Activity it belongs to (Settings → Interface → Thème). */
+    private final RavenTheme theme;
+
+    PlayerMenuSheet(Activity owner, String title, int selectedSlot, BadgeCache badges, Listener listener) {
+        this.theme = RavenTheme.of(owner);
         this.owner = owner;
         this.listener = listener;
         this.selectedSlot = selectedSlot >= 0 && selectedSlot < StateSlotRepository.SLOT_COUNT
@@ -64,17 +91,20 @@ final class PlayerMenuSheet {
         LinearLayout content = column();
         content.setPadding(dp(18), dp(12), dp(18), dp(28));
         View handle = new View(owner);
-        handle.setBackground(shape(HomeActivity.MUTED, 2));
+        handle.setBackground(shape(theme.muted, 2));
         LinearLayout.LayoutParams handleSize = new LinearLayout.LayoutParams(dp(32), dp(4));
         handleSize.gravity = Gravity.CENTER_HORIZONTAL;
         handleSize.bottomMargin = dp(20);
         content.addView(handle, handleSize);
-        TextView heading = text("Menu du jeu", 20, HomeActivity.TEXT);
+        TextView heading = text("Menu du jeu", 20, theme.text);
         heading.setTypeface(null, Typeface.BOLD);
         content.addView(heading);
-        add(content, text(title, 13, SECONDARY), 12);
+        // As in the beta: the RetroAchievements account right under the heading.
+        accountHost = new FrameLayout(owner);
+        add(content, accountHost, 12);
+        add(content, text(title, 13, theme.secondary), 12);
         add(content, text("Partie en pause · 4 emplacements de sauvegarde", 12,
-                HomeActivity.MUTED), 12);
+                theme.muted), 12);
 
         LinearLayout switcher = new LinearLayout(owner);
         for (int i = 0; i < choices.length; i++) {
@@ -96,17 +126,17 @@ final class PlayerMenuSheet {
 
         LinearLayout card = column();
         card.setPadding(dp(12), dp(12), dp(12), dp(12));
-        card.setBackground(shape(CARD, 14));
+        card.setBackground(shape(theme.card, 14));
         LinearLayout summary = new LinearLayout(owner);
         summary.setGravity(Gravity.CENTER_VERTICAL);
         String system = RomLibrary.detectSystem(title);
         FrameLayout preview = new FrameLayout(owner);
         previewBadge = text(system == null ? "—" : system.toUpperCase(Locale.ROOT),
-                16, HomeActivity.MUTED);
+                16, theme.muted);
         previewBadge.setGravity(Gravity.CENTER);
         preview.setContentDescription("Aperçu de sauvegarde indisponible");
-        GradientDrawable frame = shape(0xff10111b, 9);
-        frame.setStroke(dp(1), HomeActivity.OUTLINE);
+        GradientDrawable frame = shape(theme.frame, 9);
+        frame.setStroke(dp(1), theme.outline);
         preview.setBackground(frame);
         preview.setClipToOutline(true);
         preview.addView(previewBadge, new FrameLayout.LayoutParams(-1, -1));
@@ -118,14 +148,14 @@ final class PlayerMenuSheet {
         summary.addView(preview, new LinearLayout.LayoutParams(dp(94), dp(84)));
         LinearLayout description = column();
         description.setPadding(dp(12), 0, 0, 0);
-        slotTitle = text("", 15, HomeActivity.TEXT);
+        slotTitle = text("", 15, theme.text);
         slotTitle.setTypeface(null, Typeface.BOLD);
         description.addView(slotTitle);
-        savedAt = text("", 12, HomeActivity.MUTED);
+        savedAt = text("", 12, theme.muted);
         add(description, savedAt, 5);
         summary.addView(description, new LinearLayout.LayoutParams(0, -2, 1));
         card.addView(summary);
-        warning = text("", 12, HomeActivity.MUTED);
+        warning = text("", 12, theme.muted);
         add(card, warning, 10);
         LinearLayout actions = new LinearLayout(owner);
         save = button("Sauver", 12);
@@ -139,7 +169,7 @@ final class PlayerMenuSheet {
         }
         add(card, actions, 10);
         add(content, card, 12);
-        operationMessage = text("", 12, HomeActivity.MUTED);
+        operationMessage = text("", 12, theme.muted);
         operationMessage.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
         operationMessage.setVisibility(View.GONE);
         add(content, operationMessage, 8);
@@ -148,12 +178,16 @@ final class PlayerMenuSheet {
             if (!busy && undoAvailable && dialog.isShowing()) begin(listener::onUndo);
         });
         add(content, undo, 12);
+        // As in the beta: the cheats right after « Annuler le chargement ».
+        cheatsButton = button(CheatList.menuLabel(java.util.Collections.emptyList()), 14);
+        cheatsButton.setOnClickListener(view -> showCheats());
+        add(content, cheatsButton, 12);
         save.setOnClickListener(view -> requestSave());
         load.setOnClickListener(view -> requestLoad());
         delete.setOnClickListener(view -> requestDelete());
         Button resume = button("Reprendre le jeu", 14);
-        resume.setTextColor(HomeActivity.BACKGROUND);
-        resume.setBackground(buttonBackground(HomeActivity.ACCENT));
+        resume.setTextColor(theme.background);
+        resume.setBackground(buttonBackground(theme.accent));
         resume.setOnClickListener(view -> dismiss());
         add(content, resume, 12);
         Button move = button("Déplacer les boutons", 14);
@@ -166,16 +200,51 @@ final class PlayerMenuSheet {
             if (!busy && dialog.isShowing()) listener.onSettings();
         });
         add(content, settings, 12);
-        NestedScrollView scroll = new NestedScrollView(owner);
-        scroll.addView(content);
+        menu = content;
+        panel = new AchievementsPanel(owner, badges, new AchievementsPanel.Actions() {
+            @Override public void back() { showMenu(); }
+            @Override public void signIn() { if (dialog.isShowing()) listener.onAchievementsSignIn(); }
+            @Override public void retry() { if (dialog.isShowing()) listener.onAchievementsRetry(); }
+            @Override public void signOut() { if (dialog.isShowing()) listener.onAchievementsSignOut(); }
+            @Override public void fetchScores(int board, boolean around) {
+                if (dialog.isShowing()) listener.onFetchScores(board, around);
+            }
+            @Override public void openLink(String url) { listener.onOpenLink(url); }
+        });
+        View panelView = panel.view();
+        panelView.setPadding(dp(18), dp(12), dp(18), dp(28));
+        panelView.setVisibility(View.GONE);
+        cheats = new CheatsPanel(owner, new CheatsPanel.Actions() {
+            @Override public void back() { showMenu(); }
+            @Override public void add(String name, String code) {
+                if (dialog.isShowing()) listener.onCheatAdd(name, code);
+            }
+            @Override public void toggle(int index) { if (dialog.isShowing()) listener.onCheatToggle(index); }
+            @Override public void delete(int index) { if (dialog.isShowing()) listener.onCheatDelete(index); }
+        });
+        View cheatsView = cheats.view();
+        cheatsView.setPadding(dp(18), dp(12), dp(18), dp(28));
+        cheatsView.setVisibility(View.GONE);
+        LinearLayout pages = column();
+        pages.addView(content);
+        pages.addView(panelView);
+        pages.addView(cheatsView);
+        scroll = new NestedScrollView(owner);
+        scroll.addView(pages);
         dialog.setContentView(scroll);
+        setAchievements(AchievementsSnapshot.SIGNED_OUT);
         dialog.setOnDismissListener(ignored -> {
             dismissConfirmation();
+            panel.dismissDetails();
             listener.onDismiss();
         });
         dialog.setOnKeyListener((ignored, key, event) -> {
-            if (key == KeyEvent.KEYCODE_BUTTON_B) {
-                if (event.getAction() == KeyEvent.ACTION_UP) dismiss();
+            boolean page = achievementsShown() || cheatsShown();
+            if (key == KeyEvent.KEYCODE_BUTTON_B || key == KeyEvent.KEYCODE_BACK && page) {
+                if (event.getAction() == KeyEvent.ACTION_UP) {
+                    // A page goes back to the menu first, as its own back button.
+                    if (page) showMenu(); else dismiss();
+                }
                 return true;
             }
             if (key != KeyEvent.KEYCODE_BUTTON_A) return false;
@@ -189,6 +258,56 @@ final class PlayerMenuSheet {
     }
 
     void show() { dialog.show(); }
+
+    /** The account card, and the panel if open: from the GL thread's snapshot. */
+    void setAchievements(AchievementsSnapshot snapshot) {
+        achievements = snapshot == null ? AchievementsSnapshot.SIGNED_OUT : snapshot;
+        accountHost.removeAllViews();
+        accountHost.addView(panel.card(achievements, this::showAchievements),
+                new FrameLayout.LayoutParams(-1, -2));
+        panel.show(achievements);
+    }
+
+    boolean achievementsShown() { return panel.view().getVisibility() == View.VISIBLE; }
+    boolean cheatsShown() { return cheats.view().getVisibility() == View.VISIBLE; }
+
+    /** The game's cheats, and whether they may run (not in Hardcore). */
+    void setCheats(java.util.List<CheatList.Cheat> list, boolean allowed) {
+        cheatsButton.setText(CheatList.menuLabel(list));
+        cheats.show(list, allowed);
+    }
+
+    void cheatAdded() { cheats.added(); }
+    void cheatRefused(String reason) { cheats.refused(reason); }
+
+    void showCheats() {
+        if (busy || !dialog.isShowing()) return;
+        menu.setVisibility(View.GONE);
+        panel.view().setVisibility(View.GONE);
+        cheats.view().setVisibility(View.VISIBLE);
+        scroll.scrollTo(0, 0);
+    }
+
+    /** Signed out, the card leads to Settings → RetroAchievements. */
+    void showAchievements() {
+        if (busy || !dialog.isShowing()) return;
+        if (!achievements.signedIn) {
+            listener.onAchievementsSignIn();
+            return;
+        }
+        menu.setVisibility(View.GONE);
+        panel.view().setVisibility(View.VISIBLE);
+        scroll.scrollTo(0, 0);
+        listener.onAchievementsOpened();
+    }
+
+    void showMenu() {
+        panel.dismissDetails();
+        panel.view().setVisibility(View.GONE);
+        cheats.view().setVisibility(View.GONE);
+        menu.setVisibility(View.VISIBLE);
+        scroll.scrollTo(0, 0);
+    }
     void dismiss() { dialog.dismiss(); }
     boolean isShowing() { return dialog.isShowing(); }
     int getSelectedSlot() { return selectedSlot; }
@@ -232,8 +351,8 @@ final class PlayerMenuSheet {
             choices[i].setText(String.valueOf(i + 1) + (occupied ? "  •" : ""));
             choices[i].setContentDescription("Emplacement " + (i + 1) + (occupied ? ", occupé" : ", vide"));
             choices[i].setSelected(selected);
-            choices[i].setTextColor(selected ? HomeActivity.BACKGROUND : HomeActivity.TEXT);
-            choices[i].setBackground(buttonBackground(selected ? HomeActivity.ACCENT : 0xff292a38));
+            choices[i].setTextColor(selected ? theme.background : theme.text);
+            choices[i].setBackground(buttonBackground(selected ? theme.accent : theme.raised));
             choices[i].setEnabled(!busy);
             choices[i].setAlpha(busy ? .5f : 1f);
         }
@@ -326,9 +445,9 @@ final class PlayerMenuSheet {
             return true;
         });
         confirmation.show();
-        confirmation.getWindow().setBackgroundDrawable(shape(HomeActivity.SURFACE, 18));
-        confirmation.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(HomeActivity.ACCENT);
-        confirmation.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(HomeActivity.ACCENT);
+        confirmation.getWindow().setBackgroundDrawable(shape(theme.surface, 18));
+        confirmation.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(theme.accent);
+        confirmation.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(theme.accent);
     }
 
     private void dismissConfirmation() {
@@ -360,7 +479,7 @@ final class PlayerMenuSheet {
     private Button button(String label, int size) {
         Button button = new Button(owner);
         button.setText(label);
-        button.setTextColor(HomeActivity.TEXT);
+        button.setTextColor(theme.text);
         button.setTextSize(size);
         button.setAllCaps(false);
         button.setMinWidth(0);
@@ -368,7 +487,7 @@ final class PlayerMenuSheet {
         button.setMinHeight(dp(48));
         button.setMinimumHeight(dp(48));
         button.setPadding(dp(6), dp(4), dp(6), dp(4));
-        button.setBackground(buttonBackground(0xff292a38));
+        button.setBackground(buttonBackground(theme.raised));
         return button;
     }
 
@@ -394,10 +513,10 @@ final class PlayerMenuSheet {
     private Drawable buttonBackground(int color) {
         StateListDrawable states = new StateListDrawable();
         states.addState(new int[]{android.R.attr.state_pressed},
-                shape(color == HomeActivity.ACCENT ? 0xffbca6ff : 0xff3c3454, 12));
+                shape(color == theme.accent ? theme.accentLight : theme.accentDim, 12));
         GradientDrawable focused = shape(color, 12);
-        focused.setStroke(dp(2), color == HomeActivity.ACCENT
-                ? HomeActivity.TEXT : HomeActivity.ACCENT);
+        focused.setStroke(dp(2), color == theme.accent
+                ? theme.text : theme.accent);
         states.addState(new int[]{android.R.attr.state_focused}, focused);
         states.addState(new int[]{}, shape(color, 12));
         return states;

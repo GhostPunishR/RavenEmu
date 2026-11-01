@@ -31,9 +31,11 @@ README = """RavenEmu Native Preview - source inputs
 
 RavenEmu/ contains the tracked workspace sources and build scripts of the
 preview application. RavenCore/ contains the tracked sources of the pinned
-core checkout actually used by the Android build. Local tracked modifications
-are included and identified in SOURCE-MANIFEST.json; untracked files, Git
-metadata, caches and build outputs are excluded.
+core checkout actually used by the Android build, and rcheevos/ those of the
+pinned RetroAchievements SDK (MIT) built into its native library; RavenEmu's
+build applies its documented safety fixes to a copy. Local tracked
+modifications are included and identified in SOURCE-MANIFEST.json; untracked
+files, Git metadata, caches and build outputs are excluded.
 
 dependencies/ contains the exact source JARs, POMs and runtime AAR/JAR
 publications listed in DEPENDENCIES.tsv. The runtime publications retain their
@@ -46,7 +48,7 @@ To build the preview, use JDK 21, the Android SDK/NDK required by the project,
 and run from RavenEmu/:
   ./gradlew :android:assembleDebug \\
     -PravenSourceRevision=@SOURCE_REVISION@ -PravenSourceModified=@SOURCE_MODIFIED@ \\
-    -PravenCoreSource=../RavenCore
+    -PravenCoreSource=../RavenCore -PravenRcheevosSource=../rcheevos
 
 Gradle resolves its pinned dependencies from the repositories declared by the
 project. The APK, when present at packaging time, is identified by SHA-256 in
@@ -128,17 +130,34 @@ def core_pin(repository):
     return match.group(1).decode().lower()
 
 
-def discover_core(repository, pin):
+def achievements_pin(repository):
+    data, _ = read_regular(repository, "frontend/cmake/rcheevos.cmake")
+    match = re.search(rb'set\(RAVEN_RCHEEVOS_REVISION\s+"([a-fA-F0-9]{40})"\s*\)', data)
+    if not match:
+        raise SourceError("Cannot find the immutable rcheevos revision in frontend/cmake/rcheevos.cmake")
+    return match.group(1).decode().lower()
+
+
+def discover_checkout(repository, entry, pin, name, option):
     caches = repository.glob("android/.cxx/**/arm64-v8a/CMakeCache.txt")
     for cache in sorted(caches, key=lambda path: path.stat().st_mtime, reverse=True):
         if cache.is_symlink():
             raise SourceError(f"Refusing symlink CMake cache: {cache}")
         for line in cache.read_text().splitlines():
-            if line.startswith("RavenCore_SOURCE_DIR:STATIC="):
+            if line.startswith(entry):
                 root = Path(line.split("=", 1)[1]).resolve()
                 if revision(root).lower() == pin:
                     return root
-    raise SourceError("No built ARM64 RavenCore checkout matches the pinned revision; pass --core-root")
+    raise SourceError(f"No built ARM64 {name} checkout matches the pinned revision; pass {option}")
+
+
+def discover_core(repository, pin):
+    return discover_checkout(repository, "RavenCore_SOURCE_DIR:STATIC=", pin, "RavenCore", "--core-root")
+
+
+def discover_achievements(repository, pin):
+    return discover_checkout(repository, "RAVEN_RCHEEVOS_SOURCE_DIR:INTERNAL=", pin, "rcheevos",
+                             "--achievements-root")
 
 
 def dependency_inputs(directory):
@@ -170,13 +189,20 @@ def dependency_inputs(directory):
     return sorted((name, *value) for name, value in files.items()), records
 
 
-def build_bundle(repository, core_root=None, dependencies_dir=None, output=None, apk=None):
+def build_bundle(repository, core_root=None, dependencies_dir=None, output=None, apk=None,
+                 achievements_root=None):
     repository = Path(repository).resolve()
     pin = core_pin(repository)
     core_root = Path(core_root).resolve() if core_root else discover_core(repository, pin)
     core_revision = revision(core_root)
     if core_revision.lower() != pin:
         raise SourceError("The built RavenCore checkout does not match RAVEN_CORE_REVISION")
+    sdk_pin = achievements_pin(repository)
+    achievements_root = (Path(achievements_root).resolve() if achievements_root
+                         else discover_achievements(repository, sdk_pin))
+    achievements_revision = revision(achievements_root)
+    if achievements_revision.lower() != sdk_pin:
+        raise SourceError("The built rcheevos checkout does not match RAVEN_RCHEEVOS_REVISION")
     dependencies_dir = Path(dependencies_dir or repository / "android/build/corresponding-sources").resolve()
     output = Path(output or repository / "android/build/outputs/sources/ravenemu-native-sources.tar.gz")
     if output.is_symlink():
@@ -184,6 +210,7 @@ def build_bundle(repository, core_root=None, dependencies_dir=None, output=None,
     publications, dependency_records = dependency_inputs(dependencies_dir)
     inputs = [(f"RavenEmu/{name}", data, mode) for name, data, mode in repository_inputs(repository)]
     inputs += [(f"RavenCore/{name}", data, mode) for name, data, mode in repository_inputs(core_root)]
+    inputs += [(f"rcheevos/{name}", data, mode) for name, data, mode in repository_inputs(achievements_root)]
     inputs += [(f"dependencies/{name}", data, mode) for name, data, mode in publications]
     source_revision = revision(repository)
     source_modified = modified(repository)
@@ -196,6 +223,7 @@ def build_bundle(repository, core_root=None, dependencies_dir=None, output=None,
         "format_version": 1,
         "repository": {"revision": source_revision, "modified": source_modified},
         "core": {"revision": core_revision, "modified": modified(core_root)},
+        "achievements_sdk": {"revision": achievements_revision, "modified": modified(achievements_root)},
         "dependencies": dependency_records,
         "files": [{"path": name, "sha256": hashlib.sha256(data).hexdigest(), "size": len(data)}
                   for name, data, _ in inputs],
@@ -227,6 +255,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repository", type=Path, default=Path.cwd())
     parser.add_argument("--core-root", type=Path)
+    parser.add_argument("--achievements-root", type=Path)
     parser.add_argument("--dependencies-dir", type=Path)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--apk", type=Path)

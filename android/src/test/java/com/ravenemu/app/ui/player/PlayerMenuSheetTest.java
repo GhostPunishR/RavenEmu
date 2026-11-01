@@ -343,7 +343,10 @@ public final class PlayerMenuSheetTest {
     private ImageView image() {
         Dialog dialog = ShadowDialog.getShownDialogs().stream().filter(Dialog::isShowing)
                 .filter(d -> !(d instanceof AlertDialog)).findFirst().get();
-        return (ImageView)find(dialog.getWindow().getDecorView(), view -> view instanceof ImageView);
+        // The save preview, not the account card's avatar above it.
+        return (ImageView)find(dialog.getWindow().getDecorView(), view -> view instanceof ImageView
+                && view.getParent() instanceof View
+                && String.valueOf(((View)view.getParent()).getContentDescription()).startsWith("Aperçu"));
     }
     private static View find(View view, java.util.function.Predicate<View> predicate) {
         if (predicate.test(view)) return view;

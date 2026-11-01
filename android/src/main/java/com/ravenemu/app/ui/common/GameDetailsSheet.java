@@ -1,5 +1,4 @@
 package com.ravenemu.app.ui.common;
-import com.ravenemu.app.R;
 
 import android.content.Context;
 import android.view.View;
@@ -10,7 +9,8 @@ import com.google.android.material.bottomsheet.BottomSheetDialog;
 /** Java Views sheet matching the beta's fully expanded game-details panel. */
 public final class GameDetailsSheet extends BottomSheetDialog {
     public GameDetailsSheet(Context context) {
-        super(context, R.style.RavenGameSheetTheme);
+        // The sheet's Android style follows the theme of the Activity it opens on.
+        super(context, RavenTheme.of(context).sheetStyle);
         BottomSheetBehavior<FrameLayout> behavior = getBehavior();
         behavior.setSkipCollapsed(true);
         behavior.setHideable(true);

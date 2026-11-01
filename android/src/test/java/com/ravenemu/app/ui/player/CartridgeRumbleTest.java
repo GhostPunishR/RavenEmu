@@ -67,4 +67,39 @@ public final class CartridgeRumbleTest {
         assertFalse(vibrator.isVibrating());
         assertFalse(vibrator.isCancelled());
     }
+
+    @Test public void theControllerPlayedWithRumblesInsteadOfThePhone() {
+        java.util.List<String> pad = new java.util.ArrayList<>();
+        CartridgeRumble.Motor controller = new CartridgeRumble.Motor() {
+            @Override public void pulse(long millis) { pad.add("pulse " + millis); }
+            @Override public void cancel() { pad.add("cancel"); }
+        };
+        CartridgeRumble rumble = new CartridgeRumble(context);
+        rumble.setController(controller);
+        rumble.update(true, 0);
+        assertEquals(java.util.Collections.singletonList("pulse " + CartridgeRumble.PULSE_MS), pad);
+        assertFalse("Not the phone", vibrator.isVibrating());
+        // Back to the touch screen while it runs: the controller stops at once, the phone takes over.
+        rumble.setController(null);
+        assertEquals("cancel", pad.get(pad.size() - 1));
+        rumble.update(true, FRAME);
+        assertTrue(vibrator.isVibrating());
+        // The same controller again changes nothing; leaving stops the one running.
+        rumble.setController(controller);
+        rumble.setController(controller);
+        ShadowVibrator.reset();
+        pad.clear();
+        rumble.update(true, 2 * FRAME);
+        rumble.stop();
+        assertEquals(java.util.Arrays.asList("pulse " + CartridgeRumble.PULSE_MS, "cancel"), pad);
+        assertFalse(vibrator.isVibrating());
+    }
+
+    @Test public void aControllerWithoutMotorLeavesThePhoneRumbling() {
+        assertNull(CartridgeRumble.motor((android.view.InputDevice) null));
+        CartridgeRumble rumble = new CartridgeRumble(context);
+        rumble.setController(CartridgeRumble.motor((android.view.InputDevice) null));
+        rumble.update(true, 0);
+        assertTrue(vibrator.isVibrating());
+    }
 }

@@ -28,14 +28,19 @@ class SourceBundleTest(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
-        self.repository, self.core, self.dependencies = [self.root / name for name in ("app", "core", "dependencies")]
-        for repo in (self.repository, self.core):
+        self.repository, self.core, self.sdk, self.dependencies = [
+            self.root / name for name in ("app", "core", "sdk", "dependencies")]
+        for repo in (self.repository, self.core, self.sdk):
             repo.mkdir()
             git(repo, "init", "-q")
         (self.core / "core.c").write_text("original core\n")
         self.pin = commit(self.core)
-        (self.repository / "frontend").mkdir()
+        (self.sdk / "rc_client.c").write_text("original sdk\n")
+        self.sdk_pin = commit(self.sdk)
+        (self.repository / "frontend/cmake").mkdir(parents=True)
         (self.repository / "frontend/CMakeLists.txt").write_text(f'set(RAVEN_CORE_REVISION "{self.pin}")\n')
+        (self.repository / "frontend/cmake/rcheevos.cmake").write_text(
+            f'set(RAVEN_RCHEEVOS_REVISION "{self.sdk_pin}")\n')
         (self.repository / "app.c").write_text("original app\n")
         (self.repository / "LICENSE").write_text("fixture licence\n")
         self.revision = commit(self.repository)
@@ -47,7 +52,7 @@ class SourceBundleTest(unittest.TestCase):
         self.output = self.root / "sources.tar.gz"
 
     def build(self, **overrides):
-        arguments = dict(repository=self.repository, core_root=self.core,
+        arguments = dict(repository=self.repository, core_root=self.core, achievements_root=self.sdk,
                          dependencies_dir=self.dependencies, output=self.output)
         arguments.update(overrides)
         return build_bundle(**arguments)
@@ -65,6 +70,8 @@ class SourceBundleTest(unittest.TestCase):
         entries = self.entries()
         self.assertEqual(b"modified app\n", entries["RavenEmu/app.c"])
         self.assertEqual(b"modified core\n", entries["RavenCore/core.c"])
+        self.assertEqual(b"original sdk\n", entries["rcheevos/rc_client.c"])
+        self.assertEqual(self.sdk_pin, manifest["achievements_sdk"]["revision"])
         self.assertFalse(any("release.p12" in path or "untracked.txt" in path for path in entries))
         self.assertEqual(self.revision, manifest["repository"]["revision"])
         self.assertTrue(manifest["repository"]["modified"])
@@ -86,7 +93,7 @@ class SourceBundleTest(unittest.TestCase):
         self.assertIn("dependencies/lib.aar", self.entries())
         instructions = self.entries()["README-SOURCES.txt"].decode()
         self.assertIn("-PravenSourceRevision=" + self.revision, instructions)
-        self.assertIn("-PravenCoreSource=../RavenCore", instructions)
+        self.assertIn("-PravenCoreSource=../RavenCore -PravenRcheevosSource=../rcheevos", instructions)
         self.assertNotIn("@SOURCE_", instructions)
 
     def test_rejects_wrong_pinned_core_before_replacing_an_existing_archive(self):
@@ -96,6 +103,13 @@ class SourceBundleTest(unittest.TestCase):
         with self.assertRaisesRegex(SourceError, "does not match"):
             self.build()
         self.assertEqual(b"previous archive", self.output.read_bytes())
+
+    def test_rejects_an_sdk_other_than_the_pinned_one(self):
+        (self.sdk / "rc_client.c").write_text("updated sdk\n")
+        commit(self.sdk)
+        with self.assertRaisesRegex(SourceError, "rcheevos checkout does not match"):
+            self.build()
+        self.assertFalse(self.output.exists())
 
     def test_rejects_missing_source_or_runtime_publication(self):
         for name in ("lib-sources.jar", "lib.pom", "lib.aar"):
@@ -122,10 +136,13 @@ class SourceBundleTest(unittest.TestCase):
         (self.repository / "app.c").unlink()
         (self.repository / "app.c").write_text("restored app\n")
         (self.repository / "frontend/CMakeLists.txt").unlink()
+        (self.repository / "frontend/cmake/rcheevos.cmake").unlink()
+        (self.repository / "frontend/cmake").rmdir()
         (self.repository / "frontend").rmdir()
         directory = self.root / "external-directory"
-        directory.mkdir()
+        (directory / "cmake").mkdir(parents=True)
         (directory / "CMakeLists.txt").write_text(f'set(RAVEN_CORE_REVISION "{self.pin}")\n')
+        (directory / "cmake/rcheevos.cmake").write_text(f'set(RAVEN_RCHEEVOS_REVISION "{self.sdk_pin}")\n')
         (self.repository / "frontend").symlink_to(directory, target_is_directory=True)
         with self.assertRaisesRegex(SourceError, "Symlink"):
             self.build()
@@ -144,13 +161,15 @@ class SourceBundleTest(unittest.TestCase):
     def test_finds_actual_arm64_checkout_and_omits_tracked_build_outputs(self):
         cache = self.repository / "android/.cxx/Debug/test/arm64-v8a/CMakeCache.txt"
         cache.parent.mkdir(parents=True)
-        cache.write_text(f"RavenCore_SOURCE_DIR:STATIC={self.core}\n")
+        cache.write_text(f"RavenCore_SOURCE_DIR:STATIC={self.core}\n"
+                         f"RAVEN_RCHEEVOS_SOURCE_DIR:INTERNAL={self.sdk}\n")
         build = self.repository / "build/generated.c"
         build.parent.mkdir()
         build.write_text("generated file\n")
         commit(self.repository)
-        manifest = self.build(core_root=None)
+        manifest = self.build(core_root=None, achievements_root=None)
         self.assertEqual(self.pin, manifest["core"]["revision"])
+        self.assertEqual(self.sdk_pin, manifest["achievements_sdk"]["revision"])
         self.assertNotIn("RavenEmu/build/generated.c", self.entries())
         self.assertFalse(any(".cxx" in name for name in self.entries()))
 

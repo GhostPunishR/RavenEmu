@@ -1,5 +1,6 @@
 #include <libretro.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 
 /* Test-only core; no copyrighted ROM or BIOS. */
@@ -177,4 +178,15 @@ bool retro_unserialize(const void *buffer, size_t size) {
     if (!loaded || !buffer || size != sizeof(save_ram)) return false;
     memcpy(save_ram, buffer, size);
     return true;
+}
+
+/* Cheats as a core's menu takes them: a code starting with "bad" is refused
+ * and named in a message, as RavenCore does; the others are taken. */
+void retro_cheat_reset(void) {}
+void retro_cheat_set(unsigned index, bool enabled, const char *code) {
+    if (!enabled || !code || strncmp(code, "bad", 3) != 0 || !env) return;
+    char text[64];
+    snprintf(text, sizeof(text), "RavenTest : code de triche %u refusé", index + 1);
+    const struct retro_message message = {text, 180};
+    env(RETRO_ENVIRONMENT_SET_MESSAGE, (void *)&message);
 }
