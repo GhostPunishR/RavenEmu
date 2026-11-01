@@ -68,9 +68,11 @@ public final class LegalDocumentActivityTest {
         List<TextView> views = texts(root);
         TextView heading = null;
         for (TextView view : views)
-            if (view.getTypeface() != null && view.getTypeface().isBold()
-                    && view.getCurrentTextColor() == RavenTheme.RAVENEMU.accent) { heading = view; break; }
-        assertNotNull("A heading in the accent", heading);
+            if (view.isAccessibilityHeading() && view.getCurrentTextColor() == RavenTheme.RAVENEMU.accent) {
+                heading = view;
+                break;
+            }
+        assertNotNull("A heading, announced as one, in the accent", heading);
         assertNotNull("The beta's bullet mark", text(root, "•"));
         for (TextView view : views)
             assertFalse("No raw Markdown: " + view.getText(), view.getText().toString().contains("**"));
