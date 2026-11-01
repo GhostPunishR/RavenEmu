@@ -364,6 +364,10 @@ sur noir, d'après le thème « NVIDIA Shield » du menu MaterialUI de RetroArch
 Écrans, icônes, menus et commandes tactiles suivent (`ui/common/RavenTheme`) ;
 un jeu déjà ouvert garde les siennes jusqu'à sa fermeture.
 
+**Paramètres → À propos** lit les conditions d'utilisation et la politique de
+confidentialité dans l'application, comme la bêta : Gradle copie `TERMS.md` et
+`PRIVACY.md` du dépôt dans les assets à chaque construction.
+
 ## Vibration et capteurs de la cartouche
 
 **Paramètres → Interface → Cartouche** reprend la bêta : **Vibration de la cartouche**

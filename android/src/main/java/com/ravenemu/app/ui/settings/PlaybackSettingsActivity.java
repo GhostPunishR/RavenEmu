@@ -518,10 +518,11 @@ public final class PlaybackSettingsActivity extends Activity implements RavenThe
         add(name, 0);
         add(text("Par GhostPunishR · version native expérimentale Java / C / C++", 13, theme.muted), 4);
         group("Informations légales");
-        aboutRow("Conditions d'utilisation", "Ce que RavenEmu fournit, et votre responsabilité", RavenIcon.Glyph.EXTERNAL,
-                view -> openLink(REPOSITORY + "/blob/main/TERMS.md"));
-        aboutRow("Politique de confidentialité", "Données échangées et services tiers", RavenIcon.Glyph.EXTERNAL,
-                view -> openLink(REPOSITORY + "/blob/main/PRIVACY.md"));
+        // Read inside the app, as in the beta: the repository's own documents.
+        aboutRow("Conditions d'utilisation", "Ce que RavenEmu fournit, et votre responsabilité", RavenIcon.Glyph.CHEVRON,
+                view -> openDocument(LegalDocumentActivity.TERMS));
+        aboutRow("Politique de confidentialité", "Données échangées et services tiers", RavenIcon.Glyph.CHEVRON,
+                view -> openDocument(LegalDocumentActivity.PRIVACY));
         group("Licences et crédits");
         aboutRow("Licences et crédits", "Crédits, GPLv3, AGPLv3, MIT et Apache 2, lus dans l'application",
                 RavenIcon.Glyph.CHEVRON,
@@ -530,6 +531,11 @@ public final class PlaybackSettingsActivity extends Activity implements RavenThe
         aboutRow("RavenEmu", "github.com/GhostPunishR/RavenEmu", RavenIcon.Glyph.EXTERNAL, view -> openLink(REPOSITORY));
         aboutRow("RavenCore", "github.com/GhostPunishR/RavenCore", RavenIcon.Glyph.EXTERNAL,
                 view -> openLink("https://github.com/GhostPunishR/RavenCore"));
+    }
+
+    private void openDocument(String document) {
+        startActivity(new Intent(this, LegalDocumentActivity.class)
+                .putExtra(LegalDocumentActivity.EXTRA_DOCUMENT, document));
     }
 
     private void aboutRow(String label, String summary, RavenIcon.Glyph trailing, View.OnClickListener open) {

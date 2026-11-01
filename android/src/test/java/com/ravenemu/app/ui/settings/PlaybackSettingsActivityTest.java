@@ -455,7 +455,7 @@ public final class PlaybackSettingsActivityTest {
         assertTrue(AchievementSettings.load(activity).hardcore);
     }
 
-    @Test public void aboutOpensTheLicencesInTheAppAndTheSourcesOnline() {
+    @Test public void aboutOpensTheLegalDocumentsAndTheLicencesInTheAppAndTheSourcesOnline() {
         PlaybackSettingsActivity activity = open(PlaybackSettingsActivity.ABOUT, null).get();
         find(activity, view -> view.getContentDescription() != null
                 && view.getContentDescription().toString().startsWith("Licences et crédits.")).performClick();
@@ -466,10 +466,17 @@ public final class PlaybackSettingsActivityTest {
         Intent source = shadowOf(activity).getNextStartedActivity();
         assertEquals(Intent.ACTION_VIEW, source.getAction());
         assertEquals("https://github.com/GhostPunishR/RavenCore", source.getDataString());
+        // Read inside the app, as in the beta, never on GitHub.
         find(activity, view -> view.getContentDescription() != null
                 && view.getContentDescription().toString().startsWith("Politique de confidentialité.")).performClick();
-        assertEquals("https://github.com/GhostPunishR/RavenEmu/blob/main/PRIVACY.md",
-                shadowOf(activity).getNextStartedActivity().getDataString());
+        Intent privacy = shadowOf(activity).getNextStartedActivity();
+        assertEquals(LegalDocumentActivity.class.getName(), privacy.getComponent().getClassName());
+        assertEquals(LegalDocumentActivity.PRIVACY, privacy.getStringExtra(LegalDocumentActivity.EXTRA_DOCUMENT));
+        find(activity, view -> view.getContentDescription() != null
+                && view.getContentDescription().toString().startsWith("Conditions d'utilisation.")).performClick();
+        Intent terms = shadowOf(activity).getNextStartedActivity();
+        assertEquals(LegalDocumentActivity.class.getName(), terms.getComponent().getClassName());
+        assertEquals(LegalDocumentActivity.TERMS, terms.getStringExtra(LegalDocumentActivity.EXTRA_DOCUMENT));
     }
 
     @Test public void interfacePageSetsTheTouchControlsAndResetsThem() {

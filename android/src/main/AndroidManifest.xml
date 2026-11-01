@@ -11,6 +11,7 @@
         android:theme="@style/RavenEmuNativeTheme"
         android:usesCleartextTraffic="false">
         <activity android:name=".ui.settings.LicensesActivity" android:exported="false"/>
+        <activity android:name=".ui.settings.LegalDocumentActivity" android:exported="false"/>
         <activity android:name=".ui.settings.PlaybackSettingsActivity" android:exported="false"
             android:enableOnBackInvokedCallback="true"/>
         <activity android:name=".ui.library.HomeActivity"

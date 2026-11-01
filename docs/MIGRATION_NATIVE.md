@@ -1278,3 +1278,26 @@ perdu. Le carillon des succès n'est pas atténué, comme dans la bêta. La page
   deux mutations détectées (pas de fondu à la reprise, pas de fondu du tout).
 
 Écart restant : écoute sur téléphone à faire.
+
+## Conditions d'utilisation et confidentialité dans l'application, lot F-2
+
+Comme la bêta (`LegalMarkdown`, `DocumentReader`), **Paramètres → À propos →
+Conditions d'utilisation** et **Politique de confidentialité** s'ouvrent dans
+un lecteur intégré (`ui/settings/LegalDocumentActivity`) au lieu de GitHub.
+
+- **Source unique** : la tâche Gradle `legalDocuments`
+  (`android/build.gradle.kts`) copie `TERMS.md` et `PRIVACY.md` du dépôt dans
+  les assets de l'APK (`legal/`) à chaque construction, par l'API des
+  variantes d'AGP ; aucune copie n'est tenue à la main.
+- **Lecture** : `LegalMarkdown` (Java, sans Android) reprend le sous-ensemble
+  Markdown de la bêta (titres, paragraphes, puces, **gras**, `code`, liens
+  http(s)) ; le premier titre va dans la barre, la date d'entrée en vigueur
+  devient une légende. Le lecteur suit la mise en forme de la bêta (titres de
+  niveau 1-2 dans l'accent, puces « • » dans l'accent, lignes de 21 sp, liens
+  soulignés qui ouvrent le navigateur ou disent qu'aucune application ne peut
+  les ouvrir) et les couleurs du thème choisi.
+- Tests : `LegalMarkdownTest` (cas de la bêta, titres en double, niveaux
+  bornés, liens non web laissés en texte, documents du dépôt) ;
+  `LegalDocumentActivityTest` (assets identiques aux fichiers du dépôt,
+  titres, puces, liens actifs, thème NVIDIA, document inconnu) ;
+  `PlaybackSettingsActivityTest` (À propos ouvre le lecteur).
