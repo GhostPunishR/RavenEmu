@@ -1248,7 +1248,9 @@ public final class PlayerActivityTest {
                 view.getContentDescription() == null ? "" : view.getContentDescription()));
         assertNotNull(button);
         assertTrue(button.isShown());
-        assertEquals("At the top centre of the controls", 0, button.getTop());
+        // The controls cover the stage; their own room starts where the picture ends.
+        View picture = ReflectionHelpers.getField(activity, "pictureFrame");
+        assertEquals("At the top centre of the controls", picture.getBottom(), button.getTop());
         assertTrue(button.performClick());
         pump(activity);
         assertTrue(menu(activity).isShowing());
