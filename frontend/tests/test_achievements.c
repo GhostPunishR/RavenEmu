@@ -345,6 +345,44 @@ static void closing_settles_requests_still_out(void) {
     CHECK(strncmp(clause, "rcheevos/", 9) == 0);
 }
 
+/* A save state keeps how far each achievement had got (the beta did not). */
+static void a_save_state_keeps_the_progress(void) {
+    raven_frontend *host = open_game();
+    raven_achievements *a = raven_achievements_create(host, NULL);
+    CHECK(raven_achievements_progress_size(a) == 0);
+    CHECK(!raven_achievements_load_progress(a, NULL, 0));  /* no game yet */
+    login(a);
+    raven_achievements_load_game(a, RAVEN_ACHIEVEMENTS_CONSOLE_GAMEBOY, rom, sizeof(rom));
+    answer_game(host, a, GAME_SETS);
+    raven_achievements_event event;
+    CHECK(take(a, "game", &event));
+    for (int i = 0; i < 5; ++i) {
+        CHECK(raven_frontend_run_frame(host));
+        raven_achievements_frame(a);
+    }
+    const size_t size = raven_achievements_progress_size(a);
+    CHECK(size > 0);
+    uint8_t *saved = (uint8_t *)malloc(size);
+    CHECK(saved);
+    CHECK(!raven_achievements_save_progress(a, saved, 0));
+    CHECK(raven_achievements_save_progress(a, saved, size));
+    /* Loaded back, as a state carries it; a state without it starts over. */
+    CHECK(raven_achievements_load_progress(a, saved, size));
+    CHECK(raven_achievements_load_progress(a, NULL, 0));
+    uint8_t *again = (uint8_t *)malloc(size);
+    CHECK(again && raven_achievements_save_progress(a, again, size));
+    CHECK(raven_achievements_load_progress(a, saved, size));
+    /* Unreadable bytes: refused, and every achievement starts over. */
+    memset(again, 0xEE, size);
+    CHECK(!raven_achievements_load_progress(a, again, size));
+    free(again);
+    free(saved);
+    /* The achievement still unlocks after these loads. */
+    CHECK(play_until_award(host, a, 400) > 0);
+    raven_achievements_destroy(a);
+    raven_frontend_destroy(host);
+}
+
 int main(int argc, char **argv) {
     if (argc != 2) {
         fprintf(stderr, "usage: %s ravenemu_gb_libretro\n", argv[0]);
@@ -360,6 +398,7 @@ int main(int argc, char **argv) {
     the_lists_follow_the_game_and_its_scores();
     a_service_out_of_reach_is_told_apart();
     closing_settles_requests_still_out();
-    puts("Achievements: 8 scenarios passed");
+    a_save_state_keeps_the_progress();
+    puts("Achievements: 9 scenarios passed");
     return 0;
 }

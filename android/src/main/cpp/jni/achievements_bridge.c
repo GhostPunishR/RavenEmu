@@ -122,6 +122,18 @@ void raven_bridge_achievements_state_loaded(void) {
     if (player) raven_achievements_reset(player);
 }
 
+size_t raven_bridge_achievements_progress(uint8_t *out, size_t capacity) {
+    if (!player) return 0;
+    const size_t size = raven_achievements_progress_size(player);
+    if (!out || !size) return size;
+    if (size > capacity) return 0;
+    return raven_achievements_save_progress(player, out, size) ? size : 0;
+}
+
+void raven_bridge_achievements_progress_loaded(const uint8_t *progress, size_t size) {
+    if (player) raven_achievements_load_progress(player, progress, size);
+}
+
 void raven_bridge_achievements_close(void) {
     if (!player) return;
     raven_achievements *closing = find(0, 1, 1);

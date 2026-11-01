@@ -20,6 +20,11 @@ target_compile_features(raven_native_preview_test PRIVATE c_std_11)
 target_include_directories(raven_native_preview_test PRIVATE "${MEDIA}")
 add_test(NAME raven_native_preview COMMAND raven_native_preview_test)
 
+add_executable(raven_native_state_progress_test test_state_progress.c "${MEDIA}/state_progress.c")
+target_compile_features(raven_native_state_progress_test PRIVATE c_std_11)
+target_include_directories(raven_native_state_progress_test PRIVATE "${MEDIA}")
+add_test(NAME raven_native_state_progress COMMAND raven_native_state_progress_test)
+
 find_package(Threads REQUIRED)
 add_executable(raven_native_audio_test test_audio_pipeline.c
     "${DRIVERS}/audio/audio_pipeline.c" "${DRIVERS}/audio/sinc_resampler.c"
@@ -60,5 +65,6 @@ if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(raven_native_audio_test PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(raven_native_video_test PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(raven_native_sensor_test PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(raven_native_state_progress_test PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(raven_native_sinc_test PRIVATE -Wall -Wextra -Wpedantic)
 endif()

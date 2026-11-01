@@ -15,6 +15,7 @@ required = [
     "android/src/main/cpp/hardware/input/input_driver.c",
     "android/src/main/cpp/hardware/input/sensor_driver.c",
     "android/src/main/cpp/media/state_thumbnail.c",
+    "android/src/main/cpp/media/state_progress.c",
     "tests/hardware/CMakeLists.txt",
     "legal/attributions/retroarch.md",
     "android/src/main/res/drawable-nodpi/ravenemu_launcher.webp",

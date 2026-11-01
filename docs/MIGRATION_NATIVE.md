@@ -1408,3 +1408,30 @@ manette jusqu'à la prochaine entrée. La bêta n'utilisait que le téléphone.
 
 Écarts restants : sens des axes d'une manette et ressenti de la vibration à
 vérifier avec de vraies manettes (DualSense, DualShock 4, Switch Pro).
+
+## Petits écarts, lot E-6 : progression des succès dans les états
+
+Un état de sauvegarde garde maintenant l'avancement de chaque succès
+RetroAchievements (le runtime de rcheevos) ; le charger le remet tel qu'il
+était, au lieu de tout recommencer (la bêta recommençait aussi).
+
+- **Format** (`android/src/main/cpp/media/state_progress.c`) : l'état du core,
+  puis la progression et un pied de page de 12 octets (longueur, puis
+  « RAVENRA1 »). Java et `StateSlotRepository` ne changent pas : les octets
+  restent opaques. **Les états d'avant se chargent comme avant** (sans pied de
+  page, les succès recommencent) ; sans compte ni jeu identifié, l'état reste
+  celui du core seul. L'annulation d'un chargement remet aussi la progression.
+- **Module C** : `raven_achievements_progress_size`, `_save_progress`,
+  `_load_progress` (`rc_client_serialize_progress_sized` /
+  `rc_client_deserialize_progress_sized`) ; une progression illisible est
+  refusée et les succès recommencent. Le redémarrage de la console garde
+  `rc_client_reset`. En Hardcore, les états restent interdits.
+- Tests : `test_state_progress.c` (pied de page, états sans lui, longueur
+  impossible, faux pied de page, progression vide) ; `test_achievements.c`
+  (taille, écriture, relecture, départ à zéro, octets illisibles refusés, le
+  succès se débloque ensuite) ; ASan/UBSan propre.
+
+Les petits écarts relevés après RA-3 et K (progression dans les états,
+avatars des classements, bandeaux sur le skin, skins en paysage, boutons sur
+l'image en portrait, vibration et capteurs de la manette) sont ainsi traités
+par les lots E-1 à E-6 ; il reste à les vérifier sur téléphone.

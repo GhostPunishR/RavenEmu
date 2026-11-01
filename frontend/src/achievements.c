@@ -482,6 +482,22 @@ void raven_achievements_reset(raven_achievements *a) {
     if (a) rc_client_reset(a->rc);
 }
 
+size_t raven_achievements_progress_size(raven_achievements *a) {
+    return a && rc_client_is_game_loaded(a->rc) ? rc_client_progress_size(a->rc) : 0;
+}
+
+int raven_achievements_save_progress(raven_achievements *a, uint8_t *buffer, size_t size) {
+    if (!a || !buffer || !size) return 0;
+    return rc_client_serialize_progress_sized(a->rc, buffer, size) == RC_OK;
+}
+
+int raven_achievements_load_progress(raven_achievements *a, const uint8_t *progress, size_t size) {
+    if (!a || !rc_client_is_game_loaded(a->rc)) return 0;
+    if (progress && size && rc_client_deserialize_progress_sized(a->rc, progress, size) == RC_OK) return 1;
+    rc_client_deserialize_progress_sized(a->rc, NULL, 0);
+    return !progress || !size;
+}
+
 void raven_achievements_frame(raven_achievements *a) {
     if (a) rc_client_do_frame(a->rc);
 }

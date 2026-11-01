@@ -42,6 +42,16 @@ void raven_achievements_load_game(raven_achievements *achievements, unsigned con
 void raven_achievements_unload_game(raven_achievements *achievements);
 /* After a reset of the game (the event "hardcore_reset" asks for one). */
 void raven_achievements_reset(raven_achievements *achievements);
+
+/* A save state's share: how far each achievement had got (rcheevos'
+ * runtime), so that loading the state puts it back. 0 without a game. */
+size_t raven_achievements_progress_size(raven_achievements *achievements);
+/* Writes the progress into `buffer`; 1 on success. */
+int raven_achievements_save_progress(raven_achievements *achievements, uint8_t *buffer, size_t size);
+/* After a state was loaded: its progress, or none (NULL, 0) for a state saved
+ * without it, when every achievement starts over. 1 on success; a progress
+ * the game cannot read starts them over too, and answers 0. */
+int raven_achievements_load_progress(raven_achievements *achievements, const uint8_t *progress, size_t size);
 /* After each frame shown, never for frames replayed behind it. */
 void raven_achievements_frame(raven_achievements *achievements);
 /* While paused: keeps the session alive and retries what failed. */

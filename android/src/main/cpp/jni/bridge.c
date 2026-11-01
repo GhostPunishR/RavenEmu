@@ -8,6 +8,7 @@
 #include "gles2_renderer.h"
 #include "input_driver.h"
 #include "sensor_driver.h"
+#include "state_progress.h"
 #include "state_thumbnail.h"
 #include <time.h>
 
@@ -605,6 +606,8 @@ Java_com_ravenemu_app_bridge_NativeBridge_stateCompatibility(JNIEnv *env, jclass
 /* A limit on JNI allocations; Libretro save RAM/state sizes are untrusted. */
 #define MAX_BATTERY_BYTES (1024u * 1024u)
 #define MAX_STATE_BYTES (16u * 1024u * 1024u)
+/* rcheevos' runtime for a game: a few kilobytes; far more is refused. */
+#define MAX_PROGRESS_BYTES (1024u * 1024u)
 
 static jbyteArray read_battery(JNIEnv *env, unsigned player) {
     size_t size = raven_frontend_player_battery_size(session, player);
@@ -660,19 +663,30 @@ Java_com_ravenemu_app_bridge_NativeBridge_restorePlayerBattery(
     return player == 0 || player == 1 ? write_battery(env, (unsigned)player, saved) : JNI_FALSE;
 }
 
+/* The core's state, then how far each achievement had got (state_progress.h):
+ * loading it later puts both back. Without achievements, the core's alone. */
 JNIEXPORT jbyteArray JNICALL
 Java_com_ravenemu_app_bridge_NativeBridge_saveState(JNIEnv *env, jclass clazz) {
     (void)clazz;
     size_t size = raven_frontend_state_size(session);
     if (!size || size > MAX_STATE_BYTES) return NULL;
-    jbyteArray bytes = (*env)->NewByteArray(env, (jsize)size);
-    if (!bytes) return NULL;
-    void *temp = malloc(size);
+    size_t room = raven_bridge_achievements_progress(NULL, 0);
+    if (room > MAX_PROGRESS_BYTES) room = 0;
+    uint8_t *temp = (uint8_t *)malloc(raven_state_progress_total(size, room));
     if (!temp) return NULL;
-    int saved = raven_frontend_save_state(session, temp, size);
-    if (saved) (*env)->SetByteArrayRegion(env, bytes, 0, (jsize)size, (const jbyte *)temp);
+    if (!raven_frontend_save_state(session, temp, size)) {
+        free(temp);
+        return NULL;
+    }
+    /* Progress that cannot be written leaves the state as before. */
+    size_t progress = room ? raven_bridge_achievements_progress(temp + size, room) : 0;
+    if (progress != room) progress = 0;
+    raven_state_progress_seal(temp, size, progress);
+    const size_t total = raven_state_progress_total(size, progress);
+    jbyteArray bytes = (*env)->NewByteArray(env, (jsize)total);
+    if (bytes) (*env)->SetByteArrayRegion(env, bytes, 0, (jsize)total, (const jbyte *)temp);
     free(temp);
-    return saved ? bytes : NULL;
+    return bytes;
 }
 
 JNIEXPORT jboolean JNICALL
@@ -681,13 +695,17 @@ Java_com_ravenemu_app_bridge_NativeBridge_restoreState(
     (void)clazz;
     if (!saved) return JNI_FALSE;
     jsize size = (*env)->GetArrayLength(env, saved);
-    if (size <= 0 || (size_t)size > MAX_STATE_BYTES) return JNI_FALSE;
+    if (size <= 0 || (size_t)size > MAX_STATE_BYTES + MAX_PROGRESS_BYTES + RAVEN_STATE_PROGRESS_FOOTER)
+        return JNI_FALSE;
     jbyte *bytes = (*env)->GetByteArrayElements(env, saved, NULL);
     if (!bytes) return JNI_FALSE;
-    int result = raven_frontend_load_state(session, bytes, (size_t)size);
+    size_t core = 0, progress_size = 0;
+    const uint8_t *progress = NULL;
+    raven_state_progress_split((const uint8_t *)bytes, (size_t)size, &core, &progress, &progress_size);
+    int result = core <= MAX_STATE_BYTES && raven_frontend_load_state(session, bytes, core);
     raven_frame_pacer_reset(&frame_pacer);
-    /* The states carry no achievement progress yet: it starts over. */
-    if (result) raven_bridge_achievements_state_loaded();
+    /* Its achievements' progress, or, for a state saved without it, a fresh start. */
+    if (result) raven_bridge_achievements_progress_loaded(progress, progress_size);
     // Keep displaying the previous frame, but never attach its pixels to a
     // restored state until the core has supplied a fresh video callback.
     preview_valid = 0;

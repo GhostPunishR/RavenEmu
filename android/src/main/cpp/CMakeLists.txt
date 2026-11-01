@@ -26,7 +26,8 @@ add_library(raven_android SHARED
     hardware/video/gles2/gles2_renderer.c
     hardware/input/input_driver.c
     hardware/input/sensor_driver.c
-    media/state_thumbnail.c)
+    media/state_thumbnail.c
+    media/state_progress.c)
 target_compile_features(raven_android PRIVATE c_std_11)
 target_link_libraries(raven_android PRIVATE raven_frontend raven_achievements GLESv2 aaudio android log m)
 target_include_directories(raven_android PRIVATE
