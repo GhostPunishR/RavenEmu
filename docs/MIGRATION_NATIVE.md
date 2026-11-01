@@ -1315,3 +1315,15 @@ pas : c'est un ajout demandé par le propriétaire.
 
 - Tests : `test_achievements.c` (adresse des deux joueurs) ;
   `AchievementsPanelTest` (avatar demandé pour sa ligne).
+
+## Petits écarts, lot E-2 : bandeaux des succès sur tout le skin
+
+Avec un skin Delta, les bandeaux, indicateurs et progressions de
+RetroAchievements couvrent toute la zone du skin, comme dans la bêta
+(`RetroOverlays` dans la boîte du skin), et non plus la seule image ; avec
+les commandes classiques, ils reviennent sur l'image. La surcouche ne prend
+aucun toucher : les boutons du skin restent actifs sous elle.
+
+- Tests : `PlayerActivityTest` (surcouche au-dessus du skin, sur toute sa
+  taille, un toucher sur la scène atteint encore le bouton A ; retour sur
+  l'image quand le skin ne peut pas se dessiner).

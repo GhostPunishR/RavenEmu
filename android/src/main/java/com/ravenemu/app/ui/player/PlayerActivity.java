@@ -95,6 +95,9 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
     private DeltaSkinView skinView;
     /** The picture and the achievements over it: the skin's game area when it shows. */
     private FrameLayout pictureFrame;
+    /** Portrait: the picture's column and the skin over it; RetroAchievements'
+     * banners and indicators cover it whole while a skin is shown. */
+    private FrameLayout skinStage;
     /** UI thread: the open game's system, for its console's skin; null before a game. */
     private String loadedSystem;
     private int skinRequest;
@@ -325,6 +328,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
             skinView.setEnabled(false);
             stage.addView(skinView, new FrameLayout.LayoutParams(-1, -1));
             root.addView(stage, new LinearLayout.LayoutParams(-1, 0, 1));
+            skinStage = stage;
         }
         pictureFrame = screen;
         // Reserve actual status bar, cutout, nav buttons and keyboard space.
@@ -455,6 +459,17 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         area.leftMargin = (int) Math.round(layout.gameArea.left);
         area.topMargin = (int) Math.round(layout.gameArea.top);
         pictureFrame.setLayoutParams(area);
+        // As in the beta, the banners use the whole skin, not the picture alone.
+        placeAchievementOverlay(skinStage);
+    }
+
+    /** RetroAchievements' banners and indicators, over the whole skin or over
+     * the picture. The overlay takes no touch: the skin's buttons stay live. */
+    private void placeAchievementOverlay(android.view.ViewGroup parent) {
+        if (achievementOverlay == null || parent == null || achievementOverlay.getParent() == parent) return;
+        android.view.ViewParent current = achievementOverlay.getParent();
+        if (current instanceof android.view.ViewGroup) ((android.view.ViewGroup) current).removeView(achievementOverlay);
+        parent.addView(achievementOverlay, new FrameLayout.LayoutParams(-1, -1));
     }
 
     private void showClassicControls() {
@@ -462,6 +477,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         if (skinView == null) return;
         skinView.setConfiguration(null, false);
         if (pictureFrame == null || gameControls == null) return;
+        placeAchievementOverlay(pictureFrame);
         if (gameControls.getVisibility() == View.VISIBLE) return;
         releaseInput();
         pictureFrame.setLayoutParams(new LinearLayout.LayoutParams(-1, 0, 1));

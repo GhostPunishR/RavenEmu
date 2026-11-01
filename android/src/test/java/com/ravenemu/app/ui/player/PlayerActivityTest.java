@@ -994,6 +994,19 @@ public final class PlayerActivityTest {
             touchSkin(skin, MotionEvent.ACTION_UP, 350 * scale, top + 110 * scale);
             assertEquals(0, FakeNative.buttons);
 
+            // RetroAchievements' banners cover the whole skin, as in the beta, and
+            // let its buttons play: a touch on the stage still reaches A.
+            View overlay = ReflectionHelpers.getField(activity, "achievementOverlay");
+            android.view.ViewGroup stage = (android.view.ViewGroup) skin.getParent();
+            assertSame(stage, overlay.getParent());
+            assertEquals("Drawn over the skin", stage.getChildCount() - 1, stage.indexOfChild(overlay));
+            assertEquals(android.view.ViewGroup.LayoutParams.MATCH_PARENT, overlay.getLayoutParams().width);
+            assertEquals(android.view.ViewGroup.LayoutParams.MATCH_PARENT, overlay.getLayoutParams().height);
+            touchSkin(stage, MotionEvent.ACTION_DOWN, 350 * scale, top + 110 * scale);
+            assertEquals(NativeBridge.A, FakeNative.buttons & NativeBridge.A);
+            touchSkin(stage, MotionEvent.ACTION_UP, 350 * scale, top + 110 * scale);
+            assertEquals(0, FakeNative.buttons);
+
             ShadowToast.reset();
             openMenu(activity);
             menuButton("Déplacer les boutons").performClick();
@@ -1035,6 +1048,9 @@ public final class PlayerActivityTest {
             assertEquals(View.VISIBLE, controls.getVisibility());
             assertEquals(View.GONE, skin.getVisibility());
             assertEquals("Skin invalide : commandes classiques restaurées", ShadowToast.getTextOfLatestToast());
+            // The banners go back over the picture with the classic controls.
+            View overlay = ReflectionHelpers.getField(activity, "achievementOverlay");
+            assertSame(ReflectionHelpers.getField(activity, "pictureFrame"), overlay.getParent());
             assertNull("The console goes back to the classic controls",
                     preferences.getString("skins.selected.gb_gbc", null));
         } finally {
@@ -1294,7 +1310,7 @@ public final class PlayerActivityTest {
         }
     }
 
-    private static void touchSkin(DeltaSkinView skin, int action, float x, float y) {
+    private static void touchSkin(View skin, int action, float x, float y) {
         long now = android.os.SystemClock.uptimeMillis();
         MotionEvent event = MotionEvent.obtain(now, now, action, x, y, 0);
         try { skin.dispatchTouchEvent(event); } finally { event.recycle(); }
