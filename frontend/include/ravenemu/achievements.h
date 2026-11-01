@@ -130,7 +130,8 @@ size_t raven_achievements_boards(raven_achievements *achievements, const raven_a
 void raven_achievements_fetch_scores(raven_achievements *achievements, uint32_t board, int around);
 typedef struct raven_achievements_score {
     uint32_t rank;
-    const char *user, *score;
+    /* The avatar's address as rcheevos builds it, "" without one. */
+    const char *user, *score, *avatar;
     int64_t submitted;
     int is_player;
 } raven_achievements_score;

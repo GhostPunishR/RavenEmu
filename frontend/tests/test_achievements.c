@@ -288,6 +288,9 @@ static void the_lists_follow_the_game_and_its_scores(void) {
     CHECK(scores[0].rank == 1 && strcmp(scores[0].user, "Corbeau") == 0 && !scores[0].is_player);
     CHECK(scores[1].rank == 2 && scores[1].is_player && strstr(scores[1].score, "60") != NULL);
     CHECK(scores[1].submitted == 1615634566);
+    /* Each line carries its player's picture, from the SDK's image host. */
+    CHECK(strcmp(scores[0].avatar, "https://media.retroachievements.org/UserPic/Corbeau.png") == 0);
+    CHECK(strcmp(scores[1].avatar, "https://media.retroachievements.org/UserPic/SyntheticUser.png") == 0);
     /* A refusal or no answer says so; the scores read before go with the new query. */
     raven_achievements_fetch_scores(a, 4401, 0);
     answer(a, "{\"Success\":false,\"Error\":\"Unknown leaderboard\"}", 404);

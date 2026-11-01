@@ -1301,3 +1301,17 @@ un lecteur intégré (`ui/settings/LegalDocumentActivity`) au lieu de GitHub.
   `LegalDocumentActivityTest` (assets identiques aux fichiers du dépôt,
   titres, puces, liens actifs, thème NVIDIA, document inconnu) ;
   `PlaybackSettingsActivityTest` (À propos ouvre le lecteur).
+
+## Petits écarts, lot E-1 : avatars des classements
+
+Chaque ligne d'un classement RetroAchievements (menu du jeu → succès →
+classements) montre l'avatar du joueur à gauche du rang, du nom et du score.
+L'adresse vient du SDK (`rc_client_leaderboard_entry_get_user_image_url`,
+hôte d'images de RetroAchievements), passe par `raven_achievements_score.avatar`,
+le pont JNI (six champs par score) et `NativeAchievements.Score.avatar` ;
+l'image se charge comme les badges (`BadgeCache`, HTTPS vers
+retroachievements.org et ses sous-domaines seulement). La bêta n'en montrait
+pas : c'est un ajout demandé par le propriétaire.
+
+- Tests : `test_achievements.c` (adresse des deux joueurs) ;
+  `AchievementsPanelTest` (avatar demandé pour sa ligne).

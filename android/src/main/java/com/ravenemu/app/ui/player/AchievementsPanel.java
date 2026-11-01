@@ -366,6 +366,35 @@ final class AchievementsPanel {
         details.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(theme.accent);
     }
 
+    /** A line of a leaderboard, the beta's text, with its player's picture
+     * on the left (the beta showed none), fetched like the badges. */
+    private LinearLayout scoreRow(NativeAchievements.Score score) {
+        LinearLayout row = new LinearLayout(owner);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        ImageView avatar = new ImageView(owner);
+        avatar.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        avatar.setBackground(shape(theme.raised, 8));
+        avatar.setClipToOutline(true);
+        avatar.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        if (!score.avatar.isEmpty()) badges.into(avatar, score.avatar);
+        LinearLayout.LayoutParams picture = new LinearLayout.LayoutParams(dp(32), dp(32));
+        picture.setMarginEnd(dp(10));
+        row.addView(avatar, picture);
+        LinearLayout lines = new LinearLayout(owner);
+        lines.setOrientation(LinearLayout.VERTICAL);
+        lines.addView(text("#" + score.rank + " · " + score.user + (score.player ? " (vous)" : "")
+                + "\n" + score.score, 13, score.player ? theme.accent : theme.text));
+        String date = date(score.submitted);
+        if (!date.isEmpty()) {
+            TextView when = text(date, 11, theme.muted);
+            LinearLayout.LayoutParams below = new LinearLayout.LayoutParams(-2, -2);
+            below.topMargin = dp(1);
+            lines.addView(when, below);
+        }
+        row.addView(lines, new LinearLayout.LayoutParams(0, -2, 1));
+        return row;
+    }
+
     /** The beta's RetroLeaderboardsContent. */
     private void renderBoards() {
         boards.removeAllViews();
@@ -437,12 +466,8 @@ final class AchievementsPanel {
                         + snapshot.scores.total + " participants", 12, theme.muted), 4);
                 if (snapshot.scores.scores.length == 0)
                     add(boards, text("Aucun score enregistré.", 13, theme.muted), 4);
-                for (NativeAchievements.Score score : snapshot.scores.scores) {
-                    add(boards, text("#" + score.rank + " · " + score.user + (score.player ? " (vous)" : "")
-                            + "\n" + score.score, 13, score.player ? theme.accent : theme.text), 6);
-                    String date = date(score.submitted);
-                    if (!date.isEmpty()) add(boards, text(date, 11, theme.muted), 1);
-                }
+                for (NativeAchievements.Score score : snapshot.scores.scores)
+                    add(boards, scoreRow(score), 6);
             }
         }
         Button site = textButton("Classement complet sur le site", theme.accent);

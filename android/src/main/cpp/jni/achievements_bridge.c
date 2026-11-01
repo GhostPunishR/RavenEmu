@@ -355,8 +355,8 @@ Java_com_ravenemu_app_bridge_NativeAchievements_fetchScores(
     if (board > 0) raven_achievements_fetch_scores(find(handle, 0, 0), (uint32_t)board, around == JNI_TRUE);
 }
 
-/* board, total, around; then five fields per score: rank, user, score,
- * submitted, is the player. */
+/* board, total, around; then six fields per score: rank, user, score,
+ * submitted, is the player, avatar address. */
 JNIEXPORT jobjectArray JNICALL
 Java_com_ravenemu_app_bridge_NativeAchievements_scores(JNIEnv *env, jclass clazz, jlong handle) {
     (void)clazz;
@@ -366,7 +366,7 @@ Java_com_ravenemu_app_bridge_NativeAchievements_scores(JNIEnv *env, jclass clazz
     int around = 0;
     const raven_achievements_score *scores;
     const size_t count = raven_achievements_scores(achievements, &board, &total, &around, &scores);
-    const size_t fields = 5, size = 3 + count * fields;
+    const size_t fields = 6, size = 3 + count * fields;
     const char **values = (const char **)calloc(size, sizeof(char *));
     char (*numbers)[3][32] = calloc(count + 1, sizeof(*numbers));
     if (!values || !numbers) {
@@ -382,8 +382,8 @@ Java_com_ravenemu_app_bridge_NativeAchievements_scores(JNIEnv *env, jclass clazz
     for (size_t i = 0; i < count; ++i) {
         snprintf(numbers[i][0], 32, "%u", (unsigned)scores[i].rank);
         snprintf(numbers[i][1], 32, "%lld", (long long)scores[i].submitted);
-        const char *row[5] = {numbers[i][0], scores[i].user, scores[i].score, numbers[i][1],
-                              scores[i].is_player ? "1" : "0"};
+        const char *row[6] = {numbers[i][0], scores[i].user, scores[i].score, numbers[i][1],
+                              scores[i].is_player ? "1" : "0", scores[i].avatar ? scores[i].avatar : ""};
         memcpy(values + 3 + i * fields, row, sizeof(row));
     }
     jobjectArray result = records(env, values, size);

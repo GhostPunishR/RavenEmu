@@ -104,12 +104,18 @@ public final class AchievementsPanelTest {
         assertEquals("scores 4401 false", actions.get(0));
         panel.show(game(1, null, 4401, true, ""));
         assertNotNull(described("Chargement des scores"));
-        NativeAchievements.Score[] lines = {new NativeAchievements.Score(1, "Corbeau", "000120", 1615654895L, false),
+        String picture = "https://media.retroachievements.org/UserPic/Corbeau.png";
+        NativeAchievements.Score[] lines = {
+                new NativeAchievements.Score(1, "Corbeau", "000120", 1615654895L, false, picture),
                 new NativeAchievements.Score(2, "Raven", "000060", 1615634566L, true)};
         panel.show(game(1, new NativeAchievements.Scores(4401, 2, true, lines), 4401, false, ""));
         assertNotNull(text("Scores autour de moi · 2 participants"));
         assertNotNull(text("#1 · Corbeau\n000120"));
         assertNotNull(text("#2 · Raven (vous)\n000060"));
+        // Each line has its player's picture, asked for like a badge.
+        View avatar = find(panel.view(), view -> view instanceof android.widget.ImageView && picture.equals(view.getTag()));
+        assertNotNull("Corbeau's avatar", avatar);
+        assertTrue(avatar.isShown());
         panel.show(game(1, null, 4401, false, "Impossible de charger les scores. Réessayez."));
         text("Réessayer les scores").performClick();
         text("Classement complet sur le site").performClick();

@@ -391,6 +391,7 @@ static void free_scores(score_list *list) {
     for (size_t i = 0; i < list->count; ++i) {
         free((char *)list->scores[i].user);
         free((char *)list->scores[i].score);
+        free((char *)list->scores[i].avatar);
     }
     free(list->scores);
     memset(list, 0, sizeof(*list));
@@ -680,6 +681,10 @@ static void scores_fetched(int result, const char *message, rc_client_leaderboar
         score->rank = list->entries[i].rank;
         score->user = copy(list->entries[i].user);
         score->score = copy(list->entries[i].display);
+        /* The player's picture beside the score, from the SDK's image host. */
+        char avatar[256];
+        score->avatar = copy(rc_client_leaderboard_entry_get_user_image_url(&list->entries[i], avatar,
+                                                                            sizeof(avatar)) == RC_OK ? avatar : "");
         score->submitted = (int64_t)list->entries[i].submitted;
         score->is_player = (int32_t)i == list->user_index;
     }

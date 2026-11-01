@@ -76,11 +76,16 @@ public final class NativeAchievements {
     /** One line of a leaderboard. submitted: seconds since 1970. */
     public static final class Score {
         public final int rank;
-        public final String user, score;
+        /** avatar: the player's picture on retroachievements.org, "" without one. */
+        public final String user, score, avatar;
         public final long submitted;
         public final boolean player;
         public Score(int rank, String user, String score, long submitted, boolean player) {
+            this(rank, user, score, submitted, player, "");
+        }
+        public Score(int rank, String user, String score, long submitted, boolean player, String avatar) {
             this.rank = rank; this.user = user; this.score = score; this.submitted = submitted; this.player = player;
+            this.avatar = avatar == null ? "" : avatar;
         }
     }
 
@@ -186,13 +191,13 @@ public final class NativeAchievements {
 
     public Scores scores() {
         byte[][] fields = scores(handle);
-        if (fields == null || fields.length < 3 || (fields.length - 3) % 5 != 0)
+        if (fields == null || fields.length < 3 || (fields.length - 3) % 6 != 0)
             return new Scores(0, 0, false, new Score[0]);
-        Score[] scores = new Score[(fields.length - 3) / 5];
+        Score[] scores = new Score[(fields.length - 3) / 6];
         for (int i = 0; i < scores.length; i++) {
-            int at = 3 + i * 5;
+            int at = 3 + i * 6;
             scores[i] = new Score((int)number(text(fields[at])), text(fields[at + 1]), text(fields[at + 2]),
-                    number(text(fields[at + 3])), number(text(fields[at + 4])) != 0);
+                    number(text(fields[at + 3])), number(text(fields[at + 4])) != 0, text(fields[at + 5]));
         }
         return new Scores((int)number(text(fields[0])), (int)number(text(fields[1])),
                 number(text(fields[2])) != 0, scores);
