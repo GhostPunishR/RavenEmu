@@ -523,6 +523,16 @@ Java_com_ravenemu_app_bridge_NativeBridge_setDisplayRotation(
     raven_sensors_set_rotation(rotation);
 }
 
+/* GL thread, before a frame: the motion sensors of the controller played
+ * with (kinds: 1 accelerometer, 2 gyroscope; 0 hands them back to the phone). */
+JNIEXPORT void JNICALL
+Java_com_ravenemu_app_bridge_NativeBridge_feedControllerMotion(
+    JNIEnv *env, jclass clazz, jint kinds, jfloat ax, jfloat ay, jfloat az, jfloat gx, jfloat gy, jfloat gz) {
+    (void)env; (void)clazz;
+    const float acceleration[3] = {ax, ay, az}, turning[3] = {gx, gy, gz};
+    raven_sensors_feed_controller(kinds < 0 ? 0u : (unsigned)kinds, acceleration, turning);
+}
+
 /* GL thread, after each drawn frame: whether the cartridge's motor runs. A
  * paused game never vibrates. */
 JNIEXPORT jboolean JNICALL

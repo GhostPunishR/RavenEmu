@@ -184,12 +184,60 @@ static void a_sensor_the_system_refuses_is_reported(void) {
     raven_sensors_close();
 }
 
+/* The controller played with stands for the phone, along itself. */
+static void a_controller_stands_for_the_phone(void) {
+    has_gyroscope = 0;
+    raven_sensors_set_rotation(1);
+    CHECK(raven_sensors_set_state(RETRO_SENSOR_ACCELEROMETER_ENABLE, 60));
+    push_motion(ASENSOR_TYPE_ACCELEROMETER, 1.0f, 2.0f, 9.5f);
+    raven_sensors_poll();
+    CHECK(near(raven_sensors_read(RETRO_SENSOR_ACCELEROMETER_X), -2.0f));  /* the phone, turned */
+    const float tilt[3] = {3.0f, 4.0f, 5.0f}, turn[3] = {0.5f, -0.5f, 2.0f};
+    raven_sensors_feed_controller(RAVEN_SENSORS_CONTROLLER_ACCELEROMETER | RAVEN_SENSORS_CONTROLLER_GYROSCOPE,
+                                  tilt, turn);
+    /* Along the controller: no screen rotation; the phone's events are not read. */
+    push_motion(ASENSOR_TYPE_ACCELEROMETER, 7.0f, 7.0f, 7.0f);
+    raven_sensors_poll();
+    CHECK(near(raven_sensors_read(RETRO_SENSOR_ACCELEROMETER_X), 3.0f));
+    CHECK(near(raven_sensors_read(RETRO_SENSOR_ACCELEROMETER_Y), 4.0f));
+    CHECK(near(raven_sensors_read(RETRO_SENSOR_ACCELEROMETER_Z), 5.0f));
+    /* The gyroscope the phone lacks: the controller's, once the core asks. */
+    CHECK(raven_sensors_read(RETRO_SENSOR_GYROSCOPE_Z) == 0.0f);
+    CHECK(raven_sensors_set_state(RETRO_SENSOR_GYROSCOPE_ENABLE, 60));
+    CHECK(!registered[ASENSOR_TYPE_GYROSCOPE]);
+    CHECK(near(raven_sensors_read(RETRO_SENSOR_GYROSCOPE_X), 0.5f));
+    CHECK(near(raven_sensors_read(RETRO_SENSOR_GYROSCOPE_Z), 2.0f));
+    /* The light stays the phone's. */
+    CHECK(raven_sensors_read(RETRO_SENSOR_ILLUMINANCE) == 0.0f);
+    /* A paused game reads nothing, the controller's included. */
+    raven_sensors_set_active(0);
+    CHECK(raven_sensors_read(RETRO_SENSOR_ACCELEROMETER_X) == 0.0f);
+    CHECK(raven_sensors_read(RETRO_SENSOR_GYROSCOPE_X) == 0.0f);
+    raven_sensors_set_active(1);
+    CHECK(near(raven_sensors_read(RETRO_SENSOR_ACCELEROMETER_X), 3.0f));
+    /* Back to the touch screen: the phone again, and no gyroscope. */
+    raven_sensors_feed_controller(0, NULL, NULL);
+    push_motion(ASENSOR_TYPE_ACCELEROMETER, 1.0f, 2.0f, 9.5f);
+    raven_sensors_poll();
+    CHECK(near(raven_sensors_read(RETRO_SENSOR_ACCELEROMETER_X), -2.0f));
+    CHECK(raven_sensors_read(RETRO_SENSOR_GYROSCOPE_X) == 0.0f);
+    CHECK(!raven_sensors_set_state(RETRO_SENSOR_GYROSCOPE_ENABLE, 60));
+    /* Closing the game forgets the controller too. */
+    raven_sensors_feed_controller(RAVEN_SENSORS_CONTROLLER_ACCELEROMETER, tilt, NULL);
+    raven_sensors_close();
+    CHECK(raven_sensors_set_state(RETRO_SENSOR_ACCELEROMETER_ENABLE, 60));
+    CHECK(raven_sensors_read(RETRO_SENSOR_ACCELEROMETER_X) == 0.0f);
+    raven_sensors_close();
+    raven_sensors_set_rotation(0);
+}
+
 int main(void) {
     accelerometer_follows_the_screen();
     a_missing_sensor_is_refused_and_disabling_always_works();
     a_paused_game_turns_them_off();
     closing_the_game_releases_everything();
     a_sensor_the_system_refuses_is_reported();
-    puts("Sensor driver: 5 scenarios passed");
+    a_controller_stands_for_the_phone();
+    puts("Sensor driver: 6 scenarios passed");
     return 0;
 }

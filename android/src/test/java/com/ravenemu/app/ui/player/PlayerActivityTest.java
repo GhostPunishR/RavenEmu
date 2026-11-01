@@ -199,6 +199,27 @@ public final class PlayerActivityTest {
         assertSame(RavenTheme.RAVENEMU, RavenTheme.of(activity));
     }
 
+    @Test public void theControllersMotionSensorsReachTheCoreBeforeEachFrame() throws Exception {
+        PlayerActivity activity = loaded();
+        ControllerMotion motion = ReflectionHelpers.getField(activity, "motion");
+        activity.onDrawFrame(null);
+        assertEquals("No controller: nothing fed", 0, FakeNative.motionFeeds);
+        motion.pretend(ControllerMotion.ACCELEROMETER | ControllerMotion.GYROSCOPE);
+        motion.record(android.hardware.Sensor.TYPE_ACCELEROMETER, new float[]{1f, 2f, 9f});
+        motion.record(android.hardware.Sensor.TYPE_GYROSCOPE, new float[]{0.5f, 0f, -1f});
+        activity.onDrawFrame(null);
+        assertEquals(3, FakeNative.motionKinds);
+        assertArrayEquals(new float[]{1f, 2f, 9f, 0.5f, 0f, -1f}, FakeNative.motion, 0f);
+        activity.onDrawFrame(null);
+        assertEquals("Every frame while it plays", 2, FakeNative.motionFeeds);
+        // Back to the touch screen: once more, to give the phone its sensors back, then nothing.
+        motion.stop();
+        activity.onDrawFrame(null);
+        activity.onDrawFrame(null);
+        assertEquals(3, FakeNative.motionFeeds);
+        assertEquals(0, FakeNative.motionKinds);
+    }
+
     @Test public void inPortraitAButtonCanBeMovedOverThePicture() throws Exception {
         PlayerActivity activity = loaded();
         settleSkin(activity);
@@ -1519,6 +1540,8 @@ public final class PlayerActivityTest {
             rotation = -1;
             preemptive = -1;
             rumbling = false;
+            motionKinds = motionFeeds = 0;
+            motion = new float[6];
         }
         private static void requireGl() { assertTrue("Core operation must use the queued GL boundary", QueuedGl.executing); }
         @Implementation protected static void __staticInitializer__() {}
@@ -1554,6 +1577,15 @@ public final class PlayerActivityTest {
         }
         @Implementation protected static void setDisplayRate(float hertz) { requireGl(); displayRate = hertz; }
         @Implementation protected static void setDisplayRotation(int value) { requireGl(); rotation = value; }
+        /** The controller's motion sensors, as last fed before a frame. */
+        static int motionKinds, motionFeeds;
+        static float[] motion = new float[6];
+        @Implementation protected static void feedControllerMotion(int kinds, float ax, float ay, float az,
+                                                                  float gx, float gy, float gz) {
+            motionKinds = kinds;
+            motionFeeds++;
+            motion = new float[]{ax, ay, az, gx, gy, gz};
+        }
         @Implementation protected static void setPreemptiveFrames(int frames) { requireGl(); preemptive = frames; }
         /** As the bridge: a paused or closed game never vibrates. */
         @Implementation protected static boolean rumbling() { return rumbling && !paused && !closed; }

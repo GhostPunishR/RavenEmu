@@ -66,6 +66,11 @@ public final class NativeBridge {
     public static native String cheatRefusal();
     /** GL thread: Display.getRotation(), so the tilt follows the screen as shown. */
     public static native void setDisplayRotation(int rotation);
+    /** GL thread, before a frame: the accelerometer (kinds bit 1) and the
+     * gyroscope (bit 2) of the controller played with, in place of the
+     * phone's; 0 gives them back to the phone. */
+    public static native void feedControllerMotion(int kinds, float ax, float ay, float az,
+                                                   float gx, float gy, float gz);
     /** GL thread, after drawFrame: the cartridge's motor runs; never while paused. */
     public static native boolean rumbling();
     /** GL thread: the open game's frame rate, 0 without one. */

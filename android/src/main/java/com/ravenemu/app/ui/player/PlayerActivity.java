@@ -123,6 +123,22 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
     private CartridgeRumble rumble;
     /** Settings → Interface: "Vibration de la cartouche". */
     private volatile boolean rumbleEnabled = CartridgeSettings.DEFAULTS.rumble;
+    /** The controller played with: its motor rumbles and its sensors move the
+     * cartridge's (UI thread picks it; -1 for the touch screen). */
+    private final ControllerMotion motion = new ControllerMotion();
+    private int controllerId = -1;
+    private volatile boolean sensorsWanted = CartridgeSettings.DEFAULTS.sensors;
+    /** GL thread: what the native driver was last given of the controller's sensors. */
+    private int fedMotion;
+    private final float[] motionAcceleration = new float[3], motionTurning = new float[3];
+    private final android.hardware.input.InputManager.InputDeviceListener controllers =
+            new android.hardware.input.InputManager.InputDeviceListener() {
+                @Override public void onInputDeviceAdded(int deviceId) {}
+                @Override public void onInputDeviceChanged(int deviceId) {}
+                @Override public void onInputDeviceRemoved(int deviceId) {
+                    if (deviceId == controllerId) controllerUsed(null);
+                }
+            };
     /** RetroAchievements over the game (UI thread), and its session (GL thread). */
     private AchievementOverlay achievementOverlay;
     private PlayerAchievements achievements;
@@ -551,6 +567,8 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
 
     private void setTouchButtons(int mask) {
         if (disposed.get() || gamePaused) return;
+        // Played on the screen: the phone rumbles and moves again.
+        if (mask != 0) controllerUsed(null);
         touchButtons = mask;
         NativeBridge.setButtons(gamepad.mask() | touchButtons);
     }
@@ -1289,6 +1307,13 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
     @Override
     public void onDrawFrame(GL10 gl) {
         long now = System.nanoTime();
+        // The controller's motion sensors, if it has some, for this frame.
+        int moving = motion.read(motionAcceleration, motionTurning);
+        if (moving != 0 || fedMotion != 0) {
+            NativeBridge.feedControllerMotion(moving, motionAcceleration[0], motionAcceleration[1],
+                    motionAcceleration[2], motionTurning[0], motionTurning[1], motionTurning[2]);
+            fedMotion = moving;
+        }
         // Hardcore waits for the sign-in and the ROM's identification.
         int advanced = NativeBridge.drawFrame(width, height, !gamePaused && !achievements.holdFrames());
         // The frames shown reached RetroAchievements in the bridge: now its
@@ -1319,9 +1344,21 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         }
     }
 
+    /** The last input played with, UI thread: a controller with a motor
+     * rumbles, one with motion sensors moves the cartridge's (Android 12 and
+     * later); the touch screen gives both back to the phone. */
+    private void controllerUsed(InputDevice device) {
+        int id = device != null ? device.getId() : -1;
+        if (id == controllerId) return;
+        controllerId = id;
+        rumble.setController(CartridgeRumble.motor(device));
+        motion.use(device, sensorsWanted);
+    }
+
     /** A controller key, while the game runs: the buttons it holds reach the core. */
     private boolean gamepadKey(int keyCode, KeyEvent event) {
         if (gamePaused || !gamepad.handles(keyCode)) return false;
+        controllerUsed(event.getDevice());
         if (gamepad.key(keyCode, event.getAction(), event.getRepeatCount()))
             NativeBridge.setButtons(gamepad.mask() | touchButtons);
         return true;
@@ -1331,6 +1368,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
     @Override public boolean dispatchGenericMotionEvent(MotionEvent event) {
         if (!gamePaused && event.isFromSource(InputDevice.SOURCE_JOYSTICK)
                 && event.getAction() == MotionEvent.ACTION_MOVE) {
+            controllerUsed(event.getDevice());
             gamepad.axes(event.getAxisValue(MotionEvent.AXIS_HAT_X), event.getAxisValue(MotionEvent.AXIS_HAT_Y),
                     event.getAxisValue(MotionEvent.AXIS_X), event.getAxisValue(MotionEvent.AXIS_Y));
             NativeBridge.setButtons(gamepad.mask() | touchButtons);
@@ -1366,6 +1404,8 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         if (surface != null) surface.onResume();
         if (displays != null) displays.registerDisplayListener(displayListener, new Handler(Looper.getMainLooper()));
         sendDisplay();
+        android.hardware.input.InputManager inputs = getSystemService(android.hardware.input.InputManager.class);
+        if (inputs != null) inputs.registerInputDeviceListener(controllers, new Handler(Looper.getMainLooper()));
         // Settings → Interface: size, spacing, style and haptics of the touch
         // controls, and where the player moved them for this orientation.
         if (gameControls != null) {
@@ -1387,6 +1427,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         final CartridgeSettings cartridge = CartridgeSettings.load(this);
         final LatencySettings latency = LatencySettings.load(this);
         rumbleEnabled = cartridge.rumble;
+        sensorsWanted = cartridge.sensors;
         if (achievementOverlay != null)
             achievementOverlay.setSettings(AchievementSettings.load(this), settings.audioEnabled, settings.audioVolume);
         if (surface != null) surface.queueEvent(() -> {
@@ -1405,6 +1446,12 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
     @Override protected void onPause() {
         finishMovingControls();
         if (displays != null) displays.unregisterDisplayListener(displayListener);
+        android.hardware.input.InputManager inputs = getSystemService(android.hardware.input.InputManager.class);
+        if (inputs != null) inputs.unregisterInputDeviceListener(controllers);
+        // Back from the background, the next input picks the controller again.
+        motion.stop();
+        controllerId = -1;
+        rumble.setController(null);
         foreground = false;
         if (pauseState != null) pauseState.foreground(false);
         releaseInput();

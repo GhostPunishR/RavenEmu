@@ -1379,3 +1379,32 @@ bougent pas : leurs décalages partent des mêmes places.
   au-dessus de l'image et gardé).
 
 Écart restant : précision du glissement à vérifier sur téléphone.
+
+## Petits écarts, lot E-5 : vibration et capteurs de la manette
+
+La dernière entrée utilisée décide : une touche ou un stick d'une manette la
+choisit, un toucher sur l'écran rend la main au téléphone ; une manette
+débranchée aussi (`InputManager.InputDeviceListener`), et la pause oublie la
+manette jusqu'à la prochaine entrée. La bêta n'utilisait que le téléphone.
+
+- **Vibration** (`CartridgeRumble`) : la manette qui a un moteur vibre au
+  rythme de la cartouche (mêmes impulsions de 40 ms), sinon le téléphone ;
+  changer de source arrête aussitôt l'impulsion en cours.
+- **Capteurs** (`ControllerMotion`, Android 12 et plus) : l'accéléromètre et
+  le gyroscope de la manette, quand elle en a et que **Capteurs du
+  téléphone** est activé, remplacent ceux du téléphone. Java lit leurs
+  événements ; le fil d'émulation les donne au pilote C avant chaque image
+  (`NativeBridge.feedControllerMotion` → `raven_sensors_feed_controller`),
+  sans verrou. Le pilote rend leurs valeurs le long de la manette (sans
+  rotation de l'écran), seulement quand le core les demande et que le jeu
+  tourne ; un capteur que le téléphone n'a pas peut être activé si la manette
+  l'a. La lumière (Boktai) reste celle du téléphone.
+- Tests : `test_sensor_driver.c` (valeurs de la manette, sans rotation, pause,
+  gyroscope absent du téléphone, retour au téléphone, fermeture du jeu) ;
+  `CartridgeRumbleTest` (manette au lieu du téléphone, bascule et arrêt) ;
+  `ControllerMotionTest` (dernières valeurs, capteur absent, arrêt) ;
+  `PlayerActivityTest` (valeurs données avant chaque image, une fois de plus
+  pour rendre la main au téléphone).
+
+Écarts restants : sens des axes d'une manette et ressenti de la vibration à
+vérifier avec de vraies manettes (DualSense, DualShock 4, Switch Pro).

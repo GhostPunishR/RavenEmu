@@ -21,5 +21,14 @@ void raven_sensors_set_rotation(int rotation);
 void raven_sensors_set_active(int active);
 /* The game closed: all off, nothing wanted any more. */
 void raven_sensors_close(void);
+/* A game controller's motion sensors in place of the phone's, while it is
+ * the one played with (Java reads them, Android 12 and later): `kinds` says
+ * which it has, RAVEN_SENSORS_CONTROLLER_*; their readings, along the
+ * controller (no screen rotation), stand for the phone's until it is fed
+ * with no kind. The light stays the phone's. A sensor the phone lacks can
+ * be enabled when the controller has it. Emulation owner, before a frame. */
+#define RAVEN_SENSORS_CONTROLLER_ACCELEROMETER 1u
+#define RAVEN_SENSORS_CONTROLLER_GYROSCOPE 2u
+void raven_sensors_feed_controller(unsigned kinds, const float acceleration[3], const float turning[3]);
 
 #endif
