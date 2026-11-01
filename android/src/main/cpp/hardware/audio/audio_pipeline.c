@@ -29,6 +29,19 @@ static int output_enabled = 1, output_volume = 100;
 static int resampler = RAVEN_AUDIO_RESAMPLER_SINC;
 /* Built when the stream opens, for its two rates; NULL table until then. */
 static raven_sinc sinc;
+/* The start fade, in device frames: its length, and how far it went. */
+static int fade_ms = RAVEN_AUDIO_STARTUP_FADE_MS;
+static uint32_t fade_length, fade_frame;
+
+/* Rises again from silence: a new stream, or a stream coming back. */
+static void restart_fade(void) {
+    fade_frame = 0;
+    fade_length = 0;
+    if (fade_ms > 0 && output_rate > 0.0) {
+        const double frames = output_rate * fade_ms / 1000.0;
+        fade_length = frames < 1.0 ? 1u : (uint32_t)lrint(frames);
+    }
+}
 
 /* Forgets where the stream was: after a pause, or a new filter. */
 static void restart_filters(void) {
@@ -68,9 +81,24 @@ void raven_audio_set_resampler(int value) {
     restart_filters();
 }
 
-static void push_with_gain(int16_t left, int16_t right, void *user) {
-    const int gain = *(const int *)user;
+/* 0.5 - 0.5 cos(pi t), rounded half up as the beta did, before the volume. */
+static int16_t fade(int16_t sample, double gain) {
+    return (int16_t)floor((double)sample * gain + 0.5);
+}
+
+static void push_output(int16_t left, int16_t right, int gain) {
+    if (fade_frame < fade_length && (fade_frame > 0 || left || right)) {
+        static const double pi = 3.14159265358979323846;
+        const double rise = 0.5 - 0.5 * cos(pi * (double)fade_frame / (double)fade_length);
+        left = fade(left, rise);
+        right = fade(right, rise);
+        ++fade_frame;
+    }
     raven_aaudio_push(apply_gain(left, gain), apply_gain(right, gain));
+}
+
+static void push_with_gain(int16_t left, int16_t right, void *user) {
+    push_output(left, right, *(const int *)user);
 }
 
 void raven_audio_set_speed(double value) {
@@ -113,8 +141,7 @@ void raven_audio_write(const int16_t *stereo, size_t frames) {
             continue;
         }
         while (phase < 1.0) {
-            raven_aaudio_push(apply_gain(interpolate(previous[0], left, phase), gain),
-                             apply_gain(interpolate(previous[1], right, phase), gain));
+            push_output(interpolate(previous[0], left, phase), interpolate(previous[1], right, phase), gain);
             phase += step;
         }
         phase -= 1.0;
@@ -132,6 +159,7 @@ int raven_audio_open(double requested) {
     requested_rate = requested;
     /* Without memory for the table, linear interpolation carries on. */
     raven_sinc_configure(&sinc, input_rate, output_rate);
+    restart_fade();
     return 1;
 }
 
@@ -161,14 +189,24 @@ int raven_audio_recover(void) {
 
 void raven_audio_set_running(int running) {
     wanted_running = !!running;
-    if (!!running != raven_aaudio_running()) restart_filters();
+    if (!!running != raven_aaudio_running()) {
+        restart_filters();
+        // Back from a pause: the sound rises again instead of starting with a click.
+        if (running) restart_fade();
+    }
     raven_aaudio_set_running(running);
+}
+
+void raven_audio_set_startup_fade(int milliseconds) {
+    fade_ms = milliseconds > 0 && milliseconds <= 1000 ? milliseconds : 0;
+    restart_fade();
 }
 
 void raven_audio_close(void) {
     raven_aaudio_close();
     input_rate = output_rate = phase = 0.0;
     have_previous = 0;
+    fade_length = fade_frame = 0;
     raven_sinc_free(&sinc);
     requested_rate = 0.0;
     reopen_pending = reopen_countdown = 0;

@@ -1256,3 +1256,25 @@ captures des deux thèmes). NVIDIA et Shield sont des marques de NVIDIA
 Corporation ; RavenEmu n'est ni affilié à NVIDIA ni approuvé par elle, le nom
 désigne seulement la palette.
 
+## Fondu audio de démarrage, lot F-1
+
+Portage du fondu de la bêta (`AndroidGbAudioOutput.fadeIn`) dans le pipeline
+audio C (`android/src/main/cpp/hardware/audio/audio_pipeline.c`) : un cosinus
+surélevé (0,5 − 0,5 cos πt) sur les 180 premières millisecondes de son, à la
+fréquence du périphérique, avant le volume, arrondi comme dans la bêta. Il
+commence au premier échantillon qui n'est pas du silence, pour que les images
+muettes du début d'un jeu ne le consomment pas, et repart à chaque ouverture
+du flux, à chaque reprise après une pause et à la réouverture d'un appareil
+perdu. Le carillon des succès n'est pas atténué, comme dans la bêta. La page
+**Audio → Son du jeu** reprend la note de la bêta : « Le fondu de démarrage de
+180 ms reste inchangé. »
+
+- `raven_audio_set_startup_fade(ms)` : 180 par défaut, 0 le coupe (tests aux
+  valeurs exactes) ; le choix survit à la fermeture du flux.
+- Tests : scénario `the_start_fade_rises_from_the_first_sound` (silence
+  intact, départ à zéro, montée régulière sans marche, quart et moitié du
+  niveau, niveau plein après 8 640 images à 48 kHz, nouveau fondu après une
+  pause et pour un nouveau jeu, volume appliqué après le fondu, fondu coupé) ;
+  deux mutations détectées (pas de fondu à la reprise, pas de fondu du tout).
+
+Écart restant : écoute sur téléphone à faire.

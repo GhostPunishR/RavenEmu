@@ -35,5 +35,13 @@ void raven_audio_set_output(int enabled, int volume);
 #define RAVEN_AUDIO_RESAMPLER_LINEAR 0
 #define RAVEN_AUDIO_RESAMPLER_SINC 1
 void raven_audio_set_resampler(int resampler);
+/* The beta's start fade (AndroidGbAudioOutput): a raised cosine over the
+ * first `milliseconds` of sound each time the stream opens, comes back from
+ * a pause or reopens after a lost device, starting at the first sample that
+ * is not silence, so that a game's silent first frames do not use it up.
+ * 180 by default, as validated on the phone; 0 turns it off (exact tests).
+ * Emulation owner; survives close/open. */
+#define RAVEN_AUDIO_STARTUP_FADE_MS 180
+void raven_audio_set_startup_fade(int milliseconds);
 void raven_audio_close(void);
 #endif

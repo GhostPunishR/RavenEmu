@@ -7,6 +7,7 @@
 #include <sched.h>
 #include <stdatomic.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #define CHECK(c) do { if (!(c)) { fprintf(stderr, "%s:%d: %s\n", __FILE__, __LINE__, #c); return 0; } } while (0)
@@ -72,6 +73,8 @@ static void defaults(void) {
     // Exact linear values; the sinc has its own scenario here and its own test.
     raven_audio_set_resampler(RAVEN_AUDIO_RESAMPLER_LINEAR);
     raven_audio_set_speed(1.0);
+    // Exact values; the start fade has its own scenario.
+    raven_audio_set_startup_fade(0);
     open_error = opens = 0;
     native_rate = 48000; format = AAUDIO_FORMAT_PCM_I16; channels = 2;
     burst = 192; buffer_capacity = buffer_size = 4096;
@@ -376,6 +379,66 @@ static int the_sinc_keeps_the_cadence_the_level_and_the_gain(void) {
     return 1;
 }
 
+/* Writes `frames` of one level through the 1:1 linear path and reads as
+ * many device frames back; the left channel is kept, the right checked. */
+static int level_run(int16_t level, int frames, int16_t *left) {
+    int16_t in[256 * 2], out[256 * 2];
+    for (int done = 0; done < frames; done += 256) {
+        const int n = frames - done < 256 ? frames - done : 256;
+        for (int i = 0; i < n; ++i) { in[i * 2] = level; in[i * 2 + 1] = (int16_t)-level; }
+        raven_audio_write(in, (size_t)n);
+        memset(out, 0, sizeof(out));
+        consume(out, n);
+        for (int i = 0; i < n; ++i) {
+            if (out[i * 2 + 1] != -out[i * 2]) return 0;
+            left[done + i] = out[i * 2];
+        }
+    }
+    return 1;
+}
+
+static int the_start_fade_rises_from_the_first_sound(void) {
+    defaults();
+    raven_audio_set_startup_fade(RAVEN_AUDIO_STARTUP_FADE_MS);
+    CHECK(raven_audio_open(48000));
+    static int16_t left[12000];
+    const int fade = 48000 * RAVEN_AUDIO_STARTUP_FADE_MS / 1000;  /* 8640 device frames */
+    /* A silent start does not use the fade up. */
+    CHECK(level_run(0, 2000, left));
+    for (int i = 0; i < 2000; ++i) CHECK(left[i] == 0);
+    /* The linear path keeps its first frame aside: the sound starts one frame
+     * later, at nothing, then rises without a step to the full level. */
+    CHECK(level_run(10000, 10000, left));
+    CHECK(left[0] == 0 && left[1] == 0);
+    int previous = 0;
+    for (int i = 1; i <= fade; ++i) {
+        CHECK(left[i] >= previous && left[i] <= 10000);  /* the last frames round to it */
+        CHECK(left[i] - previous <= 2);  /* smooth: under 2 steps a frame */
+        previous = left[i];
+    }
+    CHECK(abs(left[1 + fade / 4] - 1464) <= 2);  /* a quarter: 0.5 - 0.5 cos(pi / 4) */
+    CHECK(abs(left[1 + fade / 2] - 5000) <= 2);  /* half way, half the level */
+    CHECK(left[fade - 100] < 10000);
+    for (int i = fade + 1; i < 10000; ++i) CHECK(left[i] == 10000);
+    /* Back from a pause, it rises again; the volume applies after it. */
+    raven_audio_set_running(0); raven_audio_set_running(1);
+    raven_audio_set_output(1, 50);
+    CHECK(level_run(10000, 10000, left));
+    CHECK(left[1] == 0 && left[fade / 2 + 1] > 2400 && left[fade / 2 + 1] < 2600);
+    CHECK(left[fade + 2] == 5000);
+    /* Off: the first sound is whole, and the choice outlives the stream. */
+    raven_audio_set_output(1, 100);
+    raven_audio_set_startup_fade(0);
+    raven_audio_close(); CHECK(raven_audio_open(48000));
+    CHECK(level_run(10000, 300, left));
+    CHECK(left[1] == 10000);
+    raven_audio_set_startup_fade(RAVEN_AUDIO_STARTUP_FADE_MS);
+    raven_audio_close(); CHECK(raven_audio_open(48000));
+    CHECK(level_run(10000, 300, left));
+    CHECK(left[1] == 0 && left[299] < 1000);  /* a new game rises too */
+    return 1;
+}
+
 int main(void) {
     int okay = open_and_device_negotiation() && rates_chunks_and_silence() &&
         pause_discards_old_audio_without_erasing_fresh_samples() && bounded_queue_wrap_and_stop() &&
@@ -385,10 +448,11 @@ int main(void) {
         rate_control_absorbs_a_device_clock_drift() &&
         the_display_speed_reaches_the_resampler() &&
         a_lost_device_is_reopened_with_its_pause_state() &&
-        the_sinc_keeps_the_cadence_the_level_and_the_gain();
+        the_sinc_keeps_the_cadence_the_level_and_the_gain() &&
+        the_start_fade_rises_from_the_first_sound();
     raven_audio_close();
     if (!okay) return 1;
-    puts("AAudio subset: 11 scenarios passed (negotiation, resampling, pause, bounds, output settings, SPSC, "
-         "rate control, display speed, device loss, sinc)");
+    puts("AAudio subset: 12 scenarios passed (negotiation, resampling, pause, bounds, output settings, SPSC, "
+         "rate control, display speed, device loss, sinc, start fade)");
     return 0;
 }

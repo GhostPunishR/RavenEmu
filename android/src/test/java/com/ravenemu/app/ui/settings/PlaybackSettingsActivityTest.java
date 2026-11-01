@@ -113,6 +113,8 @@ public final class PlaybackSettingsActivityTest {
         described(activity, "Ouvrir les réglages son du jeu").performClick();
         assertTrue(toggle(activity, "Activer le son").isChecked());
         assertEquals(100, slider(activity, "Volume").getProgress());
+        assertNotNull("The beta's note on the start fade",
+                text(activity, "Le fondu de démarrage de 180 ms reste inchangé."));
         assertTrue(preferences.getAll().isEmpty());
     }
 

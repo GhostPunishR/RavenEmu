@@ -616,6 +616,8 @@ public final class PlaybackSettingsActivity extends Activity implements RavenThe
         volume = slider("Volume", settings.audioVolume, 0, 100, true, value ->
                 update(settings.withAudio(settings.audioEnabled, value)));
         volume.setEnabled(settings.audioEnabled);
+        // The beta's note: the native audio driver fades in the same way.
+        add(text("Le fondu de démarrage de 180 ms reste inchangé.", 12, theme.muted), 8);
     }
 
     /** A native addition: the beta's player had linear interpolation only. */
