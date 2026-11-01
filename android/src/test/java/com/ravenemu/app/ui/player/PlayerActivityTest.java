@@ -441,8 +441,9 @@ public final class PlayerActivityTest {
                 : view.getContentDescription())).performClick();
         pump(activity);
         assertEquals(java.util.Collections.singletonList("4401 false"), FakeAchievements.fetched);
-        FakeAchievements.scores = new String[]{"4401", "2", "0", "1", "Corbeau", "000120", "1615654895", "0",
-                "2", "Raven", "000060", "1615634566", "1"};
+        FakeAchievements.scores = new String[]{"4401", "2", "0",
+                "1", "Corbeau", "000120", "1615654895", "0", "https://media.retroachievements.org/UserPic/Corbeau.png",
+                "2", "Raven", "000060", "1615634566", "1", "https://media.retroachievements.org/UserPic/Raven.png"};
         FakeAchievements.raise("scores", "", "2", "top", "", "4401");
         activity.onDrawFrame(null);
         shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(300));

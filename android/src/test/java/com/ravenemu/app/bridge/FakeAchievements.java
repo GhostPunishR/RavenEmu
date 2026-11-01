@@ -22,7 +22,7 @@ public class FakeAchievements {
     /** What the next answer leads to: kind, title, detail, extra, image, id. */
     public static final ArrayDeque<String[]> afterAnswer = new ArrayDeque<>();
     /** The game's lists, as the module would copy them: entries of ten
-     * fields, boards of six; scores: board, total, around, then five per line. */
+     * fields, boards of six; scores: board, total, around, then six per line (the avatar last). */
     public static final List<String[]> entries = new ArrayList<>(), boards = new ArrayList<>();
     public static String[] scores = {"0", "0", "0"};
     public static String richPresence = "";
