@@ -595,6 +595,20 @@ public final class HomeActivityTest {
         assertEquals("No page before the first one", "Tous les jeux", heading.getText().toString());
     }
 
+    @Test public void theSheetShowsTheCoverAtTheSizeOfALibraryTile() throws Exception {
+        seedLibrary();
+        HomeActivity activity = open(null).get();
+        View root = activity.getWindow().getDecorView();
+        CoverArtwork tile = find(root, CoverArtwork.class);
+        assertTrue(tile.getWidth() > 0);
+        showFirstGame(activity);
+        shadowOf(Looper.getMainLooper()).idle();
+        CoverArtwork cover = find(ShadowDialog.getLatestDialog().getWindow().getDecorView(), CoverArtwork.class);
+        assertEquals("As wide as a tile's cover", tile.getWidth(), cover.getLayoutParams().width);
+        assertEquals("As high", tile.getHeight(), cover.getLayoutParams().height);
+        assertFalse("No cover chosen: the console's placeholder, as in the grid", cover.showsCover());
+    }
+
     /** A finger from one point to another in `millis`, then the page's motion. */
     private static void swipe(View view, float fromX, float toX, float fromY, float toY, long millis) {
         long down = SystemClock.uptimeMillis();

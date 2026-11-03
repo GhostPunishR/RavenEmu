@@ -94,7 +94,7 @@ conclure à une parité avec la bêta.
 - `RomLibrary.java`: offline private GB/GBC/GBA catalogue, SHA-256 identities,
   verified ROM copies and atomic JSON index. No broad storage permission.
 - `CoverRepository.java`: local-only cover import via SAF, bounded PNG
-  conversion (maximum 512 px edge, 8 MiB source) and atomic private storage
+  conversion (maximum 768 px edge, 8 MiB source) and atomic private storage
   by ROM SHA-256; removal affects no ROMs, saves or other files.
 - `CoverAdapter.java`: image thumbnails decoded on a background executor,
   with a bounded 32-image LRU cache and text fallback.
@@ -561,8 +561,9 @@ This is an integration prototype, not a release candidate.
   for RetroAchievements' approval of RavenEmu, as in the beta.
   No wireless/local link cable or Delta skins yet.
 - Cover images must be manually selected by the user from local documents.
-  Import is limited to 8 MiB and 4096 x 4096 input, decoded into 512 px PNG
-  thumbnails. No artwork is bundled or fetched online.
+  Import is limited to 8 MiB and 4096 x 4096 input, kept as PNG of at most
+  768 px a side, then decoded for each cover's own size in pixels (grid,
+  list, game sheet). No artwork is bundled or fetched online.
 - Native pacing follows the core FPS, with bounded catch-up. It is not yet
   synchronized to the audio device clock. GLSurfaceView still renders
   continuously at the display refresh rate.

@@ -411,17 +411,23 @@ public final class HomeActivity extends Activity implements RavenTheme.Host {
         spacing.topMargin = dp(12);
         panel.addView(coverRow, spacing);
 
-        android.widget.ImageView cover = new android.widget.ImageView(this);
-        cover.setBackground(shape(theme.outline, 10, density));
-        cover.setScaleType(android.widget.ImageView.ScaleType.CENTER_CROP);
-        coverRow.addView(cover, new LinearLayout.LayoutParams(dp(90), dp(105)));
+        // The cover exactly as a tile of the library shows it (the owner's
+        // wish; the beta's sheet had a smaller 90 × 105 dp one).
+        CoverArtwork cover = new CoverArtwork(this, theme, false);
+        cover.setGame(entry);
+        cover.setCover(null);
+        int[] coverSize = gridCoverSize();
+        coverRow.addView(cover, new LinearLayout.LayoutParams(coverSize[0], coverSize[1]));
         io.execute(() -> {
             try {
-                android.graphics.Bitmap image = CoverRepository.load(getFilesDir(), entry.key, 160);
+                android.graphics.Bitmap image = CoverRepository.load(getFilesDir(), entry.key,
+                        coverSize[0], coverSize[1]);
                 if (image != null) runOnUiThread(() -> {
-                    if (!destroyed) cover.setImageBitmap(image);
+                    if (!destroyed) cover.setCover(image);
                 });
-            } catch (IOException ignored) {}
+            } catch (IOException | RuntimeException ignored) {
+                // A damaged cover leaves the console's placeholder.
+            }
         });
 
         LinearLayout controls = new LinearLayout(this);
@@ -497,6 +503,17 @@ public final class HomeActivity extends Activity implements RavenTheme.Host {
             });
         });
         dialog.show();
+    }
+
+    /** A grid tile's cover, in pixels, for the library's current width
+     * (whichever view is shown): the sheet's cover takes the same. */
+    private int[] gridCoverSize() {
+        int width = cards != null && cards.getWidth() > 0 ? cards.getWidth()
+                : getResources().getDisplayMetrics().widthPixels;
+        if (!listMode && cards != null && cards.getColumnWidth() > 0)
+            return new int[]{Math.max(1, cards.getColumnWidth() - 2 * dp(CoverArtwork.GRID_SIDE_DP)),
+                    dp(CoverArtwork.GRID_HEIGHT_DP)};
+        return CoverArtwork.gridSize(width, getResources().getDisplayMetrics().density);
     }
 
     private Button action(String label) {

@@ -1,9 +1,14 @@
 package com.ravenemu.app.ui.library;
 
+import com.ravenemu.app.data.library.CoverRepository;
 import com.ravenemu.app.data.library.RomLibrary;
 
 import android.app.Activity;
+import android.graphics.Bitmap;
+import android.graphics.drawable.BitmapDrawable;
+import android.os.Looper;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.GridView;
 import android.widget.TextView;
 import java.util.ArrayList;
@@ -12,9 +17,11 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
+import org.robolectric.RuntimeEnvironment;
 import org.robolectric.annotation.Config;
 import org.robolectric.annotation.GraphicsMode;
 import static org.junit.Assert.*;
+import static org.robolectric.Shadows.shadowOf;
 
 /** The grid's tiles of one row share its height, as the beta's lazy grid:
  * GridView places a row from one of its tiles, so tiles of different
@@ -119,5 +126,28 @@ public final class RavenLibraryAdapterTest {
     private static TextView title(View tile) {
         android.view.ViewGroup labels = (android.view.ViewGroup) ((android.view.ViewGroup) tile).getChildAt(1);
         return (TextView) labels.getChildAt(0);
+    }
+
+    @Test public void aTileDecodesItsCoverAtItsOwnPixelSize() throws Exception {
+        String key = "c".repeat(64);
+        Bitmap picture = Bitmap.createBitmap(1200, 1600, Bitmap.Config.ARGB_8888);
+        java.io.ByteArrayOutputStream png = new java.io.ByteArrayOutputStream();
+        assertTrue(picture.compress(Bitmap.CompressFormat.PNG, 100, png));
+        CoverRepository.importImage(RuntimeEnvironment.getApplication().getFilesDir(), key, png.toByteArray());
+        List<RomLibrary.Entry> games = new ArrayList<>();
+        games.add(new RomLibrary.Entry(key, "Avec jaquette", "gba", 0x8000));
+        games.add(new RomLibrary.Entry("d".repeat(64), "Sans jaquette", "gb", 0x8000));
+        GridView grid = grid(games);
+        shadowOf(Looper.getMainLooper()).idle();
+        layout(grid);
+        CoverArtwork withCover = (CoverArtwork) ((ViewGroup) grid.getChildAt(0)).getChildAt(0);
+        CoverArtwork without = (CoverArtwork) ((ViewGroup) grid.getChildAt(1)).getChildAt(0);
+        assertTrue(withCover.showsCover());
+        assertFalse("The console's placeholder", without.showsCover());
+        Bitmap shown = ((BitmapDrawable) withCover.image.getDrawable()).getBitmap();
+        // Its width fills the tile exactly, its height covers it: nothing stretched.
+        assertEquals(withCover.getWidth(), shown.getWidth());
+        assertTrue(shown.getHeight() >= withCover.getHeight());
+        assertTrue("Rounded like the beta's cover", withCover.getClipToOutline());
     }
 }

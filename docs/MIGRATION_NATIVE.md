@@ -115,7 +115,8 @@ Voir [android/README.md](../android/README.md).
   aucune source distante ni jaquette propriétaire intégrée.
 - Décodage borné : fichier source inférieur ou égal à 8 MiB, dimensions
   comprises entre 16 et 4096 px et 16 Mpixels au maximum ; normalisation en
-  PNG de 512 px de côté au plus avec écriture atomique, dans le dossier privé
+  PNG de 512 px de côté au plus (768 px depuis les retours d'essai, voir plus
+  bas) avec écriture atomique, dans le dossier privé
   `native-library/covers/` identifié uniquement par SHA-256 de la ROM.
 - Liste Android désormais illustrée par miniatures décodées hors UI et mises
   en cache avec une limite de 32 images. Les jeux sans jaquette restent
@@ -1436,9 +1437,9 @@ avatars des classements, bandeaux sur le skin, skins en paysage, boutons sur
 l'image en portrait, vibration et capteurs de la manette) sont ainsi traités
 par les lots E-1 à E-6 ; il reste à les vérifier sur téléphone.
 
-## Retours d'essai : grille de la bibliothèque, bandeau du lancement, glissement entre consoles
+## Retours d'essai : grille de la bibliothèque, bandeau du lancement, glissement entre consoles, jaquettes
 
-Deux défauts signalés par le propriétaire sur téléphone, et une demande.
+Trois défauts signalés par le propriétaire sur téléphone, et une demande.
 
 - **Tuiles qui se décalent en faisant défiler la bibliothèque.** Le titre
   d'une tuile tient sur une à trois lignes, donc les tuiles d'une même rangée
@@ -1488,7 +1489,42 @@ Deux défauts signalés par le propriétaire sur téléphone, et une demande.
   (vers la gauche puis la droite, bords, geste court et lent, geste vertical,
   icônes).
 
+- **Jaquettes floues, et pas au même format dans la fiche du jeu.** Les deux
+  problèmes viennent de la version native.
+  - À l'import, le décodage par puissances de 2 descendait *sous* la taille
+    visée : une image de 1000 × 1400 était gardée en 250 × 350.
+  - La grille relisait ensuite la jaquette en 256 px au plus, encore divisée
+    par 2 (180 × 250 pour une jaquette de 360 × 500), puis étirée sur une
+    tuile d'environ 430 px.
+  - La fiche du jeu la chargeait en 160 px, dans un cadre fixe de 90 × 105 dp.
+  - Correctifs dans `CoverRepository` :
+    - les jaquettes sont gardées jusqu'à 768 px de côté ;
+    - le décodage s'arrête à la plus grande réduction qui reste au-dessus de
+      la taille voulue, puis un seul redimensionnement filtré donne la taille
+      exacte ;
+    - le nouveau `load(files, key, largeur, hauteur)` rend l'image à la taille
+      réelle de son cadre en pixels (recadrée pour le remplir, jamais
+      agrandie).
+  - `CoverArtwork` (Java) reprend le composant du même nom de la bêta :
+    - image arrondie à 10 dp, liseré par-dessus ;
+    - sans image, pictogramme et nom de la console ;
+    - il sert à la grille, à la liste et à la fiche.
+  - Comme le propriétaire l'a demandé, la fiche montre la jaquette **aux
+    dimensions exactes d'une tuile de la bibliothèque** (la largeur de la
+    colonne sur 124 dp). La bêta avait un cadre plus petit de 90 × 105 dp.
+  - Les jaquettes importées avant ce correctif restent dans leur ancienne
+    taille : il faut les choisir à nouveau pour qu'elles soient nettes.
+  - Tests :
+    - `CoverRepositoryTest`, en Java pur : 768 px, décodage jamais sous la
+      taille voulue, image recadrée sans agrandissement ;
+    - `CoverImageQualityTest`, sur de vraies images : 549 × 768 gardés pour
+      1000 × 1400, tuile servie à sa taille, petite image non agrandie ;
+    - `RavenLibraryAdapterTest` : une tuile reçoit sa jaquette à sa taille en
+      pixels, coins arrondis ;
+    - `HomeActivityTest` : jaquette de la fiche aux dimensions d'une tuile.
+
 À vérifier sur téléphone : défilement rapide d'une grande bibliothèque avec
 jaquettes, en portrait et en paysage ; bandeau du lancement avec et sans réseau ;
 glissement entre consoles avec la navigation par gestes d'Android (le retour par
-le bord de l'écran reste au système).
+le bord de l'écran reste au système) ; netteté d'une jaquette choisie à nouveau,
+dans la grille et dans la fiche.

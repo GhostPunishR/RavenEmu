@@ -1,22 +1,17 @@
 package com.ravenemu.app.ui.library;
-import com.ravenemu.app.ui.common.RavenIcon;
 import com.ravenemu.app.data.library.CoverRepository;
 import com.ravenemu.app.data.library.RomLibrary;
 import com.ravenemu.app.ui.common.RavenTheme;
 
 import android.content.Context;
 import android.graphics.Bitmap;
-import android.graphics.Typeface;
-import android.graphics.drawable.GradientDrawable;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
-import android.widget.FrameLayout;
 import android.widget.GridView;
-import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -76,7 +71,8 @@ final class RavenLibraryAdapter extends BaseAdapter {
         notifyDataSetChanged();
     }
     void invalidateCover(String key) {
-        cache.remove(key);
+        // Every size it was decoded at.
+        cache.keySet().removeIf(cached -> cached.startsWith(key + "@"));
         unavailable.remove(key);
         notifyDataSetChanged();
     }
@@ -99,10 +95,7 @@ final class RavenLibraryAdapter extends BaseAdapter {
     }
 
     private static final class Holder {
-        ImageView image;
-        LinearLayout placeholder;
-        ImageView console;
-        TextView system;
+        CoverArtwork artwork;
         TextView title;
         TextView secondary;
         String key;
@@ -121,38 +114,15 @@ final class RavenLibraryAdapter extends BaseAdapter {
             column.setPadding(dp(listMode ? 10 : 4), dp(listMode ? 9 : 6),
                     dp(listMode ? 10 : 4), dp(10));
 
-            FrameLayout artwork = new FrameLayout(context);
-            GradientDrawable shape = HomeActivity.shape(
-                    theme.surface, 10,
-                    context.getResources().getDisplayMetrics().density);
-            shape.setStroke(dp(1), theme.outline);
-            artwork.setBackground(shape);
-
-            h.image = new ImageView(context);
-            h.image.setScaleType(ImageView.ScaleType.CENTER_CROP);
-            artwork.addView(h.image, new FrameLayout.LayoutParams(-1, -1));
-
-            h.placeholder = new LinearLayout(context);
-            h.placeholder.setGravity(Gravity.CENTER);
-            h.placeholder.setOrientation(LinearLayout.VERTICAL);
-            // No cover yet: the console's pictogram over its name.
-            h.console = new ImageView(context);
-            h.console.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-            h.console.setScaleType(ImageView.ScaleType.CENTER);
-            LinearLayout.LayoutParams consoleSize = new LinearLayout.LayoutParams(dp(listMode ? 22 : 30), dp(listMode ? 22 : 30));
-            consoleSize.bottomMargin = dp(listMode ? 1 : 4);
-            h.placeholder.addView(h.console, consoleSize);
-            h.system = label("", 13, theme.secondary);
-            h.system.setTypeface(null, Typeface.BOLD);
-            h.placeholder.addView(h.system);
-            artwork.addView(h.placeholder, new FrameLayout.LayoutParams(-1, -1));
+            // The cover as everywhere in the library (the game's sheet included).
+            h.artwork = new CoverArtwork(context, theme, listMode);
 
             if (listMode) {
                 column.setBackground(HomeActivity.shape(theme.column, 10,
                         context.getResources().getDisplayMetrics().density));
-                column.addView(artwork, new LinearLayout.LayoutParams(dp(44), dp(52)));
+                column.addView(h.artwork, new LinearLayout.LayoutParams(dp(44), dp(52)));
             } else {
-                column.addView(artwork, new LinearLayout.LayoutParams(-1, dp(124)));
+                column.addView(h.artwork, new LinearLayout.LayoutParams(-1, dp(CoverArtwork.GRID_HEIGHT_DP)));
             }
 
             LinearLayout labels = new LinearLayout(context);
@@ -176,24 +146,28 @@ final class RavenLibraryAdapter extends BaseAdapter {
         h.title.setText(entry.title);
         h.title.setMinHeight(listMode ? 0 : rowTitleHeight(index, parent));
         h.secondary.setText(entry.system.toUpperCase(java.util.Locale.ROOT));
-        h.system.setText(entry.system.toUpperCase(java.util.Locale.ROOT));
-        h.console.setImageDrawable(new RavenIcon("gba".equals(entry.system) ? RavenIcon.Glyph.GBA
-                : "gbc".equals(entry.system) ? RavenIcon.Glyph.GBC : RavenIcon.Glyph.GB,
-                theme.accent, dp(listMode ? 20 : 28)));
-        h.image.setContentDescription("Jaquette de " + entry.title);
+        h.artwork.setGame(entry);
 
-        Bitmap cached = cache.get(entry.key);
-        if (cached != null && !cached.isRecycled()) {
-            h.image.setImageBitmap(cached);
-            h.placeholder.setVisibility(View.GONE);
-        } else {
-            h.image.setImageDrawable(null);
-            h.placeholder.setVisibility(View.VISIBLE);
-            if (!loading.contains(entry.key) && !unavailable.contains(entry.key)) {
-                loadCover(entry.key);
-            }
+        // Decoded for the cover's own size in pixels: sharp, and no bigger than needed.
+        int[] box = coverBox(parent);
+        String cacheKey = entry.key + "@" + box[0] + "x" + box[1];
+        Bitmap cached = cache.get(cacheKey);
+        h.artwork.setCover(cached);
+        if ((cached == null || cached.isRecycled()) && !loading.contains(cacheKey)
+                && !unavailable.contains(entry.key)) {
+            loadCover(entry.key, cacheKey, box);
         }
         return old;
+    }
+
+    /** A tile's cover in pixels: the column's width less the tile's padding by
+     * 124 dp in the grid; 44 by 52 dp in the list. */
+    private int[] coverBox(ViewGroup parent) {
+        if (listMode) return new int[]{dp(44), dp(52)};
+        int column = parent instanceof GridView ? ((GridView) parent).getColumnWidth() : 0;
+        if (column <= 0) return CoverArtwork.gridSize(parent == null ? 0 : parent.getWidth(),
+                context.getResources().getDisplayMetrics().density);
+        return new int[]{Math.max(1, column - 2 * dp(CoverArtwork.GRID_SIDE_DP)), dp(CoverArtwork.GRID_HEIGHT_DP)};
     }
 
     /** A tile's title: one line in the list, up to three in the grid. */
@@ -241,26 +215,26 @@ final class RavenLibraryAdapter extends BaseAdapter {
         return height;
     }
 
-    private void loadCover(String key) {
-        loading.add(key);
+    private void loadCover(String key, String cacheKey, int[] box) {
+        loading.add(cacheKey);
         try {
             executor.execute(() -> {
                 Bitmap bitmap = null;
                 try {
-                    bitmap = CoverRepository.load(privateFiles, key, 256);
+                    bitmap = CoverRepository.load(privateFiles, key, box[0], box[1]);
                 } catch (IOException | RuntimeException ignored) {
                     // Missing/invalid covers never block or crash library rendering.
                 }
                 Bitmap result = bitmap;
                 main.post(() -> {
-                    loading.remove(key);
+                    loading.remove(cacheKey);
                     if (result == null) unavailable.add(key);
-                    else cache.put(key, result);
+                    else cache.put(cacheKey, result);
                     notifyDataSetChanged();
                 });
             });
         } catch (RuntimeException ignored) {
-            loading.remove(key);
+            loading.remove(cacheKey);
             unavailable.add(key);
         }
     }

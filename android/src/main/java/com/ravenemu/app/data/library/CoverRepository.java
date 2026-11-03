@@ -13,12 +13,17 @@ import java.io.InputStream;
 
 /** Private, user-provided cover art, never downloaded from the internet.
  * The filename is a verified SHA-256 ROM identity, not a user-controlled path.
- * Copies are normalized to small PNG images before atomic publication. */
+ * Copies are normalized to PNG images of at most 768 pixels a side before
+ * atomic publication: sharp in a library tile or the game's sheet, even on
+ * the densest screens. Decoding by powers of two never goes below the size
+ * wanted; one filtered scaling then gives it exactly. */
 public final class CoverRepository {
     public static final int MAX_SOURCE_BYTES = 8 * 1024 * 1024;
     private static final int MAX_STORED_BYTES = 4 * 1024 * 1024;
     private static final int MAX_SOURCE_DIMENSION = 4096;
-    private static final int MAX_COVER_EDGE = 512;
+    /** The longest side kept. Earlier versions kept 512 and lost more on
+     * import: their covers stay readable, sharper once chosen again. */
+    static final int MAX_COVER_EDGE = 768;
 
     private CoverRepository() {}
 
@@ -50,17 +55,14 @@ public final class CoverRepository {
             (long)bounds.outWidth * bounds.outHeight > 16_000_000L)
             throw new IOException("Dimensions de jaquette non acceptées");
 
+        int[] kept = fitSize(bounds.outWidth, bounds.outHeight, MAX_COVER_EDGE);
         BitmapFactory.Options options = new BitmapFactory.Options();
-        options.inSampleSize = sampleSize(bounds.outWidth, bounds.outHeight, MAX_COVER_EDGE);
+        options.inSampleSize = keepingSample(bounds.outWidth, bounds.outHeight, kept[0], kept[1]);
         Bitmap decoded = null, scaled = null;
         try {
             decoded = BitmapFactory.decodeByteArray(raw, 0, raw.length, options);
             if (decoded == null) throw new IOException("Image non décodable");
-            float scale = Math.min(1f, (float)MAX_COVER_EDGE /
-                    Math.max(decoded.getWidth(), decoded.getHeight()));
-            int w = Math.max(1, Math.round(decoded.getWidth() * scale));
-            int h = Math.max(1, Math.round(decoded.getHeight() * scale));
-            scaled = Bitmap.createScaledBitmap(decoded, w, h, true);
+            scaled = scaledTo(decoded, fitSize(decoded.getWidth(), decoded.getHeight(), MAX_COVER_EDGE));
 
             ByteArrayOutputStream output = new ByteArrayOutputStream();
             if (!scaled.compress(Bitmap.CompressFormat.PNG, 100, output))
@@ -88,6 +90,39 @@ public final class CoverRepository {
             if (scaled != null && scaled != decoded) scaled.recycle();
             if (decoded != null) decoded.recycle();
         }
+    }
+
+    /** The size fitting within `maxEdge` a side, never enlarged. */
+    static int[] fitSize(int width, int height, int maxEdge) {
+        if (width <= 0 || height <= 0 || maxEdge <= 0)
+            throw new IllegalArgumentException("Invalid image dimensions");
+        double scale = Math.min(1d, (double) maxEdge / Math.max(width, height));
+        return new int[]{Math.max(1, (int) Math.round(width * scale)), Math.max(1, (int) Math.round(height * scale))};
+    }
+
+    /** The size covering a box (cropped to fill it, as the library shows
+     * covers), never enlarged. */
+    static int[] coverSize(int width, int height, int boxWidth, int boxHeight) {
+        if (width <= 0 || height <= 0 || boxWidth <= 0 || boxHeight <= 0)
+            throw new IllegalArgumentException("Invalid image dimensions");
+        double scale = Math.min(1d, Math.max((double) boxWidth / width, (double) boxHeight / height));
+        return new int[]{Math.max(1, (int) Math.round(width * scale)), Math.max(1, (int) Math.round(height * scale))};
+    }
+
+    /** The largest power-of-two reduction that still leaves at least this size. */
+    static int keepingSample(int width, int height, int wantedWidth, int wantedHeight) {
+        if (width <= 0 || height <= 0 || wantedWidth <= 0 || wantedHeight <= 0)
+            throw new IllegalArgumentException("Invalid image dimensions");
+        int sample = 1;
+        while (sample < 128 && width / (sample * 2) >= wantedWidth && height / (sample * 2) >= wantedHeight)
+            sample *= 2;
+        return sample;
+    }
+
+    /** One filtered scaling to exactly `size`; the bitmap itself when it already is. */
+    private static Bitmap scaledTo(Bitmap bitmap, int[] size) {
+        if (bitmap.getWidth() == size[0] && bitmap.getHeight() == size[1]) return bitmap;
+        return Bitmap.createScaledBitmap(bitmap, size[0], size[1], true);
     }
 
     public static int sampleSize(int width, int height, int maxEdge) {
@@ -129,6 +164,52 @@ public final class CoverRepository {
             return bitmap;
         } catch (OutOfMemoryError error) {
             throw new IOException("Mémoire insuffisante pour la jaquette", error);
+        }
+    }
+
+    /** The cover to fill a `width` × `height` pixel box, cropped as the
+     * library shows it: decoded by powers of two while it still covers the
+     * box, then scaled once to just cover it; never enlarged. Null without a
+     * cover; IOException when it is corrupt. Off the UI thread. */
+    public static Bitmap load(File files, String key, int width, int height) throws IOException {
+        if (width <= 0 || height <= 0 || width > 4096 || height > 4096)
+            throw new IllegalArgumentException("Invalid cover size");
+        if (!exists(files, key)) return null;
+        byte[] bytes = read(files, key);
+        BitmapFactory.Options bounds = new BitmapFactory.Options();
+        bounds.inJustDecodeBounds = true;
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.length, bounds);
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0 ||
+            bounds.outWidth > MAX_COVER_EDGE || bounds.outHeight > MAX_COVER_EDGE)
+            throw new IOException("Dimensions de jaquette invalides");
+        int[] wanted = coverSize(bounds.outWidth, bounds.outHeight, width, height);
+        BitmapFactory.Options options = new BitmapFactory.Options();
+        options.inSampleSize = keepingSample(bounds.outWidth, bounds.outHeight, wanted[0], wanted[1]);
+        Bitmap decoded = null;
+        try {
+            decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.length, options);
+            if (decoded == null) throw new IOException("Jaquette illisible");
+            Bitmap shown = scaledTo(decoded, coverSize(decoded.getWidth(), decoded.getHeight(), width, height));
+            if (shown != decoded) decoded.recycle();
+            return shown;
+        } catch (OutOfMemoryError error) {
+            if (decoded != null) decoded.recycle();
+            throw new IOException("Mémoire insuffisante pour la jaquette", error);
+        }
+    }
+
+    private static byte[] read(File files, String key) throws IOException {
+        AtomicFile atomic = new AtomicFile(coverFile(files, key));
+        try (InputStream input = atomic.openRead();
+             ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            byte[] chunk = new byte[16 * 1024];
+            int n;
+            while ((n = input.read(chunk)) != -1) {
+                if (output.size() > MAX_STORED_BYTES - n)
+                    throw new IOException("Jaquette corrompue ou trop volumineuse");
+                output.write(chunk, 0, n);
+            }
+            return output.toByteArray();
         }
     }
 

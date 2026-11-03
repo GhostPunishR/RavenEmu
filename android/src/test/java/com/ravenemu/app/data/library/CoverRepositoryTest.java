@@ -37,6 +37,36 @@ public final class CoverRepositoryTest {
         assertEquals(4, CoverRepository.sampleSize(700, 200, 192));
     }
 
+    @Test public void aCoverKeepsUpTo768PixelsASideNeverEnlarged() {
+        assertArrayEquals(new int[]{576, 768}, CoverRepository.fitSize(1200, 1600, 768));
+        assertArrayEquals(new int[]{768, 576}, CoverRepository.fitSize(4000, 3000, 768));
+        assertArrayEquals("Small images stay as they are", new int[]{300, 400},
+                CoverRepository.fitSize(300, 400, 768));
+    }
+
+    @Test public void decodingNeverDropsBelowTheSizeWanted() {
+        // 1000 × 1400 kept at 549 × 768: halving would give 500 wide, too few.
+        assertEquals(1, CoverRepository.keepingSample(1000, 1400, 549, 768));
+        assertEquals(4, CoverRepository.keepingSample(4000, 3000, 768, 576));
+        assertEquals(2, CoverRepository.keepingSample(1536, 2048, 576, 768));
+        // The former rule went below it: 1000 × 1400 for 512 gave a quarter, 250 × 350.
+        assertEquals(4, CoverRepository.sampleSize(1000, 1400, 512));
+    }
+
+    @Test public void aTileGetsTheCoverCroppedToFillItNeverEnlarged() {
+        // A 3:4 cover in a 321 × 372 pixel tile: its width fills it, the rest is cropped.
+        assertArrayEquals(new int[]{321, 428}, CoverRepository.coverSize(576, 768, 321, 372));
+        // A wide cover: its height fills the tile.
+        assertArrayEquals(new int[]{496, 372}, CoverRepository.coverSize(768, 576, 321, 372));
+        assertArrayEquals("Smaller than the tile: as it is", new int[]{200, 250},
+                CoverRepository.coverSize(200, 250, 321, 372));
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void rejectsAnEmptyBox() {
+        CoverRepository.coverSize(576, 768, 0, 372);
+    }
+
     @Test(expected = IllegalArgumentException.class)
     public void rejectsInvalidSampleDimensions() {
         CoverRepository.sampleSize(0, 100, 512);
