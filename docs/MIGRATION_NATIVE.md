@@ -1435,3 +1435,36 @@ Les petits écarts relevés après RA-3 et K (progression dans les états,
 avatars des classements, bandeaux sur le skin, skins en paysage, boutons sur
 l'image en portrait, vibration et capteurs de la manette) sont ainsi traités
 par les lots E-1 à E-6 ; il reste à les vérifier sur téléphone.
+
+## Retours d'essai : grille de la bibliothèque et bandeau du lancement
+
+Deux défauts signalés par le propriétaire sur téléphone.
+
+- **Tuiles qui se décalent en faisant défiler la bibliothèque.** Le titre
+  d'une tuile tient sur une à trois lignes, donc les tuiles d'une même rangée
+  n'avaient pas la même hauteur. Or `GridView` place la rangée suivante sous
+  la **dernière** tuile de la rangée, et non sous la plus haute ; en remontant,
+  il aligne même les tuiles par le bas. Les tuiles se chevauchaient ou se
+  décalaient, surtout après le chargement d'une jaquette, qui relance la mise
+  en page. `RavenLibraryAdapter` donne maintenant aux titres d'une rangée la
+  hauteur, en pixels, du plus haut d'entre eux (mesurée une fois par titre et
+  par largeur de colonne). La rangée garde la hauteur de sa plus haute tuile,
+  comme dans la grille de la bêta (`LazyVerticalGrid`) : une rangée de titres
+  courts reste basse.
+- **Étoile, puis icône du jeu, dans le bandeau du lancement.** Le bandeau
+  RetroAchievements s'ouvrait aussitôt avec l'étoile, puis l'icône du jeu
+  la remplaçait une fois téléchargée. Comme la bêta (`showUnlocks`), le bandeau
+  attend maintenant son image (`BadgeCache.fetch`) : jusqu'à 2 s
+  (`AchievementOverlay.BADGE_WAIT_MILLIS`). Si elle n'est pas arrivée, s'il n'y
+  en a pas ou si son téléchargement échoue, il s'ouvre avec l'étoile et la
+  garde : il ne change plus pendant qu'il est affiché. Le carillon d'un succès
+  sonne à l'ouverture du bandeau, comme dans la bêta. Quand les bandeaux de
+  succès sont désactivés, il sonne seul, comme avant.
+- Tests : `RavenLibraryAdapterTest` (rangées alignées en descendant puis en
+  remontant, titre long entier, rangée de titres courts plus basse, recherche
+  qui regroupe les rangées) ; `AchievementOverlayTest` (icône avant l'ouverture,
+  étoile gardée après 2 s, ouverture immédiate sans image à télécharger ou après
+  un échec, rien d'affiché si le jeu se ferme pendant le téléchargement).
+
+À vérifier sur téléphone : défilement rapide d'une grande bibliothèque avec
+jaquettes, en portrait et en paysage ; bandeau du lancement avec et sans réseau.

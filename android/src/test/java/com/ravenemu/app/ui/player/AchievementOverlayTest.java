@@ -3,15 +3,22 @@ package com.ravenemu.app.ui.player;
 import com.ravenemu.app.bridge.NativeAchievements;
 import com.ravenemu.app.settings.AchievementSettings;
 
+import com.ravenemu.app.platform.AchievementsHttp;
+
 import android.app.Activity;
+import android.graphics.Bitmap;
 import android.os.Looper;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import java.time.Duration;
 import java.util.ArrayDeque;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -24,8 +31,9 @@ import static org.junit.Assert.*;
 import static org.robolectric.Shadows.shadowOf;
 
 /** The beta's banner rules: one at a time, each for its duration, awards
- * only with "Déblocages et bilan", progress under it. No network: the events
- * carry no image. */
+ * only with "Déblocages et bilan", progress under it; a banner opens once its
+ * image is known (2 s at most) and never changes while shown. No network:
+ * the icon tests give their image through a held fake. */
 @RunWith(RobolectricTestRunner.class)
 @Config(sdk = 36, qualifiers = "fr-rFR-w360dp-h640dp-mdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -160,5 +168,127 @@ public final class AchievementOverlayTest {
         overlay.setSettings(AchievementSettings.DEFAULTS.withSound(false), true, 100);
         assertEquals(Gravity.TOP, ((FrameLayout.LayoutParams)column.getLayoutParams()).gravity & Gravity.VERTICAL_GRAVITY_MASK);
         assertSame(banner, column.getChildAt(0));
+    }
+
+    private static final String ICON = "https://media.retroachievements.org/Images/000001.png";
+
+    /** The game's icon, given out when the test says so. */
+    private static final class HeldHttp extends AchievementsHttp {
+        final CountDownLatch go = new CountDownLatch(1);
+        final Bitmap image;
+        HeldHttp(Bitmap image) {
+            super("RavenEmu/test");
+            this.image = image;
+        }
+        @Override public Bitmap badge(String url) {
+            try {
+                go.await(5, TimeUnit.SECONDS);
+            } catch (InterruptedException stop) {
+                Thread.currentThread().interrupt();
+            }
+            return image;
+        }
+    }
+
+    private AchievementOverlay overlayWith(HeldHttp http) {
+        Activity activity = Robolectric.buildActivity(Activity.class).setup().get();
+        BadgeCache badges = new BadgeCache();
+        badges.setHttp(http);
+        AchievementOverlay withBadges = new AchievementOverlay(activity, badges);
+        activity.setContentView(withBadges);
+        withBadges.setSettings(AchievementSettings.DEFAULTS.withSound(false), true, 100);
+        return withBadges;
+    }
+
+    /** The fetch runs on its own thread: the UI thread runs what it posts. */
+    private static void until(BooleanSupplier done) throws InterruptedException {
+        for (int i = 0; i < 500 && !done.getAsBoolean(); i++) {
+            Thread.sleep(10);
+            shadowOf(Looper.getMainLooper()).idle();
+        }
+        assertTrue(done.getAsBoolean());
+    }
+
+    private static NativeAchievements.Event game(String image) {
+        return new NativeAchievements.Event("game", "Synthetic game", "3", "0", image, "1");
+    }
+
+    @Test public void theGameBannerOpensWithItsIconNeverWithTheStarFirst() throws InterruptedException {
+        HeldHttp http = new HeldHttp(Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888));
+        AchievementOverlay withIcon = overlayWith(http);
+        try {
+            withIcon.onEvent(game(ICON));
+            View banner = ReflectionHelpers.getField(withIcon, "banner");
+            assertNull("Not before its icon", withIcon.bannerText());
+            assertEquals(View.GONE, banner.getVisibility());
+            http.go.countDown();
+            until(() -> withIcon.bannerText() != null);
+            ImageView star = ReflectionHelpers.getField(withIcon, "bannerStar");
+            ImageView icon = ReflectionHelpers.getField(withIcon, "bannerImage");
+            assertEquals(View.VISIBLE, banner.getVisibility());
+            assertEquals("The icon, no star", View.GONE, star.getVisibility());
+            assertNotNull(icon.getDrawable());
+        } finally {
+            http.go.countDown();
+        }
+    }
+
+    @Test public void aSlowIconLeavesTheStarForTheWholeBannerAsInTheBeta() throws InterruptedException {
+        HeldHttp http = new HeldHttp(Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888));
+        AchievementOverlay slow = overlayWith(http);
+        try {
+            slow.onEvent(game(ICON));
+            slow.onEvent(event("online", "", "", ""));
+            advance(AchievementOverlay.BADGE_WAIT_MILLIS - 100);
+            assertNull("Still waiting for the icon", slow.bannerText());
+            advance(200);
+            assertEquals("3 succès disponibles · Synthetic game", String.valueOf(slow.bannerText()));
+            ImageView star = ReflectionHelpers.getField(slow, "bannerStar");
+            ImageView icon = ReflectionHelpers.getField(slow, "bannerImage");
+            assertEquals(View.VISIBLE, star.getVisibility());
+            http.go.countDown();
+            BadgeCache badges = ReflectionHelpers.getField(slow, "badges");
+            until(() -> badges.cached(ICON) != null);
+            assertEquals("Never changes while shown", View.VISIBLE, star.getVisibility());
+            assertNull(icon.getDrawable());
+            advance(MOTION + 5_000 + MOTION + 100);
+            assertEquals("Then the next one, without waiting", "RetroAchievements · De nouveau en ligne",
+                    String.valueOf(slow.bannerText()));
+        } finally {
+            http.go.countDown();
+        }
+    }
+
+    @Test public void noIconToFetchOpensAtOnce() throws InterruptedException {
+        HeldHttp failing = new HeldHttp(null);
+        failing.go.countDown();
+        AchievementOverlay withoutIcon = overlayWith(failing);
+        withoutIcon.onEvent(game("http://example.org/not-allowed.png"));
+        assertEquals("Not an allowed address: the star at once", "3 succès disponibles · Synthetic game",
+                String.valueOf(withoutIcon.bannerText()));
+        withoutIcon.clear();
+        withoutIcon.onEvent(game(ICON));
+        until(() -> withoutIcon.bannerText() != null);
+        ImageView star = ReflectionHelpers.getField(withoutIcon, "bannerStar");
+        assertEquals("A failed fetch: the star, without the full wait", View.VISIBLE, star.getVisibility());
+    }
+
+    @Test public void closingTheGameWhileTheIconComesShowsNothing() throws InterruptedException {
+        HeldHttp http = new HeldHttp(Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888));
+        AchievementOverlay closing = overlayWith(http);
+        try {
+            closing.onEvent(game(ICON));
+            closing.clear();
+            http.go.countDown();
+            BadgeCache badges = ReflectionHelpers.getField(closing, "badges");
+            until(() -> badges.cached(ICON) != null);
+            advance(AchievementOverlay.BADGE_WAIT_MILLIS + 100);
+            assertNull(closing.bannerText());
+            closing.onEvent(game(ICON));
+            assertEquals("The icon known: at once", "3 succès disponibles · Synthetic game",
+                    String.valueOf(closing.bannerText()));
+        } finally {
+            http.go.countDown();
+        }
     }
 }

@@ -58,6 +58,26 @@ final class BadgeCache {
         });
     }
 
+    /** For a banner, before it opens: `done` gets the image, or null when
+     * there is none to fetch or the fetch failed. UI thread, unless released;
+     * at once when nothing needs the network. */
+    void fetch(String url, java.util.function.Consumer<Bitmap> done) {
+        Bitmap known = cached(url);
+        final AchievementsHttp network = http;
+        if (known != null || network == null || url == null || url.isEmpty() || !AchievementsHttp.allowed(url)) {
+            done.accept(known);
+            return;
+        }
+        IMAGES.execute(() -> {
+            Bitmap decoded = network.badge(url);
+            main.post(() -> {
+                if (released) return;
+                if (decoded != null) images.put(url, decoded);
+                done.accept(decoded);
+            });
+        });
+    }
+
     /** An ImageView shows the badge; tagged, so a recycled row keeps its own. */
     void into(ImageView view, String url) {
         view.setTag(url);
