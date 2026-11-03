@@ -1436,9 +1436,9 @@ avatars des classements, bandeaux sur le skin, skins en paysage, boutons sur
 l'image en portrait, vibration et capteurs de la manette) sont ainsi traités
 par les lots E-1 à E-6 ; il reste à les vérifier sur téléphone.
 
-## Retours d'essai : grille de la bibliothèque et bandeau du lancement
+## Retours d'essai : grille de la bibliothèque, bandeau du lancement, glissement entre consoles
 
-Deux défauts signalés par le propriétaire sur téléphone.
+Deux défauts signalés par le propriétaire sur téléphone, et une demande.
 
 - **Tuiles qui se décalent en faisant défiler la bibliothèque.** Le titre
   d'une tuile tient sur une à trois lignes, donc les tuiles d'une même rangée
@@ -1466,5 +1466,29 @@ Deux défauts signalés par le propriétaire sur téléphone.
   étoile gardée après 2 s, ouverture immédiate sans image à télécharger ou après
   un échec, rien d'affiché si le jeu se ferme pendant le téléchargement).
 
+- **Changer de console en glissant** (demande du propriétaire : appuyer sur
+  les icônes était pénible). La bibliothèque de la bêta était un
+  `HorizontalPager` ; la version native n'avait que les icônes. `PageSwipe`
+  entoure maintenant la grille :
+  - un glissement horizontal fait suivre la page au doigt ;
+  - au-delà d'un tiers de la largeur, ou avec un geste rapide, la page part
+    et celle de la console voisine arrive de l'autre côté (Tous, Game Boy,
+    Game Boy Color, Game Boy Advance, selon les consoles présentes) ;
+    sinon elle revient en place ;
+  - sans page voisine de ce côté, elle ne cède qu'un peu ;
+  - un geste surtout vertical reste le défilement de la grille, qui garde la
+    main une fois lancé ;
+  - les icônes tournent toujours les pages, et une nouvelle page s'ouvre sur
+    ses premiers jeux.
+
+  Écart avec la bêta : pendant le glissement, la page voisine n'apparaît pas
+  encore à côté. Elle arrive à la fin du geste, alors que le pager de la bêta
+  montrait les deux pages côte à côte.
+  Test : `HomeActivityTest.swipingSidewaysTurnsTheConsolePagesAsInTheBeta`
+  (vers la gauche puis la droite, bords, geste court et lent, geste vertical,
+  icônes).
+
 À vérifier sur téléphone : défilement rapide d'une grande bibliothèque avec
-jaquettes, en portrait et en paysage ; bandeau du lancement avec et sans réseau.
+jaquettes, en portrait et en paysage ; bandeau du lancement avec et sans réseau ;
+glissement entre consoles avec la navigation par gestes d'Android (le retour par
+le bord de l'écran reste au système).

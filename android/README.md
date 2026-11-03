@@ -9,8 +9,9 @@ Requires Android 8.0+ and an **ARM64** phone (arm64-v8a).
 Le lancement ouvre `HomeActivity.java`, une adaptation en **Java
 Android Views** du design déjà présent dans la bêta RavenEmu. Les couleurs
 (`#0B0C12`, `#191B28`, `#A78BFA`), la barre d'outils avec ⚙ / + / ⋮,
-le champ de recherche, la grille/listes de jaquettes, les onglets par console,
-le pied de page « RavenEmu By GhostPunishR » et la fiche du jeu reprennent
+le champ de recherche, la grille/listes de jaquettes, les onglets par console
+(une page par console, tournée d'un appui sur son icône ou d'un glissement à
+gauche ou à droite, comme le `HorizontalPager` de la bêta), le pied de page « RavenEmu By GhostPunishR » et la fiche du jeu reprennent
 le code source de référence `shared/theme/RavenColors.kt`,
 `shared/library/LibraryComponents.kt` et `LibraryDialogs.kt` **pour
 l'apparence seulement**. Ces fichiers Kotlin ne sont pas compilés ni utilisés

@@ -558,6 +558,54 @@ public final class HomeActivityTest {
     }
 
     /** Opens the first game's import with `bytes` as `name`, up to the review. */
+    @Test public void swipingSidewaysTurnsTheConsolePagesAsInTheBeta() throws Exception {
+        seedLibrary();
+        HomeActivity activity = open(null).get();
+        View root = activity.getWindow().getDecorView();
+        PageSwipe pages = find(root, PageSwipe.class);
+        GridView grid = find(root, GridView.class);
+        TextView heading = ReflectionHelpers.getField(activity, "heading");
+        assertEquals("Tous les jeux", heading.getText().toString());
+        assertEquals(2, grid.getAdapter().getCount());
+        float y = pages.getHeight() / 2f;
+        assertTrue(y > 0);
+
+        swipe(pages, 250, 50, y, y, 150);
+        assertEquals("To the left: the next console", "Game Boy", heading.getText().toString());
+        assertEquals(1, grid.getAdapter().getCount());
+        assertEquals("Back in place", 0f, grid.getTranslationX(), 0f);
+        swipe(pages, 250, 50, y, y, 150);
+        assertEquals("Game Boy Color", heading.getText().toString());
+        swipe(pages, 250, 50, y, y, 150);
+        assertEquals("No page after the last one", "Game Boy Color", heading.getText().toString());
+        assertEquals(0f, grid.getTranslationX(), 0f);
+
+        swipe(pages, 50, 250, y, y, 150);
+        assertEquals("To the right: the previous console", "Game Boy", heading.getText().toString());
+        swipe(pages, 150, 110, y, y, 1_000);
+        assertEquals("A short, slow move settles back", "Game Boy", heading.getText().toString());
+        assertEquals(0f, grid.getTranslationX(), 0f);
+        swipe(pages, 160, 175, 40, y + 120, 150);
+        assertEquals("Mostly downwards: the grid's, not the pages'", "Game Boy", heading.getText().toString());
+
+        View all = described(root, "Tous les jeux");
+        all.performClick();
+        assertEquals("The icons still turn the pages", "Tous les jeux", heading.getText().toString());
+        swipe(pages, 50, 250, y, y, 150);
+        assertEquals("No page before the first one", "Tous les jeux", heading.getText().toString());
+    }
+
+    /** A finger from one point to another in `millis`, then the page's motion. */
+    private static void swipe(View view, float fromX, float toX, float fromY, float toY, long millis) {
+        long down = SystemClock.uptimeMillis();
+        touch(view, down, down, MotionEvent.ACTION_DOWN, fromX, fromY);
+        for (int step = 1; step <= 10; step++)
+            touch(view, down, down + millis * step / 10, MotionEvent.ACTION_MOVE,
+                    fromX + (toX - fromX) * step / 10, fromY + (toY - fromY) * step / 10);
+        touch(view, down, down + millis, MotionEvent.ACTION_UP, toX, toY);
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(2 * PageSwipe.TURN_MILLIS + 100));
+    }
+
     private AlertDialog reviewOf(HomeActivity activity, String name, byte[] bytes) throws Exception {
         showFirstGame(activity);
         text(sheet(), "Importer").performClick();
