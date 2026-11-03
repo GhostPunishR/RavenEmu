@@ -209,6 +209,12 @@ public final class AchievementOverlayTest {
         assertTrue(done.getAsBoolean());
     }
 
+    /** The picture an ImageView shows: setImageBitmap(null) leaves an empty drawable. */
+    private static Bitmap shown(ImageView view) {
+        return view.getDrawable() instanceof android.graphics.drawable.BitmapDrawable
+                ? ((android.graphics.drawable.BitmapDrawable) view.getDrawable()).getBitmap() : null;
+    }
+
     private static NativeAchievements.Event game(String image) {
         return new NativeAchievements.Event("game", "Synthetic game", "3", "0", image, "1");
     }
@@ -227,7 +233,7 @@ public final class AchievementOverlayTest {
             ImageView icon = ReflectionHelpers.getField(withIcon, "bannerImage");
             assertEquals(View.VISIBLE, banner.getVisibility());
             assertEquals("The icon, no star", View.GONE, star.getVisibility());
-            assertNotNull(icon.getDrawable());
+            assertNotNull(shown(icon));
         } finally {
             http.go.countDown();
         }
@@ -250,7 +256,7 @@ public final class AchievementOverlayTest {
             BadgeCache badges = ReflectionHelpers.getField(slow, "badges");
             until(() -> badges.cached(ICON) != null);
             assertEquals("Never changes while shown", View.VISIBLE, star.getVisibility());
-            assertNull(icon.getDrawable());
+            assertNull(shown(icon));
             advance(MOTION + 5_000 + MOTION + 100);
             assertEquals("Then the next one, without waiting", "RetroAchievements · De nouveau en ligne",
                     String.valueOf(slow.bannerText()));

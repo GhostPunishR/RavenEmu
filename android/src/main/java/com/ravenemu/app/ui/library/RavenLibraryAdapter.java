@@ -227,7 +227,12 @@ final class RavenLibraryAdapter extends BaseAdapter {
         }
         Integer known = titleHeights.get(text);
         if (known != null) return known;
-        if (sizer == null) sizer = title(false);
+        if (sizer == null) {
+            sizer = title(false);
+            // A TextView laid out once reads its LayoutParams on the next setText.
+            sizer.setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT));
+        }
         sizer.setText(text);
         sizer.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
                 View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
