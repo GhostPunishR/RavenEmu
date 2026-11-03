@@ -15,6 +15,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
 import android.widget.FrameLayout;
+import android.widget.GridView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -22,6 +23,7 @@ import android.widget.TextView;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -31,7 +33,11 @@ import java.util.concurrent.Executor;
 
 /** Java Android Views version of the original RavenEmu cover grid and list.
  * Title, palette, spacing, cover proportions and empty artwork all reference
- * shared/library/LibraryComponents.kt. It never downloads game artwork. */
+ * shared/library/LibraryComponents.kt. It never downloads game artwork.
+ * The tiles of a grid row all take its tallest title's height, as the
+ * beta's lazy grid sizes a row by its tallest tile: GridView places each row
+ * from one of its tiles, so tiles of different heights shifted while
+ * scrolling. */
 final class RavenLibraryAdapter extends BaseAdapter {
     private final Context context;
     private final File privateFiles;
@@ -46,6 +52,11 @@ final class RavenLibraryAdapter extends BaseAdapter {
     };
     private final Set<String> loading = new HashSet<>();
     private final Set<String> unavailable = new HashSet<>();
+    /** A grid title's height in pixels (1 to 3 lines) at `titleWidth`, by title. */
+    private final Map<String, Integer> titleHeights = new HashMap<>();
+    private int titleWidth;
+    /** Laid out as the grid's titles, to measure them. */
+    private TextView sizer;
     private boolean listMode;
 
     /** The colours of the Activity it belongs to (Settings → Interface → Thème). */
@@ -148,11 +159,7 @@ final class RavenLibraryAdapter extends BaseAdapter {
             labels.setOrientation(LinearLayout.VERTICAL);
             if (listMode) labels.setPadding(dp(12), 0, 0, 0);
             else labels.setPadding(0, dp(6), 0, 0);
-            h.title = label("", listMode ? 15 : 11,
-                    listMode ? theme.text : theme.secondary);
-            h.title.setMaxLines(listMode ? 1 : 3);
-            h.title.setEllipsize(android.text.TextUtils.TruncateAt.END);
-            h.title.setGravity(listMode ? Gravity.LEFT : Gravity.TOP | Gravity.CENTER_HORIZONTAL);
+            h.title = title(listMode);
             labels.addView(h.title, new LinearLayout.LayoutParams(-1, -2));
             h.secondary = label("", 12, theme.muted);
             h.secondary.setGravity(Gravity.LEFT);
@@ -167,6 +174,7 @@ final class RavenLibraryAdapter extends BaseAdapter {
 
         h.key = entry.key;
         h.title.setText(entry.title);
+        h.title.setMinHeight(listMode ? 0 : rowTitleHeight(index, parent));
         h.secondary.setText(entry.system.toUpperCase(java.util.Locale.ROOT));
         h.system.setText(entry.system.toUpperCase(java.util.Locale.ROOT));
         h.console.setImageDrawable(new RavenIcon("gba".equals(entry.system) ? RavenIcon.Glyph.GBA
@@ -186,6 +194,46 @@ final class RavenLibraryAdapter extends BaseAdapter {
             }
         }
         return old;
+    }
+
+    /** A tile's title: one line in the list, up to three in the grid. */
+    private TextView title(boolean list) {
+        TextView title = label("", list ? 15 : 11, list ? theme.text : theme.secondary);
+        title.setMaxLines(list ? 1 : 3);
+        title.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        title.setGravity(list ? Gravity.LEFT : Gravity.TOP | Gravity.CENTER_HORIZONTAL);
+        return title;
+    }
+
+    /** The tallest title of this tile's row of the grid, in pixels; 0
+     * before the grid knows its columns. */
+    private int rowTitleHeight(int index, ViewGroup parent) {
+        if (!(parent instanceof GridView)) return 0;
+        GridView grid = (GridView) parent;
+        int columns = Math.max(1, grid.getNumColumns());
+        // The tile's padding is 4 dp on each side; the title fills the rest.
+        int width = grid.getColumnWidth() - 2 * dp(4);
+        if (width <= 0) return 0;
+        int first = index - index % columns, end = Math.min(games.size(), first + columns);
+        int tallest = 0;
+        for (int i = first; i < end; i++) tallest = Math.max(tallest, titleHeight(games.get(i).title, width));
+        return tallest;
+    }
+
+    private int titleHeight(String text, int width) {
+        if (width != titleWidth) {
+            titleHeights.clear();
+            titleWidth = width;
+        }
+        Integer known = titleHeights.get(text);
+        if (known != null) return known;
+        if (sizer == null) sizer = title(false);
+        sizer.setText(text);
+        sizer.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+        int height = sizer.getMeasuredHeight();
+        titleHeights.put(text, height);
+        return height;
     }
 
     private void loadCover(String key) {
