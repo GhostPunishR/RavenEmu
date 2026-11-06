@@ -1,42 +1,39 @@
 # Distribution de RavenEmu
 
-La version de référence est **v0.2.0 - bêta** ; son contenu et ses limites sont décrits dans [CHANGELOG.md](CHANGELOG.md). Le workflow [RavenEmu / Applications](.github/workflows/ci-applications.yml) publie l'APK Android signé dans les [Releases](https://github.com/GhostPunishR/RavenEmu/releases) après validation de tous les jobs sur `main`.
+## État actuel
+
+L'application native n'a **pas encore de version publique**. Les dernières préversions publiées, `android-beta-N` (identifiant `com.ravenemu.preview`), sont celles de la bêta retirée le 6 novembre 2026 ; elles restent sur la page des [Releases](https://github.com/GhostPunishR/RavenEmu/releases). Voir [CHANGELOG.md](CHANGELOG.md).
+
+Le workflow [RavenEmu / Applications](.github/workflows/ci-applications.yml) ne publie rien. Il construit et teste, puis archive un APK de développement :
 
 | Élément | Valeur |
 | --- | --- |
-| Commande | `./gradlew :androidApp:assembleBeta` |
-| Variante | Bêta sans drapeau débogable, signée pour la distribution |
-| Identifiant Android | `com.ravenemu.preview` |
-| Nom affiché | RavenEmu |
-| Artefact Actions | `ravenemu-android-beta` |
-| APK distribué | `ravenemu-beta.apk` |
-| Préversion | `android-beta-N`, où N est le numéro de la CI et le `versionCode` Android |
-| Empreinte | `SHA256SUMS.txt` joint à la préversion |
-| Conservation | APK conservé dans chaque Release ; artefact Actions de secours pendant 7 jours |
+| Commande | `./gradlew :android:assembleDebug` |
+| Variante | Debug, code natif optimisé, signée avec la clé de débogage |
+| Identifiant Android | `com.ravenemu.dev` |
+| Architecture | ARM64 (`arm64-v8a`), Android 8.0 minimum |
+| Artefact Actions | `ravenemu-android-dev-arm64` : `android-debug.apk` et l'archive des sources natives |
+| Conservation | 7 jours |
 
-Les téléchargements des Releases sont accessibles sans compte GitHub ni archive ZIP. Les APK de test des pull requests restent des artefacts Actions distincts. Voir [Installation](wiki/Installation.md).
+Cet APK s'installe à côté de la bêta sans lire ses données. Ce n'est pas une version publique signée.
 
-## Signature et données
+## Avant une première publication
 
-Les APK distribués conservent le même certificat de signature et le même identifiant Android. Le `versionCode` augmente avec le numéro de CI pour permettre les mises à jour sans désinstallation. Un ancien APK signé avec un certificat différent peut exiger une première désinstallation ; les préversions suivantes s'installent par-dessus la précédente.
+Une publication relève **uniquement d'une décision explicite de GhostPunishR** ([ARCHITECTURE.md](ARCHITECTURE.md), section 8). Elle demande de choisir et de mettre en place :
 
-Avant toute désinstallation ou effacement de données, exportez les sauvegardes. Les ZIP historiques et les `.sav` compatibles peuvent être réimportés avec les ROM correspondantes. Les formats natifs restent ceux du RavenCore épinglé.
+- l'identifiant Android publié et le certificat de signature : garder `com.ravenemu.preview` permettrait une mise à jour par-dessus la bêta avec son certificat, mais ses données privées ne sont jamais lues ni migrées sans une migration explicite, réversible et testée ;
+- une variante de publication signée, le `versionCode` et le nom de version ;
+- le workflow de publication (tag, notes, empreintes `SHA256SUMS.txt`).
 
-## Avant de distribuer un build
+Avant de distribuer un build :
 
-- Relever l'exécution, le commit et le résultat des jobs.
-- Tester installation, audio, commandes, sauvegardes, reprise et transferts sur appareil.
-- Distinguer compilation, tests automatisés et validation réelle des jeux.
-- Documenter les limites et incompatibilités de signature ou d'états.
+- relever l'exécution, le commit et le résultat des jobs ;
+- tester installation, navigation Android (trois boutons et gestes), portrait et paysage, audio, commandes, sauvegardes, reprise et transferts sur appareil ;
+- distinguer compilation, tests automatisés et validation réelle des jeux ;
+- documenter les limites et les écarts de parité restants ([docs/MIGRATION_NATIVE.md](docs/MIGRATION_NATIVE.md)).
 
-Le job iOS construit le framework partagé, le SDK natif et l'application Xcode, puis exécute les XCTest sur simulateur. L'artefact `ravenemu-ios-simulator` contient une application pour simulateur Apple Silicon ; il ne constitue pas une IPA pour iPhone. Aucun binaire iPhone signé n'est distribué. Voir [la première tranche et ses limites](iosApp/README.md).
+Avant toute désinstallation ou effacement de données, exportez les sauvegardes.
 
-## Versions et publications
+## README et image de marque
 
-Le changelog décrit chaque version bêta. Après réussite des jobs règles du dépôt, natif, Android et iOS sur `main`, la CI crée automatiquement le tag `android-beta-N` sur le commit validé et publie sa préversion avec l'APK signé et son empreinte. Une relance reprend un éventuel brouillon sans remplacer une préversion déjà publiée. Les anciennes préversions restent disponibles. La création manuelle d'un tag ne déclenche pas de build ; la publication part de la CI de `main`.
-
-## README et image de marque après migration
-
-Le futur README de publication est pré-rédigé dans [README_RELEASE.md](README_RELEASE.md). Le README actuellement affiché par GitHub reste [README.md](README.md) tant que la migration n'est pas terminée et explicitement validée par GhostPunishR.
-
-**Seul le propriétaire décide de remplacer le README actif.** Aucune étape CI ou agent ne doit publier automatiquement cette maquette, la régénérer ou remplacer le logo officiel. Avant une décision de publication, confirmer les fonctionnalités réellement présentes, les liens, les validations Android/iOS et la compatibilité des sauvegardes. Voir la règle permanente dans [AGENTS.md](AGENTS.md) et les propriétaires définis dans `.github/CODEOWNERS`.
+Le [README](README.md) affiché par GitHub a été promu depuis [README_RELEASE.md](README_RELEASE.md) le 6 novembre 2026, sur demande du propriétaire. **Seul le propriétaire décide d'une nouvelle modification du README.** Aucune étape CI ni aucun agent ne doit le régénérer ou remplacer le logo officiel. Voir la règle permanente dans [AGENTS.md](AGENTS.md) et les propriétaires définis dans `.github/CODEOWNERS`.

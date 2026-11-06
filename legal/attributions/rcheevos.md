@@ -12,11 +12,13 @@ s'appuient sur le SDK officiel de RetroAchievements, **rcheevos**, sous
   (`frontend/cmake/rcheevos.cmake`), à cette révision fixe, la même que la
   bêta. Aucun fichier n'est copié dans le dépôt.
 - **Modification** : deux correctifs de sûreté de la bêta
-  (`native/cmake/rcheevos_safety.cmake`), appliqués à une copie de
+  (`native/cmake/rcheevos_safety.cmake`, dans l'historique git au commit
+  `de1c9cc`), appliqués à une copie de
   `rc_client.c` et vérifiés à chaque configuration. Une mise à jour du SDK
   qui les rend inapplicables arrête la compilation.
 - **Notre code** : `achievements.c` est le code de RavenEmu (AGPLv3), d'après
-  l'adaptateur de la bêta (`native/android/achievements_bridge.cpp`). Il lit
+  l'adaptateur de la bêta (`native/android/achievements_bridge.cpp`, même
+  commit). Il lit
   la mémoire du jeu par la carte mémoire Libretro que publie RavenCore.
 - RavenCore, le moteur, ne contient aucune ligne de rcheevos.
 

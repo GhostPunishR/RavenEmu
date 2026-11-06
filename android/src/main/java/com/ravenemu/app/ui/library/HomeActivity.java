@@ -43,8 +43,9 @@ import java.util.concurrent.Executors;
 
 /**
  * Java-only adaptation of RavenEmuApp's EXISTING library design.
- * Visual source of truth: shared/theme/RavenColors.kt and
- * shared/library/LibraryComponents.kt, not a new or generic Android UI.
+ * Visual source of truth: the beta's shared/theme/RavenColors.kt and
+ * shared/library/LibraryComponents.kt (git history, commit de1c9cc), not a
+ * new or generic Android UI.
  *
  * The shell uses Android Views; the emulation path remains C/JNI/C++.
  * Never reads the beta package's library or saved data.

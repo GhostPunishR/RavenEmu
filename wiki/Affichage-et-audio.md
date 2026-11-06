@@ -1,6 +1,6 @@
 # Affichage et audio
 
-Les réglages partagés sont présents dans l'interface Compose. Leur application et leur persistance sont raccordées sur Android et dans la première session iOS. Sur iOS, l'audio utilise AVAudioEngine ; le routage et les performances restent à valider sur appareil. Les options des services absents y sont masquées.
+Cette page décrit les réglages de l'application Android native. L'image passe par le pilote GLES2 et le son par AAudio, deux pilotes natifs en C. Les options des services absents ne sont pas affichées.
 
 ## Vidéo
 
@@ -50,4 +50,4 @@ Ces valeurs sont des diagnostics, **pas une garantie de FPS affichés à l'écra
 
 Pour les craquements, décalages ou lenteurs, consultez [Dépannage](https://github.com/GhostPunishR/RavenEmu/blob/main/wiki/Depannage.md).
 
-Sources : [réglages](https://github.com/GhostPunishR/RavenEmu/blob/main/shared/src/commonMain/kotlin/com/ravenemu/shared/settings/SettingsScreen.kt) et [sortie audio Android](https://github.com/GhostPunishR/RavenEmu/blob/main/androidApp/src/main/kotlin/com/ravenemu/android/audio/AndroidGbAudioOutput.kt).
+Sources : [réglages](https://github.com/GhostPunishR/RavenEmu/blob/main/android/src/main/java/com/ravenemu/app/ui/settings/PlaybackSettingsActivity.java) et [pilote audio](https://github.com/GhostPunishR/RavenEmu/blob/main/android/src/main/cpp/hardware/audio/aaudio/aaudio_driver.c).

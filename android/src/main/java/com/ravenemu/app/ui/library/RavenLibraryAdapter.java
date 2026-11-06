@@ -28,7 +28,8 @@ import java.util.concurrent.Executor;
 
 /** Java Android Views version of the original RavenEmu cover grid and list.
  * Title, palette, spacing, cover proportions and empty artwork all reference
- * shared/library/LibraryComponents.kt. It never downloads game artwork.
+ * the beta's shared/library/LibraryComponents.kt (git history, de1c9cc).
+ * It never downloads game artwork.
  * The tiles of a grid row all take its tallest title's height, as the
  * beta's lazy grid sizes a row by its tallest tile: GridView places each row
  * from one of its tiles, so tiles of different heights shifted while

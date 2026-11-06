@@ -25,7 +25,7 @@ public final class RavenThemeTest {
 
     @Test public void ravenEmuKeepsTheBetasColours() {
         RavenTheme theme = RavenTheme.RAVENEMU;
-        // shared/theme/RavenColors.kt
+        // The beta's shared/theme/RavenColors.kt (git history, de1c9cc)
         assertEquals(0xff0b0c12, theme.background);
         assertEquals(0xff191b28, theme.surface);
         assertEquals(0xffa78bfa, theme.accent);

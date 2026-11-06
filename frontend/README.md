@@ -1,15 +1,18 @@
 # Frontend RavenEmu C / Libretro
 
-Première tranche du nouveau frontend **C + Libretro**. Ce dossier est indépendant
-du lecteur Kotlin actuel : il ne remplace ni les APK signés, ni la cible iOS.
+Frontend **C + Libretro** de l'application RavenEmu. Il ne dépend d'aucune
+plateforme : l'application Android (`android/`) le compile par CMake avec ses
+pilotes natifs.
 
 - `src/libretro_host.c` : charge dynamiquement un core Libretro, établit les callbacks
-  de vidéo, audio et commandes, charge une ROM en mémoire, exécute des images,\n  expose la SRAM et la sérialisation des états.
+  de vidéo, audio et commandes, charge une ROM en mémoire, exécute des images,
+  expose la SRAM et la sérialisation des états.
 - `include/ravenemu/frontend.h` : API stable côté application (sans dépendre des
   détails de l'ABI Libretro dans les en-têtes publics).
-- `tests/` : faux core Libretro et tests d'intégration, dont l'aller-retour\n  SRAM/save-state et le chargement des trois vrais cores.
+- `tests/` : faux core Libretro et tests d'intégration, dont l'aller-retour
+  SRAM/save-state et le chargement des trois vrais cores.
 - `CMakeLists.txt` : reprend le SHA épinglé de RavenCore et active ses trois
-  bibliothèques Libretro. Le projet historique `native/` reste inchangé.
+  bibliothèques Libretro.
 
 ## Compiler et tester sur Linux
 

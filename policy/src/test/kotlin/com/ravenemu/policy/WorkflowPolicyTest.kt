@@ -5,7 +5,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-/** Règles des workflows et des chemins du dépôt autonome RavenEmu. */
+/** Règles des workflows et des chemins du dépôt RavenEmu (application native). */
 class WorkflowPolicyTest {
 
     private val root: File = generateSequence(File("").absoluteFile) { it.parentFile }
@@ -19,16 +19,16 @@ class WorkflowPolicyTest {
     private fun lines(file: File) = file.readLines().withIndex()
 
     @Test
-    fun `les workflows d applications et Android Dev sont présents`() {
+    fun `le workflow de l application est présent`() {
+        // Le badge du README pointe vers lui.
         assertTrue(
-            workflows.any { it.name == "ci-applications.yml" } &&
-                workflows.any { it.name == "ci-android.yml" },
+            workflows.any { it.name == "ci-applications.yml" },
             "Workflows lus : ${workflows.map { it.name }}",
         )
     }
 
     @Test
-    fun `la CI construit le projet racine et son pont natif`() {
+    fun `la CI construit le projet racine et le frontend C`() {
         val fautes = workflows.flatMap { file ->
             lines(file).filter { (_, line) ->
                 val code = line.substringBefore(" #").trim()
@@ -36,18 +36,17 @@ class WorkflowPolicyTest {
                     ((Regex("""(^|[\s;&|])(\./)?gradlew(\.bat)?\s""").containsMatchIn(code) &&
                         Regex("""(?:^|\s)(?:-p|--project-dir)(?:=|\s+)""").containsMatchIn(code)) ||
                         (Regex("""\bcmake\b""").containsMatchIn(code) &&
-                            !Regex("""\bcmake\s+(?:-S\s+(?:native|frontend)\b|--build\s+(?:native/build-host|build/native-frontend)\b)""").containsMatchIn(code)))
+                            !Regex("""\bcmake\s+(?:-S\s+frontend\b|--build\s+build/native-frontend\b)""").containsMatchIn(code)))
             }.map { (index, line) -> "${file.name}:${index + 1}: ${line.trim()}" }
         }
         assertEquals(emptyList(), fautes,
-            "Les workflows doivent utiliser le Gradle racine et les builds CMake native/ ou frontend/")
+            "Les workflows doivent utiliser le Gradle racine et le build CMake de frontend/")
     }
 
     @Test
-    fun `les fichiers necessaires au depot autonome sont presents`() {
+    fun `les fichiers necessaires au depot sont presents`() {
         for (path in listOf("gradlew", "gradle/wrapper/gradle-wrapper.jar", "settings.gradle.kts",
-            "androidApp/build.gradle.kts", "shared/build.gradle.kts", "iosApp/project.yml",
-            "native/CMakeLists.txt", "LICENSE", "TERMS.md", "PRIVACY.md")) {
+            "android/build.gradle.kts", "frontend/CMakeLists.txt", "LICENSE", "TERMS.md", "PRIVACY.md")) {
             assertTrue(File(root, path).isFile, "Fichier absent : $path")
         }
     }

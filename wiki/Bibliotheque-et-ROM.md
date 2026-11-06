@@ -1,6 +1,6 @@
 # Bibliothèque et ROM
 
-Cette page décrit principalement Android. La première session iOS propose aussi une bibliothèque persistante par contenu et l'import d'un fichier depuis Fichiers ; l'import de dossiers et les jaquettes ne sont pas encore raccordés sur Apple. Voir [le périmètre iOS](https://github.com/GhostPunishR/RavenEmu/blob/main/iosApp/README.md).
+Cette page décrit l'application Android native.
 
 ## Import d'un fichier
 
@@ -35,20 +35,18 @@ L'application n'obtient pas d'accès global au stockage ni d'autorisation perman
 - pages pour les consoles qui contiennent des jeux ;
 - navigation par balayage et pictogrammes de console ;
 - fiche de jeu avec **Jouer**, jaquette, export `.sav`/`.srm` et import de sauvegarde ;
-- menu **⋮** : vue grille ou liste, **Importer un dossier**, **Actualiser la bibliothèque de jeux** (relit la bibliothèque et ses jaquettes, et relance la recherche de jaquettes en ligne si elle est activée) et **Exporter toutes les sauvegardes (.zip)**. **À propos** se trouve dans **Paramètres**.
+- menu **⋮** : vue grille ou liste, **Importer un dossier**, **Actualiser la bibliothèque de jeux** (relit la bibliothèque et ses jaquettes) et **Exporter toutes les sauvegardes (.zip)**. **À propos** se trouve dans **Paramètres**.
 
-Ne supposez pas que les tris, surveillances de dossiers ou options de l'ancienne application sont présents dans cette version.
+Ne supposez pas que les tris, surveillances de dossiers ou options de la bêta retirée sont présents dans cette version.
 
 ## Jaquettes
 
 Dans la fiche, **Image manuelle (facultatif)** ou **Changer l'image** permet de choisir une image. Elle est redimensionnée et copiée dans le stockage privé ; elle reste visible après redémarrage. **Retirer la jaquette** ne supprime ni ROM ni sauvegarde.
 
-L'option **Paramètres → Général → Jaquettes en ligne** cherche les images manquantes sur `thumbnails.libretro.com`. Elle est **désactivée par défaut**. Une image manuelle est conservée ; une jaquette retirée n'est pas téléchargée de nouveau automatiquement pour ce jeu.
-
-Sans correspondance ou sans réseau, le jeu conserve un emplacement neutre. Aucun téléchargement de ROM n'est effectué. Voir [Légalité et confidentialité](https://github.com/GhostPunishR/RavenEmu/blob/main/wiki/Legalite-et-confidentialite.md).
+L'application native ne télécharge aucune jaquette : la recherche en ligne de la bêta n'est pas reprise. Sans image, le jeu montre le pictogramme et le nom de sa console. Aucun téléchargement de ROM n'est effectué. Voir [Légalité et confidentialité](https://github.com/GhostPunishR/RavenEmu/blob/main/wiki/Legalite-et-confidentialite.md).
 
 ## Conservation
 
 La copie de la ROM, l'index, les jaquettes et les sauvegardes internes disparaissent après désinstallation ou effacement des données. Sauvegardez vos originaux et [exportez votre progression](https://github.com/GhostPunishR/RavenEmu/blob/main/wiki/Sauvegardes-et-etats.md).
 
-Source : [bibliothèque Android](https://github.com/GhostPunishR/RavenEmu/blob/main/androidApp/src/main/kotlin/com/ravenemu/android/library/GbRomLibrary.kt).
+Source : [bibliothèque Android](https://github.com/GhostPunishR/RavenEmu/blob/main/android/src/main/java/com/ravenemu/app/data/library/RomLibrary.java).

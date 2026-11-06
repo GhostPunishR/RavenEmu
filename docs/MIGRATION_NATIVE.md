@@ -1,11 +1,54 @@
 # Migration native de RavenEmu
 
+> **Bascule du 6 novembre 2026.** Sur décision du propriétaire, la migration est
+> fusionnée dans `main` et la bêta (`androidApp/`, `shared/`, `iosApp/`,
+> `native/`) est retirée, iOS compris. Le reste de ce document retrace la
+> migration tranche par tranche ; ses mentions de la bêta décrivent l'état
+> d'alors. Voir [Bascule et écarts restants](#bascule-et-écarts-restants).
+>
 > Réorganisation du 29 octobre 2026 : `android/` (application, JNI et pilotes matériels), `frontend/` (C et Libretro), `tests/hardware/` (tests matériels), `legal/attributions/` (provenance). Le nouvel APK de développement `com.ravenemu.dev` est isolé des données de la bêta et de l'ancienne prévisualisation, sans migration automatique.
 
-Branche de travail : `migration/native-libretro`, dérivée de `main`.
+Branche de travail pendant la migration : `migration/native-libretro`, fusionnée dans `main` le 6 novembre 2026.
 Objectif : frontend C natif + cores C++20 par l'ABI Libretro, couche Android
 Java/JNI et pilotes vidéo/audio/commandes natifs, selon l'architecture de
 RetroArch Plus, sans remplacer les moteurs maison RavenCore.
+
+## Bascule et écarts restants
+
+Le 6 novembre 2026, le propriétaire a demandé de fusionner la migration jusqu'à
+`main`, de supprimer la bêta, iOS compris, et d'aligner le site, la
+documentation et le README sur l'application native.
+
+- **Retirés** : `androidApp/` et `shared/` (bêta Android Kotlin/Compose),
+  `iosApp/` (application iOS), `native/` (ponts JNI et Swift de la bêta),
+  le workflow `ci-android.yml`. Leur code reste dans l'historique git, au
+  commit `de1c9cc`, dernier état de `main` avec la bêta.
+- **CI** : un seul workflow, `ci-applications.yml` (« RavenEmu / Applications ») :
+  règles du dépôt (`policy/`), frontend C et pilotes, APK ARM64 et tests Java.
+  Il ne publie plus de préversion `android-beta-N`.
+- **Règles du dépôt** : `AndroidPolicyTest` vérifie maintenant les méthodes
+  `native` de l'application Java contre les symboles JNI de
+  `android/src/main/cpp/`, et la permission d'accès au réseau local selon le
+  `targetSdk` de `android/`.
+- **Données** : l'application garde l'identifiant `com.ravenemu.dev`. Une bêta
+  `com.ravenemu.preview` déjà installée n'est ni lue ni modifiée.
+- **RavenCore** épinglé à la version 0.15.0 (codes de triche lus comme
+  l'appareil et comme dans RetroArch).
+
+Écarts de parité restants avec la bêta, à traiter comme du travail à faire :
+
+- **Câble link sans fil** entre deux téléphones : absent de l'application
+  native. Le protocole à reprendre est décrit dans
+  [ARCHITECTURE.md](../ARCHITECTURE.md#câble-link-sans-fil--protocole-à-reprendre).
+- **Import des états instantanés de la bêta** : les sauvegardes de cartouche
+  s'importent, pas les états (décision du propriétaire attendue).
+- **Validation sur téléphone** de l'ensemble (navigation trois boutons et
+  gestes, portrait et paysage, son, manettes, sauvegardes, RetroAchievements),
+  et les écarts notés dans chaque tranche ci-dessous.
+- **Publication** : variante signée, identifiant publié et workflow de
+  publication restent à décider ([RELEASING.md](../RELEASING.md)).
+- **iOS** : retiré sur décision du propriétaire, à reconstruire sur l'API C
+  du frontend si un jour il est demandé.
 
 ## Jalons et critères d'acceptation
 
@@ -31,7 +74,8 @@ RetroArch Plus, sans remplacer les moteurs maison RavenCore.
   Préserver `com.ravenemu.preview` et les clés/chemins de sauvegarde jusqu'à
   une migration de données testée.
 - Préserver le projet actuel (`androidApp/`, `shared/`, `iosApp/`,
-  `native/`) et la publication de `main` pendant la transition.
+  `native/`) et la publication de `main` pendant la transition. (Levé le
+  6 novembre 2026 par la décision du propriétaire.)
 - Conserver RavenCore en C++20, avec sa provenance et ses licences.
 - Éviter de mélanger l'API C RavenCore historique et Libretro dans une même
   instance de jeu : une seule interface fait autorité par session.

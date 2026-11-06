@@ -1,18 +1,18 @@
 # Dépannage
 
-Les vérifications suivantes concernent la bêta Android multiplateforme. Commencez par relever le **commit du build**, votre appareil et la version Android.
+Les vérifications suivantes concernent l'application Android native. Commencez par relever le **commit du build**, votre appareil et la version Android.
 
 ## Le téléchargement Android est introuvable
 
-- Ouvrez les [Releases Android](https://github.com/GhostPunishR/RavenEmu/releases), sans connexion nécessaire.
-- Choisissez une préversion `android-beta-N` et téléchargez `ravenemu-beta.apk` dans ses fichiers.
-- Chaque préversion conserve son APK. Une nouvelle préversion apparaît après la réussite de tous les jobs du [workflow multiplateforme](https://github.com/GhostPunishR/RavenEmu/actions/workflows/multiplateforme.yml?query=branch%3Amain+is%3Asuccess) sur `main`.
+- L'application native n'a pas encore de version publique : son APK est un artefact des [compilations de `main`](https://github.com/GhostPunishR/RavenEmu/actions/workflows/ci-applications.yml?query=branch%3Amain+is%3Asuccess), visible une fois connecté à GitHub.
+- Ouvrez la dernière compilation réussie, section « Artifacts », et téléchargez `ravenemu-android-dev-arm64`. Il est gardé 7 jours.
+- Les préversions `android-beta-N` des Releases sont celles de la bêta retirée.
 
 ## L'APK ne s'installe pas
 
-Vérifiez Android 8.0 minimum, l'espace libre et l'autorisation d'installer depuis la source utilisée. Téléchargez directement `ravenemu-beta.apk` et choisissez une version plus récente que celle installée.
+Vérifiez Android 8.0 minimum, un téléphone ARM64, l'espace libre et l'autorisation d'installer depuis la source utilisée. Extrayez `android-debug.apk` du ZIP de l'artefact avant de l'installer.
 
-En cas de signature incompatible avec un ancien APK, **exportez vos sauvegardes depuis la version installée avant toute désinstallation**. Les préversions signées actuelles utilisent le même certificat entre les builds et s'installent ensuite par-dessus les précédentes. Voir [Installation](https://github.com/GhostPunishR/RavenEmu/blob/main/wiki/Installation.md).
+L'APK de développement (`com.ravenemu.dev`) s'installe à côté de la bêta. Chaque compilation est signée avec sa clé de débogage : si une mise à jour est refusée, **exportez vos sauvegardes avant de désinstaller**. Voir [Installation](https://github.com/GhostPunishR/RavenEmu/blob/main/wiki/Installation.md).
 
 ## Un jeu n'apparaît pas
 
@@ -25,9 +25,9 @@ La bibliothèque garde une copie privée ; elle n'est pas une surveillance perma
 
 ## La console ou la jaquette semble incorrecte
 
-GB/GBC est décidé par l'en-tête. Un fichier `.gb` peut être classé en Game Boy Color. Les images en ligne dépendent du nom et d'une correspondance de catalogue, sans garantie d'édition exacte.
+GB/GBC est décidé par l'en-tête. Un fichier `.gb` peut être classé en Game Boy Color.
 
-Vérifiez **Paramètres → Général → Jaquettes en ligne** si vous voulez la recherche facultative. Sinon choisissez une image manuelle dans la fiche. Une absence de réseau ou de correspondance ne doit pas bloquer le jeu.
+L'application ne télécharge aucune jaquette : choisissez une image dans la fiche du jeu. Une jaquette importée avant la correction de leur qualité reste floue : choisissez-la à nouveau.
 
 ## Écran noir ou jeu lent
 

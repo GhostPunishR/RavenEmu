@@ -1,5 +1,6 @@
 /* RetroAchievements for the C frontend (RavenEmu code, AGPLv3), after the
- * beta's adapter native/android/achievements_bridge.cpp: the same requests
+ * beta's adapter native/android/achievements_bridge.cpp (git history,
+ * de1c9cc): the same requests
  * and events, with the game's memory read here through its Libretro memory
  * map (rcheevos' rc_libretro) rather than through Java. */
 #define _POSIX_C_SOURCE 200809L
