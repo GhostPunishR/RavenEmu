@@ -13,7 +13,7 @@ extern "C" {
  * (rc_client, MIT): the account, the game's identification by its hash, the
  * evaluation of its achievements once per shown frame against the core's
  * memory map, and Hardcore. RavenEmu code, after the beta's adapter
- * (native/android/achievements_bridge.cpp).
+ * (native/android/achievements_bridge.cpp, in git history at de1c9cc).
  *
  * Emulation thread only, like every call to the core: rcheevos reads the
  * game's memory from the calls below. The platform does the networking:

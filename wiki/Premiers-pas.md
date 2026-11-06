@@ -1,6 +1,6 @@
 # Premiers pas
 
-Les étapes suivantes concernent la **bêta Android multiplateforme**. La première intégration iOS est décrite dans [son guide](https://github.com/GhostPunishR/RavenEmu/blob/main/iosApp/README.md), avec les essais restants sur appareil.
+Les étapes suivantes concernent l'**application Android native**. Pour l'installer, voir [Installation](https://github.com/GhostPunishR/RavenEmu/blob/main/wiki/Installation.md).
 
 ## 1. Importer un jeu
 
@@ -24,9 +24,10 @@ La console Game Boy ou Game Boy Color est choisie d'après l'en-tête de la ROM,
 Dans **Paramètres** :
 
 - **Audio** : activation du son et volume ;
-- **Vidéo** : profil Original, DMG vert ou Pocket gris, luminosité et contraste ;
-- **Interface** : retour haptique, taille, espacement et style des commandes ;
-- **Général** : jaquettes en ligne facultatives et diagnostic de performance.
+- **Vidéo** : couleurs des jeux Game Boy (vert de la console ou gris de la Pocket), correction des couleurs LCD, luminosité, contraste et rendu de l'image ;
+- **Interface** : thème RavenEmu ou NVIDIA, retour haptique, taille, espacement et style des commandes, skin Delta ;
+- **Console** : jeux Game Boy en couleurs, GBC d'une Game Boy Advance, BIOS GBA facultatif ;
+- **Général** : pause automatique et latence.
 
 Les profils DMG et Pocket s'appliquent uniquement aux jeux monochromes. Voir [Affichage et audio](https://github.com/GhostPunishR/RavenEmu/blob/main/wiki/Affichage-et-audio.md) et [Commandes](https://github.com/GhostPunishR/RavenEmu/blob/main/wiki/Commandes.md).
 

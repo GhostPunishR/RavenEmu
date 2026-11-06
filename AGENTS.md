@@ -1,58 +1,58 @@
-# Intention de la migration native RavenEmu
+# Consignes de RavenEmu : application native
 
 > Instructions de référence pour les agents et contributeurs travaillant sur
-> `migration/native-libretro`. **Lire d'abord
-> [ARCHITECTURE.md](ARCHITECTURE.md), contrat final et source de vérité
-> obligatoire**, puis [docs/MIGRATION_NATIVE.md](docs/MIGRATION_NATIVE.md)
+> RavenEmu. **Lire d'abord [ARCHITECTURE.md](ARCHITECTURE.md), contrat
+> et source de vérité obligatoire**, puis [docs/MIGRATION_NATIVE.md](docs/MIGRATION_NATIVE.md)
 > et [android/README.md](android/README.md).
 >
-> **Ne pas confondre migration technique et refonte de RavenEmu.** Le résultat
-> recherché conserve **l'identité, l'interface, les jeux et les données de RavenEmu**
-> tout en remplaçant progressivement sa couche d'exécution par une architecture
-> native de type frontend Libretro.
+> Le 6 novembre 2026, le propriétaire a fait fusionner la migration native dans
+> `main` et retirer la bêta (`androidApp/`, `shared/`, `iosApp/`, `native/`),
+> iOS compris. Son code reste consultable dans l'historique git, au commit
+> `de1c9cc`. **Ne pas confondre l'architecture native et une refonte de
+> RavenEmu** : l'application conserve **l'identité, l'interface, les jeux et
+> les données de RavenEmu**.
 
 ## Protection du README officiel et du logo — règle permanente
 
 **Interdiction pour les agents (y compris CorvusSoftware, Codex et les agents CI) de modifier, régénérer, reformater, déplacer ou remplacer ces fichiers sans demande explicite du propriétaire ciblant précisément cette action :**
 
-- `README.md` : présentation officielle publiée du dépôt ; **intouchable pendant la migration**.
-- `README_RELEASE.md` : maquette du README après migration ; préparer une seule fois sur demande du propriétaire, puis **ne pas actualiser automatiquement**, même lors des changements de version, badge, workflow ou fonctionnalités.
+- `README.md` : présentation officielle publiée du dépôt, promue depuis `README_RELEASE.md` le 6 novembre 2026 sur demande du propriétaire ; **intouchable** sans nouvelle demande.
+- `README_RELEASE.md` : maquette qui a servi à cette promotion ; **ne pas actualiser automatiquement**, même lors des changements de version, badge, workflow ou fonctionnalités.
 - `assets/brand/ravenemu-logo.webp` : visuel officiel de référence ; ne pas recadrer, retoucher, convertir ou substituer sans validation explicite.
 
-**La fin technique de la migration ne constitue PAS une autorisation de publication.** Les agents ne doivent jamais copier `README_RELEASE.md` vers `README.md`, activer les affirmations de parité, créer une release ou modifier le logo de leur propre initiative. La décision finale et toute mise à jour du README appartiennent exclusivement à GhostPunishR.
+**Une CI verte ou une fusion ne constitue PAS une autorisation de publication.** Les agents ne doivent jamais réécrire `README.md`, activer des affirmations de parité, créer une release ou modifier le logo de leur propre initiative. La décision finale et toute mise à jour du README appartiennent exclusivement à GhostPunishR.
 
 Lorsqu'une tâche nécessite un changement de documentation, modifier les documents techniques concernés (`docs/`, `CHANGELOG.md`, `BUILDING.md`, etc.) **sans toucher aux README protégés** ; signaler au propriétaire les ajustements de README éventuellement nécessaires. Le fichier `.github/CODEOWNERS` réclame une revue du propriétaire ; son effet bloquant dépend de l'activation des règles de protection de branche GitHub.
 
 ## Règle obligatoire : architecture finale
 
-**Tous les agents, y compris après la fin de la migration, doivent respecter
-[ARCHITECTURE.md](ARCHITECTURE.md).** Ce document définit la cible définitive,
+**Tous les agents doivent respecter [ARCHITECTURE.md](ARCHITECTURE.md).** Ce document définit la cible définitive,
 les frontières des modules, le cycle de vie des sessions Libretro, les
 responsabilités Java / C / C++20, la conformité visuelle, les formats de
-sauvegarde et les critères de bascule. Il s'applique aussi aux nouvelles
-fonctionnalités et correctifs **après publication**, pas uniquement à la PR #39.
+sauvegarde et les critères de publication. Il s'applique à toute nouvelle
+fonctionnalité et à tout correctif.
 
 Ordre de référence, en cas de contradiction :
 
 1. **Demandes explicites du propriétaire et protection des données** ;
 2. **`ARCHITECTURE.md`** : règles et architecture finale ;
 3. **`AGENTS.md`** : consignes de travail et contraintes des agents ;
-4. **`docs/MIGRATION_NATIVE.md`** : étapes, statut et écarts de migration ;
-5. **Code hérité** : utile comme référence de compatibilité et de design,
-   sans imposer Compose/Kotlin à la nouvelle application.
+4. **`docs/MIGRATION_NATIVE.md`** : historique de la migration et écarts de parité ;
+5. **Code de la bêta retirée** (historique git, commit `de1c9cc`) : utile comme
+   référence de compatibilité et de design, sans imposer Compose/Kotlin.
 
 Ne jamais faire évoluer le code **contre** `ARCHITECTURE.md` pour gagner du
 temps. Si une exception ou un changement de structure paraît nécessaire,
 exposer le besoin au propriétaire, attendre son accord, et mettre à jour
 `ARCHITECTURE.md`, la documentation et les tests dans le même changement.
 
-**Ne pas présenter la section historique** d'`ARCHITECTURE.md` sur
-`shared/`, `androidApp/` et l'ancienne API RavenCore comme la cible finale :
-les sections **1 à 8** en tête du document sont le contrat normatif.
+Les sections **1 à 8** d'`ARCHITECTURE.md` sont le contrat normatif ; la
+partie « Références techniques » le complète (épinglages, protocole du câble
+sans fil à reprendre, contrats de données).
 
 ## Objectif produit
 
-- Faire évoluer RavenEmu vers une architecture inspirée de **RetroArch Plus** :
+- RavenEmu suit une architecture inspirée de **RetroArch Plus** :
   frontend natif, cores séparés par l'ABI publique **Libretro**, pilotes natifs
   pour l'image, le son et les entrées.
 - Le frontend C reste propre à RavenEmu. Le portage ciblé autorisé des pilotes
@@ -66,8 +66,9 @@ les sections **1 à 8** en tête du document sont le contrat normatif.
   un autre émulateur par commodité.
 - Préserver les fonctions attendues de RavenEmu : bibliothèque et jaquettes,
   sauvegardes, paramètres, affichage du jeu, menus, contrôles, skins, câble
-  link, RetroAchievements et expérience iOS. Les fonctionnalités manquantes
-  sont des travaux de parité, pas une permission de les supprimer.
+  link et RetroAchievements. Les fonctionnalités manquantes (par exemple le
+  câble sans fil) sont des travaux de parité, pas une permission de les
+  supprimer. iOS a été retiré sur décision du propriétaire.
 
 ## Contrat de langages et de responsabilités
 
@@ -77,28 +78,30 @@ les sections **1 à 8** en tête du document sont le contrat normatif.
 | Cores RavenCore | **C++20** | Exécution GB/GBC/GBA via l'ABI Libretro |
 | Android | **Java + JNI + NDK** | Interface, stockage, activités, cycle de vie et accès plateforme |
 | Vidéo / audio / commandes | **C natif** et pilotes Android | GLES, AAudio, contrôleurs et autres pilotes natifs |
-| iOS | À conserver et adapter par étapes | Ne pas casser le projet existant ni annoncer une parité fictive |
+| iOS | Retiré le 6 novembre 2026 | Ne pas annoncer de version iOS ; un futur hôte se brancherait sur l'API C du frontend |
 
 **Aucun code applicatif Kotlin ni Compose dans `android/`.**
-Ne pas introduire de fichiers `.kt`, de plugin Compose ni de dépendance
-`:shared` pour reproduire l'interface. Les fichiers `.gradle.kts` sont des
+Ne pas introduire de fichiers `.kt`, de plugin Compose ni de module Kotlin
+partagé pour reproduire l'interface. Les fichiers `.gradle.kts` sont des
 **scripts de configuration Gradle**, et non une autorisation à écrire
-l'application en Kotlin. Les sources Kotlin de l'application **historique**
-restent inchangées et peuvent être **consultées comme références visuelles**.
+l'application en Kotlin. Les tests JVM de `policy/` sont la seule exception
+Kotlin, hors application. Les sources Kotlin de la **bêta retirée** peuvent
+être **consultées comme références visuelles** dans l'historique git.
 
 ## Fidélité à l'interface RavenEmu
 
-- La migration **n'est pas une refonte graphique**. Reproduire en Java
+- L'application native **n'est pas une refonte graphique**. Reproduire en Java
   l'interface déjà validée par le propriétaire : palette sombre/violette,
   barre « Tous les jeux », recherche, boutons paramètres/ajout/options,
   grille/liste de jaquettes, navigation GB/GBC/GBA, fiche de jeu et bouton
   « Jouer », lecteur, menu de pause, réglages et commandes.
-- Références visuelles : `shared/src/commonMain/kotlin/com/ravenemu/shared/RavenEmuApp.kt`,
+- Références visuelles, à lire avec `git show de1c9cc:<chemin>` :
+  `shared/src/commonMain/kotlin/com/ravenemu/shared/RavenEmuApp.kt`,
   `shared/src/commonMain/kotlin/com/ravenemu/shared/library/LibraryComponents.kt`,
   `shared/src/commonMain/kotlin/com/ravenemu/shared/library/LibraryDialogs.kt`,
   `shared/src/commonMain/kotlin/com/ravenemu/shared/player/GbVideoScreen.kt`
   et `shared/src/commonMain/kotlin/com/ravenemu/shared/theme/RavenColors.kt`.
-  **Les lire pour reproduire le design, pas pour porter Compose dans la migration.**
+  **Les lire pour reproduire le design, pas pour porter Compose dans l'application.**
 - Couleurs de référence : fond `#0B0C12`, surface `#191B28`,
   accent `#A78BFA`, texte `#F5F2FF`, texte atténué `#AAA2BC`.
 - **Respecter les barres du téléphone** : heure, icônes d'état, encoches,
@@ -109,14 +112,14 @@ restent inchangées et peuvent être **consultées comme références visuelles*
 - Une ressemblance approximative ne suffit pas : signaler clairement
   les écarts de parité restants au lieu de déclarer l'interface identique.
 
-## Sécurité des données et de la version bêta
+## Sécurité des données et des branches
 
-- Travailler uniquement dans la branche **`migration/native-libretro`**,
-  via la PR brouillon **#39**. Ne pas fusionner, modifier `main` ou lancer
-  une publication sans demande explicite.
-- Garder la bêta (`androidApp/`, `shared/`, `iosApp/`, `native/`)
-  opérationnelle. Le module de prévisualisation est **`android/`**
-  et utilise l'identifiant indépendant **`com.ravenemu.dev`**.
+- Développer sur une branche dédiée et passer par une **pull request vers
+  `main`**. Ne pas pousser directement sur `main`, fusionner ou lancer une
+  publication sans demande explicite du propriétaire.
+- L'application est le module **`android/`**, à l'identifiant
+  **`com.ravenemu.dev`**, indépendant de la bêta `com.ravenemu.preview`
+  qui peut rester installée sur les téléphones.
 - Ne pas lire, migrer, effacer ou écraser automatiquement les ROMs,
   sauvegardes, paramètres ou autres données de la bêta. Toute migration
   de données doit être explicite, réversible et testée.
@@ -133,10 +136,11 @@ restent inchangées et peuvent être **consultées comme références visuelles*
    une documentation cohérente et vérifier les workflows GitHub Actions.
    Ne pas annoncer un résultat CI avant qu'il soit réellement terminé.
 3. Vérifier en CI le frontend C, les cores RavenCore, l'APK Android ARM64,
-   les tests Java/JVM et les règles de dépôt. Préserver la CI bêta Android/iOS.
+   les tests Java/JVM et les règles de dépôt (workflow
+   `.github/workflows/ci-applications.yml`).
 4. Vérifier sur **appareil physique** l'interface, la navigation Android
    (trois boutons **et** gestes), portrait/paysage, clavier/encoches, son,
-   vidéo, commandes, chargement et sauvegardes avant toute bascule produit.
+   vidéo, commandes, chargement et sauvegardes avant toute publication.
    **La CI verte ne prouve pas à elle seule qu'une application est jouable.**
 5. Corriger d'abord les régressions et les retours de captures d'écran,
    puis ajouter de nouvelles fonctions. Ne pas élargir le périmètre si
@@ -144,12 +148,12 @@ restent inchangées et peuvent être **consultées comme références visuelles*
 
 ## État et périmètre actuel
 
-Le frontend C est dans `frontend/`. L'application native expérimentale
-est dans `android/` : écrans Java, JNI, rendu GLES2, AAudio,
-bibliothèque GB/GBC/GBA, sauvegardes et jaquettes locales. Ce sont des
-**jalons de migration**, pas une substitution de la bêta. Les fonctions
-avancées, les réglages complets, le rendu parfaitement identique et la
-validation sur téléphones sont encore à terminer.
+Le frontend C est dans `frontend/`. L'application native est dans
+`android/` : écrans Java, JNI, rendu GLES2, AAudio, bibliothèque
+GB/GBC/GBA, sauvegardes, jaquettes locales, skins Delta, câble link local,
+codes de triche et RetroAchievements. Le câble sans fil, l'import des états
+de la bêta et la validation complète sur téléphones restent à faire ; la
+liste des écarts est tenue dans `docs/MIGRATION_NATIVE.md`.
 
 **Priorité des décisions : intention du propriétaire > fidélité à la bêta
 > intégrité des données > architecture Java/C/C++20 > nouveautés.**

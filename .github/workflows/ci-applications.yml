@@ -1,40 +1,52 @@
 name: RavenEmu / Applications
-# Application autonome : toutes les commandes partent de la racine.
+# The RavenEmu app: Android (Java + JNI + C), the C frontend and RavenCore,
+# and the repository rules. Every command starts from the repository root.
+
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - migration/native-libretro
     paths:
-      - "androidApp/**"
-      - "shared/**"
-      - "iosApp/**"
-      - "native/**"
-      - "policy/**"
-      - ".github/workflows/**"
-      - "gradle/**"
-      - "*.gradle.kts"
-      - "gradle.properties"
-      - "gradlew"
-      - "gradlew.bat"
-      - "TERMS.md"
-      - "PRIVACY.md"
-      - "LICENSE"
+      - 'frontend/**'
+      - 'android/**'
+      - 'tests/**'
+      - 'scripts/**'
+      - 'policy/**'
+      - 'legal/**'
+      - 'gradle/**'
+      - '*.gradle.kts'
+      - 'gradle.properties'
+      - 'gradlew'
+      - 'gradlew.bat'
+      - 'docs/MIGRATION_NATIVE.md'
+      - 'TERMS.md'
+      - 'PRIVACY.md'
+      - 'LICENSE'
+      - '.github/workflows/**'
   pull_request:
     paths:
-      - "androidApp/**"
-      - "shared/**"
-      - "iosApp/**"
-      - "native/**"
-      - "policy/**"
-      - ".github/workflows/**"
-      - "gradle/**"
-      - "*.gradle.kts"
-      - "gradle.properties"
-      - "gradlew"
-      - "gradlew.bat"
-      - "TERMS.md"
-      - "PRIVACY.md"
-      - "LICENSE"
+      - 'frontend/**'
+      - 'android/**'
+      - 'tests/**'
+      - 'scripts/**'
+      - 'policy/**'
+      - 'legal/**'
+      - 'gradle/**'
+      - '*.gradle.kts'
+      - 'gradle.properties'
+      - 'gradlew'
+      - 'gradlew.bat'
+      - 'docs/MIGRATION_NATIVE.md'
+      - 'TERMS.md'
+      - 'PRIVACY.md'
+      - 'LICENSE'
+      - '.github/workflows/**'
   workflow_dispatch:
+
+concurrency:
+  group: ravenemu-applications-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -91,212 +103,101 @@ jobs:
       - name: Règles des workflows
         run: ./gradlew :policy:test --stacktrace
 
-  native:
-    name: API native - tests et sauvegardes
+  smoke:
+    name: Frontend C - compilation et tests
     runs-on: ubuntu-latest
     steps:
       - name: Récupérer le dépôt
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Configurer le test de liaison C
-        run: cmake -S native -B native/build-host -DCMAKE_BUILD_TYPE=Release -DRAVENEMU_BRIDGE_TESTS=ON
-      - name: Construire le test
-        run: cmake --build native/build-host --target ravenemu_bridge_smoke ravenemu_achievements_smoke ravenemu_rewind_test --parallel 2
-      - name: Exécuter le test de liaison et de sauvegarde
-        run: ctest --test-dir native/build-host --output-on-failure
+      - name: Installer les bibliothèques GLES et EGL
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y libegl-dev libgles-dev libgl1-mesa-dri
+      # The RetroAchievements JNI bridge is tested on the host's JVM.
+      - name: Installer Java 21
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Configurer CMake
+        run: cmake -S frontend -B build/native-frontend -DCMAKE_BUILD_TYPE=Release -DRAVEN_VIDEO_PIXEL_TESTS=ON
+      - name: Compiler le frontend, les pilotes et RavenCore
+        run: |
+          cmake --build build/native-frontend --parallel 2 --target \
+            raven_frontend_test raven_frontend_fake_core raven_frontend_real_core_test \
+            raven_frontend_options_test raven_frontend_fake_core_v1 raven_frontend_fake_core_variables \
+            raven_frame_clock_test raven_frame_pacer_test raven_frontend_preempt_test raven_frontend_achievements_test \
+            raven_frontend_fake_core_lag raven_frontend_fake_core_lag_incomplete \
+            raven_native_video_pixels \
+            raven_native_input_test raven_native_sensor_test raven_native_preview_test raven_native_audio_test raven_native_video_test \
+            raven_native_sinc_test raven_native_state_progress_test raven_jni_achievements \
+            ravenemu_gb_libretro ravenemu_gbc_libretro ravenemu_gba_libretro
+      - name: Exécuter les tests C
+        run: ctest --test-dir build/native-frontend --output-on-failure
 
   android:
-    name: Android - APK bêta et tests
+    name: Android ARM64 - APK et tests
     runs-on: ubuntu-latest
-    env:
-      RAVENEMU_VERSION_CODE: ${{ github.run_number }}
     steps:
       - name: Récupérer le dépôt
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # Le wrapper versionné s'exécute avant tout le reste : il est comparé
-      # aux empreintes publiées par Gradle, comme dans le workflow Android.
       - name: Valider le wrapper Gradle
         uses: gradle/actions/wrapper-validation@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
-      - name: Installer Java
+      - name: Installer Java 21
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with:
           distribution: temurin
-          java-version: "21"
-      # Variante « beta » : l'APK Debug sans le drapeau débogable, pour que
-      # le lecteur tourne optimisé sur téléphone (voir androidApp/build.gradle.kts).
-      - name: Construire l'APK bêta
-        run: ./gradlew :androidApp:assembleBeta --stacktrace
-      - name: Tests Android
-        run: ./gradlew :androidApp:testDebugUnitTest :shared:testAndroidHostTest --stacktrace
-      - name: Analyse Android Lint
-        run: ./gradlew :androidApp:lintDebug --stacktrace
-      - name: Signer l'APK de distribution
-        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-        env:
-          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-        shell: bash
+          java-version: '21'
+      - name: Vérifier l'organisation des sources
+        run: python3 scripts/check_native_layout.py
+      - name: Vérifier les langages autorisés
         run: |
-          set -euo pipefail
-          if [[ -z "${ANDROID_KEYSTORE_BASE64:-}" || -z "${ANDROID_KEYSTORE_PASSWORD:-}" ]]; then
-            echo "::error::Les secrets de signature Android sont requis pour distribuer un APK."
-            exit 1
-          fi
-          umask 077
-          signing_dir="$(mktemp -d "$RUNNER_TEMP/ravenemu-signing.XXXXXX")"
-          trap 'rm -rf "$signing_dir"' EXIT
-          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$signing_dir/release.p12"
-          build_tools="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
-          mkdir -p androidApp/build/outputs/apk/signed
-          "$build_tools/zipalign" -f -P 16 4 \
-            androidApp/build/outputs/apk/beta/androidApp-beta.apk "$signing_dir/aligned.apk"
-          "$build_tools/apksigner" sign \
-            --ks "$signing_dir/release.p12" --ks-type PKCS12 \
-            --ks-pass env:ANDROID_KEYSTORE_PASSWORD --key-pass env:ANDROID_KEYSTORE_PASSWORD \
-            --out androidApp/build/outputs/apk/signed/ravenemu-beta.apk "$signing_dir/aligned.apk"
-          "$build_tools/apksigner" verify --verbose androidApp/build/outputs/apk/signed/ravenemu-beta.apk
-          "$build_tools/zipalign" -c -P 16 4 androidApp/build/outputs/apk/signed/ravenemu-beta.apk
-      - name: Publier l'APK bêta signé
-        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+          python3 - <<'PY'
+          from pathlib import Path
+          source = Path('android/src')
+          kotlin = list(source.rglob('*.kt')) + list(source.rglob('*.kts'))
+          if kotlin:
+              raise SystemExit('Kotlin source forbidden in android: ' + str(kotlin))
+          build = Path('android/build.gradle.kts').read_text()
+          if 'kotlin.plugin.compose' in build or 'project(":shared")' in build:
+              raise SystemExit('Kotlin/Compose integration forbidden in android')
+          print('Java + native C/C++ architecture validated')
+          PY
+      - name: Compiler l'APK ARM64 et exécuter les tests
+        run: ./gradlew :android:assembleDebug :android:testDebugUnitTest :android:lintDebug :android:collectDebugCorrespondingSources --stacktrace
+      - name: Contrôler l'optimisation du code natif
+        run: |
+          python3 scripts/test_check_native_optimization.py
+          python3 scripts/check_native_optimization.py
+      - name: Vérifier et archiver les sources
+        run: |
+          python3 scripts/test_package_native_sources.py
+          python3 scripts/package_native_sources.py
+      - name: Contrôler les bibliothèques ARM64
+        run: |
+          python3 - <<'PY'
+          import zipfile, pathlib
+          apk = pathlib.Path('android/build/outputs/apk/debug/android-debug.apk')
+          required = {'libraven_android.so', 'ravenemu_gb_libretro.so',
+                      'ravenemu_gbc_libretro.so', 'ravenemu_gba_libretro.so'}
+          with zipfile.ZipFile(apk) as z:
+              found = {path.split('/')[-1] for path in z.namelist()
+                       if path.startswith('lib/arm64-v8a/') and path.endswith('.so')}
+          missing = required - found
+          print('Packaged ARM64 libraries:', sorted(found))
+          if missing:
+              raise SystemExit(f'Missing ARM64 libraries: {sorted(missing)}')
+          PY
+      - name: Publier l'APK de développement et les sources
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: ravenemu-android-beta
-          path: androidApp/build/outputs/apk/signed/ravenemu-beta.apk
-          if-no-files-found: error
-          retention-days: 7
-      - name: Publier l'APK de test
-        if: github.ref != 'refs/heads/main' || github.event_name == 'pull_request'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: ravenemu-android-beta-test
-          path: androidApp/build/outputs/apk/beta/*.apk
-          if-no-files-found: error
-          retention-days: 7
-
-  ios:
-    name: iOS - simulateur et tests
-    runs-on: macos-latest
-    steps:
-      - name: Récupérer le dépôt
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      # Le wrapper versionné s'exécute avant tout le reste : il est comparé
-      # aux empreintes publiées par Gradle, comme dans le workflow Android.
-      - name: Valider le wrapper Gradle
-        uses: gradle/actions/wrapper-validation@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
-      - name: Installer Java
-        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
-        with:
-          distribution: temurin
-          java-version: "21"
-      - name: Identifier la version Xcode
-        id: apple-tools
-        run: echo "version=$(xcodebuild -version | shasum -a 256 | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
-      - name: Restaurer les binaires Apple pour ces sources
-        id: apple-cache
-        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
-        with:
+          name: ravenemu-android-dev-arm64
           path: |
-            shared/build
-            native/build-ios
-          key: apple-v1-${{ runner.arch }}-${{ steps.apple-tools.outputs.version }}-${{ hashFiles('shared/src/**', 'shared/build.gradle.kts', 'native/**', 'gradle/**', '*.gradle.kts', 'gradle.properties', 'TERMS.md', 'PRIVACY.md', 'LICENSE') }}
-      - name: Build iOS simulator framework
-        if: steps.apple-cache.outputs.cache-hit != 'true'
-        run: ./gradlew :shared:linkDebugFrameworkIosSimulatorArm64 --stacktrace
-      - name: Cross-compile native emulator SDK for iOS simulator
-        if: steps.apple-cache.outputs.cache-hit != 'true'
-        run: sh native/build-ios.sh
-      - name: Conserver les binaires Apple après compilation
-        if: steps.apple-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
-        with:
-          path: |
-            shared/build
-            native/build-ios
-          key: ${{ steps.apple-cache.outputs.cache-primary-key }}
-      - name: Vérifier les adaptateurs Swift
-        run: |
-          sh iosApp/run-checked.sh xcrun --sdk iphonesimulator swiftc -parse-as-library -typecheck \
-            -target arm64-apple-ios15.0-simulator \
-            -sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)" \
-            -I native/build-ios/iphonesimulator/include \
-            -F shared/build/bin/iosSimulatorArm64/debugFramework \
-            iosApp/Sources/*.swift
-      - name: Installer XcodeGen si nécessaire
-        run: command -v xcodegen || brew install xcodegen
-      - name: Construire et tester l'application iOS
-        env:
-          RAVENEMU_PREBUILT_SHARED: "YES"
-        run: sh iosApp/ci-test.sh
-      - name: Publier l'application pour simulateur Apple Silicon
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: ravenemu-ios-simulator
-          path: iosApp/build/RavenEmu-simulator.zip
+            android/build/outputs/apk/debug/android-debug.apk
+            android/build/outputs/sources/ravenemu-native-sources.tar.gz
           if-no-files-found: error
           retention-days: 7
-      - name: Conserver les résultats de test iOS
-        if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: ravenemu-ios-test-results
-          path: iosApp/build/test-run.*/results.xcresult
-          if-no-files-found: ignore
-          retention-days: 7
-
-  prerelease:
-    name: Android - publication de la bêta
-    needs: [policy, native, android, ios]
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
-    permissions:
-      actions: read
-      contents: write
-    steps:
-      - name: Publier l'APK signé dans les Releases
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          CI_RUN_ID: ${{ github.run_id }}
-          CI_RUN_NUMBER: ${{ github.run_number }}
-          COMMIT_SHA: ${{ github.sha }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          tag="android-beta-$CI_RUN_NUMBER"
-          dist="$RUNNER_TEMP/ravenemu-release"
-          mkdir -p "$dist"
-          gh run download "$CI_RUN_ID" --name ravenemu-android-beta --dir "$dist"
-          test -s "$dist/ravenemu-beta.apk"
-          (cd "$dist" && sha256sum ravenemu-beta.apk > SHA256SUMS.txt)
-          notes="$RUNNER_TEMP/ravenemu-release-notes.md"
-          cat > "$notes" <<EOF
-          Bêta Android 8.0 et plus, construite et signée après validation des quatre jobs de CI.
-
-          Téléchargez **ravenemu-beta.apk** dans les fichiers ci-dessous et installez-le directement, sans ZIP ni compte GitHub.
-          Les prochaines bêtas signées s'installent par-dessus celle-ci. Si vous venez d'un ancien APK dont la signature diffère, exportez vos sauvegardes avant la première désinstallation.
-
-          - Version Android (versionCode) : $CI_RUN_NUMBER
-          - Commit : $COMMIT_SHA
-          - CI : https://github.com/$GH_REPO/actions/runs/$CI_RUN_ID
-          - Empreinte du téléchargement : SHA256SUMS.txt
-
-          La compatibilité des jeux et les performances restent en cours de validation sur appareil. Aucun jeu inclus ; aucune application iOS distribuée.
-          EOF
-          # Une relance reprend un brouillon, sans remplacer une préversion publiée.
-          if gh release view "$tag" --json isDraft > "$dist/release.json" 2> "$dist/release-error.txt"; then
-            if [[ "$(jq -r .isDraft "$dist/release.json")" != "true" ]]; then
-              echo "La préversion $tag est déjà publiée."
-              exit 0
-            fi
-          else
-            gh release create "$tag" --target "$COMMIT_SHA" \
-              --title "RavenEmu Android - bêta $CI_RUN_NUMBER" \
-              --prerelease --latest=false --draft --notes-file "$notes"
-          fi
-          gh release upload "$tag" "$dist/ravenemu-beta.apk" "$dist/SHA256SUMS.txt" --clobber
-          gh release edit "$tag" --draft=false --prerelease --latest=false --notes-file "$notes"

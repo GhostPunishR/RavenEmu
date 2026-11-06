@@ -1,20 +1,24 @@
-# RavenEmu Android (application de développement)
+# RavenEmu Android
 
-This is an **independent experimental Android application** that does not
-replace the released RavenEmu beta. Application ID: `com.ravenemu.dev`.
+The RavenEmu Android application: Java views, a JNI bridge and native C
+drivers over the C frontend. Since 6 November 2026 it is the repository's
+only application; the Kotlin/Compose beta and iOS were removed (git history,
+commit `de1c9cc`). Application ID: `com.ravenemu.dev`, installed beside the
+beta `com.ravenemu.preview` without reading its data.
 Requires Android 8.0+ and an **ARM64** phone (arm64-v8a).
 
-## Interface d'origine sans Kotlin dans le module migré
+## Interface d'origine sans Kotlin
 
 Le lancement ouvre `HomeActivity.java`, une adaptation en **Java
 Android Views** du design déjà présent dans la bêta RavenEmu. Les couleurs
 (`#0B0C12`, `#191B28`, `#A78BFA`), la barre d'outils avec ⚙ / + / ⋮,
-le champ de recherche, la grille/listes de jaquettes, les onglets par console,
-le pied de page « RavenEmu By GhostPunishR » et la fiche du jeu reprennent
-le code source de référence `shared/theme/RavenColors.kt`,
-`shared/library/LibraryComponents.kt` et `LibraryDialogs.kt` **pour
-l'apparence seulement**. Ces fichiers Kotlin ne sont pas compilés ni utilisés
-dans `android`.
+le champ de recherche, la grille/listes de jaquettes, les onglets par console
+(une page par console, tournée d'un appui sur son icône ou d'un glissement à
+gauche ou à droite, comme le `HorizontalPager` de la bêta), le pied de page « RavenEmu By GhostPunishR » et la fiche du jeu reprennent
+le code source de référence de la bêta `shared/theme/RavenColors.kt`,
+`shared/library/LibraryComponents.kt` et `LibraryDialogs.kt` (historique git,
+commit `de1c9cc`) **pour l'apparence seulement**. Aucun code Kotlin n'est
+compilé ni utilisé dans `android`.
 
 La couche Android de migration utilise uniquement **Java**, le frontend et
 le rendu restent **C**, et RavenCore reste **C++20**. Les fichiers
@@ -93,7 +97,7 @@ conclure à une parité avec la bêta.
 - `RomLibrary.java`: offline private GB/GBC/GBA catalogue, SHA-256 identities,
   verified ROM copies and atomic JSON index. No broad storage permission.
 - `CoverRepository.java`: local-only cover import via SAF, bounded PNG
-  conversion (maximum 512 px edge, 8 MiB source) and atomic private storage
+  conversion (maximum 768 px edge, 8 MiB source) and atomic private storage
   by ROM SHA-256; removal affects no ROMs, saves or other files.
 - `CoverAdapter.java`: image thumbnails decoded on a background executor,
   with a bounded 32-image LRU cache and text fallback.
@@ -132,7 +136,7 @@ APK: `android/build/outputs/apk/debug/android-debug.apk`.
 This is Gradle's debug variant, whose native code the NDK compiles at `-O0`.
 `src/main/cpp/CMakeLists.txt` adds `-O2` to every native target (frontend,
 rcheevos, the RavenCore cores, the drivers) and keeps the debug symbols, as
-the beta does in `native/CMakeLists.txt`: at `-O0` RavenCore's GBA core runs
+the beta did in its `native/CMakeLists.txt`: at `-O0` RavenCore's GBA core runs
 about six times slower and every game crawls on a phone.
 `scripts/check_native_optimization.py` reads the compile databases Gradle
 leaves under `android/.cxx` and fails the CI on any unoptimised command.
@@ -142,7 +146,7 @@ Activity recreation/import, sheet gestures and multi-touch controls tests.
 The standalone `raven_native_input_test` target in `frontend/CMakeLists.txt`
 tests the input driver through CTest without Android or a commercial ROM.
 The test SDK is resolved through Gradle;
-the application remains Java-only, without Compose or `:shared`.
+the application remains Java-only, without Kotlin or Compose.
 
 The build should package `libraven_android.so`,
 `ravenemu_gb_libretro.so`, `ravenemu_gbc_libretro.so` and
@@ -560,8 +564,9 @@ This is an integration prototype, not a release candidate.
   for RetroAchievements' approval of RavenEmu, as in the beta.
   No wireless/local link cable or Delta skins yet.
 - Cover images must be manually selected by the user from local documents.
-  Import is limited to 8 MiB and 4096 x 4096 input, decoded into 512 px PNG
-  thumbnails. No artwork is bundled or fetched online.
+  Import is limited to 8 MiB and 4096 x 4096 input, kept as PNG of at most
+  768 px a side, then decoded for each cover's own size in pixels (grid,
+  list, game sheet). No artwork is bundled or fetched online.
 - Native pacing follows the core FPS, with bounded catch-up. It is not yet
   synchronized to the audio device clock. GLSurfaceView still renders
   continuously at the display refresh rate.
@@ -571,8 +576,6 @@ This is an integration prototype, not a release candidate.
 - Only one Libretro core instance may exist at once.
 - The Android APK and gameplay have to be validated on physical hardware;
   passing CI shows only that it compiled.
-
-The existing `androidApp/`, `iosApp/`, app ID and saves are untouched.
 
 ## Structure actuelle
 
@@ -585,7 +588,7 @@ The existing `androidApp/`, `iosApp/`, app ID and saves are untouched.
 - `../../tests/hardware/` : tests hôtes des adaptateurs.
 - `../../legal/attributions/` : provenance des sources adaptées.
 
-L'identifiant de développement est `com.ravenemu.dev`, distinct de la bêta et de l'ancienne prévisualisation. Les données privées de l'ancienne prévisualisation ne sont ni migrées ni supprimées automatiquement.
+L'identifiant est `com.ravenemu.dev`, distinct de la bêta `com.ravenemu.preview` et de l'ancienne prévisualisation. Leurs données privées ne sont ni lues, ni migrées, ni supprimées automatiquement.
 
 ## Sous-packages Java
 
@@ -609,5 +612,3 @@ Les tests JVM reflètent les mêmes packages. Le manifeste déclare les classes 
 L'APK `com.ravenemu.dev` utilise le logo Raven fourni pour la migration dans
 `src/main/res/drawable-nodpi/ravenemu_launcher.webp`. Le lanceur Android
 résout `@mipmap/ic_launcher` vers une icône adaptative sur Android 8.0+.
-Ce changement est limité à l'application de migration ; l'icône de
-`androidApp/` (bêta) n'est pas modifiée.

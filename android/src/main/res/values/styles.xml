@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Color tokens taken from shared/theme/RavenColors.kt (the existing app).
-         Java UI in androidNative deliberately does not use Kotlin or Compose. -->
+    <!-- Color tokens taken from the beta's shared/theme/RavenColors.kt (git
+         history, commit de1c9cc). The Java UI deliberately uses no Kotlin or Compose. -->
     <style name="RavenEmuNativeTheme" parent="RavenEmuNativeTheme.Base" />
     <style name="RavenEmuNativeTheme.Base" parent="android:style/Theme.Material.NoActionBar">
         <item name="android:colorAccent">#A78BFA</item>

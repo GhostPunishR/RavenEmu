@@ -1,6 +1,6 @@
 # RetroAchievements' official SDK (rcheevos, MIT), pinned to the revision the
-# beta reviewed, with the beta's two safety fixes (native/cmake, shared with
-# RavenEmuDSK) applied to a copy: FetchContent's checkout is never modified,
+# beta reviewed, with the beta's two safety fixes (its native/cmake, commit
+# de1c9cc; shared with RavenEmuDSK) applied to a copy: FetchContent's checkout is never modified,
 # and a SDK update that breaks a precondition stops the configure step.
 set(RAVEN_RCHEEVOS_REVISION "1433173220a7eaede6a9ed7a18e94117be1821e0")
 FetchContent_Declare(rcheevos

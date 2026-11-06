@@ -26,7 +26,8 @@ import java.util.ArrayDeque;
 
 /** RetroAchievements over the game, after the beta's RetroOverlays.kt: the
  * one-at-a-time banner (its badge drops in, then the band unfolds; the
- * reverse to leave; an award is framed in gold), and under it the measured
+ * reverse to leave; an award is framed in gold; it opens once its badge is
+ * fetched, as in the beta's showUnlocks), and under it the measured
  * progress of an achievement, at the top of the picture or at the bottom;
  * and at the bottom, the active challenges and leaderboard trackers, each
  * until rcheevos hides it (RetroIndicatorState.kt). UI thread; it never
@@ -34,6 +35,9 @@ import java.util.ArrayDeque;
 final class AchievementOverlay extends FrameLayout {
     static final int GOLD = 0xfff4c152;
     static final int DROP_MILLIS = 300, UNFOLD_MILLIS = 350;
+    /** As the beta: a banner waits this long at most for its badge, then
+     * opens with the star; it never changes while shown. */
+    static final int BADGE_WAIT_MILLIS = 2_000;
     private static final int MAX_QUEUED = 8, MAX_INDICATORS = 4;
     private final Handler main = new Handler(Looper.getMainLooper());
     private final UnlockChime chime = new UnlockChime();
@@ -59,9 +63,11 @@ final class AchievementOverlay extends FrameLayout {
     private AchievementNotices.Notice showing;
     private String progressBadge = "";
     private Animator running;
-    private int serial;
+    /** The next banner while its badge is fetched; null otherwise. */
+    private AchievementNotices.Notice fetching;
     private boolean released;
     private final Runnable leave = this::leave;
+    private final Runnable waited = () -> { if (fetching != null) fetched(fetching); };
     private final Runnable hideProgress = () -> fadeProgress(false);
 
     /** The colours of the Activity it belongs to (Settings → Interface → Thème). */
@@ -152,6 +158,7 @@ final class AchievementOverlay extends FrameLayout {
         if (!settings.unlockPopups) {
             queue.removeIf(notice -> notice.award);
             if (showing != null && showing.award) leaveNow();
+            if (fetching != null && fetching.award) stopFetching();
         }
         if (!settings.progressPopups) fadeProgress(false);
         placeColumn();
@@ -172,10 +179,13 @@ final class AchievementOverlay extends FrameLayout {
         if ("hardcore_reset".equals(event.kind)) clearIndicators();
         AchievementNotices.Notice notice = AchievementNotices.of(event);
         if (notice == null) return;
-        if (notice.award && settings.sound && soundOn) chime.play(volume);
-        if (notice.award && !settings.unlockPopups) return;
+        if (notice.award && !settings.unlockPopups) {
+            // No banner: the chime alone (a banner rings when it opens).
+            if (settings.sound && soundOn) chime.play(volume);
+            return;
+        }
         if (queue.size() < MAX_QUEUED) queue.add(notice);
-        if (showing == null) next();
+        next();
     }
 
     /** The game closes: nothing is left on screen or queued. */
@@ -241,10 +251,38 @@ final class AchievementOverlay extends FrameLayout {
     /** The banner's text, for tests and accessibility. */
     CharSequence bannerText() { return showing == null ? null : showing.heading + " · " + showing.title; }
 
+    /** The next banner, once its badge is known: as in the beta, it is
+     * fetched before the banner opens (BADGE_WAIT_MILLIS at most). */
     private void next() {
+        if (showing != null || fetching != null || released) return;
+        final AchievementNotices.Notice head = queue.peek();
+        if (head == null) return;
+        if (head.image.isEmpty() || badges.cached(head.image) != null) {
+            open();
+            return;
+        }
+        fetching = head;
+        // Armed first: a badge known at once opens the banner within fetch().
+        main.postDelayed(waited, BADGE_WAIT_MILLIS);
+        badges.fetch(head.image, image -> fetched(head));
+    }
+
+    /** The awaited badge arrived, failed, or took too long. */
+    private void fetched(AchievementNotices.Notice notice) {
+        if (released || fetching != notice) return;
+        stopFetching();
+        if (queue.peek() == notice) open();
+        else next();
+    }
+
+    private void stopFetching() {
+        fetching = null;
+        main.removeCallbacks(waited);
+    }
+
+    private void open() {
         showing = queue.poll();
         if (showing == null) return;
-        final int shown = ++serial;
         bannerHeading.setText(showing.heading);
         bannerHeading.setVisibility(showing.heading.isEmpty() ? GONE : VISIBLE);
         bannerHeading.setTextColor(showing.award ? GOLD : theme.secondary);
@@ -253,7 +291,11 @@ final class AchievementOverlay extends FrameLayout {
         ((RavenIcon) bannerStar.getDrawable()).setTint(showing.award ? GOLD : theme.accent);
         bannerBadge.setBackground(round(theme.surface, 7, 2, showing.award ? GOLD : theme.outline));
         banner.setContentDescription(showing.heading + ". " + showing.title);
-        badge(showing.image, bannerImage, bannerStar, () -> shown == serial);
+        // Fetched already, or the star for good: the banner never changes while shown.
+        Bitmap badge = badges.cached(showing.image);
+        bannerImage.setImageBitmap(badge);
+        bannerStar.setVisibility(badge == null ? VISIBLE : GONE);
+        if (showing.award && settings.sound && soundOn) chime.play(volume);
         banner.setVisibility(VISIBLE);
         banner.setTranslationY(offscreen());
         bannerText.setFraction(0f);
@@ -288,7 +330,7 @@ final class AchievementOverlay extends FrameLayout {
         }
         banner.setVisibility(GONE);
         showing = null;
-        ++serial;
+        stopFetching();
     }
 
     /** One stage after the other; `done` only if nothing replaced them. */

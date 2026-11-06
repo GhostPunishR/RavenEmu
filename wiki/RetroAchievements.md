@@ -1,6 +1,6 @@
 # RetroAchievements
 
-L'intégration de la version multiplateforme est raccordée sur **Android**, avec le SDK officiel **rcheevos 12.5.0** en mode **Softcore**. La connexion est facultative ; l'application peut être utilisée sans compte.
+L'intégration est raccordée dans l'application Android native, par le frontend C, avec le SDK officiel **rcheevos 12.5.0** en mode **Softcore**. La connexion est facultative ; l'application peut être utilisée sans compte.
 
 **La reconnaissance des jeux, l'affichage des badges et l'attribution synchronisée de succès restent à valider avec un compte et une ROM reconnue sur téléphone.** Un build réussi ne prouve pas un déblocage côté serveur.
 
@@ -57,9 +57,9 @@ La consultation fonctionne en Softcore. Les tentatives et soumissions officielle
 
 ## Préparation du mode Hardcore
 
-Le verrou `HardcoreAvailability.APPROVED` reste à `false`. Le réglage ne peut pas activer ce mode tant que RavenEmu n'a pas été validé par RetroAchievements ([RAdmin](https://retroachievements.org/messages/create?to=RAdmin)).
+Le verrou `AwardPolicy.HARDCORE_APPROVED` reste à `false`. Le réglage ne peut pas activer ce mode tant que RavenEmu n'a pas été validé par RetroAchievements ([RAdmin](https://retroachievements.org/messages/create?to=RAdmin)).
 
-L'identifiant HTTP (User-Agent) est composé à partir du build, sans version recopiée à la main, par exemple `RavenEmu/0.2.0 (Android 14; arm64-v8a) RavenCore/0.8.0 rcheevos/12.5` : version numérique de l'application, version d'Android et architecture, version du moteur et clause du SDK. Le même identifiant est envoyé au serveur d'images. Le nom du client, `RavenEmu`, est aussi celui de la version PC : le format reste à confirmer avec RAdmin.
+L'identifiant HTTP (User-Agent) est composé à partir du build, sans version recopiée à la main, par exemple `RavenEmu/0.1 (Android 15; arm64-v8a) RavenCore/0.15.0 rcheevos/12.5` : version numérique de l'application, version d'Android et architecture, version du moteur et clause du SDK. Le même identifiant est envoyé au serveur d'images. Le nom du client, `RavenEmu`, est aussi celui de la version PC : le format reste à confirmer avec RAdmin.
 
 Ce que le code fait déjà en Hardcore :
 - **Barrière de démarrage.** Le jeu n'avance pas tant que le compte n'est pas connecté et que la ROM n'est pas identifiée ; le SDK continue d'être servi pendant l'attente. Dès que le jeu est reconnu, il redémarre depuis l'allumage, comme le demande le SDK, pour effacer les quelques images éventuellement jouées avant.
@@ -78,7 +78,6 @@ Références : [User-Agent et validation](https://github.com/RetroAchievements/r
 - Hardcore reste désactivé.
 - Les classements se consultent en Softcore ; les soumissions restent indisponibles tant que le Hardcore est verrouillé.
 - Les déblocages et leur synchronisation nécessitent une validation réelle.
-- La première session iOS raccorde le lecteur ; son service RetroAchievements reste à développer.
 
 ## Données et réseau
 
@@ -90,4 +89,4 @@ Aucune ROM ni sauvegarde n'est téléversée. Pour les détails de conservation 
 
 Indiquez le commit RavenEmu, l'appareil, la console, le jeu/région, l'étape qui échoue et le message visible. Ne publiez ni mot de passe, ni jeton, ni ROM. Voir [Dépannage](https://github.com/GhostPunishR/RavenEmu/blob/main/wiki/Depannage.md).
 
-Source : [contrôleur Android](https://github.com/GhostPunishR/RavenEmu/blob/main/androidApp/src/main/kotlin/com/ravenemu/android/retro/AchievementsController.kt).
+Sources : [succès dans le lecteur](https://github.com/GhostPunishR/RavenEmu/blob/main/android/src/main/java/com/ravenemu/app/ui/player/PlayerAchievements.java) et [module C](https://github.com/GhostPunishR/RavenEmu/blob/main/frontend/src/achievements.c).

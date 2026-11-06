@@ -1,6 +1,6 @@
 # Consoles et compatibilité
 
-La version multiplateforme utilise les moteurs GB, GBC et GBA de [RavenCore](https://github.com/GhostPunishR/RavenCore), récupérés à une **révision épinglée** dans la [configuration native](https://github.com/GhostPunishR/RavenEmu/blob/main/native/CMakeLists.txt).
+L'application utilise les moteurs GB, GBC et GBA de [RavenCore](https://github.com/GhostPunishR/RavenCore), chargés comme cores Libretro et récupérés à une **révision épinglée** dans la [configuration du frontend](https://github.com/GhostPunishR/RavenEmu/blob/main/frontend/CMakeLists.txt).
 
 Les possibilités d'un moteur dans RavenCore ne sont pas toutes exposées dans l'application. Les anciennes descriptions matérielles de l'ancienne application ne constituent pas une liste de fonctions disponibles dans ce lecteur.
 
@@ -46,9 +46,8 @@ Une ROM acceptée et un build réussi ne garantissent pas une partie jouable ou 
 
 ## Fonctions à ne pas confondre
 
-- Le câble link relie deux jeux du même téléphone, ou deux téléphones sur le même réseau Wi-Fi ([Jouer à deux](https://github.com/GhostPunishR/RavenEmu/blob/main/wiki/Jouer-a-deux.md)). L'infrarouge et l'adaptateur sans fil ne sont pas raccordés.
-- Les skins `.deltaskin` en portrait sont intégrés sur Android et restent à valider sur appareil ; le déplacement libre des commandes n’est pas proposé.
-- La première intégration du lecteur iOS est raccordée ; les essais de compatibilité sur appareil restent à effectuer.
+- Le câble link relie deux jeux du même téléphone ([Jouer à deux](https://github.com/GhostPunishR/RavenEmu/blob/main/wiki/Jouer-a-deux.md)) ; le câble entre deux téléphones n'est pas encore dans l'application native. L'infrarouge et l'adaptateur sans fil ne sont pas raccordés.
+- Les skins `.deltaskin`, en portrait et en paysage, sont intégrés et restent à valider sur appareil ; les commandes tactiles se déplacent librement depuis le menu du jeu.
 - [RetroAchievements](https://github.com/GhostPunishR/RavenEmu/blob/main/wiki/RetroAchievements.md) fonctionne en Softcore dans l'intégration, avec validation réelle des déblocages encore nécessaire. Hardcore est désactivé.
 
 ## Résultats par jeu

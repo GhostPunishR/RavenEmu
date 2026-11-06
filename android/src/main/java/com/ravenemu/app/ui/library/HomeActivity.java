@@ -43,8 +43,9 @@ import java.util.concurrent.Executors;
 
 /**
  * Java-only adaptation of RavenEmuApp's EXISTING library design.
- * Visual source of truth: shared/theme/RavenColors.kt and
- * shared/library/LibraryComponents.kt, not a new or generic Android UI.
+ * Visual source of truth: the beta's shared/theme/RavenColors.kt and
+ * shared/library/LibraryComponents.kt (git history, commit de1c9cc), not a
+ * new or generic Android UI.
  *
  * The shell uses Android Views; the emulation path remains C/JNI/C++.
  * Never reads the beta package's library or saved data.
@@ -62,6 +63,8 @@ public final class HomeActivity extends Activity implements RavenTheme.Host {
     private String selectedCoverKey;
     private String searchText = "";
     private String selectedPage = "";
+    /** "" for all the games, then each console with games, as the beta's pager. */
+    private final List<String> pages = new ArrayList<>();
     private boolean listMode;
 
     private TextView heading, footnote;
@@ -202,7 +205,19 @@ public final class HomeActivity extends Activity implements RavenTheme.Host {
         cards.setOnItemClickListener((parent, view, position, id) -> {
             if (position >= 0 && position < shown.size()) showDetails(shown.get(position));
         });
-        root.addView(cards, new LinearLayout.LayoutParams(-1, 0, 1));
+        // Swiping sideways turns the console pages, as the beta's HorizontalPager.
+        PageSwipe swipe = new PageSwipe(this, new PageSwipe.Pages() {
+            @Override public boolean has(int direction) {
+                int next = pages.indexOf(selectedPage) + direction;
+                return pages.size() > 1 && next >= 0 && next < pages.size();
+            }
+            @Override public void turn(int direction) {
+                if (has(direction)) showPage(pages.get(pages.indexOf(selectedPage) + direction));
+            }
+        });
+        swipe.setBackgroundColor(theme.background);
+        swipe.addView(cards, new FrameLayout.LayoutParams(-1, -1));
+        root.addView(swipe, new LinearLayout.LayoutParams(-1, 0, 1));
 
         tabs = new LinearLayout(this);
         tabs.setGravity(Gravity.CENTER);
@@ -255,7 +270,7 @@ public final class HomeActivity extends Activity implements RavenTheme.Host {
                 }
             }
         }
-        List<String> pages = new ArrayList<>();
+        pages.clear();
         if (populated.size() != 1) pages.add("");
         pages.addAll(populated);
         if (pages.isEmpty()) pages.add("");
@@ -278,11 +293,7 @@ public final class HomeActivity extends Activity implements RavenTheme.Host {
             LinearLayout.LayoutParams parameter = new LinearLayout.LayoutParams(dp(36), dp(36));
             parameter.setMargins(dp(4), 0, dp(4), 0);
             tabs.addView(option, parameter);
-            option.setOnClickListener(view -> {
-                selectedPage = page;
-                updatePages();
-                updateCards();
-            });
+            option.setOnClickListener(view -> showPage(page));
         }
     }
 
@@ -329,6 +340,14 @@ public final class HomeActivity extends Activity implements RavenTheme.Host {
                 .setNegativeButton("Annuler", null).create();
         partnerDialog.show();
         partnerDialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(theme.accent);
+    }
+
+    /** A console's page (from its icon or a swipe), from its first game. */
+    private void showPage(String page) {
+        selectedPage = page;
+        updatePages();
+        updateCards();
+        cards.setSelection(0);
     }
 
     private String pageTitle(String system) {
@@ -393,17 +412,23 @@ public final class HomeActivity extends Activity implements RavenTheme.Host {
         spacing.topMargin = dp(12);
         panel.addView(coverRow, spacing);
 
-        android.widget.ImageView cover = new android.widget.ImageView(this);
-        cover.setBackground(shape(theme.outline, 10, density));
-        cover.setScaleType(android.widget.ImageView.ScaleType.CENTER_CROP);
-        coverRow.addView(cover, new LinearLayout.LayoutParams(dp(90), dp(105)));
+        // The cover exactly as a tile of the library shows it (the owner's
+        // wish; the beta's sheet had a smaller 90 × 105 dp one).
+        CoverArtwork cover = new CoverArtwork(this, theme, false);
+        cover.setGame(entry);
+        cover.setCover(null);
+        int[] coverSize = gridCoverSize();
+        coverRow.addView(cover, new LinearLayout.LayoutParams(coverSize[0], coverSize[1]));
         io.execute(() -> {
             try {
-                android.graphics.Bitmap image = CoverRepository.load(getFilesDir(), entry.key, 160);
+                android.graphics.Bitmap image = CoverRepository.load(getFilesDir(), entry.key,
+                        coverSize[0], coverSize[1]);
                 if (image != null) runOnUiThread(() -> {
-                    if (!destroyed) cover.setImageBitmap(image);
+                    if (!destroyed) cover.setCover(image);
                 });
-            } catch (IOException ignored) {}
+            } catch (IOException | RuntimeException ignored) {
+                // A damaged cover leaves the console's placeholder.
+            }
         });
 
         LinearLayout controls = new LinearLayout(this);
@@ -479,6 +504,17 @@ public final class HomeActivity extends Activity implements RavenTheme.Host {
             });
         });
         dialog.show();
+    }
+
+    /** A grid tile's cover, in pixels, for the library's current width
+     * (whichever view is shown): the sheet's cover takes the same. */
+    private int[] gridCoverSize() {
+        int width = cards != null && cards.getWidth() > 0 ? cards.getWidth()
+                : getResources().getDisplayMetrics().widthPixels;
+        if (!listMode && cards != null && cards.getColumnWidth() > 0)
+            return new int[]{Math.max(1, cards.getColumnWidth() - 2 * dp(CoverArtwork.GRID_SIDE_DP)),
+                    dp(CoverArtwork.GRID_HEIGHT_DP)};
+        return CoverArtwork.gridSize(width, getResources().getDisplayMetrics().density);
     }
 
     private Button action(String label) {

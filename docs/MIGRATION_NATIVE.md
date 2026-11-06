@@ -1,11 +1,54 @@
 # Migration native de RavenEmu
 
+> **Bascule du 6 novembre 2026.** Sur décision du propriétaire, la migration est
+> fusionnée dans `main` et la bêta (`androidApp/`, `shared/`, `iosApp/`,
+> `native/`) est retirée, iOS compris. Le reste de ce document retrace la
+> migration tranche par tranche ; ses mentions de la bêta décrivent l'état
+> d'alors. Voir [Bascule et écarts restants](#bascule-et-écarts-restants).
+>
 > Réorganisation du 29 octobre 2026 : `android/` (application, JNI et pilotes matériels), `frontend/` (C et Libretro), `tests/hardware/` (tests matériels), `legal/attributions/` (provenance). Le nouvel APK de développement `com.ravenemu.dev` est isolé des données de la bêta et de l'ancienne prévisualisation, sans migration automatique.
 
-Branche de travail : `migration/native-libretro`, dérivée de `main`.
+Branche de travail pendant la migration : `migration/native-libretro`, fusionnée dans `main` le 6 novembre 2026.
 Objectif : frontend C natif + cores C++20 par l'ABI Libretro, couche Android
 Java/JNI et pilotes vidéo/audio/commandes natifs, selon l'architecture de
 RetroArch Plus, sans remplacer les moteurs maison RavenCore.
+
+## Bascule et écarts restants
+
+Le 6 novembre 2026, le propriétaire a demandé de fusionner la migration jusqu'à
+`main`, de supprimer la bêta, iOS compris, et d'aligner le site, la
+documentation et le README sur l'application native.
+
+- **Retirés** : `androidApp/` et `shared/` (bêta Android Kotlin/Compose),
+  `iosApp/` (application iOS), `native/` (ponts JNI et Swift de la bêta),
+  le workflow `ci-android.yml`. Leur code reste dans l'historique git, au
+  commit `de1c9cc`, dernier état de `main` avec la bêta.
+- **CI** : un seul workflow, `ci-applications.yml` (« RavenEmu / Applications ») :
+  règles du dépôt (`policy/`), frontend C et pilotes, APK ARM64 et tests Java.
+  Il ne publie plus de préversion `android-beta-N`.
+- **Règles du dépôt** : `AndroidPolicyTest` vérifie maintenant les méthodes
+  `native` de l'application Java contre les symboles JNI de
+  `android/src/main/cpp/`, et la permission d'accès au réseau local selon le
+  `targetSdk` de `android/`.
+- **Données** : l'application garde l'identifiant `com.ravenemu.dev`. Une bêta
+  `com.ravenemu.preview` déjà installée n'est ni lue ni modifiée.
+- **RavenCore** épinglé à la version 0.15.0 (codes de triche lus comme
+  l'appareil et comme dans RetroArch).
+
+Écarts de parité restants avec la bêta, à traiter comme du travail à faire :
+
+- **Câble link sans fil** entre deux téléphones : absent de l'application
+  native. Le protocole à reprendre est décrit dans
+  [ARCHITECTURE.md](../ARCHITECTURE.md#câble-link-sans-fil--protocole-à-reprendre).
+- **Import des états instantanés de la bêta** : les sauvegardes de cartouche
+  s'importent, pas les états (décision du propriétaire attendue).
+- **Validation sur téléphone** de l'ensemble (navigation trois boutons et
+  gestes, portrait et paysage, son, manettes, sauvegardes, RetroAchievements),
+  et les écarts notés dans chaque tranche ci-dessous.
+- **Publication** : variante signée, identifiant publié et workflow de
+  publication restent à décider ([RELEASING.md](../RELEASING.md)).
+- **iOS** : retiré sur décision du propriétaire, à reconstruire sur l'API C
+  du frontend si un jour il est demandé.
 
 ## Jalons et critères d'acceptation
 
@@ -31,7 +74,8 @@ RetroArch Plus, sans remplacer les moteurs maison RavenCore.
   Préserver `com.ravenemu.preview` et les clés/chemins de sauvegarde jusqu'à
   une migration de données testée.
 - Préserver le projet actuel (`androidApp/`, `shared/`, `iosApp/`,
-  `native/`) et la publication de `main` pendant la transition.
+  `native/`) et la publication de `main` pendant la transition. (Levé le
+  6 novembre 2026 par la décision du propriétaire.)
 - Conserver RavenCore en C++20, avec sa provenance et ses licences.
 - Éviter de mélanger l'API C RavenCore historique et Libretro dans une même
   instance de jeu : une seule interface fait autorité par session.
@@ -115,7 +159,8 @@ Voir [android/README.md](../android/README.md).
   aucune source distante ni jaquette propriétaire intégrée.
 - Décodage borné : fichier source inférieur ou égal à 8 MiB, dimensions
   comprises entre 16 et 4096 px et 16 Mpixels au maximum ; normalisation en
-  PNG de 512 px de côté au plus avec écriture atomique, dans le dossier privé
+  PNG de 512 px de côté au plus (768 px depuis les retours d'essai, voir plus
+  bas) avec écriture atomique, dans le dossier privé
   `native-library/covers/` identifié uniquement par SHA-256 de la ROM.
 - Liste Android désormais illustrée par miniatures décodées hors UI et mises
   en cache avec une limite de 32 images. Les jeux sans jaquette restent
@@ -1435,3 +1480,95 @@ Les petits écarts relevés après RA-3 et K (progression dans les états,
 avatars des classements, bandeaux sur le skin, skins en paysage, boutons sur
 l'image en portrait, vibration et capteurs de la manette) sont ainsi traités
 par les lots E-1 à E-6 ; il reste à les vérifier sur téléphone.
+
+## Retours d'essai : grille de la bibliothèque, bandeau du lancement, glissement entre consoles, jaquettes
+
+Trois défauts signalés par le propriétaire sur téléphone, et une demande.
+
+- **Tuiles qui se décalent en faisant défiler la bibliothèque.** Le titre
+  d'une tuile tient sur une à trois lignes, donc les tuiles d'une même rangée
+  n'avaient pas la même hauteur. Or `GridView` place la rangée suivante sous
+  la **dernière** tuile de la rangée, et non sous la plus haute ; en remontant,
+  il aligne même les tuiles par le bas. Les tuiles se chevauchaient ou se
+  décalaient, surtout après le chargement d'une jaquette, qui relance la mise
+  en page. `RavenLibraryAdapter` donne maintenant aux titres d'une rangée la
+  hauteur, en pixels, du plus haut d'entre eux (mesurée une fois par titre et
+  par largeur de colonne). La rangée garde la hauteur de sa plus haute tuile,
+  comme dans la grille de la bêta (`LazyVerticalGrid`) : une rangée de titres
+  courts reste basse.
+- **Étoile, puis icône du jeu, dans le bandeau du lancement.** Le bandeau
+  RetroAchievements s'ouvrait aussitôt avec l'étoile, puis l'icône du jeu
+  la remplaçait une fois téléchargée. Comme la bêta (`showUnlocks`), le bandeau
+  attend maintenant son image (`BadgeCache.fetch`) : jusqu'à 2 s
+  (`AchievementOverlay.BADGE_WAIT_MILLIS`). Si elle n'est pas arrivée, s'il n'y
+  en a pas ou si son téléchargement échoue, il s'ouvre avec l'étoile et la
+  garde : il ne change plus pendant qu'il est affiché. Le carillon d'un succès
+  sonne à l'ouverture du bandeau, comme dans la bêta. Quand les bandeaux de
+  succès sont désactivés, il sonne seul, comme avant.
+- Tests : `RavenLibraryAdapterTest` (rangées alignées en descendant puis en
+  remontant, titre long entier, rangée de titres courts plus basse, recherche
+  qui regroupe les rangées) ; `AchievementOverlayTest` (icône avant l'ouverture,
+  étoile gardée après 2 s, ouverture immédiate sans image à télécharger ou après
+  un échec, rien d'affiché si le jeu se ferme pendant le téléchargement).
+
+- **Changer de console en glissant** (demande du propriétaire : appuyer sur
+  les icônes était pénible). La bibliothèque de la bêta était un
+  `HorizontalPager` ; la version native n'avait que les icônes. `PageSwipe`
+  entoure maintenant la grille :
+  - un glissement horizontal fait suivre la page au doigt ;
+  - au-delà d'un tiers de la largeur, ou avec un geste rapide, la page part
+    et celle de la console voisine arrive de l'autre côté (Tous, Game Boy,
+    Game Boy Color, Game Boy Advance, selon les consoles présentes) ;
+    sinon elle revient en place ;
+  - sans page voisine de ce côté, elle ne cède qu'un peu ;
+  - un geste surtout vertical reste le défilement de la grille, qui garde la
+    main une fois lancé ;
+  - les icônes tournent toujours les pages, et une nouvelle page s'ouvre sur
+    ses premiers jeux.
+
+  Écart avec la bêta : pendant le glissement, la page voisine n'apparaît pas
+  encore à côté. Elle arrive à la fin du geste, alors que le pager de la bêta
+  montrait les deux pages côte à côte.
+  Test : `HomeActivityTest.swipingSidewaysTurnsTheConsolePagesAsInTheBeta`
+  (vers la gauche puis la droite, bords, geste court et lent, geste vertical,
+  icônes).
+
+- **Jaquettes floues, et pas au même format dans la fiche du jeu.** Les deux
+  problèmes viennent de la version native.
+  - À l'import, le décodage par puissances de 2 descendait *sous* la taille
+    visée : une image de 1000 × 1400 était gardée en 250 × 350.
+  - La grille relisait ensuite la jaquette en 256 px au plus, encore divisée
+    par 2 (180 × 250 pour une jaquette de 360 × 500), puis étirée sur une
+    tuile d'environ 430 px.
+  - La fiche du jeu la chargeait en 160 px, dans un cadre fixe de 90 × 105 dp.
+  - Correctifs dans `CoverRepository` :
+    - les jaquettes sont gardées jusqu'à 768 px de côté ;
+    - le décodage s'arrête à la plus grande réduction qui reste au-dessus de
+      la taille voulue, puis un seul redimensionnement filtré donne la taille
+      exacte ;
+    - le nouveau `load(files, key, largeur, hauteur)` rend l'image à la taille
+      réelle de son cadre en pixels (recadrée pour le remplir, jamais
+      agrandie).
+  - `CoverArtwork` (Java) reprend le composant du même nom de la bêta :
+    - image arrondie à 10 dp, liseré par-dessus ;
+    - sans image, pictogramme et nom de la console ;
+    - il sert à la grille, à la liste et à la fiche.
+  - Comme le propriétaire l'a demandé, la fiche montre la jaquette **aux
+    dimensions exactes d'une tuile de la bibliothèque** (la largeur de la
+    colonne sur 124 dp). La bêta avait un cadre plus petit de 90 × 105 dp.
+  - Les jaquettes importées avant ce correctif restent dans leur ancienne
+    taille : il faut les choisir à nouveau pour qu'elles soient nettes.
+  - Tests :
+    - `CoverRepositoryTest`, en Java pur : 768 px, décodage jamais sous la
+      taille voulue, image recadrée sans agrandissement ;
+    - `CoverImageQualityTest`, sur de vraies images : 549 × 768 gardés pour
+      1000 × 1400, tuile servie à sa taille, petite image non agrandie ;
+    - `RavenLibraryAdapterTest` : une tuile reçoit sa jaquette à sa taille en
+      pixels, coins arrondis ;
+    - `HomeActivityTest` : jaquette de la fiche aux dimensions d'une tuile.
+
+À vérifier sur téléphone : défilement rapide d'une grande bibliothèque avec
+jaquettes, en portrait et en paysage ; bandeau du lancement avec et sans réseau ;
+glissement entre consoles avec la navigation par gestes d'Android (le retour par
+le bord de l'écran reste au système) ; netteté d'une jaquette choisie à nouveau,
+dans la grille et dans la fiche.

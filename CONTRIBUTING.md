@@ -1,20 +1,21 @@
 # Contribuer à RavenEmu
 
-Les contributions de code, de documentation et de tests sont bienvenues. Ce dépôt contient le projet autonome RavenEmu : les commandes partent de sa racine.
+Les contributions de code, de documentation et de tests sont bienvenues. Ce dépôt contient l'application RavenEmu : les commandes partent de sa racine.
 
 ## Choisir le bon emplacement
 
 | Sujet | Emplacement |
 | --- | --- |
-| Interface et logique communes Android/iOS | `shared/` |
-| Lecteur, stockage, audio et services Android | `androidApp/` |
-| Hôte Apple et intégration Swift | `iosApp/` |
-| Ponts natifs et révisions épinglées | `native/` |
-| Règles de CI | `policy/` et `.github/workflows/` |
+| Interface, stockage et services Android (Java) | `android/src/main/java/` |
+| Pont JNI, pilotes vidéo, audio et entrées (C) | `android/src/main/cpp/` |
+| Frontend C, hôte Libretro et révision RavenCore épinglée | `frontend/` |
+| Tests des pilotes natifs | `tests/hardware/` |
+| Règles de CI et contrôles du dépôt | `policy/`, `scripts/` et `.github/workflows/` |
+| Provenance des sources adaptées | `legal/attributions/` |
 | Site et documentation | `docs/` et `wiki/` |
 | Moteurs d'émulation | [RavenCore](https://github.com/GhostPunishR/RavenCore) |
 
-Voir [ARCHITECTURE.md](ARCHITECTURE.md). Une correction du moteur se fait dans RavenCore ; sa révision épinglée est mise à jour séparément avec une validation d'intégration.
+Voir [ARCHITECTURE.md](ARCHITECTURE.md). L'application est écrite en Java, JNI et C : pas de Kotlin ni de Compose dans `android/`. Une correction du moteur se fait dans RavenCore ; sa révision épinglée est mise à jour séparément avec une validation d'intégration.
 
 ## Avant de développer
 
@@ -22,22 +23,22 @@ Recherchez une issue ou une PR similaire. Décrivez les chantiers importants ava
 
 ## Environnement et vérifications
 
-Prérequis : JDK 21, Gradle Wrapper du dépôt, SDK Android API 37 et CMake/NDK. iOS nécessite macOS, Xcode, CMake et XcodeGen. Voir [BUILDING.md](BUILDING.md).
+Prérequis : JDK 21, Gradle Wrapper du dépôt, SDK Android API 37, NDK et CMake. Voir [BUILDING.md](BUILDING.md).
 
 ```sh
-./gradlew :androidApp:testDebugUnitTest
-./gradlew :shared:testAndroidHostTest
-./gradlew :androidApp:lintDebug
-./gradlew :androidApp:assembleDebug
+./gradlew :android:testDebugUnitTest
+./gradlew :android:lintDebug
+./gradlew :android:assembleDebug
 ./gradlew :policy:test
-./gradlew :shared:tasks
+python3 scripts/check_native_layout.py
 ```
 
-Sur macOS :
+Frontend C et pilotes, sur Linux :
 
 ```sh
-./gradlew :shared:linkDebugFrameworkIosSimulatorArm64
-sh native/build-ios.sh
+cmake -S frontend -B build/native-frontend -DCMAKE_BUILD_TYPE=Release
+cmake --build build/native-frontend --parallel 2
+ctest --test-dir build/native-frontend --output-on-failure
 ```
 
 Ajoutez une vérification de régression lorsque le changement modifie un comportement. Précisez séparément ce qui a été compilé, testé et observé sur appareil.

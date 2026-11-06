@@ -1,6 +1,6 @@
 # Matrice de compatibilité des jeux
 
-Cette page concerne les tests de la **version multiplateforme** sur Android. Les résultats ancienne application ou ceux d'un moteur RavenCore construit séparément ne sont pas des validations du lecteur actuel.
+Cette page concerne les tests de l'**application Android native**. Les résultats de la bêta retirée ou ceux d'un moteur RavenCore construit séparément ne sont pas des validations du lecteur actuel.
 
 Aucun jeu testé n'est encore renseigné dans cette matrice. Cela ne signifie pas que tous les jeux sont incompatibles : aucun résultat suffisamment documenté n'a été inscrit ici.
 
@@ -22,13 +22,13 @@ Aucun jeu testé n'est encore renseigné dans cette matrice. Cela ne signifie pa
 
 ## Protocole
 
-1. Utilisez un build identifié de `multiplateforme.yml` et notez son **commit exact**. Le nom de version de prévisualisation seul ne distingue pas nécessairement deux builds.
+1. Utilisez un build identifié de `ci-applications.yml` et notez son **commit exact**. Le nom de version seul ne distingue pas deux builds.
 2. Notez le modèle de l'appareil, la version Android, la console et la région/révision de la ROM.
 3. Calculez le SHA-256 localement sans publier le fichier du jeu.
 4. Testez démarrage, commandes, vidéo et audio ; indiquez la durée de l'essai.
 5. Testez la sauvegarde normale, un état, puis la reprise après fermeture de l'application.
 6. Si un défaut apparaît, essayez aussi un démarrage sans ancien état.
-7. Précisez si RetroAchievements, les jaquettes en ligne ou des réglages particuliers sont actifs.
+7. Précisez si RetroAchievements, des codes de triche ou des réglages particuliers sont actifs.
 8. Ouvrez une issue reproductible et liez-la au résultat.
 
 Les mesures de frames calculées ne sont pas des FPS d'écran garantis. Un succès RetroAchievements nécessite une vérification séparée de sa reconnaissance et de sa synchronisation côté serveur.

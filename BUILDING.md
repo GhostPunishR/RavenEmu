@@ -1,74 +1,44 @@
 # Compiler RavenEmu
 
-Le projet Gradle autonome se trouve à la racine. L'interface Compose Multiplatform est partagée ; Android raccorde le lecteur GB/GBC/GBA, iOS raccorde une première session SwiftUI/Compose avec import, lecteur, audio et sauvegardes, à valider sur appareil. Voir [README.md](README.md), [ARCHITECTURE.md](ARCHITECTURE.md) et [CHANGELOG.md](CHANGELOG.md) pour les fonctions et les limites de la bêta.
+Le dépôt contient l'application Android native (`android/`, Java + JNI + C) et son frontend C (`frontend/`), qui charge les cores Libretro de [RavenCore](https://github.com/GhostPunishR/RavenCore). Voir [ARCHITECTURE.md](ARCHITECTURE.md) pour les responsabilités de chaque couche et [docs/MIGRATION_NATIVE.md](docs/MIGRATION_NATIVE.md) pour les écarts de parité restants.
+
+Toutes les commandes partent de la racine du dépôt.
 
 ## Android
 
-Prérequis : JDK 21, SDK Android API 37, CMake 3.22.1 minimum et NDK. Utilisez le Wrapper versionné :
+Prérequis : JDK 21, SDK Android API 37, NDK, CMake 3.22.1 minimum. Utilisez le Wrapper Gradle versionné :
 
 ```sh
 git clone https://github.com/GhostPunishR/RavenEmu.git
 cd RavenEmu
-./gradlew :androidApp:assembleDebug
-./gradlew :androidApp:testDebugUnitTest
-./gradlew :shared:testAndroidHostTest
-./gradlew :androidApp:lintDebug
+./gradlew :android:assembleDebug
+./gradlew :android:testDebugUnitTest
+./gradlew :android:lintDebug
 ./gradlew :policy:test
 ```
 
-APK Debug : `androidApp/build/outputs/apk/debug/androidApp-debug.apk`.
+APK de développement : `android/build/outputs/apk/debug/android-debug.apk`, identifiant `com.ravenemu.dev`, ARM64 (`arm64-v8a`), Android 8.0 (API 26) minimum. Il s'installe à côté de la bêta `com.ravenemu.preview` sans lire ses données.
 
-La CI publie la variante bêta non débogable, plus rapide sur téléphone, signée comme le build Debug :
+La compilation de l'APK construit aussi, par CMake, le frontend C, les pilotes natifs (GLES2, AAudio, entrées) et les trois cores Libretro de RavenCore. Le code natif est optimisé même dans l'APK Debug ; `scripts/check_native_optimization.py` le vérifie après une compilation.
 
-```sh
-./gradlew :androidApp:assembleBeta
-```
+## Frontend C et tests hôtes
 
-APK bêta : `androidApp/build/outputs/apk/beta/androidApp-beta.apk`. Voir [RELEASING.md](RELEASING.md) pour la signature et le transfert des données.
-
-Les tâches du module commun se découvrent avec `./gradlew :shared:tasks`. La génération des textes légaux lit `TERMS.md`, `PRIVACY.md` et `LICENSE` à la racine ; ces fichiers sont nécessaires à la compilation.
-
-## iOS (macOS)
-
-Prérequis : Xcode, JDK 21, CMake et [XcodeGen](https://github.com/yonaskolb/XcodeGen).
+Le frontend et ses pilotes se testent sur un ordinateur Linux, sans téléphone. Prérequis : un compilateur C/C++20, CMake, les bibliothèques EGL et GLES (`libegl-dev`, `libgles-dev`) et un JDK 21 pour le test du pont JNI RetroAchievements.
 
 ```sh
-cd iosApp
-xcodegen generate
-open RavenEmu.xcodeproj
+cmake -S frontend -B build/native-frontend -DCMAKE_BUILD_TYPE=Release
+cmake --build build/native-frontend --parallel 2
+ctest --test-dir build/native-frontend --output-on-failure
 ```
 
-Le script Xcode construit les archives natives et intègre `RavenShared` via `../gradlew`, situé à la racine du dépôt. Pour vérifier seulement le framework depuis cette racine :
-
-```sh
-./gradlew :shared:linkDebugFrameworkIosSimulatorArm64
-sh native/build-ios.sh
-```
-
-Le SDK Apple utilise `PLATFORM_NAME` (`iphonesimulator` par défaut, ou `iphoneos`). La première session iOS raccorde les imports de fichiers, la bibliothèque, le lecteur GB/GBC/GBA, l'audio et les sauvegardes. Aucun binaire iPhone signé n'est distribué. Voir [le périmètre et les essais restants](iosApp/README.md).
-
-Sur Apple Silicon, construire et exécuter les tests dans un simulateur disponible :
-
-```sh
-sh iosApp/ci-test.sh
-```
-
-La CI produit aussi `ravenemu-ios-simulator` : une application pour simulateur, pas une IPA pour iPhone.
+`-DRAVEN_VIDEO_PIXEL_TESTS=ON` ajoute les tests de rendu au pixel près, comme dans la CI.
 
 ## Liaison RavenCore
 
-La configuration [native/CMakeLists.txt](native/CMakeLists.txt) récupère RavenCore au commit `15675cc3af4f9b07f2e10cc5a7ca6234ea1c77cc` (version 0.14.0), API C `ravenemu_*` avec le câble link `ravenemu_link_*` et le câble distant `ravenemu_remote_link_*`. Les états sont au format GB/GBC 11 et GBA 17 ; le format GBA 17 relit les formats 16 à 11. Le SDK rcheevos est épinglé séparément au commit `1433173220a7eaede6a9ed7a18e94117be1821e0`.
+[frontend/CMakeLists.txt](frontend/CMakeLists.txt) récupère RavenCore au SHA complet d'un commit (`RAVEN_CORE_REVISION`) et en construit les cores Libretro GB, GBC et GBA. Aucun code moteur n'est copié dans ce dépôt ; publier une version de RavenCore ne change pas la révision utilisée. Le SDK rcheevos est épinglé séparément au commit `1433173220a7eaede6a9ed7a18e94117be1821e0` ([frontend/cmake/rcheevos.cmake](frontend/cmake/rcheevos.cmake)).
 
-Le test hôte vérifie la liaison, la création des trois systèmes, une frame et de l'audio synthétiques ainsi que l'enregistrement/rechargement d'un état :
-
-```sh
-cmake -S native -B native/build-host -DCMAKE_BUILD_TYPE=Release -DRAVENEMU_BRIDGE_TESTS=ON
-cmake --build native/build-host --target ravenemu_bridge_smoke ravenemu_achievements_smoke --parallel 2
-ctest --test-dir native/build-host --output-on-failure
-```
-
-Les adaptateurs JNI et Swift utilisent le même header `ravenemu/bridge.h` de RavenCore. Aucun code moteur n'est copié dans ce dépôt. Les appels à une même instance sont sérialisés.
+Après un changement de révision, mettre à jour les licences embarquées (`android/src/main/assets/licenses/`), qui nomment le commit utilisé.
 
 ## Vérifications CI et appareil
 
-Le workflow [multiplateforme.yml](.github/workflows/multiplateforme.yml) vérifie le Wrapper, les règles du dépôt, le test de liaison native, l'APK bêta, les tests Android et communs sur JVM, Android Lint, le framework/SDK natif iOS et les adaptateurs Swift. Une compilation réussie ne remplace pas les essais visuels, audio, sauvegardes et RetroAchievements sur un appareil réel.
+Le workflow [RavenEmu / Applications](.github/workflows/ci-applications.yml) vérifie le Wrapper et les règles du dépôt, compile et teste le frontend C et ses pilotes, puis construit l'APK ARM64, exécute les tests Java (JVM et Robolectric) et Android Lint, et archive l'APK de développement avec ses sources natives. Une compilation réussie ne remplace pas les essais visuels, audio, sauvegardes et RetroAchievements sur un appareil réel.
