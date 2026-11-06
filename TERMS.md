@@ -35,7 +35,7 @@ RavenEmu n'est ni affilié à Delta, ni approuvé par ses auteurs : la lecture d
 
 RavenEmu propose une connexion facultative à [RetroAchievements](https://retroachievements.org). Sans connexion de votre part, aucun échange n'a lieu avec ce service. Lorsque vous vous connectez, votre usage de ce service relève de ses propres conditions et de sa propre politique de confidentialité, sur lesquelles le projet n'a aucune prise. RavenEmu n'est ni affilié à RetroAchievements, ni approuvé par ce service.
 
-La nouvelle version multiplateforme propose aussi une option facultative, **désactivée par défaut**, de jaquettes en ligne : si vous l'activez, l'application télécharge les jaquettes manquantes depuis `thumbnails.libretro.com`, un service tiers. Ces images appartiennent à leurs ayants droit ; elles ne sont ni distribuées avec RavenEmu, ni hébergées par le projet, et restent sur votre appareil. Ce que ce service reçoit est décrit dans la [politique de confidentialité](PRIVACY.md). Vous pouvez à tout moment désactiver l'option, retirer une jaquette ou choisir votre propre image.
+Une option facultative, **désactivée par défaut**, de jaquettes en ligne peut aussi être proposée (la bêta l'avait, l'application native actuelle ne l'a pas) : si vous l'activez, l'application télécharge les jaquettes manquantes depuis `thumbnails.libretro.com`, un service tiers. Ces images appartiennent à leurs ayants droit ; elles ne sont ni distribuées avec RavenEmu, ni hébergées par le projet, et restent sur votre appareil. Ce que ce service reçoit est décrit dans la [politique de confidentialité](PRIVACY.md). Vous pouvez à tout moment désactiver l'option, retirer une jaquette ou choisir votre propre image.
 
 ## Absence de garantie
 

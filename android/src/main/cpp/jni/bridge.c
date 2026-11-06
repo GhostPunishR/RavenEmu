@@ -1,0 +1,757 @@
+#include <jni.h>
+#include <android/log.h>
+#include <libretro.h>
+#include <ravenemu/frontend.h>
+#include <ravenemu/frame_pacer.h>
+#include "audio_pipeline.h"
+#include "bridge_internal.h"
+#include "gles2_renderer.h"
+#include "input_driver.h"
+#include "sensor_driver.h"
+#include "state_progress.h"
+#include "state_thumbnail.h"
+#include <time.h>
+
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, "RavenNative", __VA_ARGS__)
+#define MAX_ROM_BYTES (64u * 1024u * 1024u)
+#define MAX_FRAME_SIZE (2048u * 2048u)
+#define MAX_CORE_OPTIONS 64u
+
+static raven_frontend *session;
+static raven_input input = RAVEN_INPUT_INITIALIZER;
+/* Owned by the GL/emulation thread; Java combines the reasons to pause. */
+static int playback_paused = 1;
+static uint8_t *rgba_pixels;
+static size_t rgba_capacity;
+static int image_width, image_height;
+static int image_dirty, image_ready;
+static int preview_valid;
+/* Locked on the display when it divides the core rate, else the console clock. */
+static raven_frame_pacer frame_pacer;
+/* The display's refresh rate, as Android reports it; kept across games. */
+static double display_rate;
+/* The cartridge's motor, as the core last set it: strong and weak. */
+static uint16_t rumble_strength[2];
+/* Preemptive frames: as Settings → Général asks, under a cap this game
+ * lowers when the phone cannot replay that many in time. */
+static unsigned preempt_wanted, preempt_cap = RAVEN_FRONTEND_PREEMPT_MAX;
+static raven_replay_guard replay_guard;
+/* Linked games: the player shown, heard by the touch controls and the
+ * controller, and given the phone's motor and sensors (0 or 1). GL thread. */
+static unsigned link_focus;
+/* A message from the player itself, shown like the core's. */
+static char player_message[RAVEN_FRONTEND_MESSAGE_MAX];
+static int player_message_pending;
+static uint8_t stretch5(uint32_t value) {
+    return (uint8_t)((value << 3u) | (value >> 2u));
+}
+static uint8_t stretch6(uint32_t value) {
+    return (uint8_t)((value << 2u) | (value >> 4u));
+}
+
+/* The port of the player the phone plays: the only one, or the shown one. */
+static unsigned focus_port(void) {
+    return session && raven_frontend_players(session) == 2 ? link_focus : 0;
+}
+
+static void on_video(const raven_video_frame *frame, void *userdata) {
+    (void)userdata;
+    if (!frame || !frame->pixels) return;  /* Libretro frame duplication. */
+    unsigned w = frame->width, h = frame->height;
+    /* Linked games come side by side: only the shown player's half. */
+    unsigned first = 0;
+    if (session && raven_frontend_players(session) == 2) {
+        w /= 2;
+        first = link_focus ? w : 0;
+    }
+    if (!w || !h || (size_t)w * h > MAX_FRAME_SIZE) return;
+    const size_t required = (size_t)w * h * 4;
+    if (required > rgba_capacity) {
+        uint8_t *expanded = (uint8_t *)realloc(rgba_pixels, required);
+        if (!expanded) return;
+        rgba_pixels = expanded;
+        rgba_capacity = required;
+    }
+    const unsigned bytes_per_pixel = frame->pixel_format == RETRO_PIXEL_FORMAT_XRGB8888 ? 4 : 2;
+    if (frame->pitch < (size_t)(first + w) * bytes_per_pixel) return;
+    for (unsigned y = 0; y < h; ++y) {
+        const uint8_t *line = (const uint8_t *)frame->pixels + y * frame->pitch + (size_t)first * bytes_per_pixel;
+        for (unsigned x = 0; x < w; ++x) {
+            uint8_t r, g, b;
+            if (frame->pixel_format == RETRO_PIXEL_FORMAT_XRGB8888) {
+                uint32_t px;
+                memcpy(&px, line + x * 4u, 4);
+                r = (uint8_t)(px >> 16u);
+                g = (uint8_t)(px >> 8u);
+                b = (uint8_t)px;
+            } else {
+                uint16_t px;
+                memcpy(&px, line + x * 2u, 2);
+                if (frame->pixel_format == RETRO_PIXEL_FORMAT_RGB565) {
+                    r = stretch5((px >> 11u) & 31u);
+                    g = stretch6((px >> 5u) & 63u);
+                    b = stretch5(px & 31u);
+                } else {
+                    r = stretch5((px >> 10u) & 31u);
+                    g = stretch5((px >> 5u) & 31u);
+                    b = stretch5(px & 31u);
+                }
+            }
+            uint8_t *dest = rgba_pixels + ((size_t)y * w + x) * 4;
+            dest[0] = r; dest[1] = g; dest[2] = b; dest[3] = 255;
+        }
+    }
+    image_width = (int)w;
+    image_height = (int)h;
+    image_ready = image_dirty = 1;
+    preview_valid = 1;
+}
+
+static void on_audio(const int16_t *samples, size_t count, void *userdata) {
+    (void)userdata;
+    raven_audio_write(samples, count);
+}
+
+static int16_t on_input(unsigned port, unsigned device, unsigned index,
+                        unsigned id, void *userdata) {
+    (void)userdata;
+    if (port != focus_port() || device != RETRO_DEVICE_JOYPAD || index) return 0;
+    return raven_input_pressed(&input, id);
+}
+
+/* One phone, one motor and one set of sensors: the player's it plays. */
+static int on_rumble(unsigned port, unsigned effect, uint16_t strength, void *userdata) {
+    (void)userdata;
+    if (port != focus_port() || effect > RETRO_RUMBLE_WEAK) return 0;
+    rumble_strength[effect] = strength;
+    return 1;
+}
+
+static int on_sensor_state(unsigned port, unsigned action, unsigned rate, void *userdata) {
+    (void)userdata;
+    return port == focus_port() && raven_sensors_set_state(action, rate);
+}
+
+static float on_sensor_input(unsigned port, unsigned id, void *userdata) {
+    (void)userdata;
+    return port == focus_port() ? raven_sensors_read(id) : 0.0f;
+}
+
+static uint64_t monotonic_ns(void) {
+    struct timespec now;
+    if (clock_gettime(CLOCK_MONOTONIC, &now) != 0) return 0;
+    return (uint64_t)now.tv_sec * UINT64_C(1000000000) + (uint64_t)now.tv_nsec;
+}
+
+static void apply_preemption(void) {
+    if (session)
+        raven_frontend_set_preemptive_frames(session, preempt_wanted < preempt_cap ? preempt_wanted : preempt_cap);
+}
+
+/* After a frame that replayed: too slow too often, one frame less for this
+ * game, and the player is told. */
+static void lower_preemption_if_slow(uint64_t cost_ns) {
+    if (!raven_replay_guard_overloaded(&replay_guard, cost_ns, frame_pacer.core_fps)) return;
+    const unsigned current = raven_frontend_preemptive_frames(session);
+    if (!current) return;
+    preempt_cap = current - 1;
+    apply_preemption();
+    if (preempt_cap)
+        snprintf(player_message, sizeof(player_message),
+                 "Images préventives ramenées à %u pour ce jeu : le téléphone n'en rejoue pas %u à temps.",
+                 preempt_cap, current);
+    else
+        snprintf(player_message, sizeof(player_message),
+                 "Images préventives désactivées pour ce jeu : le téléphone ne rejoue pas une image à temps.");
+    player_message_pending = 1;
+}
+
+static void clear_frame(void) {
+    image_ready = image_dirty = 0;
+    preview_valid = 0;
+    raven_video_reset();
+    image_width = image_height = 0;
+}
+
+/* Core options from Java as alternating keys and values. A key the open core
+ * does not declare, or a value it does not offer, is skipped: the core keeps
+ * its own. Called on the emulation (GL) thread, like every core call. */
+static void apply_core_options(JNIEnv *env, jobjectArray options) {
+    if (!options || !session) return;
+    jsize count = (*env)->GetArrayLength(env, options);
+    if (count < 0 || (size_t)count > 2u * MAX_CORE_OPTIONS) {
+        LOGE("Too many core options: %d", (int)count);
+        return;
+    }
+    for (jsize i = 0; i + 1 < count; i += 2) {
+        jstring key = (jstring)(*env)->GetObjectArrayElement(env, options, i);
+        jstring value = (jstring)(*env)->GetObjectArrayElement(env, options, i + 1);
+        const char *k = key ? (*env)->GetStringUTFChars(env, key, NULL) : NULL;
+        const char *v = value ? (*env)->GetStringUTFChars(env, value, NULL) : NULL;
+        if (k && v && !raven_frontend_set_option(session, k, v))
+            LOGE("Core option %s=%s not offered by this core", k, v);
+        if (k) (*env)->ReleaseStringUTFChars(env, key, k);
+        if (v) (*env)->ReleaseStringUTFChars(env, value, v);
+        if (key) (*env)->DeleteLocalRef(env, key);
+        if (value) (*env)->DeleteLocalRef(env, value);
+    }
+}
+
+raven_frontend *raven_bridge_session(void) { return session; }
+
+static jstring failure(JNIEnv *env, const char *error) {
+    return (*env)->NewStringUTF(env, error ? error : "Unknown native error");
+}
+
+JNIEXPORT void JNICALL
+Java_com_ravenemu_app_bridge_NativeBridge_initGl(
+    JNIEnv *env, jclass clazz) {
+    (void)env;
+    (void)clazz;
+    raven_video_init_gl();
+    raven_frame_pacer_reset(&frame_pacer);
+    image_dirty = image_ready;
+}
+
+/* One game, or two linked by the core's cable: the ROM and its name each. */
+typedef struct jni_game {
+    jbyteArray rom;
+    jstring name;
+} jni_game;
+
+static jstring open_games(JNIEnv *env, jstring lib_dir, jstring files_dir, jstring core_name,
+                          jobjectArray core_options, const jni_game *games, unsigned count) {
+    if (!lib_dir || !files_dir || !core_name || count < 1 || count > 2)
+        return failure(env, "Missing ROM or core details");
+    jsize sizes[2] = {0, 0};
+    for (unsigned i = 0; i < count; ++i) {
+        if (!games[i].rom || !games[i].name) return failure(env, "Missing ROM or core details");
+        sizes[i] = (*env)->GetArrayLength(env, games[i].rom);
+        if (sizes[i] <= 0 || (size_t)sizes[i] > MAX_ROM_BYTES)
+            return failure(env, "ROM empty or larger than 64 MiB");
+    }
+    const char *lib = (*env)->GetStringUTFChars(env, lib_dir, NULL);
+    const char *files = (*env)->GetStringUTFChars(env, files_dir, NULL);
+    const char *core = (*env)->GetStringUTFChars(env, core_name, NULL);
+    const char *names[2] = {NULL, NULL};
+    int names_read = 1;
+    for (unsigned i = 0; i < count; ++i) {
+        names[i] = (*env)->GetStringUTFChars(env, games[i].name, NULL);
+        if (!names[i]) names_read = 0;
+    }
+    jbyte *bytes[2] = {NULL, NULL};
+    jstring result = NULL;
+    if (!lib || !files || !core || !names_read) {
+        result = failure(env, "Failed to read ROM metadata");
+        goto done;
+    }
+    char library_path[2048];
+    int length = -1;
+    if (!strcmp(core, "gb") || !strcmp(core, "gbc") || !strcmp(core, "gba"))
+        length = snprintf(library_path, sizeof(library_path),
+                          "%s/ravenemu_%s_libretro.so", lib, core);
+    if (length <= 0 || (size_t)length >= sizeof(library_path)) {
+        result = failure(env, "Invalid Libretro core path");
+        goto done;
+    }
+    if (!session) session = raven_frontend_create();
+    if (!session) {
+        result = failure(env, "Out of memory");
+        goto done;
+    }
+    /* The previous game's achievements read its memory: they go first. */
+    raven_bridge_achievements_close();
+    raven_audio_close();
+    frame_pacer = (raven_frame_pacer){0};
+    raven_frame_pacer_set_display(&frame_pacer, display_rate);
+    raven_input_clear_buttons(&input);
+    clear_frame();
+    link_focus = 0;
+    /* The next game asks for its own sensors, as it loads. */
+    raven_sensors_close();
+    raven_sensors_set_active(!playback_paused);
+    rumble_strength[0] = rumble_strength[1] = 0;
+    if (!raven_frontend_open_core(session, library_path, files, files)) {
+        result = failure(env, raven_frontend_last_error(session));
+        goto done;
+    }
+    raven_frontend_callbacks callbacks = {
+        .video = on_video, .audio = on_audio, .input = on_input,
+        .rumble = on_rumble, .sensor_state = on_sensor_state, .sensor_input = on_sensor_input};
+    raven_frontend_set_callbacks(session, &callbacks);
+    preempt_cap = RAVEN_FRONTEND_PREEMPT_MAX;
+    replay_guard = (raven_replay_guard){0};
+    apply_preemption();
+    /* Before the game loads: the options read only then apply to it. */
+    apply_core_options(env, core_options);
+    for (unsigned i = 0; i < count; ++i) {
+        bytes[i] = (*env)->GetByteArrayElements(env, games[i].rom, NULL);
+        if (!bytes[i]) {
+            result = failure(env, "Unable to read ROM contents");
+            goto done;
+        }
+    }
+    int loaded;
+    if (count == 2) {
+        const void *const roms[2] = {bytes[0], bytes[1]};
+        const size_t lengths[2] = {(size_t)sizes[0], (size_t)sizes[1]};
+        loaded = raven_frontend_load_linked(session, roms, lengths, names);
+    } else {
+        loaded = raven_frontend_load_rom(session, bytes[0], (size_t)sizes[0], names[0]);
+    }
+    if (!loaded) {
+        result = failure(env, raven_frontend_last_error(session));
+    } else {
+        raven_core_info info = {0};
+        if (!raven_frontend_get_info(session, &info) ||
+                !raven_frame_pacer_configure(&frame_pacer, info.fps)) {
+            result = failure(env, "Unsupported Libretro core frame rate");
+            raven_frontend_unload(session);
+            goto done;
+        }
+        if (!raven_audio_open(info.sample_rate)) {
+            LOGE("Audio output unavailable; running game without sound");
+        }
+        raven_audio_set_running(!playback_paused);
+    }
+
+done:
+    for (unsigned i = 0; i < count; ++i) {
+        if (bytes[i]) (*env)->ReleaseByteArrayElements(env, games[i].rom, bytes[i], JNI_ABORT);
+        if (names[i]) (*env)->ReleaseStringUTFChars(env, games[i].name, names[i]);
+    }
+    if (lib) (*env)->ReleaseStringUTFChars(env, lib_dir, lib);
+    if (files) (*env)->ReleaseStringUTFChars(env, files_dir, files);
+    if (core) (*env)->ReleaseStringUTFChars(env, core_name, core);
+    return result;
+}
+
+JNIEXPORT jstring JNICALL
+Java_com_ravenemu_app_bridge_NativeBridge_openRom(
+    JNIEnv *env, jclass clazz, jstring lib_dir, jstring files_dir,
+    jstring core_name, jbyteArray rom, jstring filename, jobjectArray core_options) {
+    (void)clazz;
+    const jni_game game = {rom, filename};
+    return open_games(env, lib_dir, files_dir, core_name, core_options, &game, 1);
+}
+
+/* Two games joined by the core's link cable; player 1 shown first. */
+JNIEXPORT jstring JNICALL
+Java_com_ravenemu_app_bridge_NativeBridge_openLinked(
+    JNIEnv *env, jclass clazz, jstring lib_dir, jstring files_dir, jstring core_name,
+    jbyteArray first, jstring first_name, jbyteArray second, jstring second_name,
+    jobjectArray core_options) {
+    (void)clazz;
+    const jni_game games[2] = {{first, first_name}, {second, second_name}};
+    return open_games(env, lib_dir, files_dir, core_name, core_options, games, 2);
+}
+
+JNIEXPORT jint JNICALL
+Java_com_ravenemu_app_bridge_NativeBridge_players(JNIEnv *env, jclass clazz) {
+    (void)env;
+    (void)clazz;
+    return session ? (jint)raven_frontend_players(session) : 0;
+}
+
+/* The player shown and played; the other keeps running. A new picture
+ * comes with the next frame. */
+JNIEXPORT void JNICALL
+Java_com_ravenemu_app_bridge_NativeBridge_setLinkFocus(JNIEnv *env, jclass clazz, jint player) {
+    (void)env;
+    (void)clazz;
+    if (player != 0 && player != 1) return;
+    if (link_focus != (unsigned)player) {
+        raven_input_clear_buttons(&input);
+        rumble_strength[0] = rumble_strength[1] = 0;
+    }
+    link_focus = (unsigned)player;
+}
+
+JNIEXPORT void JNICALL
+Java_com_ravenemu_app_bridge_NativeBridge_setButtons(
+    JNIEnv *env, jclass clazz, jint mask) {
+    (void)env;
+    (void)clazz;
+    raven_input_set_buttons(&input, (unsigned)mask);
+}
+
+JNIEXPORT void JNICALL
+Java_com_ravenemu_app_bridge_NativeBridge_clearButtons(
+    JNIEnv *env, jclass clazz) {
+    (void)env;
+    (void)clazz;
+    raven_input_clear_buttons(&input);
+}
+
+JNIEXPORT jint JNICALL
+Java_com_ravenemu_app_bridge_NativeBridge_drawFrame(
+    JNIEnv *env, jclass clazz, jint surface_width, jint surface_height,
+    jboolean advance) {
+    (void)env;
+    (void)clazz;
+    unsigned advanced = 0;
+    /* Headphones or a Bluetooth device gone: AAudio only says so. */
+    raven_audio_recover();
+    if (playback_paused || !advance) {
+        raven_input_clear_buttons(&input);
+        raven_frame_pacer_reset(&frame_pacer);
+        /* Buttons let go during a pause are not a press to replay. */
+        if (session) raven_frontend_forget_preemption(session);
+        /* Paused, RetroAchievements keeps its session and retries. */
+        raven_bridge_achievements_idle();
+    } else if (session) {
+        struct timespec now;
+        if (clock_gettime(CLOCK_MONOTONIC, &now) == 0) {
+            const uint64_t now_ns = (uint64_t)now.tv_sec * UINT64_C(1000000000) +
+                                    (uint64_t)now.tv_nsec;
+            const unsigned due = raven_frame_pacer_tick(&frame_pacer, now_ns);
+            /* Locked on the display, the game runs at its pace: so does the sound. */
+            raven_audio_set_speed(raven_frame_pacer_speed(&frame_pacer));
+            if (due) raven_sensors_poll();
+            for (unsigned i = 0; i < due; ++i) {
+                raven_input_begin_frame(&input);
+                const uint64_t started = monotonic_ns();
+                if (!raven_frontend_run_frame(session)) {
+                    raven_frame_pacer_reset(&frame_pacer);
+                    break;
+                }
+                if (raven_frontend_replayed_frames(session))
+                    lower_preemption_if_slow(monotonic_ns() - started);
+                /* The frame shown, never those replayed behind it. */
+                raven_bridge_achievements_frame();
+                ++advanced;
+            }
+        }
+    }
+    raven_video_draw(image_ready ? rgba_pixels : NULL,
+        (unsigned)image_width, (unsigned)image_height, image_dirty,
+        surface_width, surface_height);
+    image_dirty = 0;
+    return (jint)advanced;
+}
+
+JNIEXPORT void JNICALL
+Java_com_ravenemu_app_bridge_NativeBridge_setPaused(
+    JNIEnv *env, jclass clazz, jboolean paused) {
+    (void)env; (void)clazz;
+    const int next_paused = paused == JNI_TRUE;
+    if (playback_paused != next_paused) raven_frame_pacer_reset(&frame_pacer);
+    playback_paused = next_paused;
+    if (playback_paused) raven_input_clear_buttons(&input);
+    raven_audio_set_running(!playback_paused);
+    /* The menu open, the sensors rest: the battery lasts. */
+    raven_sensors_set_active(!playback_paused);
+}
+
+/* GL thread: the console's reset, then RetroAchievements with it (Hardcore
+ * asks for it when it is switched on during a game). */
+JNIEXPORT jboolean JNICALL
+Java_com_ravenemu_app_bridge_NativeBridge_resetGame(JNIEnv *env, jclass clazz) {
+    (void)env; (void)clazz;
+    if (!session || !raven_frontend_reset(session)) return JNI_FALSE;
+    raven_frame_pacer_reset(&frame_pacer);
+    raven_input_clear_buttons(&input);
+    raven_bridge_achievements_state_loaded();
+    return JNI_TRUE;
+}
+
+/* The core's reason for the last refused cheat; GL thread like setCheats. */
+static char cheat_refusal[RAVEN_FRONTEND_MESSAGE_MAX];
+
+/* GL thread: the game's cheats replaced by `codes`, each one on, in order.
+ * The index of the first code the core refused (cheatRefusal says why), -1
+ * when it took them all, -2 without a game or a core that takes cheats.
+ * Each code is copied before the call: never more than one Java local
+ * reference at a time, whatever the list's length. */
+JNIEXPORT jint JNICALL
+Java_com_ravenemu_app_bridge_NativeBridge_setCheats(JNIEnv *env, jclass clazz, jobjectArray codes) {
+    (void)clazz;
+    cheat_refusal[0] = 0;
+    if (!session) return -2;
+    const jsize count = codes ? (*env)->GetArrayLength(env, codes) : 0;
+    if (count < 0 || (size_t)count > RAVEN_FRONTEND_CHEATS_MAX) return -2;
+    char **texts = calloc(count ? (size_t)count : 1u, sizeof(*texts));
+    if (!texts) return -2;
+    int result = -2;
+    jsize copied = 0;
+    for (; copied < count; ++copied) {
+        jstring code = (jstring)(*env)->GetObjectArrayElement(env, codes, copied);
+        if (!code) { texts[copied] = NULL; continue; }
+        const char *chars = (*env)->GetStringUTFChars(env, code, NULL);
+        const size_t length = chars ? strlen(chars) : 0;
+        texts[copied] = chars ? malloc(length + 1) : NULL;
+        if (texts[copied]) memcpy(texts[copied], chars, length + 1);
+        if (chars) (*env)->ReleaseStringUTFChars(env, code, chars);
+        (*env)->DeleteLocalRef(env, code);
+        if (!texts[copied]) break;  /* out of memory */
+    }
+    if (copied == count)
+        result = raven_frontend_set_cheats(session, (const char *const *)texts, (size_t)count,
+                                           cheat_refusal, sizeof(cheat_refusal));
+    for (jsize i = 0; i < count; ++i) free(texts[i]);
+    free(texts);
+    return result;
+}
+
+/* GL thread, after setCheats: why the core refused a code, or null. Valid
+ * UTF-8 without 4-byte sequences (raven_frontend_take_message). */
+JNIEXPORT jstring JNICALL
+Java_com_ravenemu_app_bridge_NativeBridge_cheatRefusal(JNIEnv *env, jclass clazz) {
+    (void)clazz;
+    return cheat_refusal[0] ? (*env)->NewStringUTF(env, cheat_refusal) : NULL;
+}
+
+/* GL thread: Settings → Général → Latence, 0 to RAVEN_FRONTEND_PREEMPT_MAX. */
+JNIEXPORT void JNICALL
+Java_com_ravenemu_app_bridge_NativeBridge_setPreemptiveFrames(
+    JNIEnv *env, jclass clazz, jint frames) {
+    (void)env; (void)clazz;
+    preempt_wanted = frames <= 0 ? 0u
+        : (unsigned)frames > RAVEN_FRONTEND_PREEMPT_MAX ? RAVEN_FRONTEND_PREEMPT_MAX : (unsigned)frames;
+    apply_preemption();
+}
+
+/* GL thread: Display.getRotation(), for the tilt along the screen. */
+JNIEXPORT void JNICALL
+Java_com_ravenemu_app_bridge_NativeBridge_setDisplayRotation(
+    JNIEnv *env, jclass clazz, jint rotation) {
+    (void)env; (void)clazz;
+    raven_sensors_set_rotation(rotation);
+}
+
+/* GL thread, before a frame: the motion sensors of the controller played
+ * with (kinds: 1 accelerometer, 2 gyroscope; 0 hands them back to the phone). */
+JNIEXPORT void JNICALL
+Java_com_ravenemu_app_bridge_NativeBridge_feedControllerMotion(
+    JNIEnv *env, jclass clazz, jint kinds, jfloat ax, jfloat ay, jfloat az, jfloat gx, jfloat gy, jfloat gz) {
+    (void)env; (void)clazz;
+    const float acceleration[3] = {ax, ay, az}, turning[3] = {gx, gy, gz};
+    raven_sensors_feed_controller(kinds < 0 ? 0u : (unsigned)kinds, acceleration, turning);
+}
+
+/* GL thread, after each drawn frame: whether the cartridge's motor runs. A
+ * paused game never vibrates. */
+JNIEXPORT jboolean JNICALL
+Java_com_ravenemu_app_bridge_NativeBridge_rumbling(JNIEnv *env, jclass clazz) {
+    (void)env; (void)clazz;
+    return session && !playback_paused && (rumble_strength[0] || rumble_strength[1]) ? JNI_TRUE : JNI_FALSE;
+}
+
+/* GL thread: the display's refresh rate, on start and whenever it changes. */
+JNIEXPORT void JNICALL
+Java_com_ravenemu_app_bridge_NativeBridge_setDisplayRate(
+    JNIEnv *env, jclass clazz, jfloat hertz) {
+    (void)env; (void)clazz;
+    display_rate = hertz;
+    raven_frame_pacer_set_display(&frame_pacer, display_rate);
+}
+
+/* GL thread: the latest on-screen message, once; NULL without one. The
+ * player's own (preemptive frames lowered) comes first, then the core's;
+ * both are modified UTF-8, which NewStringUTF requires. */
+JNIEXPORT jstring JNICALL
+Java_com_ravenemu_app_bridge_NativeBridge_takeMessage(JNIEnv *env, jclass clazz) {
+    (void)clazz;
+    if (player_message_pending) {
+        player_message_pending = 0;
+        return (*env)->NewStringUTF(env, player_message);
+    }
+    const char *message = session ? raven_frontend_take_message(session) : NULL;
+    return message ? (*env)->NewStringUTF(env, message) : NULL;
+}
+
+/* GL thread: the open game's frame rate, 0 without one. */
+JNIEXPORT jdouble JNICALL
+Java_com_ravenemu_app_bridge_NativeBridge_frameRate(JNIEnv *env, jclass clazz) {
+    (void)env; (void)clazz;
+    raven_core_info info = {0};
+    return session && raven_frontend_get_info(session, &info) ? info.fps : 0.0;
+}
+
+JNIEXPORT void JNICALL
+Java_com_ravenemu_app_bridge_NativeBridge_setPlaybackOptions(
+    JNIEnv *env, jclass clazz, jboolean audio_enabled, jint audio_volume,
+    jboolean integer_scale, jint brightness, jint contrast, jint screen_effect, jint resampler) {
+    (void)env; (void)clazz;
+    raven_audio_set_output(audio_enabled == JNI_TRUE, audio_volume);
+    raven_audio_set_resampler(resampler);
+    raven_video_set_options(integer_scale == JNI_TRUE, brightness, contrast);
+    raven_video_set_effect(screen_effect);
+}
+
+JNIEXPORT void JNICALL
+Java_com_ravenemu_app_bridge_NativeBridge_setCoreOptions(
+    JNIEnv *env, jclass clazz, jobjectArray core_options) {
+    (void)clazz;
+    apply_core_options(env, core_options);
+}
+
+JNIEXPORT jstring JNICALL
+Java_com_ravenemu_app_bridge_NativeBridge_stateCompatibility(JNIEnv *env, jclass clazz) {
+    (void)clazz;
+    raven_core_info info = {0};
+    if (!raven_frontend_get_info(session, &info) || !info.name || !info.version) return NULL;
+    char identity[512];
+    int count = snprintf(identity, sizeof(identity), "libretro-1|%s|%s|%s|state-v1",
+                         RAVEN_CORE_REVISION, info.name, info.version);
+    if (count <= 0 || (size_t)count >= sizeof(identity)) return NULL;
+    return (*env)->NewStringUTF(env, identity);
+}
+
+/* A limit on JNI allocations; Libretro save RAM/state sizes are untrusted. */
+#define MAX_BATTERY_BYTES (1024u * 1024u)
+#define MAX_STATE_BYTES (16u * 1024u * 1024u)
+/* rcheevos' runtime for a game: a few kilobytes; far more is refused. */
+#define MAX_PROGRESS_BYTES (1024u * 1024u)
+
+static jbyteArray read_battery(JNIEnv *env, unsigned player) {
+    size_t size = raven_frontend_player_battery_size(session, player);
+    if (!size || size > MAX_BATTERY_BYTES) return NULL;
+    void *temp = malloc(size);
+    if (!temp) return NULL;
+    if (!raven_frontend_read_player_battery(session, player, temp, size)) {
+        free(temp);
+        return NULL;
+    }
+    jbyteArray bytes = (*env)->NewByteArray(env, (jsize)size);
+    if (bytes) (*env)->SetByteArrayRegion(env, bytes, 0, (jsize)size, (const jbyte *)temp);
+    free(temp);
+    return bytes;
+}
+
+static jboolean write_battery(JNIEnv *env, unsigned player, jbyteArray saved) {
+    if (!saved) return JNI_FALSE;
+    jsize size = (*env)->GetArrayLength(env, saved);
+    if (size <= 0 || (size_t)size > MAX_BATTERY_BYTES ||
+        (size_t)size != raven_frontend_player_battery_size(session, player)) return JNI_FALSE;
+    jbyte *bytes = (*env)->GetByteArrayElements(env, saved, NULL);
+    if (!bytes) return JNI_FALSE;
+    int restored = raven_frontend_restore_player_battery(session, player, bytes, (size_t)size);
+    (*env)->ReleaseByteArrayElements(env, saved, bytes, JNI_ABORT);
+    return restored ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT jbyteArray JNICALL
+Java_com_ravenemu_app_bridge_NativeBridge_saveBattery(JNIEnv *env, jclass clazz) {
+    (void)clazz;
+    return read_battery(env, 0);
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_ravenemu_app_bridge_NativeBridge_restoreBattery(
+    JNIEnv *env, jclass clazz, jbyteArray saved) {
+    (void)clazz;
+    return write_battery(env, 0, saved);
+}
+
+/* Linked games: each player's SRAM, for its own game's save file. */
+JNIEXPORT jbyteArray JNICALL
+Java_com_ravenemu_app_bridge_NativeBridge_savePlayerBattery(JNIEnv *env, jclass clazz, jint player) {
+    (void)clazz;
+    return player == 0 || player == 1 ? read_battery(env, (unsigned)player) : NULL;
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_ravenemu_app_bridge_NativeBridge_restorePlayerBattery(
+    JNIEnv *env, jclass clazz, jint player, jbyteArray saved) {
+    (void)clazz;
+    return player == 0 || player == 1 ? write_battery(env, (unsigned)player, saved) : JNI_FALSE;
+}
+
+/* The core's state, then how far each achievement had got (state_progress.h):
+ * loading it later puts both back. Without achievements, the core's alone. */
+JNIEXPORT jbyteArray JNICALL
+Java_com_ravenemu_app_bridge_NativeBridge_saveState(JNIEnv *env, jclass clazz) {
+    (void)clazz;
+    size_t size = raven_frontend_state_size(session);
+    if (!size || size > MAX_STATE_BYTES) return NULL;
+    size_t room = raven_bridge_achievements_progress(NULL, 0);
+    if (room > MAX_PROGRESS_BYTES) room = 0;
+    uint8_t *temp = (uint8_t *)malloc(raven_state_progress_total(size, room));
+    if (!temp) return NULL;
+    if (!raven_frontend_save_state(session, temp, size)) {
+        free(temp);
+        return NULL;
+    }
+    /* Progress that cannot be written leaves the state as before. */
+    size_t progress = room ? raven_bridge_achievements_progress(temp + size, room) : 0;
+    if (progress != room) progress = 0;
+    raven_state_progress_seal(temp, size, progress);
+    const size_t total = raven_state_progress_total(size, progress);
+    jbyteArray bytes = (*env)->NewByteArray(env, (jsize)total);
+    if (bytes) (*env)->SetByteArrayRegion(env, bytes, 0, (jsize)total, (const jbyte *)temp);
+    free(temp);
+    return bytes;
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_ravenemu_app_bridge_NativeBridge_restoreState(
+    JNIEnv *env, jclass clazz, jbyteArray saved) {
+    (void)clazz;
+    if (!saved) return JNI_FALSE;
+    jsize size = (*env)->GetArrayLength(env, saved);
+    if (size <= 0 || (size_t)size > MAX_STATE_BYTES + MAX_PROGRESS_BYTES + RAVEN_STATE_PROGRESS_FOOTER)
+        return JNI_FALSE;
+    jbyte *bytes = (*env)->GetByteArrayElements(env, saved, NULL);
+    if (!bytes) return JNI_FALSE;
+    size_t core = 0, progress_size = 0;
+    const uint8_t *progress = NULL;
+    raven_state_progress_split((const uint8_t *)bytes, (size_t)size, &core, &progress, &progress_size);
+    int result = core <= MAX_STATE_BYTES && raven_frontend_load_state(session, bytes, core);
+    raven_frame_pacer_reset(&frame_pacer);
+    /* Its achievements' progress, or, for a state saved without it, a fresh start. */
+    if (result) raven_bridge_achievements_progress_loaded(progress, progress_size);
+    // Keep displaying the previous frame, but never attach its pixels to a
+    // restored state until the core has supplied a fresh video callback.
+    preview_valid = 0;
+    (*env)->ReleaseByteArrayElements(env, saved, bytes, JNI_ABORT);
+    return result ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT jintArray JNICALL
+Java_com_ravenemu_app_bridge_NativeBridge_capturePreview(JNIEnv *env, jclass clazz) {
+    (void)clazz;
+    if (!preview_valid || !image_ready || image_width <= 0 || image_height <= 0) return NULL;
+    uint32_t *pixels = malloc(RAVEN_PREVIEW_CAPACITY * sizeof(*pixels));
+    if (!pixels) return NULL;
+    size_t count = raven_preview_argb(rgba_pixels, rgba_capacity,
+        (unsigned)image_width, (unsigned)image_height, pixels, RAVEN_PREVIEW_CAPACITY);
+    jintArray result = count ? (*env)->NewIntArray(env, (jsize)count) : NULL;
+    if (result) (*env)->SetIntArrayRegion(env, result, 0, (jsize)count, (const jint *)pixels);
+    free(pixels);
+    return result;
+}
+
+JNIEXPORT void JNICALL
+Java_com_ravenemu_app_bridge_NativeBridge_setAudioEnabled(
+    JNIEnv *env, jclass clazz, jboolean enabled) {
+    (void)env; (void)clazz;
+    raven_audio_set_running(enabled == JNI_TRUE);
+}
+
+JNIEXPORT void JNICALL
+Java_com_ravenemu_app_bridge_NativeBridge_closeRom(
+    JNIEnv *env, jclass clazz) {
+    (void)env;
+    (void)clazz;
+    raven_audio_close();
+    frame_pacer = (raven_frame_pacer){0};
+    raven_frame_pacer_set_display(&frame_pacer, display_rate);
+    raven_bridge_achievements_close();
+    if (session) {
+        raven_frontend_destroy(session);
+        session = NULL;
+    }
+    raven_sensors_close();
+    rumble_strength[0] = rumble_strength[1] = 0;
+    raven_input_clear_buttons(&input);
+    clear_frame();
+    free(rgba_pixels);
+    rgba_pixels = NULL;
+    rgba_capacity = 0;
+}

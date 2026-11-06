@@ -1,0 +1,6 @@
+# Les README et le logo officiel demandent une revue du propriétaire.
+# La protection effective requiert l'option "Require review from Code Owners"
+# dans les règles de protection de branche GitHub.
+/README.md @GhostPunishR
+/README_RELEASE.md @GhostPunishR
+/assets/brand/ @GhostPunishR

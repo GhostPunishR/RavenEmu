@@ -27,9 +27,9 @@
 ## Projet
 
 - [Légalité et confidentialité](https://github.com/GhostPunishR/RavenEmu/blob/main/wiki/Legalite-et-confidentialite.md)
-- [Code multiplateforme](https://github.com/GhostPunishR/RavenEmu/tree/main)
+- [Code source](https://github.com/GhostPunishR/RavenEmu/tree/main)
 - [RavenCore](https://github.com/GhostPunishR/RavenCore)
-- [Bêta Android](https://github.com/GhostPunishR/RavenEmu/actions/workflows/multiplateforme.yml?query=branch%3Amain+is%3Asuccess)
+- [Compilations Android](https://github.com/GhostPunishR/RavenEmu/actions/workflows/ci-applications.yml?query=branch%3Amain+is%3Asuccess)
 - [Site officiel](https://ghostpunishr.github.io/RavenEmu/)
 - [Issues](https://github.com/GhostPunishR/RavenEmu/issues)
 - [Sécurité](https://github.com/GhostPunishR/RavenEmu/blob/main/SECURITY.md)

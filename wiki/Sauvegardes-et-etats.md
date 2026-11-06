@@ -37,17 +37,6 @@ Dans le menu **⋮** du lecteur, chaque jeu dispose de **quatre emplacements**, 
 
 La liste est gardée dans le stockage privé de l'application, au format de RavenEmu PC (une ligne par code : `1`, nom et code séparés par des tabulations).
 
-## Captures d'écran
-
-**Capture d'écran**, dans le menu **⋮**, enregistre l'image du jeu en PNG, telle que le lecteur la montre (couleurs et corrections comprises). Elle est agrandie quatre fois sans lissage : 960 × 640 pour la GBA, 640 × 576 pour la GB et la GBC. Le nom du fichier reprend celui du jeu, avec la date et l'heure.
-
-- Depuis Android 10, la capture va dans la galerie, dossier **Images/RavenEmu**, sans demander d'autorisation.
-- Sur Android 8 et 9, la galerie demanderait une autorisation : la capture reste dans le dossier Images propre à RavenEmu (`Android/data/…/files/Pictures/RavenEmu`), supprimé avec l'application.
-
-La capture est permise en Hardcore.
-
-L'emplacement 1 conserve le chemin historique `.slot0.state` des premières préversions de cette nouvelle application. Cela ne garantit pas la compatibilité des états ancienne application.
-
 ## Exporter sa progression
 
 **Un jeu** : dans sa fiche, touchez **Exporter** puis choisissez le type de fichier :
@@ -85,8 +74,8 @@ Avec le correctif RTC Pokémon/CFRU de RavenCore (`241f56c`), certaines ROMs mod
 
 Lorsqu'un ancien jeu GB est reclassé comme GBC d'après son en-tête, sa sauvegarde de cartouche est conservée, mais ses états créés avec le moteur GB ne sont plus chargeables sur le moteur GBC.
 
-## iOS et précautions
+## Précautions
 
-La première session iOS raccorde la sauvegarde batterie, quatre emplacements d'état sans miniature et l'import/export `.sav` avec Fichiers. Le ZIP n'y est pas encore proposé ; les essais sur appareil restent à effectuer. Avant de désinstaller Android, vérifiez vos exports et gardez-les hors du stockage privé de RavenEmu. Ne publiez pas vos sauvegardes personnelles dans une issue.
+La capture d'écran de la bêta n'est pas encore dans l'application native. Les états de la bêta ne s'importent pas ; ses sauvegardes de cartouche, si. Avant de désinstaller, vérifiez vos exports et gardez-les hors du stockage privé de RavenEmu. Ne publiez pas vos sauvegardes personnelles dans une issue.
 
-Sources : [transfert de sauvegardes](https://github.com/GhostPunishR/RavenEmu/blob/main/androidApp/src/main/kotlin/com/ravenemu/android/saves/GbSaveTransfer.kt) et [gestion des emplacements](https://github.com/GhostPunishR/RavenEmu/blob/main/androidApp/src/main/kotlin/com/ravenemu/android/saves/GbSaveStateStore.kt).
+Sources : [transfert de sauvegardes](https://github.com/GhostPunishR/RavenEmu/blob/main/android/src/main/java/com/ravenemu/app/data/saves/SaveTransfer.java) et [gestion des emplacements](https://github.com/GhostPunishR/RavenEmu/blob/main/android/src/main/java/com/ravenemu/app/data/saves/StateSlotRepository.java).

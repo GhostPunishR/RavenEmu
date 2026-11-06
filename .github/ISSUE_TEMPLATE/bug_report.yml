@@ -1,11 +1,11 @@
 name: "Rapport de bug"
-description: "Signaler un défaut reproductible dans la version multiplateforme"
+description: "Signaler un défaut reproductible dans RavenEmu"
 title: "[Bug] "
 body:
   - type: markdown
     attributes:
       value: |
-        Ce formulaire concerne RavenEmu v0.1.0 - bêta et les builds du dépôt autonome.
+        Ce formulaire concerne l'application RavenEmu (Android) et les builds du dépôt.
         Ne joignez aucune ROM, aucun BIOS, aucune sauvegarde personnelle, aucune clé ni aucun jeton. Pour une vulnérabilité, suivez la [politique de sécurité](https://github.com/GhostPunishR/RavenEmu/blob/main/SECURITY.md).
 
   - type: dropdown
@@ -13,8 +13,7 @@ body:
     attributes:
       label: "Plateforme ou contexte"
       options:
-        - "Android (bêta multiplateforme)"
-        - "iOS (hôte en développement)"
+        - "Android"
         - "Compilation ou GitHub Actions"
         - "Documentation, site ou wiki"
     validations:
@@ -33,7 +32,7 @@ body:
         - "Affichage ou audio"
         - "Sauvegardes, états ou transferts"
         - "RetroAchievements"
-        - "Hôte Android ou iOS"
+        - "Application Android (interface, stockage, manettes)"
         - "Compilation ou CI"
         - "Documentation, site ou wiki"
         - "Autre"
@@ -45,7 +44,7 @@ body:
     attributes:
       label: "Commit ou lien du build"
       description: "Indiquez le SHA du commit ou le lien de l'exécution GitHub Actions. Le nom de préversion seul ne distingue pas les builds."
-      placeholder: "Exemple : abc1234 ou URL de l'exécution multiplateforme"
+      placeholder: "Exemple : abc1234 ou URL de l'exécution RavenEmu / Applications"
     validations:
       required: true
 
@@ -53,8 +52,8 @@ body:
     id: environment
     attributes:
       label: "Appareil ou environnement"
-      description: "Appareil et version Android/iOS, ou système, JDK et outils de compilation. Pour la documentation, indiquez la page concernée."
-      placeholder: "Exemple : Pixel 8, Android 15 ; ou macOS, Xcode et JDK ; ou URL de la page"
+      description: "Appareil et version Android, ou système, JDK et outils de compilation. Pour la documentation, indiquez la page concernée."
+      placeholder: "Exemple : Pixel 8, Android 15 ; ou Ubuntu, JDK 21 et CMake ; ou URL de la page"
     validations:
       required: true
 

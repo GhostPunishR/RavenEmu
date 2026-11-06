@@ -6,10 +6,9 @@ Les contributions de code, de documentation et de validation sont bienvenues. Co
 
 | Sujet | Emplacement |
 |---|---|
-| Interface et logique communes | `shared/` |
-| Lecteur, fichiers et services Android | `androidApp/` |
-| Hôte Apple et branchements | `iosApp/` |
-| Ponts JNI/Swift et configuration native | `native/` |
+| Interface et services Android (Java) | `android/src/main/java/` |
+| Pont JNI et pilotes natifs (C) | `android/src/main/cpp/` |
+| Frontend C et révision RavenCore épinglée | `frontend/` |
 | Correction d'un moteur | Dépôt RavenCore ; mise à jour du commit épinglé traitée séparément |
 | Documentation Wiki | `wiki/*.md` dans RavenEmu |
 
@@ -24,12 +23,12 @@ Aucune ROM commerciale, aucun BIOS protégé, aucune clé ni donnée personnelle
 Adaptez les contrôles au changement. Pour Android et les règles, les commandes actuelles sont :
 
 ```sh
-./gradlew :androidApp:testDebugUnitTest
-./gradlew :androidApp:assembleDebug
+./gradlew :android:testDebugUnitTest
+./gradlew :android:assembleDebug
 ./gradlew :policy:test
 ```
 
-Voir [Compilation](https://github.com/GhostPunishR/RavenEmu/blob/main/wiki/Compilation.md) pour les cibles communes et iOS. Les commandes ci-dessus correspondent à la CI ; documentez celles réellement exécutées dans votre PR, sans assimiler compilation et validation sur appareil.
+Voir [Compilation](https://github.com/GhostPunishR/RavenEmu/blob/main/wiki/Compilation.md) pour le frontend C et ses tests. Les commandes ci-dessus correspondent à la CI ; documentez celles réellement exécutées dans votre PR, sans assimiler compilation et validation sur appareil.
 
 ## Tester sur téléphone
 

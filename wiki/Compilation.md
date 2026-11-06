@@ -1,34 +1,30 @@
 # Compilation
 
-Le projet est autonome : toutes les commandes partent de la racine du dépôt. Prérequis et procédures détaillées : [BUILDING.md](https://github.com/GhostPunishR/RavenEmu/blob/main/BUILDING.md).
+Toutes les commandes partent de la racine du dépôt. Prérequis et procédures détaillées : [BUILDING.md](https://github.com/GhostPunishR/RavenEmu/blob/main/BUILDING.md).
 
 ## Android
 
-JDK 21, SDK Android API 37 et outils natifs CMake/NDK :
+JDK 21, SDK Android API 37, NDK et CMake :
 
 ```sh
-./gradlew :androidApp:assembleDebug
-./gradlew :androidApp:assembleBeta
-./gradlew :androidApp:testDebugUnitTest
+./gradlew :android:assembleDebug
+./gradlew :android:testDebugUnitTest
+./gradlew :android:lintDebug
 ./gradlew :policy:test
 ```
 
-APK : `androidApp/build/outputs/apk/debug/` ou `androidApp/build/outputs/apk/beta/`. Les fichiers `TERMS.md`, `PRIVACY.md` et `LICENSE` de la racine sont intégrés au build partagé.
+APK : `android/build/outputs/apk/debug/android-debug.apk` (ARM64, identifiant `com.ravenemu.dev`). La compilation construit aussi, par CMake, le frontend C, les pilotes natifs et les trois cores Libretro de RavenCore. Les fichiers `TERMS.md` et `PRIVACY.md` de la racine sont copiés dans l'application, qui les affiche dans **Paramètres → À propos**.
 
-## iOS
+## Frontend C et tests sur ordinateur
 
-Sur macOS, avec Xcode, JDK 21, CMake et XcodeGen :
+Sur Linux, avec un compilateur C/C++20, CMake, les bibliothèques EGL et GLES et un JDK 21 :
 
 ```sh
-./gradlew :shared:linkDebugFrameworkIosSimulatorArm64
-sh native/build-ios.sh
-cd iosApp
-xcodegen generate
-open RavenEmu.xcodeproj
+cmake -S frontend -B build/native-frontend -DCMAKE_BUILD_TYPE=Release
+cmake --build build/native-frontend --parallel 2
+ctest --test-dir build/native-frontend --output-on-failure
 ```
-
-La CI construit aussi l'application Xcode complète et exécute les XCTest sur simulateur. Sur Apple Silicon : `sh iosApp/ci-test.sh`. L'artefact `ravenemu-ios-simulator` est réservé au simulateur, sans IPA iPhone. Voir [le périmètre iOS](https://github.com/GhostPunishR/RavenEmu/blob/main/iosApp/README.md).
 
 ## RavenCore
 
-Le commit `15675cc3af4f9b07f2e10cc5a7ca6234ea1c77cc` est épinglé dans `native/CMakeLists.txt` : RavenCore 0.14.0 et son API C `ravenemu_*`. Voir [la passerelle native](https://github.com/GhostPunishR/RavenEmu/blob/main/native/README.md).
+[frontend/CMakeLists.txt](https://github.com/GhostPunishR/RavenEmu/blob/main/frontend/CMakeLists.txt) épingle RavenCore au commit `23f9427f9937924c3a6e003673d91f6bc733162f`, la version 0.15.0, et en construit les cores Libretro. Aucun code moteur n'est copié dans RavenEmu.

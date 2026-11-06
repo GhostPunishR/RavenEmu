@@ -1,11 +1,11 @@
 name: "Demande de fonctionnalité"
-description: "Proposer une amélioration ciblée pour le projet multiplateforme"
+description: "Proposer une amélioration ciblée pour RavenEmu"
 title: "[Fonctionnalité] "
 body:
   - type: markdown
     attributes:
       value: |
-        Décrivez le besoin avant la solution. Consultez la [feuille de route](https://github.com/GhostPunishR/RavenEmu/blob/main/wiki/Feuille-de-route.md) : le lecteur iOS, les skins et certaines validations restent en cours.
+        Décrivez le besoin avant la solution. Consultez la [feuille de route](https://github.com/GhostPunishR/RavenEmu/blob/main/wiki/Feuille-de-route.md) : le câble sans fil et certaines validations sur téléphone restent en cours.
         Pour une évolution du moteur, identifiez la partie RavenCore et utilisez des références techniques publiques.
 
   - type: dropdown
@@ -13,9 +13,8 @@ body:
     attributes:
       label: "Cible"
       options:
-        - "Interface ou logique communes Android/iOS"
-        - "Android"
-        - "iOS"
+        - "Application Android (interface Java)"
+        - "Frontend C et pilotes natifs"
         - "Moteurs RavenCore ou intégration native"
         - "Construction ou CI"
         - "Documentation, site ou wiki"

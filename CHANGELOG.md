@@ -2,6 +2,17 @@
 
 ## Non publié
 
+### Application native à la place de la bêta
+
+- La migration native est fusionnée dans `main` (6 novembre 2026). L'application Android est désormais écrite en Java, avec un frontend C qui charge les cores Libretro de RavenCore et des pilotes natifs pour l'image (GLES2), le son (AAudio) et les commandes. Voir [ARCHITECTURE.md](ARCHITECTURE.md).
+- Son identifiant est `com.ravenemu.dev` : elle s'installe à côté de la bêta `com.ravenemu.preview` sans lire ses données. Ce n'est pas une mise à jour de la bêta, et aucune version publique n'en est encore publiée ([RELEASING.md](RELEASING.md)).
+- **Retirés**, sur décision du propriétaire : la bêta Android Kotlin/Compose (`androidApp/`, `shared/`), l'application iOS (`iosApp/`) et les ponts natifs de la bêta (`native/`). Leur code reste dans l'historique git, au commit `de1c9cc`.
+- La CI tient en un workflow, **RavenEmu / Applications** : règles du dépôt, frontend C et ses pilotes, APK ARM64 et tests Java. Elle ne publie plus de préversion `android-beta-N`.
+- Pas encore dans l'application native : le câble link sans fil et l'import des états de la bêta. La liste des écarts est tenue dans [docs/MIGRATION_NATIVE.md](docs/MIGRATION_NATIVE.md).
+- RavenCore épinglé à la version 0.15.0, commit `23f9427f9937924c3a6e003673d91f6bc733162f` ([#38](https://github.com/GhostPunishR/RavenCore/pull/38)) : codes de triche lus comme l'appareil et comme dans RetroArch (codes GBA déjà déchiffrés, Codebreaker exécuté comme sur la cartouche, Game Genie écrit par groupes), et corrections du câble distant, de fonctions du BIOS GBA, de l'EEPROM des ROM de 32 Mio et du joypad Game Boy. Le format des états ne change pas.
+
+> Les sections suivantes décrivent des changements de la **bêta retirée**, jamais publiés. Ils ne sont pas tous dans l'application native.
+
 ### Ajouté
 
 - **Avance rapide**, d'après RetroArch, avec un code écrit pour RavenEmu : jusqu'à 4 fois la vitesse de la console. Bouton **»** en haut du lecteur, interrupteur dans le menu **⋮**, ou clic du stick droit d'une manette. **» ×4** s'affiche sur l'image ; le son garde sa hauteur et passe par morceaux. Permise en Hardcore, sans effet pendant le câble sans fil. Voir [Commandes](wiki/Commandes.md#avance-rapide).

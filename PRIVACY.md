@@ -31,21 +31,19 @@ Les badges des succès, l’image du jeu et le portrait du compte sont des image
 
 Les informations enregistrées par RetroAchievements relèvent de sa [politique de confidentialité](https://retroachievements.org/privacy.php). RavenEmu ne stocke pas ces informations sur un serveur du projet. Les requêtes Softcore légitimes émises par le SDK sont désormais conservées localement dans un journal chiffré via Android Keystore et exclu des sauvegardes Android. Ce journal contient les paramètres de la requête d'origine, y compris le jeton du compte ; il est limité à 256 demandes et les nouvelles tentatives ne sont effectuées qu'après authentification du même compte, avec le jeton de cette connexion. Les échecs sont retentés pendant la session avec un délai progressif de 5 à 120 secondes. Les entrées sont retirées après confirmation de réussite et toute la file est effacée lors d'une déconnexion explicite ou de la suppression des données de l'application. RavenEmu n'héberge pas ces données sur un serveur.
 
-## Première session iOS
+## Jaquettes en ligne (facultatif)
 
-Le lecteur iOS importe uniquement les fichiers choisis dans Fichiers et en garde une copie dans l'espace privé de l'application, avec un index local, les sauvegardes et les états. Les préférences utilisent UserDefaults. Le lecteur ne téléverse pas ces fichiers ; les sauvegardes système de l'appareil dépendent des réglages iOS de l'utilisateur. Les exports `.sav` sont écrits à la destination choisie dans Fichiers, qui peut être un fournisseur distant choisi par l'utilisateur. La suppression de l'application peut supprimer son stockage privé.
+**L'application native actuelle ne propose pas cette option** : elle ne télécharge aucune jaquette. Ce qui suit vaut pour la bêta retirée, et pour l'option si elle revient.
 
-RetroAchievements et le téléchargement des jaquettes ne sont pas raccordés dans cette première session iOS. Les mécanismes de jeton et de journal décrits plus haut concernent Android.
-
-## Jaquettes en ligne (facultatif, version multiplateforme)
-
-La nouvelle version multiplateforme de RavenEmu peut chercher les jaquettes manquantes de la bibliothèque sur `https://thumbnails.libretro.com`, un service tiers. Cette recherche est **désactivée par défaut** et ne démarre que si l’utilisateur l’active dans Réglages → Général → Bibliothèque.
+Cette option cherche les jaquettes manquantes de la bibliothèque sur `https://thumbnails.libretro.com`, un service tiers. Cette recherche est **désactivée par défaut** et ne démarre que si l’utilisateur l’active dans Réglages → Général → Bibliothèque.
 
 Une fois activée, l’application télécharge l’index public des jaquettes de chaque console présente dans la bibliothèque (Game Boy, Game Boy Color, Game Boy Advance), puis l’image correspondant au nom de fichier de chaque jeu sans jaquette. Ce service reçoit donc les informations d’une connexion HTTPS, dont l’adresse IP de l’appareil, et, à travers les images demandées, le nom des jeux de la bibliothèque. Aucune ROM, empreinte, sauvegarde ni aucun état n’est envoyé. Les jaquettes sont conservées sur l’appareil. Les jeux absents de l’index ne sont pas recherchés de nouveau ; désactiver puis réactiver l’option relance la recherche.
 
 Les images ainsi obtenues sont la propriété de leurs ayants droit ; RavenEmu ne les distribue pas et ne les inclut pas dans l’application.
 
 ## Câble link sans fil (Android)
+
+**L'application native actuelle n'a pas encore de câble link sans fil.** Ce qui suit vaut pour la bêta retirée, et pour cette fonction quand elle reviendra.
 
 Le câble link sans fil relie deux téléphones du même réseau local. Il est activé par défaut et se désactive dans Réglages → Général → Câble link. Il ne passe par aucun serveur : les échanges restent sur le réseau local, d’un téléphone à l’autre.
 

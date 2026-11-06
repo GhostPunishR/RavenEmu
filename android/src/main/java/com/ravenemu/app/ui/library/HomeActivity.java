@@ -1,0 +1,637 @@
+package com.ravenemu.app.ui.library;
+import com.ravenemu.app.data.library.CoverRepository;
+import com.ravenemu.app.data.library.LinkCable;
+import com.ravenemu.app.data.library.RomLibrary;
+import com.ravenemu.app.platform.SystemBarInsets;
+import com.ravenemu.app.ui.common.GameDetailsSheet;
+import com.ravenemu.app.ui.common.RavenIcon;
+import com.ravenemu.app.ui.common.RavenTheme;
+import com.ravenemu.app.ui.player.PlayerActivity;
+import com.ravenemu.app.ui.settings.PlaybackSettingsActivity;
+
+import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.Intent;
+import android.database.Cursor;
+import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
+import android.net.Uri;
+import android.os.Bundle;
+import android.provider.OpenableColumns;
+import android.text.Editable;
+import android.text.TextWatcher;
+import android.view.Gravity;
+import android.view.Menu;
+import android.view.View;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.FrameLayout;
+import android.widget.GridView;
+import android.widget.LinearLayout;
+import android.widget.PopupMenu;
+import androidx.core.widget.NestedScrollView;
+import android.widget.TextView;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+/**
+ * Java-only adaptation of RavenEmuApp's EXISTING library design.
+ * Visual source of truth: the beta's shared/theme/RavenColors.kt and
+ * shared/library/LibraryComponents.kt (git history, commit de1c9cc), not a
+ * new or generic Android UI.
+ *
+ * The shell uses Android Views; the emulation path remains C/JNI/C++.
+ * Never reads the beta package's library or saved data.
+ */
+public final class HomeActivity extends Activity implements RavenTheme.Host {
+
+    private static final int PICK_ROM = 71;
+    private static final int PICK_COVER = 72;
+    private final ExecutorService io = Executors.newSingleThreadExecutor();
+    private final List<RomLibrary.Entry> all = new ArrayList<>();
+    private final List<RomLibrary.Entry> shown = new ArrayList<>();
+    private boolean destroyed;
+    /** The second game of a linked session, chosen in the beta's dialog. */
+    private AlertDialog partnerDialog;
+    private String selectedCoverKey;
+    private String searchText = "";
+    private String selectedPage = "";
+    /** "" for all the games, then each console with games, as the beta's pager. */
+    private final List<String> pages = new ArrayList<>();
+    private boolean listMode;
+
+    private TextView heading, footnote;
+    private EditText search;
+    private LinearLayout tabs;
+    private GridView cards;
+    private RavenLibraryAdapter adapter;
+    private GameDetailsSheet details;
+    private String detailsKey;
+    private String restoredDetailsKey;
+    private SaveTransferUi saves;
+    private FolderImportUi folders;
+    /** Settings → Interface → Thème, as it was when the library was created. */
+    private RavenTheme theme;
+
+    @Override public RavenTheme theme() { return theme; }
+
+    @Override public void onCreate(Bundle state) {
+        theme = RavenTheme.apply(this);
+        super.onCreate(state);
+        if (state != null) {
+            searchText = state.getString("library.search", "");
+            selectedPage = state.getString("library.page", "");
+            listMode = state.getBoolean("library.list");
+            selectedCoverKey = state.getString("library.cover");
+            restoredDetailsKey = state.getString("library.details");
+        }
+        saves = new SaveTransferUi(this, state);
+        folders = new FolderImportUi(this, io, this::reload);
+        getWindow().setStatusBarColor(Color.BLACK);
+        getWindow().setNavigationBarColor(Color.BLACK);
+        createLibrary();
+        reload();
+    }
+
+    @Override protected void onResume() {
+        super.onResume();
+        // Back from the settings with another theme: drawn again in its colours.
+        if (RavenTheme.stored(this) != theme) {
+            recreate();
+            return;
+        }
+        if (cards != null) reload();
+    }
+
+    private int dp(float value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
+    }
+
+    static GradientDrawable shape(int color, float radiusDp, float density) {
+        GradientDrawable background = new GradientDrawable();
+        background.setColor(color);
+        background.setCornerRadius(radiusDp * density);
+        return background;
+    }
+
+    private TextView text(String value, int size, int color) {
+        TextView result = new TextView(this);
+        result.setText(value);
+        result.setTextSize(size);
+        result.setTextColor(color);
+        result.setGravity(Gravity.CENTER_VERTICAL);
+        return result;
+    }
+
+    /** The beta's toolbar icons, drawn (RavenIcon), never a font's symbol. */
+    private View iconButton(RavenIcon.Glyph glyph, int tint, String description, View.OnClickListener click) {
+        View button = RavenIcon.button(this, glyph, tint, 24, description);
+        button.setOnClickListener(click);
+        return button;
+    }
+
+    private void createLibrary() {
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackgroundColor(theme.background);
+
+        // RavenEmu 0.8.1: settings left, centered page title, + and ⋮ right.
+        FrameLayout toolbar = new FrameLayout(this);
+        root.addView(toolbar, new LinearLayout.LayoutParams(-1, dp(48)));
+
+        heading = text("Tous les jeux", 20, theme.text);
+        heading.setGravity(Gravity.CENTER);
+        heading.setSingleLine(true);
+        heading.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        heading.setTypeface(null, android.graphics.Typeface.BOLD);
+        FrameLayout.LayoutParams center = new FrameLayout.LayoutParams(-1, -1);
+        center.leftMargin = dp(100);
+        center.rightMargin = dp(102);
+        toolbar.addView(heading, center);
+
+        View settings = iconButton(RavenIcon.Glyph.SETTINGS, theme.accent, "Paramètres", view -> showSettings());
+        toolbar.addView(settings, new FrameLayout.LayoutParams(dp(48), -1, Gravity.LEFT));
+
+        LinearLayout actions = new LinearLayout(this);
+        FrameLayout.LayoutParams right = new FrameLayout.LayoutParams(-2, -1, Gravity.RIGHT);
+        toolbar.addView(actions, right);
+        actions.addView(iconButton(RavenIcon.Glyph.ADD, theme.accent, "Ajouter une ROM", view -> pickRom()),
+                new LinearLayout.LayoutParams(dp(48), -1));
+        actions.addView(iconButton(RavenIcon.Glyph.MORE, theme.accent, "Plus d'options", this::showOptions),
+                new LinearLayout.LayoutParams(dp(48), -1));
+
+        search = new EditText(this);
+        search.setSingleLine(true);
+        search.setTextColor(theme.text);
+        search.setHintTextColor(theme.muted);
+        search.setTextSize(15);
+        search.setHint("Rechercher un jeu");
+        search.setCompoundDrawablesRelativeWithIntrinsicBounds(
+                new RavenIcon(RavenIcon.Glyph.SEARCH, theme.accent, dp(20)), null, null, null);
+        search.setCompoundDrawablePadding(dp(10));
+        search.setContentDescription("Rechercher un jeu");
+        search.setText(searchText);
+        search.setPadding(dp(12), 0, dp(12), 0);
+        search.setBackground(shape(theme.surface, 14, getResources().getDisplayMetrics().density));
+        LinearLayout.LayoutParams field = new LinearLayout.LayoutParams(-1, dp(44));
+        field.setMargins(dp(12), 0, dp(12), dp(8));
+        root.addView(search, field);
+        root.addView(folders.progressRow(), new LinearLayout.LayoutParams(-1, -2));
+        search.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence value, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence value, int start, int before, int count) {
+                searchText = value.toString();
+                updateCards();
+            }
+            @Override public void afterTextChanged(Editable value) {}
+        });
+
+        cards = new GridView(this);
+        cards.setBackgroundColor(theme.background);
+        cards.setVerticalScrollBarEnabled(false);
+        cards.setStretchMode(GridView.STRETCH_COLUMN_WIDTH);
+        cards.setGravity(Gravity.CENTER_HORIZONTAL);
+        cards.setHorizontalSpacing(dp(8));
+        cards.setVerticalSpacing(dp(6));
+        adapter = new RavenLibraryAdapter(this, getFilesDir(), io);
+        cards.setAdapter(adapter);
+        cards.setOnItemClickListener((parent, view, position, id) -> {
+            if (position >= 0 && position < shown.size()) showDetails(shown.get(position));
+        });
+        // Swiping sideways turns the console pages, as the beta's HorizontalPager.
+        PageSwipe swipe = new PageSwipe(this, new PageSwipe.Pages() {
+            @Override public boolean has(int direction) {
+                int next = pages.indexOf(selectedPage) + direction;
+                return pages.size() > 1 && next >= 0 && next < pages.size();
+            }
+            @Override public void turn(int direction) {
+                if (has(direction)) showPage(pages.get(pages.indexOf(selectedPage) + direction));
+            }
+        });
+        swipe.setBackgroundColor(theme.background);
+        swipe.addView(cards, new FrameLayout.LayoutParams(-1, -1));
+        root.addView(swipe, new LinearLayout.LayoutParams(-1, 0, 1));
+
+        tabs = new LinearLayout(this);
+        tabs.setGravity(Gravity.CENTER);
+        root.addView(tabs, new LinearLayout.LayoutParams(-1, dp(40)));
+
+        footnote = text("RavenEmu By GhostPunishR", 10, theme.muted);
+        footnote.setLetterSpacing(.08f);
+        footnote.setGravity(Gravity.CENTER);
+        root.addView(footnote, new LinearLayout.LayoutParams(-1, dp(28)));
+
+        // Reserve actual status bar, cutout, nav buttons and keyboard space.
+        // Android 15 edge-to-edge would otherwise overlay the toolbar/footer.
+        SystemBarInsets.install(this, root);
+        setContentView(root);
+        updateCards();
+    }
+
+    private void reload() {
+        if (destroyed) return;
+        io.execute(() -> {
+            try {
+                List<RomLibrary.Entry> loaded = RomLibrary.list(getFilesDir());
+                runOnUiThread(() -> {
+                    if (destroyed) return;
+                    all.clear();
+                    all.addAll(loaded);
+                    updatePages();
+                    updateCards();
+                    if (restoredDetailsKey != null) {
+                        String key = restoredDetailsKey;
+                        restoredDetailsKey = null;
+                        for (RomLibrary.Entry entry : all) {
+                            if (key.equals(entry.key)) { showDetails(entry); break; }
+                        }
+                    }
+                });
+            } catch (Exception failure) {
+                status("Bibliothèque indisponible : " + failure.getMessage());
+            }
+        });
+    }
+
+    private void updatePages() {
+        List<String> populated = new ArrayList<>();
+        for (String system : new String[]{"gb", "gbc", "gba"}) {
+            for (RomLibrary.Entry entry : all) {
+                if (entry.system.equals(system)) {
+                    populated.add(system);
+                    break;
+                }
+            }
+        }
+        pages.clear();
+        if (populated.size() != 1) pages.add("");
+        pages.addAll(populated);
+        if (pages.isEmpty()) pages.add("");
+        if (!pages.contains(selectedPage)) selectedPage = pages.get(0);
+        heading.setText(pageTitle(selectedPage));
+
+        tabs.removeAllViews();
+        if (pages.size() <= 1) return;
+        for (String page : pages) {
+            // The beta's PageIndicator: a console pictogram per page, larger and
+            // on its highlight when active; every icon in the accent colour.
+            boolean active = page.equals(selectedPage);
+            RavenIcon.Glyph glyph = page.isEmpty() ? RavenIcon.Glyph.ALL : "gb".equals(page) ? RavenIcon.Glyph.GB
+                    : "gbc".equals(page) ? RavenIcon.Glyph.GBC : RavenIcon.Glyph.GBA;
+            android.widget.ImageView option = RavenIcon.button(this, glyph, theme.accent,
+                    active ? 24 : 21, pageTitle(page));
+            ((RavenIcon) option.getDrawable()).setScreenAlpha(active ? 255 : 128);
+            option.setSelected(active);
+            option.setBackground(shape(active ? RavenTheme.alpha(theme.accent, 0x29) : 0x00000000, 10, getResources().getDisplayMetrics().density));
+            LinearLayout.LayoutParams parameter = new LinearLayout.LayoutParams(dp(36), dp(36));
+            parameter.setMargins(dp(4), 0, dp(4), 0);
+            tabs.addView(option, parameter);
+            option.setOnClickListener(view -> showPage(page));
+        }
+    }
+
+    /** The beta's LinkPartnerDialog: the library's games this one can be linked to. */
+    private void choosePartner(RomLibrary.Entry game) {
+        if (destroyed || (partnerDialog != null && partnerDialog.isShowing())) return;
+        List<RomLibrary.Entry> partners = LinkCable.partners(game, new ArrayList<>(all));
+        LinearLayout body = new LinearLayout(this);
+        body.setOrientation(LinearLayout.VERTICAL);
+        body.setPadding(dp(22), dp(8), dp(22), 0);
+        body.addView(text(game.title + " et un second jeu tournent ensemble, reliés par un câble link virtuel : "
+                + "échanges et combats entre vos propres sauvegardes. Un jeu est affiché à la fois : le bouton "
+                + "Joueur de la barre passe à l'autre, qui continue de tourner.", 13, theme.secondary));
+        if (partners.isEmpty()) {
+            TextView none = text("gba".equals(game.system)
+                    ? "Ajoutez un autre jeu Game Boy Advance à la bibliothèque."
+                    : "Ajoutez un autre jeu Game Boy ou Game Boy Color à la bibliothèque.", 13, theme.muted);
+            none.setPadding(0, dp(10), 0, 0);
+            body.addView(none);
+        }
+        float density = getResources().getDisplayMetrics().density;
+        for (RomLibrary.Entry partner : partners) {
+            Button pick = action(partner.title + " · " + pageTitle(partner.system));
+            pick.setTextColor(theme.text);
+            pick.setSingleLine(true);
+            pick.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            GradientDrawable outline = new GradientDrawable();
+            outline.setCornerRadius(12 * density);
+            outline.setStroke(Math.max(1, dp(1)), theme.outline);
+            pick.setBackground(outline);
+            pick.setOnClickListener(view -> {
+                if (partnerDialog != null) partnerDialog.dismiss();
+                startActivity(new Intent(this, PlayerActivity.class)
+                        .putExtra(PlayerActivity.EXTRA_ROM_KEY, game.key)
+                        .putExtra(PlayerActivity.EXTRA_LINK_ROM_KEY, partner.key));
+            });
+            LinearLayout.LayoutParams size = new LinearLayout.LayoutParams(-1, dp(48));
+            size.topMargin = dp(8);
+            body.addView(pick, size);
+        }
+        NestedScrollView scroll = new NestedScrollView(this);
+        scroll.addView(body);
+        partnerDialog = new AlertDialog.Builder(this).setTitle("Jouer à deux").setView(scroll)
+                .setNegativeButton("Annuler", null).create();
+        partnerDialog.show();
+        partnerDialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(theme.accent);
+    }
+
+    /** A console's page (from its icon or a swipe), from its first game. */
+    private void showPage(String page) {
+        selectedPage = page;
+        updatePages();
+        updateCards();
+        cards.setSelection(0);
+    }
+
+    private String pageTitle(String system) {
+        switch (system) {
+            case "gb": return "Game Boy";
+            case "gbc": return "Game Boy Color";
+            case "gba": return "Game Boy Advance";
+            default: return "Tous les jeux";
+        }
+    }
+
+    private void updateCards() {
+        if (cards == null) return;
+        shown.clear();
+        shown.addAll(RomLibrary.query(all, searchText, selectedPage,
+                RomLibrary.SortOrder.TITLE_ASC));
+        cards.setNumColumns(listMode ? 1 : GridView.AUTO_FIT);
+        cards.setColumnWidth(dp(listMode ? 280 : 106));
+        cards.setHorizontalSpacing(dp(listMode ? 0 : 8));
+        adapter.setListMode(listMode);
+        adapter.replace(shown);
+    }
+
+    private void showOptions(View anchor) {
+        PopupMenu options = new PopupMenu(this, anchor);
+        options.getMenu().add(listMode ? "Vue grille" : "Vue liste").setOnMenuItemClickListener(item -> {
+            listMode = !listMode;
+            updateCards();
+            return true;
+        });
+        options.getMenu().add(0, FolderImportUi.PICK_FOLDER, 0, "Importer un dossier")
+                .setOnMenuItemClickListener(item -> { folders.pick(); return true; });
+        options.getMenu().add("Actualiser la bibliothèque de jeux")
+                .setOnMenuItemClickListener(item -> { reload(); return true; });
+        options.getMenu().add(0, SaveTransferUi.EXPORT_ALL, 2, "Exporter toutes les sauvegardes (.zip)")
+                .setOnMenuItemClickListener(item -> { saves.exportAll(); return true; });
+        options.show();
+    }
+
+    private void showDetails(RomLibrary.Entry entry) {
+        if (destroyed || (details != null && details.isShowing())) return;
+        float density = getResources().getDisplayMetrics().density;
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding(dp(20), dp(12), dp(20), dp(16));
+
+        View handle = new View(this);
+        handle.setBackground(shape(theme.muted, 2, density));
+        LinearLayout.LayoutParams handleParams = new LinearLayout.LayoutParams(dp(32), dp(4));
+        handleParams.gravity = Gravity.CENTER_HORIZONTAL;
+        handleParams.bottomMargin = dp(20);
+        panel.addView(handle, handleParams);
+
+        TextView title = text(entry.title, 18, theme.text);
+        title.setTypeface(null, android.graphics.Typeface.BOLD);
+        panel.addView(title);
+        panel.addView(text(pageTitle(entry.system), 13, theme.secondary));
+
+        LinearLayout coverRow = new LinearLayout(this);
+        coverRow.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams spacing = new LinearLayout.LayoutParams(-1, -2);
+        spacing.topMargin = dp(12);
+        panel.addView(coverRow, spacing);
+
+        // The cover exactly as a tile of the library shows it (the owner's
+        // wish; the beta's sheet had a smaller 90 × 105 dp one).
+        CoverArtwork cover = new CoverArtwork(this, theme, false);
+        cover.setGame(entry);
+        cover.setCover(null);
+        int[] coverSize = gridCoverSize();
+        coverRow.addView(cover, new LinearLayout.LayoutParams(coverSize[0], coverSize[1]));
+        io.execute(() -> {
+            try {
+                android.graphics.Bitmap image = CoverRepository.load(getFilesDir(), entry.key,
+                        coverSize[0], coverSize[1]);
+                if (image != null) runOnUiThread(() -> {
+                    if (!destroyed) cover.setCover(image);
+                });
+            } catch (IOException | RuntimeException ignored) {
+                // A damaged cover leaves the console's placeholder.
+            }
+        });
+
+        LinearLayout controls = new LinearLayout(this);
+        controls.setOrientation(LinearLayout.VERTICAL);
+        controls.setPadding(dp(14), 0, 0, 0);
+        coverRow.addView(controls, new LinearLayout.LayoutParams(0, -2, 1));
+        controls.addView(text("Jaquette enregistrée localement ou facultative", 12, theme.muted));
+        Button changeCover = action("Image manuelle (facultatif)");
+        controls.addView(changeCover);
+        TextView removeCover = text("Retirer la jaquette", 12, theme.accent);
+        removeCover.setPadding(dp(8), dp(8), 0, dp(8));
+        controls.addView(removeCover);
+
+        Button play = action("Jouer");
+        play.setTextColor(theme.background);
+        play.setBackground(shape(theme.accent, 12, density));
+        LinearLayout.LayoutParams playParams = new LinearLayout.LayoutParams(-1, dp(48));
+        playParams.topMargin = dp(16);
+        panel.addView(play, playParams);
+        // The beta's second button: a game alongside, joined by the link cable.
+        Button linked = action("Jouer à deux (câble link)");
+        linked.setTextColor(theme.accent);
+        GradientDrawable linkedOutline = new GradientDrawable();
+        linkedOutline.setCornerRadius(12 * density);
+        linkedOutline.setStroke(Math.max(1, dp(1)), theme.accent);
+        linked.setBackground(linkedOutline);
+        LinearLayout.LayoutParams linkedParams = new LinearLayout.LayoutParams(-1, dp(48));
+        linkedParams.topMargin = dp(8);
+        panel.addView(linked, linkedParams);
+        saves.addSection(panel, entry, () -> {
+            GameDetailsSheet sheet = details;
+            if (sheet != null) sheet.dismiss();
+        });
+
+        // Keep every action reachable in landscape and with large system text.
+        NestedScrollView scroll = new NestedScrollView(this);
+        scroll.addView(panel);
+        GameDetailsSheet dialog = new GameDetailsSheet(this);
+        dialog.setContentView(scroll);
+        details = dialog;
+        detailsKey = entry.key;
+        dialog.setOnDismissListener(ignored -> {
+            if (details == dialog) { details = null; detailsKey = null; }
+        });
+        Button close = action("Fermer");
+        panel.addView(close, new LinearLayout.LayoutParams(-1, dp(48)));
+        close.setOnClickListener(view -> dialog.dismiss());
+        play.setOnClickListener(view -> {
+            dialog.dismiss();
+            startActivity(new Intent(this, PlayerActivity.class)
+                    .putExtra(PlayerActivity.EXTRA_ROM_KEY, entry.key));
+        });
+        linked.setOnClickListener(view -> {
+            dialog.dismiss();
+            choosePartner(entry);
+        });
+        changeCover.setOnClickListener(view -> {
+            dialog.dismiss();
+            selectedCoverKey = entry.key;
+            Intent pick = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            pick.addCategory(Intent.CATEGORY_OPENABLE);
+            pick.setType("image/*");
+            startActivityForResult(pick, PICK_COVER);
+        });
+        removeCover.setOnClickListener(view -> {
+            dialog.dismiss();
+            io.execute(() -> {
+                CoverRepository.remove(getFilesDir(), entry.key);
+                runOnUiThread(() -> {
+                    adapter.invalidateCover(entry.key);
+                    status("Jaquette retirée");
+                });
+            });
+        });
+        dialog.show();
+    }
+
+    /** A grid tile's cover, in pixels, for the library's current width
+     * (whichever view is shown): the sheet's cover takes the same. */
+    private int[] gridCoverSize() {
+        int width = cards != null && cards.getWidth() > 0 ? cards.getWidth()
+                : getResources().getDisplayMetrics().widthPixels;
+        if (!listMode && cards != null && cards.getColumnWidth() > 0)
+            return new int[]{Math.max(1, cards.getColumnWidth() - 2 * dp(CoverArtwork.GRID_SIDE_DP)),
+                    dp(CoverArtwork.GRID_HEIGHT_DP)};
+        return CoverArtwork.gridSize(width, getResources().getDisplayMetrics().density);
+    }
+
+    private Button action(String label) {
+        Button button = new Button(this);
+        button.setText(label);
+        button.setTextSize(13);
+        button.setAllCaps(false);
+        return button;
+    }
+
+    /** The real settings page, on its categories, as in the beta. */
+    private void showSettings() {
+        startActivity(new Intent(this, PlaybackSettingsActivity.class));
+    }
+
+    private void pickRom() {
+        Intent select = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        select.addCategory(Intent.CATEGORY_OPENABLE);
+        select.setType("*/*");
+        startActivityForResult(select, PICK_ROM);
+    }
+
+    @Override protected void onActivityResult(int request, int result, Intent data) {
+        super.onActivityResult(request, result, data);
+        if (saves.onResult(request, result, data) || folders.onResult(request, result, data)) return;
+        if (result != RESULT_OK || data == null || data.getData() == null) {
+            if (request == PICK_COVER) selectedCoverKey = null;
+            return;
+        }
+        Uri uri = data.getData();
+        if (request == PICK_ROM) {
+            io.execute(() -> {
+                try {
+                    String name = displayName(uri);
+                    RomLibrary.importRom(getFilesDir(), name,
+                            readBounded(uri, RomLibrary.MAX_ROM_BYTES));
+                    status("Jeu importé : " + RomLibrary.safeTitle(name));
+                    runOnUiThread(this::reload);
+                } catch (Exception error) {
+                    status("Import impossible : " + error.getMessage());
+                }
+            });
+        } else if (request == PICK_COVER) {
+            String key = selectedCoverKey;
+            selectedCoverKey = null;
+            if (key == null) return;
+            io.execute(() -> {
+                try {
+                    boolean found = false;
+                    for (RomLibrary.Entry entry : RomLibrary.list(getFilesDir())) {
+                        if (entry.key.equals(key)) { found = true; break; }
+                    }
+                    if (!found) throw new IOException("Jeu introuvable");
+                    CoverRepository.importImage(getFilesDir(), key,
+                            readBounded(uri, CoverRepository.MAX_SOURCE_BYTES));
+                    runOnUiThread(() -> {
+                        if (destroyed) return;
+                        adapter.invalidateCover(key);
+                        status("Jaquette enregistrée");
+                    });
+                } catch (Exception error) {
+                    status("Jaquette invalide : " + error.getMessage());
+                }
+            });
+        }
+    }
+
+    private String displayName(Uri uri) {
+        try (Cursor cursor = getContentResolver().query(uri,
+                new String[]{OpenableColumns.DISPLAY_NAME}, null, null, null)) {
+            if (cursor != null && cursor.moveToFirst() && !cursor.isNull(0))
+                return cursor.getString(0);
+        } catch (Exception ignored) {}
+        return uri.getLastPathSegment() == null ? "jeu.gb" : uri.getLastPathSegment();
+    }
+
+    private byte[] readBounded(Uri uri, int maximum) throws IOException {
+        try (InputStream input = getContentResolver().openInputStream(uri);
+             ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            if (input == null) throw new IOException("Document introuvable");
+            byte[] buffer = new byte[32 * 1024];
+            int count;
+            while ((count = input.read(buffer)) != -1) {
+                if (output.size() > maximum - count)
+                    throw new IOException("Fichier trop volumineux");
+                output.write(buffer, 0, count);
+            }
+            return output.toByteArray();
+        }
+    }
+
+    private void status(String message) {
+        runOnUiThread(() -> {
+            if (destroyed) return;
+            android.widget.Toast.makeText(this, message,
+                    android.widget.Toast.LENGTH_LONG).show();
+        });
+    }
+
+    @Override protected void onSaveInstanceState(Bundle state) {
+        super.onSaveInstanceState(state);
+        state.putString("library.search", searchText);
+        state.putString("library.page", selectedPage);
+        state.putBoolean("library.list", listMode);
+        saves.save(state);
+        state.putString("library.cover", selectedCoverKey);
+        state.putString("library.details", details != null && details.isShowing()
+                ? detailsKey : restoredDetailsKey);
+    }
+
+    @Override protected void onDestroy() {
+        destroyed = true;
+        if (details != null) details.dismiss();
+        if (partnerDialog != null) partnerDialog.dismiss();
+        saves.destroy();
+        folders.destroy();
+        io.shutdown();
+        super.onDestroy();
+    }
+}
