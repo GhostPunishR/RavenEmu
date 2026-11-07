@@ -2,152 +2,62 @@ package com.ravenemu.app.ui.player;
 
 import com.ravenemu.app.bridge.NativeAchievements;
 import com.ravenemu.app.settings.AchievementSettings;
-import com.ravenemu.app.ui.common.RavenIcon;
-import com.ravenemu.app.ui.common.RavenTheme;
 
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.animation.ValueAnimator;
 import android.content.Context;
 import android.graphics.Bitmap;
-import android.graphics.Typeface;
-import android.graphics.drawable.GradientDrawable;
 import android.os.Handler;
 import android.os.Looper;
-import android.text.TextUtils;
-import android.view.Gravity;
-import android.view.View;
 import android.view.animation.DecelerateInterpolator;
 import android.widget.FrameLayout;
-import android.widget.ImageView;
-import android.widget.LinearLayout;
-import android.widget.TextView;
 import java.util.ArrayDeque;
 
-/** RetroAchievements over the game, after the beta's RetroOverlays.kt: the
- * one-at-a-time banner (its badge drops in, then the band unfolds; the
- * reverse to leave; an award is framed in gold; it opens once its badge is
- * fetched, as in the beta's showUnlocks), and under it the measured
- * progress of an achievement, at the top of the picture or at the bottom;
- * and at the bottom, the active challenges and leaderboard trackers, each
- * until rcheevos hides it (RetroIndicatorState.kt). UI thread; it never
- * takes a touch from the game. */
+/** RetroAchievements over the game, as RetroArch shows them, in RavenEmu's
+ * own code. One popup at a time (AchievementPopup), eight waiting at most:
+ * the game that starts, each unlock, the completed game and the session's
+ * notices. Its badge slides in from the edge, then its text unfolds beside
+ * it; it stays for Settings' duration, folds back and slides away; then the
+ * next. Each stage takes RetroArch's MSG_QUEUE_ANIMATION_DURATION, 330 ms,
+ * eased out (quadratic). A popup opens once its badge is fetched, 2 s at
+ * most, and never changes while shown. In the bottom right corner
+ * (AchievementCorner): the progress of an achievement, the challenges and
+ * the leaderboard trackers. UI thread; it never takes a touch from the game. */
 final class AchievementOverlay extends FrameLayout {
-    static final int GOLD = 0xfff4c152;
-    static final int DROP_MILLIS = 300, UNFOLD_MILLIS = 350;
-    /** As the beta: a banner waits this long at most for its badge, then
-     * opens with the star; it never changes while shown. */
+    /** RetroArch's MSG_QUEUE_ANIMATION_DURATION, for each stage. */
+    static final int SLIDE_MILLIS = 330, UNFOLD_MILLIS = 330;
+    /** A popup waits this long at most for its badge, then opens with the trophy. */
     static final int BADGE_WAIT_MILLIS = 2_000;
-    private static final int MAX_QUEUED = 8, MAX_INDICATORS = 4;
+    /** RetroArch's CHEEVO_QUEUE_SIZE. */
+    static final int MAX_QUEUED = 8;
     private final Handler main = new Handler(Looper.getMainLooper());
     private final UnlockChime chime = new UnlockChime();
     private final ArrayDeque<AchievementNotices.Notice> queue = new ArrayDeque<>();
     private final BadgeCache badges;
-    /** "family:id" to its line, oldest first, as the beta keeps them. */
-    private final java.util.LinkedHashMap<String, String> active = new java.util.LinkedHashMap<>();
-    private final LinearLayout indicators;
-    private final LinearLayout column;
-    private final LinearLayout banner;
-    private final FrameLayout bannerBadge;
-    private final ImageView bannerImage;
-    private final TextView bannerHeading, bannerTitle;
-    /** Shown until the badge arrives; gold for an unlock, as the beta's ★. */
-    private final ImageView bannerStar, progressStar;
-    private final Unfold bannerText;
-    private final LinearLayout progress;
-    private final ImageView progressImage;
-    private final TextView progressTitle, progressDetail;
+    private final AchievementPopup popup;
+    private final AchievementCorner corner;
     private AchievementSettings settings = AchievementSettings.DEFAULTS;
     private boolean soundOn = true;
     private int volume = 100;
     private AchievementNotices.Notice showing;
-    private String progressBadge = "";
     private Animator running;
-    /** The next banner while its badge is fetched; null otherwise. */
+    /** The next popup while its badge is fetched; null otherwise. */
     private AchievementNotices.Notice fetching;
     private boolean released;
     private final Runnable leave = this::leave;
     private final Runnable waited = () -> { if (fetching != null) fetched(fetching); };
-    private final Runnable hideProgress = () -> fadeProgress(false);
-
-    /** The colours of the Activity it belongs to (Settings → Interface → Thème). */
-    private final RavenTheme theme;
 
     AchievementOverlay(Context context, BadgeCache badges) {
         super(context);
-        this.theme = RavenTheme.of(context);
         this.badges = badges;
-        setClipChildren(false);
+        setClipChildren(true);
         setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
-        indicators = new LinearLayout(context);
-        indicators.setOrientation(LinearLayout.VERTICAL);
-        indicators.setBackground(round(RavenTheme.alpha(theme.surface, 0xe0), 10, 0, 0));
-        indicators.setPadding(dp(12), dp(8), dp(12), dp(8));
-        indicators.setVisibility(GONE);
-        LayoutParams bottom = new LayoutParams(-2, -2, Gravity.CENTER_HORIZONTAL | Gravity.BOTTOM);
-        bottom.setMargins(dp(12), 0, dp(12), dp(10));
-        addView(indicators, bottom);
-        column = new LinearLayout(context);
-        column.setOrientation(LinearLayout.VERTICAL);
-        column.setGravity(Gravity.CENTER_HORIZONTAL);
-        column.setClipChildren(false);
-        addView(column, new LayoutParams(-2, -2, Gravity.CENTER_HORIZONTAL | Gravity.TOP));
-
-        banner = new LinearLayout(context);
-        banner.setGravity(Gravity.CENTER_VERTICAL);
-        banner.setBackground(round(RavenTheme.alpha(theme.background, 0xf0), 10, 0, 0));
-        banner.setElevation(dp(6));
-        banner.setVisibility(GONE);
-        banner.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_YES);
-        bannerBadge = new FrameLayout(context);
-        bannerBadge.setClipToOutline(true);
-        bannerImage = new ImageView(context);
-        bannerImage.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        bannerBadge.addView(bannerImage, new LayoutParams(-1, -1));
-        bannerStar = RavenIcon.image(context, RavenIcon.Glyph.STAR, theme.accent, 26);
-        bannerBadge.addView(bannerStar, new LayoutParams(-1, -1));
-        LinearLayout.LayoutParams badgeSize = new LinearLayout.LayoutParams(dp(46), dp(46));
-        badgeSize.setMargins(dp(5), dp(5), dp(5), dp(5));
-        banner.addView(bannerBadge, badgeSize);
-        LinearLayout lines = new LinearLayout(context);
-        lines.setOrientation(LinearLayout.VERTICAL);
-        lines.setPadding(dp(8), 0, dp(16), 0);
-        bannerHeading = line(12, theme.secondary);
-        bannerTitle = line(15, theme.text);
-        bannerTitle.setTypeface(null, Typeface.BOLD);
-        lines.addView(bannerHeading);
-        lines.addView(bannerTitle);
-        bannerText = new Unfold(context, dp(420));
-        bannerText.addView(lines, new LayoutParams(-2, -2, Gravity.CENTER_VERTICAL));
-        banner.addView(bannerText, new LinearLayout.LayoutParams(-2, -2));
-
-        progress = new LinearLayout(context);
-        progress.setGravity(Gravity.CENTER_VERTICAL);
-        progress.setBackground(round(theme.surface, 12, 1, theme.accent));
-        progress.setPadding(dp(14), dp(10), dp(14), dp(10));
-        progress.setVisibility(GONE);
-        progress.setAlpha(0f);
-        FrameLayout progressBadgeBox = new FrameLayout(context);
-        progressImage = new ImageView(context);
-        progressImage.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        progressBadgeBox.addView(progressImage, new LayoutParams(-1, -1));
-        progressStar = RavenIcon.image(context, RavenIcon.Glyph.STAR, theme.accent, 22);
-        progressBadgeBox.addView(progressStar, new LayoutParams(-1, -1));
-        progress.addView(progressBadgeBox, new LinearLayout.LayoutParams(dp(40), dp(40)));
-        LinearLayout progressLines = new LinearLayout(context);
-        progressLines.setOrientation(LinearLayout.VERTICAL);
-        progressTitle = line(12, theme.text);
-        progressDetail = line(12, theme.text);
-        progressLines.addView(progressTitle);
-        progressLines.addView(progressDetail);
-        LinearLayout.LayoutParams gap = new LinearLayout.LayoutParams(-2, -2);
-        gap.setMarginStart(dp(8));
-        progress.addView(progressLines, gap);
-        column.addView(banner, new LinearLayout.LayoutParams(-2, dp(56)));
-        LinearLayout.LayoutParams below = new LinearLayout.LayoutParams(-2, -2);
-        below.topMargin = dp(8);
-        column.addView(progress, below);
-        placeColumn();
+        corner = new AchievementCorner(context, badges);
+        addView(corner, new LayoutParams(-1, -1));
+        popup = new AchievementPopup(context);
+        addView(popup, new LayoutParams(-1, -1));
+        popup.setBottom(false);
     }
 
     /** Settings → RetroAchievements; Settings → Audio for the chime. */
@@ -160,27 +70,35 @@ final class AchievementOverlay extends FrameLayout {
             if (showing != null && showing.award) leaveNow();
             if (fetching != null && fetching.award) stopFetching();
         }
-        if (!settings.progressPopups) fadeProgress(false);
-        placeColumn();
+        if (!settings.progressPopups) corner.hideProgress();
+        // A popup on screen keeps its edge; the next one takes the new one.
+        if (showing == null) popup.setBottom(fromBottom());
     }
 
     /** What the C module reported; see AchievementNotices. */
     void onEvent(NativeAchievements.Event event) {
         if (released) return;
-        if ("progress_show".equals(event.kind)) {
-            if (settings.progressPopups) showProgress(event);
-            return;
+        switch (event.kind) {
+            case "progress_show":
+                if (settings.progressPopups)
+                    corner.showProgress(event.id, event.title, event.detail, event.image, settings.progressSeconds);
+                return;
+            case "progress_hide":
+                // The SDK's own two-second timer names no achievement: the
+                // corner keeps Settings' duration. A reset or a loaded state does.
+                if (!event.id.isEmpty()) corner.hideProgress();
+                return;
+            case "challenge_show": corner.showChallenge(event.id, event.title, event.image); return;
+            case "challenge_hide": corner.hideChallenge(event.id); return;
+            case "tracker_show": corner.showTracker(event.id, event.title); return;
+            case "tracker_hide": corner.hideTracker(event.id); return;
+            case "hardcore_reset": corner.clearIndicators(); break;
+            default: break;
         }
-        if ("progress_hide".equals(event.kind)) {
-            fadeProgress(false);
-            return;
-        }
-        if (indicator(event)) return;
-        if ("hardcore_reset".equals(event.kind)) clearIndicators();
         AchievementNotices.Notice notice = AchievementNotices.of(event);
         if (notice == null) return;
         if (notice.award && !settings.unlockPopups) {
-            // No banner: the chime alone (a banner rings when it opens).
+            // No popup: the chime alone (a popup rings when it opens).
             if (settings.sound && soundOn) chime.play(volume);
             return;
         }
@@ -192,77 +110,36 @@ final class AchievementOverlay extends FrameLayout {
     void clear() {
         queue.clear();
         leaveNow();
-        fadeProgress(false);
-        clearIndicators();
-    }
-
-    /** The lines on screen, oldest first: for tests and accessibility. */
-    java.util.List<String> indicatorLines() { return new java.util.ArrayList<>(active.values()); }
-
-    /** challenge_* and tracker_*: shown until their own hide. */
-    private boolean indicator(NativeAchievements.Event event) {
-        final boolean show = event.kind.equals("challenge_show") || event.kind.equals("tracker_show");
-        final boolean hide = event.kind.equals("challenge_hide") || event.kind.equals("tracker_hide");
-        if (!show && !hide) return false;
-        final String key = event.kind.substring(0, event.kind.indexOf('_')) + ":" + event.id;
-        if (hide) {
-            active.remove(key);
-        } else {
-            // A challenge says its achievement; a tracker, its value. Both, joined, if both.
-            StringBuilder line = new StringBuilder(event.title.trim());
-            if (!event.detail.trim().isEmpty()) {
-                if (line.length() > 0) line.append(" • ");
-                line.append(event.detail.trim());
-            }
-            active.put(key, line.toString());
-        }
-        renderIndicators();
-        return true;
-    }
-
-    private void clearIndicators() {
-        active.clear();
-        renderIndicators();
-    }
-
-    private void renderIndicators() {
-        indicators.removeAllViews();
-        int shown = 0;
-        for (String line : active.values()) {
-            if (shown++ == MAX_INDICATORS) break;
-            TextView text = line(12, theme.text);
-            text.setText(line);
-            LinearLayout.LayoutParams gap = new LinearLayout.LayoutParams(-2, -2);
-            if (shown > 1) gap.topMargin = dp(3);
-            indicators.addView(text, gap);
-        }
-        indicators.setVisibility(active.isEmpty() ? GONE : VISIBLE);
-        indicators.setContentDescription(active.isEmpty() ? null : String.join(". ", active.values()));
-        placeColumn();
+        corner.clear();
     }
 
     void release() {
         released = true;
         clear();
+        corner.release();
         chime.release();
         main.removeCallbacksAndMessages(null);
     }
 
-    /** The banner's text, for tests and accessibility. */
-    CharSequence bannerText() { return showing == null ? null : showing.heading + " · " + showing.title; }
+    /** The challenges' and trackers' lines, oldest first: for tests and accessibility. */
+    java.util.List<String> indicatorLines() { return corner.indicatorLines(); }
 
-    /** The next banner, once its badge is known: as in the beta, it is
-     * fetched before the banner opens (BADGE_WAIT_MILLIS at most). */
+    /** The popup's text, for tests and accessibility. */
+    CharSequence popupText() { return showing == null ? null : showing.heading + " · " + showing.title; }
+
+    private boolean fromBottom() { return AchievementSettings.BOTTOM.equals(settings.position); }
+
+    /** The next popup, once its badge is known (BADGE_WAIT_MILLIS at most). */
     private void next() {
         if (showing != null || fetching != null || released) return;
         final AchievementNotices.Notice head = queue.peek();
         if (head == null) return;
-        if (head.image.isEmpty() || badges.cached(head.image) != null) {
+        if (badges.cached(head.image) != null || !badges.fetchable(head.image)) {
             open();
             return;
         }
         fetching = head;
-        // Armed first: a badge known at once opens the banner within fetch().
+        // Armed first: a badge known at once opens the popup within fetch().
         main.postDelayed(waited, BADGE_WAIT_MILLIS);
         badges.fetch(head.image, image -> fetched(head));
     }
@@ -280,45 +157,30 @@ final class AchievementOverlay extends FrameLayout {
         main.removeCallbacks(waited);
     }
 
+    /** RetroArch's start, then unfold: slide in, open, wait. */
     private void open() {
         showing = queue.poll();
         if (showing == null) return;
-        bannerHeading.setText(showing.heading);
-        bannerHeading.setVisibility(showing.heading.isEmpty() ? GONE : VISIBLE);
-        bannerHeading.setTextColor(showing.award ? GOLD : theme.secondary);
-        bannerTitle.setText(showing.title);
-        bannerTitle.setVisibility(showing.title.isEmpty() ? GONE : VISIBLE);
-        ((RavenIcon) bannerStar.getDrawable()).setTint(showing.award ? GOLD : theme.accent);
-        bannerBadge.setBackground(round(theme.surface, 7, 2, showing.award ? GOLD : theme.outline));
-        banner.setContentDescription(showing.heading + ". " + showing.title);
-        // Fetched already, or the star for good: the banner never changes while shown.
+        popup.setBottom(fromBottom());
+        // From the bottom, above what the corner shows, so that neither hides the other.
+        popup.setLift(fromBottom() ? corner.occupiedHeight() : 0);
+        // Fetched already, or the trophy for good: the popup never changes while shown.
         Bitmap badge = badges.cached(showing.image);
-        bannerImage.setImageBitmap(badge);
-        bannerStar.setVisibility(badge == null ? VISIBLE : GONE);
+        popup.show(showing.heading, showing.title, badge);
         if (showing.award && settings.sound && soundOn) chime.play(volume);
-        banner.setVisibility(VISIBLE);
-        banner.setTranslationY(offscreen());
-        bannerText.setFraction(0f);
-        ValueAnimator drop = ValueAnimator.ofFloat(offscreen(), 0f).setDuration(DROP_MILLIS);
-        drop.setInterpolator(new DecelerateInterpolator());
-        drop.addUpdateListener(animation -> banner.setTranslationY((Float)animation.getAnimatedValue()));
-        ValueAnimator unfold = ValueAnimator.ofFloat(0f, 1f).setDuration(UNFOLD_MILLIS);
-        unfold.addUpdateListener(animation -> bannerText.setFraction((Float)animation.getAnimatedValue()));
-        play(drop, unfold, () -> main.postDelayed(leave, settings.popupSeconds * 1000L));
+        play(stage(0f, 1f, SLIDE_MILLIS, popup::setSlide), stage(0f, 1f, UNFOLD_MILLIS, popup::setUnfold),
+                () -> main.postDelayed(leave, settings.popupSeconds * 1000L));
     }
 
-    /** Folds back into the badge, which leaves; then the next one. */
+    /** RetroArch's fold, then dismiss: fold back into the badge, which slides away; then the next. */
     private void leave() {
         if (showing == null) return;
-        ValueAnimator fold = ValueAnimator.ofFloat(bannerText.fraction, 0f).setDuration(UNFOLD_MILLIS);
-        fold.addUpdateListener(animation -> bannerText.setFraction((Float)animation.getAnimatedValue()));
-        ValueAnimator rise = ValueAnimator.ofFloat(banner.getTranslationY(), offscreen()).setDuration(DROP_MILLIS);
-        rise.addUpdateListener(animation -> banner.setTranslationY((Float)animation.getAnimatedValue()));
-        play(fold, rise, () -> {
-            banner.setVisibility(GONE);
-            showing = null;
-            next();
-        });
+        play(stage(popup.unfold(), 0f, UNFOLD_MILLIS, popup::setUnfold),
+                stage(popup.slide(), 0f, SLIDE_MILLIS, popup::setSlide), () -> {
+                    popup.hide();
+                    showing = null;
+                    next();
+                });
     }
 
     private void leaveNow() {
@@ -328,9 +190,19 @@ final class AchievementOverlay extends FrameLayout {
             running = null;
             stopped.cancel();
         }
-        banner.setVisibility(GONE);
+        popup.hide();
         showing = null;
         stopFetching();
+    }
+
+    private interface Fraction { void set(float value); }
+
+    /** One stage: EASING_OUT_QUAD is 1 - (1 - t)², which DecelerateInterpolator(1) is. */
+    private static ValueAnimator stage(float from, float to, int millis, Fraction target) {
+        ValueAnimator animator = ValueAnimator.ofFloat(from, to).setDuration(millis);
+        animator.setInterpolator(new DecelerateInterpolator(1f));
+        animator.addUpdateListener(animation -> target.set((Float) animation.getAnimatedValue()));
+        return animator;
     }
 
     /** One stage after the other; `done` only if nothing replaced them. */
@@ -356,120 +228,5 @@ final class AchievementOverlay extends FrameLayout {
             }
         });
         first.start();
-    }
-
-    private void showProgress(NativeAchievements.Event event) {
-        progressTitle.setText("Progression · " + event.title);
-        progressTitle.setMaxLines(event.detail.isEmpty() ? 2 : 1);
-        progressDetail.setText(event.detail);
-        progressDetail.setVisibility(event.detail.isEmpty() ? GONE : VISIBLE);
-        progress.setContentDescription(progressTitle.getText() + " " + event.detail);
-        if (!progressBadge.equals(event.image)) {
-            progressBadge = event.image;
-            final String wanted = event.image;
-            badge(event.image, progressImage, progressStar, () -> wanted.equals(progressBadge));
-        }
-        fadeProgress(true);
-        main.removeCallbacks(hideProgress);
-        main.postDelayed(hideProgress, settings.progressSeconds * 1000L);
-    }
-
-    private void fadeProgress(boolean in) {
-        main.removeCallbacks(hideProgress);
-        progress.animate().cancel();
-        if (in) {
-            progress.setVisibility(VISIBLE);
-            progress.animate().alpha(1f).setDuration(300).start();
-        } else if (progress.getVisibility() == VISIBLE) {
-            progress.animate().alpha(0f).setDuration(300).withEndAction(() -> progress.setVisibility(GONE)).start();
-        }
-    }
-
-    /** The image when known; the star until then, or for good. */
-    private void badge(String url, ImageView image, View star, java.util.function.BooleanSupplier still) {
-        Bitmap known = badges.cached(url);
-        image.setImageBitmap(known);
-        star.setVisibility(known == null ? VISIBLE : GONE);
-        if (known == null) badges.load(url, decoded -> {
-            if (released) return;
-            image.setImageBitmap(decoded);
-            star.setVisibility(GONE);
-        }, still);
-    }
-
-    /** At the top or the bottom of the picture; as in the beta, the banner
-     * always comes first and the progress card under it. */
-    private void placeColumn() {
-        final boolean bottom = AchievementSettings.BOTTOM.equals(settings.position);
-        LayoutParams place = (LayoutParams)column.getLayoutParams();
-        place.gravity = Gravity.CENTER_HORIZONTAL | (bottom ? Gravity.BOTTOM : Gravity.TOP);
-        // At the bottom, the popups stay above the indicators, as in the beta.
-        place.setMargins(dp(12), dp(10), dp(12), dp(bottom && !active.isEmpty() ? 90 : 10));
-        column.setLayoutParams(place);
-    }
-
-    /** Beyond the picture's edge, on the side the banner comes from. */
-    private float offscreen() {
-        final float distance = dp(56 + 24);
-        return AchievementSettings.BOTTOM.equals(settings.position) ? distance : -distance;
-    }
-
-    private GradientDrawable round(int color, int radius, int stroke, int strokeColor) {
-        GradientDrawable shape = new GradientDrawable();
-        shape.setColor(color);
-        shape.setCornerRadius(dp(radius));
-        if (stroke > 0) shape.setStroke(dp(stroke), strokeColor);
-        return shape;
-    }
-
-    private TextView text(String value, int size, int color) {
-        TextView view = new TextView(getContext());
-        view.setText(value);
-        view.setTextSize(size);
-        view.setTextColor(color);
-        view.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
-        return view;
-    }
-
-    private TextView line(int size, int color) {
-        TextView view = text("", size, color);
-        view.setSingleLine(true);
-        view.setEllipsize(TextUtils.TruncateAt.END);
-        return view;
-    }
-
-    private int dp(int value) { return Math.round(value * getResources().getDisplayMetrics().density); }
-
-    /** Lays its child out whole but keeps only `fraction` of its width: the
-     * text is uncovered as the band unfolds, never squeezed. */
-    static final class Unfold extends FrameLayout {
-        private final int maxWidth;
-        float fraction = 1f;
-
-        Unfold(Context context, int maxWidth) {
-            super(context);
-            this.maxWidth = maxWidth;
-            setClipChildren(true);
-        }
-
-        void setFraction(float value) {
-            fraction = Math.max(0f, Math.min(1f, value));
-            requestLayout();
-        }
-
-        @Override protected void onMeasure(int widthSpec, int heightSpec) {
-            int available = MeasureSpec.getMode(widthSpec) == MeasureSpec.UNSPECIFIED
-                    ? maxWidth : Math.min(maxWidth, MeasureSpec.getSize(widthSpec));
-            super.onMeasure(MeasureSpec.makeMeasureSpec(available, MeasureSpec.AT_MOST), heightSpec);
-            setMeasuredDimension(Math.round(getMeasuredWidth() * fraction), getMeasuredHeight());
-        }
-
-        @Override protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
-            for (int i = 0; i < getChildCount(); i++) {
-                View child = getChildAt(i);
-                int y = Math.max(0, (bottom - top - child.getMeasuredHeight()) / 2);
-                child.layout(0, y, child.getMeasuredWidth(), y + child.getMeasuredHeight());
-            }
-        }
     }
 }

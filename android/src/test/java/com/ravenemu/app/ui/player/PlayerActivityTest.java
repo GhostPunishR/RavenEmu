@@ -358,7 +358,7 @@ public final class PlayerActivityTest {
                 FakeAchievements.answers.get(0)[2]);
         idle();
         AchievementOverlay overlay = ReflectionHelpers.getField(activity, "achievementOverlay");
-        assertEquals("Succès débloqué · 5 points · Premier pas", String.valueOf(overlay.bannerText()));
+        assertEquals("Succès débloqué · Premier pas (5)", String.valueOf(overlay.popupText()));
         ActivityController<PlayerActivity> controller = activities.remove(activities.size() - 1);
         controller.pause().stop().destroy();
         io(activity).submit(() -> {}).get(5, TimeUnit.SECONDS);
@@ -378,7 +378,7 @@ public final class PlayerActivityTest {
         }
         idle();
         AchievementOverlay overlay = ReflectionHelpers.getField(activity, "achievementOverlay");
-        assertEquals("12 succès disponibles · Libre", String.valueOf(overlay.bannerText()));
+        assertEquals("Libre · Vous avez débloqué 0 succès sur 12", String.valueOf(overlay.popupText()));
     }
 
     private static final String AWARD_URL = "https://retroachievements.org/dorequest.php";

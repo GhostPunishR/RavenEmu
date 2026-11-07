@@ -21,13 +21,11 @@ L'intégration transmet au SDK la console du jeu : Game Boy, Game Boy Color ou G
 
 Le SDK observe la mémoire fournie par l'API C de RavenCore. Les restaurations d'état réinitialisent les conditions temporaires des succès.
 
-## Notifications de progression
+## Progression, défis et classements
 
-Le popup affiche un seul succès à la fois. Lorsque plusieurs mesures progressent, leurs notifications passent à tour de rôle, pendant deux secondes chacune par défaut. Les mises à jour d'un même succès sont regroupées avec sa valeur la plus récente, sans repousser le tour des autres.
+Comme dans RetroArch, ils s'affichent **en bas à droite** de l'image (ou du skin). De bas en haut : les suivis de classement en cours, chacun sa valeur dans une boîte ; les défis en cours, une rangée de badges en couleur, ceux des succès sur le point d'être gagnés ; puis la progression d'un succès, son badge verrouillé et la valeur atteinte, par exemple « 3/10 » ou « 50 % ».
 
-Les notifications s'appuient sur les mesures de la liste complète du SDK : son événement de progression ne signale que le succès le plus proche de son objectif lorsque plusieurs mesures changent dans la même image. Une valeur déjà atteinte dans la session ne relance pas le popup à chaque oscillation du compteur. Les valeurs présentes au chargement servent de référence et les notifications anciennes sont abandonnées.
-
-Seuls les succès qui possèdent une mesure définie par leur auteur peuvent produire ces notifications. Les mesures sont relevées au rythme du tableau de bord, environ toutes les 1,2 seconde ; plusieurs hausses rapprochées peuvent être regroupées. La notification ne signifie pas que le succès est débloqué ou synchronisé.
+La progression n'apparaît que pour les succès dont l'auteur a défini une mesure, quand cette mesure change. Lorsque plusieurs mesures changent, le SDK montre le succès le plus proche de son objectif. Elle reste affichée pendant la durée réglée après sa dernière hausse, puis disparaît ; un reset ou le chargement d'un état la retire aussitôt. Quand le badge d'un succès n'est pas encore téléchargé, ce qui est affiché reste en place jusqu'à son arrivée, une demi-seconde au plus, puis un trophée le remplace : il n'y a plus de clignotement. La progression ne signifie pas que le succès est débloqué ou synchronisé.
 
 Références officielles : [intégration de l'indicateur de progression](https://github.com/RetroAchievements/rcheevos/wiki/rc_client-integration#progress-indicator) et [fonctionnement de Measured](https://github.com/RetroAchievements/docs/blob/main/docs/developer-docs/flags/measured.md).
 
@@ -39,15 +37,21 @@ Chaque succès distingue **débloqué localement**, **en attente d'envoi** et **
 
 Les demandes légitimes du SDK restent dans le journal chiffré jusqu'à confirmation, à raison d'une entrée par succès : chaque nouvelle tentative du SDK remplace la précédente. À la connexion suivante au même compte, elles sont retentées ; une tentative confirmée retire toutes celles du même succès. Une erreur de stockage affiche un avertissement : garder le jeu ouvert jusqu'à la synchronisation. Se déconnecter explicitement efface ce journal local.
 
-## Bandeau des succès
+## Popups des succès
 
-Comme sur PC, chaque notification est un bandeau centré. Le badge descend du haut de l'écran (ou monte du bas), puis le bandeau s'ouvre de part et d'autre avec un en-tête et le titre en grand. À la fin, il se replie dans le badge, qui repart. Un succès débloqué ou un jeu terminé a un cadre et un en-tête dorés. Au lancement d'un jeu reconnu, le bandeau montre l'icône du jeu et le nombre de succès disponibles. Les progressions gardent leur carte, sous le bandeau.
+Les popups reprennent le style de RetroArch : un badge carré, puis deux lignes sur un fond noir translucide, la première en gris, la seconde en blanc. Le badge arrive du bord de l'image, puis le texte se déplie à sa droite et le popup se centre. À la fin, le texte se replie et le badge repart. Un seul popup s'affiche à la fois ; les suivants attendent leur tour.
+
+- **Lancement d'un jeu reconnu** : l'icône du jeu, son titre, puis « Vous avez débloqué 3 succès sur 42 ».
+- **Succès débloqué** : son badge, « Succès débloqué », puis son titre et ses points, par exemple « Premier pas (5) ».
+- **Fin de jeu** : l'icône du jeu, son titre, puis « Jeu terminé » ou « Jeu maîtrisé ».
+
+Un popup attend son image deux secondes au plus ; sans image, il montre un trophée et ne change plus pendant qu'il est affiché.
 
 ## Réglages des notifications
 
-Dans **Paramètres → RetroAchievements**, les popups de déblocage et de fin de jeu et ceux de progression ont des interrupteurs distincts. Leur position peut être en haut ou en bas. La durée des déblocages va de 2 à 10 secondes, celle des progressions de 1 à 5 secondes ; les nouvelles durées s'appliquent aux prochains tours. **Son des succès**, activé par défaut, joue un court carillon créé par RavenEmu, mélangé au son du jeu et à son volume. Les erreurs et avis de connexion ne sont pas masqués par l'interrupteur des succès.
+Dans **Paramètres → RetroAchievements**, les popups de déblocage et de fin de jeu et ceux de progression ont des interrupteurs distincts. Les popups se placent en haut ou en bas, au centre ; la progression reste en bas à droite. La durée des déblocages va de 2 à 10 secondes, celle des progressions de 1 à 5 secondes (2 secondes par défaut, comme RetroArch) ; les nouvelles durées s'appliquent aux prochains popups. **Son des succès**, activé par défaut, joue un court carillon créé par RavenEmu, mélangé au son du jeu et à son volume. Les erreurs et avis de connexion ne sont pas masqués par l'interrupteur des succès.
 
-Une fin de jeu affiche son image, le compte, le nombre de succès et les points. **Jeu terminé** correspond au Softcore ; **Jeu maîtrisé** est réservé au Hardcore. Ce bilan suit l'événement du SDK et ne garantit pas à lui seul la synchronisation de tous les succès : consulter aussi les états d'envoi.
+Une fin de jeu affiche l'icône et le titre du jeu. **Jeu terminé** correspond au Softcore ; **Jeu maîtrisé** est réservé au Hardcore. Ce bilan suit l'événement du SDK et ne garantit pas à lui seul la synchronisation de tous les succès : consulter aussi les états d'envoi.
 
 ## Classements
 

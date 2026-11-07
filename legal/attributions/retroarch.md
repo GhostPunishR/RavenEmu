@@ -71,6 +71,24 @@ et `android/src/main/res/values/styles.xml` ; aucun code de MaterialUI n'est
 porté. NVIDIA et Shield sont des marques de NVIDIA Corporation ; RavenEmu
 n'est ni affilié à NVIDIA ni approuvé par elle.
 
+Les popups et le coin RetroAchievements du lecteur reprennent l'apparence des
+widgets de succès de RetroArch ([révision
+468dffe6057e9ebe34403a2fbed2743a7980ccbb](https://github.com/libretro/RetroArch/tree/468dffe6057e9ebe34403a2fbed2743a7980ccbb)) :
+`gfx/widgets/gfx_widget_achievement_popup.c` (popup),
+`gfx/widgets/gfx_widget_leaderboard_display.c` (suivis, défis et progression
+en bas à droite), `gfx/gfx_widgets.h` (couleurs et fond) et `cheevos/cheevos.c`
+(textes et choix des badges). Seules des **valeurs** sont reprises : couleurs
+`#888888` et `#EEEEEE`, fond noir à 75 %, hauteur de quatre lignes, marges de
+deux tiers de ligne, durée de 330 ms par étape et ralenti quadratique, file de
+huit popups, espacement d'un soixante-quatrième de l'écran, tailles relatives
+des badges et des boîtes, limites de quatre suivis et huit défis, attente de
+trente images pour un badge, durée de deux secondes de la progression, ordre
+et contenu des lignes. Le code (`AchievementPopup.java`,
+`AchievementCorner.java`, `AchievementOverlay.java`, `AchievementNotices.java`
+dans `android/src/main/java/com/ravenemu/app/ui/player/`) est écrit pour
+RavenEmu, sous sa licence AGPLv3 ; aucune ligne des widgets n'y est portée.
+Les textes français sont ceux de RavenEmu.
+
 ## Licences et distribution
 
 Le [texte intégral GPLv3](../../android/src/main/assets/licenses/GPL-3.0.txt)

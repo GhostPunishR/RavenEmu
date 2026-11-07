@@ -5,32 +5,37 @@ import com.ravenemu.app.bridge.NativeAchievements;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
-/** The beta's RetroNoticeText, and RavenEmu's lines for the session. */
+/** RetroArch's popup lines (cheevos.c), and RavenEmu's lines for the session. */
 public final class AchievementNoticesTest {
     private static AchievementNotices.Notice of(String kind, String title, String detail, String extra) {
         return AchievementNotices.of(new NativeAchievements.Event(kind, title, detail, extra, "badge.png", "1"));
     }
 
-    @Test public void unlocksAndCompletedGamesAreAwards() {
+    @Test public void unlocksAndCompletedGamesAreAwardsWordedAsRetroArch() {
         AchievementNotices.Notice unlock = of("achievement", "Victoire", "Gagner", "10");
-        assertEquals("Succès débloqué · 10 points", unlock.heading);
-        assertEquals("Victoire", unlock.title);
+        assertEquals("Succès débloqué", unlock.heading);
+        assertEquals("Victoire (10)", unlock.title);
         assertEquals("badge.png", unlock.image);
         assertTrue(unlock.award);
-        assertEquals("Succès débloqué · 1 point", of("achievement", "Un", "", "1").heading);
-        assertEquals("Jeu terminé", of("completed", "Synthetic", "1", "1").heading);
-        assertEquals("Jeu maîtrisé", of("mastered", "Synthetic", "1", "1").heading);
+        assertEquals("Un (1)", of("achievement", "Un", "", "1").title);
+        assertEquals("No points given: the title alone", "Un", of("achievement", "Un", "", "?").title);
+        AchievementNotices.Notice completed = of("completed", "Synthetic", "1", "1");
+        assertEquals("The game above, the award below", "Synthetic", completed.heading);
+        assertEquals("Jeu terminé", completed.title);
+        assertEquals("Jeu maîtrisé", of("mastered", "Synthetic", "1", "1").title);
         assertTrue(of("mastered", "Synthetic", "1", "1").award);
     }
 
-    @Test public void aStartingGameSaysWhatItOffers() {
-        AchievementNotices.Notice game = of("game", "Synthetic game", "42", "0");
-        assertEquals("42 succès disponibles", game.heading);
-        assertEquals("Synthetic game", game.title);
+    @Test public void aStartingGameNamesItselfAboveWhatIsAlreadyWon() {
+        AchievementNotices.Notice game = of("game", "Synthetic game", "42", "3");
+        assertEquals("Synthetic game", game.heading);
+        assertEquals("Vous avez débloqué 3 succès sur 42", game.title);
         assertFalse(game.award);
-        assertEquals("1 succès disponible", of("game", "G", "1", "0").heading);
-        assertEquals("Aucun succès disponible", of("game", "G", "0", "0").heading);
-        assertEquals("Succès disponibles", of("game", "G", "?", "0").heading);
+        assertEquals("Vous avez débloqué 0 succès sur 1", of("game", "G", "1", "0").title);
+        assertEquals("Ce jeu n'a aucun succès", of("game", "G", "0", "0").title);
+        assertEquals("Never more than the game has", "Vous avez débloqué 5 succès sur 5", of("game", "G", "5", "9").title);
+        assertEquals("No unlocked count: what it offers", "5 succès disponibles", of("game", "G", "5", "").title);
+        assertEquals("Succès disponibles", of("game", "G", "?", "0").title);
     }
 
     @Test public void theSessionsStateIsToldWithoutBlame() {

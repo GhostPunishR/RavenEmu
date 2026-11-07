@@ -43,6 +43,18 @@
     "\"Score\":120,\"DateSubmitted\":1615654895},{\"User\":\"SyntheticUser\",\"Rank\":2,\"Index\":2," \
     "\"Score\":60,\"DateSubmitted\":1615634566}],\"TotalEntries\":2}}"
 
+/* A measured achievement, which shows its progress as $C001 counts, and a
+ * challenge, primed while $C001 is below 200 and never won (it would need 255). */
+#define GAME_SETS_INDICATORS "{\"Success\":true,\"GameId\":1234,\"Title\":\"Synthetic game\",\"ConsoleId\":4," \
+    "\"ImageIconUrl\":\"https://media.retroachievements.org/Images/000001.png\",\"RichPresenceGameId\":1234," \
+    "\"RichPresencePatch\":\"\",\"Sets\":[{\"AchievementSetId\":1111,\"GameId\":1234,\"Title\":null," \
+    "\"Type\":\"core\",\"ImageIconUrl\":\"https://media.retroachievements.org/Images/000001.png\"," \
+    "\"Achievements\":[{\"ID\":5502,\"Title\":\"Count far\",\"Description\":\"Count to 250\"," \
+    "\"Flags\":3,\"Points\":5,\"MemAddr\":\"M:0xHc001=250\",\"Author\":\"Test\",\"BadgeName\":\"00235\"," \
+    "\"Created\":1367266583,\"Modified\":1376929305},{\"ID\":5503,\"Title\":\"Never\",\"Description\":\"Primed\"," \
+    "\"Flags\":3,\"Points\":5,\"MemAddr\":\"0xHc001<200_T:0xHc001=255\",\"Author\":\"Test\"," \
+    "\"BadgeName\":\"00236\",\"Created\":1367266583,\"Modified\":1376929305}],\"Leaderboards\":[]}]}"
+
 static const char *gb_core;
 static unsigned char rom[32 * 1024];
 
@@ -383,6 +395,50 @@ static void a_save_state_keeps_the_progress(void) {
     raven_frontend_destroy(host);
 }
 
+/* As RetroArch shows them: a challenge with the badge it is about to win, a
+ * progress with the locked one; the game says how many are already won; a
+ * reset hides the progress at once, naming it, where the SDK's own timer
+ * names none. */
+static void indicators_carry_the_badges_retroarch_shows(void) {
+    raven_frontend *host = open_game();
+    raven_achievements *a = raven_achievements_create(host, NULL);
+    login(a);
+    raven_achievements_load_game(a, RAVEN_ACHIEVEMENTS_CONSOLE_GAMEBOY, rom, sizeof(rom));
+    answer_game(host, a, GAME_SETS_INDICATORS);
+    raven_achievements_event event;
+    CHECK(take(a, "game", &event));
+    CHECK(strcmp(event.detail, "2") == 0 && strcmp(event.extra, "0") == 0);
+    int progress = 0, challenge = 0;
+    for (int frame = 0; frame < 300 && !(progress && challenge); ++frame) {
+        CHECK(raven_frontend_run_frame(host));
+        raven_achievements_frame(a);
+        while (raven_achievements_next_event(a, &event)) {
+            if (!progress && strcmp(event.kind, "progress_show") == 0) {
+                CHECK(strcmp(event.id, "5502") == 0 && strcmp(event.title, "Count far") == 0);
+                CHECK(strstr(event.image, "00235_lock") != NULL);
+                CHECK(strchr(event.detail, '/') != NULL && strstr(event.detail, "/250") != NULL);
+                progress = 1;
+            } else if (!challenge && strcmp(event.kind, "challenge_show") == 0) {
+                CHECK(strcmp(event.id, "5503") == 0);
+                CHECK(strstr(event.image, "00236") != NULL && strstr(event.image, "_lock") == NULL);
+                challenge = 1;
+            }
+        }
+    }
+    CHECK(progress && challenge);
+    /* Within the SDK's two seconds: still shown, then reset. */
+    raven_achievements_reset(a);
+    int hidden = 0;
+    while (raven_achievements_next_event(a, &event))
+        if (strcmp(event.kind, "progress_hide") == 0) {
+            CHECK(strcmp(event.id, "5502") == 0);
+            hidden = 1;
+        }
+    CHECK(hidden);
+    raven_achievements_destroy(a);
+    raven_frontend_destroy(host);
+}
+
 int main(int argc, char **argv) {
     if (argc != 2) {
         fprintf(stderr, "usage: %s ravenemu_gb_libretro\n", argv[0]);
@@ -399,6 +455,7 @@ int main(int argc, char **argv) {
     a_service_out_of_reach_is_told_apart();
     closing_settles_requests_still_out();
     a_save_state_keeps_the_progress();
-    puts("Achievements: 9 scenarios passed");
+    indicators_carry_the_badges_retroarch_shows();
+    puts("Achievements: 10 scenarios passed");
     return 0;
 }
