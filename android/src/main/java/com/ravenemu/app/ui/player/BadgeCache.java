@@ -38,6 +38,11 @@ final class BadgeCache {
 
     Bitmap cached(String url) { return url == null || url.isEmpty() ? null : images.get(url); }
 
+    /** Whether fetch() would reach the network for it: an account, and an allowed address. */
+    boolean fetchable(String url) {
+        return http != null && url != null && !url.isEmpty() && AchievementsHttp.allowed(url);
+    }
+
     /** The image now if known, else once fetched, if `target` still wants it. */
     void load(String url, Target target, java.util.function.BooleanSupplier still) {
         Bitmap known = cached(url);

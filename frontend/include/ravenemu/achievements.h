@@ -78,7 +78,7 @@ void raven_achievements_respond(raven_achievements *achievements, unsigned id, c
 /* What happened, for the interface to say. Six texts, "" when unused:
  *  login            user name, display name, token, avatar url
  *  login_error      server's reason, -, "offline" or "refused"
- *  game             title, achievements count, unsupported count, badge url, game id
+ *  game             title, achievements count, unlocked count, badge url, game id
  *  game_unknown     (the service does not know this ROM)
  *  game_offline     (no answer: try again later)
  *  game_error       server's reason
@@ -88,7 +88,9 @@ void raven_achievements_respond(raven_achievements *achievements, unsigned id, c
  *  server_error     server's reason
  *  hardcore_reset   (reset the game now)
  *  challenge_show / challenge_hide / progress_show   title, progress, -, badge url, achievement id
- *  progress_hide
+ *                   (the unlocked badge for a challenge, the locked one for a progress)
+ *  progress_hide    -, -, -, -, achievement id: "" from the SDK's two-second
+ *                   timer, the one shown after a reset or a loaded state
  *  tracker_show / tracker_hide   value, -, -, -, leaderboard id
  *  leaderboard_started / leaderboard_failed / leaderboard_submitted   title, description, -, -, id
  *  leaderboard_scoreboard   title, "Score : … · Rang : r/n", best score, -, id

@@ -205,7 +205,8 @@ static void game_image(const rc_client_game_t *game, char *out, size_t size) {
 }
 
 /* The unlocked badge, or the locked one; `colour` asks for the unlocked one
- * always (an achievement's progress). */
+ * always. As in RetroArch, a challenge shows the badge it is about to win and
+ * a progress the locked one, the achievement being still to win. */
 static void achievement_image(const rc_client_achievement_t *a, int colour, char *out, size_t size) {
     const int unlocked = colour || a->state == RC_CLIENT_ACHIEVEMENT_STATE_UNLOCKED;
     const char *ready = unlocked ? a->badge_url : a->badge_locked_url;
@@ -244,12 +245,12 @@ static void loaded(int result, const char *message, rc_client_t *rc, void *userd
         rc_client_user_game_summary_t summary;
         memset(&summary, 0, sizeof(summary));
         rc_client_get_user_game_summary(rc, &summary);
-        char count[16], unsupported[16], id[16], badge[256];
+        char count[16], unlocked[16], id[16], badge[256];
         snprintf(count, sizeof(count), "%u", summary.num_core_achievements);
-        snprintf(unsupported, sizeof(unsupported), "%u", summary.num_unsupported_achievements);
+        snprintf(unlocked, sizeof(unlocked), "%u", summary.num_unlocked_achievements);
         snprintf(id, sizeof(id), "%u", game->id);
         game_image(game, badge, sizeof(badge));
-        push_event(a, "game", game->title, count, unsupported, badge, id);
+        push_event(a, "game", game->title, count, unlocked, badge, id);
     } else if (result == RC_ABORTED) {
         /* Superseded by an unload or another game: nothing to say. */
     } else if (result == RC_NO_GAME_LOADED || result == RC_OK) {
@@ -300,8 +301,10 @@ static void event_handler(const rc_client_event_t *event, rc_client_t *rc) {
             break;
         case RC_CLIENT_EVENT_RESET: push_event(a, "hardcore_reset", NULL, NULL, NULL, NULL, NULL); break;
         case RC_CLIENT_EVENT_ACHIEVEMENT_PROGRESS_INDICATOR_HIDE:
-            /* The SDK's timer sends one global hide, without achievement. */
-            push_event(a, "progress_hide", NULL, NULL, NULL, NULL, NULL);
+            /* The SDK's two-second timer hides without achievement; a reset,
+             * a loaded state or the game's end, with the one shown. */
+            if (event->achievement) snprintf(number, sizeof(number), "%u", event->achievement->id);
+            push_event(a, "progress_hide", NULL, NULL, NULL, NULL, event->achievement ? number : NULL);
             break;
         case RC_CLIENT_EVENT_ACHIEVEMENT_CHALLENGE_INDICATOR_SHOW:
         case RC_CLIENT_EVENT_ACHIEVEMENT_CHALLENGE_INDICATOR_HIDE:
@@ -313,7 +316,7 @@ static void event_handler(const rc_client_event_t *event, rc_client_t *rc) {
                 : event->type == RC_CLIENT_EVENT_ACHIEVEMENT_CHALLENGE_INDICATOR_HIDE ? "challenge_hide"
                 : "progress_show";
             snprintf(number, sizeof(number), "%u", achievement->id);
-            achievement_image(achievement, kind[0] == 'p', badge, sizeof(badge));
+            achievement_image(achievement, kind[0] == 'c', badge, sizeof(badge));
             push_event(a, kind, achievement->title, achievement->measured_progress, NULL, badge, number);
             break;
         }

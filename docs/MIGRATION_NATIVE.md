@@ -32,9 +32,9 @@ documentation et le README sur l'application native.
   `targetSdk` de `android/`.
 - **Données** : l'application garde l'identifiant `com.ravenemu.dev`. Une bêta
   `com.ravenemu.preview` déjà installée n'est ni lue ni modifiée.
-- **RavenCore** épinglé à la version 0.15.1 (cœur GB/GBC environ 1,7 fois
-  plus rapide, au bit près ; codes de triche lus comme l'appareil et comme
-  dans RetroArch depuis la 0.15.0).
+- **RavenCore** épinglé à la version 0.15.2 (cœur GBA de 1,2 à 1,5 fois
+  plus rapide et cœur GB/GBC environ 1,7 fois depuis la 0.15.1, au bit près ;
+  codes de triche lus comme l'appareil et comme dans RetroArch depuis la 0.15.0).
 
 Écarts de parité restants avec la bêta, à traiter comme du travail à faire :
 
@@ -1620,3 +1620,104 @@ Lecture des résultats :
 - **Coût** : sur la machine de test, le core GB coûte environ 1,9 ms par image même sur une boucle vide, contre 0,33 ms pour le core GBA (qui saute sans doute les boucles d'attente). C'est sans effet sur la synchronisation, mais c'est à surveiller sur les téléphones modestes avec les images préventives : c'est du ressort de RavenCore.
 
 Limites : le test reproduit la boucle de `drawFrame` (le pacer, la vitesse du son, les images dues) au lieu d'appeler le pont JNI, qui demande Android. L'appareil est simulé : la latence réelle d'AAudio, le Bluetooth et l'écoute restent à vérifier sur téléphone.
+
+## RetroAchievements façon RetroArch, lot RA-4 : popups, coin en bas à droite, progression réparée
+
+Demande du propriétaire : le même style que RetroArch pour le popup du
+lancement d'un jeu, celui des succès et celui de la progression, placé en bas
+à droite, et la réparation du popup de progression. Comme pour le thème
+NVIDIA, seules des **valeurs** de RetroArch sont reprises (dimensions,
+durées, couleurs, ordre des éléments, textes affichés), relevées dans
+`gfx/widgets/gfx_widget_achievement_popup.c`,
+`gfx/widgets/gfx_widget_leaderboard_display.c`, `gfx/gfx_widgets.h` et
+`cheevos/cheevos.c` ; le code Java est écrit pour RavenEmu. Voir
+[l'attribution](../legal/attributions/retroarch.md).
+
+- **Popup** (`AchievementPopup.java`) : un badge carré sur un fond noir à 75 %
+  (`DEFAULT_BACKDROP`), puis un fond aussi haut avec deux lignes de la même
+  police, la première grise (`TEXT_COLOR_FAINT`, `#888888`), la seconde blanche
+  (`TEXT_COLOR_INFO`, `#EEEEEE`). Le popup fait quatre lignes de haut ; sa
+  largeur est celle de la plus longue ligne, plus deux tiers de ligne de chaque
+  côté. Sans badge, un trophée blanc, comme l'icône de RetroArch. Le cadre doré
+  et l'étoile de la bêta disparaissent.
+- **Mouvement** (`AchievementOverlay.java`) : le badge glisse depuis le bord
+  de l'image, puis le texte se déplie à sa droite en arrivant d'une demi-largeur
+  vers la gauche, pendant que le popup se décale d'une demi-largeur pour finir
+  centré ; il reste la durée des réglages, se replie, puis repart. Chaque étape
+  dure 330 ms (`MSG_QUEUE_ANIMATION_DURATION`), avec un ralenti quadratique
+  (`EASING_OUT_QUAD`) ; huit popups attendent au plus (`CHEEVO_QUEUE_SIZE`).
+  Les positions sont des translations et un découpage : rien n'est remis en
+  page pendant le mouvement. En haut ou en bas, centré, selon le réglage :
+  ce sont les ancres `TOPCENTER` et `BOTTOMCENTER` de RetroArch. En bas, le
+  popup s'arrête au-dessus de ce qu'affiche le coin.
+- **Textes** (`AchievementNotices.java`) : au lancement, le titre du jeu en
+  gris puis « Vous avez débloqué 3 succès sur 42 » (« Ce jeu n'a aucun
+  succès » sans succès) ; un déblocage, « Succès débloqué » puis « Titre (5) »,
+  avec ses points ; une fin de jeu, le titre du jeu puis « Jeu terminé » ou
+  « Jeu maîtrisé ». Les avis de session (hors ligne, erreurs, classements)
+  gardent leurs textes, dans le même popup.
+- **Coin en bas à droite** (`AchievementCorner.java`), comme le widget
+  `leaderboard_display` : de bas en haut, les suivis de classement (leur valeur
+  dans une boîte, chiffres de largeur fixe, quatre au plus), les défis (une
+  rangée de badges en couleur depuis la droite, huit au plus), puis la
+  progression d'un succès : son badge verrouillé et « 3/10 », sur fond noir à
+  75 %. L'espacement est un soixante-quatrième du petit côté de l'écran, comme
+  dans RetroArch ; le badge mesure quatre espacements, la boîte cinq. Les
+  défis et suivis quittent le bas centré.
+- **Module C** (`frontend/src/achievements.c`) : comme RetroArch, un défi
+  porte le badge en couleur (le succès est sur le point d'être gagné) et une
+  progression le badge verrouillé ; l'événement `game` donne le nombre de
+  succès déjà débloqués à la place du nombre de succès non pris en charge, que
+  rien n'affichait ; `progress_hide` nomme le succès quand un reset, un état
+  chargé ou la fin du jeu masque la progression, et rien quand c'est la minuterie
+  de deux secondes du SDK.
+
+**Défauts de la progression réparés.**
+
+1. *La durée réglée était ignorée au-delà de deux secondes.* La minuterie du
+   SDK (`rc_client`, deux secondes après la dernière hausse) envoie un
+   `progress_hide` global que l'application suivait : réglée sur 5 s, la
+   progression disparaissait à 2 s. Le coin ignore désormais ce masquage sans
+   succès et garde sa propre durée (**Paramètres → RetroAchievements →
+   Durée des progressions**, 2 s par défaut, comme RetroArch), relancée à
+   chaque hausse ; un masquage qui nomme le succès (reset, état chargé) s'applique
+   aussitôt.
+2. *L'étoile clignotait.* Une progression dont le badge n'était pas encore
+   téléchargé s'affichait d'abord avec l'étoile, puis avec le badge ; quand deux
+   succès progressaient ensemble, le SDK alternait entre eux et le badge
+   clignotait à chaque changement. Comme RetroArch (`CHEEVO_BADGE_HOLD_FRAMES`),
+   une mise à jour dont le badge est nouveau attend celui-ci, ce qui est affiché
+   restant tel quel, 500 ms au plus ; le trophée n'apparaît qu'après, ou tout de
+   suite si le badge ne peut pas venir. Les badges déjà vus restent en cache :
+   revenir au premier succès ne coûte rien. Un badge n'est demandé qu'une fois
+   à la fois, même si la progression change à chaque image. Un défi garde sa
+   place sans être dessiné tant que son badge arrive.
+3. *La carte sautait.* La progression était empilée sous le bandeau du haut et
+   descendait de toute la hauteur du bandeau quand un succès s'ouvrait. Elle a
+   maintenant sa place, en bas à droite.
+4. *La documentation décrivait un tour de rôle de la bêta* (`RetroProgressNotifications`),
+   jamais porté dans l'application native. Le wiki décrit maintenant ce que fait
+   l'application : le succès le plus proche de son objectif, choisi par le SDK,
+   comme dans RetroArch.
+
+Tests : `AchievementPopupTest` (quatre lignes, couleurs, badge depuis le bord
+puis texte qui se déplie jusqu'au centre, départ et arrêt en bas, ligne trop
+longue gardée dans l'image) ; `AchievementOverlayTest` (un popup à la fois,
+durées de 330 ms, file de huit, popups du bas au-dessus du coin, progression en
+bas à droite qui garde la durée réglée malgré la minuterie du SDK, masquée par
+un reset, empilement suivis-défis-progression, limites de quatre et huit,
+attente du badge sans trophée, défi qui garde sa place) ;
+`AchievementNoticesTest` (textes de RetroArch) ; `test_achievements.c`
+(badges en couleur et verrouillé, nombre de succès débloqués, masquage nommé
+après un reset).
+
+Écarts restants : RetroArch place ses popups en haut à gauche par défaut et
+offre six ancres ; RavenEmu garde son réglage en haut ou en bas, centré. Les
+avis de session de RetroArch passent par sa file de messages, d'un autre
+style ; RavenEmu les montre dans le même popup. La rareté d'un succès
+(« Succès rare débloqué – 2,5 % ») et le nom du compte sous une fin de jeu ne
+sont pas affichés. Les boîtes « RA … » et « ! RA ! » du coin (chargement,
+déconnexion) ne sont pas reprises : les avis hors ligne restent des popups.
+Sous Robolectric, un animateur va à sa fin d'un coup ; les étapes sont donc
+vérifiées par leur géométrie, fraction par fraction. À vérifier sur téléphone
+(portrait, paysage, skin, gestes et trois boutons) avant toute publication.

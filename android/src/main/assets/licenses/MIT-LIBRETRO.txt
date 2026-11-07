@@ -1,7 +1,7 @@
 Libretro API header (libretro.h) — MIT
 
 Source: libretro/libretro-common@a3194c18ba65ef89734e1898a2f61403c255d368/include/libretro.h
-Bundled by RavenCore@eb5e793b0d612f50fbc6aad2ddbfee1050125cf6
+Bundled by RavenCore@8799f25b0a48f51a236565d671fe33529d30815e
 
 Copyright (C) 2010-2024 The RetroArch team
 
