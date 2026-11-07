@@ -32,8 +32,9 @@ documentation et le README sur l'application native.
   `targetSdk` de `android/`.
 - **Données** : l'application garde l'identifiant `com.ravenemu.dev`. Une bêta
   `com.ravenemu.preview` déjà installée n'est ni lue ni modifiée.
-- **RavenCore** épinglé à la version 0.15.0 (codes de triche lus comme
-  l'appareil et comme dans RetroArch).
+- **RavenCore** épinglé à la version 0.15.1 (cœur GB/GBC environ 1,7 fois
+  plus rapide, au bit près ; codes de triche lus comme l'appareil et comme
+  dans RetroArch depuis la 0.15.0).
 
 Écarts de parité restants avec la bêta, à traiter comme du travail à faire :
 
