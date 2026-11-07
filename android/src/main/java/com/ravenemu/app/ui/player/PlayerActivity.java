@@ -102,6 +102,8 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
     private FrameLayout.LayoutParams classicLandscapePicture;
     /** UI thread: the open game's system, for its console's skin; null before a game. */
     private String loadedSystem;
+    /** Settings → Vidéo → Pixels entiers, as the renderer draws the picture. */
+    private boolean integerScale;
     private int skinRequest;
     /** Skins are read and checked off the UI thread, apart from the saves. */
     private static final ExecutorService SKINS = java.util.concurrent.Executors.newSingleThreadExecutor();
@@ -508,6 +510,15 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         placeAchievementOverlay(skinStage);
     }
 
+    /** The game's picture to RetroAchievements' overlay, so that its corner is
+     * the picture's: RavenCore's frame is 240 by 160 on the GBA, 160 by 144 on
+     * the Game Boy and the Game Boy Color. */
+    private void showPictureTo(AchievementOverlay overlay, String system) {
+        if (overlay == null || surface == null) return;
+        final boolean gba = "gba".equals(system);
+        overlay.setPicture(surface, gba ? 240 : 160, gba ? 160 : 144, integerScale);
+    }
+
     /** RetroAchievements' banners and indicators, over the whole skin or over
      * the picture. The overlay takes no touch: the skin's buttons stay live. */
     private void placeAchievementOverlay(android.view.ViewGroup parent) {
@@ -683,6 +694,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
                             releaseInput();
                             gameControls.setShoulders("gba".equals(entry.system));
                             loadedSystem = entry.system;
+                            showPictureTo(achievementOverlay, entry.system);
                             refreshSkin();
                             gameTitle.setText(entry.title);
                             if (biosMissing) android.widget.Toast.makeText(this,
@@ -769,6 +781,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
                     applyDisplayMode();
                     releaseInput();
                     gameControls.setShoulders("gba".equals(first.system));
+                    showPictureTo(achievementOverlay, first.system);
                     linkEntries = new RomLibrary.Entry[]{first, second};
                     showLinkTitle();
                 });
@@ -1428,8 +1441,11 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         final LatencySettings latency = LatencySettings.load(this);
         rumbleEnabled = cartridge.rumble;
         sensorsWanted = cartridge.sensors;
-        if (achievementOverlay != null)
+        integerScale = settings.integerScale;
+        if (achievementOverlay != null) {
             achievementOverlay.setSettings(AchievementSettings.load(this), settings.audioEnabled, settings.audioVolume);
+            achievementOverlay.setIntegerScale(settings.integerScale);
+        }
         if (surface != null) surface.queueEvent(() -> {
             if (disposed.get() || !foreground) return;
             NativeBridge.setPlaybackOptions(settings.audioEnabled, settings.audioVolume,

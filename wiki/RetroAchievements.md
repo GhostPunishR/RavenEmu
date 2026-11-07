@@ -23,7 +23,7 @@ Le SDK observe la mémoire fournie par l'API C de RavenCore. Les restaurations d
 
 ## Progression, défis et classements
 
-Comme dans RetroArch, ils s'affichent **en bas à droite** de l'image (ou du skin). De bas en haut : les suivis de classement en cours, chacun sa valeur dans une boîte ; les défis en cours, une rangée de badges en couleur, ceux des succès sur le point d'être gagnés ; puis la progression d'un succès, son badge verrouillé et la valeur atteinte, par exemple « 3/10 » ou « 50 % ».
+Comme dans RetroArch, ils s'affichent **en bas à droite** de l'image du jeu elle-même, y compris dans l'écran d'un skin, et non dans l'espace laissé libre sous l'image. De bas en haut : les suivis de classement en cours, chacun sa valeur dans une boîte ; les défis en cours, une rangée de badges en couleur, ceux des succès sur le point d'être gagnés ; puis la progression d'un succès, son badge verrouillé et la valeur atteinte, par exemple « 3/10 » ou « 50 % ».
 
 La progression n'apparaît que pour les succès dont l'auteur a défini une mesure, quand cette mesure change. Lorsque plusieurs mesures changent, le SDK montre le succès le plus proche de son objectif. Elle reste affichée pendant la durée réglée après sa dernière hausse, puis disparaît ; un reset ou le chargement d'un état la retire aussitôt. Quand le badge d'un succès n'est pas encore téléchargé, ce qui est affiché reste en place jusqu'à son arrivée, une demi-seconde au plus, puis un trophée le remplace : il n'y a plus de clignotement. La progression ne signifie pas que le succès est débloqué ou synchronisé.
 
@@ -39,7 +39,7 @@ Les demandes légitimes du SDK restent dans le journal chiffré jusqu'à confirm
 
 ## Popups des succès
 
-Les popups reprennent le style de RetroArch : un badge carré, puis deux lignes sur un fond noir translucide, la première en gris, la seconde en blanc. Le badge arrive du bord de l'image, puis le texte se déplie à sa droite. À la fin, le texte se replie et le badge repart. Un seul popup s'affiche à la fois ; les suivants attendent leur tour.
+Les popups se placent sur l'image du jeu, comme la progression. Ils reprennent le style de RetroArch : un badge carré, puis deux lignes sur un fond noir translucide, la première en gris, la seconde en blanc. Le badge arrive du bord de l'image, puis le texte se déplie à sa droite. À la fin, le texte se replie et le badge repart. Un seul popup s'affiche à la fois ; les suivants attendent leur tour.
 
 - **Lancement d'un jeu reconnu** : l'icône du jeu, son titre, puis « Vous avez débloqué 3 succès sur 42 ».
 - **Succès débloqué** : son badge, « Succès débloqué », puis son titre et ses points, par exemple « Premier pas (5) ».

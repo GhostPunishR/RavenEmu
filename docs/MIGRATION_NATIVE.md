@@ -1753,3 +1753,33 @@ Demande du propriétaire : les six positions de RetroArch pour les popups.
 
 Écart restant : RetroArch permet aussi une marge manuelle
 (`cheevos_appearance_padding_h` et `_v`) ; RavenEmu garde la marge automatique.
+
+### Retour d'essai : la progression trop bas
+
+Le propriétaire signale que la progression n'est pas calée en bas à droite de
+l'image du jeu : elle est trop bas. Cause : la superposition couvre la zone de
+l'image (`pictureFrame`), ou tout le skin, mais le pilote GLES2 dessine l'image
+**collée en haut** de sa surface, centrée en largeur, et laisse l'espace libre
+**en dessous** (`gles2_renderer.c`, `glViewport`). Le coin se calait sur le bas
+de la zone, donc sous l'image ; avec un skin, sur le bas du skin.
+
+- `AchievementOverlay.setPicture(vue, largeur, hauteur, pixels entiers)` : le
+  lecteur donne la vue où l'image est dessinée et la taille de l'image du cœur
+  (240 × 160 en GBA, 160 × 144 en Game Boy et Game Boy Color).
+  `AchievementOverlay.fit` refait le calcul du pilote : l'image entière, aux
+  proportions gardées, à un multiple entier de sa taille avec **Pixels
+  entiers**, centrée en largeur, collée en haut.
+- Le coin **et** les popups sont mis en page sur ce rectangle, traduit dans les
+  coordonnées de la superposition, que celle-ci couvre l'image seule ou tout le
+  skin. Avant le chargement d'un jeu, ils gardent toute la superposition.
+- La superposition suit la vue de l'image et ses parents : quand un skin
+  déplace son écran, quand la superposition passe du skin à l'image, ou quand
+  **Pixels entiers** change en jeu, le coin suit. Une nouvelle mise en page n'est
+  demandée que si l'image a vraiment bougé : chaque passe appelle les
+  écouteurs, déplacés ou non.
+- Tests : `AchievementOverlayTest` (calcul du pilote en portrait, en paysage
+  et avec Pixels entiers ; coin et popup posés sur l'image dans l'écran d'un
+  skin, qui suivent l'écran quand il bouge et Pixels entiers quand il change) ;
+  `PlayerActivityTest` (sur un téléphone de 411 × 914 dp, le coin finit au bas
+  de l'image, au-dessus de l'espace libre ; avec un skin, le rectangle est celui
+  de l'image dans l'écran du skin).
