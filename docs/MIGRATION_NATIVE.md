@@ -32,9 +32,10 @@ documentation et le README sur l'application native.
   `targetSdk` de `android/`.
 - **Données** : l'application garde l'identifiant `com.ravenemu.dev`. Une bêta
   `com.ravenemu.preview` déjà installée n'est ni lue ni modifiée.
-- **RavenCore** épinglé à la version 0.15.2 (cœur GBA de 1,2 à 1,5 fois
-  plus rapide et cœur GB/GBC environ 1,7 fois depuis la 0.15.1, au bit près ;
-  codes de triche lus comme l'appareil et comme dans RetroArch depuis la 0.15.0).
+- **RavenCore** épinglé à la version 0.15.3 (son GBC sans parasites ; cœur
+  GBA de 1,2 à 1,5 fois plus rapide depuis la 0.15.2 et cœur GB/GBC environ
+  1,7 fois depuis la 0.15.1, au bit près ; codes de triche lus comme
+  l'appareil et comme dans RetroArch depuis la 0.15.0).
 
 Écarts de parité restants avec la bêta, à traiter comme du travail à faire :
 
@@ -1712,7 +1713,8 @@ attente du badge sans trophée, défi qui garde sa place) ;
 après un reset).
 
 Écarts restants : RetroArch place ses popups en haut à gauche par défaut et
-offre six ancres ; RavenEmu garde son réglage en haut ou en bas, centré. Les
+offre six ancres ; RavenEmu garde son réglage en haut ou en bas, centré
+(les six ancres sont venues avec le lot RA-5, ci-dessous). Les
 avis de session de RetroArch passent par sa file de messages, d'un autre
 style ; RavenEmu les montre dans le même popup. La rareté d'un succès
 (« Succès rare débloqué – 2,5 % ») et le nom du compte sous une fin de jeu ne
@@ -1721,3 +1723,94 @@ déconnexion) ne sont pas reprises : les avis hors ligne restent des popups.
 Sous Robolectric, un animateur va à sa fin d'un coup ; les étapes sont donc
 vérifiées par leur géométrie, fraction par fraction. À vérifier sur téléphone
 (portrait, paysage, skin, gestes et trois boutons) avant toute publication.
+
+## RetroAchievements, lot RA-5 : les six positions de RetroArch
+
+Demande du propriétaire : les six positions de RetroArch pour les popups.
+
+- **Réglage** (`AchievementSettings.java`) : `TOP_LEFT`, `TOP`, `TOP_RIGHT`,
+  `BOTTOM_LEFT`, `BOTTOM`, `BOTTOM_RIGHT`, dans l'ordre de
+  `cheevos_appearance_anchor` de RetroArch. `top` et `bottom`, les deux valeurs
+  enregistrées jusqu'ici, sont les positions centrées : aucun choix existant ne
+  change. Une valeur inconnue revient à `TOP`. La position par défaut reste en
+  haut au centre ; celle de RetroArch est en haut à gauche.
+- **Page Paramètres → RetroAchievements** : **Position des popups**, six
+  choix (« En haut à gauche » … « En bas à droite »). La description de
+  **Progression des succès** ne parle plus d'un tour de rôle que l'application
+  ne fait pas.
+- **Géométrie** (`AchievementPopup.java`), comme `ANCHOR_LEFT`,
+  `ANCHOR_CENTER` et `ANCHOR_RIGHT` : à gauche, le badge reste à une marge du
+  bord pendant que le texte se déplie ; au centre, le popup se décale d'une
+  demi-largeur de texte et finit centré ; à droite, il part contre le bord et se
+  décale de toute la largeur du texte, pour finir contre le bord droit. La marge
+  est la même horizontalement et verticalement (marge automatique de RetroArch).
+  En bas, quelle que soit la colonne, le popup s'arrête au-dessus de ce
+  qu'affiche le coin en bas à droite.
+- Tests : `AchievementSettingsTest` (six valeurs gardées, anciennes valeurs lues,
+  ancre par défaut) ; `PlaybackSettingsActivityTest` (six choix, enregistrement) ;
+  `AchievementPopupTest` (gauche immobile, droite contre le bord pendant et après
+  le dépliage, bas à droite) ; `AchievementOverlayTest` (chaque position place le
+  popup suivant à sa place).
+
+Écart restant : RetroArch permet aussi une marge manuelle
+(`cheevos_appearance_padding_h` et `_v`) ; RavenEmu garde la marge automatique.
+
+### Retour d'essai : la progression trop bas
+
+Le propriétaire signale que la progression n'est pas calée en bas à droite de
+l'image du jeu : elle est trop bas. Cause : la superposition couvre la zone de
+l'image (`pictureFrame`), ou tout le skin, mais le pilote GLES2 dessine l'image
+**collée en haut** de sa surface, centrée en largeur, et laisse l'espace libre
+**en dessous** (`gles2_renderer.c`, `glViewport`). Le coin se calait sur le bas
+de la zone, donc sous l'image ; avec un skin, sur le bas du skin.
+
+- `AchievementOverlay.setPicture(vue, largeur, hauteur, pixels entiers)` : le
+  lecteur donne la vue où l'image est dessinée et la taille de l'image du cœur
+  (240 × 160 en GBA, 160 × 144 en Game Boy et Game Boy Color).
+  `AchievementOverlay.fit` refait le calcul du pilote : l'image entière, aux
+  proportions gardées, à un multiple entier de sa taille avec **Pixels
+  entiers**, centrée en largeur, collée en haut.
+- Le coin **et** les popups sont mis en page sur ce rectangle, traduit dans les
+  coordonnées de la superposition, que celle-ci couvre l'image seule ou tout le
+  skin. Avant le chargement d'un jeu, ils gardent toute la superposition.
+- La superposition suit la vue de l'image et ses parents : quand un skin
+  déplace son écran, quand la superposition passe du skin à l'image, ou quand
+  **Pixels entiers** change en jeu, le coin suit. Une nouvelle mise en page n'est
+  demandée que si l'image a vraiment bougé : chaque passe appelle les
+  écouteurs, déplacés ou non.
+- Tests : `AchievementOverlayTest` (calcul du pilote en portrait, en paysage
+  et avec Pixels entiers ; coin et popup posés sur l'image dans l'écran d'un
+  skin, qui suivent l'écran quand il bouge et Pixels entiers quand il change) ;
+  `PlayerActivityTest` (sur un téléphone de 411 × 914 dp, le coin finit au bas
+  de l'image, au-dessus de l'espace libre ; avec un skin, le rectangle est celui
+  de l'image dans l'écran du skin).
+
+## RetroAchievements : le cri du corbeau à la place du carillon
+
+Demande du propriétaire : récupérer le cri du corbeau de CorvusSoftware/CorvusRetro
+et l'utiliser à la place du carillon.
+
+- **Fichier** : `android/src/main/res/raw/achievement_unlock.mp3`, copié sans
+  modification de `pkg/android/app/src/main/res/raw/achievement_unlock.mp3`
+  (CorvusRetro, révision `0d30976`). C'est le croassement fourni par le
+  mainteneur (MP3, 44,1 kHz stéréo, 128 kbit/s, 3,03 s). SHA-256 :
+  `f00a367f0653432af12f74bfd8f9c62194910cfba475b265b0057decf81c2531`, vérifié
+  par `UnlockCryTest`.
+- **Lecture** (`UnlockCry.java`, écrit pour RavenEmu ; remplace `UnlockChime`,
+  le carillon synthétisé) : Android décode et joue le cri avec un `SoundPool`,
+  à part du son du jeu (AAudio), en sonification de jeu. Le son est chargé
+  une fois, avec la superposition. Un cri demandé avant la fin du chargement
+  est joué dès qu'il est prêt, sauf s'il est en retard de plus d'une seconde
+  sur son popup. Un nouveau cri reprend du début.
+- **Quand** : comme le carillon, à chaque succès débloqué et à la fin du jeu
+  (au moment où le popup s'ouvre, ou seul quand les popups de déblocage sont
+  désactivés), avec **Son des succès**, le son du jeu activé et son volume. La
+  pause du lecteur, la fermeture du jeu, **Son des succès** désactivé ou le son
+  coupé l'arrêtent ; un cri en attente de chargement est alors oublié.
+- **Paramètres → RetroAchievements → Son des succès** : « Le cri du corbeau,
+  joué avec le son du jeu pour chaque succès et le jeu terminé. »
+- Tests : `UnlockCryTest` (empreinte du fichier, cri joué une fois le son
+  chargé et au volume du jeu, cri en retard ou à volume nul ignoré, arrêt qui
+  oublie l'attente, cri pour un succès et une fin de jeu mais pas pour le
+  lancement, silence avec Son des succès ou le son du jeu coupés, cri seul sans
+  popup). `UnlockChimeTest` est retiré avec le carillon.

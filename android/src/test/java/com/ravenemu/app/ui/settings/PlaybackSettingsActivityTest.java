@@ -429,7 +429,13 @@ public final class PlaybackSettingsActivityTest {
         toggle(activity, "Déblocages et bilan").performClick();
         toggle(activity, "Progression des succès").performClick();
         toggle(activity, "Son des succès").performClick();
-        choice(activity, "Popups en bas").performClick();
+        assertNotNull("RetroArch's six anchors, the centred top one chosen",
+                choice(activity, "En haut au centre (défaut), choisi"));
+        for (String label : new String[]{"En haut à gauche", "En haut à droite", "En bas à gauche", "En bas à droite"})
+            choice(activity, label);
+        choice(activity, "En bas à droite").performClick();
+        assertEquals(AchievementSettings.BOTTOM_RIGHT, AchievementSettings.load(activity).position);
+        choice(activity, "En bas au centre").performClick();
         setAsUser(slider(activity, "Durée des déblocages"), 10 - AchievementSettings.POPUP_MIN);
         setAsUser(slider(activity, "Durée des progressions"), 0);
         AchievementSettings saved = AchievementSettings.load(activity);

@@ -17,8 +17,9 @@ import static org.robolectric.Shadows.shadowOf;
 /** RetroArch's popup geometry (gfx_widget_achievement_popup.c), stage by
  * stage, with the fractions set by hand: four lines tall, a square badge,
  * the text two thirds of a line in from each side; the badge slides from
- * beyond the edge to its place, then the text unfolds and the popup moves
- * left by half its text, ending centred. */
+ * beyond the edge to its place, then the text unfolds; centred, the popup
+ * moves left by half its text, on the right by the whole of it, on the left
+ * not at all. */
 @RunWith(RobolectricTestRunner.class)
 @Config(sdk = 36, qualifiers = "fr-rFR-w360dp-h640dp-mdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -67,9 +68,33 @@ public final class AchievementPopupTest {
         assertEquals("Centred, badge and text", width / 2f, popup.badgeLeft() + (size + text) / 2f, 0.5f);
     }
 
+    @Test public void onTheLeftItStaysAgainstTheLeftEdgeAndOnTheRightItEndsAgainstTheRightOne() {
+        final int size = popup.popupHeight(), width = parent.getWidth(), text = popup.textWidth();
+        popup.setAnchor(false, -1);
+        popup.setSlide(1f);
+        popup.setUnfold(0f);
+        assertEquals("RetroArch's ANCHOR_LEFT: a margin from the left", popup.edgeMargin(), popup.badgeLeft(), 0.5f);
+        popup.setUnfold(1f);
+        assertEquals("It does not move while it unfolds", popup.edgeMargin(), popup.badgeLeft(), 0.5f);
+        popup.setAnchor(false, 1);
+        popup.setUnfold(0f);
+        assertEquals("ANCHOR_RIGHT: the badge alone against the right", width - size - popup.edgeMargin(),
+                popup.badgeLeft(), 0.5f);
+        popup.setUnfold(0.5f);
+        assertEquals("Moving left by what is shown", width - size - popup.edgeMargin() - text * 0.5f,
+                popup.badgeLeft(), 0.5f);
+        popup.setUnfold(1f);
+        assertEquals("Badge and text against the right", width - popup.edgeMargin(),
+                popup.badgeLeft() + size + text, 0.5f);
+        popup.setAnchor(true, 1);
+        popup.setSlide(1f);
+        assertEquals("Bottom right: a margin from the bottom too", parent.getHeight() - popup.edgeMargin() - size,
+                popup.badgeTop(), 0.5f);
+    }
+
     @Test public void fromTheBottomItStartsBelowAndRestsAboveTheLift() {
         final int size = popup.popupHeight(), height = parent.getHeight();
-        popup.setBottom(true);
+        popup.setAnchor(true, 0);
         popup.setLift(40);
         popup.setSlide(0f);
         assertEquals("Below the picture", height, popup.badgeTop(), 0.5f);

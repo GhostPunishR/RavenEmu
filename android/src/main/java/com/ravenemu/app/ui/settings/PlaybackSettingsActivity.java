@@ -264,14 +264,18 @@ public final class PlaybackSettingsActivity extends Activity implements RavenThe
         group("Notifications RetroAchievements");
         settingSwitch("Déblocages et bilan", "Afficher les succès obtenus et le jeu terminé.",
                 achievementSettings.unlockPopups, value -> updateAchievements(achievementSettings.withUnlockPopups(value)));
-        settingSwitch("Progression des succès", "Afficher les hausses mesurées à tour de rôle.",
+        settingSwitch("Progression des succès", "Afficher en bas à droite l'avancée mesurée d'un succès.",
                 achievementSettings.progressPopups,
                 value -> updateAchievements(achievementSettings.withProgressPopups(value)));
-        settingSwitch("Son des succès", "Un court carillon, créé par RavenEmu, joué avec le son du jeu pour "
-                        + "chaque succès et le jeu terminé.",
+        settingSwitch("Son des succès", "Le cri du corbeau, joué avec le son du jeu pour chaque succès et le "
+                        + "jeu terminé.",
                 achievementSettings.sound, value -> updateAchievements(achievementSettings.withSound(value)));
-        choices(new String[]{"Popups en haut", "Popups en bas"},
-                new String[]{AchievementSettings.TOP, AchievementSettings.BOTTOM}, achievementSettings.position,
+        description("Position des popups",
+                "Les six emplacements de RetroArch, pour le lancement d'un jeu, les succès et les avis. "
+                        + "La progression, les défis et les classements restent en bas à droite.");
+        choices(new String[]{"En haut à gauche", "En haut au centre (défaut)", "En haut à droite",
+                        "En bas à gauche", "En bas au centre", "En bas à droite"},
+                AchievementSettings.POSITIONS.toArray(new String[0]), achievementSettings.position,
                 value -> updateAchievements(achievementSettings.withPosition(value)));
         slider("Durée des déblocages", achievementSettings.popupSeconds, AchievementSettings.POPUP_MIN,
                 AchievementSettings.POPUP_MAX, " s", value -> updateAchievements(achievementSettings.withPopupSeconds(value)));

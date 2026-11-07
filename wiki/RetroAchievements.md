@@ -23,7 +23,7 @@ Le SDK observe la mémoire fournie par l'API C de RavenCore. Les restaurations d
 
 ## Progression, défis et classements
 
-Comme dans RetroArch, ils s'affichent **en bas à droite** de l'image (ou du skin). De bas en haut : les suivis de classement en cours, chacun sa valeur dans une boîte ; les défis en cours, une rangée de badges en couleur, ceux des succès sur le point d'être gagnés ; puis la progression d'un succès, son badge verrouillé et la valeur atteinte, par exemple « 3/10 » ou « 50 % ».
+Comme dans RetroArch, ils s'affichent **en bas à droite** de l'image du jeu elle-même, y compris dans l'écran d'un skin, et non dans l'espace laissé libre sous l'image. De bas en haut : les suivis de classement en cours, chacun sa valeur dans une boîte ; les défis en cours, une rangée de badges en couleur, ceux des succès sur le point d'être gagnés ; puis la progression d'un succès, son badge verrouillé et la valeur atteinte, par exemple « 3/10 » ou « 50 % ».
 
 La progression n'apparaît que pour les succès dont l'auteur a défini une mesure, quand cette mesure change. Lorsque plusieurs mesures changent, le SDK montre le succès le plus proche de son objectif. Elle reste affichée pendant la durée réglée après sa dernière hausse, puis disparaît ; un reset ou le chargement d'un état la retire aussitôt. Quand le badge d'un succès n'est pas encore téléchargé, ce qui est affiché reste en place jusqu'à son arrivée, une demi-seconde au plus, puis un trophée le remplace : il n'y a plus de clignotement. La progression ne signifie pas que le succès est débloqué ou synchronisé.
 
@@ -39,7 +39,7 @@ Les demandes légitimes du SDK restent dans le journal chiffré jusqu'à confirm
 
 ## Popups des succès
 
-Les popups reprennent le style de RetroArch : un badge carré, puis deux lignes sur un fond noir translucide, la première en gris, la seconde en blanc. Le badge arrive du bord de l'image, puis le texte se déplie à sa droite et le popup se centre. À la fin, le texte se replie et le badge repart. Un seul popup s'affiche à la fois ; les suivants attendent leur tour.
+Les popups se placent sur l'image du jeu, comme la progression. Ils reprennent le style de RetroArch : un badge carré, puis deux lignes sur un fond noir translucide, la première en gris, la seconde en blanc. Le badge arrive du bord de l'image, puis le texte se déplie à sa droite. À la fin, le texte se replie et le badge repart. Un seul popup s'affiche à la fois ; les suivants attendent leur tour.
 
 - **Lancement d'un jeu reconnu** : l'icône du jeu, son titre, puis « Vous avez débloqué 3 succès sur 42 ».
 - **Succès débloqué** : son badge, « Succès débloqué », puis son titre et ses points, par exemple « Premier pas (5) ».
@@ -49,7 +49,7 @@ Un popup attend son image deux secondes au plus ; sans image, il montre un troph
 
 ## Réglages des notifications
 
-Dans **Paramètres → RetroAchievements**, les popups de déblocage et de fin de jeu et ceux de progression ont des interrupteurs distincts. Les popups se placent en haut ou en bas, au centre ; la progression reste en bas à droite. La durée des déblocages va de 2 à 10 secondes, celle des progressions de 1 à 5 secondes (2 secondes par défaut, comme RetroArch) ; les nouvelles durées s'appliquent aux prochains popups. **Son des succès**, activé par défaut, joue un court carillon créé par RavenEmu, mélangé au son du jeu et à son volume. Les erreurs et avis de connexion ne sont pas masqués par l'interrupteur des succès.
+Dans **Paramètres → RetroAchievements**, les popups de déblocage et de fin de jeu et ceux de progression ont des interrupteurs distincts. **Position des popups** propose les six emplacements de RetroArch : en haut ou en bas, à gauche, au centre ou à droite (en haut au centre par défaut). Un popup à gauche s'ouvre sur place ; au centre, il se recentre en s'ouvrant ; à droite, il s'ouvre vers la gauche et finit contre le bord. En bas, il s'arrête au-dessus de ce qu'affiche le coin. La progression, les défis et les classements restent en bas à droite. La durée des déblocages va de 2 à 10 secondes, celle des progressions de 1 à 5 secondes (2 secondes par défaut, comme RetroArch) ; les nouvelles durées s'appliquent aux prochains popups. **Son des succès**, activé par défaut, joue le cri du corbeau pour chaque succès et le jeu terminé (3 secondes, l'enregistrement du propriétaire repris de CorvusRetro), au volume du jeu et seulement quand le son du jeu est activé. La pause, la fermeture du jeu ou le son coupé l'arrêtent. Les erreurs et avis de connexion ne sont pas masqués par l'interrupteur des succès.
 
 Une fin de jeu affiche l'icône et le titre du jeu. **Jeu terminé** correspond au Softcore ; **Jeu maîtrisé** est réservé au Hardcore. Ce bilan suit l'événement du SDK et ne garantit pas à lui seul la synchronisation de tous les succès : consulter aussi les états d'envoi.
 
@@ -63,7 +63,7 @@ La consultation fonctionne en Softcore. Les tentatives et soumissions officielle
 
 Le verrou `AwardPolicy.HARDCORE_APPROVED` reste à `false`. Le réglage ne peut pas activer ce mode tant que RavenEmu n'a pas été validé par RetroAchievements ([RAdmin](https://retroachievements.org/messages/create?to=RAdmin)).
 
-L'identifiant HTTP (User-Agent) est composé à partir du build, sans version recopiée à la main, par exemple `RavenEmu/0.1 (Android 15; arm64-v8a) RavenCore/0.15.2 rcheevos/12.5` : version numérique de l'application, version d'Android et architecture, version du moteur et clause du SDK. Le même identifiant est envoyé au serveur d'images. Le nom du client, `RavenEmu`, est aussi celui de la version PC : le format reste à confirmer avec RAdmin.
+L'identifiant HTTP (User-Agent) est composé à partir du build, sans version recopiée à la main, par exemple `RavenEmu/0.1 (Android 15; arm64-v8a) RavenCore/0.15.3 rcheevos/12.5` : version numérique de l'application, version d'Android et architecture, version du moteur et clause du SDK. Le même identifiant est envoyé au serveur d'images. Le nom du client, `RavenEmu`, est aussi celui de la version PC : le format reste à confirmer avec RAdmin.
 
 Ce que le code fait déjà en Hardcore :
 - **Barrière de démarrage.** Le jeu n'avance pas tant que le compte n'est pas connecté et que la ROM n'est pas identifiée ; le SDK continue d'être servi pendant l'attente. Dès que le jeu est reconnu, il redémarre depuis l'allumage, comme le demande le SDK, pour effacer les quelques images éventuellement jouées avant.

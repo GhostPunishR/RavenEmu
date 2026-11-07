@@ -9,6 +9,7 @@ import android.app.Activity;
 import android.graphics.Bitmap;
 import android.os.Looper;
 import android.view.View;
+import android.widget.FrameLayout;
 import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.HashMap;
@@ -155,6 +156,89 @@ public final class AchievementOverlayTest {
         advance(5_000 + MOTION + 40);
         overlay.onEvent(event("achievement", "Second", "", "5"));
         assertFalse(popup.fromBottom());
+    }
+
+    @Test public void eachOfTheSixAnchorsPlacesTheNextPopup() {
+        AchievementPopup popup = popup(overlay);
+        int[] sides = {-1, 0, 1, -1, 0, 1};
+        long gap = MOTION + 5_000L + MOTION + 80;
+        for (int i = 0; i < AchievementSettings.POSITIONS.size(); i++) {
+            overlay.setSettings(AchievementSettings.DEFAULTS.withPosition(AchievementSettings.POSITIONS.get(i))
+                    .withSound(false), true, 100);
+            overlay.onEvent(event("achievement", "Succès " + i, "", "5"));
+            advance(MOTION + 40);
+            String position = AchievementSettings.POSITIONS.get(i);
+            assertEquals(position, i >= 3, popup.fromBottom());
+            assertEquals(position, sides[i], popup.horizontal());
+            float left = popup.badgeLeft(), right = left + popup.popupHeight() + popup.textWidth();
+            if (sides[i] < 0) assertEquals(position, popup.edgeMargin(), left, 0.5f);
+            else if (sides[i] > 0) assertEquals(position, overlay.getWidth() - popup.edgeMargin(), right, 0.5f);
+            else assertEquals(position, overlay.getWidth() / 2f, (left + right) / 2f, 1f);
+            if (i >= 3) assertEquals(position, overlay.getHeight() - popup.edgeMargin() - popup.popupHeight(),
+                    popup.badgeTop(), 0.5f);
+            else assertEquals(position, popup.edgeMargin(), popup.badgeTop(), 0.5f);
+            advance(gap - MOTION - 40);
+            assertNull(overlay.popupText());
+        }
+    }
+
+    // ---- Over the game's picture --------------------------------------------------------------
+
+    @Test public void thePictureIsFittedAsTheRendererFitsIt() {
+        assertEquals("GBA in portrait: full width, pinned to the top", new android.graphics.Rect(0, 0, 360, 240),
+                AchievementOverlay.fit(360, 400, 240, 160, false));
+        assertEquals("Game Boy", new android.graphics.Rect(0, 0, 360, 324),
+                AchievementOverlay.fit(360, 400, 160, 144, false));
+        assertEquals("Pixels entiers: once, centred across", new android.graphics.Rect(60, 0, 300, 160),
+                AchievementOverlay.fit(360, 400, 240, 160, true));
+        assertEquals("In landscape: full height, centred across", new android.graphics.Rect(130, 0, 670, 360),
+                AchievementOverlay.fit(800, 360, 240, 160, false));
+    }
+
+    @Test public void popupsAndTheCornerAreLaidOutOverThePictureNotTheSpaceAroundIt() {
+        Activity activity = Robolectric.buildActivity(Activity.class).setup().get();
+        // A skin's stage: the picture's view in its frame, the overlay over the whole stage.
+        FrameLayout stage = new FrameLayout(activity);
+        FrameLayout frame = new FrameLayout(activity);
+        View surface = new View(activity);
+        frame.addView(surface, new FrameLayout.LayoutParams(-1, -1));
+        FrameLayout.LayoutParams place = new FrameLayout.LayoutParams(300, 200);
+        place.leftMargin = 20;
+        place.topMargin = 50;
+        stage.addView(frame, place);
+        AchievementOverlay over = new AchievementOverlay(activity, new BadgeCache());
+        stage.addView(over, new FrameLayout.LayoutParams(-1, -1));
+        activity.setContentView(stage);
+        over.setSettings(AchievementSettings.DEFAULTS.withSound(false), true, 100);
+        advance(10);
+        assertEquals("No game yet: the whole overlay", new android.graphics.Rect(0, 0, over.getWidth(), over.getHeight()),
+                over.pictureRect());
+        over.setPicture(surface, 160, 144, false);
+        advance(10);
+        // 300 × 200 holds 222 × 200, centred across: 39 in.
+        android.graphics.Rect picture = new android.graphics.Rect(59, 50, 281, 250);
+        assertEquals(picture, over.pictureRect());
+        AchievementCorner corner = corner(over);
+        AchievementPopup popup = popup(over);
+        assertEquals(picture, new android.graphics.Rect(corner.getLeft(), corner.getTop(), corner.getRight(),
+                corner.getBottom()));
+        assertEquals(picture.width(), popup.getWidth());
+        over.onEvent(indicator("progress_show", "Collectionneur", "3/10", "", "55"));
+        advance(10);
+        View box = corner.progressView();
+        assertEquals("A spacing from the picture's right and bottom", picture.width() - box.getRight(),
+                picture.height() - box.getBottom());
+        // The skin moves its screen: the corner follows.
+        place.topMargin = 80;
+        frame.setLayoutParams(place);
+        advance(50);
+        assertEquals(new android.graphics.Rect(59, 80, 281, 280), over.pictureRect());
+        assertEquals(280, corner.getBottom());
+        // Pixels entiers: once, 160 × 144, centred across in 300 × 200.
+        over.setIntegerScale(true);
+        advance(50);
+        assertEquals(new android.graphics.Rect(90, 80, 250, 224), over.pictureRect());
+        over.release();
     }
 
     // ---- The bottom right corner -------------------------------------------------------------

@@ -1052,6 +1052,8 @@ public final class PlayerActivityTest {
             assertEquals(NativeBridge.A, FakeNative.buttons & NativeBridge.A);
             touchSkin(stage, MotionEvent.ACTION_UP, 350 * scale, top + 110 * scale);
             assertEquals(0, FakeNative.buttons);
+            // Its corner is the game's picture's, inside the skin's screen, not the skin's.
+            assertEquals(drawnPicture(activity, stage), ((AchievementOverlay) overlay).pictureRect());
 
             ShadowToast.reset();
             openMenu(activity);
@@ -1369,6 +1371,36 @@ public final class PlayerActivityTest {
         assertTrue(menu(restored.get()).isShowing());
         assertEquals(3, menu(restored.get()).getSelectedSlot());
         assertTrue(FakeNative.paused);
+    }
+
+    /** Where the renderer draws a Game Boy picture (160 × 144), in `in`'s coordinates. */
+    private static android.graphics.Rect drawnPicture(PlayerActivity activity, View in) {
+        View surface = ReflectionHelpers.getField(activity, "surface");
+        android.graphics.Rect drawn = AchievementOverlay.fit(surface.getWidth(), surface.getHeight(), 160, 144, false);
+        for (View step = surface; step != in; step = (View) step.getParent())
+            drawn.offset(step.getLeft(), step.getTop());
+        return drawn;
+    }
+
+    /** The bug: the progress sat at the bottom of the picture's frame, below the
+     * picture itself, which the renderer pins to the top. */
+    @Test @Config(qualifiers = "en-rUS-w411dp-h914dp-mdpi")
+    public void theAchievementCornerIsTheGamePicturesCornerNotTheSpaceBelowIt() throws Exception {
+        PlayerActivity activity = loaded();
+        pump(activity);
+        idle();
+        AchievementOverlay overlay = ReflectionHelpers.getField(activity, "achievementOverlay");
+        View frame = (View) overlay.getParent();
+        android.graphics.Rect picture = drawnPicture(activity, frame);
+        assertEquals(picture, overlay.pictureRect());
+        assertTrue("Space is left below the picture", picture.bottom < overlay.getHeight());
+        AchievementCorner corner = ReflectionHelpers.getField(overlay, "corner");
+        assertEquals("The corner ends where the picture ends", picture.bottom, corner.getBottom());
+        assertEquals(picture.right, corner.getRight());
+        overlay.onEvent(new NativeAchievements.Event("progress_show", "Collectionneur", "3/10", "", "", "55"));
+        idle();
+        View box = corner.progressView();
+        assertTrue("The progress is on the picture", corner.getTop() + box.getBottom() < picture.bottom);
     }
 
     private PlayerActivity loaded() throws Exception {

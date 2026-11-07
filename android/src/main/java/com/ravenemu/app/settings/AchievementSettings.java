@@ -1,13 +1,21 @@
 package com.ravenemu.app.settings;
 
 import android.content.Context;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
 /** The beta's Settings → RetroAchievements notifications: unlock and
- * progress popups, their chime, where they show and for how long. Stored
+ * progress popups, their sound, where they show and for how long. Stored
  * with the playback preferences of the native preview; no beta data is read. */
 public final class AchievementSettings {
-    public static final String TOP = "top", BOTTOM = "bottom";
+    /** RetroArch's six popup anchors (cheevos_appearance_anchor), in its order. TOP and
+     * BOTTOM are the centred ones, the two RavenEmu stored before: they keep their values. */
+    public static final String TOP_LEFT = "top_left", TOP = "top", TOP_RIGHT = "top_right",
+            BOTTOM_LEFT = "bottom_left", BOTTOM = "bottom", BOTTOM_RIGHT = "bottom_right";
+    public static final List<String> POSITIONS = Collections.unmodifiableList(Arrays.asList(
+            TOP_LEFT, TOP, TOP_RIGHT, BOTTOM_LEFT, BOTTOM, BOTTOM_RIGHT));
     public static final int POPUP_MIN = 2, POPUP_MAX = 10, PROGRESS_MIN = 1, PROGRESS_MAX = 5;
 
     public static final AchievementSettings DEFAULTS = new AchievementSettings(true, true, true, TOP, 5, 2, false);
@@ -16,7 +24,7 @@ public final class AchievementSettings {
     public final boolean unlockPopups;
     /** Measured progress of an achievement. */
     public final boolean progressPopups;
-    /** A short chime by RavenEmu for each unlock and the completed game. */
+    /** The crow's cry for each unlock and the completed game. */
     public final boolean sound;
     public final String position;
     public final int popupSeconds, progressSeconds;
@@ -34,10 +42,16 @@ public final class AchievementSettings {
         this.unlockPopups = unlockPopups;
         this.progressPopups = progressPopups;
         this.sound = sound;
-        this.position = BOTTOM.equals(position) ? BOTTOM : TOP;
+        this.position = POSITIONS.contains(position) ? position : TOP;
         this.popupSeconds = Math.max(POPUP_MIN, Math.min(POPUP_MAX, popupSeconds));
         this.progressSeconds = Math.max(PROGRESS_MIN, Math.min(PROGRESS_MAX, progressSeconds));
     }
+
+    /** Popups come from the bottom edge (BOTTOM_LEFT, BOTTOM, BOTTOM_RIGHT). */
+    public boolean fromBottom() { return position.startsWith("bottom"); }
+
+    /** -1 left, 0 centred, 1 right: the popup's horizontal anchor. */
+    public int horizontal() { return position.endsWith("_left") ? -1 : position.endsWith("_right") ? 1 : 0; }
 
     public AchievementSettings withUnlockPopups(boolean value) {
         return new AchievementSettings(value, progressPopups, sound, position, popupSeconds, progressSeconds, hardcore);

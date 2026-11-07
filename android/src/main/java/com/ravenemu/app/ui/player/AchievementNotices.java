@@ -10,7 +10,7 @@ import com.ravenemu.app.bridge.NativeAchievements;
  * module reports without text. */
 final class AchievementNotices {
     /** heading (grey) over title (white); an award (an unlock, a completed
-     * game) is only shown with "Déblocages et bilan" and rings the chime. */
+     * game) is only shown with "Déblocages et bilan" and plays the crow's cry. */
     static final class Notice {
         final String heading, title, image;
         final boolean award;
