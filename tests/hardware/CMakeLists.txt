@@ -36,6 +36,23 @@ target_include_directories(raven_native_audio_test PRIVATE
 target_link_libraries(raven_native_audio_test PRIVATE Threads::Threads m)
 add_test(NAME raven_native_audio COMMAND raven_native_audio_test)
 
+# Picture and sound together: the real cores, the pacer, the audio pipeline
+# and the AAudio driver, to a fake device on its own clock, in virtual time.
+add_executable(raven_native_av_sync_test test_av_sync.c
+    "${DRIVERS}/audio/audio_pipeline.c" "${DRIVERS}/audio/sinc_resampler.c"
+    "${DRIVERS}/audio/aaudio/aaudio_driver.c")
+target_compile_features(raven_native_av_sync_test PRIVATE c_std_11)
+target_include_directories(raven_native_av_sync_test PRIVATE
+    "${DRIVERS}/audio" "${DRIVERS}/audio/aaudio"
+    "${CMAKE_CURRENT_LIST_DIR}/fakes_audio")
+target_link_libraries(raven_native_av_sync_test PRIVATE raven_frontend Threads::Threads m)
+add_dependencies(raven_native_av_sync_test
+    ravenemu_gb_libretro ravenemu_gbc_libretro ravenemu_gba_libretro)
+add_test(NAME raven_native_av_sync COMMAND raven_native_av_sync_test
+    $<TARGET_FILE:ravenemu_gb_libretro>
+    $<TARGET_FILE:ravenemu_gbc_libretro>
+    $<TARGET_FILE:ravenemu_gba_libretro>)
+
 add_executable(raven_native_sinc_test test_sinc_resampler.c "${DRIVERS}/audio/sinc_resampler.c")
 target_compile_features(raven_native_sinc_test PRIVATE c_std_11)
 target_include_directories(raven_native_sinc_test PRIVATE "${DRIVERS}/audio")
@@ -63,6 +80,7 @@ if(RAVEN_VIDEO_PIXEL_TESTS)
 endif()
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(raven_native_audio_test PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(raven_native_av_sync_test PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(raven_native_video_test PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(raven_native_sensor_test PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(raven_native_state_progress_test PRIVATE -Wall -Wextra -Wpedantic)

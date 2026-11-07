@@ -1572,3 +1572,50 @@ jaquettes, en portrait et en paysage ; bandeau du lancement avec et sans réseau
 glissement entre consoles avec la navigation par gestes d'Android (le retour par
 le bord de l'écran reste au système) ; netteté d'une jaquette choisie à nouveau,
 dans la grille et dans la fiche.
+
+## Régression image et son, et leur synchronisation, lot AV-1
+
+Demande du propriétaire : un test de régression de l'audio, de la vidéo et de
+leur synchronisation. Les tests existants vérifiaient chaque pièce seule :
+l'horloge et le calage sur l'écran (`raven_frame_pacer`), le pipeline audio
+(rééchantillonnage, contrôle du débit, dérive d'horloge), le pilote GLES2 (y
+compris au pixel près). Ils passent tous (ctest 16/16).
+
+Nouveau test **`raven_native_av_sync`** (`tests/hardware/test_av_sync.c`), de bout
+en bout et en temps virtuel, donc déterministe :
+
+- Les vrais cores RavenCore GB, GBC et GBA tournent par le frontend C.
+- Le calage sur l'écran les cadence comme le fait `drawFrame` du pont Android : rythme, vitesse transmise au son, images dues.
+- Le son passe par le pipeline et le pilote AAudio jusqu'à un faux appareil qui tire des blocs de 192 trames à sa propre horloge.
+- Les ROM sont construites par le test, en GB et en GBA. Elles jouent un La (131 072 / 298 Hz, soit 439,8 Hz) sur le canal carré 2 : on vérifie ainsi la hauteur du son et l'absence de trous.
+
+Ce qui est vérifié, une fois le calage acquis :
+
+- **Image**, à 60 Hz : une image du jeu par rafraîchissement, aucune répétée ni sautée. À 120 Hz, une image tous les deux rafraîchissements. Une image affichée par image jouée.
+- **Son** : le nombre d'échantillons par image correspond au débit du core. L'appareil n'est jamais à court (craquement) et la file n'est jamais pleine (échantillons perdus). Le La est à la vitesse du jeu à 0,5 % près, sans trou de plus de 10 ms.
+- **Synchronisation** : le délai entre une image affichée et son son entendu (la file devant l'appareil) reste sous le budget du pilote (64 ms plus une image) et ne dérive pas d'1 ms entre les deux dernières fenêtres de 5 s.
+
+Résultats (après calage ; la latence est mesurée juste après chaque image écrite) :
+
+| Scénario | Images répétées / sautées | Latence établie | Coupures / file pleine | La mesuré (attendu) |
+| --- | --- | --- | --- | --- |
+| GB, 60 Hz, sinc | 0 / 0 | 44,2 ms | 0 / 0 | 441,75 Hz (441,85) |
+| GB, 59,94 Hz, appareil +300 ppm | 0 / 0 | 42,5 ms | 0 / 0 | 441,31 Hz (441,40) |
+| GB, 60 Hz, pause d'1 s à 8 s | 0 / 0 | 44,3 ms | 0 / 0 | 441,66 Hz (441,85) |
+| GBC, 120 Hz | 1 sur 2, voulu / 0 | 40,2 ms | 0 / 0 | 441,73 Hz (441,85) |
+| GBA, 60 Hz, sinc puis linéaire | 0 / 0 | 44,2 ms | 0 / 0 | 441,75 et 441,79 Hz (441,85) |
+| GBA, 60 Hz, appareil −3000 ppm | 0 / 0 | 61,0 ms | 0 / 0 | 441,65 Hz (441,85) |
+| GBA, 90 Hz (pas un multiple) | 1 sur 3, non calé / 0 | 41,5 ms | 0 / 0 | 439,77 Hz (439,84) |
+| GBA, 120 Hz, appareil +300 ppm | 1 sur 2, voulu / 0 | 38,4 ms | 0 / 0 | 441,74 Hz (441,85) |
+
+Lecture des résultats :
+
+- **Établissement de la latence.** Au lancement et après une pause, la file part presque vide (environ 29 ms de latence). Le contrôle du débit la porte à son niveau en une vingtaine de secondes : il ne corrige que de 0,5 % au plus, avec une constante de temps d'environ 6 s. L'écart image et son change ainsi d'environ 15 ms, lentement, puis ne bouge plus. Ce n'est pas une dérive.
+- **Endurance**, avec `RAVEN_AV_SECONDS=600`, dix minutes par scénario : latence à 44,34 ms puis 44,33 ms entre la 590e et la 600e seconde, La à 441,84 Hz pour 441,85, aucune coupure.
+- **Appareil 0,3 % plus lent** : la file se stabilise vers les quatre cinquièmes de sa taille, à 61 ms, sans la remplir. Au-delà de 0,5 %, limite du contrôle du débit, elle se remplirait ; les horloges des téléphones s'écartent de bien moins.
+- **90 Hz** : l'écran ne divise pas le rythme de la console. Le jeu suit alors l'horloge de la console : une image sur trois est répétée, ce qui est inévitable sans changer la fréquence de l'écran (l'application demande 60 ou 120 Hz quand l'écran le permet).
+- **Vrais jeux**, en local seulement, ROM jamais publiées : The Legend of Zelda, Pokémon Rubis, Pokémon Émeraude et GTA (GBA). Chacun a tourné 60 s, avec une pause à 30 s. Les mesures sont les mêmes que ci-dessus : 0 coupure, 0 file pleine, aucune image répétée ni sautée, latence établie à 44,2 ms. La synchronisation dépend du rythme et du nombre d'échantillons par image, que le core fixe exactement, et non du jeu. Le test accepte ces ROM en arguments supplémentaires.
+- **Sanitizers** : le test passe sous AddressSanitizer et UBSan avec des mesures identiques.
+- **Coût** : sur la machine de test, le core GB coûte environ 1,9 ms par image même sur une boucle vide, contre 0,33 ms pour le core GBA (qui saute sans doute les boucles d'attente). C'est sans effet sur la synchronisation, mais c'est à surveiller sur les téléphones modestes avec les images préventives : c'est du ressort de RavenCore.
+
+Limites : le test reproduit la boucle de `drawFrame` (le pacer, la vitesse du son, les images dues) au lieu d'appeler le pont JNI, qui demande Android. L'appareil est simulé : la latence réelle d'AAudio, le Bluetooth et l'écoute restent à vérifier sur téléphone.
