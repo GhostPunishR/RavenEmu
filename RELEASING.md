@@ -36,4 +36,4 @@ Avant toute désinstallation ou effacement de données, exportez les sauvegardes
 
 ## README et image de marque
 
-Le [README](README.md) affiché par GitHub a été promu depuis [README_RELEASE.md](README_RELEASE.md) le 6 novembre 2026, sur demande du propriétaire. **Seul le propriétaire décide d'une nouvelle modification du README.** Aucune étape CI ni aucun agent ne doit le régénérer ou remplacer le logo officiel. Voir la règle permanente dans [AGENTS.md](AGENTS.md) et les propriétaires définis dans `.github/CODEOWNERS`.
+Le [README](README.md) affiché par GitHub a été promu depuis la maquette `README_RELEASE.md` le 6 novembre 2026, sur demande du propriétaire ; la maquette et les mentions d'iOS ont été retirées le 7 novembre 2026, à sa demande aussi. **Seul le propriétaire décide d'une nouvelle modification du README.** Aucune étape CI ni aucun agent ne doit le régénérer ou remplacer le logo officiel. Voir la règle permanente dans [AGENTS.md](AGENTS.md) et les propriétaires définis dans `.github/CODEOWNERS`.

@@ -45,7 +45,7 @@ La distribution publique est disponible depuis **[les Releases GitHub](https://g
 
 Sur Android, installez l'APK, lancez RavenEmu, puis importez uniquement des jeux que vous êtes autorisé à utiliser. Avant toute désinstallation, tout changement de signature ou toute migration de données, **exportez vos sauvegardes**.
 
-Les versions iOS et les autres plateformes ne doivent être annoncées comme distribuées qu'avec une publication réelle. Les builds de développement ne sont pas des versions publiques signées.
+Les autres plateformes ne doivent être annoncées comme distribuées qu'avec une publication réelle. Les builds de développement ne sont pas des versions publiques signées.
 
 ## Architecture
 
@@ -60,9 +60,8 @@ ABI Libretro (C)
         ▼
 frontend/ (C)              Sessions et orchestration
         │
-        ├── android/       Interface Java / JNI
-        │    └── hardware/ Audio, vidéo et commandes Android
-        └── iOS            Adaptation native selon validation
+        └── android/       Interface Java / JNI
+             └── hardware/ Audio, vidéo et commandes Android
 ```
 
 L'application et le frontend appartiennent à RavenEmu. **Libretro décrit une interface de cores**, pas la marque de l'application. Certaines portions de pilotes matériels adaptées de RetroArch conservent leurs licences et crédits : [provenance des sources](legal/attributions/retroarch.md).
