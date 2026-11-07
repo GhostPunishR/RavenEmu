@@ -16,13 +16,12 @@
 
 **Interdiction pour les agents (y compris CorvusSoftware, Codex et les agents CI) de modifier, régénérer, reformater, déplacer ou remplacer ces fichiers sans demande explicite du propriétaire ciblant précisément cette action :**
 
-- `README.md` : présentation officielle publiée du dépôt, promue depuis `README_RELEASE.md` le 6 novembre 2026 sur demande du propriétaire ; **intouchable** sans nouvelle demande.
-- `README_RELEASE.md` : maquette qui a servi à cette promotion ; **ne pas actualiser automatiquement**, même lors des changements de version, badge, workflow ou fonctionnalités.
+- `README.md` : présentation officielle publiée du dépôt, promue le 6 novembre 2026 depuis la maquette `README_RELEASE.md` (supprimée le 7 novembre 2026, comme les mentions d'iOS, sur demande du propriétaire) ; **intouchable** sans nouvelle demande, et **jamais actualisé automatiquement**, même lors des changements de version, badge, workflow ou fonctionnalités.
 - `assets/brand/ravenemu-logo.webp` : visuel officiel de référence ; ne pas recadrer, retoucher, convertir ou substituer sans validation explicite.
 
 **Une CI verte ou une fusion ne constitue PAS une autorisation de publication.** Les agents ne doivent jamais réécrire `README.md`, activer des affirmations de parité, créer une release ou modifier le logo de leur propre initiative. La décision finale et toute mise à jour du README appartiennent exclusivement à GhostPunishR.
 
-Lorsqu'une tâche nécessite un changement de documentation, modifier les documents techniques concernés (`docs/`, `CHANGELOG.md`, `BUILDING.md`, etc.) **sans toucher aux README protégés** ; signaler au propriétaire les ajustements de README éventuellement nécessaires. Le fichier `.github/CODEOWNERS` réclame une revue du propriétaire ; son effet bloquant dépend de l'activation des règles de protection de branche GitHub.
+Lorsqu'une tâche nécessite un changement de documentation, modifier les documents techniques concernés (`docs/`, `CHANGELOG.md`, `BUILDING.md`, etc.) **sans toucher au README protégé** ; signaler au propriétaire les ajustements de README éventuellement nécessaires. Le fichier `.github/CODEOWNERS` réclame une revue du propriétaire ; son effet bloquant dépend de l'activation des règles de protection de branche GitHub.
 
 ## Règle obligatoire : architecture finale
 
