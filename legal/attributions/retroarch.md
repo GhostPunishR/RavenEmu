@@ -83,7 +83,8 @@ deux tiers de ligne, durée de 330 ms par étape et ralenti quadratique, file de
 huit popups, espacement d'un soixante-quatrième de l'écran, tailles relatives
 des badges et des boîtes, limites de quatre suivis et huit défis, attente de
 trente images pour un badge, durée de deux secondes de la progression, ordre
-et contenu des lignes. Le code (`AchievementPopup.java`,
+et contenu des lignes, et les six ancres des popups (`cheevos_appearance_anchor`,
+`gfx_widgets_update_cheevos_appearance_state`) avec leur marge automatique. Le code (`AchievementPopup.java`,
 `AchievementCorner.java`, `AchievementOverlay.java`, `AchievementNotices.java`
 dans `android/src/main/java/com/ravenemu/app/ui/player/`) est écrit pour
 RavenEmu, sous sa licence AGPLv3 ; aucune ligne des widgets n'y est portée.

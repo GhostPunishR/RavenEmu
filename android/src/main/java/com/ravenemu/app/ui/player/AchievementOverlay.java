@@ -19,7 +19,8 @@ import java.util.ArrayDeque;
  * the game that starts, each unlock, the completed game and the session's
  * notices. Its badge slides in from the edge, then its text unfolds beside
  * it; it stays for Settings' duration, folds back and slides away; then the
- * next. Each stage takes RetroArch's MSG_QUEUE_ANIMATION_DURATION, 330 ms,
+ * next, at one of RetroArch's six anchors (Settings → RetroAchievements).
+ * Each stage takes RetroArch's MSG_QUEUE_ANIMATION_DURATION, 330 ms,
  * eased out (quadratic). A popup opens once its badge is fetched, 2 s at
  * most, and never changes while shown. In the bottom right corner
  * (AchievementCorner): the progress of an achievement, the challenges and
@@ -57,7 +58,7 @@ final class AchievementOverlay extends FrameLayout {
         addView(corner, new LayoutParams(-1, -1));
         popup = new AchievementPopup(context);
         addView(popup, new LayoutParams(-1, -1));
-        popup.setBottom(false);
+        popup.setAnchor(false, 0);
     }
 
     /** Settings → RetroAchievements; Settings → Audio for the chime. */
@@ -71,8 +72,8 @@ final class AchievementOverlay extends FrameLayout {
             if (fetching != null && fetching.award) stopFetching();
         }
         if (!settings.progressPopups) corner.hideProgress();
-        // A popup on screen keeps its edge; the next one takes the new one.
-        if (showing == null) popup.setBottom(fromBottom());
+        // A popup on screen keeps its place; the next one takes the new one.
+        if (showing == null) popup.setAnchor(settings.fromBottom(), settings.horizontal());
     }
 
     /** What the C module reported; see AchievementNotices. */
@@ -127,8 +128,6 @@ final class AchievementOverlay extends FrameLayout {
     /** The popup's text, for tests and accessibility. */
     CharSequence popupText() { return showing == null ? null : showing.heading + " · " + showing.title; }
 
-    private boolean fromBottom() { return AchievementSettings.BOTTOM.equals(settings.position); }
-
     /** The next popup, once its badge is known (BADGE_WAIT_MILLIS at most). */
     private void next() {
         if (showing != null || fetching != null || released) return;
@@ -161,9 +160,9 @@ final class AchievementOverlay extends FrameLayout {
     private void open() {
         showing = queue.poll();
         if (showing == null) return;
-        popup.setBottom(fromBottom());
+        popup.setAnchor(settings.fromBottom(), settings.horizontal());
         // From the bottom, above what the corner shows, so that neither hides the other.
-        popup.setLift(fromBottom() ? corner.occupiedHeight() : 0);
+        popup.setLift(settings.fromBottom() ? corner.occupiedHeight() : 0);
         // Fetched already, or the trophy for good: the popup never changes while shown.
         Bitmap badge = badges.cached(showing.image);
         popup.show(showing.heading, showing.title, badge);

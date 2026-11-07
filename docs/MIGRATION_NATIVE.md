@@ -1712,7 +1712,8 @@ attente du badge sans trophée, défi qui garde sa place) ;
 après un reset).
 
 Écarts restants : RetroArch place ses popups en haut à gauche par défaut et
-offre six ancres ; RavenEmu garde son réglage en haut ou en bas, centré. Les
+offre six ancres ; RavenEmu garde son réglage en haut ou en bas, centré
+(les six ancres sont venues avec le lot RA-5, ci-dessous). Les
 avis de session de RetroArch passent par sa file de messages, d'un autre
 style ; RavenEmu les montre dans le même popup. La rareté d'un succès
 (« Succès rare débloqué – 2,5 % ») et le nom du compte sous une fin de jeu ne
@@ -1721,3 +1722,34 @@ déconnexion) ne sont pas reprises : les avis hors ligne restent des popups.
 Sous Robolectric, un animateur va à sa fin d'un coup ; les étapes sont donc
 vérifiées par leur géométrie, fraction par fraction. À vérifier sur téléphone
 (portrait, paysage, skin, gestes et trois boutons) avant toute publication.
+
+## RetroAchievements, lot RA-5 : les six positions de RetroArch
+
+Demande du propriétaire : les six positions de RetroArch pour les popups.
+
+- **Réglage** (`AchievementSettings.java`) : `TOP_LEFT`, `TOP`, `TOP_RIGHT`,
+  `BOTTOM_LEFT`, `BOTTOM`, `BOTTOM_RIGHT`, dans l'ordre de
+  `cheevos_appearance_anchor` de RetroArch. `top` et `bottom`, les deux valeurs
+  enregistrées jusqu'ici, sont les positions centrées : aucun choix existant ne
+  change. Une valeur inconnue revient à `TOP`. La position par défaut reste en
+  haut au centre ; celle de RetroArch est en haut à gauche.
+- **Page Paramètres → RetroAchievements** : **Position des popups**, six
+  choix (« En haut à gauche » … « En bas à droite »). La description de
+  **Progression des succès** ne parle plus d'un tour de rôle que l'application
+  ne fait pas.
+- **Géométrie** (`AchievementPopup.java`), comme `ANCHOR_LEFT`,
+  `ANCHOR_CENTER` et `ANCHOR_RIGHT` : à gauche, le badge reste à une marge du
+  bord pendant que le texte se déplie ; au centre, le popup se décale d'une
+  demi-largeur de texte et finit centré ; à droite, il part contre le bord et se
+  décale de toute la largeur du texte, pour finir contre le bord droit. La marge
+  est la même horizontalement et verticalement (marge automatique de RetroArch).
+  En bas, quelle que soit la colonne, le popup s'arrête au-dessus de ce
+  qu'affiche le coin en bas à droite.
+- Tests : `AchievementSettingsTest` (six valeurs gardées, anciennes valeurs lues,
+  ancre par défaut) ; `PlaybackSettingsActivityTest` (six choix, enregistrement) ;
+  `AchievementPopupTest` (gauche immobile, droite contre le bord pendant et après
+  le dépliage, bas à droite) ; `AchievementOverlayTest` (chaque position place le
+  popup suivant à sa place).
+
+Écart restant : RetroArch permet aussi une marge manuelle
+(`cheevos_appearance_padding_h` et `_v`) ; RavenEmu garde la marge automatique.

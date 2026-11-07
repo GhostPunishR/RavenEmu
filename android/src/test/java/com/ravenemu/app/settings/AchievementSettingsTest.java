@@ -47,6 +47,27 @@ public final class AchievementSettingsTest {
         assertEquals("Latency must stay", 2, LatencySettings.load(context).preemptiveFrames);
     }
 
+    @Test public void retroArchsSixAnchorsAreKeptAndTheTwoStoredBeforeStillRead() {
+        assertEquals(java.util.Arrays.asList("top_left", "top", "top_right", "bottom_left", "bottom", "bottom_right"),
+                AchievementSettings.POSITIONS);
+        int[] sides = {-1, 0, 1, -1, 0, 1};
+        for (int i = 0; i < AchievementSettings.POSITIONS.size(); i++) {
+            String position = AchievementSettings.POSITIONS.get(i);
+            AchievementSettings.DEFAULTS.withPosition(position).save(context);
+            AchievementSettings loaded = AchievementSettings.load(context);
+            assertEquals(position, loaded.position);
+            assertEquals(position, i >= 3, loaded.fromBottom());
+            assertEquals(position, sides[i], loaded.horizontal());
+        }
+        // RavenEmu stored only "top" and "bottom": they are the centred anchors.
+        preferences.edit().putString("achievements.position", "bottom").commit();
+        AchievementSettings bottom = AchievementSettings.load(context);
+        assertTrue(bottom.fromBottom());
+        assertEquals(0, bottom.horizontal());
+        assertFalse(AchievementSettings.DEFAULTS.fromBottom());
+        assertEquals("The default stays centred at the top", 0, AchievementSettings.DEFAULTS.horizontal());
+    }
+
     @Test public void outOfRangeOrMalformedValuesFallBack() {
         AchievementSettings clamped = new AchievementSettings(true, true, true, "side", 60, 0);
         assertEquals(AchievementSettings.TOP, clamped.position);

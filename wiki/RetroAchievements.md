@@ -39,7 +39,7 @@ Les demandes légitimes du SDK restent dans le journal chiffré jusqu'à confirm
 
 ## Popups des succès
 
-Les popups reprennent le style de RetroArch : un badge carré, puis deux lignes sur un fond noir translucide, la première en gris, la seconde en blanc. Le badge arrive du bord de l'image, puis le texte se déplie à sa droite et le popup se centre. À la fin, le texte se replie et le badge repart. Un seul popup s'affiche à la fois ; les suivants attendent leur tour.
+Les popups reprennent le style de RetroArch : un badge carré, puis deux lignes sur un fond noir translucide, la première en gris, la seconde en blanc. Le badge arrive du bord de l'image, puis le texte se déplie à sa droite. À la fin, le texte se replie et le badge repart. Un seul popup s'affiche à la fois ; les suivants attendent leur tour.
 
 - **Lancement d'un jeu reconnu** : l'icône du jeu, son titre, puis « Vous avez débloqué 3 succès sur 42 ».
 - **Succès débloqué** : son badge, « Succès débloqué », puis son titre et ses points, par exemple « Premier pas (5) ».
@@ -49,7 +49,7 @@ Un popup attend son image deux secondes au plus ; sans image, il montre un troph
 
 ## Réglages des notifications
 
-Dans **Paramètres → RetroAchievements**, les popups de déblocage et de fin de jeu et ceux de progression ont des interrupteurs distincts. Les popups se placent en haut ou en bas, au centre ; la progression reste en bas à droite. La durée des déblocages va de 2 à 10 secondes, celle des progressions de 1 à 5 secondes (2 secondes par défaut, comme RetroArch) ; les nouvelles durées s'appliquent aux prochains popups. **Son des succès**, activé par défaut, joue un court carillon créé par RavenEmu, mélangé au son du jeu et à son volume. Les erreurs et avis de connexion ne sont pas masqués par l'interrupteur des succès.
+Dans **Paramètres → RetroAchievements**, les popups de déblocage et de fin de jeu et ceux de progression ont des interrupteurs distincts. **Position des popups** propose les six emplacements de RetroArch : en haut ou en bas, à gauche, au centre ou à droite (en haut au centre par défaut). Un popup à gauche s'ouvre sur place ; au centre, il se recentre en s'ouvrant ; à droite, il s'ouvre vers la gauche et finit contre le bord. En bas, il s'arrête au-dessus de ce qu'affiche le coin. La progression, les défis et les classements restent en bas à droite. La durée des déblocages va de 2 à 10 secondes, celle des progressions de 1 à 5 secondes (2 secondes par défaut, comme RetroArch) ; les nouvelles durées s'appliquent aux prochains popups. **Son des succès**, activé par défaut, joue un court carillon créé par RavenEmu, mélangé au son du jeu et à son volume. Les erreurs et avis de connexion ne sont pas masqués par l'interrupteur des succès.
 
 Une fin de jeu affiche l'icône et le titre du jeu. **Jeu terminé** correspond au Softcore ; **Jeu maîtrisé** est réservé au Hardcore. Ce bilan suit l'événement du SDK et ne garantit pas à lui seul la synchronisation de tous les succès : consulter aussi les états d'envoi.
 

@@ -157,6 +157,30 @@ public final class AchievementOverlayTest {
         assertFalse(popup.fromBottom());
     }
 
+    @Test public void eachOfTheSixAnchorsPlacesTheNextPopup() {
+        AchievementPopup popup = popup(overlay);
+        int[] sides = {-1, 0, 1, -1, 0, 1};
+        long gap = MOTION + 5_000L + MOTION + 80;
+        for (int i = 0; i < AchievementSettings.POSITIONS.size(); i++) {
+            overlay.setSettings(AchievementSettings.DEFAULTS.withPosition(AchievementSettings.POSITIONS.get(i))
+                    .withSound(false), true, 100);
+            overlay.onEvent(event("achievement", "Succès " + i, "", "5"));
+            advance(MOTION + 40);
+            String position = AchievementSettings.POSITIONS.get(i);
+            assertEquals(position, i >= 3, popup.fromBottom());
+            assertEquals(position, sides[i], popup.horizontal());
+            float left = popup.badgeLeft(), right = left + popup.popupHeight() + popup.textWidth();
+            if (sides[i] < 0) assertEquals(position, popup.edgeMargin(), left, 0.5f);
+            else if (sides[i] > 0) assertEquals(position, overlay.getWidth() - popup.edgeMargin(), right, 0.5f);
+            else assertEquals(position, overlay.getWidth() / 2f, (left + right) / 2f, 1f);
+            if (i >= 3) assertEquals(position, overlay.getHeight() - popup.edgeMargin() - popup.popupHeight(),
+                    popup.badgeTop(), 0.5f);
+            else assertEquals(position, popup.edgeMargin(), popup.badgeTop(), 0.5f);
+            advance(gap - MOTION - 40);
+            assertNull(overlay.popupText());
+        }
+    }
+
     // ---- The bottom right corner -------------------------------------------------------------
 
     @Test public void progressSitsInTheBottomRightCornerAndKeepsSettingsDuration() {

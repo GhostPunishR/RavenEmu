@@ -18,12 +18,16 @@ import android.widget.TextView;
  * the same font, the first grey, the second white. It is four lines tall and
  * as wide as its longer line plus two thirds of a line on each side.
  *
+ * It sits at one of RetroArch's six anchors: at the top or the bottom edge,
+ * on the left, in the centre or on the right, a margin from the edges.
  * Its motion has two stages, each a fraction from 0 to 1 that the overlay
  * animates: `slide` brings the badge in from the edge of the picture; `unfold`
- * opens the text beside it, which comes in from the left by half the width,
- * while the whole popup moves left by half the text's width so that it ends
- * centred. Positions are translations and clips only: nothing is laid out
- * again while it moves. It takes no touch. */
+ * opens the text beside it, which comes in from the left by half the width.
+ * As RetroArch does, a centred popup moves left by half the text's width
+ * meanwhile, so that it ends centred, and one on the right by the whole of
+ * it, so that it ends against the right edge; one on the left stays where it
+ * is. Positions are translations and clips only: nothing is laid out again
+ * while it moves. It takes no touch. */
 final class AchievementPopup extends ViewGroup {
     /** RetroArch's widget colours: TEXT_COLOR_FAINT, TEXT_COLOR_INFO, DEFAULT_BACKDROP. */
     static final int FAINT = 0xff888888, INFO = 0xffeeeeee, BACKDROP = 0xbf000000;
@@ -38,6 +42,8 @@ final class AchievementPopup extends ViewGroup {
     private final TextView heading, title;
     private final Rect clip = new Rect();
     private boolean bottom;
+    /** -1 left, 0 centre, 1 right. */
+    private int horizontal;
     private float slide, unfold;
     /** Lifted above what the bottom right corner shows, from the bottom only. */
     private int lift;
@@ -103,9 +109,10 @@ final class AchievementPopup extends ViewGroup {
         badge.setImageBitmap(null);
     }
 
-    /** From the top or the bottom edge, centred as RetroArch's TOPCENTER and BOTTOMCENTER. */
-    void setBottom(boolean value) {
-        bottom = value;
+    /** One of RetroArch's anchors: the top or the bottom edge, and -1 left, 0 centre, 1 right. */
+    void setAnchor(boolean fromBottom, int side) {
+        bottom = fromBottom;
+        horizontal = Integer.signum(side);
         place();
     }
 
@@ -127,6 +134,7 @@ final class AchievementPopup extends ViewGroup {
     float slide() { return slide; }
     float unfold() { return unfold; }
     boolean fromBottom() { return bottom; }
+    int horizontal() { return horizontal; }
     boolean showsPlaceholder() { return placeholder.getVisibility() == VISIBLE; }
     Bitmap badge() {
         return badge.getDrawable() instanceof android.graphics.drawable.BitmapDrawable
@@ -180,7 +188,10 @@ final class AchievementPopup extends ViewGroup {
     private void place() {
         if (size == 0) return;
         final int width = getWidth(), height = getHeight();
-        final float x = (width - size) / 2f - textWidth / 2f * unfold;
+        // RetroArch's ANCHOR_LEFT, ANCHOR_CENTER and ANCHOR_RIGHT, with slide_h following the unfold.
+        final float x = horizontal < 0 ? margin
+                : horizontal > 0 ? width - size - margin - textWidth * unfold
+                : (width - size) / 2f - textWidth / 2f * unfold;
         // From beyond the edge to its place; from the bottom, above what the corner shows.
         final float y = bottom ? height - (margin + size + lift) * slide : -size + (margin + size) * slide;
         badgeBox.setTranslationX(x);
