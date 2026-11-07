@@ -1783,3 +1783,33 @@ de la zone, donc sous l'image ; avec un skin, sur le bas du skin.
   `PlayerActivityTest` (sur un téléphone de 411 × 914 dp, le coin finit au bas
   de l'image, au-dessus de l'espace libre ; avec un skin, le rectangle est celui
   de l'image dans l'écran du skin).
+
+## RetroAchievements : le cri du corbeau à la place du carillon
+
+Demande du propriétaire : récupérer le cri du corbeau de CorvusSoftware/CorvusRetro
+et l'utiliser à la place du carillon.
+
+- **Fichier** : `android/src/main/res/raw/achievement_unlock.mp3`, copié sans
+  modification de `pkg/android/app/src/main/res/raw/achievement_unlock.mp3`
+  (CorvusRetro, révision `0d30976`). C'est le croassement fourni par le
+  mainteneur (MP3, 44,1 kHz stéréo, 128 kbit/s, 3,03 s). SHA-256 :
+  `f00a367f0653432af12f74bfd8f9c62194910cfba475b265b0057decf81c2531`, vérifié
+  par `UnlockCryTest`.
+- **Lecture** (`UnlockCry.java`, écrit pour RavenEmu ; remplace `UnlockChime`,
+  le carillon synthétisé) : Android décode et joue le cri avec un `SoundPool`,
+  à part du son du jeu (AAudio), en sonification de jeu. Le son est chargé
+  une fois, avec la superposition. Un cri demandé avant la fin du chargement
+  est joué dès qu'il est prêt, sauf s'il est en retard de plus d'une seconde
+  sur son popup. Un nouveau cri reprend du début.
+- **Quand** : comme le carillon, à chaque succès débloqué et à la fin du jeu
+  (au moment où le popup s'ouvre, ou seul quand les popups de déblocage sont
+  désactivés), avec **Son des succès**, le son du jeu activé et son volume. La
+  pause du lecteur, la fermeture du jeu, **Son des succès** désactivé ou le son
+  coupé l'arrêtent ; un cri en attente de chargement est alors oublié.
+- **Paramètres → RetroAchievements → Son des succès** : « Le cri du corbeau,
+  joué avec le son du jeu pour chaque succès et le jeu terminé. »
+- Tests : `UnlockCryTest` (empreinte du fichier, cri joué une fois le son
+  chargé et au volume du jeu, cri en retard ou à volume nul ignoré, arrêt qui
+  oublie l'attente, cri pour un succès et une fin de jeu mais pas pour le
+  lancement, silence avec Son des succès ou le son du jeu coupés, cri seul sans
+  popup). `UnlockChimeTest` est retiré avec le carillon.

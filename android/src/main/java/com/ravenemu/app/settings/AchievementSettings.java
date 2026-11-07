@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Map;
 
 /** The beta's Settings → RetroAchievements notifications: unlock and
- * progress popups, their chime, where they show and for how long. Stored
+ * progress popups, their sound, where they show and for how long. Stored
  * with the playback preferences of the native preview; no beta data is read. */
 public final class AchievementSettings {
     /** RetroArch's six popup anchors (cheevos_appearance_anchor), in its order. TOP and
@@ -24,7 +24,7 @@ public final class AchievementSettings {
     public final boolean unlockPopups;
     /** Measured progress of an achievement. */
     public final boolean progressPopups;
-    /** A short chime by RavenEmu for each unlock and the completed game. */
+    /** The crow's cry for each unlock and the completed game. */
     public final boolean sound;
     public final String position;
     public final int popupSeconds, progressSeconds;

@@ -1461,6 +1461,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
 
     @Override protected void onPause() {
         finishMovingControls();
+        if (achievementOverlay != null) achievementOverlay.pauseSound();
         if (displays != null) displays.unregisterDisplayListener(displayListener);
         android.hardware.input.InputManager inputs = getSystemService(android.hardware.input.InputManager.class);
         if (inputs != null) inputs.unregisterInputDeviceListener(controllers);

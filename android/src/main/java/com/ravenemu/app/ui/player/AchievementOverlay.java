@@ -43,7 +43,8 @@ final class AchievementOverlay extends FrameLayout {
     /** RetroArch's CHEEVO_QUEUE_SIZE. */
     static final int MAX_QUEUED = 8;
     private final Handler main = new Handler(Looper.getMainLooper());
-    private final UnlockChime chime = new UnlockChime();
+    /** The crow's cry, for each unlock and the completed game. */
+    private final UnlockCry cry;
     private final ArrayDeque<AchievementNotices.Notice> queue = new ArrayDeque<>();
     private final BadgeCache badges;
     private final AchievementPopup popup;
@@ -75,6 +76,7 @@ final class AchievementOverlay extends FrameLayout {
     AchievementOverlay(Context context, BadgeCache badges) {
         super(context);
         this.badges = badges;
+        this.cry = new UnlockCry(context);
         setClipChildren(true);
         setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
         corner = new AchievementCorner(context, badges);
@@ -195,7 +197,7 @@ final class AchievementOverlay extends FrameLayout {
         corner.layout(picture.left, picture.top, picture.right, picture.bottom);
     }
 
-    /** Settings → RetroAchievements; Settings → Audio for the chime. */
+    /** Settings → RetroAchievements; Settings → Audio for the cry. */
     void setSettings(AchievementSettings settings, boolean soundOn, int volume) {
         this.settings = settings;
         this.soundOn = soundOn;
@@ -206,6 +208,7 @@ final class AchievementOverlay extends FrameLayout {
             if (fetching != null && fetching.award) stopFetching();
         }
         if (!settings.progressPopups) corner.hideProgress();
+        if (!settings.sound || !soundOn || volume <= 0) cry.stop();
         // A popup on screen keeps its place; the next one takes the new one.
         if (showing == null) popup.setAnchor(settings.fromBottom(), settings.horizontal());
     }
@@ -233,20 +236,24 @@ final class AchievementOverlay extends FrameLayout {
         AchievementNotices.Notice notice = AchievementNotices.of(event);
         if (notice == null) return;
         if (notice.award && !settings.unlockPopups) {
-            // No popup: the chime alone (a popup rings when it opens).
-            if (settings.sound && soundOn) chime.play(volume);
+            // No popup: the cry alone (a popup cries when it opens).
+            if (settings.sound && soundOn) cry.play(volume);
             return;
         }
         if (queue.size() < MAX_QUEUED) queue.add(notice);
         next();
     }
 
-    /** The game closes: nothing is left on screen or queued. */
+    /** The game closes: nothing is left on screen or queued, nothing heard. */
     void clear() {
+        cry.stop();
         queue.clear();
         leaveNow();
         corner.clear();
     }
+
+    /** The player goes to the background: the cry stops with the game's sound. */
+    void pauseSound() { cry.stop(); }
 
     void release() {
         released = true;
@@ -254,7 +261,7 @@ final class AchievementOverlay extends FrameLayout {
         pictureView = null;
         clear();
         corner.release();
-        chime.release();
+        cry.release();
         main.removeCallbacksAndMessages(null);
     }
 
@@ -302,7 +309,7 @@ final class AchievementOverlay extends FrameLayout {
         // Fetched already, or the trophy for good: the popup never changes while shown.
         Bitmap badge = badges.cached(showing.image);
         popup.show(showing.heading, showing.title, badge);
-        if (showing.award && settings.sound && soundOn) chime.play(volume);
+        if (showing.award && settings.sound && soundOn) cry.play(volume);
         play(stage(0f, 1f, SLIDE_MILLIS, popup::setSlide), stage(0f, 1f, UNFOLD_MILLIS, popup::setUnfold),
                 () -> main.postDelayed(leave, settings.popupSeconds * 1000L));
     }

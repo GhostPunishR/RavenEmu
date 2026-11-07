@@ -267,8 +267,8 @@ public final class PlaybackSettingsActivity extends Activity implements RavenThe
         settingSwitch("Progression des succès", "Afficher en bas à droite l'avancée mesurée d'un succès.",
                 achievementSettings.progressPopups,
                 value -> updateAchievements(achievementSettings.withProgressPopups(value)));
-        settingSwitch("Son des succès", "Un court carillon, créé par RavenEmu, joué avec le son du jeu pour "
-                        + "chaque succès et le jeu terminé.",
+        settingSwitch("Son des succès", "Le cri du corbeau, joué avec le son du jeu pour chaque succès et le "
+                        + "jeu terminé.",
                 achievementSettings.sound, value -> updateAchievements(achievementSettings.withSound(value)));
         description("Position des popups",
                 "Les six emplacements de RetroArch, pour le lancement d'un jeu, les succès et les avis. "
