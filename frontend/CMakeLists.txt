@@ -1,11 +1,11 @@
 cmake_minimum_required(VERSION 3.22.1)
 project(RavenEmuNativeFrontend LANGUAGES C CXX)
 
-# RavenCore pinned by full commit SHA: 0.15.2, the merge of RavenCore #42.
+# RavenCore pinned by full commit SHA: 0.15.3, the merge of RavenCore #43.
 include(FetchContent)
 set(RAVENEMU_BUILD_LIBRETRO ON CACHE BOOL "" FORCE)
 set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
-set(RAVEN_CORE_REVISION "8799f25b0a48f51a236565d671fe33529d30815e")
+set(RAVEN_CORE_REVISION "badcf9ba635e2e80c2193a2edfd334c1d3830c10")
 FetchContent_Declare(ravencore
     GIT_REPOSITORY https://github.com/GhostPunishR/RavenCore.git
     GIT_TAG ${RAVEN_CORE_REVISION}
