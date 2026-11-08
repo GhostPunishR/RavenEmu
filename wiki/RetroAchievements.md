@@ -71,9 +71,9 @@ Ce que le code fait déjà en Hardcore :
 - **ROM inconnue ou refus du serveur.** Rien ne peut être évalué : le jeu tourne sans succès et un message en donne la raison. Le réglage Hardcore est conservé.
 - **Défaillance critique.** Si le redémarrage du jeu échoue ou si le SDK ne peut pas évaluer une image, le Hardcore est quitté explicitement et le réglage repasse en Softcore.
 - **États.** Le chargement d'un état est refusé dès que le Hardcore est demandé ou actif, par la session de jeu elle-même, juste avant la restauration native et sous son verrou : un changement de mode ne peut pas se glisser entre la vérification et le chargement. L'enregistrement d'un état reste possible.
-- **Pause.** Le menu respecte `rc_client_can_pause`. Les fonctions de triche, rewind et ralenti ne sont pas proposées dans cette application.
+- **Pause.** Le menu respecte `rc_client_can_pause`. Les codes de triche restent visibles mais désactivés en Hardcore ; le retour arrière et le ralenti ne sont pas proposés dans cette application.
 
-Avant de lever ce verrou, il reste à tester sur appareil le cycle complet d'activation/redémarrage, la barrière de démarrage (en ligne, hors ligne, ROM inconnue), les pauses, le refus de restauration, un déblocage reconnu en Hardcore sur le site et une soumission de classement, puis obtenir la validation externe. Les tests synthétiques et de politique ne remplacent pas ces essais. Le lecteur à deux n'évalue pas les succès ; iOS reste à raccorder.
+Avant de lever ce verrou, il reste à tester sur appareil le cycle complet d'activation/redémarrage, la barrière de démarrage (en ligne, hors ligne, ROM inconnue), les pauses, le refus de restauration, un déblocage reconnu en Hardcore sur le site et une soumission de classement, puis obtenir la validation externe. Les tests synthétiques et de politique ne remplacent pas ces essais. Le lecteur à deux n'évalue pas les succès.
 
 Références : [User-Agent et validation](https://github.com/RetroAchievements/rcheevos/wiki/rc_client-integration#user-agent-header), [Hardcore et restrictions](https://github.com/RetroAchievements/rcheevos/wiki/rc_client-integration#enabling-hardcore), [notification de jeu terminé](https://github.com/RetroAchievements/rcheevos/wiki/rc_client-integration#mastery-notification).
 

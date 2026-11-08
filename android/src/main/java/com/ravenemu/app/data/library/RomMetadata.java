@@ -34,18 +34,4 @@ final class RomMetadata {
         }
         return title.toString().trim();
     }
-
-    static String displayPlatform(String system, byte[] rom) {
-        if ("gba".equals(system)) return "Game Boy Advance";
-        if ("gbc".equals(system)) return "Game Boy Color";
-        if ("gb".equals(system)) {
-            if (rom != null && rom.length > 0x143) {
-                int flag = rom[0x143] & 0xff;
-                if (flag == 0xC0) return "Game Boy Color uniquement";
-                if (flag == 0x80) return "Game Boy / Game Boy Color";
-            }
-            return "Game Boy";
-        }
-        return "Inconnu";
-    }
 }

@@ -950,18 +950,6 @@ int raven_frontend_restore_player_battery(raven_frontend *host, unsigned player,
     return 1;
 }
 
-size_t raven_frontend_battery_size(const raven_frontend *host) {
-    return raven_frontend_player_battery_size(host, 0);
-}
-
-int raven_frontend_read_battery(const raven_frontend *host, void *dst, size_t size) {
-    return raven_frontend_read_player_battery(host, 0, dst, size);
-}
-
-int raven_frontend_restore_battery(raven_frontend *host, const void *src, size_t size) {
-    return raven_frontend_restore_player_battery(host, 0, src, size);
-}
-
 size_t raven_frontend_state_size(const raven_frontend *host) {
     if (!host || !host->loaded || active != host) return 0;
     return host->api.serialize_size();

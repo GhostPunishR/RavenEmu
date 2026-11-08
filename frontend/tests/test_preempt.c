@@ -69,8 +69,8 @@ static void step(raven_frontend *host, uint16_t buttons) {
 
 static struct game read_game(raven_frontend *host) {
     struct game game;
-    CHECK(raven_frontend_battery_size(host) == sizeof(game));
-    CHECK(raven_frontend_read_battery(host, &game, sizeof(game)));
+    CHECK(raven_frontend_player_battery_size(host, 0) == sizeof(game));
+    CHECK(raven_frontend_read_player_battery(host, 0, &game, sizeof(game)));
     return game;
 }
 
@@ -159,7 +159,7 @@ static void a_jump_of_the_state_is_never_replayed_across(void) {
 
     /* Restored SRAM, and a pause, start the history again too. */
     struct game game = read_game(host);
-    CHECK(raven_frontend_restore_battery(host, &game, sizeof(game)));
+    CHECK(raven_frontend_restore_player_battery(host, 0, &game, sizeof(game)));
     step(host, RIGHT);
     CHECK(raven_frontend_replayed_frames(host) == 0);
     step(host, RIGHT);

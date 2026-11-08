@@ -451,10 +451,6 @@ void raven_achievements_login_token(raven_achievements *a, const char *user, con
     if (a && user && token) rc_client_begin_login_with_token(a->rc, user, token, logged_in, NULL);
 }
 
-void raven_achievements_logout(raven_achievements *a) {
-    if (a) rc_client_logout(a->rc);
-}
-
 /* rc_libretro asks for the core's own memory without userdata; one game runs. */
 static raven_achievements *memory_owner;
 

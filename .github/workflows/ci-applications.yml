@@ -6,7 +6,6 @@ on:
   push:
     branches:
       - main
-      - migration/native-libretro
     paths:
       - 'frontend/**'
       - 'android/**'

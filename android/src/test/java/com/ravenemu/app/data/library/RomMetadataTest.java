@@ -12,13 +12,11 @@ public final class RomMetadataTest {
         byte[] title = "PUZZLE TEST".getBytes(StandardCharsets.US_ASCII);
         System.arraycopy(title, 0, gb, 0x134, title.length);
         assertEquals("PUZZLE TEST", RomMetadata.cartridgeTitle("gb", gb));
-        assertEquals("Game Boy", RomMetadata.displayPlatform("gb", gb));
 
         gb[0x143] = (byte)0x80;
         assertEquals("PUZZLE TEST", RomMetadata.cartridgeTitle("gbc", gb));
-        assertEquals("Game Boy / Game Boy Color", RomMetadata.displayPlatform("gb", gb));
         gb[0x143] = (byte)0xC0;
-        assertEquals("Game Boy Color uniquement", RomMetadata.displayPlatform("gb", gb));
+        assertEquals("PUZZLE TEST", RomMetadata.cartridgeTitle("gbc", gb));
     }
 
     @Test public void readsGbaHeaderAndRejectsTruncatedData() {
@@ -26,7 +24,6 @@ public final class RomMetadataTest {
         byte[] title = "RAVEN DEMO".getBytes(StandardCharsets.US_ASCII);
         System.arraycopy(title, 0, gba, 0xA0, title.length);
         assertEquals("RAVEN DEMO", RomMetadata.cartridgeTitle("gba", gba));
-        assertEquals("Game Boy Advance", RomMetadata.displayPlatform("gba", gba));
         assertEquals("", RomMetadata.cartridgeTitle("gba", new byte[0xA8]));
         assertEquals("", RomMetadata.cartridgeTitle("gb", new byte[32]));
         assertEquals("", RomMetadata.cartridgeTitle("invalid", gba));

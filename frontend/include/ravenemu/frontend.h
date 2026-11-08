@@ -84,19 +84,14 @@ int raven_frontend_run_frame(raven_frontend *host);
  * without the call; the frames kept for preemption are forgotten. */
 int raven_frontend_reset(raven_frontend *host);
 /* Battery SRAM is owned by the loaded core. Access only on the emulation
- * thread, after load_game and before unload_game. Zero size means no battery. */
-/* Each player's battery SRAM: player 0 is the game alone, or player 1 of
- * linked games. The functions without a player are player 0's. */
+ * thread, after load_game and before unload_game. Zero size means no battery.
+ * Each player has their own: player 0 is the game alone, or player 1 of
+ * linked games. */
 size_t raven_frontend_player_battery_size(const raven_frontend *host, unsigned player);
 int raven_frontend_read_player_battery(const raven_frontend *host, unsigned player,
                                        void *dst, size_t size);
 int raven_frontend_restore_player_battery(raven_frontend *host, unsigned player,
                                           const void *src, size_t size);
-size_t raven_frontend_battery_size(const raven_frontend *host);
-int raven_frontend_read_battery(const raven_frontend *host,
-                                void *dst, size_t size);
-int raven_frontend_restore_battery(raven_frontend *host,
-                                   const void *src, size_t size);
 
 /* Optional quick-save snapshot; format/version is core-specific. */
 size_t raven_frontend_state_size(const raven_frontend *host);
