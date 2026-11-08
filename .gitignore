@@ -9,7 +9,6 @@ local.properties
 .idea/
 *.iml
 .cxx/
-.externalNativeBuild/
 captures/
 __pycache__/
 *.py[cod]

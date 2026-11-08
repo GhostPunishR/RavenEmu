@@ -26,9 +26,10 @@ le rendu restent **C**, et RavenCore reste **C++20**. Les fichiers
 utilisé par le dépôt ; aucune source Kotlin ou Compose n'est ajoutée au
 nouveau module.
 
-La bibliothèque Java restaure déjà les écrans centraux, mais ce n'est **pas
-encore une parité visuelle totale** : les réglages et les fonctions avancées
-du menu doivent encore être raccordés et le rendu validé sur téléphone.
+La bibliothèque, la fiche, le lecteur, son menu et les réglages sont en Java,
+mais ce n'est **pas encore une parité totale** : les écarts restants sont tenus
+dans [docs/MIGRATION_NATIVE.md](../docs/MIGRATION_NATIVE.md) et le rendu reste à
+valider sur téléphone.
 
 ## Calibrage sur les barres du téléphone
 
@@ -112,12 +113,12 @@ conclure à une parité avec la bêta.
 - `NativeBridge.java`: typed JNI entry points; `setButtons` and `clearButtons`
   update atomic input from the UI. Core calls use the GL thread while running;
   lifecycle cleanup accesses the session only after that thread is paused.
-- `src/main/cpp/bridge.c`: Libretro session management, frame conversion to
-  RGBA8888, OpenGL ES 2 texture drawing, atomic joypad input.
-- `src/main/cpp/input_driver.c`: held/pending input masks and one stable
-  joypad snapshot per emulated frame.
-- `src/main/cpp/state_thumbnail.c`: bounded RGBA-to-ARGB frame copy for state
-  thumbnails, with nearest-neighbor downscaling and preserved aspect ratio.
+- `src/main/cpp/jni/bridge.c`: Libretro session management and the JNI entry
+  points; the picture is drawn by `hardware/video/gles2/gles2_renderer.c`.
+- `src/main/cpp/hardware/input/input_driver.c`: held/pending input masks and
+  one stable joypad snapshot per emulated frame.
+- `src/main/cpp/media/state_thumbnail.c`: bounded RGBA-to-ARGB frame copy for
+  state thumbnails, with nearest-neighbor downscaling and preserved aspect ratio.
 - The C bridge gates emulated frames and native audio together during pause;
   the Java sheet supplies the RavenEmu presentation instead of the prototype's
   pixel-font menu. Core capture/restore still uses the GL/emulation thread.
@@ -143,7 +144,7 @@ leaves under `android/.cxx` and fails the CI on any unoptimised command.
 
 Run `./gradlew :android:testDebugUnitTest` for identity/path, insets,
 Activity recreation/import, sheet gestures and multi-touch controls tests.
-The standalone `raven_native_input_test` target in `frontend/CMakeLists.txt`
+The standalone `raven_native_input_test` target in `tests/hardware/CMakeLists.txt`
 tests the input driver through CTest without Android or a commercial ROM.
 The test SDK is resolved through Gradle;
 the application remains Java-only, without Kotlin or Compose.
@@ -152,7 +153,7 @@ The build should package `libraven_android.so`,
 `ravenemu_gb_libretro.so`, `ravenemu_gbc_libretro.so` and
 `ravenemu_gba_libretro.so`. They are compiled for ARM64 only.
 
-Launch **RavenEmu Native (Test)** and use the **+** button to copy your
+Launch **RavenEmu Dev** and use the **+** button to copy your
 `.gb`, `.gbc` or `.gba` into the app's private library. The library grid
 reopens previously imported games, including after relaunching the app.
 Tap a cover to open the details sheet, then tap **Jouer** to launch the

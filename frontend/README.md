@@ -7,42 +7,37 @@ pilotes natifs.
 - `src/libretro_host.c` : charge dynamiquement un core Libretro, établit les callbacks
   de vidéo, audio et commandes, charge une ROM en mémoire, exécute des images,
   expose la SRAM et la sérialisation des états.
-- `include/ravenemu/frontend.h` : API stable côté application (sans dépendre des
+- `src/frame_clock.c` et `src/frame_pacer.c` : horloge et cadence des images.
+- `src/achievements.c` : RetroAchievements sur le SDK rcheevos (voir plus bas).
+- `include/ravenemu/` : API stable côté application (sans dépendre des
   détails de l'ABI Libretro dans les en-têtes publics).
-- `tests/` : faux core Libretro et tests d'intégration, dont l'aller-retour
+- `tests/` : faux cores Libretro et tests d'intégration, dont l'aller-retour
   SRAM/save-state et le chargement des trois vrais cores.
 - `CMakeLists.txt` : reprend le SHA épinglé de RavenCore et active ses trois
-  bibliothèques Libretro.
+  bibliothèques Libretro ; `cmake/rcheevos.cmake` épingle rcheevos.
 
 ## Compiler et tester sur Linux
 
 ```sh
 cmake -S frontend -B build/native-frontend -DCMAKE_BUILD_TYPE=Release
-cmake --build build/native-frontend --target raven_frontend_test raven_frontend_fake_core raven_frontend_real_core_test \
-  raven_frontend_options_test raven_frontend_fake_core_v1 raven_frontend_fake_core_variables \
-  raven_frontend_preempt_test raven_frontend_fake_core_lag raven_frontend_fake_core_lag_incomplete \
-  raven_frontend_achievements_test
+cmake --build build/native-frontend --parallel 2
 ctest --test-dir build/native-frontend --output-on-failure
 ```
 
-Pour compiler les moteurs Libretro avec RavenCore :
-
-```sh
-cmake --build build/native-frontend --target ravenemu_gb_libretro ravenemu_gbc_libretro ravenemu_gba_libretro
-```
+La compilation complète construit aussi les trois cores Libretro de RavenCore
+(`ravenemu_gb_libretro`, `ravenemu_gbc_libretro`, `ravenemu_gba_libretro`) et
+les tests des pilotes natifs (`tests/hardware/`) et du pont JNI (`tests/jni/`).
 
 Un core est une bibliothèque partagée (`.so`) et doit être chargé par un frontend.
 Les tests vérifient les callbacks, le chargement d'une fausse ROM et l'ouverture des trois vrais cores ; il ne prétend
 pas que le jeu fonctionne sur Android.
 
-## Limitations voulues de cette tranche
+## Limites voulues
 
 Un seul core actif (les callbacks Libretro sont process-global).
 Le frontend C de ce dossier ne réalise pas lui-même les écritures de fichiers
 ni le rendu graphique : les pilotes Android C/AAudio/GLES2, le JNI Java et
 le stockage atomique par ROM vivent dans [android/](../android/).
-RetroAchievements, les fonctions link, le rendu final et la migration des
-données historiques restent à réaliser.
 
 ## Options des cores
 
@@ -88,8 +83,8 @@ une SRAM chacun, comme RavenCore) charge deux jeux par
 L'image contient les deux joueurs côte à côte, le joueur 1 à gauche ; le port
 n est la manette du joueur n+1. `raven_frontend_players` rend 1 ou 2, et
 `raven_frontend_player_battery_size`, `read_player_battery` et
-`restore_player_battery` donnent la SRAM de chaque joueur (les fonctions sans
-joueur restent celles du joueur 1). Les images préventives restent coupées
+`restore_player_battery` donnent la SRAM de chaque joueur (le joueur 0 est
+le jeu seul ou le joueur 1 des jeux reliés). Les images préventives restent coupées
 avec deux jeux. Testé sur le faux core (sans sous-système : refus net) et sur
 les vrais cores GB, GBC et GBA : image double, SRAM de chaque joueur, état
 des deux jeux, retour à un jeu seul.

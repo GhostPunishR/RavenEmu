@@ -6,7 +6,6 @@ import com.ravenemu.app.bridge.NativeAchievements;
 import android.app.Activity;
 import android.media.SoundPool;
 import android.os.Looper;
-import android.os.SystemClock;
 import java.io.File;
 import java.nio.file.Files;
 import java.security.MessageDigest;

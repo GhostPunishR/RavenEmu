@@ -119,7 +119,7 @@ int main(int argc, char **argv) {
     CHECK(raven_frontend_set_cheats(host, NULL, 0, NULL, 0) == -1);
     CHECK(raven_frontend_set_cheats(host, NULL, 1, reason, sizeof(reason)) == -2);
     CHECK(raven_frontend_set_cheats(host, cheats, RAVEN_FRONTEND_CHEATS_MAX + 1, reason, sizeof(reason)) == -2);
-    CHECK(raven_frontend_battery_size(host) == 4);
+    CHECK(raven_frontend_player_battery_size(host, 0) == 4);
     // A game alone is player 1 only; this core declares no link subsystem.
     CHECK(raven_frontend_players(host) == 1);
     CHECK(raven_frontend_player_battery_size(host, 0) == 4);
@@ -130,18 +130,18 @@ int main(int argc, char **argv) {
         CHECK(!raven_frontend_restore_player_battery(host, 1, spare, sizeof(spare)));
     }
     unsigned char battery[4] = {0};
-    CHECK(raven_frontend_read_battery(host, battery, sizeof(battery)));
+    CHECK(raven_frontend_read_player_battery(host, 0, battery, sizeof(battery)));
     CHECK(battery[0] == 1 && battery[3] == 4);
     unsigned char replacement[4] = {8, 7, 6, 5};
-    CHECK(!raven_frontend_restore_battery(host, replacement, 3));
-    CHECK(raven_frontend_restore_battery(host, replacement, sizeof(replacement)));
+    CHECK(!raven_frontend_restore_player_battery(host, 0, replacement, 3));
+    CHECK(raven_frontend_restore_player_battery(host, 0, replacement, sizeof(replacement)));
     CHECK(raven_frontend_state_size(host) == 4);
     unsigned char state[4] = {0};
     CHECK(raven_frontend_save_state(host, state, sizeof(state)));
     CHECK(memcmp(state, replacement, 4) == 0);
-    CHECK(raven_frontend_restore_battery(host, battery, sizeof(battery)));
+    CHECK(raven_frontend_restore_player_battery(host, 0, battery, sizeof(battery)));
     CHECK(raven_frontend_load_state(host, state, sizeof(state)));
-    CHECK(raven_frontend_read_battery(host, battery, sizeof(battery)));
+    CHECK(raven_frontend_read_player_battery(host, 0, battery, sizeof(battery)));
     CHECK(memcmp(battery, replacement, 4) == 0);
     CHECK(obs.video_calls == 2);
     CHECK(obs.audio_frames == 4);

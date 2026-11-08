@@ -2,7 +2,6 @@ package com.ravenemu.app.settings;
 
 
 import android.content.Context;
-import java.util.Map;
 
 /** Settings → Général → Latence: preemptive frames, a native addition after
  * RetroArch's (the beta has none). Stored with the playback preferences of

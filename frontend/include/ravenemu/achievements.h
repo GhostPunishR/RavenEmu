@@ -29,7 +29,6 @@ void raven_achievements_destroy(raven_achievements *achievements);
 
 void raven_achievements_login_password(raven_achievements *achievements, const char *user, const char *password);
 void raven_achievements_login_token(raven_achievements *achievements, const char *user, const char *token);
-void raven_achievements_logout(raven_achievements *achievements);
 
 /* Once the frontend loaded the game: reads its memory map and identifies the
  * ROM by its hash. console: RetroAchievements' id (4 GB, 6 GBC, 5 GBA). The
