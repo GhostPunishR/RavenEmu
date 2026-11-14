@@ -3,6 +3,7 @@ import com.ravenemu.app.R;
 import com.ravenemu.app.data.library.RomLibrary;
 import com.ravenemu.app.data.saves.CheatList;
 import com.ravenemu.app.data.saves.StateSlotRepository;
+import com.ravenemu.app.settings.AchievementAccount;
 import com.ravenemu.app.ui.common.GameDetailsSheet;
 import com.ravenemu.app.ui.common.RavenTheme;
 
@@ -205,7 +206,12 @@ final class PlayerMenuSheet {
             @Override public void back() { showMenu(); }
             @Override public void signIn() { if (dialog.isShowing()) listener.onAchievementsSignIn(); }
             @Override public void retry() { if (dialog.isShowing()) listener.onAchievementsRetry(); }
-            @Override public void signOut() { if (dialog.isShowing()) listener.onAchievementsSignOut(); }
+            // The unlocks still waiting go with the token: asked first, with their count.
+            @Override public void signOut() {
+                if (!dialog.isShowing()) return;
+                confirm(AchievementAccount.SIGN_OUT_TITLE, AchievementAccount.signOutMessage(achievements.pendingAwards),
+                        "Se déconnecter", () -> { if (dialog.isShowing()) listener.onAchievementsSignOut(); });
+            }
             @Override public void fetchScores(int board, boolean around) {
                 if (dialog.isShowing()) listener.onFetchScores(board, around);
             }
@@ -426,12 +432,17 @@ final class PlayerMenuSheet {
 
     private void confirm(String title, String message, String action,
                          StateSlotRepository.Slot expected, Runnable callback) {
+        confirm(title, message, action, () -> {
+            if (ready() && slot(selectedSlot) == expected) begin(callback);
+        });
+    }
+
+    /** A question over the menu, answered by touch or by the controller's A and B. */
+    private void confirm(String title, String message, String action, Runnable confirmed) {
         dismissConfirmation();
         confirmation = new AlertDialog.Builder(owner).setTitle(title).setMessage(message)
                 .setNegativeButton("Annuler", null)
-                .setPositiveButton(action, (ignored, which) -> {
-                    if (ready() && slot(selectedSlot) == expected) begin(callback);
-                }).create();
+                .setPositiveButton(action, (ignored, which) -> confirmed.run()).create();
         confirmation.setOnKeyListener((ignored, key, event) -> {
             if (key == KeyEvent.KEYCODE_BUTTON_A) {
                 if (event.getAction() == KeyEvent.ACTION_UP && !event.isCanceled()) {

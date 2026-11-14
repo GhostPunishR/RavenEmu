@@ -24,9 +24,17 @@ import org.json.JSONObject;
  * service at the next session of the same account. Each request carries the
  * account's token: the file is sealed by the Android Keystore, bound to this
  * file, out of backups. Signing out revokes every open journal and deletes it.
- * Blocking: worker threads only. */
+ *
+ * A damaged entry is skipped, the others kept. A file that cannot be opened
+ * at all (another key, damaged bytes) is set aside, never deleted, once a new
+ * one can be sealed: the unlocks that follow are kept again, rather than lost
+ * until the player signs out. A Keystore that is only unavailable for now
+ * seals nothing either, so it never moves a good file. Blocking: worker
+ * threads only. */
 public final class AwardJournal {
     static final String FILE = "retroachievements.unsent-awards";
+    /** Where a journal that cannot be opened is set aside (one, the latest). */
+    static final String UNREADABLE = FILE + ".unreadable";
     private static final int MAX_PENDING = 256, MAX_FILE_BYTES = 3 * 1024 * 1024;
     private static final byte[] CONTEXT =
             "RavenEmu native RetroAchievements unsent awards v1".getBytes(StandardCharsets.UTF_8);
@@ -67,6 +75,8 @@ public final class AwardJournal {
         synchronized (AwardJournal.class) {
             ++generation;
             new AtomicFile(new File(context.getNoBackupFilesDir(), FILE)).delete();
+            // Its requests carry the token too: they go with the account.
+            new File(context.getNoBackupFilesDir(), UNREADABLE).delete();
         }
     }
 
@@ -81,11 +91,16 @@ public final class AwardJournal {
             if (openedAt != generation || entry.account.trim().isEmpty()
                     || !AwardPolicy.isSdkAward(entry.url, entry.post)
                     || entry.contentType.isEmpty() || entry.contentType.length() > 128) return false;
+            List<Award> entries;
             try {
-                List<Award> entries = read();
+                entries = read();
+            } catch (IOException | GeneralSecurityException | JSONException | RuntimeException unreadable) {
+                return startOver(entry);
+            }
+            try {
                 List<Award> kept = AwardPolicy.remember(entries, entry, MAX_PENDING, AwardJournal::keyOf);
                 if (kept == null) return false;
-                if (!kept.equals(entries)) write(kept);
+                if (!kept.equals(entries)) write(seal(kept));
                 return true;
             } catch (IOException | GeneralSecurityException | JSONException | RuntimeException unusable) {
                 return false;
@@ -114,10 +129,29 @@ public final class AwardJournal {
             try {
                 List<Award> entries = read();
                 List<Award> kept = AwardPolicy.acknowledge(entries, entry, AwardJournal::keyOf);
-                if (!kept.equals(entries)) write(kept);
+                if (!kept.equals(entries)) write(seal(kept));
             } catch (IOException | GeneralSecurityException | JSONException | RuntimeException unusable) {
                 // Kept: it is replayed again, and the service answers "already has".
             }
+        }
+    }
+
+    /** The file cannot be opened: a new journal is sealed first (a Keystore
+     * unavailable for now fails here and moves nothing), then the old file is
+     * set aside and the new one written. */
+    private boolean startOver(Award entry) {
+        try {
+            List<Award> fresh = AwardPolicy.remember(new ArrayList<>(), entry, MAX_PENDING, AwardJournal::keyOf);
+            if (fresh == null) return false;
+            byte[] sealed = seal(fresh);
+            File base = file.getBaseFile();
+            File aside = new File(base.getParentFile(), UNREADABLE);
+            if (aside.exists() && !aside.delete()) return false;
+            if (base.exists() && !base.renameTo(aside)) return false;
+            write(sealed);
+            return true;
+        } catch (IOException | GeneralSecurityException | JSONException | RuntimeException unusable) {
+            return false;
         }
     }
 
@@ -134,14 +168,16 @@ public final class AwardJournal {
         byte[] plain = KeystoreSealer.open(sealed, CONTEXT);
         try {
             JSONArray array = new JSONArray(new String(plain, StandardCharsets.UTF_8));
-            if (array.length() > MAX_PENDING) throw new IOException("Award journal too long");
             List<Award> entries = new ArrayList<>();
-            for (int i = 0; i < array.length(); i++) {
-                JSONObject item = array.getJSONObject(i);
-                Award award = new Award(item.getString("account"), item.getString("url"),
-                        item.getString("post"), item.getString("type"));
-                if (award.account.trim().isEmpty() || !AwardPolicy.isSdkAward(award.url, award.post))
-                    throw new IOException("Not an award the SDK built");
+            // The latest MAX_PENDING, as remember keeps them; a damaged entry
+            // is skipped, never sent, and goes at the next write.
+            for (int i = Math.max(0, array.length() - MAX_PENDING); i < array.length(); i++) {
+                JSONObject item = array.optJSONObject(i);
+                if (item == null) continue;
+                Award award = new Award(item.optString("account"), item.optString("url"),
+                        item.optString("post"), item.optString("type"));
+                if (award.account.trim().isEmpty() || !AwardPolicy.isSdkAward(award.url, award.post)
+                        || award.contentType.isEmpty() || award.contentType.length() > 128) continue;
                 entries.add(award);
             }
             return entries;
@@ -150,7 +186,7 @@ public final class AwardJournal {
         }
     }
 
-    private void write(List<Award> entries) throws IOException, GeneralSecurityException, JSONException {
+    private static byte[] seal(List<Award> entries) throws IOException, GeneralSecurityException, JSONException {
         JSONArray array = new JSONArray();
         for (Award entry : entries)
             array.put(new JSONObject().put("account", entry.account).put("url", entry.url)
@@ -163,6 +199,10 @@ public final class AwardJournal {
             Arrays.fill(plain, (byte)0);
         }
         if (sealed.length > MAX_FILE_BYTES) throw new IOException("Award journal too large");
+        return sealed;
+    }
+
+    private void write(byte[] sealed) throws IOException {
         FileOutputStream stream = file.startWrite();
         try {
             stream.write(sealed);

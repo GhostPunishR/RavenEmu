@@ -100,6 +100,58 @@ public final class DeltaSkinRepositoryTest {
         assertTrue(repository.list().isEmpty());
     }
 
+    /** The app killed between a replacement's two moves: the previous skin was
+     * in .replaced and none in its place. It goes back at the next reading. */
+    @Test public void aReplacementCutShortPutsThePreviousSkinBack() throws Exception {
+        File root = temporary.newFolder("skins"), work = temporary.newFolder("work");
+        DeltaSkinRepository repository = new DeltaSkinRepository(root);
+        DeltaSkinRepository.Installed first =
+                repository.install(prepare(root, archive(work, "a.deltaskin", "Premier")), false).skin;
+        File replaced = new File(root, ".replaced");
+        assertTrue(replaced.mkdirs());
+        File backup = new File(replaced, first.directory.getName() + "-" + java.util.UUID.randomUUID());
+        Files.move(first.directory.toPath(), backup.toPath());
+        assertNull("Killed there: no skin in its place", repository.find(DeltaSkinFixtures.IDENTIFIER));
+        repository.recoverReplaced();
+        assertEquals("Premier", repository.find(DeltaSkinFixtures.IDENTIFIER).manifest.name);
+        assertFalse(backup.exists());
+        // A half-moved new skin in its place, which does not read back: the previous one wins.
+        DeltaSkinRepository.Installed again = repository.find(DeltaSkinFixtures.IDENTIFIER);
+        Files.move(again.directory.toPath(), backup.toPath());
+        assertTrue(new File(again.directory, "partiel").mkdirs());
+        repository.recoverReplaced();
+        assertEquals("Premier", repository.find(DeltaSkinFixtures.IDENTIFIER).manifest.name);
+        assertFalse(backup.exists());
+    }
+
+    /** Killed after the new skin was in place, before its backup went: the
+     * new one stays and the backup, a finished replacement's, goes. */
+    @Test public void aFinishedReplacementsLeftoverBackupGoes() throws Exception {
+        File root = temporary.newFolder("skins"), work = temporary.newFolder("work");
+        DeltaSkinRepository repository = new DeltaSkinRepository(root);
+        DeltaSkinRepository.Installed first =
+                repository.install(prepare(root, archive(work, "a.deltaskin", "Premier")), false).skin;
+        File backup = new File(new File(root, ".replaced"),
+                first.directory.getName() + "-" + java.util.UUID.randomUUID());
+        copyTree(first.directory, backup);
+        repository.install(prepare(root, archive(work, "b.deltaskin", "Second")), true);
+        assertTrue(backup.exists());
+        repository.recoverReplaced();
+        assertEquals("Second", repository.find(DeltaSkinFixtures.IDENTIFIER).manifest.name);
+        assertFalse(backup.exists());
+        assertEquals(1, repository.list().size());
+    }
+
+    private static void copyTree(File from, File to) throws Exception {
+        try (java.util.stream.Stream<java.nio.file.Path> walk = Files.walk(from.toPath())) {
+            for (java.nio.file.Path path : (Iterable<java.nio.file.Path>) walk::iterator) {
+                java.nio.file.Path target = to.toPath().resolve(from.toPath().relativize(path));
+                if (Files.isDirectory(path)) Files.createDirectories(target);
+                else Files.copy(path, target);
+            }
+        }
+    }
+
     @Test public void onlyAFolderStagedByTheArchiveInstalls() throws Exception {
         File root = temporary.newFolder("skins"), work = temporary.newFolder("work");
         DeltaSkinArchive.Prepared prepared = prepare(root, archive(work, "a.deltaskin", "Test"));
