@@ -25,6 +25,22 @@ public final class RomLibraryTest {
         assertEquals(128, RomLibrary.safeTitle("a".repeat(150)).length());
     }
 
+    /** The player's bar shows the game's name, not the file's. */
+    @Test public void theDisplayedTitleIsTheGamesNameWithoutExtensionOrTags() {
+        assertEquals("Dragon Warrior III", RomLibrary.displayTitle("Dragon Warrior III (USA).gbc"));
+        assertEquals("Pokemon - Crystal Version",
+                RomLibrary.displayTitle("Pokemon - Crystal Version (USA, Europe) (Rev 1).gbc"));
+        assertEquals("Pokémon Version Rubis", RomLibrary.displayTitle("Pokémon Version Rubis (France).gba"));
+        assertEquals("Wario Land II", RomLibrary.displayTitle("Wario Land II (USA, Europe) (SGB Enhanced) [!].GB"));
+        assertEquals("Zelda", RomLibrary.displayTitle("Zelda (En,Fr,De).gbc"));
+        assertEquals("Tetris", RomLibrary.displayTitle("Tetris.gb"));
+        assertEquals("A name the player wrote keeps its words",
+                "Zelda (Oracle des âges)", RomLibrary.displayTitle("Zelda (Oracle des âges).gbc"));
+        assertEquals("Only tags: the name stays", "(USA)", RomLibrary.displayTitle("(USA).gb"));
+        assertEquals("Jeu", RomLibrary.displayTitle(" "));
+        assertEquals("Homebrew", RomLibrary.displayTitle("Homebrew"));
+    }
+
     @Test public void findsByFilenameAndCartridgeTitleWithoutAccents() {
         RomLibrary.Entry alpha = new RomLibrary.Entry("a", "École.gbc", "gbc", 512, "GHOST");
         RomLibrary.Entry beta = new RomLibrary.Entry("b", "Zelda.gb", "gb", 256, "ADVENTURE");

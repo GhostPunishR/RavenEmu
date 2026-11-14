@@ -90,6 +90,20 @@ dans `android/src/main/java/com/ravenemu/app/ui/player/`) est écrit pour
 RavenEmu, sous sa licence AGPLv3 ; aucune ligne des widgets n'y est portée.
 Les textes français sont ceux de RavenEmu.
 
+En paysage, les commandes tactiles classiques reprennent la disposition des
+overlays tactiles de RetroArch ([libretro/common-overlays, révision
+8cc97a529fc642ec9e40e2c2f7e7e5c53ea88428](https://github.com/libretro/common-overlays/tree/8cc97a529fc642ec9e40e2c2f7e7e5c53ea88428),
+sous licence CC BY 4.0) : `gamepads/neo-retropad/neo-retropad.cfg`, l'overlay
+par défaut de RetroArch sur mobile, et les overlays `gamepads/flat/gameboy.cfg`
+et `gamepads/gameboy/gameboy.cfg`. Seules des **proportions et des places**
+sont reprises : la croix et A/B grands, un peu sous le milieu des colonnes à
+côté de l'image, B plus bas et à gauche de A, L et R dans les coins du haut,
+Select et Start en bas, et le bouton menu (`menu_toggle`) dans le coin en bas à droite. Les
+tailles en dp de RavenEmu en sont déduites (croix de 120 dp, A/B de 60 dp à
+la taille 100 %). Aucune image ni aucun fichier `.cfg` n'est intégré ; le
+code (`android/src/main/java/com/ravenemu/app/ui/player/GameControlsView.java`)
+et le dessin des boutons sont ceux de RavenEmu, sous sa licence AGPLv3.
+
 ## Licences et distribution
 
 Le [texte intégral GPLv3](../../android/src/main/assets/licenses/GPL-3.0.txt)

@@ -18,6 +18,8 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.text.Normalizer;
 
 /** Offline-only ROM catalogue in this preview app's private files directory.
@@ -101,6 +103,41 @@ public final class RomLibrary {
         title = title.replaceAll("[\\p{Cntrl}]", "");
         return title.isEmpty() ? "Jeu" :
                 title.substring(0, Math.min(title.length(), 128));
+    }
+
+    /** The last (…) or […] group of a name, and what is inside. */
+    private static final Pattern LAST_GROUP = Pattern.compile("\\s*([(\\[])([^()\\[\\]]*)[)\\]]\\s*$");
+    private static final Pattern GAME_EXTENSION = Pattern.compile("(?i)\\.(gb|gbc|sgb|cgb|gba|agb)$");
+    /** What No-Intro and GoodTools put in parentheses after a game's name:
+     * regions, languages, revisions, versions and editions. */
+    private static final Pattern NAME_TAG = Pattern.compile("(?i)(usa|europe|japan|world|france|germany|spain|"
+            + "italy|netherlands|sweden|norway|denmark|finland|australia|korea|china|taiwan|hong kong|asia|brazil|"
+            + "canada|uk|russia|poland|portugal|greece|scandinavia|latin america|mexico|belgium|switzerland|austria|"
+            + "unknown|rev\\s*[0-9a-z.]+|v\\s*\\d+(\\.\\d+)*[a-z]?|beta\\s*\\d*|proto(type)?\\s*\\d*|demo|"
+            + "sample|kiosk|promo|debug|alt\\s*\\d*|unl|pirate|hack|aftermarket|homebrew|virtual console|"
+            + "sgb enhanced|gb compatible|rumble version|np|[a-z]{2}(-[a-z]{2,4})?)");
+
+    /** The game's name for the player's bar: the file's title without its
+     * extension, nor the tags No-Intro and GoodTools put after the name
+     * ("Dragon Warrior III (USA).gbc" gives "Dragon Warrior III"; "[!]" and
+     * the like go too). Parentheses that are part of a name a player wrote
+     * stay; a title that is only tags keeps them. */
+    public static String displayTitle(String title) {
+        if (title == null || title.trim().isEmpty()) return "Jeu";
+        String name = GAME_EXTENSION.matcher(title.trim()).replaceFirst("").trim();
+        String shown = name;
+        for (Matcher group; (group = LAST_GROUP.matcher(shown)).find(); ) {
+            if (!"[".equals(group.group(1)) && !onlyTags(group.group(2))) break;
+            shown = shown.substring(0, group.start()).trim();
+        }
+        return shown.isEmpty() ? (name.isEmpty() ? title.trim() : name) : shown;
+    }
+
+    private static boolean onlyTags(String inside) {
+        if (inside.trim().isEmpty()) return false;
+        for (String part : inside.split("[,+]"))
+            if (!NAME_TAG.matcher(part.trim()).matches()) return false;
+        return true;
     }
 
     private static File directory(File privateFiles) {

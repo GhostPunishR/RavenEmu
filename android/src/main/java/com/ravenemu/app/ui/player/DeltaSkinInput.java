@@ -76,6 +76,15 @@ final class DeltaSkinInput {
         this.panel = panel;
     }
 
+    /** The representation has a button item that opens the game menu. */
+    static boolean hasMenu(Representation representation) {
+        for (Item item : representation.items) {
+            if (item.directional()) continue;
+            for (String input : item.buttons) if (input.trim().equalsIgnoreCase("menu")) return true;
+        }
+        return false;
+    }
+
     Mapped at(double x, double y) {
         if (!panel.contains(x, y)) return Mapped.NONE;
         double sx = panel.width() / representation.mapping.width, sy = panel.height() / representation.mapping.height;
