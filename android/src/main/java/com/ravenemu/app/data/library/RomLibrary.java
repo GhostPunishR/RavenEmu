@@ -27,6 +27,10 @@ public final class RomLibrary {
     public static final int MAX_ROM_BYTES = 64 * 1024 * 1024;
     public static final int MAX_GAMES = 256;
     private static final int MAX_INDEX_BYTES = 256 * 1024;
+    /** One index for every Activity: a recreated library starts its own
+     * executor while the old one may still be importing a folder, so each
+     * read, and each read-modify-write, of index.json holds this lock. */
+    private static final Object INDEX = new Object();
 
     public static final class Entry {
         public final String key, title, system, cartridgeTitle;
@@ -113,6 +117,12 @@ public final class RomLibrary {
     }
 
     public static List<Entry> list(File files) throws IOException {
+        synchronized (INDEX) {
+            return readIndex(files);
+        }
+    }
+
+    private static List<Entry> readIndex(File files) throws IOException {
         File path = indexFile(files);
         if (!path.exists() && !new File(path.getPath() + ".bak").exists())
             return new ArrayList<>();
@@ -153,7 +163,8 @@ public final class RomLibrary {
 
     private static void atomicWrite(File path, byte[] bytes) throws IOException {
         File parent = path.getParentFile();
-        if (!parent.isDirectory() && !parent.mkdirs())
+        // mkdirs() is false when another thread just made it: look again after.
+        if (!parent.mkdirs() && !parent.isDirectory())
             throw new IOException("Répertoire inaccessible");
         AtomicFile atomic = new AtomicFile(path);
         FileOutputStream stream = atomic.startWrite();
@@ -171,7 +182,14 @@ public final class RomLibrary {
         if (system == null || rom == null || rom.length == 0 || rom.length > MAX_ROM_BYTES)
             throw new IOException("ROM GB/GBC/GBA non valide");
         String key = SaveRepository.keyFor(system, rom);
-        List<Entry> games = list(files);
+        synchronized (INDEX) {
+            return addToIndex(files, name, rom, system, key);
+        }
+    }
+
+    private static Entry addToIndex(File files, String name, byte[] rom, String system, String key)
+            throws IOException {
+        List<Entry> games = readIndex(files);
         for (Entry existing : games)
             if (existing.key.equals(key)) return existing;
         if (games.size() >= MAX_GAMES) throw new IOException("Bibliothèque complète");

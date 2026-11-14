@@ -138,6 +138,10 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
                 @Override public void onInputDeviceAdded(int deviceId) {}
                 @Override public void onInputDeviceChanged(int deviceId) {}
                 @Override public void onInputDeviceRemoved(int deviceId) {
+                    // A controller switched off sends no last motion: its
+                    // stick or hat would stay held. The touch keeps its own.
+                    gamepad.reset();
+                    NativeBridge.setButtons(touchButtons);
                     if (deviceId == controllerId) controllerUsed(null);
                 }
             };
@@ -856,7 +860,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         // The menu pauses the game: in Hardcore, rcheevos says whether it may now.
         if (achievements.hardcoreActive() && !pauseGranted) {
             surface.queueEvent(() -> {
-                if (disposed.get()) return;
+                if (disposed.get() || !foreground) return;
                 final boolean allowed = achievements.canPause();
                 runOnUiThread(() -> {
                     if (disposed.get()) return;
@@ -902,7 +906,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
                     @Override public void onFetchScores(int board, boolean around) {
                         if (disposed.get()) return;
                         surface.queueEvent(() -> {
-                            if (!disposed.get()) achievements.fetchScores(board, around);
+                            if (!disposed.get() && foreground) achievements.fetchScores(board, around);
                         });
                         refreshAchievements();
                     }
@@ -958,8 +962,13 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         List<CheatList.Cheat> candidate = new ArrayList<>(before);
         candidate.add(added);
         final String[] codes = CheatList.active(candidate);
-        surface.queueEvent(() -> {
-            if (disposed.get() || !key.equals(activeSaveKey)) return;
+        queueCore(() -> {
+            if (!key.equals(activeSaveKey)) return;
+            // Hardcore came on since the form was checked: the lock wins.
+            if (cheatsLockApplied) {
+                runOnUiThread(() -> { if (!disposed.get()) menu.cheatRefused(CheatsPanel.HARDCORE); });
+                return;
+            }
             final int refused = NativeBridge.setCheats(codes);
             final String reason = NativeBridge.cheatRefusal();
             runOnUiThread(() -> {
@@ -986,8 +995,8 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         final List<CheatList.Cheat> kept = Collections.unmodifiableList(new ArrayList<>(list));
         cheats = kept;
         if (playerMenu != null) playerMenu.setCheats(kept, !achievements.cheatsLocked());
-        surface.queueEvent(() -> {
-            if (disposed.get() || !key.equals(activeSaveKey) || cheatsLockApplied) return;
+        queueCore(() -> {
+            if (!key.equals(activeSaveKey) || cheatsLockApplied) return;
             NativeBridge.setCheats(CheatList.active(kept));
             String reason = NativeBridge.cheatRefusal();
             if (reason != null) postStatus(reason);
@@ -1006,7 +1015,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         final PlayerMenuSheet menu = playerMenu;
         if (disposed.get() || menu == null || !menu.isShowing() || surface == null) return;
         surface.queueEvent(() -> {
-            if (disposed.get()) return;
+            if (disposed.get() || !foreground) return;
             final AchievementsSnapshot snapshot = achievements.snapshot();
             final AwardJournal journal = achievements.journal();
             submitIo(() -> {
@@ -1062,7 +1071,8 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
             final AwardJournal journal = account == null ? null : AwardJournal.open(this);
             if (disposed.get()) return;
             surface.queueEvent(() -> {
-                if (disposed.get() || activeEntry != entry) return;
+                // Paused meanwhile: activeAccount is unchanged, onResume starts over.
+                if (disposed.get() || !foreground || activeEntry != entry) return;
                 if (restartGame) NativeBridge.resetGame();
                 achievements.start(http, account, journal, entry.system, game, hardcore);
                 activeAccount = key;
@@ -1083,7 +1093,8 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
             AwardJournal.clear(this);
             AchievementAccount.clear(this);
             surface.queueEvent(() -> {
-                if (disposed.get()) return;
+                // Paused meanwhile: the account is already gone, onResume stops the session.
+                if (disposed.get() || !foreground) return;
                 achievements.stop();
                 activeAccount = null;
                 runOnUiThread(() -> {
@@ -1267,6 +1278,25 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         });
     }
 
+    /** GLSurfaceView runs queued events even while paused, when onPause and
+     * onDestroy use the session from the UI thread. Core work that must not
+     * be lost (the cheats) waits here for onResume; the rest is dropped. */
+    private final List<Runnable> heldForResume = new ArrayList<>();
+
+    /** Core work from the UI or another thread, on the GL thread while the
+     * player shows; posted after the pause, it runs at the next onResume. */
+    private void queueCore(Runnable work) {
+        surface.queueEvent(() -> {
+            if (disposed.get()) return;
+            if (foreground) { work.run(); return; }
+            runOnUiThread(() -> {
+                if (disposed.get()) return;
+                if (foreground) queueCore(work);
+                else heldForResume.add(work);
+            });
+        });
+    }
+
     private boolean submitIo(Runnable work) {
         synchronized (ioGate) {
             if (disposed.get()) return false;
@@ -1283,6 +1313,15 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         });
     }
 
+    /** The SRAM written on leaving fails after onDestroy: the player is gone,
+     * the toast goes through the application so the loss is still told. */
+    private void postSaveFailure(IOException error) {
+        final android.content.Context app = getApplicationContext();
+        final String message = "Sauvegarde impossible : " + error.getMessage();
+        new Handler(Looper.getMainLooper()).post(() ->
+                android.widget.Toast.makeText(app, message, android.widget.Toast.LENGTH_LONG).show());
+    }
+
     private void persistBattery() throws IOException {
         final String[] players = linkKeys;
         if (players != null) {
@@ -1292,7 +1331,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
                 final byte[] saved = NativeBridge.savePlayerBattery(player);
                 if (saved != null) submitIo(() -> {
                     try { SaveRepository.write(getFilesDir(), saveKey, "srm", saved); }
-                    catch (IOException error) { postStatus("Sauvegarde impossible : " + error.getMessage()); }
+                    catch (IOException error) { postSaveFailure(error); }
                 });
             }
             return;
@@ -1302,7 +1341,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         byte[] battery = NativeBridge.saveBattery();
         if (battery != null) submitIo(() -> {
             try { SaveRepository.write(getFilesDir(), key, "srm", battery); }
-            catch (IOException error) { postStatus("Sauvegarde impossible : " + error.getMessage()); }
+            catch (IOException error) { postSaveFailure(error); }
         });
     }
 
@@ -1415,6 +1454,11 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         foreground = true;
         settingsLaunching = false;
         if (surface != null) surface.onResume();
+        if (!heldForResume.isEmpty()) {
+            List<Runnable> held = new ArrayList<>(heldForResume);
+            heldForResume.clear();
+            for (Runnable work : held) queueCore(work);
+        }
         if (displays != null) displays.registerDisplayListener(displayListener, new Handler(Looper.getMainLooper()));
         sendDisplay();
         android.hardware.input.InputManager inputs = getSystemService(android.hardware.input.InputManager.class);
@@ -1473,6 +1517,8 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         if (pauseState != null) pauseState.foreground(false);
         releaseInput();
         // Wait for the GL/emulator thread to stop before touching session data.
+        // Events queued later still run on it: those that touch the core
+        // check foreground, set to false above.
         if (surface != null) surface.onPause();
         rumble.stop();
         NativeBridge.setAudioEnabled(false);
@@ -1500,7 +1546,8 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         undoState = null;
         statePreviews = new Bitmap[StateSlotRepository.SLOT_COUNT];
         if (playerMenu != null) playerMenu.dismiss();
-        // The emulation thread was already suspended by GLSurfaceView.onPause.
+        // The emulation thread was already suspended by GLSurfaceView.onPause;
+        // events queued since then return at once (disposed, or not foreground).
         if (surface != null) surface.onPause();
         if (achievements != null) achievements.stop();
         if (achievementOverlay != null) achievementOverlay.release();

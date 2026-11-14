@@ -396,6 +396,8 @@ public final class PlaybackSettingsActivityTest {
                 "https://retroachievements.org/dorequest.php", "r=awardachievement&u=Raven&t=TOKEN-9&a=1&h=0&v=s",
                 "application/x-www-form-urlencoded")));
         described(activity, "Se déconnecter de RetroAchievements").performClick();
+        assertFalse("Until the account is forgotten, Réessayer cannot save it back",
+                described(activity, "Actualiser le compte RetroAchievements").isEnabled());
         idleIo(activity);
         assertNull(AchievementAccount.load(activity));
         assertTrue("The unlocks still waiting go with the account",

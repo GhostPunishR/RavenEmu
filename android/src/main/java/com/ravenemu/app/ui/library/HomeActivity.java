@@ -489,7 +489,7 @@ public final class HomeActivity extends Activity implements RavenTheme.Host {
             Intent pick = new Intent(Intent.ACTION_OPEN_DOCUMENT);
             pick.addCategory(Intent.CATEGORY_OPENABLE);
             pick.setType("image/*");
-            startActivityForResult(pick, PICK_COVER);
+            DocumentPicker.start(this, pick, PICK_COVER);
         });
         removeCover.setOnClickListener(view -> {
             dialog.dismiss();
@@ -532,7 +532,7 @@ public final class HomeActivity extends Activity implements RavenTheme.Host {
         Intent select = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         select.addCategory(Intent.CATEGORY_OPENABLE);
         select.setType("*/*");
-        startActivityForResult(select, PICK_ROM);
+        DocumentPicker.start(this, select, PICK_ROM);
     }
 
     @Override protected void onActivityResult(int request, int result, Intent data) {

@@ -192,19 +192,30 @@ static void apply_core_options(JNIEnv *env, jobjectArray options) {
         jstring key = (jstring)(*env)->GetObjectArrayElement(env, options, i);
         jstring value = (jstring)(*env)->GetObjectArrayElement(env, options, i + 1);
         const char *k = key ? (*env)->GetStringUTFChars(env, key, NULL) : NULL;
-        const char *v = value ? (*env)->GetStringUTFChars(env, value, NULL) : NULL;
+        const char *v = value && k ? (*env)->GetStringUTFChars(env, value, NULL) : NULL;
+        const int unreadable = (key && !k) || (value && k && !v);
         if (k && v && !raven_frontend_set_option(session, k, v))
             LOGE("Core option %s=%s not offered by this core", k, v);
         if (k) (*env)->ReleaseStringUTFChars(env, key, k);
         if (v) (*env)->ReleaseStringUTFChars(env, value, v);
         if (key) (*env)->DeleteLocalRef(env, key);
         if (value) (*env)->DeleteLocalRef(env, value);
+        /* Out of memory: no further JNI call; the core keeps its own values. */
+        if (unreadable) {
+            if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+            LOGE("Core options left unread: out of memory");
+            return;
+        }
     }
 }
 
 raven_frontend *raven_bridge_session(void) { return session; }
 
+/* A JNI call that ran out of memory (a 64 MiB ROM copied, say) leaves an
+ * OutOfMemoryError pending, and no other JNI call may follow it (CheckJNI,
+ * on in the debuggable APK, aborts): the error is cleared and told instead. */
 static jstring failure(JNIEnv *env, const char *error) {
+    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
     return (*env)->NewStringUTF(env, error ? error : "Unknown native error");
 }
 
@@ -490,6 +501,8 @@ Java_com_ravenemu_app_bridge_NativeBridge_setCheats(JNIEnv *env, jclass clazz, j
         (*env)->DeleteLocalRef(env, code);
         if (!texts[copied]) break;  /* out of memory */
     }
+    /* The codes are refused as a whole (-2); no OutOfMemoryError left behind. */
+    if (copied != count && (*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
     if (copied == count)
         result = raven_frontend_set_cheats(session, (const char *const *)texts, (size_t)count,
                                            cheat_refusal, sizeof(cheat_refusal));
