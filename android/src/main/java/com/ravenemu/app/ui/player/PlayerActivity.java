@@ -333,8 +333,10 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
             FrameLayout stage = new FrameLayout(this);
             root.addView(stage, new LinearLayout.LayoutParams(-1, 0, 1));
             FrameLayout.LayoutParams video = new FrameLayout.LayoutParams(-1, -1);
-            video.leftMargin = video.rightMargin = dp(116);
-            video.bottomMargin = dp(44);
+            // The columns of the controls beside the picture, the strip of
+            // Select, Start and Menu under it.
+            video.leftMargin = video.rightMargin = dp(gameControls.sideWidth());
+            video.bottomMargin = dp(GameControlsView.BOTTOM_STRIP);
             classicLandscapePicture = video;
             stage.addView(screen, video);
             // The whole stage, so a control can be moved beside or over the picture.
@@ -403,7 +405,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         }
     }
 
-    private int dp(int value) {
+    private int dp(float value) {
         return Math.round(value * getResources().getDisplayMetrics().density);
     }
 
@@ -551,9 +553,20 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         updateHeaderMenu();
     }
 
+    /** Landscape: the picture between the controls' columns, which follow
+     * the size chosen in Settings → Interface. */
+    private void fitLandscapePicture() {
+        if (classicLandscapePicture == null || gameControls == null) return;
+        int side = dp(gameControls.sideWidth());
+        if (classicLandscapePicture.leftMargin == side) return;
+        classicLandscapePicture.leftMargin = classicLandscapePicture.rightMargin = side;
+        if (gameControls.getVisibility() == View.VISIBLE && pictureFrame != null)
+            pictureFrame.setLayoutParams(classicLandscapePicture);
+    }
+
     /** The bar's ⋮ only where the screen has no touch Menu: the controls'
-     * button in portrait, or a skin's own; landscape's classic controls have
-     * none (the picture keeps the top centre), nor have some skins. */
+     * own button, in portrait and in landscape, or a skin's; some skins
+     * have none. */
     private void updateHeaderMenu() {
         if (headerMenu == null || gameControls == null) return;
         boolean classic = gameControls.getVisibility() == View.VISIBLE;
@@ -1486,6 +1499,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         if (gameControls != null) {
             gameControls.setSettings(ControlSettings.load(this));
             gameControls.setControlLayout(ControlLayout.load(this, gameControls.isLandscape()));
+            fitLandscapePicture();
         }
         // Back from Settings → Interface: another skin, or none.
         refreshSkin();

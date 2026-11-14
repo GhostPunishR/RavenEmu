@@ -11,7 +11,11 @@ Cette page décrit le lecteur de l'application Android native.
 
 La croix prend en charge le glissement et les diagonales. Les boutons sont relâchés quand le lecteur est fermé ou que l'application passe en arrière-plan.
 
-En portrait, le bouton **Menu** est seul au centre d'une rangée au-dessus de la croix et de A/B, pour les trois consoles : entre L et R en Game Boy Advance. Le bandeau n'a alors pas de **⋮**. En paysage, le centre reste à l'image : le menu s'ouvre par le **⋮** du bandeau, comme avec un skin qui n'a pas son propre bouton menu. Le bandeau donne le nom du jeu, sans l'extension du fichier ni les mentions de région ou de version (« Dragon Warrior III (USA).gbc » devient « Dragon Warrior III »).
+En portrait, le bouton **Menu** est seul au centre d'une rangée au-dessus de la croix et de A/B, pour les trois consoles : entre L et R en Game Boy Advance.
+
+En paysage, la disposition suit les overlays tactiles de RetroArch : la croix et A/B, plus grands, sont un peu sous le milieu des colonnes à gauche et à droite de l'image, là où reposent les pouces, B plus bas et à gauche de A ; L et R dans les coins du haut ; Select et Start sous l'image ; le bouton **Menu** dans le coin en bas à droite. Le centre reste à l'image, qui s'arrête aux colonnes. La taille réglée dans **Paramètres → Interface** élargit ou resserre les colonnes.
+
+Avec ces commandes, le bandeau n'a pas de **⋮** : il ne revient qu'avec un skin qui n'a pas son propre bouton menu. Le bandeau donne le nom du jeu, sans l'extension du fichier ni les mentions de région ou de version (« Dragon Warrior III (USA).gbc » devient « Dragon Warrior III »).
 
 ## Réglages actuels
 

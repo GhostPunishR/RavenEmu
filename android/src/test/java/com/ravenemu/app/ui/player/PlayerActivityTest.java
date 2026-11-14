@@ -118,11 +118,16 @@ public final class PlayerActivityTest {
     }
 
     @Test @Config(qualifiers = "en-rUS-w640dp-h360dp-land-mdpi")
-    public void inLandscapeTheBarKeepsItsMenuForTheClassicControls() throws Exception {
+    public void inLandscapeTheClassicControlsCarryTheMenuAndTheBarDropsItsOwn() throws Exception {
         PlayerActivity activity = loaded();
         GameControlsView controls = ReflectionHelpers.getField(activity, "gameControls");
-        assertFalse(controls.showsMenu());
-        assertEquals(View.VISIBLE, ((View) ReflectionHelpers.getField(activity, "headerMenu")).getVisibility());
+        assertTrue(controls.showsMenu());
+        assertEquals(View.GONE, ((View) ReflectionHelpers.getField(activity, "headerMenu")).getVisibility());
+        assertEquals("One Menu on screen", 1, countShown(activity.getWindow().getDecorView(), "Menu du jeu"));
+        android.widget.FrameLayout.LayoutParams picture = (android.widget.FrameLayout.LayoutParams)
+                ((View) ReflectionHelpers.getField(activity, "pictureFrame")).getLayoutParams();
+        assertEquals("The picture clears the control columns", Math.round(controls.sideWidth()), picture.leftMargin);
+        assertEquals(picture.leftMargin, picture.rightMargin);
     }
 
     private static long countShown(View view, String description) {
@@ -1256,7 +1261,8 @@ public final class PlayerActivityTest {
             DeltaSkinView skin = ReflectionHelpers.getField(activity, "skinView");
             assertEquals(View.VISIBLE, controls.getVisibility());
             assertEquals(View.GONE, skin.getVisibility());
-            assertEquals("Landscape's classic controls have no Menu: the bar keeps its ⋮", View.VISIBLE,
+            assertTrue("Landscape's classic controls carry the Menu", controls.showsMenu());
+            assertEquals("So the bar drops its ⋮", View.GONE,
                     ((View) ReflectionHelpers.getField(activity, "headerMenu")).getVisibility());
             assertEquals("Still chosen for the portrait", com.ravenemu.app.data.skins.DeltaSkinFixtures.IDENTIFIER,
                     preferences.getString("skins.selected.gb_gbc", null));

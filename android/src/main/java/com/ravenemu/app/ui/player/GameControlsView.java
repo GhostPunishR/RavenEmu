@@ -43,6 +43,12 @@ import android.view.accessibility.AccessibilityNodeInfo;
  * owner's place): between L and R on the GBA, and on the GB/GBC in the same
  * top row, alone, the D-pad and A/B below it as on the GBA. It never sends a
  * console button.
+ *
+ * Landscape follows RetroArch's touch overlays (libretro/common-overlays,
+ * CC BY 4.0, values only: neo-retropad and the Game Boy overlays): the D-pad
+ * and A/B large, a little below the middle of the columns beside the
+ * picture, B lower and to the left of A; L and R in the top corners; Select and Start under the picture; the
+ * menu in the bottom right corner, where neo-retropad puts its menu_toggle.
  */
 final class GameControlsView extends ViewGroup {
     interface Listener { void onButtonsChanged(int mask); }
@@ -119,7 +125,7 @@ final class GameControlsView extends ViewGroup {
 
     void setShoulders(boolean value) {
         if (shoulders == value) {
-            menuButton.setVisibility(!compact() && onMenu != null ? VISIBLE : GONE);
+            menuButton.setVisibility(onMenu != null ? VISIBLE : GONE);
             return;
         }
         releaseAll();
@@ -127,7 +133,7 @@ final class GameControlsView extends ViewGroup {
         footprintChanged();
         leftShoulder.setVisibility(value ? VISIBLE : GONE);
         rightShoulder.setVisibility(value ? VISIBLE : GONE);
-        menuButton.setVisibility(!compact() && onMenu != null ? VISIBLE : GONE);
+        menuButton.setVisibility(onMenu != null ? VISIBLE : GONE);
         requestLayout();
     }
 
@@ -270,15 +276,30 @@ final class GameControlsView extends ViewGroup {
         return Math.max(48, Math.min(69, Math.round(60f * size())));
     }
 
-    /** The Menu button is on screen (portrait, wired to the game menu). */
+    /** The Menu button is on screen (wired to the game menu). */
     boolean showsMenu() { return menuButton.getVisibility() == VISIBLE; }
+
+    /** Landscape: the D-pad, 120 dp at 100 %, as RetroArch's overlays size it
+     * against a phone's height (neo-retropad: 131 dp). */
+    private float landscapePad() { return Math.round(120f * size()); }
+
+    /** Landscape: A and B as in portrait; their pair is 1.9 by 1.75 buttons. */
+    private float faceWidth() { return diameter() * 1.9f; }
+    private float faceHeight() { return diameter() * 1.75f; }
+
+    /** Landscape: each column beside the picture, in dp, the picture's
+     * margin: the D-pad or the A/B pair, with 16 dp on each side. */
+    float sideWidth() { return 16f + Math.max(landscapePad(), faceWidth()) + 16f; }
+
+    /** Landscape: the strip under the picture, for Select, Start and Menu. */
+    static final float BOTTOM_STRIP = 44f;
 
     /** Portrait: L, Menu and R in one row above the D-pad and A/B; on the
      * GB/GBC the row holds the Menu alone, so both consoles look alike. */
     private boolean topRow() { return shoulders || onMenu != null; }
 
     private float desiredHeight(float width) {
-        if (compact()) return 72f + 80f * size();
+        if (compact()) return (shoulders ? 48f : 8f) + Math.max(landscapePad(), faceHeight()) + 8f + BOTTOM_STRIP;
         return (topRow() ? 40f + settings.gap : 0f) + cluster(width) + settings.gap + 40f + 16f;
     }
 
@@ -301,16 +322,27 @@ final class GameControlsView extends ViewGroup {
         float scale = Math.min(1f, height / desired);
         float offset = Math.max(0f, height - desired);
         if (compact()) {
-            // A fixed overlay beside the picture: only the D-pad and A/B grow.
-            float pad = 80 * size(), button = 48 * size();
-            place(dpad, 16, offset + 32 * scale, pad, pad * scale, layout);
-            place(a, width - 16 - button, offset + 32 * scale, button, button * scale, layout);
-            place(b, width - 56 - button, offset + (32 + button) * scale, button, button * scale, layout);
-            place(select, width / 2 - 101, offset + (32 + pad) * scale, 84, 40 * scale, layout);
-            place(start, width / 2 + 17, offset + (32 + pad) * scale, 84, 40 * scale, layout);
-            place(leftShoulder, 16, offset, 80, 28 * scale, layout);
-            place(rightShoulder, width - 96, offset, 80, 28 * scale, layout);
-            place(menuButton, (width - MENU_WIDTH) / 2, offset, MENU_WIDTH, 28 * scale, layout);
+            // The columns beside the picture, as RetroArch's landscape overlays:
+            // the D-pad and A/B a little below their middle, L/R in the top corners.
+            float side = sideWidth(), bottom = height - BOTTOM_STRIP;
+            float top = shoulders ? 48f : 8f, room = Math.max(0f, bottom - 8f - top);
+            float pad = Math.min(landscapePad(), room);
+            float button = Math.min(diameter(), room / 1.75f), faceW = button * 1.9f, faceH = button * 1.75f;
+            // Centred a little below the middle of the column, where thumbs rest.
+            float centre = top + room * 0.55f;
+            float padLeft = (side - pad) / 2f, faceLeft = width - side + (side - faceW) / 2f;
+            float padTop = Math.max(top, Math.min(bottom - 8f - pad, centre - pad / 2f));
+            float faceTop = Math.max(top, Math.min(bottom - 8f - faceH, centre - faceH / 2f));
+            place(dpad, padLeft, padTop, pad, pad, layout);
+            // A higher and on the right, B lower and to its left, as on the console.
+            place(a, faceLeft + faceW - button, faceTop, button, button, layout);
+            place(b, faceLeft, faceTop + faceH - button, button, button, layout);
+            place(select, width / 2 - 101, bottom + 2, 84, 40, layout);
+            place(start, width / 2 + 17, bottom + 2, 84, 40, layout);
+            place(leftShoulder, 16, 4, 96, 40, layout);
+            place(rightShoulder, width - 112, 4, 96, 40, layout);
+            // neo-retropad's menu_toggle place: the bottom right corner.
+            place(menuButton, width - 16 - MENU_WIDTH, bottom + 2, MENU_WIDTH, 40, layout);
         } else {
             float size = cluster(width), button = diameter(), rows = settings.gap;
             float row = topRow() ? 40f + rows : 0f;
@@ -355,7 +387,7 @@ final class GameControlsView extends ViewGroup {
         super.onConfigurationChanged(configuration);
         releaseAll();
         setBackgroundColor(Color.TRANSPARENT);
-        menuButton.setVisibility(!compact() && onMenu != null ? VISIBLE : GONE);
+        menuButton.setVisibility(onMenu != null ? VISIBLE : GONE);
         requestLayout();
         footprintChanged();
     }
