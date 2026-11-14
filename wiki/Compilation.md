@@ -27,4 +27,4 @@ ctest --test-dir build/native-frontend --output-on-failure
 
 ## RavenCore
 
-[frontend/CMakeLists.txt](https://github.com/GhostPunishR/RavenEmu/blob/main/frontend/CMakeLists.txt) épingle RavenCore au commit `badcf9ba635e2e80c2193a2edfd334c1d3830c10`, la version 0.15.3, et en construit les cores Libretro. Aucun code moteur n'est copié dans RavenEmu.
+[frontend/CMakeLists.txt](https://github.com/GhostPunishR/RavenEmu/blob/main/frontend/CMakeLists.txt) épingle RavenCore au commit `18d3c8373b330fe38fe656ce5af62f0808b9df06`, la version 0.15.4, et en construit les cores Libretro. Aucun code moteur n'est copié dans RavenEmu.
