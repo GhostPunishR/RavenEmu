@@ -156,21 +156,36 @@ public final class GameControlsViewTest {
         assertTrue(menu.isEnabled());
     }
 
-    @Test public void gbAndGbcMenuSitsAtTheTopCentreNeverBetweenSelectAndStart() {
+    /** The owner's layout: the GB/GBC as the GBA, the Menu alone at the
+     * centre of a top row, the D-pad and A/B below it, never between Select
+     * and Start; only L and R are missing. */
+    @Test public void gbAndGbcLayOutLikeTheGbaWithTheMenuAloneInTheTopRow() {
         int[] menus = {0};
         open(360, false, () -> menus[0]++);
         View menu = labelled("Menu du jeu"), dpad = labelled("Croix directionnelle");
-        View select = labelled("SELECT"), start = labelled("START"), a = labelled("A");
+        View select = labelled("SELECT"), start = labelled("START"), a = labelled("A"), b = labelled("B");
         assertEquals(View.VISIBLE, menu.getVisibility());
         assertEquals(View.GONE, labelled("L").getVisibility());
-        assertEquals("No extra row takes space from the picture", 234, controls.getMeasuredHeight());
         assertEquals("At the top centre", 180f, centerX(menu), 0.5f);
         assertEquals(0, menu.getTop());
-        assertTrue("Above the Select/Start row", menu.getBottom() < select.getTop());
-        assertTrue("Clear of the D-pad", dpad.getRight() < menu.getLeft());
-        assertTrue("Clear of A", menu.getRight() < a.getLeft());
-        assertTrue("Clear of B", menu.getBottom() < labelled("B").getTop());
+        assertTrue("Above the D-pad", menu.getBottom() < dpad.getTop());
+        assertTrue("Above A", menu.getBottom() < a.getTop());
+        assertTrue("Above B", menu.getBottom() < b.getTop());
         assertTrue(select.getRight() < start.getLeft());
+
+        // The same places as on the GBA, L and R aside.
+        int[] gb = {dpad.getTop(), a.getTop(), b.getTop(), select.getTop(), controls.getMeasuredHeight()};
+        controls.setShoulders(true);
+        apply(ControlSettings.DEFAULTS);
+        assertEquals(gb[0], labelled("Croix directionnelle").getTop());
+        assertEquals(gb[1], labelled("A").getTop());
+        assertEquals(gb[2], labelled("B").getTop());
+        assertEquals(gb[3], labelled("SELECT").getTop());
+        assertEquals(gb[4], controls.getMeasuredHeight());
+        assertEquals(centerY(labelled("L")), centerY(labelled("Menu du jeu")), 0.5f);
+        controls.setShoulders(false);
+        apply(ControlSettings.DEFAULTS);
+
         assertTrue(touch(MotionEvent.ACTION_DOWN, 13, centerX(menu), centerY(menu)));
         assertTrue(touch(MotionEvent.ACTION_UP, 13, centerX(menu), centerY(menu)));
         shadowOf(Looper.getMainLooper()).idle();
@@ -178,20 +193,15 @@ public final class GameControlsViewTest {
         assertTrue("Menu never sends emulator buttons", changes.isEmpty());
     }
 
-    @Test public void aNarrowGbScreenKeepsTheMenuOffTheDpadAndA() {
-        open(320, false, () -> {});
-        View menu = labelled("Menu du jeu");
-        assertTrue(labelled("Croix directionnelle").getRight() < menu.getLeft());
-        assertTrue(menu.getRight() < labelled("A").getLeft());
-        assertEquals(0, menu.getTop());
-    }
-
-    @Test public void aVeryNarrowScreenSlimsTheMenuBetweenTheDpadAndA() {
-        open(240, false, () -> {});
-        View menu = labelled("Menu du jeu");
-        assertTrue("Slimmer, still apart", labelled("Croix directionnelle").getRight() < menu.getLeft());
-        assertTrue(menu.getRight() < labelled("A").getLeft());
-        assertTrue(menu.getWidth() >= 24);
+    @Test public void aNarrowGbScreenKeepsTheMenuAboveTheDpadAndA() {
+        for (int width : new int[]{320, 240}) {
+            open(width, false, () -> {});
+            View menu = labelled("Menu du jeu");
+            assertEquals(width / 2f, centerX(menu), 0.5f);
+            assertEquals(0, menu.getTop());
+            assertTrue(menu.getBottom() < labelled("Croix directionnelle").getTop());
+            assertTrue(menu.getBottom() < labelled("A").getTop());
+        }
     }
 
     @Test public void menuMovesWithTheConsoleAndStaysHiddenWithoutAnAction() {
@@ -472,22 +482,72 @@ public final class GameControlsViewTest {
         assertEquals(4, count);
     }
 
+    /** Landscape, after RetroArch's touch overlays (common-overlays): the
+     * D-pad and A/B large in the columns beside the picture, B lower and to
+     * the left of A, L/R in the top corners, Select/Start under the
+     * picture, the menu in the bottom right corner (neo-retropad's place). */
     @Test @Config(qualifiers = "en-rUS-w640dp-h360dp-land-mdpi")
-    public void landscapeControlsStayAtTheEdgesWithAnUntouchedCenter() {
-        open(640, true);
-        assertEquals(152, controls.getMeasuredHeight());
+    public void landscapeControlsStayInTheColumnsWithTheMenuBottomRight() {
+        int[] menus = {0};
+        open(640, true, () -> menus[0]++);
         View dpad = labelled("Croix directionnelle"), a = labelled("A"), b = labelled("B");
-        assertEquals(80, dpad.getWidth());
-        assertEquals(48, a.getWidth());
-        assertTrue(dpad.getRight() <= 116);
-        assertTrue(b.getLeft() >= 640 - 116);
-        assertFalse(touch(MotionEvent.ACTION_DOWN, 10, 320, 50));
+        View menu = labelled("Menu du jeu"), l = labelled("L"), r = labelled("R");
+        assertEquals("Columns of 16 + 120 + 16 dp", 152f, controls.sideWidth(), 0.01f);
+        assertEquals(48 + 120 + 8 + 44, controls.getMeasuredHeight());
+        assertEquals(120, dpad.getWidth());
+        assertEquals(60, a.getWidth());
+        assertTrue("The D-pad stays in its column", dpad.getLeft() >= 16 && dpad.getRight() <= 152);
+        assertTrue("A/B stay in theirs", b.getLeft() >= 640 - 152 && a.getRight() <= 640 - 16);
+        assertTrue("B lower and to the left of A", b.getLeft() < a.getLeft() && b.getTop() > a.getTop());
+        assertTrue("L/R in the top corners", l.getTop() < dpad.getTop() && r.getTop() < a.getTop());
+        assertEquals(View.VISIBLE, menu.getVisibility());
+        assertTrue("The menu in the bottom right corner", menu.getRight() == 640 - 16
+                && menu.getTop() >= controls.getHeight() - GameControlsView.BOTTOM_STRIP);
+        View select = labelled("SELECT"), start = labelled("START");
+        assertTrue(select.getTop() >= controls.getHeight() - 44);
+        assertTrue("Never between Select and Start", menu.getLeft() > start.getRight());
+        assertTrue("Clear of A/B", menu.getTop() > b.getBottom() && menu.getTop() > a.getBottom());
+        assertFalse("The picture's centre takes no touch", touch(MotionEvent.ACTION_DOWN, 10, 320, 50));
         assertEquals(0, current());
-        assertTrue(labelled("SELECT").getTop() >= controls.getHeight() - 44);
-        assertTrue(labelled("START").getBottom() <= controls.getHeight());
-        assertEquals("The top centre is the picture's", View.GONE, labelled("Menu du jeu").getVisibility());
         touch(MotionEvent.ACTION_DOWN, 10, centerX(a), centerY(a));
         assertEquals(NativeBridge.A, current());
+        touch(MotionEvent.ACTION_UP, 10, centerX(a), centerY(a));
+        assertTrue(touch(MotionEvent.ACTION_DOWN, 11, centerX(menu), centerY(menu)));
+        assertTrue(touch(MotionEvent.ACTION_UP, 11, centerX(menu), centerY(menu)));
+        shadowOf(Looper.getMainLooper()).idle();
+        assertEquals(1, menus[0]);
+    }
+
+    /** On the player's stage the controls cover it all: L/R in its top
+     * corners, the D-pad and A/B a little below the middle of the columns,
+     * where neo-retropad puts them (0.556 of the height), Menu in the strip. */
+    @Test @Config(qualifiers = "en-rUS-w914dp-h411dp-land-mdpi")
+    public void onTheWholeStageTheClustersSitALittleBelowTheMiddle() {
+        open(914, true, () -> {});
+        int stage = 355;
+        controls.measure(View.MeasureSpec.makeMeasureSpec(914, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(stage, View.MeasureSpec.EXACTLY));
+        controls.layout(0, 0, 914, stage);
+        View dpad = labelled("Croix directionnelle"), a = labelled("A"), b = labelled("B");
+        View l = labelled("L"), r = labelled("R"), menu = labelled("Menu du jeu");
+        assertEquals(4, l.getTop());
+        assertEquals(4, r.getTop());
+        float middle = (dpad.getTop() + dpad.getBottom()) / 2f / stage;
+        assertTrue("D-pad centred at " + middle, middle > 0.5f && middle < 0.6f);
+        float faces = (a.getTop() + b.getBottom()) / 2f / stage;
+        assertEquals("A/B level with the D-pad", middle, faces, 0.02f);
+        assertTrue(menu.getTop() >= stage - GameControlsView.BOTTOM_STRIP && menu.getRight() == 914 - 16);
+        assertTrue("Clear of the strip", dpad.getBottom() < stage - GameControlsView.BOTTOM_STRIP);
+    }
+
+    /** A smaller size narrows the columns, so the picture can grow. */
+    @Test @Config(qualifiers = "en-rUS-w640dp-h360dp-land-mdpi")
+    public void landscapeColumnsFollowTheControlSize() {
+        open(640, false, () -> {});
+        float normal = controls.sideWidth();
+        apply(ControlSettings.DEFAULTS.withScale(80));
+        assertTrue(controls.sideWidth() < normal);
+        assertEquals(Math.round(120 * 0.8f), labelled("Croix directionnelle").getWidth());
     }
 
     private void open(int width, boolean shoulders) {

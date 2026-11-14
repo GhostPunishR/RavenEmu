@@ -58,6 +58,8 @@ final class DeltaSkinView extends View {
     private DeltaSkins.Asset asset;
     private DeltaSkinLayout layout;
     private DeltaSkinInput input;
+    /** The representation shown has a "menu" item: the bar needs no ⋮. */
+    private boolean menuInput;
     private Bitmap page;
     private long generation;
     private boolean ready;
@@ -108,6 +110,7 @@ final class DeltaSkinView extends View {
     boolean ready() { return ready; }
 
     DeltaSkinLayout layout() { return layout; }
+    boolean hasMenu() { return menuInput; }
 
     /** Pause, focus loss and detachment never leave a button held. */
     void releaseAll() {
@@ -253,6 +256,7 @@ final class DeltaSkinView extends View {
         boolean moved = layout == null || !layout.panel.equals(next.panel) || !layout.gameArea.equals(next.gameArea);
         layout = next;
         input = new DeltaSkinInput(config.console, chosenAsset.representation, next.panel);
+        menuInput = DeltaSkinInput.hasMenu(chosenAsset.representation);
         int width = Math.max(1, (int) next.panel.width()), height = Math.max(1, (int) next.panel.height());
         if (chosen == kind && chosenAsset == asset && page != null && page.getWidth() == width
                 && page.getHeight() == height) {

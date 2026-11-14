@@ -77,6 +77,8 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
     private final AtomicBoolean disposed = new AtomicBoolean(false);
     private GLSurfaceView surface;
     private TextView gameTitle;
+    /** The bar's ⋮: shown only where no touch Menu button is on screen. */
+    private View headerMenu;
     private int width = 1, height = 1, touchButtons;
     /** UI thread: a physical controller's keys and axes. */
     private final GamepadMapper gamepad = new GamepadMapper();
@@ -237,8 +239,9 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         });
         pauseState.menu(restoreMenu);
 
-        // Mirror the 48dp RavenEmu player toolbar: back, current game,
-        // and the three-dot game menu. The GL/C frontend is unchanged.
+        // Mirror the 48dp RavenEmu player toolbar: back, current game, and
+        // the three-dot game menu only where no touch Menu is on screen
+        // (landscape's classic controls, a skin without one).
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.VERTICAL);
         header.setBackgroundColor(theme.background);
@@ -279,9 +282,9 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
             toolbar.addView(linkSwitch, switchSize);
             showLinkTitle();
         } else {
-            View menu = RavenIcon.button(this, RavenIcon.Glyph.MORE, theme.accent, 24, "Menu du jeu");
-            menu.setOnClickListener(view -> togglePlayerMenu());
-            toolbar.addView(menu, new LinearLayout.LayoutParams(dp(48), dp(48)));
+            headerMenu = RavenIcon.button(this, RavenIcon.Glyph.MORE, theme.accent, 24, "Menu du jeu");
+            headerMenu.setOnClickListener(view -> togglePlayerMenu());
+            toolbar.addView(headerMenu, new LinearLayout.LayoutParams(dp(48), dp(48)));
         }
         header.addView(toolbar);
 
@@ -310,6 +313,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
 
         // Linked games have no game menu: no Menu button among the controls.
         gameControls = new GameControlsView(this, this::setTouchButtons, linkMode ? null : this::togglePlayerMenu);
+        updateHeaderMenu();
         gameControls.setEnabled(false);
         // The picture, and RetroAchievements' banners over it.
         FrameLayout screen = new FrameLayout(this);
@@ -329,8 +333,10 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
             FrameLayout stage = new FrameLayout(this);
             root.addView(stage, new LinearLayout.LayoutParams(-1, 0, 1));
             FrameLayout.LayoutParams video = new FrameLayout.LayoutParams(-1, -1);
-            video.leftMargin = video.rightMargin = dp(116);
-            video.bottomMargin = dp(44);
+            // The columns of the controls beside the picture, the strip of
+            // Select, Start and Menu under it.
+            video.leftMargin = video.rightMargin = dp(gameControls.sideWidth());
+            video.bottomMargin = dp(GameControlsView.BOTTOM_STRIP);
             classicLandscapePicture = video;
             stage.addView(screen, video);
             // The whole stage, so a control can be moved beside or over the picture.
@@ -399,7 +405,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         }
     }
 
-    private int dp(int value) {
+    private int dp(float value) {
         return Math.round(value * getResources().getDisplayMetrics().density);
     }
 
@@ -497,6 +503,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         releaseInput();
         gameControls.setVisibility(View.GONE);
         gameControls.footprint().setVisibility(View.GONE);
+        updateHeaderMenu();
         int width = (int) Math.round(layout.gameArea.width()), height = (int) Math.round(layout.gameArea.height());
         int left = (int) Math.round(layout.gameArea.left), top = (int) Math.round(layout.gameArea.top);
         if (pictureFrame.getLayoutParams() instanceof FrameLayout.LayoutParams) {
@@ -543,6 +550,28 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         else pictureFrame.setLayoutParams(new LinearLayout.LayoutParams(-1, 0, 1));
         gameControls.setVisibility(View.VISIBLE);
         gameControls.footprint().setVisibility(View.VISIBLE);
+        updateHeaderMenu();
+    }
+
+    /** Landscape: the picture between the controls' columns, which follow
+     * the size chosen in Settings → Interface. */
+    private void fitLandscapePicture() {
+        if (classicLandscapePicture == null || gameControls == null) return;
+        int side = dp(gameControls.sideWidth());
+        if (classicLandscapePicture.leftMargin == side) return;
+        classicLandscapePicture.leftMargin = classicLandscapePicture.rightMargin = side;
+        if (gameControls.getVisibility() == View.VISIBLE && pictureFrame != null)
+            pictureFrame.setLayoutParams(classicLandscapePicture);
+    }
+
+    /** The bar's ⋮ only where the screen has no touch Menu: the controls'
+     * own button, in portrait and in landscape, or a skin's; some skins
+     * have none. */
+    private void updateHeaderMenu() {
+        if (headerMenu == null || gameControls == null) return;
+        boolean classic = gameControls.getVisibility() == View.VISIBLE;
+        boolean touchMenu = classic ? gameControls.showsMenu() : skinView != null && skinView.hasMenu();
+        headerMenu.setVisibility(touchMenu ? View.GONE : View.VISIBLE);
     }
 
     /** A skin that cannot be drawn is unselected, as in the beta. */
@@ -697,10 +726,11 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
                             applyDisplayMode();
                             releaseInput();
                             gameControls.setShoulders("gba".equals(entry.system));
+                            updateHeaderMenu();
                             loadedSystem = entry.system;
                             showPictureTo(achievementOverlay, entry.system);
                             refreshSkin();
-                            gameTitle.setText(entry.title);
+                            gameTitle.setText(RomLibrary.displayTitle(entry.title));
                             if (biosMissing) android.widget.Toast.makeText(this,
                                     "Vrai BIOS GBA absent : RavenCore utilise le sien. Choisissez son fichier "
                                             + "dans Paramètres → Console.", android.widget.Toast.LENGTH_LONG).show();
@@ -785,6 +815,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
                     applyDisplayMode();
                     releaseInput();
                     gameControls.setShoulders("gba".equals(first.system));
+                    updateHeaderMenu();
                     showPictureTo(achievementOverlay, first.system);
                     linkEntries = new RomLibrary.Entry[]{first, second};
                     showLinkTitle();
@@ -803,7 +834,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
                 new android.text.SpannableStringBuilder("Câble link · Joueur " + (linkFocus + 1));
         if (linkEntries != null) {
             int start = title.length();
-            title.append('\n').append(linkEntries[linkFocus].title);
+            title.append('\n').append(RomLibrary.displayTitle(linkEntries[linkFocus].title));
             title.setSpan(new android.text.style.RelativeSizeSpan(0.72f), start, title.length(), 0);
             title.setSpan(new android.text.style.ForegroundColorSpan(theme.muted), start, title.length(), 0);
         }
@@ -1468,6 +1499,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         if (gameControls != null) {
             gameControls.setSettings(ControlSettings.load(this));
             gameControls.setControlLayout(ControlLayout.load(this, gameControls.isLandscape()));
+            fitLandscapePicture();
         }
         // Back from Settings → Interface: another skin, or none.
         refreshSkin();
