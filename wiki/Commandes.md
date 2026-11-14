@@ -11,6 +11,8 @@ Cette page décrit le lecteur de l'application Android native.
 
 La croix prend en charge le glissement et les diagonales. Les boutons sont relâchés quand le lecteur est fermé ou que l'application passe en arrière-plan.
 
+En portrait, le bouton **Menu** est seul au centre d'une rangée au-dessus de la croix et de A/B, pour les trois consoles : entre L et R en Game Boy Advance. Le bandeau n'a alors pas de **⋮**. En paysage, le centre reste à l'image : le menu s'ouvre par le **⋮** du bandeau, comme avec un skin qui n'a pas son propre bouton menu. Le bandeau donne le nom du jeu, sans l'extension du fichier ni les mentions de région ou de version (« Dragon Warrior III (USA).gbc » devient « Dragon Warrior III »).
+
 ## Réglages actuels
 
 Ouvrez **Paramètres → Interface** :
@@ -40,7 +42,7 @@ Dans **Paramètres → Interface → Capteurs de la cartouche** :
 - **Soleil automatique (Boktai)** : le capteur de lumière règle le soleil. Comme sur la vraie cartouche, il faut la lumière du jour : l'éclairage d'une pièce ne donne rien ;
 - **Soleil (Boktai)** : niveau manuel de 0 à 100 %, utilisé quand le soleil automatique est coupé ou que le téléphone n'a pas de capteur de lumière.
 
-Comme sur la console, l'inclinaison a pour repère la gravité : posé à plat, le téléphone est au repos. Il n'y a pas encore de recentrage sur la position de jeu. Le déplacement libre des boutons et les profils avancés ne sont pas proposés. Le menu **⋮** du lecteur donne accès aux états, à l'avance rapide, à la capture d'écran, au diagnostic audio et à RetroAchievements.
+Comme sur la console, l'inclinaison a pour repère la gravité : posé à plat, le téléphone est au repos. Il n'y a pas encore de recentrage sur la position de jeu. Les profils avancés ne sont pas proposés. Le menu du jeu donne accès aux états, aux codes de triche, à RetroAchievements, au déplacement des boutons et aux paramètres.
 
 ## Manettes et skins
 

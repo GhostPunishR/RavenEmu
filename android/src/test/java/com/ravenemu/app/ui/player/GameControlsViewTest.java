@@ -156,21 +156,36 @@ public final class GameControlsViewTest {
         assertTrue(menu.isEnabled());
     }
 
-    @Test public void gbAndGbcMenuSitsAtTheTopCentreNeverBetweenSelectAndStart() {
+    /** The owner's layout: the GB/GBC as the GBA, the Menu alone at the
+     * centre of a top row, the D-pad and A/B below it, never between Select
+     * and Start; only L and R are missing. */
+    @Test public void gbAndGbcLayOutLikeTheGbaWithTheMenuAloneInTheTopRow() {
         int[] menus = {0};
         open(360, false, () -> menus[0]++);
         View menu = labelled("Menu du jeu"), dpad = labelled("Croix directionnelle");
-        View select = labelled("SELECT"), start = labelled("START"), a = labelled("A");
+        View select = labelled("SELECT"), start = labelled("START"), a = labelled("A"), b = labelled("B");
         assertEquals(View.VISIBLE, menu.getVisibility());
         assertEquals(View.GONE, labelled("L").getVisibility());
-        assertEquals("No extra row takes space from the picture", 234, controls.getMeasuredHeight());
         assertEquals("At the top centre", 180f, centerX(menu), 0.5f);
         assertEquals(0, menu.getTop());
-        assertTrue("Above the Select/Start row", menu.getBottom() < select.getTop());
-        assertTrue("Clear of the D-pad", dpad.getRight() < menu.getLeft());
-        assertTrue("Clear of A", menu.getRight() < a.getLeft());
-        assertTrue("Clear of B", menu.getBottom() < labelled("B").getTop());
+        assertTrue("Above the D-pad", menu.getBottom() < dpad.getTop());
+        assertTrue("Above A", menu.getBottom() < a.getTop());
+        assertTrue("Above B", menu.getBottom() < b.getTop());
         assertTrue(select.getRight() < start.getLeft());
+
+        // The same places as on the GBA, L and R aside.
+        int[] gb = {dpad.getTop(), a.getTop(), b.getTop(), select.getTop(), controls.getMeasuredHeight()};
+        controls.setShoulders(true);
+        apply(ControlSettings.DEFAULTS);
+        assertEquals(gb[0], labelled("Croix directionnelle").getTop());
+        assertEquals(gb[1], labelled("A").getTop());
+        assertEquals(gb[2], labelled("B").getTop());
+        assertEquals(gb[3], labelled("SELECT").getTop());
+        assertEquals(gb[4], controls.getMeasuredHeight());
+        assertEquals(centerY(labelled("L")), centerY(labelled("Menu du jeu")), 0.5f);
+        controls.setShoulders(false);
+        apply(ControlSettings.DEFAULTS);
+
         assertTrue(touch(MotionEvent.ACTION_DOWN, 13, centerX(menu), centerY(menu)));
         assertTrue(touch(MotionEvent.ACTION_UP, 13, centerX(menu), centerY(menu)));
         shadowOf(Looper.getMainLooper()).idle();
@@ -178,20 +193,15 @@ public final class GameControlsViewTest {
         assertTrue("Menu never sends emulator buttons", changes.isEmpty());
     }
 
-    @Test public void aNarrowGbScreenKeepsTheMenuOffTheDpadAndA() {
-        open(320, false, () -> {});
-        View menu = labelled("Menu du jeu");
-        assertTrue(labelled("Croix directionnelle").getRight() < menu.getLeft());
-        assertTrue(menu.getRight() < labelled("A").getLeft());
-        assertEquals(0, menu.getTop());
-    }
-
-    @Test public void aVeryNarrowScreenSlimsTheMenuBetweenTheDpadAndA() {
-        open(240, false, () -> {});
-        View menu = labelled("Menu du jeu");
-        assertTrue("Slimmer, still apart", labelled("Croix directionnelle").getRight() < menu.getLeft());
-        assertTrue(menu.getRight() < labelled("A").getLeft());
-        assertTrue(menu.getWidth() >= 24);
+    @Test public void aNarrowGbScreenKeepsTheMenuAboveTheDpadAndA() {
+        for (int width : new int[]{320, 240}) {
+            open(width, false, () -> {});
+            View menu = labelled("Menu du jeu");
+            assertEquals(width / 2f, centerX(menu), 0.5f);
+            assertEquals(0, menu.getTop());
+            assertTrue(menu.getBottom() < labelled("Croix directionnelle").getTop());
+            assertTrue(menu.getBottom() < labelled("A").getTop());
+        }
     }
 
     @Test public void menuMovesWithTheConsoleAndStaysHiddenWithoutAnAction() {

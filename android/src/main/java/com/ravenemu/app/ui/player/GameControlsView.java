@@ -39,8 +39,10 @@ import android.view.accessibility.AccessibilityNodeInfo;
  * Drawn in the app's palette (the owner's redesign, not the beta's look):
  * one dark face with an accent outline, labels and arrows in the accent, the
  * pressed part filled with it. In portrait the game menu's button sits at
- * the top centre of the controls, between L and R on the GBA, never between
- * Select and Start (the owner's place); it never sends a console button.
+ * the top centre of the controls, never between Select and Start (the
+ * owner's place): between L and R on the GBA, and on the GB/GBC in the same
+ * top row, alone, the D-pad and A/B below it as on the GBA. It never sends a
+ * console button.
  */
 final class GameControlsView extends ViewGroup {
     interface Listener { void onButtonsChanged(int mask); }
@@ -268,9 +270,16 @@ final class GameControlsView extends ViewGroup {
         return Math.max(48, Math.min(69, Math.round(60f * size())));
     }
 
+    /** The Menu button is on screen (portrait, wired to the game menu). */
+    boolean showsMenu() { return menuButton.getVisibility() == VISIBLE; }
+
+    /** Portrait: L, Menu and R in one row above the D-pad and A/B; on the
+     * GB/GBC the row holds the Menu alone, so both consoles look alike. */
+    private boolean topRow() { return shoulders || onMenu != null; }
+
     private float desiredHeight(float width) {
         if (compact()) return 72f + 80f * size();
-        return (shoulders ? 40f + settings.gap : 0f) + cluster(width) + settings.gap + 40f + 16f;
+        return (topRow() ? 40f + settings.gap : 0f) + cluster(width) + settings.gap + 40f + 16f;
     }
 
     @Override protected void onMeasure(int widthSpec, int heightSpec) {
@@ -304,7 +313,7 @@ final class GameControlsView extends ViewGroup {
             place(menuButton, (width - MENU_WIDTH) / 2, offset, MENU_WIDTH, 28 * scale, layout);
         } else {
             float size = cluster(width), button = diameter(), rows = settings.gap;
-            float row = shoulders ? 40f + rows : 0f;
+            float row = topRow() ? 40f + rows : 0f;
             float actionWidth = Math.min(144f, Math.max(60f, width - 44f - size));
             float gap = Math.min(50f, Math.max(8f, width - 168f));
             place(dpad, 16, offset + row * scale, size, size * scale, layout);
@@ -314,18 +323,9 @@ final class GameControlsView extends ViewGroup {
             place(start, (width + gap) / 2, offset + (row + size + rows) * scale, 84, 40 * scale, layout);
             place(leftShoulder, 16, offset, 96, 40 * scale, layout);
             place(rightShoulder, width - 112, offset, 96, 40 * scale, layout);
-            // The owner's place, top centre: between L and R on the GBA; on
-            // the GB/GBC in the free top between the D-pad and A, without a
-            // new row. A narrow screen moves it off the D-pad, then slims it.
-            float menuWidth = MENU_WIDTH, menuLeft = (width - menuWidth) / 2;
-            if (!shoulders) {
-                float from = 16 + size + 4, to = width - 28 - button - 4;
-                if (to - from < menuWidth) {
-                    menuWidth = Math.max(24f, Math.min(MENU_WIDTH, to - from));
-                    menuLeft = (from + to - menuWidth) / 2;
-                } else menuLeft = Math.max(from, Math.min(to - menuWidth, menuLeft));
-            }
-            place(menuButton, menuLeft, offset, menuWidth, 40 * scale, layout);
+            // The owner's place, top centre of the top row: between L and R on
+            // the GBA, alone on the GB/GBC, above the D-pad and A/B on both.
+            place(menuButton, (width - MENU_WIDTH) / 2, offset, MENU_WIDTH, 40 * scale, layout);
         }
     }
 

@@ -105,6 +105,35 @@ public final class PlayerActivityTest {
         idle();
     }
 
+    /** Portrait: the controls' Menu button opens the game menu, so the bar has
+     * no ⋮; it names the game, not its file. */
+    @Test public void thePortraitBarNamesTheGameAndLeavesTheMenuToTheControls() throws Exception {
+        PlayerActivity activity = loaded();
+        GameControlsView controls = ReflectionHelpers.getField(activity, "gameControls");
+        assertTrue(controls.showsMenu());
+        assertEquals(View.GONE, ((View) ReflectionHelpers.getField(activity, "headerMenu")).getVisibility());
+        assertEquals("Libre", ((TextView) ReflectionHelpers.getField(activity, "gameTitle")).getText().toString());
+        long shown = countShown(activity.getWindow().getDecorView(), "Menu du jeu");
+        assertEquals("One Menu on screen", 1, shown);
+    }
+
+    @Test @Config(qualifiers = "en-rUS-w640dp-h360dp-land-mdpi")
+    public void inLandscapeTheBarKeepsItsMenuForTheClassicControls() throws Exception {
+        PlayerActivity activity = loaded();
+        GameControlsView controls = ReflectionHelpers.getField(activity, "gameControls");
+        assertFalse(controls.showsMenu());
+        assertEquals(View.VISIBLE, ((View) ReflectionHelpers.getField(activity, "headerMenu")).getVisibility());
+    }
+
+    private static long countShown(View view, String description) {
+        long own = view.isShown() && description.contentEquals(view.getContentDescription() == null ? ""
+                : view.getContentDescription()) ? 1 : 0;
+        if (!(view instanceof ViewGroup)) return own;
+        ViewGroup group = (ViewGroup) view;
+        for (int i = 0; i < group.getChildCount(); i++) own += countShown(group.getChildAt(i), description);
+        return own;
+    }
+
     @Test public void initialRomReadFinishingInBackgroundWaitsForResumeBeforeOpeningTheCore() throws Exception {
         ActivityController<PlayerActivity> controller = open(null);
         PlayerActivity activity = controller.get();
@@ -1114,6 +1143,9 @@ public final class PlayerActivityTest {
             assertTrue(skin.ready());
             assertEquals(View.VISIBLE, skin.getVisibility());
             assertEquals("The skin replaces the touch controls", View.GONE, controls.getVisibility());
+            assertTrue(skin.hasMenu());
+            assertEquals("The skin has its own menu: no ⋮ in the bar", View.GONE,
+                    ((View) ReflectionHelpers.getField(activity, "headerMenu")).getVisibility());
             DeltaSkinLayout layout = skin.layout();
             assertEquals("The picture takes the game's area", Math.round(layout.gameArea.height()),
                     picture.getLayoutParams().height);
@@ -1224,6 +1256,8 @@ public final class PlayerActivityTest {
             DeltaSkinView skin = ReflectionHelpers.getField(activity, "skinView");
             assertEquals(View.VISIBLE, controls.getVisibility());
             assertEquals(View.GONE, skin.getVisibility());
+            assertEquals("Landscape's classic controls have no Menu: the bar keeps its ⋮", View.VISIBLE,
+                    ((View) ReflectionHelpers.getField(activity, "headerMenu")).getVisibility());
             assertEquals("Still chosen for the portrait", com.ravenemu.app.data.skins.DeltaSkinFixtures.IDENTIFIER,
                     preferences.getString("skins.selected.gb_gbc", null));
             assertNull("No failure announced", ShadowToast.getTextOfLatestToast());
@@ -1284,7 +1318,7 @@ public final class PlayerActivityTest {
                 Arrays.asList("0:[1, 2]"), FakeNative.restoredPlayers);
         assertEquals(0, FakeNative.linkFocus);
         TextView title = ReflectionHelpers.getField(activity, "gameTitle");
-        assertTrue(title.getText().toString().startsWith("Câble link · Joueur 1\nLibre.gb"));
+        assertEquals("The game's name, not the file's", "Câble link · Joueur 1\nLibre", title.getText().toString());
 
         View swap = find(activity.getWindow().getDecorView(), view ->
                 "Passer au joueur 2".contentEquals(view.getContentDescription() == null ? "" : view.getContentDescription()));
@@ -1292,7 +1326,7 @@ public final class PlayerActivityTest {
         swap.performClick();
         pump(activity);
         assertEquals(1, FakeNative.linkFocus);
-        assertTrue(title.getText().toString().startsWith("Câble link · Joueur 2\nAutre.gb"));
+        assertEquals("Câble link · Joueur 2\nAutre", title.getText().toString());
         assertNotNull(find(activity.getWindow().getDecorView(), view ->
                 "Passer au joueur 1".contentEquals(view.getContentDescription() == null ? "" : view.getContentDescription())));
 
