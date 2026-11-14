@@ -916,6 +916,86 @@ public final class PlayerActivityTest {
         assertNotNull("The refused code is not counted", menuButton("Codes de triche · 1 actif"));
     }
 
+    /** GLSurfaceView runs queued events even paused, when onPause reads the
+     * SRAM from the UI thread: a code queued just before waits for onResume. */
+    @Test public void aCodeAddedAsThePlayerPausesReachesTheCoreOnlyAtResume() throws Exception {
+        ActivityController<PlayerActivity> controller = open(null);
+        PlayerActivity activity = controller.get();
+        activity.onWindowFocusChanged(true);
+        pump(activity);
+        openMenu(activity);
+        menuButton("Codes de triche").performClick();
+        field("Code").setText("0199B5D0");
+        menuButton("Ajouter").performClick();
+        int calls = FakeNative.cheatCalls.size();
+        controller.pause();
+        gl(activity).drain();
+        idle();
+        assertEquals("Paused: the core is not touched", calls, FakeNative.cheatCalls.size());
+        controller.resume();
+        pump(activity);
+        assertArrayEquals(new String[]{"0199B5D0"}, lastCheats());
+        assertEquals(1, CheatRepository.read(files, key).size());
+    }
+
+    /** Hardcore locks the cheats on the GL thread: a code already in the queue
+     * (added just after "Réessayer") is refused there, never run. */
+    @Test public void aCodeAddedAsHardcoreLocksTheCheatsNeverReachesTheCore() throws Exception {
+        PlayerActivity activity = loaded();
+        openMenu(activity);
+        menuButton("Codes de triche").performClick();
+        field("Code").setText("0199B5D0");
+        menuButton("Ajouter").performClick();
+        int calls = FakeNative.cheatCalls.size();
+        ReflectionHelpers.setField(activity, "cheatsLockApplied", true);
+        pump(activity);
+        assertEquals("No code given to the core", calls, FakeNative.cheatCalls.size());
+        assertNotNull(menuButton(CheatsPanel.HARDCORE));
+        assertTrue(CheatRepository.read(files, key).isEmpty());
+    }
+
+    /** The account read can end after the player paused: RetroAchievements
+     * then starts at the next resume, never on the paused GL thread while
+     * onPause and onDestroy use the session. */
+    @Test public void anAccountReadEndingAfterThePauseStartsAtTheNextResume() throws Exception {
+        android.content.Context app = RuntimeEnvironment.getApplication();
+        ActivityController<PlayerActivity> controller = open(null);
+        PlayerActivity activity = controller.get();
+        activity.onWindowFocusChanged(true);
+        pump(activity);
+        assertTrue("Signed out: no session", FakeAchievements.log.isEmpty());
+        // Signed in from Settings: back in the game, the account and the ROM are read.
+        new AchievementAccount("Raven", "TOKEN-1", "", "", 0, 0).save(app);
+        AchievementSettings.DEFAULTS.withSound(false).save(app);
+        CountDownLatch reading = new CountDownLatch(1);
+        io(activity).execute(() -> {
+            try { reading.await(5, TimeUnit.SECONDS); } catch (InterruptedException stop) {
+                Thread.currentThread().interrupt();
+            }
+        });
+        controller.pause();
+        controller.resume();
+        controller.pause();
+        reading.countDown();
+        io(activity).submit(() -> {}).get(5, TimeUnit.SECONDS);
+        gl(activity).drain();
+        assertFalse("Paused: no session starts", FakeAchievements.log.stream().anyMatch(l -> l.startsWith("start ")));
+        controller.resume();
+        pump(activity);
+        assertEquals("Raven", FakeAchievements.startUser);
+    }
+
+    /** A controller switched off sends no last motion: what it held is let go. */
+    @Test public void aControllerSwitchedOffLetsGoOfItsStick() throws Exception {
+        PlayerActivity activity = loaded();
+        assertTrue(activity.dispatchGenericMotionEvent(joystick(1f, 0f, 0f, 0f)));
+        assertEquals(NativeBridge.RIGHT, FakeNative.buttons);
+        android.hardware.input.InputManager.InputDeviceListener controllers =
+                ReflectionHelpers.getField(activity, "controllers");
+        controllers.onInputDeviceRemoved(7);
+        assertEquals("Nothing held by a device that is gone", 0, FakeNative.buttons);
+    }
+
     @Test public void aCodeTurnedOffOrDeletedLeavesTheCoreAndTheFile() throws Exception {
         CheatRepository.write(files, key, Arrays.asList(new CheatList.Cheat("Vies", "010238CD", true),
                 new CheatList.Cheat("Argent", "0199B5D0", true)));

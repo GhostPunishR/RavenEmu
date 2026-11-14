@@ -75,7 +75,7 @@ final class FolderImportUi {
 
     void pick() {
         if (busy) return;
-        host.startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE), PICK_FOLDER);
+        DocumentPicker.start(host, new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE), PICK_FOLDER);
     }
 
     /** The host's onActivityResult: true when the request was this one. */

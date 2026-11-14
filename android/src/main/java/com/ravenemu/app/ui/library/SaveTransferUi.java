@@ -138,7 +138,7 @@ final class SaveTransferUi {
                 create.addCategory(Intent.CATEGORY_OPENABLE);
                 create.setType("application/octet-stream");
                 create.putExtra(Intent.EXTRA_TITLE, SaveTransfer.exportName(entry.title, format));
-                host.startActivityForResult(create, EXPORT_SAVE);
+                DocumentPicker.start(host, create, EXPORT_SAVE);
             });
         });
     }
@@ -150,7 +150,7 @@ final class SaveTransferUi {
         pick.addCategory(Intent.CATEGORY_OPENABLE);
         pick.setType("*/*");
         pick.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"application/zip", "application/octet-stream", "*/*"});
-        host.startActivityForResult(pick, IMPORT_SAVE);
+        DocumentPicker.start(host, pick, IMPORT_SAVE);
     }
 
     /** The host's onActivityResult: true when the request was one of these. */
@@ -216,7 +216,7 @@ final class SaveTransferUi {
                 create.addCategory(Intent.CATEGORY_OPENABLE);
                 create.setType("application/zip");
                 create.putExtra(Intent.EXTRA_TITLE, "RavenEmu-sauvegardes-" + java.time.LocalDate.now() + ".zip");
-                host.startActivityForResult(create, EXPORT_ALL);
+                DocumentPicker.start(host, create, EXPORT_ALL);
             });
         });
     }

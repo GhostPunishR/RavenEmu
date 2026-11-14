@@ -115,7 +115,9 @@ public final class PlaybackSettingsActivity extends Activity implements RavenThe
     private AchievementSettings achievementSettings;
     /** Read from its sealed file once, then as signed in or out here. */
     private AchievementAccount account;
-    private boolean accountRead, signingIn;
+    /** signingOut: the account is being forgotten; until then neither button
+     * answers, so "Réessayer" cannot save the token back after it. */
+    private boolean accountRead, signingIn, signingOut;
     private String accountError, typedUser = "";
     private Bitmap avatar;
     private LinearLayout content;
@@ -368,11 +370,11 @@ public final class PlaybackSettingsActivity extends Activity implements RavenThe
         LinearLayout actions = new LinearLayout(this);
         Button retry = outlined(signingIn ? "Connexion…" : "Réessayer");
         retry.setContentDescription("Actualiser le compte RetroAchievements");
-        retry.setEnabled(!signingIn);
+        retry.setEnabled(!signingIn && !signingOut);
         retry.setOnClickListener(view -> signIn(account.user, null, account.token));
         Button signOut = outlined("Déconnexion");
         signOut.setContentDescription("Se déconnecter de RetroAchievements");
-        signOut.setEnabled(!signingIn);
+        signOut.setEnabled(!signingIn && !signingOut);
         signOut.setOnClickListener(view -> signOut());
         actions.addView(retry, new LinearLayout.LayoutParams(0, -2, 1));
         LinearLayout.LayoutParams second = new LinearLayout.LayoutParams(0, -2, 1);
@@ -383,6 +385,7 @@ public final class PlaybackSettingsActivity extends Activity implements RavenThe
 
     /** With a password, a new account; with the token, the stored one refreshed. */
     private void signIn(String user, String password, String token) {
+        if (signingIn || signingOut) return;
         signingIn = true;
         accountError = null;
         if (RETRO.equals(page)) showPage(RETRO);
@@ -411,13 +414,16 @@ public final class PlaybackSettingsActivity extends Activity implements RavenThe
 
     /** Forgets the token on this device; RetroAchievements is not told. */
     private void signOut() {
-        if (signingIn) return;
+        if (signingIn || signingOut) return;
+        signingOut = true;
+        if (RETRO.equals(page)) showPage(RETRO);
         io.execute(() -> {
             // The unlocks still waiting go with the account, as in the beta.
             AwardJournal.clear(this);
             AchievementAccount.clear(this);
             runOnUiThread(() -> {
                 if (isDestroyed()) return;
+                signingOut = false;
                 avatar = null;
                 accountChanged(null, null);
             });
