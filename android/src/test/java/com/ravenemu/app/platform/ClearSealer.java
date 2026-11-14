@@ -13,7 +13,16 @@ import org.robolectric.annotation.Implements;
 public class ClearSealer {
     private static final byte[] MAGIC = "TEST-SEALED:".getBytes(StandardCharsets.US_ASCII);
 
-    @Implementation protected static byte[] seal(byte[] plain, byte[] context) {
+    /** As a Keystore that is locked or busy for now: nothing seals. */
+    public static volatile boolean unavailable;
+
+    /** What seal(plain, context) writes, for a test that builds a file by hand. */
+    public static byte[] sealedFor(byte[] plain, byte[] context) throws GeneralSecurityException {
+        return seal(plain, context);
+    }
+
+    @Implementation protected static byte[] seal(byte[] plain, byte[] context) throws GeneralSecurityException {
+        if (unavailable) throw new GeneralSecurityException("Keystore unavailable");
         byte[] bound = bound(context);
         byte[] sealed = Arrays.copyOf(MAGIC, MAGIC.length + bound.length + plain.length);
         System.arraycopy(bound, 0, sealed, MAGIC.length, bound.length);

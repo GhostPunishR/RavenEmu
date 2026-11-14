@@ -83,8 +83,55 @@ public final class AwardJournalTest {
         new AchievementAccount("Raven", "TOKEN", "", "", 0, 0).save(context);
         Files.copy(new File(context.getNoBackupFilesDir(), AchievementAccount.FILE).toPath(), file.toPath());
         assertTrue(after.forAccount("Raven").isEmpty());
-        assertFalse("Unreadable: kept as it is, not overwritten", after.remember(award("Raven", AwardPolicyTest.AWARD)));
         try (FileOutputStream out = new FileOutputStream(file)) { out.write(new byte[]{1, 2, 3}); }
         assertTrue(after.forAccount("Raven").isEmpty());
+    }
+
+    /** One damaged entry no longer takes the others with it. */
+    @Test public void aDamagedEntryIsSkippedAndTheOthersStay() throws Exception {
+        AwardJournal journal = AwardJournal.open(context);
+        AwardJournal.Award kept = award("Raven", AwardPolicyTest.AWARD);
+        assertTrue(journal.remember(kept));
+        String plain = "[{\"account\":\"Raven\",\"url\":\"" + URL + "\",\"post\":\"r=login2&u=Raven&p=x\","
+                + "\"type\":\"" + TYPE + "\"},7,{\"account\":\"Raven\",\"url\":\"" + URL + "\",\"post\":\""
+                + AwardPolicyTest.AWARD + "\",\"type\":\"" + TYPE + "\"}]";
+        Files.write(file.toPath(), ClearSealer.sealedFor(plain.getBytes(StandardCharsets.UTF_8),
+                "RavenEmu native RetroAchievements unsent awards v1".getBytes(StandardCharsets.UTF_8)));
+        assertEquals("Only the SDK's award, the rest skipped", java.util.Collections.singletonList(kept),
+                journal.forAccount("Raven"));
+        String other = AwardPolicyTest.AWARD.replace("a=5501", "a=5502");
+        assertTrue("Still kept after a damaged entry", journal.remember(award("Raven", other)));
+        assertEquals(2, journal.forAccount("Raven").size());
+    }
+
+    /** A file that cannot be opened is set aside, byte for byte, and the
+     * unlocks that follow are kept again; signing out removes both. */
+    @Test public void anUnreadableJournalIsSetAsideAndTheNextUnlockIsKept() throws Exception {
+        byte[] foreign = {1, 2, 3, 4};
+        Files.write(file.toPath(), foreign);
+        File aside = new File(context.getNoBackupFilesDir(), AwardJournal.UNREADABLE);
+        AwardJournal journal = AwardJournal.open(context);
+        assertTrue(journal.forAccount("Raven").isEmpty());
+        AwardJournal.Award award = award("Raven", AwardPolicyTest.AWARD);
+        assertTrue(journal.remember(award));
+        assertArrayEquals("Set aside, never deleted", foreign, Files.readAllBytes(aside.toPath()));
+        assertEquals(java.util.Collections.singletonList(award), journal.forAccount("Raven"));
+        AwardJournal.clear(context);
+        assertFalse(file.exists());
+        assertFalse("Its requests carry the token: they go with the account", aside.exists());
+    }
+
+    /** A Keystore unavailable for now seals nothing: a good file is never moved. */
+    @Test public void aKeystoreThatCannotSealNowMovesNothing() throws Exception {
+        byte[] foreign = {9, 8, 7};
+        Files.write(file.toPath(), foreign);
+        ClearSealer.unavailable = true;
+        try {
+            assertFalse(AwardJournal.open(context).remember(award("Raven", AwardPolicyTest.AWARD)));
+        } finally {
+            ClearSealer.unavailable = false;
+        }
+        assertArrayEquals(foreign, Files.readAllBytes(file.toPath()));
+        assertFalse(new File(context.getNoBackupFilesDir(), AwardJournal.UNREADABLE).exists());
     }
 }

@@ -107,7 +107,7 @@ public final class PlaybackSettingsActivity extends Activity implements RavenThe
     private DeltaSkins skins;
     private List<DeltaSkins.Entry> skinEntries = Collections.emptyList();
     private boolean skinsRead, skinBusy, skinImporting;
-    private AlertDialog skinDialog;
+    private AlertDialog skinDialog, signOutDialog;
     /** The BIOS copy and removal, and the account file, off the UI thread, one at a time. */
     private final ExecutorService io = Executors.newSingleThreadExecutor();
     /** RetroAchievements' sign-in and the avatar: they wait for the network. */
@@ -147,10 +147,13 @@ public final class PlaybackSettingsActivity extends Activity implements RavenThe
         skins = new DeltaSkins(this);
         io.execute(() -> {
             AchievementAccount stored = AchievementAccount.load(this);
+            // Stored but unreadable: said so, never shown as merely signed out.
+            final String unreadable = stored == null && AchievementAccount.stored(this)
+                    ? AchievementAccount.UNREADABLE : null;
             runOnUiThread(() -> {
                 if (isDestroyed()) return;
                 accountRead = true;
-                accountChanged(stored, null);
+                accountChanged(stored, unreadable);
             });
         });
         String initialPage = getIntent().getStringExtra(EXTRA_PAGE);
@@ -375,7 +378,7 @@ public final class PlaybackSettingsActivity extends Activity implements RavenThe
         Button signOut = outlined("Déconnexion");
         signOut.setContentDescription("Se déconnecter de RetroAchievements");
         signOut.setEnabled(!signingIn && !signingOut);
-        signOut.setOnClickListener(view -> signOut());
+        signOut.setOnClickListener(view -> confirmSignOut());
         actions.addView(retry, new LinearLayout.LayoutParams(0, -2, 1));
         LinearLayout.LayoutParams second = new LinearLayout.LayoutParams(0, -2, 1);
         second.setMarginStart(dp(8));
@@ -408,6 +411,27 @@ public final class PlaybackSettingsActivity extends Activity implements RavenThe
                 signingIn = false;
                 if (picture != null) avatar = picture;
                 accountChanged(result.account != null && failure == null ? result.account : account, failure);
+            });
+        });
+    }
+
+    /** The unlocks still waiting are counted off the UI thread, then the
+     * player confirms: they go with the token. */
+    private void confirmSignOut() {
+        if (signingIn || signingOut || account == null) return;
+        final AchievementAccount shown = account;
+        io.execute(() -> {
+            final int pending = AwardJournal.open(this).forAccount(shown.user).size();
+            runOnUiThread(() -> {
+                if (isDestroyed() || account != shown || signingIn || signingOut) return;
+                if (signOutDialog != null && signOutDialog.isShowing()) return;
+                signOutDialog = new AlertDialog.Builder(this).setTitle(AchievementAccount.SIGN_OUT_TITLE)
+                        .setMessage(AchievementAccount.signOutMessage(pending))
+                        .setPositiveButton("Se déconnecter", (dialog, which) -> signOut())
+                        .setNegativeButton("Annuler", null).create();
+                signOutDialog.show();
+                signOutDialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(theme.accent);
+                signOutDialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(theme.secondary);
             });
         });
     }
@@ -1265,6 +1289,7 @@ public final class PlaybackSettingsActivity extends Activity implements RavenThe
 
     @Override protected void onDestroy() {
         if (skinDialog != null) skinDialog.dismiss();
+        if (signOutDialog != null) signOutDialog.dismiss();
         io.shutdown();
         network.shutdown();
         super.onDestroy();

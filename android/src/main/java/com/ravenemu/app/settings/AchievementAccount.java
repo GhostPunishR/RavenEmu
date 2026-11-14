@@ -85,6 +85,28 @@ public final class AchievementAccount {
         file(context).delete();
     }
 
+    /** An account is stored, readable or not: load() returning null with one
+     * means it could not be read (another key, a damaged file, a Keystore
+     * busy for now), which the player is told rather than shown signed out. */
+    public static boolean stored(Context context) {
+        return file(context).getBaseFile().exists();
+    }
+
+    public static final String UNREADABLE = "Le compte RetroAchievements enregistré sur cet appareil n'a pas pu "
+            + "être lu. Réessayez plus tard, ou reconnectez-vous : la connexion le remplace.";
+
+    /** Asked before signing out: the unlocks earned offline and not yet sent
+     * go with the token, as in the beta. */
+    public static final String SIGN_OUT_TITLE = "Se déconnecter de RetroAchievements ?";
+
+    public static String signOutMessage(int pending) {
+        String forgotten = "Le jeton est oublié sur cet appareil ; RetroAchievements n'est pas prévenu.";
+        if (pending <= 0) return forgotten;
+        return (pending == 1 ? "1 succès gagné hors ligne n'a pas encore été envoyé : il sera perdu. "
+                : pending + " succès gagnés hors ligne n'ont pas encore été envoyés : ils seront perdus. ")
+                + forgotten;
+    }
+
     private static AtomicFile file(Context context) {
         return new AtomicFile(new File(context.getNoBackupFilesDir(), FILE));
     }

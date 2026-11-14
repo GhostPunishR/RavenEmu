@@ -149,6 +149,7 @@ public final class DeltaSkins {
     }
 
     public List<Entry> entries() {
+        repository.recoverReplaced();
         List<Entry> entries = new ArrayList<>();
         for (DeltaSkinRepository.Installed skin : repository.list()) {
             Console console = skin.metadata.console;
@@ -179,6 +180,9 @@ public final class DeltaSkins {
     public Configuration configuration(Console console) {
         String identifier = selected(console);
         if (identifier == null) return null;
+        // An interrupted replacement first puts the previous skin back: it is
+        // not unselected for a folder the app was killed in the middle of moving.
+        repository.recoverReplaced();
         DeltaSkinRepository.Installed installed = repository.find(identifier);
         Map<Kind, Asset> assets = new EnumMap<>(Kind.class), landscape = new EnumMap<>(Kind.class);
         if (installed != null && installed.metadata.console == console) {

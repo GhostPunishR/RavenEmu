@@ -15,6 +15,7 @@ import com.ravenemu.app.settings.LatencySettings;
 import com.ravenemu.app.settings.PlaybackSettings;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -53,6 +54,7 @@ import org.robolectric.android.controller.ActivityController;
 import org.robolectric.annotation.Config;
 import org.robolectric.annotation.GraphicsMode;
 import org.robolectric.shadows.ShadowActivity;
+import org.robolectric.shadows.ShadowAlertDialog;
 import org.robolectric.shadows.ShadowToast;
 import org.robolectric.util.ReflectionHelpers;
 import static org.junit.Assert.*;
@@ -395,14 +397,49 @@ public final class PlaybackSettingsActivityTest {
         assertTrue(AwardJournal.open(activity).remember(new AwardJournal.Award("Raven",
                 "https://retroachievements.org/dorequest.php", "r=awardachievement&u=Raven&t=TOKEN-9&a=1&h=0&v=s",
                 "application/x-www-form-urlencoded")));
+        // Asked first, with the unlock it would lose; "Annuler" keeps everything.
         described(activity, "Se déconnecter de RetroAchievements").performClick();
+        idleIo(activity);
+        AlertDialog asked = ShadowAlertDialog.getLatestAlertDialog();
+        assertEquals(AchievementAccount.SIGN_OUT_TITLE, shadowOf(asked).getTitle().toString());
+        assertEquals(AchievementAccount.signOutMessage(1), shadowOf(asked).getMessage().toString());
+        assertTrue(shadowOf(asked).getMessage().toString().startsWith("1 succès gagné hors ligne"));
+        asked.getButton(AlertDialog.BUTTON_NEGATIVE).performClick();
+        idleIo(activity);
+        assertNotNull(AchievementAccount.load(activity));
+        assertEquals(1, AwardJournal.open(activity).forAccount("Raven").size());
+        described(activity, "Se déconnecter de RetroAchievements").performClick();
+        idleIo(activity);
+        // The account is still being forgotten (the storage thread held): Réessayer waits.
+        java.util.concurrent.CountDownLatch forgetting = new java.util.concurrent.CountDownLatch(1);
+        ExecutorService io = ReflectionHelpers.getField(activity, "io");
+        io.execute(() -> {
+            try { forgetting.await(5, TimeUnit.SECONDS); } catch (InterruptedException stop) {
+                Thread.currentThread().interrupt();
+            }
+        });
+        ShadowAlertDialog.getLatestAlertDialog().getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        shadowOf(Looper.getMainLooper()).idle();
         assertFalse("Until the account is forgotten, Réessayer cannot save it back",
                 described(activity, "Actualiser le compte RetroAchievements").isEnabled());
+        forgetting.countDown();
         idleIo(activity);
         assertNull(AchievementAccount.load(activity));
         assertTrue("The unlocks still waiting go with the account",
                 AwardJournal.open(activity).forAccount("Raven").isEmpty());
         assertNotNull(described(activity, "Nom d'utilisateur"));
+    }
+
+    /** Stored but unreadable (another key, damaged bytes): said so above the
+     * form, never shown as merely signed out; the file is left as it is. */
+    @Test public void anUnreadableStoredAccountIsToldNotShownSignedOut() throws Exception {
+        File stored = new File(RuntimeEnvironment.getApplication().getNoBackupFilesDir(), "retroachievements.account");
+        byte[] damaged = {1, 2, 3};
+        Files.write(stored.toPath(), damaged);
+        PlaybackSettingsActivity activity = retroPage();
+        assertNotNull(text(activity, AchievementAccount.UNREADABLE));
+        assertNotNull("Signing in again replaces it", described(activity, "Nom d'utilisateur"));
+        assertArrayEquals("Nothing deleted", damaged, Files.readAllBytes(stored.toPath()));
     }
 
     @Test public void aRefusedOrUnreachableLoginSaysWhyAndStoresNothing() throws Exception {

@@ -31,6 +31,12 @@ import org.json.JSONObject;
 public final class DeltaSkinRepository {
     private static final long MAX_METADATA_BYTES = 2L * 1024 * 1024;
     private static final String REPLACED_DIRECTORY = ".replaced";
+    /** A replacement's backup: the skin's folder name, then "-" and a UUID. */
+    private static final java.util.regex.Pattern BACKUP =
+            java.util.regex.Pattern.compile("([0-9a-f]{64})-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
+    /** Installs, deletions and recovery move the same folders: one at a time,
+     * whatever thread or Activity asks (settings import, player). */
+    private static final Object LOCK = new Object();
     static final int SCHEMA_VERSION = 1;
 
     /** What the app keeps beside the skin's own files. */
@@ -185,6 +191,12 @@ public final class DeltaSkinRepository {
     /** The same archive is a duplicate (the staging folder is discarded); the
      * same identifier from another archive is a conflict unless replacing. */
     public Result install(DeltaSkinArchive.Prepared prepared, boolean replace) throws DeltaSkinException {
+        synchronized (LOCK) {
+            return installLocked(prepared, replace);
+        }
+    }
+
+    private Result installLocked(DeltaSkinArchive.Prepared prepared, boolean replace) throws DeltaSkinException {
         requireStaged(prepared);
         if (!root.isDirectory() && !root.mkdirs())
             throw new DeltaSkinException(Code.STORAGE_ERROR, "Impossible de préparer le stockage des skins");
@@ -228,6 +240,12 @@ public final class DeltaSkinRepository {
 
     /** The removed skin, or null when it was not installed. */
     public Installed delete(String identifier) throws DeltaSkinException {
+        synchronized (LOCK) {
+            return deleteLocked(identifier);
+        }
+    }
+
+    private Installed deleteLocked(String identifier) throws DeltaSkinException {
         Installed installed = find(identifier);
         if (installed == null) return null;
         try {
@@ -248,9 +266,38 @@ public final class DeltaSkinRepository {
     }
 
     /** Leftovers of an interrupted import. A replaced skin's backup stays:
-     * after a crash in the middle of a replacement it may be the only copy. */
+     * after a crash in the middle of a replacement it may be the only copy;
+     * recoverReplaced puts it back. */
     public void clearStaging() {
         DeltaSkinArchive.deleteTree(new File(root, DeltaSkinArchive.STAGING_DIRECTORY));
+    }
+
+    /** A replacement cut short (the app killed between its two moves) leaves
+     * the previous skin in .replaced, and no skin, or one that does not read
+     * back, in its place: the previous one goes back, the latest backup first.
+     * A backup whose skin reads back whole is what a finished replacement left:
+     * it goes. Before the skins are read; cheap when nothing was interrupted. */
+    public void recoverReplaced() {
+        synchronized (LOCK) {
+            File[] backups = new File(root, REPLACED_DIRECTORY).listFiles();
+            if (backups == null) return;
+            java.util.Arrays.sort(backups, (left, right) -> Long.compare(right.lastModified(), left.lastModified()));
+            for (File backup : backups) {
+                java.util.regex.Matcher name = BACKUP.matcher(backup.getName());
+                if (!backup.isDirectory() || !name.matches()) continue;
+                File target = new File(root, name.group(1));
+                if (read(target) != null) {
+                    DeltaSkinArchive.deleteTree(backup);
+                    continue;
+                }
+                try {
+                    if (target.exists()) DeltaSkinArchive.deleteTree(target);
+                    if (!target.exists()) move(backup, target);
+                } catch (DeltaSkinException stillThere) {
+                    // Left in .replaced, as it was: tried again at the next reading.
+                }
+            }
+        }
     }
 
     private Installed read(File directory) {

@@ -474,6 +474,12 @@ public final class PlayerActivityTest {
         // Signing out from the panel: the token and the waiting unlocks go, the session stops.
         find(decor, view -> "Se déconnecter de RetroAchievements".contentEquals(view.getContentDescription() == null
                 ? "" : view.getContentDescription())).performClick();
+        AlertDialog asked = org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog();
+        assertNotNull("Signing out is asked first", asked);
+        assertTrue(asked.isShowing());
+        assertEquals(AchievementAccount.SIGN_OUT_TITLE, shadowOf(asked).getTitle().toString());
+        assertNotNull("Not signed out before the answer", AchievementAccount.load(app));
+        asked.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
         pump(activity);
         assertNull(AchievementAccount.load(app));
         assertTrue(FakeAchievements.log.stream().anyMatch(l -> l.startsWith("stop ")));
