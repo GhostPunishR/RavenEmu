@@ -144,7 +144,7 @@ static void make_gba_rom(void) {
 
 typedef struct scenario {
     const char *name;
-    unsigned core;          /* 0 GB, 1 GBC, 2 GBA */
+    unsigned core;          /* 0 GB, 1 GBC (the Game Boy core on GBC hardware), 2 GBA */
     const void *rom;
     size_t rom_size;
     const char *file;
@@ -206,6 +206,12 @@ static int run(raven_frontend *host, const char *core_path, const scenario *s, r
     }
     raven_frontend_callbacks callbacks = {.video = on_video, .audio = on_audio};
     raven_frontend_set_callbacks(host, &callbacks);
+    /* One core for the Game Boy and the Game Boy Color: the GBC by its option. */
+    if (s->core < 2 && !raven_frontend_set_option(host, "ravenemu_gb_hardware", s->core == 1 ? "gbc" : "gb")) {
+        fprintf(stderr, "%s: no ravenemu_gb_hardware option\n", s->name);
+        raven_frontend_close_core(host);
+        return 0;
+    }
     if (!raven_frontend_load_rom(host, s->rom, s->rom_size, s->file)) {
         fprintf(stderr, "%s: %s\n", s->name, raven_frontend_last_error(host));
         raven_frontend_close_core(host);
@@ -401,10 +407,12 @@ static int run(raven_frontend *host, const char *core_path, const scenario *s, r
 }
 
 int main(int argc, char **argv) {
-    if (argc < 4) {
-        fprintf(stderr, "Expected paths to GB, GBC and GBA Libretro cores, then optional ROMs\n");
+    if (argc < 3) {
+        fprintf(stderr, "Expected paths to the Game Boy and the GBA Libretro cores, then optional ROMs\n");
         return 1;
     }
+    /* The Game Boy core runs the GB and the GBC scenarios. */
+    const char *const cores[] = {argv[1], argv[1], argv[2]};
     make_gb_rom();
     make_gba_rom();
     /* The GB and GBC cores cost about six times the GBA core's idle loop on
@@ -430,11 +438,11 @@ int main(int argc, char **argv) {
         scenario chosen = scenarios[i];
         if (seconds >= 40.0) chosen.seconds = seconds;
         results r;
-        if (!run(host, argv[1 + chosen.core], &chosen, &r)) ok = 0;
+        if (!run(host, cores[chosen.core], &chosen, &r)) ok = 0;
     }
     /* A player's own ROMs, for a local run: the same measures, without the
-     * tone. A .gba goes to the GBA core, anything else to the GBC core. */
-    for (int a = 4; a < argc; ++a) {
+     * tone. A .gba goes to the GBA core, anything else to the Game Boy core on the GBC. */
+    for (int a = 3; a < argc; ++a) {
         FILE *file = fopen(argv[a], "rb");
         if (!file) { fprintf(stderr, "%s: unreadable\n", argv[a]); ok = 0; continue; }
         static unsigned char data[32u << 20];
@@ -447,7 +455,7 @@ int main(int argc, char **argv) {
         scenario own = {name, gba ? 2u : 1u, data, size, gba ? "own.gba" : "own.gbc",
                         60.0, 0, 0.3, seconds >= 40.0 ? seconds : 60, RAVEN_AUDIO_RESAMPLER_SINC, 1, 0, 30};
         results r;
-        if (!run(host, argv[1 + own.core], &own, &r)) ok = 0;
+        if (!run(host, cores[own.core], &own, &r)) ok = 0;
     }
     raven_frontend_destroy(host);
     if (!ok) return 1;

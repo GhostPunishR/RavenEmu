@@ -22,7 +22,7 @@ public final class ConsoleSettings {
 
     public static final ConsoleSettings DEFAULTS = new ConsoleSettings(false, 0, false, BIOS_RAVENCORE);
 
-    /** Game Boy games run on the Game Boy Color core, which colors them. */
+    /** Game Boy games run on the Game Boy Color, which colors them. */
     public final boolean gbInColor;
     /** Their colors: an index in GB_COLORS. */
     public final int gbColors;
@@ -54,18 +54,32 @@ public final class ConsoleSettings {
         return new ConsoleSettings(gbInColor, gbColors, gbcOnGba, value);
     }
 
-    /** The Libretro core that runs a game of this console: "gb", "gbc" or "gba". */
+    /** The RavenCore Libretro core that runs a game of this console: "gb",
+     * one core for the Game Boy and the Game Boy Color, or "gba". */
     public String coreFor(String system) {
-        return "gb".equals(system) && gbInColor ? "gbc" : system;
+        return "gba".equals(system) ? "gba" : "gb";
     }
 
-    /** Added to the core's state identity: a state taken on the GBC of a GBA,
-     * or with a real BIOS (its SHA-256 prefix), only reloads in that setup.
-     * Empty with the defaults, so the states already taken stay usable. */
-    public String stateVariant(String core, String biosDigest) {
-        if ("gbc".equals(core) && gbcOnGba) return "|gbc-on-gba";
-        if ("gba".equals(core) && gbaBios != BIOS_RAVENCORE && biosDigest != null) return "|gba-bios-" + biosDigest;
-        return "";
+    /** The console the Game Boy core emulates for a game of this console, as
+     * its option ravenemu_gb_hardware names it: "gb", "gbc" or "gba" (the GBC
+     * of a Game Boy Advance); null for a GBA game. A Game Boy game stays on
+     * the Game Boy unless it gets its colors. */
+    public String hardwareFor(String system) {
+        if (!"gb".equals(system) && !"gbc".equals(system)) return null;
+        if ("gb".equals(system) && !gbInColor) return "gb";
+        return gbcOnGba ? "gba" : "gbc";
+    }
+
+    /** Added to the core's state identity: a state taken on another console
+     * than the game's own (a Game Boy game in color, the GBC of a GBA), or
+     * with a real BIOS (its SHA-256 prefix), only reloads in that setup.
+     * Empty with the defaults. */
+    public String stateVariant(String system, String biosDigest) {
+        if ("gba".equals(system))
+            return gbaBios != BIOS_RAVENCORE && biosDigest != null ? "|gba-bios-" + biosDigest : "";
+        String hardware = hardwareFor(system);
+        if ("gba".equals(hardware)) return "|gbc-on-gba";
+        return "gb".equals(system) && "gbc".equals(hardware) ? "|gbc" : "";
     }
 
     public static ConsoleSettings load(Context context) {

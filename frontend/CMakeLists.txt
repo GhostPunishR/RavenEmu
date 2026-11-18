@@ -1,11 +1,12 @@
 cmake_minimum_required(VERSION 3.22.1)
 project(RavenEmuNativeFrontend LANGUAGES C CXX)
 
-# RavenCore pinned by full commit SHA: 0.15.4, the merge of RavenCore #44.
+# RavenCore pinned by full commit SHA: 0.16.0 (RavenCore #45), one core for
+# the Game Boy and the Game Boy Color.
 include(FetchContent)
 set(RAVENEMU_BUILD_LIBRETRO ON CACHE BOOL "" FORCE)
 set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
-set(RAVEN_CORE_REVISION "18d3c8373b330fe38fe656ce5af62f0808b9df06")
+set(RAVEN_CORE_REVISION "d08d276f6d135566974f9c874ed25ad478e08e3e")
 FetchContent_Declare(ravencore
     GIT_REPOSITORY https://github.com/GhostPunishR/RavenCore.git
     GIT_TAG ${RAVEN_CORE_REVISION}
@@ -116,10 +117,8 @@ if(RAVEN_FRONTEND_TESTS AND NOT ANDROID)
              $<TARGET_FILE:ravenemu_gb_libretro>)
     add_executable(raven_frontend_real_core_test tests/test_real_cores.c)
     target_link_libraries(raven_frontend_real_core_test PRIVATE raven_frontend)
-    add_dependencies(raven_frontend_real_core_test
-        ravenemu_gb_libretro ravenemu_gbc_libretro ravenemu_gba_libretro)
+    add_dependencies(raven_frontend_real_core_test ravenemu_gb_libretro ravenemu_gba_libretro)
     add_test(NAME raven_frontend_real_cores COMMAND raven_frontend_real_core_test
         $<TARGET_FILE:ravenemu_gb_libretro>
-        $<TARGET_FILE:ravenemu_gbc_libretro>
         $<TARGET_FILE:ravenemu_gba_libretro>)
 endif()

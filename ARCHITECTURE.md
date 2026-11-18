@@ -89,10 +89,10 @@ L'APK de développement `com.ravenemu.dev` est indépendant de la bêta `com.rav
                                             |
                              ABI publique Libretro [C]
                                             |
-                            +---------------+---------------+
-                            |               |               |
-                      RavenCore GB     RavenCore GBC    RavenCore GBA
-                           [C++20]         [C++20]         [C++20]
+                                    +-------+-------+
+                                    |               |
+                            RavenCore GB/GBC   RavenCore GBA
+                                [C++20]           [C++20]
 ```
 
 **Dépendances autorisées :** les plateformes appellent l'API C du frontend ;
@@ -117,7 +117,7 @@ mécanisme explicite de transition.
 | `android/src/main/java/` | UI Android **Java**, bibliothèque, gestion fichiers, permissions, états de navigation et cycle de vie |
 | `android/src/main/cpp/` | Pont **JNI**, rendu natif, audio AAudio, commandes et intégration des cores |
 | `android/src/main/res/` | Thème, icônes et ressources fidèles à RavenEmu ; adaptation aux densités et insets système |
-| `RavenCore` (dépôt indépendant) | Cores **C++20** GB/GBC/GBA, adaptés à l'ABI Libretro, révisions immuables et licences suivies |
+| `RavenCore` (dépôt indépendant) | Cores **C++20** adaptés à l'ABI Libretro : un seul pour la Game Boy et la Game Boy Color (la console émulée se choisit par jeu, option `ravenemu_gb_hardware`), un pour la GBA ; révisions immuables et licences suivies |
 | `policy/` et `.github/workflows/` | Tests des frontières, de l'architecture, de la compilation et de la compatibilité |
 | `docs/MIGRATION_NATIVE.md` | Historique de la migration et écarts de parité restants, **pas** une autre architecture |
 | Bêta retirée (`androidApp/`, `shared/`, `iosApp/`, `native/`) | Supprimée de `main` ; consultable au commit `de1c9cc` comme référence de design et de compatibilité, jamais comme cible |

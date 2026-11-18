@@ -23,13 +23,21 @@ public final class LinkCable {
         return Collections.unmodifiableList(partners);
     }
 
-    /** The RavenCore that runs both games: GBA for two GBA games; for Game Boy
-     * games the Game Boy Color core as soon as one of them needs it (a GBC
-     * game, or Settings → Console giving Game Boy games their colours). Each
+    /** The RavenCore that runs both games: GBA for two GBA games, the Game
+     * Boy core for two Game Boy or Game Boy Color games, none otherwise. Each
      * player's core, as the settings pick it for a game alone, comes first. */
     public static String core(String firstCore, String secondCore) {
         if ("gba".equals(firstCore) && "gba".equals(secondCore)) return "gba";
         if ("gba".equals(firstCore) || "gba".equals(secondCore)) return null;
-        return "gbc".equals(firstCore) || "gbc".equals(secondCore) ? "gbc" : "gb";
+        return "gb";
+    }
+
+    /** The console both Game Boy games run on, set once for the two: the
+     * Game Boy Color (or the GBC of a GBA) as soon as one of them needs it, a
+     * GBC game or Settings → Console giving Game Boy games their colours.
+     * Each player's console comes as ConsoleSettings.hardwareFor gives it. */
+    public static String hardware(String first, String second) {
+        if (first == null || second == null) return null;
+        return "gb".equals(first) ? second : first;
     }
 }

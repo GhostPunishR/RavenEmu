@@ -38,4 +38,4 @@ target_include_directories(raven_android PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/media"
     "${CMAKE_CURRENT_LIST_DIR}/../../../../frontend/include"
     "${ravencore_SOURCE_DIR}/libretro/include")
-add_dependencies(raven_android ravenemu_gb_libretro ravenemu_gbc_libretro ravenemu_gba_libretro)
+add_dependencies(raven_android ravenemu_gb_libretro ravenemu_gba_libretro)

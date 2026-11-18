@@ -60,10 +60,9 @@ android {
                 providers.gradleProperty("ravenRcheevosSource").orNull?.let {
                     arguments += "-DFETCHCONTENT_SOURCE_DIR_RCHEEVOS=${rootProject.file(it).absolutePath}"
                 }
-                targets += listOf(
-                    "raven_android", "ravenemu_gb_libretro",
-                    "ravenemu_gbc_libretro", "ravenemu_gba_libretro"
-                )
+                // RavenCore's two Libretro cores: Game Boy and Game Boy Color
+                // in one, Game Boy Advance.
+                targets += listOf("raven_android", "ravenemu_gb_libretro", "ravenemu_gba_libretro")
             }
         }
     }
