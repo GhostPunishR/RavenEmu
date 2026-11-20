@@ -66,6 +66,9 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
+          # Dependencies cached between runs: without it every run downloads
+          # them all again, and Maven Central's rate limit (429) fails the job.
+          cache: gradle
 
       # Le wrapper valide, la distribution qu'il télécharge reste à contrôler.
       # `distributionSha256Sum` s'en charge à chaque exécution, sur le poste des
@@ -151,6 +154,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+          # Dependencies cached between runs, as in the repository job.
+          cache: gradle
       - name: Vérifier l'organisation des sources
         run: python3 scripts/check_native_layout.py
       - name: Vérifier les langages autorisés
