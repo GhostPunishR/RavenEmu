@@ -1,12 +1,12 @@
 cmake_minimum_required(VERSION 3.22.1)
 project(RavenEmuNativeFrontend LANGUAGES C CXX)
 
-# RavenCore pinned by full commit SHA: 0.16.0 (RavenCore #45), one core for
-# the Game Boy and the Game Boy Color.
+# RavenCore pinned by full commit SHA: 0.16.0, the merge of RavenCore #45:
+# one core, the Game Boy Color's, for the Game Boy Color and the Game Boy.
 include(FetchContent)
 set(RAVENEMU_BUILD_LIBRETRO ON CACHE BOOL "" FORCE)
 set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
-set(RAVEN_CORE_REVISION "82b4d53f90b0bd14e97d7f1c108ec517dc884e4e")
+set(RAVEN_CORE_REVISION "236b28fb00bb8b997cfd8b06d9f505d0168e80bb")
 FetchContent_Declare(ravencore
     GIT_REPOSITORY https://github.com/GhostPunishR/RavenCore.git
     GIT_TAG ${RAVEN_CORE_REVISION}
