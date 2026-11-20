@@ -69,6 +69,16 @@ jobs:
           # Dependencies cached between runs: without it every run downloads
           # them all again, and Maven Central's rate limit (429) fails the job.
           cache: gradle
+          # The key hashes these files. Each Gradle job lists its own module so
+          # the two keys differ: with one shared key, whichever job ends first
+          # saves only its own dependencies and the other cannot save.
+          cache-dependency-path: |
+            settings.gradle.kts
+            build.gradle.kts
+            gradle.properties
+            gradle/libs.versions.toml
+            gradle/wrapper/gradle-wrapper.properties
+            policy/build.gradle.kts
 
       # Le wrapper valide, la distribution qu'il télécharge reste à contrôler.
       # `distributionSha256Sum` s'en charge à chaque exécution, sur le poste des
@@ -154,8 +164,16 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-          # Dependencies cached between runs, as in the repository job.
+          # Dependencies cached between runs, as in the repository job, under
+          # a key of its own (see there).
           cache: gradle
+          cache-dependency-path: |
+            settings.gradle.kts
+            build.gradle.kts
+            gradle.properties
+            gradle/libs.versions.toml
+            gradle/wrapper/gradle-wrapper.properties
+            android/build.gradle.kts
       - name: Vérifier l'organisation des sources
         run: python3 scripts/check_native_layout.py
       - name: Vérifier les langages autorisés
