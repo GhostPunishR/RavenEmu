@@ -25,12 +25,16 @@ public final class LinkCableTest {
         assertTrue(LinkCable.partners(RUBY, Arrays.asList(RUBY, RED)).isEmpty());
     }
 
-    @Test public void bothGamesRunInTheCoreTheMostDemandingNeeds() {
-        assertEquals("gb", LinkCable.core("gb", "gb"));
-        assertEquals("gbc", LinkCable.core("gb", "gbc"));
-        assertEquals("gbc", LinkCable.core("gbc", "gb"));
+    @Test public void bothGamesRunInOneCoreOnTheConsoleTheMostDemandingNeeds() {
         assertEquals("gbc", LinkCable.core("gbc", "gbc"));
         assertEquals("gba", LinkCable.core("gba", "gba"));
-        assertNull(LinkCable.core("gba", "gb"));
+        assertNull(LinkCable.core("gba", "gbc"));
+        assertNull(LinkCable.core("gbc", "gba"));
+        assertEquals("gb", LinkCable.hardware("gb", "gb"));
+        assertEquals("gbc", LinkCable.hardware("gb", "gbc"));
+        assertEquals("gbc", LinkCable.hardware("gbc", "gb"));
+        assertEquals("gbc", LinkCable.hardware("gbc", "gbc"));
+        assertEquals("The GBC of a GBA when the settings ask for it", "gba", LinkCable.hardware("gb", "gba"));
+        assertNull("Two GBA games: no Game Boy console", LinkCable.hardware(null, null));
     }
 }

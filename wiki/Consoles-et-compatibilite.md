@@ -1,6 +1,6 @@
 # Consoles et compatibilité
 
-L'application utilise les moteurs GB, GBC et GBA de [RavenCore](https://github.com/GhostPunishR/RavenCore), chargés comme cores Libretro et récupérés à une **révision épinglée** dans la [configuration du frontend](https://github.com/GhostPunishR/RavenEmu/blob/main/frontend/CMakeLists.txt).
+L'application utilise les moteurs de [RavenCore](https://github.com/GhostPunishR/RavenCore) : un seul pour la Game Boy Color et la Game Boy, un pour la Game Boy Advance, chargés comme cores Libretro et récupérés à une **révision épinglée** dans la [configuration du frontend](https://github.com/GhostPunishR/RavenEmu/blob/main/frontend/CMakeLists.txt).
 
 Les possibilités d'un moteur dans RavenCore ne sont pas toutes exposées dans l'application. Les anciennes descriptions matérielles de l'ancienne application ne constituent pas une liste de fonctions disponibles dans ce lecteur.
 

@@ -17,15 +17,16 @@ public final class CoreOptions {
 
     private CoreOptions() {}
 
-    /** Every option of the core ("gb", "gbc" or "gba"), set before the game
-     * loads. The real GBA BIOS only when one is installed, so the core never
-     * runs another BIOS than the state identity says. */
-    public static String[] atLoad(String core, PlaybackSettings image, ConsoleSettings console,
+    /** Every option of the core ("gbc" or "gba"), set before the game loads:
+     * for the Game Boy Color core, the console it emulates (`hardware`, from
+     * ConsoleSettings.hardwareFor). The real GBA BIOS only when one is
+     * installed, so the core never runs another BIOS than the state identity says. */
+    public static String[] atLoad(String core, String hardware, PlaybackSettings image, ConsoleSettings console,
                                   CartridgeSettings cartridge, boolean gbaBiosInstalled) {
         List<String> options = new ArrayList<>(Arrays.asList(live(core, image, console, cartridge)));
-        if ("gbc".equals(core)) {
+        if ("gbc".equals(core) && hardware != null) {
             options.add("ravenemu_gbc_hardware");
-            options.add(console.gbcOnGba ? "gba" : "gbc");
+            options.add(hardware);
         } else if ("gba".equals(core)) {
             options.add("ravenemu_gba_bios");
             options.add(!gbaBiosInstalled || console.gbaBios == ConsoleSettings.BIOS_RAVENCORE ? "disabled"
@@ -34,24 +35,22 @@ public final class CoreOptions {
         return options.toArray(new String[0]);
     }
 
-    /** The options the core rereads during the game: the image ones, the
-     * colors of the Game Boy games on the Game Boy Color, the phone's sensors
-     * and Boktai's sun. */
+    /** The options the core rereads during the game: the image ones (the
+     * Game Boy's palette, the color consoles' correction), the colors of the
+     * Game Boy games on the Game Boy Color, the phone's sensors and Boktai's sun. */
     public static String[] live(String core, PlaybackSettings image, ConsoleSettings console,
                                 CartridgeSettings cartridge) {
-        if (!"gb".equals(core) && !"gbc".equals(core) && !"gba".equals(core)) return new String[0];
+        if (!"gbc".equals(core) && !"gba".equals(core)) return new String[0];
         String blending = PlaybackSettings.BLENDING_OFF.equals(image.frameBlending)
                 ? "disabled" : image.frameBlending;
         String prefix = "ravenemu_" + core + "_";
         String sensors = enabled(cartridge.sensors);
         switch (core) {
-            case "gb":
-                return new String[]{prefix + "palette", palette(image.gbPalette),
-                        prefix + "frame_blending", blending, prefix + "device_sensors", sensors};
             case "gbc":
-                return new String[]{prefix + "color_correction", enabled(image.lcdCorrectionGbc),
+                return new String[]{prefix + "palette", palette(image.gbPalette),
+                        prefix + "color_correction", enabled(image.lcdCorrectionGbc),
                         prefix + "frame_blending", blending,
-                        "ravenemu_gbc_dmg_colors", GB_COLOR_VALUES[console.gbColors],
+                        prefix + "dmg_colors", GB_COLOR_VALUES[console.gbColors],
                         prefix + "device_sensors", sensors};
             default:
                 return new String[]{prefix + "color_correction", enabled(image.lcdCorrectionGba),

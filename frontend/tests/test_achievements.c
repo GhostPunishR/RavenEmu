@@ -441,7 +441,7 @@ static void indicators_carry_the_badges_retroarch_shows(void) {
 
 int main(int argc, char **argv) {
     if (argc != 2) {
-        fprintf(stderr, "usage: %s ravenemu_gb_libretro\n", argv[0]);
+        fprintf(stderr, "usage: %s ravenemu_gbc_libretro\n", argv[0]);
         return 2;
     }
     gb_core = argv[1];

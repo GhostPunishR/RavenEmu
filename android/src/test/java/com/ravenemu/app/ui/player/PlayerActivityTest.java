@@ -193,14 +193,16 @@ public final class PlayerActivityTest {
         PlayerActivity activity = controller.get();
         activity.onWindowFocusChanged(true); pump(activity);
         assertEquals(1, FakeNative.opens);
-        assertArrayEquals(new String[]{"ravenemu_gb_palette", "pocket", "ravenemu_gb_frame_blending", "mix",
-                "ravenemu_gb_device_sensors", "enabled"}, FakeNative.openOptions);
+        assertArrayEquals(new String[]{"ravenemu_gbc_palette", "pocket", "ravenemu_gbc_color_correction", "enabled",
+                "ravenemu_gbc_frame_blending", "mix", "ravenemu_gbc_dmg_colors", "auto",
+                "ravenemu_gbc_device_sensors", "enabled", "ravenemu_gbc_hardware", "gb"}, FakeNative.openOptions);
         controller.pause();
         PlaybackSettings.load(activity).withImage(PlaybackSettings.PALETTE_GRAY, false, false,
                 PlaybackSettings.BLENDING_GHOSTING).save(activity);
         controller.resume(); activity.onWindowFocusChanged(true); pump(activity);
-        assertArrayEquals(new String[]{"ravenemu_gb_palette", "gray", "ravenemu_gb_frame_blending", "ghosting",
-                "ravenemu_gb_device_sensors", "enabled"}, FakeNative.liveOptions);
+        assertArrayEquals(new String[]{"ravenemu_gbc_palette", "gray", "ravenemu_gbc_color_correction", "disabled",
+                "ravenemu_gbc_frame_blending", "ghosting", "ravenemu_gbc_dmg_colors", "auto",
+                "ravenemu_gbc_device_sensors", "enabled"}, FakeNative.liveOptions);
         assertEquals("Changing an image option must not reopen the game", 1, FakeNative.opens);
     }
 
@@ -611,13 +613,13 @@ public final class PlayerActivityTest {
                 & android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     }
 
-    @Test public void gameBoyGamesInColorRunOnTheGbcCoreWithTheirColorsAndTheirOwnStates() throws Exception {
+    @Test public void gameBoyGamesInColorRunOnTheGbcWithTheirColorsAndTheirOwnStates() throws Exception {
         new ConsoleSettings(true, 3, true, ConsoleSettings.BIOS_RAVENCORE).save(RuntimeEnvironment.getApplication());
         ActivityController<PlayerActivity> controller = open(null);
         PlayerActivity activity = controller.get();
         activity.onWindowFocusChanged(true); pump(activity);
-        assertEquals("gbc", FakeNative.openCore);
-        assertArrayEquals(new String[]{"ravenemu_gbc_color_correction", "disabled",
+        assertEquals("The Game Boy Color core runs the Game Boy's games too", "gbc", FakeNative.openCore);
+        assertArrayEquals(new String[]{"ravenemu_gbc_palette", "dmg", "ravenemu_gbc_color_correction", "disabled",
                 "ravenemu_gbc_frame_blending", "disabled", "ravenemu_gbc_dmg_colors", "a_up",
                 "ravenemu_gbc_device_sensors", "enabled", "ravenemu_gbc_hardware", "gba"}, FakeNative.openOptions);
         assertEquals("A state taken on the GBC of a GBA only reloads there",
@@ -626,8 +628,9 @@ public final class PlayerActivityTest {
         ConsoleSettings.load(activity).withGbColors(5).withGbcOnGba(false).save(activity);
         controller.resume(); activity.onWindowFocusChanged(true); pump(activity);
         assertArrayEquals("The colors change at once; the console waits for the next launch",
-                new String[]{"ravenemu_gbc_color_correction", "disabled", "ravenemu_gbc_frame_blending", "disabled",
-                        "ravenemu_gbc_dmg_colors", "left", "ravenemu_gbc_device_sensors", "enabled"},
+                new String[]{"ravenemu_gbc_palette", "dmg", "ravenemu_gbc_color_correction", "disabled",
+                        "ravenemu_gbc_frame_blending", "disabled", "ravenemu_gbc_dmg_colors", "left",
+                        "ravenemu_gbc_device_sensors", "enabled"},
                 FakeNative.liveOptions);
         assertEquals(COMPATIBILITY + "|gbc-on-gba", ReflectionHelpers.getField(activity, "stateCompatibility"));
         assertEquals(1, FakeNative.opens);
@@ -676,11 +679,11 @@ public final class PlayerActivityTest {
         activity.onDrawFrame(null);
         assertFalse(vibrator.isVibrating());
         assertEquals("The sensors reach the core all the same", "enabled",
-                option(FakeNative.liveOptions, "ravenemu_gb_device_sensors"));
+                option(FakeNative.liveOptions, "ravenemu_gbc_device_sensors"));
         // On again, but the menu pauses the game: no vibration either.
         new CartridgeSettings(true, false, true, 50).save(activity);
         controller.pause(); controller.resume(); activity.onWindowFocusChanged(true); pump(activity);
-        assertEquals("disabled", option(FakeNative.liveOptions, "ravenemu_gb_device_sensors"));
+        assertEquals("disabled", option(FakeNative.liveOptions, "ravenemu_gbc_device_sensors"));
         openMenu(activity);
         ShadowVibrator.reset();
         activity.onDrawFrame(null);
@@ -950,7 +953,7 @@ public final class PlayerActivityTest {
         code.setText("BAD-CODE");
         menuButton("Ajouter").performClick();
         pump(activity);
-        assertNotNull(menuButton("RavenGB : code de triche 2 refusé (code illisible)"));
+        assertNotNull(menuButton("RavenGBC : code de triche 2 refusé (code illisible)"));
         assertEquals("Kept in the form to fix", "BAD-CODE", code.getText().toString());
         assertEquals(1, CheatRepository.read(files, key).size());
         assertNotNull("The refused code is not counted", menuButton("Codes de triche · 1 actif"));
@@ -1318,7 +1321,7 @@ public final class PlayerActivityTest {
         activity.onWindowFocusChanged(true);
         pump(activity);
         assertTrue(FakeNative.linked);
-        assertEquals("gb", FakeNative.openCore);
+        assertEquals("gbc", FakeNative.openCore);
         assertEquals(Arrays.asList("Libre.gb", "Autre.gb"), Arrays.asList(FakeNative.linkedTitles));
         assertEquals("Player 1's save restored; player 2 has none yet",
                 Arrays.asList("0:[1, 2]"), FakeNative.restoredPlayers);
@@ -1777,7 +1780,7 @@ public final class PlayerActivityTest {
             if (closed) return -2;
             for (int i = 0; i < codes.length; i++) {
                 if (codes[i].startsWith("BAD")) {
-                    cheatRefusal = "RavenGB : code de triche " + (i + 1) + " refusé (code illisible)";
+                    cheatRefusal = "RavenGBC : code de triche " + (i + 1) + " refusé (code illisible)";
                     return i;
                 }
             }

@@ -164,7 +164,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
     /** GL thread: the Hardcore lock the core's cheats were last set for. */
     private boolean cheatsLockApplied;
     private volatile String activeSaveKey;
-    /** GL thread: the core of the open game ("gb", "gbc" or "gba"), for its options. */
+    /** GL thread: the core of the open game ("gbc" or "gba"), for its options. */
     private String activeCore;
     private volatile boolean menuOpen;
     private volatile boolean gamePaused = true;
@@ -638,10 +638,12 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
                     postStatus("Codes de triche illisibles : " + unreadable.getMessage());
                 }
                 final List<CheatList.Cheat> storedCheats = stored;
-                // Settings → Console picks the core; it and the image options
-                // apply as the game loads. The SRAM stays the game's own.
+                // Settings → Console picks the console the core emulates; it
+                // and the image options apply as the game loads. The SRAM
+                // stays the game's own.
                 ConsoleSettings console = ConsoleSettings.load(this);
                 String core = console.coreFor(entry.system);
+                String hardware = console.hardwareFor(entry.system);
                 byte[] bios = null;
                 if ("gba".equals(core) && console.gbaBios != ConsoleSettings.BIOS_RAVENCORE) {
                     try { bios = GbaBiosRepository.read(getFilesDir()); }
@@ -649,9 +651,10 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
                 }
                 final boolean biosMissing = "gba".equals(core)
                         && console.gbaBios != ConsoleSettings.BIOS_RAVENCORE && bios == null;
-                String[] coreOptions = CoreOptions.atLoad(core, PlaybackSettings.load(this), console,
+                String[] coreOptions = CoreOptions.atLoad(core, hardware, PlaybackSettings.load(this), console,
                         CartridgeSettings.load(this), bios != null);
-                String stateVariant = console.stateVariant(core, bios == null ? null : GbaBiosRepository.digest(bios));
+                String stateVariant = console.stateVariant(entry.system,
+                        bios == null ? null : GbaBiosRepository.digest(bios));
                 // Signed in from Settings → RetroAchievements: the game's
                 // achievements follow it. Without an account, no network.
                 final AchievementAccount account = AchievementAccount.load(this);
@@ -755,6 +758,8 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
                     SaveRepository.read(getFilesDir(), second.key, "srm")};
             ConsoleSettings console = ConsoleSettings.load(this);
             final String core = LinkCable.core(console.coreFor(first.system), console.coreFor(second.system));
+            final String hardware = LinkCable.hardware(console.hardwareFor(first.system),
+                    console.hardwareFor(second.system));
             if (core == null) {
                 postStatus("Ces deux jeux ne se relient pas : Game Boy et Game Boy Color ensemble, "
                         + "ou deux Game Boy Advance.");
@@ -765,7 +770,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
                 try { bios = GbaBiosRepository.read(getFilesDir()); }
                 catch (IOException unreadable) { bios = null; }
             }
-            String[] coreOptions = CoreOptions.atLoad(core, PlaybackSettings.load(this), console,
+            String[] coreOptions = CoreOptions.atLoad(core, hardware, PlaybackSettings.load(this), console,
                     CartridgeSettings.load(this), bios != null);
             if (disposed.get()) return;
             String nativeDir = getApplicationInfo().nativeLibraryDir;

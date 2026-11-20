@@ -60,15 +60,19 @@ static int check_options(raven_frontend *host, const char *system) {
     CHECK(raven_frontend_set_option(host, key, "mix"));
     CHECK(raven_frontend_set_option(host, key, "ghosting"));
     CHECK(raven_frontend_set_option(host, key, "disabled"));
-    if (strcmp(system, "gb") == 0) {
-        CHECK(has_option(host, "ravenemu_gb_palette", "dmg"));
-        CHECK(!has_option(host, "ravenemu_gbc_color_correction", NULL));
-    } else {
-        snprintf(key, sizeof(key), "ravenemu_%s_color_correction", system);
-        CHECK(has_option(host, key, "disabled"));
-        CHECK(raven_frontend_set_option(host, key, "enabled"));
-        CHECK(raven_frontend_set_option(host, key, "disabled"));
+    snprintf(key, sizeof(key), "ravenemu_%s_color_correction", system);
+    CHECK(has_option(host, key, "disabled"));
+    CHECK(raven_frontend_set_option(host, key, "enabled"));
+    CHECK(raven_frontend_set_option(host, key, "disabled"));
+    if (strcmp(system, "gbc") == 0) {
+        /* The Game Boy Color core runs the Game Boy's games too: a Game Boy
+         * Color by default, the Game Boy's palette, the colors of its games. */
+        CHECK(has_option(host, "ravenemu_gbc_hardware", "gbc"));
+        CHECK(has_option(host, "ravenemu_gbc_palette", "dmg"));
+        CHECK(has_option(host, "ravenemu_gbc_dmg_colors", "auto"));
         CHECK(!has_option(host, "ravenemu_gb_palette", NULL));
+    } else {
+        CHECK(!has_option(host, "ravenemu_gbc_palette", NULL));
     }
     return 0;
 }
@@ -90,23 +94,23 @@ static int check_gb_palette(raven_frontend *host) {
     make_rom(rom, sizeof(rom));
     raven_frontend_callbacks callbacks = {.video = video};
     raven_frontend_set_callbacks(host, &callbacks);
-    CHECK(raven_frontend_set_option(host, "ravenemu_gb_palette", "gray"));
+    CHECK(raven_frontend_set_option(host, "ravenemu_gbc_palette", "gray"));
     CHECK(raven_frontend_load_rom(host, rom, sizeof(rom), "raventest.gb"));
     if (run_until_frame(host)) return 1;
     CHECK(first_pixel == 0xffffffu);
-    CHECK(raven_frontend_set_option(host, "ravenemu_gb_palette", "pocket"));
+    CHECK(raven_frontend_set_option(host, "ravenemu_gbc_palette", "pocket"));
     if (run_until_frame(host)) return 1;
     CHECK(first_pixel == 0xecececu);
-    CHECK(raven_frontend_set_option(host, "ravenemu_gb_palette", "dmg"));
+    CHECK(raven_frontend_set_option(host, "ravenemu_gbc_palette", "dmg"));
     if (run_until_frame(host)) return 1;
     CHECK(first_pixel == 0xe0f8d0u);
     raven_frontend_unload(host);
     return 0;
 }
 
-/* The same Game Boy game in color on the Game Boy Color core, as the
- * application runs it: its GBA hardware and colors set before loading, the
- * colors changed again during the game. */
+/* The same Game Boy game in color on the Game Boy Color, as the application
+ * runs it: the GBC of a GBA and the colors set before loading, the colors
+ * changed again during the game. */
 static int check_gb_in_color(raven_frontend *host) {
     make_rom(rom, sizeof(rom));
     raven_frontend_callbacks callbacks = {.video = video};
@@ -285,16 +289,21 @@ static int check_link(raven_frontend *host, const unsigned char *first, size_t f
 }
 
 int main(int argc, char **argv) {
-    if (argc != 4) {
-        fprintf(stderr, "Expected paths to GB, GBC and GBA Libretro cores\n");
+    if (argc != 3) {
+        fprintf(stderr, "Expected paths to the Game Boy Color and the GBA Libretro cores\n");
         return 1;
     }
-    static const char *const systems[] = {"gb", "gbc", "gba"};
+    /* The Game Boy Color core twice, as the application opens it: a Game Boy
+     * game on the Game Boy, then on the Game Boy Color; then the GBA core. */
+    const char *const paths[] = {NULL, argv[1], argv[1], argv[2]};
+    static const char *const systems[] = {"gbc", "gbc", "gba"};
+    static const char *const hardware[] = {"gb", "gbc", NULL};
     raven_frontend *host = raven_frontend_create();
     if (!host) return 2;
-    for (int i = 1; i < argc; ++i) {
-        if (!raven_frontend_open_core(host, argv[i], ".", ".")) {
-            fprintf(stderr, "%s: %s\n", argv[i], raven_frontend_last_error(host));
+    for (int i = 1; i <= 3; ++i) {
+        const char *core = paths[i];
+        if (!raven_frontend_open_core(host, core, ".", ".")) {
+            fprintf(stderr, "%s: %s\n", core, raven_frontend_last_error(host));
             raven_frontend_destroy(host);
             return 3;
         }
@@ -302,13 +311,14 @@ int main(int argc, char **argv) {
         if (!raven_frontend_get_info(host, &info) || !info.name ||
             !info.version || !info.extensions || !*info.name ||
             !*info.extensions) {
-            fprintf(stderr, "%s: missing Libretro metadata\n", argv[i]);
+            fprintf(stderr, "%s: missing Libretro metadata\n", core);
             raven_frontend_destroy(host);
             return 4;
         }
         if (check_options(host, systems[i - 1]) ||
+            (hardware[i - 1] && !raven_frontend_set_option(host, "ravenemu_gbc_hardware", hardware[i - 1])) ||
             (i == 1 && check_gb_palette(host)) || (i == 2 && check_gb_in_color(host))) {
-            fprintf(stderr, "%s: core options\n", argv[i]);
+            fprintf(stderr, "%s: core options\n", core);
             raven_frontend_destroy(host);
             return 5;
         }
@@ -319,13 +329,13 @@ int main(int argc, char **argv) {
         gba_rom[0xb2] = 0x96;  /* the header's fixed byte */
         if (i == 3 ? check_preemption(host, gba_rom, sizeof(gba_rom), "raventest.gba")
                    : check_preemption(host, rom, sizeof(rom), "raventest.gb")) {
-            fprintf(stderr, "%s: preemptive frames\n", argv[i]);
+            fprintf(stderr, "%s: preemptive frames\n", core);
             raven_frontend_destroy(host);
             return 6;
         }
         if (i == 3 ? check_cheats(host, gba_rom, sizeof(gba_rom), "raventest.gba", "32000000 0042")
                    : check_cheats(host, rom, sizeof(rom), "raventest.gb", "014200C0")) {
-            fprintf(stderr, "%s: cheats\n", argv[i]);
+            fprintf(stderr, "%s: cheats\n", core);
             raven_frontend_destroy(host);
             return 7;
         }
@@ -333,7 +343,7 @@ int main(int argc, char **argv) {
             static unsigned char gba_second[1024];
             memcpy(gba_second, gba_rom, sizeof(gba_second));
             if (check_link(host, gba_rom, sizeof(gba_rom), gba_second, sizeof(gba_second), 240, 0)) {
-                fprintf(stderr, "%s: linked games\n", argv[i]);
+                fprintf(stderr, "%s: linked games\n", core);
                 raven_frontend_destroy(host);
                 return 8;
             }
@@ -346,12 +356,12 @@ int main(int argc, char **argv) {
             for (size_t b = 0x134; b <= 0x14c; ++b) checksum = (unsigned char)(checksum - battery_rom[b] - 1);
             battery_rom[0x14d] = checksum;
             if (check_link(host, rom, sizeof(rom), battery_rom, sizeof(battery_rom), 160, 8192)) {
-                fprintf(stderr, "%s: linked games\n", argv[i]);
+                fprintf(stderr, "%s: linked games\n", core);
                 raven_frontend_destroy(host);
                 return 8;
             }
         }
-        printf("%s: %s (%s), %zu options\n", argv[i], info.name, info.version,
+        printf("%s: %s (%s), %zu options\n", core, info.name, info.version,
                raven_frontend_option_count(host));
         raven_frontend_close_core(host);
     }

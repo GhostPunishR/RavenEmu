@@ -17,8 +17,8 @@ import sys
 OPTIMISED = {"-O2", "-O3"}
 REQUIRED_TARGETS = {
     "raven_android", "raven_frontend", "raven_achievements", "raven_rcheevos",
-    "gb_raven_core", "gbc_raven_core", "gba_raven_core",
-    "ravenemu_gb_libretro", "ravenemu_gbc_libretro", "ravenemu_gba_libretro",
+    "gbc_raven_core", "gba_raven_core",
+    "ravenemu_gbc_libretro", "ravenemu_gba_libretro",
 }
 TARGET = re.compile(r"CMakeFiles/([^/]+)\.dir/")
 

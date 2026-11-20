@@ -46,10 +46,8 @@ target_include_directories(raven_native_av_sync_test PRIVATE
     "${DRIVERS}/audio" "${DRIVERS}/audio/aaudio"
     "${CMAKE_CURRENT_LIST_DIR}/fakes_audio")
 target_link_libraries(raven_native_av_sync_test PRIVATE raven_frontend Threads::Threads m)
-add_dependencies(raven_native_av_sync_test
-    ravenemu_gb_libretro ravenemu_gbc_libretro ravenemu_gba_libretro)
+add_dependencies(raven_native_av_sync_test ravenemu_gbc_libretro ravenemu_gba_libretro)
 add_test(NAME raven_native_av_sync COMMAND raven_native_av_sync_test
-    $<TARGET_FILE:ravenemu_gb_libretro>
     $<TARGET_FILE:ravenemu_gbc_libretro>
     $<TARGET_FILE:ravenemu_gba_libretro>)
 

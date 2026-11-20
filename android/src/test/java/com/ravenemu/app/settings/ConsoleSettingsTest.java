@@ -29,17 +29,29 @@ public final class ConsoleSettingsTest {
         assertEquals(0, value.gbColors);
         assertFalse(value.gbcOnGba);
         assertEquals(ConsoleSettings.BIOS_RAVENCORE, value.gbaBios);
-        assertEquals("gb", value.coreFor("gb"));
+        assertEquals("The Game Boy Color core runs the Game Boy's games too", "gbc", value.coreFor("gb"));
         assertEquals("gbc", value.coreFor("gbc"));
         assertEquals("gba", value.coreFor("gba"));
+        assertEquals("gb", value.hardwareFor("gb"));
+        assertEquals("gbc", value.hardwareFor("gbc"));
+        assertNull(value.hardwareFor("gba"));
         assertTrue(preferences.getAll().isEmpty());
     }
 
-    @Test public void gameBoyGamesInColorRunOnTheGameBoyColorCore() {
+    @Test public void gameBoyGamesInColorRunOnTheGameBoyColor() {
         ConsoleSettings color = ConsoleSettings.DEFAULTS.withGbInColor(true);
         assertEquals("gbc", color.coreFor("gb"));
-        assertEquals("gbc", color.coreFor("gbc"));
-        assertEquals("gba", color.coreFor("gba"));
+        assertEquals("gbc", color.hardwareFor("gb"));
+        assertEquals("gbc", color.hardwareFor("gbc"));
+        assertNull(color.hardwareFor("gba"));
+        assertNull("Not a console of the Game Boy core", color.hardwareFor("nes"));
+    }
+
+    @Test public void theGbcOfAGbaRunsTheGamesThatAreInColor() {
+        ConsoleSettings advance = ConsoleSettings.DEFAULTS.withGbcOnGba(true);
+        assertEquals("A Game Boy game without its colors stays on the Game Boy", "gb", advance.hardwareFor("gb"));
+        assertEquals("gba", advance.hardwareFor("gbc"));
+        assertEquals("gba", advance.withGbInColor(true).hardwareFor("gb"));
     }
 
     @Test public void settingsPersistAlongsideThePlaybackOnes() {
@@ -67,13 +79,17 @@ public final class ConsoleSettingsTest {
         assertEquals(ConsoleSettings.BIOS_RAVENCORE, value.gbaBios);
     }
 
-    @Test public void onlyTheGbaHardwareAndARealBiosSetStatesApart() {
+    @Test public void anotherConsoleThanTheGamesOwnAndARealBiosSetStatesApart() {
         ConsoleSettings defaults = ConsoleSettings.DEFAULTS;
         assertEquals("", defaults.stateVariant("gb", null));
         assertEquals("", defaults.stateVariant("gbc", null));
         assertEquals("", defaults.stateVariant("gba", "0123456789abcdef"));
         assertEquals("|gbc-on-gba", defaults.withGbcOnGba(true).stateVariant("gbc", null));
         assertEquals("", defaults.withGbcOnGba(true).stateVariant("gb", null));
+        assertEquals("One core: a Game Boy game in color is told apart", "|gbc",
+                defaults.withGbInColor(true).stateVariant("gb", null));
+        assertEquals("|gbc-on-gba", defaults.withGbInColor(true).withGbcOnGba(true).stateVariant("gb", null));
+        assertEquals("", defaults.withGbInColor(true).stateVariant("gbc", null));
         ConsoleSettings real = defaults.withGbaBios(ConsoleSettings.BIOS_REAL);
         assertEquals("|gba-bios-0123456789abcdef", real.stateVariant("gba", "0123456789abcdef"));
         assertEquals("No BIOS installed: RavenCore's own runs", "", real.stateVariant("gba", null));

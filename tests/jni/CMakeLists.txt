@@ -39,7 +39,7 @@ add_custom_command(OUTPUT "${raven_classes}/com/ravenemu/app/bridge/Achievements
     DEPENDS ${raven_java_sources} VERBATIM)
 add_custom_target(raven_jni_achievements_classes
     DEPENDS "${raven_classes}/com/ravenemu/app/bridge/AchievementsBridgeCheck.class")
-add_dependencies(raven_jni_achievements raven_jni_achievements_classes ravenemu_gb_libretro)
+add_dependencies(raven_jni_achievements raven_jni_achievements_classes ravenemu_gbc_libretro)
 add_test(NAME raven_jni_achievements
     COMMAND "${Java_JAVA_EXECUTABLE}" -Xcheck:jni -Djava.library.path=$<TARGET_FILE_DIR:raven_jni_achievements>
-        -cp "${raven_classes}" com.ravenemu.app.bridge.AchievementsBridgeCheck $<TARGET_FILE:ravenemu_gb_libretro>)
+        -cp "${raven_classes}" com.ravenemu.app.bridge.AchievementsBridgeCheck $<TARGET_FILE:ravenemu_gbc_libretro>)
