@@ -25,11 +25,11 @@ ctest --test-dir build/native-frontend --output-on-failure
 ```
 
 La compilation complète construit aussi les deux cores Libretro de RavenCore
-(`ravenemu_gb_libretro` pour la Game Boy et la Game Boy Color, `ravenemu_gba_libretro`) et
+(`ravenemu_gbc_libretro` pour la Game Boy Color et la Game Boy, `ravenemu_gba_libretro`) et
 les tests des pilotes natifs (`tests/hardware/`) et du pont JNI (`tests/jni/`).
 
 Un core est une bibliothèque partagée (`.so`) et doit être chargé par un frontend.
-Les tests vérifient les callbacks, le chargement d'une fausse ROM et l'ouverture des vrais cores (le core Game Boy en Game Boy puis en Game Boy Color, et le core GBA) ; il ne prétend
+Les tests vérifient les callbacks, le chargement d'une fausse ROM et l'ouverture des vrais cores (le core Game Boy Color en Game Boy puis en Game Boy Color, et le core GBA) ; il ne prétend
 pas que le jeu fonctionne sur Android.
 
 ## Limites voulues
@@ -71,7 +71,7 @@ facultatifs : sans eux, -2). RavenCore nomme un code refusé dans un message
 code refusé et sa raison, et garde ce message hors de
 `raven_frontend_take_message`, pour que l'application l'affiche une seule
 fois, sous le formulaire. Les images préventives repartent de zéro. Testé sur
-le faux core et sur les vrais cores (Game Boy, en Game Boy puis en GBC, et GBA) : un code GameShark ou
+le faux core et sur les vrais cores (Game Boy Color, en Game Boy puis en GBC, et GBA) : un code GameShark ou
 Codebreaker écrit la mémoire du jeu (l'état diffère), un code illisible est
 refusé avec sa raison.
 
@@ -86,7 +86,7 @@ n est la manette du joueur n+1. `raven_frontend_players` rend 1 ou 2, et
 `restore_player_battery` donnent la SRAM de chaque joueur (le joueur 0 est
 le jeu seul ou le joueur 1 des jeux reliés). Les images préventives restent coupées
 avec deux jeux. Testé sur le faux core (sans sous-système : refus net) et sur
-les vrais cores (Game Boy, en Game Boy puis en GBC, et GBA) : image double, SRAM de chaque joueur, état
+les vrais cores (Game Boy Color, en Game Boy puis en GBC, et GBA) : image double, SRAM de chaque joueur, état
 des deux jeux, retour à un jeu seul.
 
 ## Vibration et capteurs
@@ -147,10 +147,10 @@ Sur Android, `android/src/main/cpp/jni/achievements_bridge.c` expose le module
 textes passent en octets UTF-8, jamais en UTF-8 « modifié » de JNI ; une
 poignée détruite ne retrouve rien. Le test `raven_jni_achievements`
 (`tests/jni/`) le vérifie sur la JVM de l'hôte, avec la vraie source Java et
-le core Game Boy de RavenCore ; il est omis sans JDK.
+le core Game Boy Color de RavenCore ; il est omis sans JDK.
 
 Test : `raven_frontend_achievements`, contre un faux service aux réponses du
-format de rcheevos et le vrai core Game Boy de RavenCore, qui exécute une ROM
+format de rcheevos et le vrai core Game Boy Color de RavenCore, qui exécute une ROM
 construite par le test : elle compte les images en WRAM (`$C001`) et le succès
 « 0xHc001=60 » se débloque à la soixantième image, en mode normal comme en
 Hardcore (requête `h=1`, jeu « maîtrisé »). Le test couvre aussi les refus et

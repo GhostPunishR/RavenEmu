@@ -6,7 +6,7 @@ project(RavenEmuNativeFrontend LANGUAGES C CXX)
 include(FetchContent)
 set(RAVENEMU_BUILD_LIBRETRO ON CACHE BOOL "" FORCE)
 set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
-set(RAVEN_CORE_REVISION "d08d276f6d135566974f9c874ed25ad478e08e3e")
+set(RAVEN_CORE_REVISION "82b4d53f90b0bd14e97d7f1c108ec517dc884e4e")
 FetchContent_Declare(ravencore
     GIT_REPOSITORY https://github.com/GhostPunishR/RavenCore.git
     GIT_TAG ${RAVEN_CORE_REVISION}
@@ -109,16 +109,16 @@ if(RAVEN_FRONTEND_TESTS AND NOT ANDROID)
              $<TARGET_FILE:raven_frontend_fake_core_lag_incomplete>)
     add_executable(raven_frontend_achievements_test tests/test_achievements.c)
     target_link_libraries(raven_frontend_achievements_test PRIVATE raven_achievements)
-    add_dependencies(raven_frontend_achievements_test ravenemu_gb_libretro)
+    add_dependencies(raven_frontend_achievements_test ravenemu_gbc_libretro)
     if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
         target_compile_options(raven_frontend_achievements_test PRIVATE -Wall -Wextra -Wpedantic)
     endif()
     add_test(NAME raven_frontend_achievements COMMAND raven_frontend_achievements_test
-             $<TARGET_FILE:ravenemu_gb_libretro>)
+             $<TARGET_FILE:ravenemu_gbc_libretro>)
     add_executable(raven_frontend_real_core_test tests/test_real_cores.c)
     target_link_libraries(raven_frontend_real_core_test PRIVATE raven_frontend)
-    add_dependencies(raven_frontend_real_core_test ravenemu_gb_libretro ravenemu_gba_libretro)
+    add_dependencies(raven_frontend_real_core_test ravenemu_gbc_libretro ravenemu_gba_libretro)
     add_test(NAME raven_frontend_real_cores COMMAND raven_frontend_real_core_test
-        $<TARGET_FILE:ravenemu_gb_libretro>
+        $<TARGET_FILE:ravenemu_gbc_libretro>
         $<TARGET_FILE:ravenemu_gba_libretro>)
 endif()

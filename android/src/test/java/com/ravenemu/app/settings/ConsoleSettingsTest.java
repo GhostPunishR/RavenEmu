@@ -29,8 +29,8 @@ public final class ConsoleSettingsTest {
         assertEquals(0, value.gbColors);
         assertFalse(value.gbcOnGba);
         assertEquals(ConsoleSettings.BIOS_RAVENCORE, value.gbaBios);
-        assertEquals("One core for the Game Boy and the Game Boy Color", "gb", value.coreFor("gb"));
-        assertEquals("gb", value.coreFor("gbc"));
+        assertEquals("The Game Boy Color core runs the Game Boy's games too", "gbc", value.coreFor("gb"));
+        assertEquals("gbc", value.coreFor("gbc"));
         assertEquals("gba", value.coreFor("gba"));
         assertEquals("gb", value.hardwareFor("gb"));
         assertEquals("gbc", value.hardwareFor("gbc"));
@@ -40,7 +40,7 @@ public final class ConsoleSettingsTest {
 
     @Test public void gameBoyGamesInColorRunOnTheGameBoyColor() {
         ConsoleSettings color = ConsoleSettings.DEFAULTS.withGbInColor(true);
-        assertEquals("gb", color.coreFor("gb"));
+        assertEquals("gbc", color.coreFor("gb"));
         assertEquals("gbc", color.hardwareFor("gb"));
         assertEquals("gbc", color.hardwareFor("gbc"));
         assertNull(color.hardwareFor("gba"));

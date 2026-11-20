@@ -144,7 +144,7 @@ static void make_gba_rom(void) {
 
 typedef struct scenario {
     const char *name;
-    unsigned core;          /* 0 GB, 1 GBC (the Game Boy core on GBC hardware), 2 GBA */
+    unsigned core;          /* 0 GB (the Game Boy Color core on the Game Boy), 1 GBC, 2 GBA */
     const void *rom;
     size_t rom_size;
     const char *file;
@@ -206,9 +206,9 @@ static int run(raven_frontend *host, const char *core_path, const scenario *s, r
     }
     raven_frontend_callbacks callbacks = {.video = on_video, .audio = on_audio};
     raven_frontend_set_callbacks(host, &callbacks);
-    /* One core for the Game Boy and the Game Boy Color: the GBC by its option. */
-    if (s->core < 2 && !raven_frontend_set_option(host, "ravenemu_gb_hardware", s->core == 1 ? "gbc" : "gb")) {
-        fprintf(stderr, "%s: no ravenemu_gb_hardware option\n", s->name);
+    /* One core, the Game Boy Color, which runs the Game Boy by its option. */
+    if (s->core < 2 && !raven_frontend_set_option(host, "ravenemu_gbc_hardware", s->core == 1 ? "gbc" : "gb")) {
+        fprintf(stderr, "%s: no ravenemu_gbc_hardware option\n", s->name);
         raven_frontend_close_core(host);
         return 0;
     }
@@ -408,10 +408,10 @@ static int run(raven_frontend *host, const char *core_path, const scenario *s, r
 
 int main(int argc, char **argv) {
     if (argc < 3) {
-        fprintf(stderr, "Expected paths to the Game Boy and the GBA Libretro cores, then optional ROMs\n");
+        fprintf(stderr, "Expected paths to the Game Boy Color and the GBA Libretro cores, then optional ROMs\n");
         return 1;
     }
-    /* The Game Boy core runs the GB and the GBC scenarios. */
+    /* The Game Boy Color core runs the GB and the GBC scenarios. */
     const char *const cores[] = {argv[1], argv[1], argv[2]};
     make_gb_rom();
     make_gba_rom();
@@ -441,7 +441,7 @@ int main(int argc, char **argv) {
         if (!run(host, cores[chosen.core], &chosen, &r)) ok = 0;
     }
     /* A player's own ROMs, for a local run: the same measures, without the
-     * tone. A .gba goes to the GBA core, anything else to the Game Boy core on the GBC. */
+     * tone. A .gba goes to the GBA core, anything else to the Game Boy Color core. */
     for (int a = 3; a < argc; ++a) {
         FILE *file = fopen(argv[a], "rb");
         if (!file) { fprintf(stderr, "%s: unreadable\n", argv[a]); ok = 0; continue; }

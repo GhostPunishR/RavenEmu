@@ -54,14 +54,14 @@ public final class ConsoleSettings {
         return new ConsoleSettings(gbInColor, gbColors, gbcOnGba, value);
     }
 
-    /** The RavenCore Libretro core that runs a game of this console: "gb",
-     * one core for the Game Boy and the Game Boy Color, or "gba". */
+    /** The RavenCore Libretro core that runs a game of this console: "gbc",
+     * the Game Boy Color, which runs the Game Boy's games too, or "gba". */
     public String coreFor(String system) {
-        return "gba".equals(system) ? "gba" : "gb";
+        return "gba".equals(system) ? "gba" : "gbc";
     }
 
-    /** The console the Game Boy core emulates for a game of this console, as
-     * its option ravenemu_gb_hardware names it: "gb", "gbc" or "gba" (the GBC
+    /** The console the Game Boy Color core emulates for a game of this console,
+     * as its option ravenemu_gbc_hardware names it: "gb", "gbc" or "gba" (the GBC
      * of a Game Boy Advance); null for a GBA game. A Game Boy game stays on
      * the Game Boy unless it gets its colors. */
     public String hardwareFor(String system) {

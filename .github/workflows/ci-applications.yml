@@ -132,7 +132,7 @@ jobs:
             raven_native_video_pixels \
             raven_native_input_test raven_native_sensor_test raven_native_preview_test raven_native_audio_test raven_native_video_test \
             raven_native_sinc_test raven_native_state_progress_test raven_native_av_sync_test raven_jni_achievements \
-            ravenemu_gb_libretro ravenemu_gba_libretro
+            ravenemu_gbc_libretro ravenemu_gba_libretro
       - name: Exécuter les tests C
         run: ctest --test-dir build/native-frontend --output-on-failure
 
@@ -181,8 +181,8 @@ jobs:
           python3 - <<'PY'
           import zipfile, pathlib
           apk = pathlib.Path('android/build/outputs/apk/debug/android-debug.apk')
-          # Game Boy and Game Boy Color: one core.
-          required = {'libraven_android.so', 'ravenemu_gb_libretro.so', 'ravenemu_gba_libretro.so'}
+          # Game Boy Color, which runs the Game Boy's games too: one core.
+          required = {'libraven_android.so', 'ravenemu_gbc_libretro.so', 'ravenemu_gba_libretro.so'}
           with zipfile.ZipFile(apk) as z:
               found = {path.split('/')[-1] for path in z.namelist()
                        if path.startswith('lib/arm64-v8a/') and path.endswith('.so')}
@@ -190,8 +190,8 @@ jobs:
           print('Packaged ARM64 libraries:', sorted(found))
           if missing:
               raise SystemExit(f'Missing ARM64 libraries: {sorted(missing)}')
-          if 'ravenemu_gbc_libretro.so' in found:
-              raise SystemExit('The retired Game Boy Color core is still packaged')
+          if 'ravenemu_gb_libretro.so' in found:
+              raise SystemExit('The retired Game Boy core is still packaged')
           PY
       - name: Publier l'APK de développement et les sources
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

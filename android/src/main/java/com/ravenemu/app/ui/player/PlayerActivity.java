@@ -164,7 +164,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
     /** GL thread: the Hardcore lock the core's cheats were last set for. */
     private boolean cheatsLockApplied;
     private volatile String activeSaveKey;
-    /** GL thread: the core of the open game ("gb" or "gba"), for its options. */
+    /** GL thread: the core of the open game ("gbc" or "gba"), for its options. */
     private String activeCore;
     private volatile boolean menuOpen;
     private volatile boolean gamePaused = true;

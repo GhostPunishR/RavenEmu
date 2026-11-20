@@ -26,10 +26,10 @@ public final class LinkCableTest {
     }
 
     @Test public void bothGamesRunInOneCoreOnTheConsoleTheMostDemandingNeeds() {
-        assertEquals("gb", LinkCable.core("gb", "gb"));
+        assertEquals("gbc", LinkCable.core("gbc", "gbc"));
         assertEquals("gba", LinkCable.core("gba", "gba"));
-        assertNull(LinkCable.core("gba", "gb"));
-        assertNull(LinkCable.core("gb", "gba"));
+        assertNull(LinkCable.core("gba", "gbc"));
+        assertNull(LinkCable.core("gbc", "gba"));
         assertEquals("gb", LinkCable.hardware("gb", "gb"));
         assertEquals("gbc", LinkCable.hardware("gb", "gbc"));
         assertEquals("gbc", LinkCable.hardware("gbc", "gb"));
