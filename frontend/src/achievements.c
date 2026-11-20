@@ -217,7 +217,7 @@ static void achievement_image(const rc_client_achievement_t *a, int colour, char
 }
 
 /* No answer, or not one from the service: the network, not the account. */
-static int unreachable(int result) { return result == RC_NO_RESPONSE || result == RC_INVALID_JSON; }
+static int server_unreachable(int result) { return result == RC_NO_RESPONSE || result == RC_INVALID_JSON; }
 
 static void logged_in(int result, const char *message, rc_client_t *rc, void *userdata) {
     (void)userdata;
@@ -231,7 +231,7 @@ static void logged_in(int result, const char *message, rc_client_t *rc, void *us
     } else {
         char reason[MAX_TEXT + 8];
         server_text(message, reason, sizeof(reason));
-        push_event(a, "login_error", reason, NULL, unreachable(result) ? "offline" : "refused", NULL, NULL);
+        push_event(a, "login_error", reason, NULL, server_unreachable(result) ? "offline" : "refused", NULL, NULL);
     }
 }
 
@@ -255,7 +255,7 @@ static void loaded(int result, const char *message, rc_client_t *rc, void *userd
         /* Superseded by an unload or another game: nothing to say. */
     } else if (result == RC_NO_GAME_LOADED || result == RC_OK) {
         push_event(a, "game_unknown", NULL, NULL, NULL, NULL, NULL);
-    } else if (unreachable(result)) {
+    } else if (server_unreachable(result)) {
         push_event(a, "game_offline", NULL, NULL, NULL, NULL, NULL);
     } else {
         char reason[MAX_TEXT + 8];
@@ -687,7 +687,7 @@ static void scores_fetched(int result, const char *message, rc_client_leaderboar
     if (result != RC_OK || !list) {
         server_text(message, reason, sizeof(reason));
         if (list) rc_client_destroy_leaderboard_entry_list(list);
-        push_event(a, "scores_error", reason, NULL, unreachable(result) ? "offline" : "refused", NULL, number);
+        push_event(a, "scores_error", reason, NULL, server_unreachable(result) ? "offline" : "refused", NULL, number);
         return;
     }
     a->scores.scores = list->num_entries

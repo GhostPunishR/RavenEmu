@@ -11,7 +11,9 @@ typedef struct raven_input {
     uint16_t frame; /* Only the emulation owner reads/writes this snapshot. */
 } raven_input;
 
-#define RAVEN_INPUT_INITIALIZER { ATOMIC_VAR_INIT(0), 0 }
+/* A plain initializer: ATOMIC_VAR_INIT is obsolete since C17 and gone in C23,
+ * the default of GCC 15. */
+#define RAVEN_INPUT_INITIALIZER { 0, 0 }
 
 /* UI/controller producers may call these while the emulation owner runs.
  * A release keeps a quick press pending; clear explicitly discards it. */
