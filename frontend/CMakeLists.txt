@@ -1,13 +1,13 @@
 cmake_minimum_required(VERSION 3.22.1)
 project(RavenEmuNativeFrontend LANGUAGES C CXX)
 
-# RavenCore pinned by full commit SHA: 0.17.0, the merge of RavenCore #46:
+# RavenCore pinned by full commit SHA: 0.17.1, the merge of RavenCore #47:
 # Game Boy and Game Boy Color sound, picture and HDMA closer to the console
 # (SameSuite, Mealybug Tearoom). One core, the Game Boy Color's, for both.
 include(FetchContent)
 set(RAVENEMU_BUILD_LIBRETRO ON CACHE BOOL "" FORCE)
 set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
-set(RAVEN_CORE_REVISION "f2a3980c2aa1e4948a48c65a36f0380d190f3265")
+set(RAVEN_CORE_REVISION "8a76484399e3de5664ca6c33653cdf700a5d7259")
 FetchContent_Declare(ravencore
     GIT_REPOSITORY https://github.com/GhostPunishR/RavenCore.git
     GIT_TAG ${RAVEN_CORE_REVISION}
