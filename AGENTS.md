@@ -144,6 +144,18 @@ Kotlin, hors application. Les sources Kotlin de la **bêta retirée** peuvent
 5. Corriger d'abord les régressions et les retours de captures d'écran,
    puis ajouter de nouvelles fonctions. Ne pas élargir le périmètre si
    la parité avec RavenEmu est encore incomplète.
+6. **Refactoriser quand le code devient trop long.** Avant d'ajouter du
+   code à un fichier source de plus de **800 lignes**, à un fichier qui
+   regroupe plusieurs composants ou à une fonction de plus de **80 lignes**,
+   le découper : **un fichier par composant**, nommé d'après lui
+   (`PlayerMenuSheet.java`, `GameControlsView.java`, `achievements.c`…).
+   Un fichier de test de plus de 1 000 lignes se découpe de même, par
+   composant testé, quand on y ajoute des tests. Le refactor reste un
+   changement à part : commit dédié, sans changement de comportement, jamais
+   mêlé à un correctif. Le prouver par les tests existants, par des sorties
+   identiques avant et après (images, son, états, captures d'interface) et
+   par une mesure de performance. Exceptions : en-têtes tiers
+   (`libretro.h`), fichiers générés et tables de données.
 
 ## État et périmètre actuel
 
