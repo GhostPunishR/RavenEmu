@@ -27,4 +27,4 @@ ctest --test-dir build/native-frontend --output-on-failure
 
 ## RavenCore
 
-[frontend/CMakeLists.txt](https://github.com/GhostPunishR/RavenEmu/blob/main/frontend/CMakeLists.txt) épingle RavenCore au commit `236b28fb00bb8b997cfd8b06d9f505d0168e80bb`, la version 0.16.0, et en construit les deux cores Libretro : Game Boy Color, qui lit aussi les jeux Game Boy, et Game Boy Advance. Aucun code moteur n'est copié dans RavenEmu.
+[frontend/CMakeLists.txt](https://github.com/GhostPunishR/RavenEmu/blob/main/frontend/CMakeLists.txt) épingle RavenCore au commit `f2a3980c2aa1e4948a48c65a36f0380d190f3265`, la version 0.17.0, et en construit les deux cores Libretro : Game Boy Color, qui lit aussi les jeux Game Boy, et Game Boy Advance. Aucun code moteur n'est copié dans RavenEmu.

@@ -32,7 +32,9 @@ documentation et le README sur l'application native.
   `targetSdk` de `android/`.
 - **Données** : l'application garde l'identifiant `com.ravenemu.dev`. Une bêta
   `com.ravenemu.preview` déjà installée n'est ni lue ni modifiée.
-- **RavenCore** épinglé à la version 0.16.0 : la Game Boy Color et la Game
+- **RavenCore** épinglé à la version 0.17.0 : son, image et HDMA de la Game
+  Boy et de la Game Boy Color plus proches de la console (SameSuite, 47 tests
+  sur 76 au lieu de 22) ; depuis la 0.16.0, la Game Boy Color et la Game
   Boy ne forment plus qu'un core, RavenGBC, qui émule la console choisie pour
   chaque jeu (corrections de la relecture des cœurs depuis la 0.15.4 ; son GBC
   sans parasites depuis la 0.15.3 ; cœur GBA de 1,2 à 1,5 fois plus rapide depuis la 0.15.2 et cœur
