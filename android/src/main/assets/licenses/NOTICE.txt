@@ -56,7 +56,7 @@ Interface Libretro (libretro.h)
 Copyright (C) 2010-2024 The RetroArch team
 Licence MIT (MIT-LIBRETRO.txt).
 Source : libretro-common@a3194c18ba65ef89734e1898a2f61403c255d368,
-via RavenCore@f2a3980c2aa1e4948a48c65a36f0380d190f3265.
+via RavenCore@8a76484399e3de5664ca6c33653cdf700a5d7259.
 L’ABI Libretro est indépendante du frontend RetroArch.
 
 Effets d’écran Lissage net et Grille LCD : écrits pour RavenEmu d’après
