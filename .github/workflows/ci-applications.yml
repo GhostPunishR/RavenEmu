@@ -55,7 +55,9 @@ on:
         value: ${{ jobs.production.outputs.artifact }}
 
 concurrency:
-  group: ravenemu-applications-${{ github.ref }}
+  # Called by release.yml, github.workflow names the release: a release
+  # built from main never cancels, nor is cancelled by, a push to main.
+  group: ravenemu-applications-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:

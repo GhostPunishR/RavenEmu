@@ -120,7 +120,8 @@ Kotlin, hors application. Les sources Kotlin de la **bêta retirée** peuvent
   l'APK Release publié (« RavenEmu ») et **`com.ravenemu.dev`** pour l'APK
   de développement (« RavenEmu Dev »), indépendants de la bêta
   `com.ravenemu.preview` qui peut rester installée sur les téléphones.
-  Ne jamais pousser de tag `vX.Y.Z` : il publie une release ([RELEASING.md](RELEASING.md)).
+  Ne jamais pousser de tag `vX.Y.Z` ni lancer **RavenEmu / Release** sans demande
+  explicite du propriétaire : l'un et l'autre publient une release ([RELEASING.md](RELEASING.md)).
 - Ne pas lire, migrer, effacer ou écraser automatiquement les ROMs,
   sauvegardes, paramètres ou autres données de la bêta. Toute migration
   de données doit être explicite, réversible et testée.
@@ -144,7 +145,7 @@ un sens fixé par le propriétaire :
 - Y et Z restent sous 100 : le code de version Android, `X·10000 + Y·100 + Z`, doit croître d'une version à la suivante.
 - Une version qui mêle nouvelles fonctions et correctifs est une mise à jour majeure (Y).
 - Seul le propriétaire décide de passer à une nouvelle version stable (X).
-- Un agent peut proposer le prochain numéro dans une pull request, selon ces règles. Il ne pousse jamais le tag `vX.Y.Z`, qui publie la version ([RELEASING.md](RELEASING.md#publier-une-version)).
+- Un agent peut proposer le prochain numéro dans une pull request, selon ces règles. Il ne pousse jamais le tag `vX.Y.Z` et ne lance la publication que sur demande explicite du propriétaire ([RELEASING.md](RELEASING.md#publier-une-version)).
 
 ## Qualité technique et validation obligatoire
 

@@ -243,11 +243,13 @@ l'application n'est publiée **que si** :
    conformes au plan de publication approuvé.
 6. **Aucune release, aucun tag de version ni changement du README sans
    décision explicite du propriétaire.** Une CI verte n'est pas une
-   autorisation de publication. Le tag `vX.Y.Z` poussé par le propriétaire
-   est cette décision : le workflow `release.yml` ne publie que sur lui,
-   après toute la CI, pour un commit de `main` dont la version
-   (`ravenemuVersion` de `gradle.properties`) est égale au tag. Les agents
-   ne poussent pas de tag et ne créent pas de release ([RELEASING.md](RELEASING.md)).
+   autorisation de publication. Le tag `vX.Y.Z` poussé par le propriétaire,
+   ou la publication de `main` qu'il lance ou demande explicitement, est
+   cette décision : le workflow `release.yml` ne publie que là, après toute
+   la CI, pour un commit de `main` dont la version (`ravenemuVersion` de
+   `gradle.properties`) est égale au tag. Les agents ne poussent pas de tag
+   et ne lancent la publication que sur demande explicite du propriétaire
+   ([RELEASING.md](RELEASING.md)).
 
 Les agents **doivent continuer à respecter ces
 mêmes frontières**, maintenir les tests et ne pas réintroduire du Kotlin
