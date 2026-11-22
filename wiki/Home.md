@@ -33,7 +33,7 @@ Pas encore dans l'application native : le câble link sans fil entre deux télé
 
 ## Version et données
 
-L'application native n'a pas encore de version publique ; le [changelog](https://github.com/GhostPunishR/RavenEmu/blob/main/CHANGELOG.md) décrit son contenu. Son identifiant Android est `com.ravenemu.dev` : elle s'installe à côté de la bêta `com.ravenemu.preview` sans lire ses données. Exportez les sauvegardes de la bêta pour les importer dans l'application native.
+L'application native n'a pas encore de version publique ; le [changelog](https://github.com/GhostPunishR/RavenEmu/blob/main/CHANGELOG.md) décrit son contenu. L'APK de développement a l'identifiant `com.ravenemu.dev`, et la première version publique, RavenEmu 1.0.0, aura `com.ravenemu` : chacun s'installe à côté de la bêta `com.ravenemu.preview` sans lire ses données. Exportez les sauvegardes de la bêta pour les importer dans l'application native.
 
 ## Liens officiels
 

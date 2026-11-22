@@ -116,9 +116,11 @@ Kotlin, hors application. Les sources Kotlin de la **bêta retirée** peuvent
 - Développer sur une branche dédiée et passer par une **pull request vers
   `main`**. Ne pas pousser directement sur `main`, fusionner ou lancer une
   publication sans demande explicite du propriétaire.
-- L'application est le module **`android/`**, à l'identifiant
-  **`com.ravenemu.dev`**, indépendant de la bêta `com.ravenemu.preview`
-  qui peut rester installée sur les téléphones.
+- L'application est le module **`android/`** : **`com.ravenemu`** pour
+  l'APK Release publié (« RavenEmu ») et **`com.ravenemu.dev`** pour l'APK
+  de développement (« RavenEmu Dev »), indépendants de la bêta
+  `com.ravenemu.preview` qui peut rester installée sur les téléphones.
+  Ne jamais pousser de tag `vX.Y.Z` : il publie une release ([RELEASING.md](RELEASING.md)).
 - Ne pas lire, migrer, effacer ou écraser automatiquement les ROMs,
   sauvegardes, paramètres ou autres données de la bêta. Toute migration
   de données doit être explicite, réversible et testée.

@@ -16,7 +16,7 @@ import javax.crypto.spec.GCMParameterSpec;
  * keeps its RetroAchievements token (AchievementAccount.kt). The sealed form
  * is the 12-byte nonce, then the ciphertext and its tag. */
 public final class KeystoreSealer {
-    /** This preview's own key: com.ravenemu.dev never shares the beta's. */
+    /** Each app's own key: com.ravenemu and com.ravenemu.dev never share it, nor the beta's. */
     private static final String ALIAS = "RavenEmu.Native.RetroAchievements.v1";
     private static final int NONCE_BYTES = 12, TAG_BITS = 128;
 

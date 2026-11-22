@@ -31,7 +31,7 @@
 - `scripts/` : contrôles de l'organisation des sources, de l'optimisation native et de l'archive des sources.
 - `docs/` : site statique ; `wiki/` : documentation utilisateur.
 
-L'APK de développement `com.ravenemu.dev` est indépendant de la bêta `com.ravenemu.preview`, qui peut rester installée sur les téléphones : ses données privées ne sont ni lues ni migrées automatiquement. Le changement d'identifiant ne vaut pas accord pour publier une version.
+L'application publiée est **RavenEmu**, identifiant `com.ravenemu` ; l'APK de développement, **RavenEmu Dev**, est `com.ravenemu.dev`. Le propriétaire a fixé ces identifiants et la version 1.0.0 le 22 novembre 2026. Tous deux sont indépendants de la bêta `com.ravenemu.preview`, qui peut rester installée sur les téléphones : ses données privées ne sont ni lues ni migrées automatiquement. Ni ces identifiants ni une CI verte ne valent accord pour publier une version.
 
 ## 1. Principes immuables
 
@@ -176,9 +176,10 @@ cible est définie par la séparation des responsabilités.
 
 ## 6. Stockage, identité et garanties des sauvegardes
 
-- `com.ravenemu.dev` est **isolé** de la bêta `com.ravenemu.preview`,
-  qui peut rester installée. Ne jamais accéder à ses données privées ni
-  changer implicitement un application ID.
+- `com.ravenemu` (publié) et `com.ravenemu.dev` (développement) sont
+  **isolés** l'un de l'autre et de la bêta `com.ravenemu.preview`, qui
+  peut rester installée. Ne jamais accéder aux données privées d'une autre
+  application ni changer implicitement un application ID.
 - Index et ROMs privés par jeu : nom de fichier strictement validé,
   identité ROM + plateforme (SHA-256 ou format compatible documenté),
   plafonds de taille, détection des corruptions, écriture atomique.
@@ -242,7 +243,11 @@ l'application n'est publiée **que si** :
    conformes au plan de publication approuvé.
 6. **Aucune release, aucun tag de version ni changement du README sans
    décision explicite du propriétaire.** Une CI verte n'est pas une
-   autorisation de publication.
+   autorisation de publication. Le tag `vX.Y.Z` poussé par le propriétaire
+   est cette décision : le workflow `release.yml` ne publie que sur lui,
+   après toute la CI, pour un commit de `main` dont la version
+   (`ravenemuVersion` de `gradle.properties`) est égale au tag. Les agents
+   ne poussent pas de tag et ne créent pas de release ([RELEASING.md](RELEASING.md)).
 
 Les agents **doivent continuer à respecter ces
 mêmes frontières**, maintenir les tests et ne pas réintroduire du Kotlin
@@ -302,4 +307,4 @@ Deux téléphones du même réseau local se relient par le câble distant de Rav
 - Android conserve bibliothèque, jaquettes et sauvegardes dans son espace privé, avec le SHA-256 de la ROM comme identité.
 - Les imports utilisent le sélecteur Android sans accès global au stockage.
 - Les archives de sauvegarde ne contiennent aucune ROM.
-- Le paquet Java est `com.ravenemu.app`, l'identifiant Android `com.ravenemu.dev`. Les classes à méthodes `native` donnent leur paquet aux symboles JNI de `android/src/main/cpp/` (`Java_com_ravenemu_app_<paquet>_<Classe>_<méthode>`) ; `AndroidPolicyTest` vérifie que chaque méthode a son symbole, et inversement.
+- Le paquet Java est `com.ravenemu.app`, l'identifiant Android `com.ravenemu` (Release) et `com.ravenemu.dev` (Debug, par `applicationIdSuffix`). Les classes à méthodes `native` donnent leur paquet aux symboles JNI de `android/src/main/cpp/` (`Java_com_ravenemu_app_<paquet>_<Classe>_<méthode>`) ; `AndroidPolicyTest` vérifie que chaque méthode a son symbole, et inversement.

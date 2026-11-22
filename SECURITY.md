@@ -7,7 +7,7 @@
 | Branche `main` (application native) | Oui, version de développement |
 | Préversions de la bêta retirée (`android-beta-N`) | Non maintenues |
 
-Aucune version publique de l'application native n'est encore publiée. La CI produit un APK de développement `com.ravenemu.dev`, signé avec la clé de débogage : ce n'est pas une version stable. Voir [RELEASING.md](RELEASING.md).
+Aucune version publique de l'application native n'est encore publiée. Les versions publiques, à partir de 1.0.0, seront les releases `vX.Y.Z` de `com.ravenemu`, signées par la clé de RavenEmu ; la plus récente sera prise en charge. L'APK de développement `com.ravenemu.dev`, signé avec la clé de débogage, n'est pas une version stable. Voir [RELEASING.md](RELEASING.md).
 
 ## Signaler une vulnérabilité
 
