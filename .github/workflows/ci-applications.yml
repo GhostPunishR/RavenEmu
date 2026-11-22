@@ -225,3 +225,108 @@ jobs:
             android/build/outputs/sources/ravenemu-native-sources.tar.gz
           if-no-files-found: error
           retention-days: 7
+
+production:
+    name: Android ARM64 - APK Release signe (non publie)
+    # Never load signing credentials from pull requests or non-main refs.
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    needs: [policy, smoke, android]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Recuperer le depot
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Valider le wrapper Gradle
+        uses: gradle/actions/wrapper-validation@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
+      - name: Installer Java 21
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+          cache-dependency-path: |
+            settings.gradle.kts
+            build.gradle.kts
+            gradle.properties
+            gradle/libs.versions.toml
+            gradle/wrapper/gradle-wrapper.properties
+            android/build.gradle.kts
+      - name: Compiler l'APK Release et rassembler les sources
+        run: ./gradlew :android:assembleRelease :android:collectDebugCorrespondingSources --stacktrace
+      - name: Aligner signer et verifier l'APK
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$ANDROID_KEYSTORE_BASE64" || -z "$ANDROID_KEYSTORE_PASSWORD" ]]; then
+            echo "::error::Configurer ANDROID_KEYSTORE_BASE64 et ANDROID_KEYSTORE_PASSWORD dans les secrets du depot."
+            exit 1
+          fi
+          sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          if [[ ! -d "$sdk/build-tools" ]]; then
+            echo "::error::Android SDK Build Tools absents."
+            exit 1
+          fi
+          bt="$(find "$sdk/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+          if [[ ! -x "$bt/zipalign" || ! -x "$bt/apksigner" || ! -x "$bt/aapt" ]]; then
+            echo "::error::zipalign, apksigner ou aapt introuvable dans les Build Tools."
+            exit 1
+          fi
+          unsigned="android/build/outputs/apk/release/android-release-unsigned.apk"
+          signed="android/build/outputs/apk/release/ravenemu-release-signed.apk"
+          if [[ ! -s "$unsigned" ]]; then
+            echo "::error::L'APK Release non signe est introuvable."
+            exit 1
+          fi
+          umask 077
+          signing_dir="$(mktemp -d "$RUNNER_TEMP/ravenemu-sign-XXXXXX")"
+          trap 'rm -rf "$signing_dir"' EXIT
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$signing_dir/keystore.p12"
+          if [[ ! -s "$signing_dir/keystore.p12" ]]; then
+            echo "::error::Le keystore decode est vide."
+            exit 1
+          fi
+          "$bt/zipalign" -P 16 -f 4 "$unsigned" "$signing_dir/aligned.apk"
+          "$bt/zipalign" -c -P 16 -v 4 "$signing_dir/aligned.apk"
+          # A PKCS12 keystore with a single private key needs no hardcoded alias.
+          "$bt/apksigner" sign \
+            --ks "$signing_dir/keystore.p12" \
+            --ks-type PKCS12 \
+            --ks-pass env:ANDROID_KEYSTORE_PASSWORD \
+            --key-pass env:ANDROID_KEYSTORE_PASSWORD \
+            --out "$signed" "$signing_dir/aligned.apk"
+          "$bt/apksigner" verify --verbose --print-certs --min-sdk-version 26 "$signed"
+          "$bt/zipalign" -c -P 16 -v 4 "$signed"
+          if ! "$bt/aapt" dump badging "$signed" | grep -Fq "package: name='com.ravenemu.dev' "; then
+            echo "::error::Identifiant Android inattendu : ne pas ecraser la beta."
+            exit 1
+          fi
+          unzip -Z1 "$signed" > "$signing_dir/apk-entries.txt"
+          for lib in libraven_android.so ravenemu_gbc_libretro.so ravenemu_gba_libretro.so; do
+            if ! grep -Fxq "lib/arm64-v8a/$lib" "$signing_dir/apk-entries.txt"; then
+              echo "::error::Bibliotheque ARM64 absente : $lib"
+              exit 1
+            fi
+          done
+      - name: Archiver les sources du Release signe et leurs empreintes
+        run: |
+          set -euo pipefail
+          python3 scripts/test_package_native_sources.py
+          python3 scripts/package_native_sources.py --apk android/build/outputs/apk/release/ravenemu-release-signed.apk
+          (
+            cd android/build/outputs
+            sha256sum apk/release/ravenemu-release-signed.apk sources/ravenemu-native-sources.tar.gz > SHA256SUMS.txt
+          )
+      - name: Conserver le Release signe pour validation (sans publication)
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ravenemu-android-release-candidate-arm64
+          path: |
+            android/build/outputs/apk/release/ravenemu-release-signed.apk
+            android/build/outputs/sources/ravenemu-native-sources.tar.gz
+            android/build/outputs/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14
