@@ -226,7 +226,7 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-production:
+  production:
     name: Android ARM64 - APK Release signe (non publie)
     # Never load signing credentials from pull requests or non-main refs.
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
