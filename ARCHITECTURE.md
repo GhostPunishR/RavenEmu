@@ -22,8 +22,8 @@
 ## Organisation du dépôt
 
 - `frontend/` : frontend C et ABI Libretro, indépendant des pilotes matériels.
-- `android/` : application Java organisée en sous-packages `ui/library`, `ui/player`, `ui/settings`, `ui/common`, `data/library`, `data/saves`, `settings`, `bridge` et `platform` sous `com.ravenemu.app`, avec adaptateur JNI C dans `src/main/cpp/jni/`.
-- `android/src/main/cpp/hardware/` : pilotes AAudio, GLES2 et entrées.
+- `android/` : application Java organisée en sous-packages `ui/library`, `ui/player`, `ui/settings`, `ui/common`, `data/library`, `data/saves`, `data/shaders`, `settings`, `bridge` et `platform` sous `com.ravenemu.app`, avec adaptateur JNI C dans `src/main/cpp/jni/`.
+- `android/src/main/cpp/hardware/` : pilotes AAudio, GLES2 (et presets de shaders importés, `video/shaders/`) et entrées.
 - `android/src/main/cpp/media/` : capture des miniatures d'états.
 - `tests/hardware/` : tests unitaires des pilotes natifs, séparés de `frontend/tests/`.
 - `legal/attributions/` : notices de provenance des sources externes adaptées, conservées avec leurs licences.

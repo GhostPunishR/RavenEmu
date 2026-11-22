@@ -45,9 +45,16 @@ gain ou de mute dans l'adaptateur audio. Ces modifications restent sous la
 licence indiquée dans chaque fichier ; elles ne sont pas attribuées à l'amont.
 
 Le frontend, la boucle d'émulation et les menus restent ceux de RavenEmu ;
-RavenCore reste le moteur GB/GBC/GBA. Les resamplers sinc, les presets de
-shaders, la sélection de périphériques, les cores graphiques matériels et la
-planification de RetroArch ne sont pas portés : le filtre sinc de RavenEmu
+RavenCore reste le moteur GB/GBC/GBA. Les resamplers sinc, la sélection de
+périphériques, les cores graphiques matériels et la planification de RetroArch
+ne sont pas portés. Les presets de shaders GLSL (`.glslp`) que le joueur
+importe sont lus d'après leur format documenté (clés du preset, `#reference`,
+`#pragma parameter`, noms des uniforms `MVPMatrix`, `TextureSize`,
+`InputSize`, `OutputSize`, `FrameCount`, `Orig*`, `Prev*`, `PassN*`,
+`PassPrevN*`), mais leur code (`android/src/main/cpp/hardware/video/shaders/`)
+est écrit pour RavenEmu, sous sa licence AGPLv3 : aucune ligne de
+`gfx/video_shader_parse.c`, `gfx/drivers_shader/shader_glsl.c` ni
+`gfx/drivers/gl2.c` n'y est reprise, et aucun shader n'est fourni. De même : le filtre sinc de RavenEmu
 (`android/src/main/cpp/hardware/audio/sinc_resampler.c`) est écrit pour lui,
 d'après la méthode classique d'interpolation à bande limitée et une fenêtre
 de Kaiser, sans aucune ligne de `libretro-common/audio/resampler`. Le calage sur l'écran et le

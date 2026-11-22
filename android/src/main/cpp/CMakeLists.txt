@@ -20,10 +20,15 @@ FetchContent_GetProperties(ravencore)
 add_library(raven_android SHARED
     jni/bridge.c
     jni/achievements_bridge.c
+    jni/shader_bridge.c
     hardware/audio/audio_pipeline.c
     hardware/audio/sinc_resampler.c
     hardware/audio/aaudio/aaudio_driver.c
     hardware/video/gles2/gles2_renderer.c
+    hardware/video/shaders/shader_preset.c
+    hardware/video/shaders/shader_source.c
+    hardware/video/shaders/shader_chain.c
+    hardware/video/shaders/shader_state.c
     hardware/input/input_driver.c
     hardware/input/sensor_driver.c
     media/state_thumbnail.c
@@ -34,6 +39,7 @@ target_include_directories(raven_android PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/hardware/audio"
     "${CMAKE_CURRENT_LIST_DIR}/hardware/audio/aaudio"
     "${CMAKE_CURRENT_LIST_DIR}/hardware/video/gles2"
+    "${CMAKE_CURRENT_LIST_DIR}/hardware/video/shaders"
     "${CMAKE_CURRENT_LIST_DIR}/hardware/input"
     "${CMAKE_CURRENT_LIST_DIR}/media"
     "${CMAKE_CURRENT_LIST_DIR}/../../../../frontend/include"

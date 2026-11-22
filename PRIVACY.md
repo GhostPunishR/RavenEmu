@@ -1,6 +1,6 @@
 # Politique de confidentialité de RavenEmu
 
-Date d’entrée en vigueur : 22 octobre 2026
+Date d’entrée en vigueur : 22 novembre 2026
 
 ## Champ d’application
 
@@ -8,7 +8,7 @@ Cette politique décrit le fonctionnement de l’application Android RavenEmu, d
 
 ## Application Android
 
-RavenEmu fonctionne sans compte, sans télémétrie et sans publicité. Il propose une connexion facultative au service tiers RetroAchievements. Sans connexion, aucun échange avec ce service n’est effectué. L’application ne téléverse jamais les ROM, sauvegardes, états instantanés ni pochettes.
+RavenEmu fonctionne sans compte, sans télémétrie et sans publicité. Il propose une connexion facultative au service tiers RetroAchievements, et une synchronisation facultative des sauvegardes de cartouche avec un dossier WebDAV choisi par l’utilisateur. Sans connexion, aucun échange avec ces services n’est effectué. L’application ne téléverse jamais les ROM, BIOS, états instantanés ni pochettes ; les sauvegardes de cartouche ne quittent l’appareil que vers le dossier WebDAV que l’utilisateur a lui-même configuré.
 
 Les données suivantes peuvent être créées ou analysées localement sur l’appareil :
 
@@ -16,6 +16,7 @@ Les données suivantes peuvent être créées ou analysées localement sur l’a
 - métadonnées et empreintes de jeux ;
 - sauvegardes et états instantanés ;
 - pochettes choisies ou générées localement ;
+- packs de shaders importés par l’utilisateur ;
 - préférences d’affichage, d’audio et de commandes ;
 - mesures de performance affichées dans l’APK Debug.
 
@@ -30,6 +31,16 @@ Pendant une partie connectée, le SDK officiel transmet l’empreinte du jeu, le
 Les badges des succès, l’image du jeu et le portrait du compte sont des images publiques, téléchargées en HTTPS depuis `https://media.retroachievements.org`. Pour RetroAchievements, c’est le seul autre hôte contacté, et l’application refuse toute image venant d’ailleurs ; aucune donnée n’y est envoyée au-delà de ce que comporte une requête HTTPS, avec le même identifiant du client, et les images sont conservées dans le cache de l’application, que le système peut vider et qu’effacer les données supprime.
 
 Les informations enregistrées par RetroAchievements relèvent de sa [politique de confidentialité](https://retroachievements.org/privacy.php). RavenEmu ne stocke pas ces informations sur un serveur du projet. Les requêtes Softcore légitimes émises par le SDK sont désormais conservées localement dans un journal chiffré via Android Keystore et exclu des sauvegardes Android. Ce journal contient les paramètres de la requête d'origine, y compris le jeton du compte ; il est limité à 256 demandes et les nouvelles tentatives ne sont effectuées qu'après authentification du même compte, avec le jeton de cette connexion. Les échecs sont retentés pendant la session avec un délai progressif de 5 à 120 secondes. Les entrées sont retirées après confirmation de réussite et toute la file est effacée lors d'une déconnexion explicite ou de la suppression des données de l'application. Un journal qui ne peut plus être déchiffré est mis de côté sur l'appareil, tel quel, toujours exclu des sauvegardes et jamais envoyé ; il est effacé de la même façon. RavenEmu n'héberge pas ces données sur un serveur.
+
+## Synchronisation des sauvegardes (facultatif)
+
+Dans **Paramètres → Sauvegardes cloud**, l’utilisateur peut indiquer l’adresse d’un dossier WebDAV (Nextcloud, ownCloud, kDrive, Koofr, pCloud, NAS…), un identifiant et un mot de passe, de préférence un mot de passe d’application. Sans cette configuration, aucun échange n’a lieu. Le projet ne fournit ni n’héberge ce dossier : il appartient à l’utilisateur, ou au service qu’il a choisi, dont les conditions et la politique de confidentialité s’appliquent.
+
+- **Ce qui est envoyé.** Seules les sauvegardes de cartouche (`.srm`) des jeux de la bibliothèque, et une liste `ravenemu-saves.json`. Pour chaque jeu, elle donne l’empreinte SHA-256 qui l’identifie dans RavenEmu, l’empreinte et la taille de sa sauvegarde, la date d’envoi, le nom de l’appareil qui l’a envoyée (fabricant et modèle Android, par exemple « Google Pixel 8 ») et les empreintes des deux versions précédentes. Aucun nom de jeu, aucune ROM, aucun BIOS, aucun état instantané ni aucune jaquette n’est envoyé.
+- **Connexion.** Uniquement en HTTPS, vers l’hôte du dossier ; une redirection n’est jamais suivie. Le serveur reçoit les informations d’une connexion HTTPS, dont l’adresse IP, et l’identifiant du client (User-Agent) « RavenEmu/version (Android) ».
+- **Quand.** Au lancement de l’application et à la fermeture d’un jeu si **Synchroniser automatiquement** est activé, et quand l’utilisateur touche **Synchroniser maintenant** ou règle un conflit.
+- **Sur l’appareil.** L’adresse, l’identifiant et le mot de passe sont chiffrés avec Android Keystore dans un fichier exclu des sauvegardes Android : le mot de passe sert à chaque synchronisation et n’est conservé nulle part ailleurs. Un fichier d’état garde les empreintes de la dernière synchronisation et les conflits à régler. Une sauvegarde remplacée par celle du cloud est d’abord copiée dans le stockage privé de l’application, cinq versions par jeu.
+- **Fin.** La déconnexion efface l’adresse, le mot de passe et l’état de synchronisation de l’appareil. Elle ne supprime ni les sauvegardes du téléphone ni les fichiers du dossier WebDAV, que l’utilisateur gère lui-même.
 
 ## Jaquettes en ligne (facultatif)
 

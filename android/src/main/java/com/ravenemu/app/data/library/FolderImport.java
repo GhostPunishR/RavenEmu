@@ -30,10 +30,10 @@ public final class FolderImport {
     }
 
     public static final class Child {
-        final String id, name;
-        final boolean folder;
+        public final String id, name;
+        public final boolean folder;
         /** -1 when the provider does not say. */
-        final long size;
+        public final long size;
 
         public Child(String id, String name, boolean folder, long size) {
             this.id = id; this.name = name; this.folder = folder; this.size = size;

@@ -41,9 +41,13 @@
  * libretro/glsl-shaders cba01a48b0974a1232bea68d999a7c21bc4c233e:
  * interpolation/shaders/sharp-bilinear.glsl (Themaister) and
  * handheld/shaders/lcd3x.glsl (Gigaherz).
+ * RavenEmu additions, 2026-11-22: a RetroArch GLSL preset the player
+ * imported, drawn by ../shaders/shader_state.c in place of the stock
+ * program; written for RavenEmu, no new upstream source is imported.
  */
 
 #include "gles2_renderer.h"
+#include "shader_state.h"
 #include <GLES2/gl2.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -173,6 +177,7 @@ error:
 }
 
 void raven_video_reset(void) {
+    raven_shaders_reset();
     texture_width = texture_height = 0;
     texture_filter = 0;
     upload_pending = 1;
@@ -192,6 +197,7 @@ void raven_video_set_options(int next_integer_scale, int next_brightness, int ne
 void raven_video_init_gl(void) {
     /* Old names belong to the lost context. Do not delete them here. */
     program = texture = 0;
+    raven_shaders_context_lost();
     max_texture_edge = 0;
     raven_video_reset();
     create_pipeline();
@@ -243,6 +249,11 @@ void raven_video_draw(const uint8_t *rgba, unsigned width, unsigned height,
         upload_pending = 0;
     }
     if (texture_filter != wanted_filter()) {
+        /* After a preset, which sets its own: the stock wrap comes back too. */
+        if (!texture_filter) {
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        }
         texture_filter = wanted_filter();
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, texture_filter);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, texture_filter);
@@ -264,6 +275,13 @@ void raven_video_draw(const uint8_t *rgba, unsigned width, unsigned height,
     /* The beta pins the picture to the top: the free space stays below it,
      * next to the touch controls. GL counts rows from the bottom. */
     glViewport((surface_width - w) / 2, surface_height - h, w, h);
+    /* An imported preset draws the picture in the same place; the built-in
+     * effects, brightness and contrast then wait. */
+    if (raven_shaders_draw(texture, rgba, dirty, width, height,
+                           (surface_width - w) / 2, surface_height - h, w, h)) {
+        texture_filter = 0;
+        return;
+    }
     const GLfloat vertex[] = {-1.f,-1.f, 1.f,-1.f, -1.f,1.f, 1.f,1.f};
     const GLfloat coords[] = {0.f,1.f, 1.f,1.f, 0.f,0.f, 1.f,0.f};
     const GLfloat identity[] = {1.f,0.f,0.f,0.f, 0.f,1.f,0.f,0.f,

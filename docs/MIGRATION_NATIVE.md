@@ -32,9 +32,11 @@ documentation et le README sur l'application native.
   `targetSdk` de `android/`.
 - **Données** : l'application garde l'identifiant `com.ravenemu.dev`. Une bêta
   `com.ravenemu.preview` déjà installée n'est ni lue ni modifiée.
-- **RavenCore** épinglé à la version 0.17.1 : son, image et HDMA de la Game
-  Boy et de la Game Boy Color plus proches de la console (SameSuite, 51 tests
-  sur 76 au lieu de 22) ; depuis la 0.16.0, la Game Boy Color et la Game
+- **RavenCore** épinglé à la version 0.17.4 : son, image, HDMA et
+  minutage de la Game Boy et de la Game Boy Color plus proches de la console
+  (SameSuite, 51 tests sur 76 au lieu de 22 ; GBMicrotest, 355 sur 513 au
+  lieu de 304 ; Mealybug Tearoom et AGE du mode 3, 37 % de pixels faux en
+  moins) ; depuis la 0.16.0, la Game Boy Color et la Game
   Boy ne forment plus qu'un core, RavenGBC, qui émule la console choisie pour
   chaque jeu (corrections de la relecture des cœurs depuis la 0.15.4 ; son GBC
   sans parasites depuis la 0.15.3 ; cœur GBA de 1,2 à 1,5 fois plus rapide depuis la 0.15.2 et cœur
@@ -1063,6 +1065,96 @@ bêta (`GbFolderImporter`, `FolderImportSummaryDialog`).
 
 Écart : la bêta ne propose pas de sélection de plusieurs fichiers avec « + » ;
 elle n'est pas ajoutée. Validation sur téléphone à faire.
+
+## Sauvegardes, lot S-4 : synchronisation WebDAV
+
+Demande du propriétaire (22 novembre 2026) : synchroniser les sauvegardes
+dans le cloud, par **WebDAV comme RetroArch**, et seulement les
+**sauvegardes de cartouche**. Nouveauté : la bêta n'avait pas de cloud.
+
+- **Paramètres → Sauvegardes cloud** (`CloudSettingsPage`) : adresse
+  `https://` d'un dossier WebDAV, identifiant, mot de passe d'application,
+  vérifiés (`CloudSync.verify`) avant d'être scellés par Android Keystore
+  (`CloudAccount`, fichier exclu des sauvegardes). Puis carte du compte,
+  état de la dernière synchronisation, « Synchroniser automatiquement »,
+  « Synchroniser maintenant », conflits et déconnexion.
+- **Règle à trois états** (`CloudSyncPlan`), comme le manifeste local de
+  RetroArch : sauvegarde du téléphone, du cloud, et celle de la dernière
+  synchronisation. Un seul côté a changé : il est suivi ; les deux : conflit,
+  réglé par le joueur ; une sauvegarde absente d'un côté y est copiée.
+  Jamais de suppression.
+- **Dossier** : `ravenemu-saves.json` (format 1) liste chaque jeu (SHA-256 de
+  sa ROM) avec l'empreinte, la taille, la date et l'appareil de sa sauvegarde,
+  plus les deux versions précédentes ; chaque version a son fichier
+  `ravenemu-<jeu>-<16 chiffres de son SHA-256>.srm`, jamais réécrit avec
+  d'autres octets. La liste n'est remplacée que si personne ne l'a changée
+  (`If-Match` sur son ETag ; `If-None-Match: *` pour la créer) ; sinon la
+  synchronisation repart de la nouvelle liste (trois passes au plus).
+- **Côté téléphone** (`CloudSaves`) : lectures et remplacements sur
+  `SaveStorage.IO`, après la dernière écriture du lecteur ; une sauvegarde
+  reçue est vérifiée (taille et SHA-256) puis remplace l'ancienne, mise de
+  côté dans `files/cloud/backups/` (cinq versions par jeu), seulement si elle
+  est encore celle qui a été lue et si son jeu n'est pas en cours (la
+  bibliothèque marque les jeux qu'elle lance).
+- **Déclenchement** (`CloudSyncRunner`, un seul fil pour l'application) : au
+  retour à la bibliothèque, au plus toutes les deux minutes sauf à la
+  fermeture d'un jeu, et à la demande.
+- **Réseau** (`WebDavHttp`) : GET, PUT et DELETE seulement, en HTTPS, Basic
+  sur l'hôte du dossier, sans suivre de redirection ; aucune bibliothèque
+  tierce.
+- Tests : `CloudSyncPlanTest`, `CloudManifestTest`, `CloudSyncTest` (deux
+  téléphones et un dossier en mémoire : envoi, réception, conflits et
+  réponses, liste changée pendant l'envoi, fichier altéré, jeu en cours,
+  sauvegarde illisible, historique), `CloudSavesTest`, `CloudAccountTest`,
+  `WebDavHttpTest` (requêtes reçues par un serveur local),
+  `CloudSettingsPageTest` (connexion, refus, conflit réglé, déconnexion).
+
+Limites : HTTPS avec un certificat reconnu par Android seulement ; le dossier
+doit exister ; pas encore de restauration des versions mises de côté depuis
+l'application. Validation sur téléphones et serveurs réels (Nextcloud,
+kDrive, NAS) à faire.
+
+## Vidéo, lot SH-1 : shaders RetroArch (.glslp) importés
+
+Demande du propriétaire (22 novembre 2026) : des shaders externes, au format
+**.glslp d'abord**, **importés par l'utilisateur** (aucun shader fourni).
+Nouveauté : la bêta n'avait que les effets intégrés.
+
+- **Natif** (`android/src/main/cpp/hardware/video/shaders/`, écrit pour
+  RavenEmu d'après le format documenté) : `shader_preset.c` lit les presets
+  (clés, guillemets, commentaires, `#reference` sur huit niveaux, textures,
+  valeurs des paramètres) et refuse tout chemin hors du dossier ;
+  `shader_source.c` lit les `#pragma parameter` et prépare les deux étages
+  (`#define VERTEX` ou `FRAGMENT`, `PARAMETER_UNIFORM`, `#version` retiré,
+  précision ajoutée si absente) ; `shader_chain.c` dessine les passes en
+  GLES2 : un framebuffer par passe, échelles `source`, `viewport` et
+  `absolute`, `filter_linear`, `wrap_mode`, `frame_count_mod`, alias,
+  uniforms de RetroArch, textures LUT, historique de sept images
+  (`PrevTexture` à `Prev6Texture`) ; `shader_state.c` prépare le preset sur un
+  fil de travail, le compile sur le fil GL, le recompile après la perte du
+  contexte. `gles2_renderer.c` dessine par lui quand il y en a un, au même
+  cadrage ; sinon rien ne change.
+- **Java** : `ShaderPacks` (import d'un `.zip` ou d'un dossier dans
+  `files/shaders/`, seulement `.glslp`, `.glsl`, images et licences, chemins
+  vérifiés, 8 000 fichiers et 192 Mio au plus, installation d'un bloc),
+  `ShaderSettings` (preset choisi, valeurs par preset), `ShaderSettingsPage`
+  (**Paramètres → Vidéo → Shaders** et **Paramètres du shader**),
+  `PlayerShaders` (au retour dans le jeu : préparation à part, images LUT
+  décodées par Android, compilation sur le fil GL, erreur dite une fois),
+  `NativeShaders` et `jni/shader_bridge.c`.
+- Tests : `raven_native_shader_preset` (lecture, références, refus) ;
+  `raven_native_shader_pixels`, onze cas rendus par le GLES2 de Mesa (une
+  passe, échelle et tailles, alias et original, paramètres, texture LUT,
+  FrameCount, image précédente, erreur de compilation, image droite à travers
+  les framebuffers, contexte perdu, preset hors du dossier) ; Java :
+  `ShaderPacksTest`, `ShaderSettingsTest`, `PlayerShadersTest`,
+  `ShaderSettingsPageTest`.
+
+Limites : pas de `.slangp` ; framebuffers en 8 bits (pas de `float` ni de
+`sRGB`) ; répétition des textures seulement avec `GL_OES_texture_npot` ;
+luminosité, contraste et effet intégré attendent tant qu'un preset dessine.
+Validation sur téléphones (compatibilité et coût des presets courants) à
+faire.
 
 ## Codes de triche, lots T-1 et T-2
 

@@ -22,6 +22,18 @@ Dans **Paramètres → Vidéo** :
 
 Les jeux GBC et GBA restent en couleur : les profils DMG vert et Pocket gris ne les concernent pas. La correction LCD, désactivée par défaut, ne touche jamais un jeu Game Boy. Luminosité et contraste s'appliquent aux trois consoles.
 
+### Shaders RetroArch (.glslp)
+
+**Paramètres → Vidéo → Shaders** dessine l'image avec un preset GLSL de RetroArch : écrans CRT (crt-geom, crt-easymode…), grilles LCD, agrandissement xBR ou ScaleFX. **Aucun shader n'est fourni** : importez le vôtre.
+
+1. Téléchargez un pack, par exemple l'archive `.zip` du dépôt [libretro/glsl-shaders](https://github.com/libretro/glsl-shaders) (bouton *Code → Download ZIP*).
+2. Touchez **Importer un .zip** (ou **Importer un dossier**) : seuls les presets `.glslp`, leurs shaders `.glsl`, leurs images et les fichiers de licence sont copiés dans l'espace privé de l'application.
+3. **Choisir un preset…** propose les dossiers du pack, puis leurs presets. **Paramètres du shader** règle les valeurs que le preset propose (`#pragma parameter`) ; **Valeurs du preset** les remet. **Aucun shader : effets intégrés** revient aux réglages ci-dessus.
+
+Le preset s'applique au retour dans le jeu. S'il ne se charge pas ou ne compile pas, un message le dit et l'image reste dessinée sans lui. Avec un shader, la luminosité, le contraste et l'effet d'écran intégré attendent ; les pixels entiers et le cadrage restent. **Rétablir l'affichage d'origine** retire aussi le shader.
+
+Limites : les presets `.slangp` (format Vulkan) ne sont pas pris en charge ; un shader qui demande une image en virgule flottante ou sRGB est dessiné en 8 bits ; les modes de répétition d'une texture dépendent de l'extension `GL_OES_texture_npot` du téléphone ; les shaders les plus lourds (crt-royale) peuvent ralentir le jeu.
+
 Le lecteur respecte les dimensions fournies par le moteur et affiche l'image sans lissage : **160 × 144** pour GB/GBC, **240 × 160** pour GBA. Le mélange d'images s'applique après les couleurs et la correction LCD, aussi aux deux jeux reliés sur un même téléphone ; les pixels entiers ne changent rien avec un skin Delta, qui place lui-même l'image.
 
 ## Fluidité

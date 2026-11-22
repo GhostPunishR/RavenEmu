@@ -86,7 +86,8 @@ public final class PlaybackSettingsActivityTest {
     @Test public void everyCategoryHasItsOwnDrawnIconConsoleIncluded() {
         PlaybackSettingsActivity activity = open(null, null).get();
         String[][] expected = {{"retroachievements", "TROPHY"}, {"général", "SLIDERS"}, {"audio", "SPEAKER"},
-                {"vidéo", "MONITOR"}, {"console", "GB"}, {"interface", "GAMEPAD"}, {"à propos", "INFO"}};
+                {"vidéo", "MONITOR"}, {"console", "GB"}, {"interface", "GAMEPAD"}, {"sauvegardes cloud", "CLOUD"},
+                {"à propos", "INFO"}};
         java.util.Set<RavenIcon.Glyph> seen = new java.util.HashSet<>();
         for (String[] row : expected) {
             View category = described(activity, "Ouvrir les réglages " + row[0]);
