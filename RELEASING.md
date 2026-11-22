@@ -63,24 +63,24 @@ Le job **échoue**, au lieu d'émettre un APK présenté comme publiable, dans l
 
 ## Publier une version
 
-Seul le propriétaire publie : **un tag `vX.Y.Z` poussé par lui est la décision de publication** ([ARCHITECTURE.md](ARCHITECTURE.md), section 8). Les agents ne poussent jamais de tag et ne créent jamais de release.
+Seul le propriétaire publie : **un tag `vX.Y.Z` qu'il pousse, ou la publication qu'il lance ou demande explicitement, est la décision de publication** ([ARCHITECTURE.md](ARCHITECTURE.md), section 8). Les agents ne poussent jamais de tag et ne lancent la publication que sur une demande explicite du propriétaire.
 
 1. **Valider sur appareil** l'APK Release signé de `main` ([Avant de distribuer](#avant-de-distribuer)).
 2. **Préparer la version** par une pull request vers `main` :
    - `ravenemuVersion=X.Y.Z` dans `gradle.properties` (déjà `1.0.0` pour la première) ;
    - dans [CHANGELOG.md](CHANGELOG.md), renommer `## Non publié` en `## X.Y.Z - AAAA-MM-JJ`, à la date de publication. Son texte devient les notes de la release, et ses liens vers les fichiers du dépôt y pointent sur le tag.
-3. **Taguer le commit de `main`** une fois la pull request fusionnée :
+3. **Lancer la publication**, une fois la pull request fusionnée, de l'une de ces deux façons :
+   - **sans git** : onglet **Actions → RavenEmu / Release → Run workflow**, branche `main`, version `X.Y.Z`. Le workflow crée le tag `vX.Y.Z` sur le commit de `main` qu'il a compilé et signé, et refuse un tag qui existe déjà ;
+   - **avec git**, en taguant le commit de `main` :
 
-   ```bash
-   git switch main && git pull
-   git tag -a v1.0.0 -m "RavenEmu 1.0.0"
-   git push origin v1.0.0
-   ```
+     ```bash
+     git switch main && git pull
+     git tag -a v1.0.0 -m "RavenEmu 1.0.0"
+     git push origin v1.0.0
+     ```
 
-4. Le workflow [RavenEmu / Release](.github/workflows/release.yml) se lance sur le tag. Il exécute **toute la CI** de RavenEmu / Applications sur ce commit, puis le job de signature contrôle trois points :
-   - le tag est égal à `ravenemuVersion` ;
-   - CHANGELOG.md a sa section datée ;
-   - le commit appartient à `main`.
+   N'utilisez pas le formulaire « Draft a new release » de GitHub : il créerait une release sans APK, et le workflow échouerait ensuite sur la release déjà existante.
+4. Le workflow [RavenEmu / Release](.github/workflows/release.yml) contrôle d'abord que la version est égale à `ravenemuVersion` et que CHANGELOG.md a sa section datée. Il exécute ensuite **toute la CI** de RavenEmu / Applications sur ce commit ; pour un tag poussé, le job de signature vérifie aussi que le commit appartient à `main`.
 
    Il crée ensuite la release GitHub **`vX.Y.Z`**, intitulée « RavenEmu X.Y.Z ». Elle porte les notes et trois fichiers : `RavenEmu-X.Y.Z.apk`, `RavenEmu-X.Y.Z-sources.tar.gz` et `SHA256SUMS.txt`, vérifiés avant l'envoi. Seul ce dernier job reçoit le droit d'écrire.
 5. **En cas d'échec**, rien n'est publié. Corrigez par une pull request, supprimez le tag (`git push --delete origin v1.0.0` puis `git tag -d v1.0.0`) et taguez de nouveau. Une release déjà existante n'est jamais écrasée : le job échoue.

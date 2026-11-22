@@ -1,33 +1,81 @@
 name: RavenEmu / Release
-# A tag vX.Y.Z on a commit of main publishes that version of RavenEmu: the
-# whole CI of RavenEmu / Applications runs on it and signs its APK, then the
-# APK, its corresponding sources and their SHA-256 become the GitHub Release
-# vX.Y.Z, with the CHANGELOG.md section of X.Y.Z as its notes. Only the
-# owner pushes such a tag: nothing else publishes a version (RELEASING.md).
+# Publishes a version of RavenEmu, on the owner's decision only: a tag vX.Y.Z
+# he pushes on a commit of main, or « Run workflow » on main with the version
+# X.Y.Z, which creates that tag. The whole CI of RavenEmu / Applications runs
+# on the commit and signs its APK; then the APK, its corresponding sources
+# and their SHA-256 become the GitHub Release vX.Y.Z, with the CHANGELOG.md
+# section of X.Y.Z as its notes. Nothing else publishes (RELEASING.md).
 
 on:
   push:
     tags:
       - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version à publier, X.Y.Z (égale à ravenemuVersion de gradle.properties)
+        required: true
+        type: string
 
 concurrency:
-  group: ravenemu-release-${{ github.ref }}
+  group: ravenemu-release
   cancel-in-progress: false
 
 permissions:
   contents: read
 
 jobs:
+  version:
+    name: Contrôler la version
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Lire le tag et le comparer à la version
+        id: tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_EVENT_NAME" == workflow_dispatch ]]; then
+            # A version is published from main only, and only once.
+            if [[ "$GITHUB_REF" != refs/heads/main ]]; then
+              echo "::error::Lancez la publication depuis main."
+              exit 1
+            fi
+            if [[ ! "$REQUESTED_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "::error::Version invalide : X.Y.Z attendu."
+              exit 1
+            fi
+            tag="v$REQUESTED_VERSION"
+            if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" > /dev/null 2>&1; then
+              echo "::error::Le tag $tag existe déjà : la version est déjà publiée ou en cours."
+              exit 1
+            fi
+          else
+            tag="$GITHUB_REF_NAME"
+          fi
+          # The tag equals ravenemuVersion, and CHANGELOG.md holds its section.
+          python3 scripts/release_version.py --tag "$tag"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
   build:
     name: Applications
+    needs: version
     uses: ./.github/workflows/ci-applications.yml
     secrets: inherit
 
   publish:
     name: Publier la release GitHub
-    needs: build
+    needs: [version, build]
     runs-on: ubuntu-latest
-    # The only job that may write: it creates the release and its files.
+    # The only job that may write: it creates the release, its files and,
+    # when started from main, its tag on the commit that was built.
     permissions:
       contents: write
     steps:
@@ -42,11 +90,13 @@ jobs:
           path: release
       - name: Vérifier les fichiers et écrire les notes
         env:
+          RAVENEMU_TAG: ${{ needs.version.outputs.tag }}
           RAVENEMU_VERSION: ${{ needs.build.outputs.version }}
         run: |
           set -euo pipefail
+          test "$RAVENEMU_TAG" = "v$RAVENEMU_VERSION"
           (cd release && sha256sum -c SHA256SUMS.txt)
-          python3 scripts/release_version.py --tag "$GITHUB_REF_NAME" \
+          python3 scripts/release_version.py --tag "$RAVENEMU_TAG" \
             --repository-slug "$GITHUB_REPOSITORY" --notes "$RUNNER_TEMP/release-notes.md"
           for file in "RavenEmu-$RAVENEMU_VERSION.apk" "RavenEmu-$RAVENEMU_VERSION-sources.tar.gz" SHA256SUMS.txt; do
             test -s "release/$file"
@@ -54,10 +104,18 @@ jobs:
       - name: Créer la release
         env:
           GH_TOKEN: ${{ github.token }}
+          RAVENEMU_TAG: ${{ needs.version.outputs.tag }}
           RAVENEMU_VERSION: ${{ needs.build.outputs.version }}
         run: |
           set -euo pipefail
-          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag \
+          # A pushed tag must exist already; from main, the tag is created
+          # on the commit that was built and signed.
+          if [[ "$GITHUB_EVENT_NAME" == push ]]; then
+            target=(--verify-tag)
+          else
+            target=(--target "$GITHUB_SHA")
+          fi
+          gh release create "$RAVENEMU_TAG" --repo "$GITHUB_REPOSITORY" "${target[@]}" \
             --title "RavenEmu $RAVENEMU_VERSION" --notes-file "$RUNNER_TEMP/release-notes.md" \
             "release/RavenEmu-$RAVENEMU_VERSION.apk" \
             "release/RavenEmu-$RAVENEMU_VERSION-sources.tar.gz" \
