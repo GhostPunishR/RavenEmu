@@ -4,6 +4,7 @@
 
 ### Application native à la place de la bêta
 
+- **Réglages découpés par page** : `PlaybackSettingsActivity` (1 297 lignes) ne garde que la navigation ; chaque groupe de pages a son fichier (`AudioSettingsPages`, `SkinSettingsPage`…) et les lignes communes sont dans `SettingsWidgets`, selon la règle d'AGENTS.md. Aucun changement visible : les 21 pages donnent le même arbre de vues avant et après.
 - La migration native est fusionnée dans `main` (6 novembre 2026). L'application Android est désormais écrite en Java, avec un frontend C qui charge les cores Libretro de RavenCore et des pilotes natifs pour l'image (GLES2), le son (AAudio) et les commandes. Voir [ARCHITECTURE.md](ARCHITECTURE.md).
 - Son identifiant est `com.ravenemu.dev` : elle s'installe à côté de la bêta `com.ravenemu.preview` sans lire ses données. Ce n'est pas une mise à jour de la bêta, et aucune version publique n'en est encore publiée ([RELEASING.md](RELEASING.md)).
 - **Retirés**, sur décision du propriétaire : la bêta Android Kotlin/Compose (`androidApp/`, `shared/`), l'application iOS (`iosApp/`) et les ponts natifs de la bêta (`native/`). Leur code reste dans l'historique git, au commit `de1c9cc`.
