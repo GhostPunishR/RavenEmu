@@ -150,8 +150,10 @@ The test SDK is resolved through Gradle;
 the application remains Java-only, without Kotlin or Compose.
 
 The build should package `libraven_android.so`,
-`ravenemu_gbc_libretro.so` (Game Boy Color, which runs Game Boy games too) and
-`ravenemu_gba_libretro.so`. They are compiled for ARM64 only.
+`libravenemu_gbc_libretro.so` (Game Boy Color, which runs Game Boy games too) and
+`libravenemu_gba_libretro.so`. They are compiled for ARM64 only. The cores take
+the `lib` prefix in the APK only: Android installs from a non-debuggable
+(Release) APK nothing but `lib*.so`, and the player loads these names.
 
 Launch **RavenEmu Dev** and use the **+** button to copy your
 `.gb`, `.gbc` or `.gba` into the app's private library. The library grid
