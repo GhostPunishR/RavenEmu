@@ -17,6 +17,13 @@ L'application native n'a **pas encore de version publique**. Sa première versio
 
 La version tient en **un seul endroit** : `ravenemuVersion=X.Y.Z` dans [`gradle.properties`](gradle.properties). `android/build.gradle.kts` en tire le nom et le code de version, et refuse toute autre forme ; le mineur et le correctif restent sous 100, pour que le code de version croisse d'une version à la suivante. Le tag qui publie une version doit être exactement `vX.Y.Z`.
 
+Chaque chiffre a un sens ([AGENTS.md](AGENTS.md#numéros-de-version)) :
+- **X** marque une **version stable**, une nouvelle génération ;
+- **Y** marque une **mise à jour majeure**, avec de nouvelles fonctions ;
+- **Z** marque un **correctif** : des bugs corrigés, sans nouvelle fonction.
+
+Augmenter un chiffre remet à zéro ceux qui le suivent : `1.4.2` devient `1.4.3` pour un correctif, `1.5.0` pour une mise à jour majeure, `2.0.0` pour une nouvelle version stable.
+
 Les trois applications s'installent côte à côte et aucune ne lit les données d'une autre : la bêta `com.ravenemu.preview`, l'APK de développement `com.ravenemu.dev` et la version publiée `com.ravenemu`. Les sauvegardes de l'APK de développement ne passent donc pas toutes seules dans `com.ravenemu`. Pour les reprendre, exportez-les depuis la fiche du jeu puis importez-les, ou utilisez **Paramètres → Sauvegardes cloud** dans les deux applications.
 
 ## APK de développement

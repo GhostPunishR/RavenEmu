@@ -128,6 +128,24 @@ Kotlin, hors application. Les sources Kotlin de la **bêta retirée** peuvent
   intégrités et chemins, utiliser le stockage privé et les écritures atomiques.
   Ne jamais intégrer de ROM commerciale, BIOS ou jaquette protégée.
 
+## Numéros de version
+
+La version de RavenEmu s'écrit **`X.Y.Z`** (par exemple `1.0.0`), en un
+seul endroit : `ravenemuVersion` dans `gradle.properties`. Chaque chiffre a
+un sens fixé par le propriétaire :
+
+| Chiffre | Sens | Exemple |
+| --- | --- | --- |
+| **X**, premier | **Version stable** : une nouvelle génération de l'application | `1.4.2` → `2.0.0` |
+| **Y**, deuxième | **Mise à jour majeure** : nouvelles fonctions ou changements visibles | `1.4.2` → `1.5.0` |
+| **Z**, troisième | **Correctif** : bugs corrigés, sans nouvelle fonction | `1.4.2` → `1.4.3` |
+
+- Augmenter un chiffre remet à zéro ceux qui le suivent.
+- Y et Z restent sous 100 : le code de version Android, `X·10000 + Y·100 + Z`, doit croître d'une version à la suivante.
+- Une version qui mêle nouvelles fonctions et correctifs est une mise à jour majeure (Y).
+- Seul le propriétaire décide de passer à une nouvelle version stable (X).
+- Un agent peut proposer le prochain numéro dans une pull request, selon ces règles. Il ne pousse jamais le tag `vX.Y.Z`, qui publie la version ([RELEASING.md](RELEASING.md#publier-une-version)).
+
 ## Qualité technique et validation obligatoire
 
 1. Conserver l'ABI Libretro correcte et isoler les accès aux cores sur
