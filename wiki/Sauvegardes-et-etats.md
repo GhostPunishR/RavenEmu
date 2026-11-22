@@ -17,6 +17,30 @@ La mémoire batterie modifiée est enregistrée périodiquement, ainsi qu'à la 
 
 Les fichiers sont écrits atomiquement. Cela ne remplace pas une copie externe : une désinstallation ou un effacement des données supprime le stockage privé.
 
+## Synchronisation dans le cloud (WebDAV)
+
+Comme dans RetroArch, RavenEmu synchronise les **sauvegardes de cartouche** avec un dossier WebDAV : Nextcloud, ownCloud, kDrive, Koofr, pCloud, un NAS… Vous retrouvez ainsi votre partie sur un autre téléphone. Les ROMs, le BIOS et les états instantanés ne sont jamais envoyés.
+
+1. Dans votre cloud, créez un dossier dédié, par exemple `RavenEmu`, et copiez son adresse WebDAV. Avec Nextcloud : `https://votre-serveur/remote.php/dav/files/identifiant/RavenEmu/`.
+2. Créez si possible un **mot de passe d'application** : votre cloud permet de le révoquer sans changer votre mot de passe principal.
+3. Dans **Paramètres → Sauvegardes cloud**, saisissez l'adresse (`https://` obligatoire), l'identifiant et le mot de passe, puis **Se connecter**. RavenEmu vérifie le dossier et lance une première synchronisation.
+
+**Quand ?** Au lancement de RavenEmu et à la fermeture d'un jeu (réglage **Synchroniser automatiquement**), ou avec **Synchroniser maintenant**. Un jeu en cours n'est jamais modifié.
+
+**Règle.** Pour chaque jeu de la bibliothèque, RavenEmu compare la sauvegarde du téléphone, celle du cloud et celle de la dernière synchronisation :
+
+| Situation | Résultat |
+|---|---|
+| Seul le téléphone a changé, ou le cloud n'a rien | La sauvegarde du téléphone est envoyée |
+| Seul le cloud a changé, ou le téléphone n'a rien | Celle du cloud remplace celle du téléphone, mise de côté d'abord |
+| Les deux ont changé (ou première synchronisation avec deux sauvegardes différentes) | **Conflit** : rien n'est remplacé, vous choisissez |
+
+Un conflit apparaît dans **Paramètres → Sauvegardes cloud**, avec les dates et l'appareil qui a envoyé la version du cloud. **Garder ce téléphone** envoie la vôtre ; **Prendre le cloud** la remplace. Aucune version n'est effacée : la sauvegarde remplacée sur le téléphone est gardée dans le stockage privé (cinq versions par jeu), et le dossier garde les **deux versions précédentes** de chaque jeu, dans des fichiers `ravenemu-<jeu>-<version>.srm` décrits par `ravenemu-saves.json`.
+
+Un jeu est reconnu par l'empreinte de sa ROM : la synchronisation ne concerne que deux copies de la **même ROM exacte**. **Déconnexion** oublie l'adresse et le mot de passe sur l'appareil, sans rien supprimer, ni sur le téléphone ni dans le cloud.
+
+Limites actuelles : HTTPS seulement, avec un certificat reconnu par Android (pas de certificat auto-signé de NAS) ; le dossier doit exister avant la connexion ; les versions mises de côté sur le téléphone ne se restaurent pas encore depuis l'application.
+
 ## Quatre emplacements d'état
 
 Dans le menu **⋮** du lecteur, chaque jeu dispose de **quatre emplacements**, avec miniature et date lorsqu'elles sont disponibles.

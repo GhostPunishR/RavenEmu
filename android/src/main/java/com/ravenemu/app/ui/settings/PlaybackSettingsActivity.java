@@ -21,10 +21,11 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /** Java Views counterpart of the beta's settings: RetroAchievements, Général,
- * Audio, Vidéo, Console, Interface and À propos. The library's ⚙ opens it on
- * its categories. Only settings connected to the native drivers are presented.
- * Each page group has its own file (AudioSettingsPages, SkinSettingsPage…), its rows
- * are SettingsWidgets'; this activity holds the page shown and its navigation. */
+ * Audio, Vidéo, Console, Interface, Sauvegardes cloud and À propos. The
+ * library's ⚙ opens it on its categories. Only settings connected to the
+ * native drivers are presented. Each page group has its own file
+ * (AudioSettingsPages, SkinSettingsPage…), its rows are SettingsWidgets';
+ * this activity holds the page shown and its navigation. */
 public final class PlaybackSettingsActivity extends Activity implements RavenTheme.Host {
     public static final String EXTRA_PAGE = "playback.settings.page";
     public static final String HOME = "home";
@@ -35,6 +36,7 @@ public final class PlaybackSettingsActivity extends Activity implements RavenThe
     public static final String GENERAL = "general";
     public static final String ABOUT = "about";
     public static final String RETRO = "retroachievements";
+    public static final String CLOUD = "cloud";
     /** Each category lists its sub-pages; "category/sub-page" goes back to its category. */
     public static final String GENERAL_EMULATION = "general/emulation";
     public static final String GENERAL_LATENCY = "general/latency";
@@ -52,11 +54,11 @@ public final class PlaybackSettingsActivity extends Activity implements RavenThe
     private static final String[] PAGES = {HOME, AUDIO, VIDEO, CONSOLE, INTERFACE, GENERAL, ABOUT,
             GENERAL_EMULATION, GENERAL_LATENCY, AUDIO_SOUND, AUDIO_QUALITY, VIDEO_COLORS, VIDEO_RENDERING,
             VIDEO_PICTURE, CONSOLE_GB, CONSOLE_GBA, INTERFACE_CONTROLS, INTERFACE_CARTRIDGE, INTERFACE_SKINS, RETRO,
-            INTERFACE_THEME};
+            INTERFACE_THEME, CLOUD};
     private static final String[] TITLES = {"Paramètres", "Audio", "Vidéo", "Console", "Interface",
             "Général", "À propos", "Émulation", "Latence", "Son du jeu", "Qualité du son", "Couleurs",
             "Rendu", "Taille et réglages", "Game Boy et GBC", "Game Boy Advance", "Commandes tactiles",
-            "Cartouche", "Skin Delta", "RetroAchievements", "Thème"};
+            "Cartouche", "Skin Delta", "RetroAchievements", "Thème", "Sauvegardes cloud"};
     static final int PICK_BIOS = 1;
     static final int PICK_SKIN = 2;
 
@@ -86,6 +88,7 @@ public final class PlaybackSettingsActivity extends Activity implements RavenThe
     private InterfaceSettingsPages interfaces;
     private SkinSettingsPage skinPage;
     private AboutSettingsPage about;
+    private CloudSettingsPage cloud;
 
     @Override public RavenTheme theme() { return theme; }
 
@@ -105,7 +108,9 @@ public final class PlaybackSettingsActivity extends Activity implements RavenThe
         interfaces = new InterfaceSettingsPages(this, widgets);
         skinPage = new SkinSettingsPage(this, widgets);
         about = new AboutSettingsPage(this, widgets);
+        cloud = new CloudSettingsPage(this, widgets);
         achievements.start();
+        cloud.start();
         String initialPage = getIntent().getStringExtra(EXTRA_PAGE);
         if (state != null) {
             initialPage = state.getString("settings.page", initialPage);
@@ -177,6 +182,7 @@ public final class PlaybackSettingsActivity extends Activity implements RavenThe
             case INTERFACE_SKINS: skinPage.interfaceSkinsPage(); break;
             case INTERFACE_THEME: interfaces.interfaceThemePage(); break;
             case RETRO: achievements.retroPage(); break;
+            case CLOUD: cloud.cloudPage(); break;
             default: homePage();
         }
         final int restoreScroll = scrollPositions[index(page)];
@@ -201,6 +207,8 @@ public final class PlaybackSettingsActivity extends Activity implements RavenThe
         // Delta skins wait for their port, so neither is announced.
         widgets.category("Interface", "Thème, vibrations, capteurs, commandes, style et skin Delta", INTERFACE,
                 RavenIcon.Glyph.GAMEPAD);
+        // The owner's addition: the beta had no cloud.
+        widgets.category("Sauvegardes cloud", "WebDAV : Nextcloud, kDrive, NAS…", CLOUD, RavenIcon.Glyph.CLOUD);
         widgets.category("À propos", "Version, auteur, confidentialité et licences", ABOUT, RavenIcon.Glyph.INFO);
     }
 
@@ -249,6 +257,7 @@ public final class PlaybackSettingsActivity extends Activity implements RavenThe
     @Override protected void onDestroy() {
         skinPage.dismiss();
         achievements.dismiss();
+        cloud.dismiss();
         io.shutdown();
         network.shutdown();
         super.onDestroy();

@@ -32,7 +32,7 @@ public final class RavenIcon extends Drawable {
         SETTINGS, ADD, MORE, SEARCH, BACK, CHEVRON, EXTERNAL,
         ALL, GB, GBC, GBA,
         TROPHY, SLIDERS, SPEAKER, MONITOR, GAMEPAD, INFO,
-        STAR, RADIO_ON, RADIO_OFF, MENU, SWAP,
+        STAR, RADIO_ON, RADIO_OFF, MENU, SWAP, CLOUD,
     }
 
     private static final float STROKE = 2f;
@@ -71,6 +71,8 @@ public final class RavenIcon extends Drawable {
                 + "M8,6H6.5A2,2 0 0 0 6.5,10H8M16,6H17.5A2,2 0 0 1 17.5,10H16M12,13V17M10,17H14M8.5,20H15.5", ""});
         SPECS.put(Glyph.SLIDERS, new String[]{"M4,7H8M12,7H20M4,12H14M18,12H20M4,17H6M10,17H20"
                 + circle(10, 7, 2) + circle(16, 12, 2) + circle(8, 17, 2), ""});
+        SPECS.put(Glyph.CLOUD, new String[]{"M7.5,18.5H17A4,4 0 0 0 17.6,10.55A5.5,5.5 0 0 0 7,9.2"
+                + "A4.7,4.7 0 0 0 7.5,18.5ZM12,16.5V11.8M9.9,13.9L12,11.8L14.1,13.9", ""});
         SPECS.put(Glyph.SPEAKER, new String[]{"M4,9.5H7.5L12,5.5V18.5L7.5,14.5H4Z"
                 + "M15.5,9.5A3.5,3.5 0 0 1 15.5,14.5M18,7A7,7 0 0 1 18,17", ""});
         SPECS.put(Glyph.MONITOR, new String[]{rounded(3, 4, 18, 12, 2) + "M12,16V20M8,20H16", ""});

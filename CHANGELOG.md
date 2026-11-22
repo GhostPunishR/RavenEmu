@@ -4,6 +4,8 @@
 
 ### Application native à la place de la bêta
 
+- **Synchronisation des sauvegardes dans le cloud, par WebDAV comme RetroArch** (**Paramètres → Sauvegardes cloud**) : Nextcloud, ownCloud, kDrive, Koofr, pCloud ou un NAS. Seules les sauvegardes de cartouche des jeux de la bibliothèque sont envoyées, jamais les ROMs, le BIOS ni les états. Au lancement et à la fermeture d'un jeu, ou à la demande ; une sauvegarde changée des deux côtés devient un conflit que vous réglez, sans rien effacer : le téléphone garde les cinq dernières versions remplacées, le dossier les deux versions précédentes. Le mot de passe est chiffré par Android Keystore. Détails dans [docs/MIGRATION_NATIVE.md](docs/MIGRATION_NATIVE.md#sauvegardes-lot-s-4--synchronisation-webdav) ; la [politique de confidentialité](PRIVACY.md) et les [conditions](TERMS.md) sont mises à jour.
+
 - **Réglages découpés par page** : `PlaybackSettingsActivity` (1 297 lignes) ne garde que la navigation ; chaque groupe de pages a son fichier (`AudioSettingsPages`, `SkinSettingsPage`…) et les lignes communes sont dans `SettingsWidgets`, selon la règle d'AGENTS.md. Aucun changement visible : les 21 pages donnent le même arbre de vues avant et après.
 - La migration native est fusionnée dans `main` (6 novembre 2026). L'application Android est désormais écrite en Java, avec un frontend C qui charge les cores Libretro de RavenCore et des pilotes natifs pour l'image (GLES2), le son (AAudio) et les commandes. Voir [ARCHITECTURE.md](ARCHITECTURE.md).
 - Son identifiant est `com.ravenemu.dev` : elle s'installe à côté de la bêta `com.ravenemu.preview` sans lire ses données. Ce n'est pas une mise à jour de la bêta, et aucune version publique n'en est encore publiée ([RELEASING.md](RELEASING.md)).

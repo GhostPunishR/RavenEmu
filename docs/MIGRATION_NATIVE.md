@@ -1064,6 +1064,54 @@ bêta (`GbFolderImporter`, `FolderImportSummaryDialog`).
 Écart : la bêta ne propose pas de sélection de plusieurs fichiers avec « + » ;
 elle n'est pas ajoutée. Validation sur téléphone à faire.
 
+## Sauvegardes, lot S-4 : synchronisation WebDAV
+
+Demande du propriétaire (22 novembre 2026) : synchroniser les sauvegardes
+dans le cloud, par **WebDAV comme RetroArch**, et seulement les
+**sauvegardes de cartouche**. Nouveauté : la bêta n'avait pas de cloud.
+
+- **Paramètres → Sauvegardes cloud** (`CloudSettingsPage`) : adresse
+  `https://` d'un dossier WebDAV, identifiant, mot de passe d'application,
+  vérifiés (`CloudSync.verify`) avant d'être scellés par Android Keystore
+  (`CloudAccount`, fichier exclu des sauvegardes). Puis carte du compte,
+  état de la dernière synchronisation, « Synchroniser automatiquement »,
+  « Synchroniser maintenant », conflits et déconnexion.
+- **Règle à trois états** (`CloudSyncPlan`), comme le manifeste local de
+  RetroArch : sauvegarde du téléphone, du cloud, et celle de la dernière
+  synchronisation. Un seul côté a changé : il est suivi ; les deux : conflit,
+  réglé par le joueur ; une sauvegarde absente d'un côté y est copiée.
+  Jamais de suppression.
+- **Dossier** : `ravenemu-saves.json` (format 1) liste chaque jeu (SHA-256 de
+  sa ROM) avec l'empreinte, la taille, la date et l'appareil de sa sauvegarde,
+  plus les deux versions précédentes ; chaque version a son fichier
+  `ravenemu-<jeu>-<16 chiffres de son SHA-256>.srm`, jamais réécrit avec
+  d'autres octets. La liste n'est remplacée que si personne ne l'a changée
+  (`If-Match` sur son ETag ; `If-None-Match: *` pour la créer) ; sinon la
+  synchronisation repart de la nouvelle liste (trois passes au plus).
+- **Côté téléphone** (`CloudSaves`) : lectures et remplacements sur
+  `SaveStorage.IO`, après la dernière écriture du lecteur ; une sauvegarde
+  reçue est vérifiée (taille et SHA-256) puis remplace l'ancienne, mise de
+  côté dans `files/cloud/backups/` (cinq versions par jeu), seulement si elle
+  est encore celle qui a été lue et si son jeu n'est pas en cours (la
+  bibliothèque marque les jeux qu'elle lance).
+- **Déclenchement** (`CloudSyncRunner`, un seul fil pour l'application) : au
+  retour à la bibliothèque, au plus toutes les deux minutes sauf à la
+  fermeture d'un jeu, et à la demande.
+- **Réseau** (`WebDavHttp`) : GET, PUT et DELETE seulement, en HTTPS, Basic
+  sur l'hôte du dossier, sans suivre de redirection ; aucune bibliothèque
+  tierce.
+- Tests : `CloudSyncPlanTest`, `CloudManifestTest`, `CloudSyncTest` (deux
+  téléphones et un dossier en mémoire : envoi, réception, conflits et
+  réponses, liste changée pendant l'envoi, fichier altéré, jeu en cours,
+  sauvegarde illisible, historique), `CloudSavesTest`, `CloudAccountTest`,
+  `WebDavHttpTest` (requêtes reçues par un serveur local),
+  `CloudSettingsPageTest` (connexion, refus, conflit réglé, déconnexion).
+
+Limites : HTTPS avec un certificat reconnu par Android seulement ; le dossier
+doit exister ; pas encore de restauration des versions mises de côté depuis
+l'application. Validation sur téléphones et serveurs réels (Nextcloud,
+kDrive, NAS) à faire.
+
 ## Codes de triche, lots T-1 et T-2
 
 Portage de `GbCheatList`, `GbCheatStore`, `GbCheatsUi` et `GbCheatsPanel` de

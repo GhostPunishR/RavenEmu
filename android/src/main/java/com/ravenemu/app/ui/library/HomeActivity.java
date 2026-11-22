@@ -2,6 +2,7 @@ package com.ravenemu.app.ui.library;
 import com.ravenemu.app.data.library.CoverRepository;
 import com.ravenemu.app.data.library.LinkCable;
 import com.ravenemu.app.data.library.RomLibrary;
+import com.ravenemu.app.data.saves.CloudSaves;
 import com.ravenemu.app.platform.SystemBarInsets;
 import com.ravenemu.app.ui.common.GameDetailsSheet;
 import com.ravenemu.app.ui.common.RavenIcon;
@@ -106,6 +107,8 @@ public final class HomeActivity extends Activity implements RavenTheme.Host {
             return;
         }
         if (cards != null) reload();
+        // Settings → Sauvegardes cloud: at launch and when a game closes.
+        CloudSyncRunner.libraryShown(this);
     }
 
     private int dp(float value) {
@@ -324,6 +327,7 @@ public final class HomeActivity extends Activity implements RavenTheme.Host {
             pick.setBackground(outline);
             pick.setOnClickListener(view -> {
                 if (partnerDialog != null) partnerDialog.dismiss();
+                CloudSaves.markInPlay(game.key, partner.key);
                 startActivity(new Intent(this, PlayerActivity.class)
                         .putExtra(PlayerActivity.EXTRA_ROM_KEY, game.key)
                         .putExtra(PlayerActivity.EXTRA_LINK_ROM_KEY, partner.key));
@@ -476,6 +480,7 @@ public final class HomeActivity extends Activity implements RavenTheme.Host {
         close.setOnClickListener(view -> dialog.dismiss());
         play.setOnClickListener(view -> {
             dialog.dismiss();
+            CloudSaves.markInPlay(entry.key);
             startActivity(new Intent(this, PlayerActivity.class)
                     .putExtra(PlayerActivity.EXTRA_ROM_KEY, entry.key));
         });
