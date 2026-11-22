@@ -45,6 +45,8 @@ public final class PlaybackSettingsActivity extends Activity implements RavenThe
     public static final String VIDEO_COLORS = "video/colors";
     public static final String VIDEO_RENDERING = "video/rendering";
     public static final String VIDEO_PICTURE = "video/picture";
+    public static final String VIDEO_SHADERS = "video/shaders";
+    public static final String VIDEO_SHADER_PARAMETERS = "video/shaders/parameters";
     public static final String CONSOLE_GB = "console/gb";
     public static final String CONSOLE_GBA = "console/gba";
     public static final String INTERFACE_CONTROLS = "interface/controls";
@@ -54,13 +56,16 @@ public final class PlaybackSettingsActivity extends Activity implements RavenThe
     private static final String[] PAGES = {HOME, AUDIO, VIDEO, CONSOLE, INTERFACE, GENERAL, ABOUT,
             GENERAL_EMULATION, GENERAL_LATENCY, AUDIO_SOUND, AUDIO_QUALITY, VIDEO_COLORS, VIDEO_RENDERING,
             VIDEO_PICTURE, CONSOLE_GB, CONSOLE_GBA, INTERFACE_CONTROLS, INTERFACE_CARTRIDGE, INTERFACE_SKINS, RETRO,
-            INTERFACE_THEME, CLOUD};
+            INTERFACE_THEME, CLOUD, VIDEO_SHADERS, VIDEO_SHADER_PARAMETERS};
     private static final String[] TITLES = {"Paramètres", "Audio", "Vidéo", "Console", "Interface",
             "Général", "À propos", "Émulation", "Latence", "Son du jeu", "Qualité du son", "Couleurs",
             "Rendu", "Taille et réglages", "Game Boy et GBC", "Game Boy Advance", "Commandes tactiles",
-            "Cartouche", "Skin Delta", "RetroAchievements", "Thème", "Sauvegardes cloud"};
+            "Cartouche", "Skin Delta", "RetroAchievements", "Thème", "Sauvegardes cloud", "Shaders",
+            "Paramètres du shader"};
     static final int PICK_BIOS = 1;
     static final int PICK_SKIN = 2;
+    static final int PICK_SHADER_ZIP = 3;
+    static final int PICK_SHADER_FOLDER = 4;
 
     /** Shared by the Audio and Vidéo pages. */
     PlaybackSettings settings;
@@ -89,6 +94,7 @@ public final class PlaybackSettingsActivity extends Activity implements RavenThe
     private SkinSettingsPage skinPage;
     private AboutSettingsPage about;
     private CloudSettingsPage cloud;
+    private ShaderSettingsPage shaders;
 
     @Override public RavenTheme theme() { return theme; }
 
@@ -109,6 +115,7 @@ public final class PlaybackSettingsActivity extends Activity implements RavenThe
         skinPage = new SkinSettingsPage(this, widgets);
         about = new AboutSettingsPage(this, widgets);
         cloud = new CloudSettingsPage(this, widgets);
+        shaders = new ShaderSettingsPage(this, widgets);
         achievements.start();
         cloud.start();
         String initialPage = getIntent().getStringExtra(EXTRA_PAGE);
@@ -183,6 +190,8 @@ public final class PlaybackSettingsActivity extends Activity implements RavenThe
             case INTERFACE_THEME: interfaces.interfaceThemePage(); break;
             case RETRO: achievements.retroPage(); break;
             case CLOUD: cloud.cloudPage(); break;
+            case VIDEO_SHADERS: shaders.shadersPage(); break;
+            case VIDEO_SHADER_PARAMETERS: shaders.parametersPage(); break;
             default: homePage();
         }
         final int restoreScroll = scrollPositions[index(page)];
@@ -218,7 +227,8 @@ public final class PlaybackSettingsActivity extends Activity implements RavenThe
     }
 
     private static String parent(String page) {
-        final int slash = page.indexOf('/');
+        // "video/shaders/parameters" goes back to "video/shaders".
+        final int slash = page.lastIndexOf('/');
         return slash < 0 ? HOME : page.substring(0, slash);
     }
 
@@ -230,6 +240,10 @@ public final class PlaybackSettingsActivity extends Activity implements RavenThe
         Uri uri = data.getData();
         if (request == PICK_SKIN) {
             skinPage.skinPicked(uri);
+            return;
+        }
+        if (request == PICK_SHADER_ZIP || request == PICK_SHADER_FOLDER) {
+            shaders.picked(request, uri);
             return;
         }
         if (request != PICK_BIOS) return;
@@ -258,6 +272,7 @@ public final class PlaybackSettingsActivity extends Activity implements RavenThe
         skinPage.dismiss();
         achievements.dismiss();
         cloud.dismiss();
+        shaders.dismiss();
         io.shutdown();
         network.shutdown();
         super.onDestroy();

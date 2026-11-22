@@ -160,6 +160,48 @@ final class SettingsWidgets {
         return control;
     }
 
+    /** A shader parameter: minimum to maximum by `step`, a hundredth of the
+     * range without one; its value shown as a decimal number. */
+    SeekBar floatSlider(String label, float value, float minimum, float maximum, float step, FloatChange change) {
+        final float unit = step > 0f ? step : (maximum - minimum) / 100f;
+        final int steps = unit > 0f ? Math.max(1, Math.round((maximum - minimum) / unit)) : 1;
+        LinearLayout block = column();
+        LinearLayout heading = new LinearLayout(activity);
+        heading.setGravity(Gravity.CENTER_VERTICAL);
+        heading.addView(text(label, 15, theme.text), new LinearLayout.LayoutParams(0, -2, 1));
+        TextView valueText = text(decimal(value), 14, theme.accent);
+        heading.addView(valueText);
+        block.addView(heading);
+        SeekBar control = new SeekBar(activity);
+        control.setSaveEnabled(false);
+        control.setMax(steps);
+        control.setProgress(unit > 0f ? Math.max(0, Math.min(steps, Math.round((value - minimum) / unit))) : 0);
+        control.setContentDescription(label + ", " + decimal(value));
+        control.setProgressTintList(ColorStateList.valueOf(theme.accent));
+        control.setThumbTintList(ColorStateList.valueOf(theme.accent));
+        control.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                if (!fromUser) return;
+                float current = Math.min(maximum, minimum + progress * unit);
+                valueText.setText(decimal(current));
+                control.setContentDescription(label + ", " + decimal(current));
+                change.accept(current);
+            }
+            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
+            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
+        });
+        block.addView(control, new LinearLayout.LayoutParams(-1, dp(48)));
+        add(block, 14);
+        return control;
+    }
+
+    /** "0.25", "1", "-3.5": three decimals at most, no trailing zero. */
+    static String decimal(float value) {
+        String text = String.format(Locale.ROOT, "%.3f", value);
+        text = text.replaceAll("0+$", "");
+        return text.endsWith(".") ? text.substring(0, text.length() - 1) : text;
+    }
+
     void group(String label) {
         TextView heading = text(label, 14, theme.accent);
         heading.setTypeface(null, Typeface.BOLD);
@@ -298,4 +340,5 @@ final class SettingsWidgets {
     interface BooleanChange { void accept(boolean value); }
     interface IntChange { void accept(int value); }
     interface StringChange { void accept(String value); }
+    interface FloatChange { void accept(float value); }
 }

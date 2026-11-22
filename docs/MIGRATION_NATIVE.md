@@ -1112,6 +1112,48 @@ doit exister ; pas encore de restauration des versions mises de côté depuis
 l'application. Validation sur téléphones et serveurs réels (Nextcloud,
 kDrive, NAS) à faire.
 
+## Vidéo, lot SH-1 : shaders RetroArch (.glslp) importés
+
+Demande du propriétaire (22 novembre 2026) : des shaders externes, au format
+**.glslp d'abord**, **importés par l'utilisateur** (aucun shader fourni).
+Nouveauté : la bêta n'avait que les effets intégrés.
+
+- **Natif** (`android/src/main/cpp/hardware/video/shaders/`, écrit pour
+  RavenEmu d'après le format documenté) : `shader_preset.c` lit les presets
+  (clés, guillemets, commentaires, `#reference` sur huit niveaux, textures,
+  valeurs des paramètres) et refuse tout chemin hors du dossier ;
+  `shader_source.c` lit les `#pragma parameter` et prépare les deux étages
+  (`#define VERTEX` ou `FRAGMENT`, `PARAMETER_UNIFORM`, `#version` retiré,
+  précision ajoutée si absente) ; `shader_chain.c` dessine les passes en
+  GLES2 : un framebuffer par passe, échelles `source`, `viewport` et
+  `absolute`, `filter_linear`, `wrap_mode`, `frame_count_mod`, alias,
+  uniforms de RetroArch, textures LUT, historique de sept images
+  (`PrevTexture` à `Prev6Texture`) ; `shader_state.c` prépare le preset sur un
+  fil de travail, le compile sur le fil GL, le recompile après la perte du
+  contexte. `gles2_renderer.c` dessine par lui quand il y en a un, au même
+  cadrage ; sinon rien ne change.
+- **Java** : `ShaderPacks` (import d'un `.zip` ou d'un dossier dans
+  `files/shaders/`, seulement `.glslp`, `.glsl`, images et licences, chemins
+  vérifiés, 8 000 fichiers et 192 Mio au plus, installation d'un bloc),
+  `ShaderSettings` (preset choisi, valeurs par preset), `ShaderSettingsPage`
+  (**Paramètres → Vidéo → Shaders** et **Paramètres du shader**),
+  `PlayerShaders` (au retour dans le jeu : préparation à part, images LUT
+  décodées par Android, compilation sur le fil GL, erreur dite une fois),
+  `NativeShaders` et `jni/shader_bridge.c`.
+- Tests : `raven_native_shader_preset` (lecture, références, refus) ;
+  `raven_native_shader_pixels`, onze cas rendus par le GLES2 de Mesa (une
+  passe, échelle et tailles, alias et original, paramètres, texture LUT,
+  FrameCount, image précédente, erreur de compilation, image droite à travers
+  les framebuffers, contexte perdu, preset hors du dossier) ; Java :
+  `ShaderPacksTest`, `ShaderSettingsTest`, `PlayerShadersTest`,
+  `ShaderSettingsPageTest`.
+
+Limites : pas de `.slangp` ; framebuffers en 8 bits (pas de `float` ni de
+`sRGB`) ; répétition des textures seulement avec `GL_OES_texture_npot` ;
+luminosité, contraste et effet intégré attendent tant qu'un preset dessine.
+Validation sur téléphones (compatibilité et coût des presets courants) à
+faire.
+
 ## Codes de triche, lots T-1 et T-2
 
 Portage de `GbCheatList`, `GbCheatStore`, `GbCheatsUi` et `GbCheatsPanel` de

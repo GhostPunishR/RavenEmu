@@ -2,12 +2,14 @@ package com.ravenemu.app.ui.settings;
 
 import android.widget.Button;
 import com.ravenemu.app.settings.PlaybackSettings;
+import com.ravenemu.app.settings.ShaderSettings;
 import com.ravenemu.app.ui.common.RavenTheme;
 
 import static com.ravenemu.app.ui.settings.PlaybackSettingsActivity.VIDEO;
 import static com.ravenemu.app.ui.settings.PlaybackSettingsActivity.VIDEO_COLORS;
 import static com.ravenemu.app.ui.settings.PlaybackSettingsActivity.VIDEO_PICTURE;
 import static com.ravenemu.app.ui.settings.PlaybackSettingsActivity.VIDEO_RENDERING;
+import static com.ravenemu.app.ui.settings.PlaybackSettingsActivity.VIDEO_SHADERS;
 
 /** Settings → Vidéo: colours, rendering, size and picture adjustments. */
 final class VideoSettingsPages {
@@ -26,11 +28,14 @@ final class VideoSettingsPages {
         widgets.category("Couleurs", "Profil Game Boy et correction LCD", VIDEO_COLORS, null);
         widgets.category("Rendu", "Mélange d'images et effet d'écran", VIDEO_RENDERING, null);
         widgets.category("Taille et réglages", "Pixels entiers, luminosité et contraste", VIDEO_PICTURE, null);
+        // A native addition after RetroArch: presets the player imports.
+        widgets.category("Shaders", "Presets .glslp importés : CRT, LCD, xBR…", VIDEO_SHADERS, null);
         Button reset = widgets.button("Rétablir l'affichage d'origine");
         reset.setTextColor(theme.accent);
         reset.setOnClickListener(view -> {
             activity.update(activity.settings.withPicture(false, 0, 100).withImage(PlaybackSettings.PALETTE_ORIGINAL,
                     false, false, PlaybackSettings.BLENDING_OFF).withEffect(PlaybackSettings.EFFECT_NONE));
+            ShaderSettings.choose(activity, "");
             activity.showPage(VIDEO);
         });
         widgets.add(reset, 14);

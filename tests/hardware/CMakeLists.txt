@@ -57,29 +57,46 @@ target_include_directories(raven_native_sinc_test PRIVATE "${DRIVERS}/audio")
 target_link_libraries(raven_native_sinc_test PRIVATE m)
 add_test(NAME raven_native_sinc COMMAND raven_native_sinc_test)
 
-add_executable(raven_native_video_test test_gles2_renderer.c "${DRIVERS}/video/gles2/gles2_renderer.c")
+add_executable(raven_native_video_test test_gles2_renderer.c "${DRIVERS}/video/gles2/gles2_renderer.c"
+    fake_shader_state.c)
 target_compile_features(raven_native_video_test PRIVATE c_std_11)
 target_include_directories(raven_native_video_test PRIVATE
-    "${DRIVERS}/video/gles2" "${CMAKE_CURRENT_LIST_DIR}/fake_gles2")
+    "${DRIVERS}/video/gles2" "${DRIVERS}/video/shaders" "${CMAKE_CURRENT_LIST_DIR}/fake_gles2")
 add_test(NAME raven_native_video COMMAND raven_native_video_test)
+
+# Imported shader presets: the .glslp reader and the .glsl stages, no GL.
+add_executable(raven_native_shader_preset_test test_shader_preset.c
+    "${DRIVERS}/video/shaders/shader_preset.c" "${DRIVERS}/video/shaders/shader_source.c")
+target_compile_features(raven_native_shader_preset_test PRIVATE c_std_11)
+target_include_directories(raven_native_shader_preset_test PRIVATE
+    "${DRIVERS}/video/shaders" "${CMAKE_CURRENT_LIST_DIR}/fake_gles2")
+add_test(NAME raven_native_shader_preset COMMAND raven_native_shader_preset_test)
 
 option(RAVEN_VIDEO_PIXEL_TESTS "Run EGL software shader verification" OFF)
 if(RAVEN_VIDEO_PIXEL_TESTS)
     find_package(Python3 REQUIRED COMPONENTS Interpreter)
     find_library(RAVEN_PIXEL_GL NAMES GLESv2 GL libGL.so.1 REQUIRED)
     find_library(RAVEN_PIXEL_EGL NAMES EGL libEGL.so.1 REQUIRED)
-    add_library(raven_native_video_pixels SHARED "${DRIVERS}/video/gles2/gles2_renderer.c")
+    add_library(raven_native_video_pixels SHARED "${DRIVERS}/video/gles2/gles2_renderer.c"
+        "${DRIVERS}/video/shaders/shader_preset.c" "${DRIVERS}/video/shaders/shader_source.c"
+        "${DRIVERS}/video/shaders/shader_chain.c" "${DRIVERS}/video/shaders/shader_state.c")
     target_compile_features(raven_native_video_pixels PRIVATE c_std_11)
-    target_include_directories(raven_native_video_pixels PRIVATE "${CMAKE_CURRENT_LIST_DIR}/fake_gles2")
-    target_link_libraries(raven_native_video_pixels PRIVATE "${RAVEN_PIXEL_GL}")
+    target_include_directories(raven_native_video_pixels PRIVATE "${CMAKE_CURRENT_LIST_DIR}/fake_gles2"
+        "${DRIVERS}/video/shaders")
+    target_link_libraries(raven_native_video_pixels PRIVATE "${RAVEN_PIXEL_GL}" Threads::Threads)
     add_test(NAME raven_native_video_pixels COMMAND "${Python3_EXECUTABLE}"
         "${CMAKE_CURRENT_LIST_DIR}/../../scripts/test_native_video_pixels.py"
+        $<TARGET_FILE:raven_native_video_pixels> --egl "${RAVEN_PIXEL_EGL}" --gl "${RAVEN_PIXEL_GL}")
+    # The same library, through presets written for the test.
+    add_test(NAME raven_native_shader_pixels COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/../../scripts/test_native_shader_pixels.py"
         $<TARGET_FILE:raven_native_video_pixels> --egl "${RAVEN_PIXEL_EGL}" --gl "${RAVEN_PIXEL_GL}")
 endif()
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(raven_native_audio_test PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(raven_native_av_sync_test PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(raven_native_video_test PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(raven_native_shader_preset_test PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(raven_native_sensor_test PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(raven_native_state_progress_test PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(raven_native_sinc_test PRIVATE -Wall -Wextra -Wpedantic)

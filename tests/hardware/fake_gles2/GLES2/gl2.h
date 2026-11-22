@@ -11,6 +11,7 @@ typedef int GLsizei;
 typedef float GLfloat;
 typedef unsigned char GLboolean;
 typedef char GLchar;
+typedef unsigned char GLubyte;
 
 #define GL_FALSE 0
 #define GL_TRUE 1
@@ -37,6 +38,19 @@ typedef char GLchar;
 #define GL_ARRAY_BUFFER 0x8892
 #define GL_FLOAT 0x1406
 #define GL_TRIANGLE_STRIP 0x0005
+/* For the shader presets (shaders/shader_chain.c). */
+#define GL_VERSION 0x1F02
+#define GL_EXTENSIONS 0x1F03
+#define GL_INT 0x1404
+#define GL_REPEAT 0x2901
+#define GL_MIRRORED_REPEAT 0x8370
+#define GL_NEAREST_MIPMAP_NEAREST 0x2700
+#define GL_LINEAR_MIPMAP_LINEAR 0x2703
+#define GL_FRAMEBUFFER 0x8D40
+#define GL_COLOR_ATTACHMENT0 0x8CE0
+#define GL_FRAMEBUFFER_COMPLETE 0x8CD5
+#define GL_ACTIVE_UNIFORMS 0x8B86
+#define GL_MAX_TEXTURE_IMAGE_UNITS 0x8872
 
 GLuint glCreateShader(GLenum type);
 void glShaderSource(GLuint shader, GLsizei count, const GLchar *const *source, const GLint *length);
@@ -78,5 +92,17 @@ void glVertexAttribPointer(GLuint index, GLint size, GLenum type,
                            GLboolean normalized, GLsizei stride, const void *pointer);
 void glDrawArrays(GLenum mode, GLint first, GLsizei count);
 void glDisableVertexAttribArray(GLuint index);
+const GLubyte *glGetString(GLenum name);
+void glGetShaderInfoLog(GLuint shader, GLsizei bufSize, GLsizei *length, GLchar *infoLog);
+void glGetProgramInfoLog(GLuint program, GLsizei bufSize, GLsizei *length, GLchar *infoLog);
+void glGetActiveUniform(GLuint program, GLuint index, GLsizei bufSize, GLsizei *length, GLint *size,
+                        GLenum *type, GLchar *name);
+void glGenFramebuffers(GLsizei n, GLuint *framebuffers);
+void glDeleteFramebuffers(GLsizei n, const GLuint *framebuffers);
+void glBindFramebuffer(GLenum target, GLuint framebuffer);
+void glFramebufferTexture2D(GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level);
+GLenum glCheckFramebufferStatus(GLenum target);
+void glVertexAttrib4f(GLuint index, GLfloat x, GLfloat y, GLfloat z, GLfloat w);
+void glGenerateMipmap(GLenum target);
 
 #endif

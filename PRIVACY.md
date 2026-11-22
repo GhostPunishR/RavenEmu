@@ -16,6 +16,7 @@ Les données suivantes peuvent être créées ou analysées localement sur l’a
 - métadonnées et empreintes de jeux ;
 - sauvegardes et états instantanés ;
 - pochettes choisies ou générées localement ;
+- packs de shaders importés par l’utilisateur ;
 - préférences d’affichage, d’audio et de commandes ;
 - mesures de performance affichées dans l’APK Debug.
 

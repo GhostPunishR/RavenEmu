@@ -28,6 +28,7 @@ import com.ravenemu.app.settings.ControlSettings;
 import com.ravenemu.app.settings.CoreOptions;
 import com.ravenemu.app.settings.LatencySettings;
 import com.ravenemu.app.settings.PlaybackSettings;
+import com.ravenemu.app.settings.ShaderSettings;
 import com.ravenemu.app.ui.common.RavenIcon;
 import com.ravenemu.app.ui.common.RavenTheme;
 import com.ravenemu.app.ui.settings.PlaybackSettingsActivity;
@@ -209,6 +210,7 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
     final PlayerAchievementSession achievementPart = new PlayerAchievementSession(this);
     final PlayerDisplay displayPart = new PlayerDisplay(this);
     final PlayerInput inputPart = new PlayerInput(this);
+    final PlayerShaders shaderPart = new PlayerShaders(this);
 
     @Override public RavenTheme theme() { return theme; }
 
@@ -618,6 +620,8 @@ public final class PlayerActivity extends Activity implements GLSurfaceView.Rend
         rumbleEnabled = cartridge.rumble;
         sensorsWanted = cartridge.sensors;
         integerScale = settings.integerScale;
+        // Settings → Vidéo → Shaders: an imported preset, or the built-in effects.
+        shaderPart.apply(ShaderSettings.load(this));
         if (achievementOverlay != null) {
             achievementOverlay.setSettings(AchievementSettings.load(this), settings.audioEnabled, settings.audioVolume);
             achievementOverlay.setIntegerScale(settings.integerScale);
