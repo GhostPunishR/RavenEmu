@@ -265,7 +265,7 @@ static jstring open_games(JNIEnv *env, jstring lib_dir, jstring files_dir, jstri
     int length = -1;
     if (!strcmp(core, "gb") || !strcmp(core, "gbc") || !strcmp(core, "gba"))
         length = snprintf(library_path, sizeof(library_path),
-                          "%s/ravenemu_%s_libretro.so", lib, core);
+                          "%s/libravenemu_%s_libretro.so", lib, core);
     if (length <= 0 || (size_t)length >= sizeof(library_path)) {
         result = failure(env, "Invalid Libretro core path");
         goto done;

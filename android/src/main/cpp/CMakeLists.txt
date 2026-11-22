@@ -45,3 +45,9 @@ target_include_directories(raven_android PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/../../../../frontend/include"
     "${ravencore_SOURCE_DIR}/libretro/include")
 add_dependencies(raven_android ravenemu_gbc_libretro ravenemu_gba_libretro)
+# Android installs from a non-debuggable APK (the signed Release) only the
+# libraries named lib*.so: without the prefix, the cores stay in the APK and
+# dlopen finds nothing in nativeLibraryDir. Debuggable APKs have every .so
+# extracted, which hid it. The player loads these names (jni/bridge.c); the
+# host tests keep RavenCore's own.
+set_target_properties(ravenemu_gbc_libretro ravenemu_gba_libretro PROPERTIES PREFIX "lib")

@@ -205,7 +205,7 @@ jobs:
           import zipfile, pathlib
           apk = pathlib.Path('android/build/outputs/apk/debug/android-debug.apk')
           # Game Boy Color, which runs the Game Boy's games too: one core.
-          required = {'libraven_android.so', 'ravenemu_gbc_libretro.so', 'ravenemu_gba_libretro.so'}
+          required = {'libraven_android.so', 'libravenemu_gbc_libretro.so', 'libravenemu_gba_libretro.so'}
           with zipfile.ZipFile(apk) as z:
               found = {path.split('/')[-1] for path in z.namelist()
                        if path.startswith('lib/arm64-v8a/') and path.endswith('.so')}
@@ -213,8 +213,12 @@ jobs:
           print('Packaged ARM64 libraries:', sorted(found))
           if missing:
               raise SystemExit(f'Missing ARM64 libraries: {sorted(missing)}')
-          if 'ravenemu_gb_libretro.so' in found:
+          if found & {'ravenemu_gb_libretro.so', 'libravenemu_gb_libretro.so'}:
               raise SystemExit('The retired Game Boy core is still packaged')
+          # Android extracts only lib*.so from a non-debuggable (Release) APK.
+          unextracted = sorted(name for name in found if not name.startswith('lib'))
+          if unextracted:
+              raise SystemExit(f'Not installed from a Release APK (no lib prefix): {unextracted}')
           PY
       - name: Publier l'APK de développement et les sources
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -305,12 +309,17 @@ jobs:
             exit 1
           fi
           unzip -Z1 "$signed" > "$signing_dir/apk-entries.txt"
-          for lib in libraven_android.so ravenemu_gbc_libretro.so ravenemu_gba_libretro.so; do
+          for lib in libraven_android.so libravenemu_gbc_libretro.so libravenemu_gba_libretro.so; do
             if ! grep -Fxq "lib/arm64-v8a/$lib" "$signing_dir/apk-entries.txt"; then
               echo "::error::Bibliotheque ARM64 absente : $lib"
               exit 1
             fi
           done
+          # Android n'installe d'un APK non debogable que les lib*.so.
+          if grep -E '^lib/[^/]+/[^/]+\.so$' "$signing_dir/apk-entries.txt" | grep -Ev '/lib[^/]*\.so$'; then
+            echo "::error::Bibliotheque sans prefixe lib : Android ne l'installera pas depuis le Release."
+            exit 1
+          fi
       - name: Archiver les sources du Release signe et leurs empreintes
         run: |
           set -euo pipefail
