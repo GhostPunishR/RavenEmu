@@ -16,6 +16,18 @@ val sourceModified = providers.gradleProperty("ravenSourceModified").map {
     isIgnoreExitValue = true
 }.result.map { it.exitValue != 0 })
 
+// The app's one version, x.y.z, set in gradle.properties: the Release tag
+// vX.Y.Z must equal it. Its code orders the updates, major·10000 + minor·100
+// + patch, so the minor and the patch stay below 100.
+val appVersion = providers.gradleProperty("ravenemuVersion").get().also {
+    require(Regex("""(0|[1-9][0-9]{0,2})\.(0|[1-9][0-9]?)\.(0|[1-9][0-9]?)""").matches(it)) {
+        "ravenemuVersion must be x.y.z, minor and patch below 100: $it"
+    }
+}
+val appVersionCode = appVersion.split('.').map(String::toInt).let { (major, minor, patch) ->
+    major * 10000 + minor * 100 + patch
+}
+
 // Resolve the test SDK through Gradle, also on read-only CI user homes.
 val robolectricSdks by configurations.creating {
     isCanBeConsumed = false
@@ -40,12 +52,15 @@ android {
     compileSdk = 37
 
     defaultConfig {
-        // Separate install identity: never overwrite the current beta.
-        applicationId = "com.ravenemu.dev"
+        // The published app, "RavenEmu". The Debug build is com.ravenemu.dev,
+        // "RavenEmu Dev", installed beside it. Neither replaces the retired
+        // beta com.ravenemu.preview, nor reads its data.
+        applicationId = "com.ravenemu"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1-dev"
+        versionCode = appVersionCode
+        versionName = appVersion
+        manifestPlaceholders["appLabel"] = "RavenEmu"
         buildConfigField("String", "SOURCE_REVISION", "\"${sourceRevision.get()}\"")
         buildConfigField("boolean", "SOURCE_MODIFIED", sourceModified.get().toString())
 
@@ -64,6 +79,13 @@ android {
                 // the Game Boy's games too, and the Game Boy Advance.
                 targets += listOf("raven_android", "ravenemu_gbc_libretro", "ravenemu_gba_libretro")
             }
+        }
+    }
+    buildTypes {
+        debug {
+            applicationIdSuffix = ".dev"
+            versionNameSuffix = "-dev"
+            manifestPlaceholders["appLabel"] = "RavenEmu Dev"
         }
     }
     // The shared cores need to be unpacked as files for dlopen(path).

@@ -7,7 +7,7 @@
     <application android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher"
-        android:label="RavenEmu Dev"
+        android:label="${appLabel}"
         android:theme="@style/RavenEmuNativeTheme"
         android:usesCleartextTraffic="false">
         <activity android:name=".ui.settings.LicensesActivity" android:exported="false"/>

@@ -1,0 +1,64 @@
+name: RavenEmu / Release
+# A tag vX.Y.Z on a commit of main publishes that version of RavenEmu: the
+# whole CI of RavenEmu / Applications runs on it and signs its APK, then the
+# APK, its corresponding sources and their SHA-256 become the GitHub Release
+# vX.Y.Z, with the CHANGELOG.md section of X.Y.Z as its notes. Only the
+# owner pushes such a tag: nothing else publishes a version (RELEASING.md).
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+concurrency:
+  group: ravenemu-release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Applications
+    uses: ./.github/workflows/ci-applications.yml
+    secrets: inherit
+
+  publish:
+    name: Publier la release GitHub
+    needs: build
+    runs-on: ubuntu-latest
+    # The only job that may write: it creates the release and its files.
+    permissions:
+      contents: write
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Récupérer l'APK signé, ses sources et leurs empreintes
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ needs.build.outputs.artifact }}
+          path: release
+      - name: Vérifier les fichiers et écrire les notes
+        env:
+          RAVENEMU_VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          set -euo pipefail
+          (cd release && sha256sum -c SHA256SUMS.txt)
+          python3 scripts/release_version.py --tag "$GITHUB_REF_NAME" \
+            --repository-slug "$GITHUB_REPOSITORY" --notes "$RUNNER_TEMP/release-notes.md"
+          for file in "RavenEmu-$RAVENEMU_VERSION.apk" "RavenEmu-$RAVENEMU_VERSION-sources.tar.gz" SHA256SUMS.txt; do
+            test -s "release/$file"
+          done
+      - name: Créer la release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RAVENEMU_VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          set -euo pipefail
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag \
+            --title "RavenEmu $RAVENEMU_VERSION" --notes-file "$RUNNER_TEMP/release-notes.md" \
+            "release/RavenEmu-$RAVENEMU_VERSION.apk" \
+            "release/RavenEmu-$RAVENEMU_VERSION-sources.tar.gz" \
+            release/SHA256SUMS.txt

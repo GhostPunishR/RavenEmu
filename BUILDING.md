@@ -17,7 +17,9 @@ cd RavenEmu
 ./gradlew :policy:test
 ```
 
-APK de développement : `android/build/outputs/apk/debug/android-debug.apk`, identifiant `com.ravenemu.dev`, ARM64 (`arm64-v8a`), Android 8.0 (API 26) minimum. Il s'installe à côté de la bêta `com.ravenemu.preview` sans lire ses données.
+APK de développement : `android/build/outputs/apk/debug/android-debug.apk`, « RavenEmu Dev », identifiant `com.ravenemu.dev`, ARM64 (`arm64-v8a`), Android 8.0 (API 26) minimum. Il s'installe à côté de la bêta `com.ravenemu.preview` sans lire ses données.
+
+`./gradlew :android:assembleRelease` donne l'APK Release non signé, « RavenEmu », identifiant `com.ravenemu` ; la CI le signe avec `scripts/sign_release_apk.sh` ([RELEASING.md](RELEASING.md)). La version des deux APK est `ravenemuVersion` dans `gradle.properties`.
 
 La compilation de l'APK construit aussi, par CMake, le frontend C, les pilotes natifs (GLES2, AAudio, entrées) et les trois cores Libretro de RavenCore. Le code natif est optimisé même dans l'APK Debug ; `scripts/check_native_optimization.py` le vérifie après une compilation.
 

@@ -116,15 +116,35 @@ Kotlin, hors application. Les sources Kotlin de la **bêta retirée** peuvent
 - Développer sur une branche dédiée et passer par une **pull request vers
   `main`**. Ne pas pousser directement sur `main`, fusionner ou lancer une
   publication sans demande explicite du propriétaire.
-- L'application est le module **`android/`**, à l'identifiant
-  **`com.ravenemu.dev`**, indépendant de la bêta `com.ravenemu.preview`
-  qui peut rester installée sur les téléphones.
+- L'application est le module **`android/`** : **`com.ravenemu`** pour
+  l'APK Release publié (« RavenEmu ») et **`com.ravenemu.dev`** pour l'APK
+  de développement (« RavenEmu Dev »), indépendants de la bêta
+  `com.ravenemu.preview` qui peut rester installée sur les téléphones.
+  Ne jamais pousser de tag `vX.Y.Z` : il publie une release ([RELEASING.md](RELEASING.md)).
 - Ne pas lire, migrer, effacer ou écraser automatiquement les ROMs,
   sauvegardes, paramètres ou autres données de la bêta. Toute migration
   de données doit être explicite, réversible et testée.
 - Les ROMs et jaquettes sont choisies par l'utilisateur. Vérifier les tailles,
   intégrités et chemins, utiliser le stockage privé et les écritures atomiques.
   Ne jamais intégrer de ROM commerciale, BIOS ou jaquette protégée.
+
+## Numéros de version
+
+La version de RavenEmu s'écrit **`X.Y.Z`** (par exemple `1.0.0`), en un
+seul endroit : `ravenemuVersion` dans `gradle.properties`. Chaque chiffre a
+un sens fixé par le propriétaire :
+
+| Chiffre | Sens | Exemple |
+| --- | --- | --- |
+| **X**, premier | **Version stable** : une nouvelle génération de l'application | `1.4.2` → `2.0.0` |
+| **Y**, deuxième | **Mise à jour majeure** : nouvelles fonctions ou changements visibles | `1.4.2` → `1.5.0` |
+| **Z**, troisième | **Correctif** : bugs corrigés, sans nouvelle fonction | `1.4.2` → `1.4.3` |
+
+- Augmenter un chiffre remet à zéro ceux qui le suivent.
+- Y et Z restent sous 100 : le code de version Android, `X·10000 + Y·100 + Z`, doit croître d'une version à la suivante.
+- Une version qui mêle nouvelles fonctions et correctifs est une mise à jour majeure (Y).
+- Seul le propriétaire décide de passer à une nouvelle version stable (X).
+- Un agent peut proposer le prochain numéro dans une pull request, selon ces règles. Il ne pousse jamais le tag `vX.Y.Z`, qui publie la version ([RELEASING.md](RELEASING.md#publier-une-version)).
 
 ## Qualité technique et validation obligatoire
 

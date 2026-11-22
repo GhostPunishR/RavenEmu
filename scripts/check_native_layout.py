@@ -41,8 +41,10 @@ bridge = (root / "android/src/main/cpp/jni/bridge.c").read_text(encoding="utf-8"
 if "Java_com_ravenemu_app_bridge_NativeBridge_" not in bridge or "Java_com_ravenemu_app_NativeBridge_" in bridge:
     raise SystemExit("Outdated JNI package prefix")
 gradle = (root / "android/build.gradle.kts").read_text(encoding="utf-8")
-if 'namespace = "com.ravenemu.app"' not in gradle or 'applicationId = "com.ravenemu.dev"' not in gradle:
-    raise SystemExit("Unexpected Java namespace or development application ID")
+# The Release is com.ravenemu, the Debug build com.ravenemu.dev beside it.
+if ('namespace = "com.ravenemu.app"' not in gradle or 'applicationId = "com.ravenemu"' not in gradle
+        or 'applicationIdSuffix = ".dev"' not in gradle):
+    raise SystemExit("Unexpected Java namespace, Release or Debug application ID")
 # The migration APK must expose its launcher artwork to the Android manifest.
 import xml.etree.ElementTree as ET
 res = root / "android/src/main/res"

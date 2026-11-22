@@ -3,8 +3,9 @@
 The RavenEmu Android application: Java views, a JNI bridge and native C
 drivers over the C frontend. Since 6 November 2026 it is the repository's
 only application; the Kotlin/Compose beta and iOS were removed (git history,
-commit `de1c9cc`). Application ID: `com.ravenemu.dev`, installed beside the
-beta `com.ravenemu.preview` without reading its data.
+commit `de1c9cc`). Application ID: `com.ravenemu` for the published Release
+("RavenEmu"), `com.ravenemu.dev` for the Debug build ("RavenEmu Dev"); both
+install beside the beta `com.ravenemu.preview` without reading its data.
 Requires Android 8.0+ and an **ARM64** phone (arm64-v8a).
 
 ## Interface d'origine sans Kotlin
@@ -155,7 +156,7 @@ The build should package `libraven_android.so`,
 the `lib` prefix in the APK only: Android installs from a non-debuggable
 (Release) APK nothing but `lib*.so`, and the player loads these names.
 
-Launch **RavenEmu Dev** and use the **+** button to copy your
+Launch **RavenEmu Dev** (the Debug build; **RavenEmu** for the Release) and use the **+** button to copy your
 `.gb`, `.gbc` or `.gba` into the app's private library. The library grid
 reopens previously imported games, including after relaunching the app.
 Tap a cover to open the details sheet, then tap **Jouer** to launch the
@@ -592,7 +593,7 @@ This is an integration prototype, not a release candidate.
 - `../../tests/hardware/` : tests hôtes des adaptateurs.
 - `../../legal/attributions/` : provenance des sources adaptées.
 
-L'identifiant est `com.ravenemu.dev`, distinct de la bêta `com.ravenemu.preview` et de l'ancienne prévisualisation. Leurs données privées ne sont ni lues, ni migrées, ni supprimées automatiquement.
+Les identifiants sont `com.ravenemu` (Release) et `com.ravenemu.dev` (Debug), distincts l'un de l'autre, de la bêta `com.ravenemu.preview` et de l'ancienne prévisualisation. Leurs données privées ne sont ni lues, ni migrées, ni supprimées automatiquement.
 
 ## Sous-packages Java
 
@@ -613,6 +614,6 @@ Les tests JVM reflètent les mêmes packages. Le manifeste déclare les classes 
 
 ## Icône de l'APK de développement
 
-L'APK `com.ravenemu.dev` utilise le logo Raven fourni pour la migration dans
+Les APK `com.ravenemu` et `com.ravenemu.dev` utilisent le logo Raven fourni pour la migration dans
 `src/main/res/drawable-nodpi/ravenemu_launcher.webp`. Le lanceur Android
 résout `@mipmap/ic_launcher` vers une icône adaptative sur Android 8.0+.

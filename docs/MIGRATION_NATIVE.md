@@ -30,8 +30,10 @@ documentation et le README sur l'application native.
   `native` de l'application Java contre les symboles JNI de
   `android/src/main/cpp/`, et la permission d'accès au réseau local selon le
   `targetSdk` de `android/`.
-- **Données** : l'application garde l'identifiant `com.ravenemu.dev`. Une bêta
-  `com.ravenemu.preview` déjà installée n'est ni lue ni modifiée.
+- **Données** : l'APK de développement garde l'identifiant `com.ravenemu.dev` ;
+  l'APK Release publié est `com.ravenemu` (version 1.0.0, décision du
+  22 novembre 2026). Une bêta `com.ravenemu.preview` déjà installée n'est ni
+  lue ni modifiée.
 - **RavenCore** épinglé à la version 0.17.4 : son, image, HDMA et
   minutage de la Game Boy et de la Game Boy Color plus proches de la console
   (SameSuite, 51 tests sur 76 au lieu de 22 ; GBMicrotest, 355 sur 513 au

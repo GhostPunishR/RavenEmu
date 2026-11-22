@@ -16,7 +16,7 @@ import org.json.JSONObject;
  * AchievementAccount.kt: the token only, never the password, sealed by the
  * Android Keystore in a file excluded from backups. The name, avatar and
  * points are kept with it to show the account without the network. No beta
- * data is read: com.ravenemu.dev has its own file and key. */
+ * data is read: com.ravenemu and com.ravenemu.dev each have their own file and key. */
 public final class AchievementAccount {
     static final String FILE = "retroachievements.account";
 
