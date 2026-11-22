@@ -4,7 +4,7 @@
 
 L'application native n'a **pas encore de version publique**. Les dernières préversions publiées, `android-beta-N` (identifiant `com.ravenemu.preview`), sont celles de la bêta retirée le 6 novembre 2026 ; elles restent sur la page des [Releases](https://github.com/GhostPunishR/RavenEmu/releases). Voir [CHANGELOG.md](CHANGELOG.md).
 
-Le workflow [RavenEmu / Applications](.github/workflows/ci-applications.yml) ne publie rien. Il construit et teste, puis archive un APK de développement :
+Le workflow [RavenEmu / Applications](.github/workflows/ci-applications.yml) ne publie aucune version publique. Il construit et teste, puis archive un APK de développement :
 
 | Élément | Valeur |
 | --- | --- |
@@ -16,6 +16,35 @@ Le workflow [RavenEmu / Applications](.github/workflows/ci-applications.yml) ne 
 | Conservation | 7 jours |
 
 Cet APK s'installe à côté de la bêta sans lire ses données. Ce n'est pas une version publique signée.
+
+## APK Release signé dans GitHub Actions (sans publication)
+
+Après la réussite des jobs de règles, des tests C et de l'APK Android Debug,
+le job **Android ARM64 - APK Release signé (non publié)** se lance uniquement
+sur `main` (push ou déclenchement manuel `workflow_dispatch`). Aucune clé
+n'est chargée sur les pull requests. Il produit `assembleRelease`, aligne
+l'APK, le signe avec la clé conservée dans les secrets GitHub, puis vérifie
+la signature, l'alignement, l'identifiant et les bibliothèques ARM64.
+
+- Secrets attendus : `ANDROID_KEYSTORE_BASE64` (contenu du keystore en Base64)
+  et `ANDROID_KEYSTORE_PASSWORD` (mot de passe du magasin **et de sa clé**).
+  Le magasin doit contenir **une seule clé privée** : aucun alias n'est
+  supposé par la CI. Le workflow ne génère ni ne remplace un keystore.
+- Artefact `ravenemu-android-release-candidate-arm64` (14 jours) :
+  `ravenemu-release-signed.apk`, `ravenemu-native-sources.tar.gz` associé
+  à l'APK signé, et `SHA256SUMS.txt` pour contrôler les téléchargements.
+- Identifiant conservé **`com.ravenemu.dev`**, version actuelle `0.1-dev`
+  (`versionCode=1`) : cet APK ne met pas à jour la bêta
+  `com.ravenemu.preview` et n'est **pas encore** une version publique.
+- Aucun tag, aucune GitHub Release, aucun déploiement en magasin ni modification
+  du README n'est effectué automatiquement. La compatibilité du certificat,
+  l'identifiant définitif, le versionnement et les validations sur appareils
+  restent des décisions préalables à toute distribution publique.
+
+Un keystore Base64 incomplet, un mot de passe incorrect, plusieurs clés
+privées ou un APK invalide **font échouer** le job de signature au lieu
+d'émettre un artefact prétendument publiable. Les secrets ne doivent jamais
+être ajoutés au dépôt, copiés dans les logs ni communiqués en clair.
 
 ## Avant une première publication
 
