@@ -14,6 +14,9 @@ public final class FakeGoogleAuthorizer implements GoogleDriveAuth.Authorizer {
 
     public Mode mode = Mode.GRANT;
     public String failure = "Les services Google Play sont absents";
+    /** What Google's closed screen says, if not access: as Google's screen
+     * closing as cancelled when it refuses RavenEmu. */
+    public String resultFailure;
     public final List<String> calls = new ArrayList<>();
 
     @Override public void authorize(Activity activity, GoogleDriveAuth.Answer answer) {
@@ -26,7 +29,8 @@ public final class FakeGoogleAuthorizer implements GoogleDriveAuth.Authorizer {
 
     @Override public void result(Activity activity, Intent data, GoogleDriveAuth.Answer answer) {
         calls.add("result");
-        answer.granted("token");
+        if (resultFailure != null) answer.failed(resultFailure);
+        else answer.granted("token");
     }
 
     @Override public GoogleDriveHttp.Tokens tokens(Context context, String email) {

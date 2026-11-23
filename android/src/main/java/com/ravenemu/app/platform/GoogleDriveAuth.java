@@ -35,6 +35,9 @@ public final class GoogleDriveAuth {
     static final String RECONNECT =
             "Google Drive demande une nouvelle autorisation : reconnectez-vous dans Paramètres → Sauvegardes cloud";
     private static final long WAIT_SECONDS = 30;
+    /** Google Sign-In's codes, as its screens still answer them: cancelled, and
+     * failed (most often an OAuth client not declared). */
+    static final int SIGN_IN_FAILED = 12500, SIGN_IN_CANCELLED = 12501;
 
     /** The connection's outcome, on the UI thread. */
     public interface Answer {
@@ -148,22 +151,28 @@ public final class GoogleDriveAuth {
         String message = message(cause);
         if (cause instanceof ApiException) {
             int status = ((ApiException) cause).getStatusCode();
-            if (status == CommonStatusCodes.SIGN_IN_REQUIRED || status == CommonStatusCodes.DEVELOPER_ERROR)
+            if (status == CommonStatusCodes.SIGN_IN_REQUIRED || status == CommonStatusCodes.DEVELOPER_ERROR
+                    || status == SIGN_IN_FAILED)
                 return new CloudRefused(message);
         }
         return new IOException(message);
     }
 
-    /** Play services' failure, in French. */
+    /** Play services' failure, in French; an unknown one gives Google's code,
+     * which says what to look at (docs/GOOGLE_DRIVE.md). */
     static String message(Throwable failure) {
         if (failure instanceof ApiException) {
-            switch (((ApiException) failure).getStatusCode()) {
+            int code = ((ApiException) failure).getStatusCode();
+            switch (code) {
                 case CommonStatusCodes.NETWORK_ERROR: return "Réseau indisponible : réessayez une fois connecté";
-                case CommonStatusCodes.CANCELED: return "Connexion à Google annulée";
+                case CommonStatusCodes.CANCELED:
+                case SIGN_IN_CANCELLED: return "Connexion à Google annulée";
                 case CommonStatusCodes.SIGN_IN_REQUIRED: return RECONNECT;
                 case CommonStatusCodes.DEVELOPER_ERROR:
-                    return "Google ne reconnaît pas encore cette version de RavenEmu (identifiant OAuth à déclarer)";
-                default: break;
+                case SIGN_IN_FAILED:
+                    return "Google ne reconnaît pas encore cette version de RavenEmu : son projet Google doit "
+                            + "déclarer l'application (identifiant OAuth Android, code " + code + ")";
+                default: return "Google a refusé la connexion (code " + code + ")";
             }
         }
         return "Google Drive est injoignable pour l'instant";

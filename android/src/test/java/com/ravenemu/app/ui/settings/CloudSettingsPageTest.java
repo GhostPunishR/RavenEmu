@@ -205,6 +205,16 @@ public final class CloudSettingsPageTest {
         assertFalse(CloudAccount.stored(context));
         assertTrue(FakeGoogleDrive.folder.log.isEmpty());
 
+        // Google's screen closes as cancelled when Google refuses RavenEmu: its answer says why.
+        google.resultFailure = "Google ne reconnaît pas encore cette version de RavenEmu (code 10)";
+        googleButton(activity).performClick();
+        settle(activity);
+        googleResult(activity, Activity.RESULT_CANCELED, new Intent());
+        assertEquals(google.resultFailure,
+                ((TextView) find(activity, view -> "cloud.error".equals(view.getTag()))).getText().toString());
+        assertFalse(CloudAccount.stored(context));
+
+        google.resultFailure = null;
         googleButton(activity).performClick();
         settle(activity);
         googleResult(activity, Activity.RESULT_OK, new Intent());

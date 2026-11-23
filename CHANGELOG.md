@@ -1,5 +1,11 @@
 # Journal des modifications de RavenEmu
 
+## Non publié
+
+Version prévue : **1.1.1**, un correctif.
+
+- **« Connexion à Google annulée » sans l'être** : quand Google refuse RavenEmu, par exemple parce que son projet Google ne déclare pas encore l'application, l'écran de Google se ferme comme si on l'avait annulé. RavenEmu lit désormais la réponse de Google dans tous les cas et dit pourquoi : identifiant OAuth à déclarer (codes 10 et 12500), ou le code de Google pour un autre refus. « Connexion à Google annulée » ne s'affiche plus que si l'écran a vraiment été fermé.
+
 ## 1.1.0 - 2026-11-23
 
 Mise à jour majeure : elle ajoute une fonction (règles de numérotation d'[AGENTS.md](AGENTS.md#numéros-de-version)).

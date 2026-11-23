@@ -61,6 +61,15 @@ l'application par son paquet et sa signature.
 
 ## 4. Vérifier
 
+Si la connexion échoue, RavenEmu affiche la réponse de Google :
+
+- **« identifiant OAuth Android, code 10 » ou « code 12500 »** : l'identifiant OAuth Android manque, ou son nom de paquet ou son empreinte SHA-1 ne correspond pas à l'APK installé ;
+- **« Google a refusé la connexion (code N) »** : un autre refus de Google, dont le code se cherche dans la documentation de Google Play services ;
+- **« Connexion à Google annulée »** : l'écran de Google a été fermé sans choix.
+
+Une fois la configuration faite :
+
+
 Installez l'APK Release signé, ouvrez **Paramètres → Sauvegardes cloud →
 Se connecter avec Google**, choisissez le compte et acceptez. Le dossier
 **RavenEmu** apparaît à la racine du Drive, avec `ravenemu-saves.json`.
