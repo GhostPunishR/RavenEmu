@@ -14,6 +14,8 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.text.Selection;
 import android.text.Spannable;
+import android.text.Spanned;
+import android.text.method.LinkMovementMethod;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
@@ -26,13 +28,15 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/** Local, selectable legal notices. Loading a long licence never blocks UI. */
+/** Local, selectable legal notices, written in Markdown and shown formatted
+ * (LegalText). Loading a long licence never blocks UI. */
 public final class LicensesActivity extends Activity implements RavenTheme.Host {
     private static final String[] ASSETS = {
-            "NOTICE.txt", "GPL-3.0.txt", "AGPL-3.0.txt", "MIT-LIBRETRO.txt", "MIT-RCHEEVOS.txt", "APACHE-2.0.txt"
+            "NOTICE.md", "GPL-3.0.md", "AGPL-3.0.md", "MIT-LIBRETRO.md", "MIT-RCHEEVOS.md", "APACHE-2.0.md"
     };
     private static final String[] LABELS = {"Crédits", "GPLv3", "AGPLv3", "MIT", "MIT rcheevos", "Apache 2"};
     private final ExecutorService io = Executors.newSingleThreadExecutor();
@@ -116,7 +120,8 @@ public final class LicensesActivity extends Activity implements RavenTheme.Host 
         documentTitle.setPadding(dp(16), dp(8), dp(16), dp(8));
         root.addView(documentTitle);
         documentScroll = new ScrollView(this);
-        body = text("", 13, theme.text);
+        body = text("", 14, theme.text);
+        body.setLineSpacing(0, 1.25f);
         body.setId(android.R.id.text1);
         body.setTextIsSelectable(true);
         body.setPadding(dp(16), dp(8), dp(16), dp(24));
@@ -140,13 +145,17 @@ public final class LicensesActivity extends Activity implements RavenTheme.Host 
         }
         body.setText("Chargement…");
         io.execute(() -> {
-            String content;
-            try { content = readAsset(ASSETS[document]); }
-            catch (IOException error) { content = "Ce texte de licence est indisponible."; }
-            final String loaded = content;
+            List<LegalMarkdown.Block> blocks;
+            try { blocks = LegalMarkdown.parse(readAsset(ASSETS[document])); }
+            catch (IOException error) { blocks = null; }
+            final List<LegalMarkdown.Block> read = blocks;
             runOnUiThread(() -> {
                 if (destroyed || request != requestSerial) return;
+                CharSequence loaded = read == null ? "Ce texte de licence est indisponible."
+                        : LegalText.render(this, read, theme);
                 body.setText(loaded, TextView.BufferType.SPANNABLE);
+                // Links open; the text stays selectable.
+                if (LegalText.hasLinks((Spanned) body.getText())) body.setMovementMethod(LinkMovementMethod.getInstance());
                 if (restoredStart >= 0 && restoredEnd >= 0 &&
                         restoredStart <= loaded.length() && restoredEnd <= loaded.length())
                     Selection.setSelection((Spannable)body.getText(), restoredStart, restoredEnd);

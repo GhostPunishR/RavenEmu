@@ -9,8 +9,9 @@ import java.util.regex.Pattern;
 
 /** The small Markdown subset of the repository's TERMS.md and PRIVACY.md,
  * after the beta's LegalMarkdown: headings, paragraphs, "- " bullets,
- * **bold**, `code` and [links](https://…). Anything else stays as plain
- * text. The first title is left out (the reader's bar shows it), and the
+ * **bold**, `code` and [links](https://…); a backslash keeps the next
+ * character as it is (\`, \*, \[, \\), as the licence texts need for
+ * their own backquotes. Anything else stays as plain text. The first title is left out (the reader's bar shows it), and the
  * "Date d'entrée en vigueur" line under it becomes a caption. Free of
  * Android types; immutable results. */
 public final class LegalMarkdown {
@@ -66,8 +67,8 @@ public final class LegalMarkdown {
         }
     }
 
-    private static final Pattern TOKEN =
-            Pattern.compile("\\*\\*(.+?)\\*\\*|`([^`]+)`|\\[([^\\]]+)]\\((https?://[^)\\s]+)\\)");
+    private static final Pattern TOKEN = Pattern.compile(
+            "\\\\([\\\\`*\\[\\]])|\\*\\*(.+?)\\*\\*|`([^`]+)`|\\[([^\\]]+)]\\((https?://[^)\\s]+)\\)");
 
     public static List<Block> parse(String text) {
         List<Block> blocks = new ArrayList<>();
@@ -102,14 +103,23 @@ public final class LegalMarkdown {
         List<Span> spans = new ArrayList<>();
         Matcher match = TOKEN.matcher(text);
         int index = 0;
+        StringBuilder plain = new StringBuilder();
         while (match.find()) {
-            if (match.start() > index) spans.add(new Span(text.substring(index, match.start())));
-            if (match.group(1) != null) spans.add(new Span(match.group(1), true, false, null));
-            else if (match.group(2) != null) spans.add(new Span(match.group(2), false, true, null));
-            else spans.add(new Span(match.group(3), false, false, match.group(4)));
+            plain.append(text, index, match.start());
             index = match.end();
+            // An escaped character joins the plain text around it.
+            if (match.group(1) != null) {
+                plain.append(match.group(1));
+                continue;
+            }
+            if (plain.length() > 0) spans.add(new Span(plain.toString()));
+            plain.setLength(0);
+            if (match.group(2) != null) spans.add(new Span(match.group(2), true, false, null));
+            else if (match.group(3) != null) spans.add(new Span(match.group(3), false, true, null));
+            else spans.add(new Span(match.group(4), false, false, match.group(5)));
         }
-        if (index < text.length()) spans.add(new Span(text.substring(index)));
+        plain.append(text, index, text.length());
+        if (plain.length() > 0) spans.add(new Span(plain.toString()));
         return spans;
     }
 
