@@ -1,8 +1,8 @@
 # Journal des modifications de RavenEmu
 
-## Non publié
+## 1.1.1 - 2026-11-23
 
-Version prévue : **1.1.1**, un correctif.
+Correctif (règles de numérotation d'[AGENTS.md](AGENTS.md#numéros-de-version)).
 
 - **Politique de confidentialité et conditions d'utilisation à jour** (**Paramètres → À propos**), datées du 23 novembre 2026 :
   - elles décrivent l'application telle qu'elle est : synchronisation par WebDAV, Google Drive pas encore proposé, pas de jaquettes en ligne ni de câble sans fil, que seule la bêta retirée avait ;
