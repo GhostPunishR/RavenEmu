@@ -4,6 +4,7 @@
 
 Version prévue : **1.1.1**, un correctif.
 
+- **Google Drive masqué en attendant le projet Google de RavenEmu** : sans ce projet, Google refuse toute connexion. **Paramètres → Sauvegardes cloud** ne propose donc plus que le dossier WebDAV, comme en 1.0.0. Le code reste en place : le réglage `ravenemuGoogleDrive` de `gradle.properties` réaffiche l'option une fois le projet créé ([docs/GOOGLE_DRIVE.md](docs/GOOGLE_DRIVE.md)).
 - **« Connexion à Google annulée » sans l'être** : quand Google refuse RavenEmu, par exemple parce que son projet Google ne déclare pas encore l'application, l'écran de Google se ferme comme si on l'avait annulé. RavenEmu lit désormais la réponse de Google dans tous les cas et dit pourquoi : identifiant OAuth à déclarer (codes 10 et 12500), ou le code de Google pour un autre refus. « Connexion à Google annulée » ne s'affiche plus que si l'écran a vraiment été fermé.
 
 ## 1.1.0 - 2026-11-23

@@ -59,7 +59,14 @@ dont vous avez déclaré la clé.
 Aucun identifiant client n'est à copier dans RavenEmu : Google reconnaît
 l'application par son paquet et sa signature.
 
-## 4. Vérifier
+## 4. Afficher l'option dans RavenEmu
+
+Tant que ce projet n'existe pas, **Paramètres → Sauvegardes cloud** ne propose
+pas Google Drive. Une fois les étapes 1 à 3 faites, passez
+`ravenemuGoogleDrive=true` dans `gradle.properties` par une pull request,
+puis publiez une version ([RELEASING.md](../RELEASING.md)).
+
+## 5. Vérifier
 
 Si la connexion échoue, RavenEmu affiche la réponse de Google :
 

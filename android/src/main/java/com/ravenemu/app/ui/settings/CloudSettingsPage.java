@@ -14,6 +14,7 @@ import android.widget.TextView;
 import com.ravenemu.app.data.library.RomLibrary;
 import com.ravenemu.app.data.saves.CloudSync;
 import com.ravenemu.app.data.saves.CloudSyncState;
+import com.ravenemu.app.platform.GoogleDriveAuth;
 import com.ravenemu.app.platform.WebDavHttp;
 import com.ravenemu.app.settings.CloudAccount;
 import com.ravenemu.app.ui.common.RavenTheme;
@@ -129,13 +130,20 @@ final class CloudSettingsPage implements CloudSyncRunner.Listener {
     }
 
     private void signInForm() {
-        widgets.add(widgets.text("Retrouvez vos parties sur tous vos appareils : RavenEmu envoie les sauvegardes "
-                + "de cartouche de vos jeux dans votre Google Drive ou dans un dossier WebDAV, comme RetroArch.",
-                13, theme.muted), 0);
-        googleChoice();
-        widgets.group("Dossier WebDAV");
-        widgets.add(widgets.text("Nextcloud, ownCloud, kDrive, Koofr, pCloud ou un NAS le proposent. Créez d'abord "
-                + "un dossier dédié, par exemple RavenEmu, puis copiez son adresse WebDAV.", 13, theme.muted), 0);
+        String webDav = "Nextcloud, ownCloud, kDrive, Koofr, pCloud ou un NAS le proposent. Créez d'abord un dossier "
+                + "dédié, par exemple RavenEmu, puis copiez son adresse WebDAV.";
+        if (GoogleDriveAuth.offered) {
+            widgets.add(widgets.text("Retrouvez vos parties sur tous vos appareils : RavenEmu envoie les sauvegardes "
+                    + "de cartouche de vos jeux dans votre Google Drive ou dans un dossier WebDAV, comme RetroArch.",
+                    13, theme.muted), 0);
+            googleChoice();
+            widgets.group("Dossier WebDAV");
+            widgets.add(widgets.text(webDav, 13, theme.muted), 0);
+        } else {
+            // Google Drive waits for RavenEmu's Google project: WebDAV alone, as in 1.0.0.
+            widgets.add(widgets.text("Retrouvez vos parties sur tous vos appareils : RavenEmu envoie les sauvegardes "
+                    + "de cartouche de vos jeux dans un dossier WebDAV, comme RetroArch. " + webDav, 13, theme.muted), 0);
+        }
         EditText folder = widgets.field("Adresse WebDAV du dossier (https://…)",
                 InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
         folder.setText(typedFolder);

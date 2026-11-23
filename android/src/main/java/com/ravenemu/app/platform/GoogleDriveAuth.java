@@ -16,6 +16,7 @@ import com.google.android.gms.common.api.CommonStatusCodes;
 import com.google.android.gms.common.api.Scope;
 import com.google.android.gms.tasks.Task;
 import com.google.android.gms.tasks.Tasks;
+import com.ravenemu.app.BuildConfig;
 import com.ravenemu.app.data.saves.CloudRefused;
 import java.io.IOException;
 import java.util.Collections;
@@ -111,6 +112,11 @@ public final class GoogleDriveAuth {
 
     /** The one in use: the tests set their own. */
     public static volatile Authorizer authorizer = PLAY;
+
+    /** Whether the settings offer Google Drive: only once RavenEmu's Google
+     * project declares the app (ravenemuGoogleDrive, docs/GOOGLE_DRIVE.md),
+     * as Google refuses it until then. The tests set it. */
+    public static volatile boolean offered = BuildConfig.GOOGLE_DRIVE;
 
     private GoogleDriveAuth() {}
 

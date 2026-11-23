@@ -1152,6 +1152,10 @@ Google exclus, point de licence à faire vérifier :
   jeton remplacé, erreurs, noms refusés), `CloudSettingsPageTest` (connexion,
   écran de Google annulé puis accepté, services absents, déconnexion),
   `CloudAccountTest` (compte Drive, ancien compte WebDAV relu).
+- **Masqué en 1.1.1** (`ravenemuGoogleDrive=false`), à la demande du
+  propriétaire, tant que le projet Google de RavenEmu n'existe pas : sans
+  lui, Google refuse toute connexion. Le WebDAV seul est proposé, comme en
+  1.0.0 ; le WebDAV a été validé sur Koofr réel le 23 novembre 2026.
 - **À valider sur téléphone** : connexion réelle avec l'APK Release signé et
   son identifiant OAuth, deux téléphones sur le même compte, compte retiré
   depuis Google.

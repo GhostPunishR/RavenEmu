@@ -67,6 +67,7 @@ public final class CloudSettingsPageTest {
         FakeWebDav.reset();
         FakeGoogleDrive.reset();
         GoogleDriveAuth.authorizer = google;
+        GoogleDriveAuth.offered = true;
         FakeAchievements.reset();
         CloudAccount.clear(context);
         CloudSyncState.clear(files);
@@ -80,6 +81,7 @@ public final class CloudSettingsPageTest {
         settle(null);
         CloudAccount.clear(context);
         GoogleDriveAuth.authorizer = GoogleDriveAuth.PLAY;
+        GoogleDriveAuth.offered = com.ravenemu.app.BuildConfig.GOOGLE_DRIVE;
     }
 
     @Test public void signingInChecksTheFolderThenSyncsTheLibrarysSaves() throws Exception {
@@ -167,6 +169,17 @@ public final class CloudSettingsPageTest {
         assertArrayEquals("kept".getBytes(StandardCharsets.UTF_8), SaveRepository.read(files, game.key, "srm"));
         assertTrue("The cloud keeps its copy", FakeWebDav.folder.files.size() > 1);
         assertNotNull(field(activity, "Adresse WebDAV du dossier (https://…)"));
+    }
+
+    @Test public void untilRavenEmusGoogleProjectIsReadyOnlyWebDavIsOffered() throws Exception {
+        assertFalse("Off by default in the build", com.ravenemu.app.BuildConfig.GOOGLE_DRIVE);
+        GoogleDriveAuth.offered = false;
+        PlaybackSettingsActivity activity = open();
+        assertNull("No Google button", find(activity, view -> "cloud.google".equals(view.getTag())));
+        assertNull(find(activity, view -> view instanceof TextView
+                && ((TextView) view).getText().toString().contains("Google")));
+        assertNotNull(field(activity, "Adresse WebDAV du dossier (https://…)"));
+        assertTrue(google.calls.isEmpty());
     }
 
     @Test public void googleDriveSignInCreatesTheFolderThenSyncsTheLibrarysSaves() throws Exception {
