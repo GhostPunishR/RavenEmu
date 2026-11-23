@@ -9,7 +9,7 @@ Mise à jour majeure : elle ajoute une fonction (règles de numérotation d'[AGE
   - **Message clair** : « Le cloud bloque les connexions pour un moment, souvent après plusieurs mots de passe refusés », avec le délai donné par le serveur quand il le donne (« réessayez dans 2 minutes »).
   - **Plus de nouvel essai automatique** après un refus (mot de passe refusé, accès retiré, blocage) : les synchronisations automatiques s'arrêtent jusqu'à **Synchroniser maintenant** ou une nouvelle connexion, et l'écran le dit.
   - Le mot de passe refusé dit maintenant d'utiliser un **mot de passe d'application** (Koofr, kDrive, Nextcloud).
-  - Un mot de passe collé perd ses espaces et son retour à la ligne de début et de fin.
+  - Un mot de passe collé perd le retour à la ligne qui l'accompagne souvent ; ses espaces, qui peuvent en faire partie, sont gardés.
   - Le champ du mot de passe n'affiche plus son indication en police à chasse fixe.
 
 ## 1.0.0 - 2026-11-22

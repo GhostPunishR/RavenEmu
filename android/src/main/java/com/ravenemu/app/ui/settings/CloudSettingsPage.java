@@ -174,8 +174,9 @@ final class CloudSettingsPage implements CloudSyncRunner.Listener {
         connect.setOnClickListener(view -> {
             String address = folder.getText().toString().trim();
             String name = user.getText().toString().trim();
-            // A pasted application password often brings a space or a line break.
-            String secret = password.getText().toString().trim();
+            // A pasted password often brings a line break, which no password
+            // holds; its spaces may be its own, and are kept.
+            String secret = password.getText().toString().replaceAll("^[\\r\\n]+|[\\r\\n]+$", "");
             password.setText("");
             if (address.isEmpty() || name.isEmpty() || secret.isEmpty() || signingIn) return;
             signIn(address, name, secret);

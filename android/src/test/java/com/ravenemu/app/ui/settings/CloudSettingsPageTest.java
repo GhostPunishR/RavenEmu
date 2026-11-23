@@ -269,8 +269,13 @@ public final class CloudSettingsPageTest {
         PlaybackSettingsActivity activity = open();
         assertEquals("The hint is not monospace", android.graphics.Typeface.DEFAULT,
                 field(activity, "Mot de passe d'application").getTypeface());
-        signIn(activity, FOLDER, "me", " app-pass\n");
-        assertEquals("app-pass", CloudAccount.load(context).password);
+        signIn(activity, FOLDER, "me", "app-pass\r\n");
+        assertEquals("A pasted line break is dropped", "app-pass", CloudAccount.load(context).password);
+        described(activity, "Se déconnecter du cloud").performClick();
+        ((AlertDialog) ShadowDialog.getLatestDialog()).getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        settle(activity);
+        signIn(activity, FOLDER, "me", " pass phrase ");
+        assertEquals("Spaces may be the password's own", " pass phrase ", CloudAccount.load(context).password);
 
         // The password is revoked: the next sync is refused, and the automatic ones stop.
         FakeWebDav.folder.status = 401;
