@@ -1,6 +1,6 @@
 # Feuille de route
 
-Cette page décrit l'application Android native, sans date de livraison promise. Les [issues](https://github.com/GhostPunishR/RavenEmu/issues), les [pull requests](https://github.com/GhostPunishR/RavenEmu/pulls) et [l'historique de la migration](https://github.com/GhostPunishR/RavenEmu/blob/main/docs/MIGRATION_NATIVE.md) donnent le détail des travaux.
+Cette page décrit l'application Android native, sans date de livraison promise. Les [issues](https://github.com/GhostPunishR/RavenEmu/issues), les [pull requests](https://github.com/GhostPunishR/RavenEmu/pulls) et [l'historique de la migration](https://github.com/GhostPunishR/RavenEmu/blob/main/MIGRATION_NATIVE.md) donnent le détail des travaux.
 
 ## Intégré dans l'application native
 

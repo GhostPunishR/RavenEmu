@@ -1,6 +1,6 @@
 # Compiler RavenEmu
 
-Le dépôt contient l'application Android native (`android/`, Java + JNI + C) et son frontend C (`frontend/`), qui charge les cores Libretro de [RavenCore](https://github.com/GhostPunishR/RavenCore). Voir [ARCHITECTURE.md](ARCHITECTURE.md) pour les responsabilités de chaque couche et [docs/MIGRATION_NATIVE.md](docs/MIGRATION_NATIVE.md) pour les écarts de parité restants.
+Le dépôt contient l'application Android native (`android/`, Java + JNI + C) et son frontend C (`frontend/`), qui charge les cores Libretro de [RavenCore](https://github.com/GhostPunishR/RavenCore). Voir [ARCHITECTURE.md](ARCHITECTURE.md) pour les responsabilités de chaque couche et [MIGRATION_NATIVE.md](MIGRATION_NATIVE.md) pour les écarts de parité restants.
 
 Toutes les commandes partent de la racine du dépôt.
 

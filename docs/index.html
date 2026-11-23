@@ -8,7 +8,7 @@
   <meta name="description" content="RavenEmu : émulateur open source Game Boy, Game Boy Color et Game Boy Advance. Application Android native et préversion PC (Windows, Linux, macOS) gratuites, sans publicité ni télémétrie, propulsées par les moteurs RavenCore.">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
   <meta property="og:title" content="RavenEmu : vos classiques Game Boy, une nouvelle maison">
-  <meta property="og:description" content="Game Boy, Game Boy Color et Game Boy Advance sur Android et sur ordinateur. Open source, sans publicité ni télémétrie. Application Android native en développement, préversion PC.">
+  <meta property="og:description" content="Game Boy, Game Boy Color et Game Boy Advance sur Android et sur ordinateur. Open source, sans publicité ni télémétrie. Application Android native disponible, préversion PC.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://ghostpunishr.github.io/RavenEmu/">
   <meta property="og:image" content="https://ghostpunishr.github.io/RavenEmu/assets/ravenemu-og.jpg">
@@ -285,9 +285,9 @@
         </div>
         <div class="platforms">
           <article class="platform reveal">
-            <div class="platform-head"><h3>Android</h3><span class="state state-amber"><span class="dot dot-amber" aria-hidden="true"></span>En développement</span></div>
-            <p>Application native&nbsp;: interface Java, frontend C et cores Libretro de RavenCore. Bibliothèque, lecteur, son, commandes, capteurs, skins, câble link sur un téléphone, codes de triche, sauvegardes et RetroAchievements sont raccordés&nbsp;; le câble sans fil reste à porter. La compatibilité et les performances se valident jeu par jeu, appareil par appareil.</p>
-            <a class="text-link" href="#installer">Tester RavenEmu <span aria-hidden="true">→</span></a>
+            <div class="platform-head"><h3>Android</h3><span class="state state-live"><span class="dot dot-live" aria-hidden="true"></span>Disponible</span></div>
+            <p>Application native&nbsp;: interface Java, frontend C et cores Libretro de RavenCore. Bibliothèque, lecteur, son, commandes, capteurs, skins, shaders RetroArch, câble link sur un téléphone, codes de triche, sauvegardes synchronisées par WebDAV et RetroAchievements&nbsp;; le câble sans fil reste à porter. La compatibilité et les performances se valident jeu par jeu, appareil par appareil.</p>
+            <a class="text-link" href="#installer">Installer RavenEmu <span aria-hidden="true">→</span></a>
           </article>
           <article class="platform reveal">
             <div class="platform-head"><h3>PC</h3><span class="state state-amber"><span class="dot dot-amber" aria-hidden="true"></span>Préversion</span></div>
@@ -305,20 +305,20 @@
             <div>
               <p class="eyebrow">À vous de jouer</p>
               <h2 id="install-title">Installer RavenEmu sur Android</h2>
-              <p class="lead">L'application native n'a pas encore de version publique. Chaque compilation réussie de <code>main</code> produit un APK de développement&nbsp;: c'est un artefact GitHub Actions, qu'il faut un compte GitHub pour télécharger.</p>
+              <p class="lead">Chaque version est publiée dans les Releases GitHub&nbsp;: un APK signé, à télécharger sans compte, avec ses sources et ses empreintes.</p>
             </div>
-            <a class="button button-primary" href="https://github.com/GhostPunishR/RavenEmu/actions/workflows/ci-applications.yml?query=branch%3Amain+is%3Asuccess">Ouvrir les compilations Android
-              <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <a class="button button-primary" href="https://github.com/GhostPunishR/RavenEmu/releases/latest">Télécharger la dernière version
+              <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v14m0 0-6-6m6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </a>
           </div>
           <ol class="install-steps">
-            <li><span class="step-num">1</span><h3>Choisir une compilation</h3><p>Connecté à GitHub, ouvrez la dernière compilation réussie de <code>main</code>, puis sa section «&nbsp;Artifacts&nbsp;».</p></li>
-            <li><span class="step-num">2</span><h3>Récupérer l'APK</h3><p>Téléchargez <code>ravenemu-android-dev-arm64</code>, puis extrayez <code>android-debug.apk</code> du ZIP. L'artefact est gardé 7 jours.</p></li>
-            <li><span class="step-num">3</span><h3>Installer et jouer</h3><p>Installez-le sur un téléphone ARM64 sous Android 8.0 ou plus récent, puis importez vos jeux avec le bouton <kbd>+</kbd>.</p></li>
+            <li><span class="step-num">1</span><h3>Télécharger l'APK</h3><p>Ouvrez la <a class="inline-link" href="https://github.com/GhostPunishR/RavenEmu/releases/latest">dernière version</a> et touchez <code>RavenEmu-X.Y.Z.apk</code> dans la liste des fichiers.</p></li>
+            <li><span class="step-num">2</span><h3>L'installer</h3><p>Sur un téléphone ARM64 sous Android 8.0 ou plus récent, ouvrez le fichier et autorisez l'installation depuis votre navigateur ou vos fichiers si Android le demande.</p></li>
+            <li><span class="step-num">3</span><h3>Jouer</h3><p>Importez vos jeux avec le bouton <kbd>+</kbd>. Les versions suivantes s'installent par-dessus, sans perdre vos jeux ni vos sauvegardes.</p></li>
           </ol>
           <div class="install-notes">
-            <p><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16h.01" /></svg>Cet APK de développement (<code>com.ravenemu.dev</code>) s'installe à côté de la bêta sans lire ses données. Exportez vos sauvegardes de la bêta pour les importer dans l'application native.</p>
-            <p><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h11l3 3v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" /><path d="M7 3v5h8V3" /></svg>Les anciennes préversions de la bêta restent dans les <a class="inline-link" href="https://github.com/GhostPunishR/RavenEmu/releases">Releases</a>, mais ne sont plus développées.</p>
+            <p><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16h.01" /></svg><span>RavenEmu (<code>com.ravenemu</code>) s'installe à côté de la bêta retirée et de l'APK de développement, sans lire leurs données. Exportez vos sauvegardes de la bêta pour les importer dans l'application.</span></p>
+            <p><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h11l3 3v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" /><path d="M7 3v5h8V3" /></svg><span>Chaque version fournit <code>SHA256SUMS.txt</code> pour vérifier le téléchargement, et ses sources (AGPL-3.0). Les anciennes préversions de la bêta restent dans les <a class="inline-link" href="https://github.com/GhostPunishR/RavenEmu/releases">Releases</a>, mais ne sont plus développées.</span></p>
           </div>
         </div>
       </div>
@@ -343,8 +343,8 @@
             <li><span class="step-num">3</span><h3>Extraire et lancer</h3><p>Windows&nbsp;: <code>RavenEmuDSK.exe</code>, avec ses DLL et le dossier <code>assets</code>. Linux&nbsp;: extrayez <code>RavenEmu-Linux-x86_64.tar.gz</code>, puis lancez <code>RavenEmu/RavenEmuDSK</code>. macOS 15+&nbsp;: déplacez <code>RavenEmu.app</code> dans Applications.</p></li>
           </ol>
           <div class="install-notes">
-            <p><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16h.01" /></svg>Linux&nbsp;: glibc 2.39 ou plus récente (Ubuntu 24.04, Debian 13). Les bibliothèques sont incluses&nbsp;: gardez le dossier entier.</p>
-            <p><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></svg>macOS&nbsp;: signature locale, sans notarisation Apple. Si macOS le demande, autorisez l'application dans Confidentialité et sécurité.</p>
+            <p><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16h.01" /></svg><span>Linux&nbsp;: glibc 2.39 ou plus récente (Ubuntu 24.04, Debian 13). Les bibliothèques sont incluses&nbsp;: gardez le dossier entier.</span></p>
+            <p><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></svg><span>macOS&nbsp;: signature locale, sans notarisation Apple. Si macOS le demande, autorisez l'application dans Confidentialité et sécurité.</span></p>
           </div>
         </div>
       </div>
@@ -389,7 +389,7 @@
           </details>
           <details>
             <summary>Pourquoi passer par GitHub pour télécharger&nbsp;?</summary>
-            <p>RavenEmu n'est pas publié sur un magasin d'applications. L'application Android native n'a pas encore de version publique&nbsp;: ses APK de développement sont des <a class="inline-link" href="https://github.com/GhostPunishR/RavenEmu/actions/workflows/ci-applications.yml?query=branch%3Amain+is%3Asuccess">artefacts de compilation</a>, téléchargeables une fois connecté à un compte GitHub. Les préversions de la bêta retirée restent dans les <a class="inline-link" href="https://github.com/GhostPunishR/RavenEmu/releases">Releases GitHub</a>. La version PC n'a pas encore de release&nbsp;: ses paquets sont les <a class="inline-link" href="https://github.com/GhostPunishR/RavenEmuDSK/actions/workflows/build.yml?query=branch%3Amain+is%3Asuccess">artefacts de compilation</a>, téléchargeables une fois connecté à un compte GitHub.</p>
+            <p>RavenEmu n'est pas publié sur un magasin d'applications. Chaque version Android est publiée dans les <a class="inline-link" href="https://github.com/GhostPunishR/RavenEmu/releases/latest">Releases GitHub</a>, téléchargeable sans compte. Les APK de développement de chaque compilation de <code>main</code> restent des <a class="inline-link" href="https://github.com/GhostPunishR/RavenEmu/actions/workflows/ci-applications.yml?query=branch%3Amain+is%3Asuccess">artefacts de compilation</a>, pour les testeurs connectés à GitHub. Les préversions de la bêta retirée restent aussi dans les Releases. La version PC n'a pas encore de release&nbsp;: ses paquets sont les <a class="inline-link" href="https://github.com/GhostPunishR/RavenEmuDSK/actions/workflows/build.yml?query=branch%3Amain+is%3Asuccess">artefacts de compilation</a>, téléchargeables une fois connecté à un compte GitHub.</p>
           </details>
           <details class="build-card">
             <summary>Compiler depuis le code source</summary>
@@ -439,6 +439,7 @@ cmake --build build --parallel 2</code></pre>
         </div>
         <nav aria-label="Projet">
           <h2>Projet</h2>
+          <a href="https://github.com/GhostPunishR/RavenEmu/releases/latest">Télécharger RavenEmu Android</a>
           <a href="https://github.com/GhostPunishR/RavenEmu">Code de RavenEmu</a>
           <a href="https://github.com/GhostPunishR/RavenEmuDSK">Code de RavenEmu PC</a>
           <a href="https://github.com/GhostPunishR/RavenCore">Moteurs RavenCore</a>

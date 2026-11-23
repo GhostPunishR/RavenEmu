@@ -12,7 +12,8 @@ Les contributions de code, de documentation et de tests sont bienvenues. Ce dép
 | Tests des pilotes natifs | `tests/hardware/` |
 | Règles de CI et contrôles du dépôt | `policy/`, `scripts/` et `.github/workflows/` |
 | Provenance des sources adaptées | `legal/attributions/` |
-| Site et documentation | `docs/` et `wiki/` |
+| Site GitHub Pages | `docs/` (le site seulement) |
+| Documentation | `wiki/` et documents techniques à la racine (`ARCHITECTURE.md`, `MIGRATION_NATIVE.md`…) |
 | Moteurs d'émulation | [RavenCore](https://github.com/GhostPunishR/RavenCore) |
 
 Voir [ARCHITECTURE.md](ARCHITECTURE.md). L'application est écrite en Java, JNI et C : pas de Kotlin ni de Compose dans `android/`. Une correction du moteur se fait dans RavenCore ; sa révision épinglée est mise à jour séparément avec une validation d'intégration.
@@ -58,7 +59,7 @@ Les contributions relèvent de la [licence AGPL-3.0](LICENSE) et du [code de con
 
 Le [modèle de PR](.github/PULL_REQUEST_TEMPLATE.md) demande le problème, le résultat, le périmètre, les commandes exécutées et les limites. Pour une interface, ajoutez une capture sans donnée privée si possible. Actualisez [CHANGELOG.md](CHANGELOG.md) pour un changement notable.
 
-Les sources du site sont dans `docs/`, les pages du wiki dans `wiki/`. Le workflow du wiki vérifie les pages et les synchronise si le Wiki GitHub est accessible et initialisé. Sinon, elles restent consultables dans le dépôt. N'utilisez pas de tiret cadratin dans les pages du wiki : le workflow le refuse.
+Les sources du site sont dans `docs/`, qui ne contient rien d'autre ; les pages du wiki sont dans `wiki/`, les documents techniques à la racine. Le workflow du wiki vérifie les pages et les synchronise si le Wiki GitHub est accessible et initialisé. Sinon, elles restent consultables dans le dépôt. N'utilisez pas de tiret cadratin dans les pages du wiki : le workflow le refuse.
 
 Pour un bug ou un résultat de compatibilité, indiquez le commit ou le build exact, la plateforme, l'appareil, les étapes et les réglages. Voir [RELEASING.md](RELEASING.md) pour la distribution.
 

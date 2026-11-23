@@ -21,8 +21,8 @@ déclarer) ».
 1. **APIs et services → Écran de consentement OAuth** (Google Auth Platform) :
    type **Externe**.
 2. Nom de l'application **RavenEmu**, adresse d'assistance, liens vers la
-   [politique de confidentialité](../PRIVACY.md) et les
-   [conditions](../TERMS.md) publiées.
+   [politique de confidentialité](PRIVACY.md) et les
+   [conditions](TERMS.md) publiées.
 3. **Accès aux données** : ajoutez seulement la portée
    `https://www.googleapis.com/auth/drive.file`. Google la classe parmi les
    portées non sensibles : pas d'audit de sécurité.
@@ -64,7 +64,7 @@ l'application par son paquet et sa signature.
 Tant que ce projet n'existe pas, **Paramètres → Sauvegardes cloud** ne propose
 pas Google Drive. Une fois les étapes 1 à 3 faites, passez
 `ravenemuGoogleDrive=true` dans `gradle.properties` par une pull request,
-puis publiez une version ([RELEASING.md](../RELEASING.md)).
+puis publiez une version ([RELEASING.md](RELEASING.md)).
 
 ## 5. Vérifier
 

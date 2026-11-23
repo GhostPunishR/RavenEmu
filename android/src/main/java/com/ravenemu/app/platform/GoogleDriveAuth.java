@@ -114,7 +114,7 @@ public final class GoogleDriveAuth {
     public static volatile Authorizer authorizer = PLAY;
 
     /** Whether the settings offer Google Drive: only once RavenEmu's Google
-     * project declares the app (ravenemuGoogleDrive, docs/GOOGLE_DRIVE.md),
+     * project declares the app (ravenemuGoogleDrive, GOOGLE_DRIVE.md),
      * as Google refuses it until then. The tests set it. */
     public static volatile boolean offered = BuildConfig.GOOGLE_DRIVE;
 
@@ -165,7 +165,7 @@ public final class GoogleDriveAuth {
     }
 
     /** Play services' failure, in French; an unknown one gives Google's code,
-     * which says what to look at (docs/GOOGLE_DRIVE.md). */
+     * which says what to look at (GOOGLE_DRIVE.md). */
     static String message(Throwable failure) {
         if (failure instanceof ApiException) {
             int code = ((ApiException) failure).getStatusCode();

@@ -2,7 +2,7 @@
 
 > Instructions de référence pour les agents et contributeurs travaillant sur
 > RavenEmu. **Lire d'abord [ARCHITECTURE.md](ARCHITECTURE.md), contrat
-> et source de vérité obligatoire**, puis [docs/MIGRATION_NATIVE.md](docs/MIGRATION_NATIVE.md)
+> et source de vérité obligatoire**, puis [MIGRATION_NATIVE.md](MIGRATION_NATIVE.md)
 > et [android/README.md](android/README.md).
 >
 > Le 6 novembre 2026, le propriétaire a fait fusionner la migration native dans
@@ -21,7 +21,9 @@
 
 **Une CI verte ou une fusion ne constitue PAS une autorisation de publication.** Les agents ne doivent jamais réécrire `README.md`, activer des affirmations de parité, créer une release ou modifier le logo de leur propre initiative. La décision finale et toute mise à jour du README appartiennent exclusivement à GhostPunishR.
 
-Lorsqu'une tâche nécessite un changement de documentation, modifier les documents techniques concernés (`docs/`, `CHANGELOG.md`, `BUILDING.md`, etc.) **sans toucher au README protégé** ; signaler au propriétaire les ajustements de README éventuellement nécessaires. Le fichier `.github/CODEOWNERS` réclame une revue du propriétaire ; son effet bloquant dépend de l'activation des règles de protection de branche GitHub.
+Lorsqu'une tâche nécessite un changement de documentation, modifier les documents techniques concernés (`MIGRATION_NATIVE.md`, `CHANGELOG.md`, `BUILDING.md`, le wiki, etc.) **sans toucher au README protégé** ; signaler au propriétaire les ajustements de README éventuellement nécessaires. Le fichier `.github/CODEOWNERS` réclame une revue du propriétaire ; son effet bloquant dépend de l'activation des règles de protection de branche GitHub.
+
+**`docs/` ne contient que le site GitHub Pages** (`index.html`, `assets/`, son `README.md`), sur demande du propriétaire (23 novembre 2026) : aucun autre document n'y entre. Les documents techniques vont à la racine, la documentation utilisateur dans `wiki/`. Le site suit l'état réel de l'application : le mettre à jour quand une version, l'installation ou une fonction visible change.
 
 ## Règle obligatoire : architecture finale
 
@@ -36,7 +38,7 @@ Ordre de référence, en cas de contradiction :
 1. **Demandes explicites du propriétaire et protection des données** ;
 2. **`ARCHITECTURE.md`** : règles et architecture finale ;
 3. **`AGENTS.md`** : consignes de travail et contraintes des agents ;
-4. **`docs/MIGRATION_NATIVE.md`** : historique de la migration et écarts de parité ;
+4. **`MIGRATION_NATIVE.md`** : historique de la migration et écarts de parité ;
 5. **Code de la bêta retirée** (historique git, commit `de1c9cc`) : utile comme
    référence de compatibilité et de design, sans imposer Compose/Kotlin.
 
@@ -185,7 +187,7 @@ Le frontend C est dans `frontend/`. L'application native est dans
 GB/GBC/GBA, sauvegardes, jaquettes locales, skins Delta, câble link local,
 codes de triche et RetroAchievements. Le câble sans fil, l'import des états
 de la bêta et la validation complète sur téléphones restent à faire ; la
-liste des écarts est tenue dans `docs/MIGRATION_NATIVE.md`.
+liste des écarts est tenue dans `MIGRATION_NATIVE.md`.
 
 **Priorité des décisions : intention du propriétaire > fidélité à la bêta
 > intégrité des données > architecture Java/C/C++20 > nouveautés.**

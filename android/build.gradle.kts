@@ -29,7 +29,7 @@ val appVersionCode = appVersion.split('.').map(String::toInt).let { (major, mino
 }
 
 // The Google Drive choice of the cloud saves, shown once RavenEmu's Google
-// project declares the app (docs/GOOGLE_DRIVE.md): without it, Google refuses.
+// project declares the app (GOOGLE_DRIVE.md): without it, Google refuses.
 val googleDrive = providers.gradleProperty("ravenemuGoogleDrive").map { it.toBooleanStrict() }.orElse(false)
 
 // Resolve the test SDK through Gradle, also on read-only CI user homes.

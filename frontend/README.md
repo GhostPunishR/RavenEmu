@@ -53,7 +53,7 @@ avec une ROM Game Boy vide générée par le test.
 Les buffers vidéo/PCM appartiennent aux cores. Ils doivent être copiés ou
 consommés synchroniquement dans les callbacks. Ne jamais garder leurs pointeurs.
 
-Lire aussi [le plan de migration](../docs/MIGRATION_NATIVE.md).
+Lire aussi [le plan de migration](../MIGRATION_NATIVE.md).
 
 ## Messages du core
 
