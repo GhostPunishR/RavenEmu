@@ -113,7 +113,7 @@ et le dessin des boutons sont ceux de RavenEmu, sous sa licence AGPLv3.
 
 ## Licences et distribution
 
-Le [texte intégral GPLv3](../../android/src/main/assets/licenses/GPL-3.0.txt)
+Le [texte intégral GPLv3](../../android/src/main/assets/licenses/GPL-3.0.md)
 accompagne l'APK. RavenEmu et RavenCore gardent leur [licence AGPLv3](../../LICENSE).
 Les sections [13 de GPLv3](https://www.gnu.org/licenses/gpl-3.0.html#section13)
 et [13 d'AGPLv3](https://www.gnu.org/licenses/agpl-3.0.html#section13) permettent

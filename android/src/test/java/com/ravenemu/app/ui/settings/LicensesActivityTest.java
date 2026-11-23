@@ -71,6 +71,35 @@ public final class LicensesActivityTest {
         assertTrue(body(activity).getText().toString().contains("Version 2.0, January 2004"));
     }
 
+    @Test public void everyTextIsShownFormattedWithoutItsMarkdown() throws Exception {
+        LicensesActivity activity = open(null).get();
+        for (String document : new String[]{"Crédits", "GPLv3", "AGPLv3", "MIT", "MIT rcheevos", "Apache 2"}) {
+            choose(activity, document);
+            CharSequence shown = body(activity).getText();
+            String text = shown.toString();
+            assertFalse(document, text.contains("**") || text.contains("## ") || text.contains("\\`") || text.contains("](http"));
+            assertTrue(document + " has styled headings",
+                    ((android.text.Spanned) shown).getSpans(0, shown.length(), android.text.style.StyleSpan.class).length > 0);
+            assertTrue(document, body(activity).isTextSelectable());
+        }
+        choose(activity, "GPLv3");
+        String gpl = body(activity).getText().toString();
+        // A licence's paragraphs are joined lines, its backquotes kept.
+        assertTrue(gpl.contains("The GNU General Public License is a free, copyleft license for software and other kinds of works."));
+        assertTrue(gpl.contains("type `show w'."));
+        assertTrue(gpl.contains("0. Definitions."));
+        choose(activity, "Crédits");
+        android.text.Spanned credits = (android.text.Spanned) body(activity).getText();
+        LegalText.Link[] links = credits.getSpans(0, credits.length(), LegalText.Link.class);
+        assertTrue(links.length >= 5);
+        boolean retroArch = false;
+        for (LegalText.Link link : links)
+            retroArch |= link.url.equals("https://github.com/libretro/RetroArch/tree/7986022baf6822677ad2cec4bc215069e89bd8ce");
+        assertTrue(retroArch);
+        links[0].onClick(body(activity));
+        assertEquals(Intent.ACTION_VIEW, shadowOf(activity).getNextStartedActivity().getAction());
+    }
+
     @Test public void sourcesPointToTheBuildRevisionAndBackFinishesOnlyThisScreen() throws Exception {
         LicensesActivity activity = open(null).get();
         described(activity, "Consulter le code source").performClick();

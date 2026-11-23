@@ -32,6 +32,16 @@ public final class LegalMarkdownTest {
             "### Détail",
             "Un lien [sans adresse web](mailto:x@y.z) reste du texte.");
 
+    @Test public void aBackslashKeepsTheNextCharacterAsItIs() {
+        // The GPL's own backquotes stay text, not code.
+        List<LegalMarkdown.Span> spans = LegalMarkdown.inline("type \\`show w'. and \\`show c' \\*\\* \\[x\\] \\\\ `code`");
+        assertEquals("type `show w'. and `show c' ** [x] \\ ", spans.get(0).text);
+        assertFalse(spans.get(0).code);
+        assertTrue(spans.get(1).code);
+        assertEquals("code", spans.get(1).text);
+        assertEquals(2, spans.size());
+    }
+
     @Test public void theTitleIsSkippedAndTheDateBecomesACaption() {
         List<Block> blocks = LegalMarkdown.parse(SAMPLE);
         assertEquals(Kind.CAPTION, blocks.get(0).kind);

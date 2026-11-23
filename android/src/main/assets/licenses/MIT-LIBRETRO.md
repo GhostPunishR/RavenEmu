@@ -1,4 +1,4 @@
-Libretro API header (libretro.h) — MIT
+## Libretro API header (libretro.h) — MIT
 
 Source: libretro/libretro-common@a3194c18ba65ef89734e1898a2f61403c255d368/include/libretro.h
 Bundled by RavenCore@25982804f3502f2c3397829cfe720c139c635f38

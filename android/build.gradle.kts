@@ -28,6 +28,10 @@ val appVersionCode = appVersion.split('.').map(String::toInt).let { (major, mino
     major * 10000 + minor * 100 + patch
 }
 
+// The Google Drive choice of the cloud saves, shown once RavenEmu's Google
+// project declares the app (GOOGLE_DRIVE.md): without it, Google refuses.
+val googleDrive = providers.gradleProperty("ravenemuGoogleDrive").map { it.toBooleanStrict() }.orElse(false)
+
 // Resolve the test SDK through Gradle, also on read-only CI user homes.
 val robolectricSdks by configurations.creating {
     isCanBeConsumed = false
@@ -63,6 +67,7 @@ android {
         manifestPlaceholders["appLabel"] = "RavenEmu"
         buildConfigField("String", "SOURCE_REVISION", "\"${sourceRevision.get()}\"")
         buildConfigField("boolean", "SOURCE_MODIFIED", sourceModified.get().toString())
+        buildConfigField("boolean", "GOOGLE_DRIVE", googleDrive.get().toString())
 
         ndk {
             abiFilters += listOf("arm64-v8a")

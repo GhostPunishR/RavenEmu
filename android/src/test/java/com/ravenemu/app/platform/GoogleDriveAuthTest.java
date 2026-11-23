@@ -33,6 +33,15 @@ public final class GoogleDriveAuthTest {
         assertTrue(failure.getMessage(), failure.getMessage().contains("identifiant OAuth"));
     }
 
+    @Test public void googlesClosedScreenSaysWhyWithItsCode() {
+        IOException failed = failure(GoogleDriveAuth.SIGN_IN_FAILED);
+        assertTrue(failed instanceof CloudRefused);
+        assertTrue(failed.getMessage(), failed.getMessage().contains("identifiant OAuth Android, code 12500"));
+        assertEquals("Connexion à Google annulée", failure(GoogleDriveAuth.SIGN_IN_CANCELLED).getMessage());
+        assertEquals("Connexion à Google annulée", failure(CommonStatusCodes.CANCELED).getMessage());
+        assertEquals("Google a refusé la connexion (code 8)", failure(CommonStatusCodes.INTERNAL_ERROR).getMessage());
+    }
+
     @Test public void theNetworkAndUnknownFailuresAreTriedAgainLater() {
         IOException network = failure(CommonStatusCodes.NETWORK_ERROR);
         assertFalse(network instanceof CloudRefused);

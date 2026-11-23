@@ -1,6 +1,5 @@
 package com.ravenemu.app.ui.settings;
 
-import android.app.Activity;
 import android.content.Intent;
 import android.content.IntentSender;
 import com.ravenemu.app.data.saves.CloudSync;
@@ -49,9 +48,11 @@ final class GoogleDriveSignIn {
     /** UI thread: Google's screens, if the account or the consent are needed. */
     void start() { GoogleDriveAuth.authorizer.authorize(activity, answer); }
 
-    /** UI thread: the consent screen closed. */
+    /** UI thread: the consent screen closed. Google's screen also closes as
+     * cancelled when Google refuses RavenEmu (an OAuth client not declared,
+     * for one): its answer then says why, and is read whatever the code. */
     void result(int resultCode, Intent data) {
-        if (resultCode != Activity.RESULT_OK || data == null) outcome.failed("Connexion à Google annulée");
+        if (data == null) outcome.failed("Connexion à Google annulée");
         else GoogleDriveAuth.authorizer.result(activity, data, answer);
     }
 

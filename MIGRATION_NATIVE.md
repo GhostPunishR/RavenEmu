@@ -49,14 +49,14 @@ documentation et le README sur l'application native.
 
 - **Câble link sans fil** entre deux téléphones : absent de l'application
   native. Le protocole à reprendre est décrit dans
-  [ARCHITECTURE.md](../ARCHITECTURE.md#câble-link-sans-fil--protocole-à-reprendre).
+  [ARCHITECTURE.md](ARCHITECTURE.md#câble-link-sans-fil--protocole-à-reprendre).
 - **Import des états instantanés de la bêta** : les sauvegardes de cartouche
   s'importent, pas les états (décision du propriétaire attendue).
 - **Validation sur téléphone** de l'ensemble (navigation trois boutons et
   gestes, portrait et paysage, son, manettes, sauvegardes, RetroAchievements),
   et les écarts notés dans chaque tranche ci-dessous.
 - **Publication** : variante signée, identifiant publié et workflow de
-  publication restent à décider ([RELEASING.md](../RELEASING.md)).
+  publication restent à décider ([RELEASING.md](RELEASING.md)).
 - **iOS** : retiré sur décision du propriétaire, à reconstruire sur l'API C
   du frontend si un jour il est demandé.
 
@@ -102,7 +102,7 @@ Le module distinct `android/` raccorde Java/JNI, les cores Libretro ARM64
 et un premier rendu natif OpenGL ES 2, sans modifier `androidApp/`.
 L'audio AAudio, les sauvegardes privées et la bibliothèque ont été ajoutés
 par les tranches suivantes. Les services avancés de la bêta restent à porter.
-Voir [android/README.md](../android/README.md).
+Voir [android/README.md](android/README.md).
 
 ## Deuxième tranche : prévisualisation Android
 
@@ -344,7 +344,7 @@ portions des sources officielles RetroArch, révision immuable
   vérifiant le pin du core, les modifications suivies, l'exclusion des
   fichiers privés non suivis et le rejet des liens/chemins sortants.
 
-[Provenance, périmètre et distribution](../legal/attributions/retroarch.md).
+[Provenance, périmètre et distribution](legal/attributions/retroarch.md).
 RavenCore reste le moteur ; ce portage ne reprend pas le frontend complet,
 les resamplers sinc ou la planification de RetroArch. L'asservissement audio,
 la reconnexion audio, la mesure de latence et la validation sur matériel
@@ -659,7 +659,7 @@ comportement des écrans à fréquence variable restent à vérifier sur télép
   console portable. Le pilote GLES2 les dessine dans son shader unique, d'après
   `sharp-bilinear` (Themaister) et `lcd3x` (Gigaherz), deux shaders du domaine
   public de libretro/glsl-shaders `cba01a4`
-  ([crédits](../legal/attributions/libretro-shaders.md)). Le lissage net passe
+  ([crédits](legal/attributions/libretro-shaders.md)). Le lissage net passe
   la texture au filtre bilinéaire matériel ; les autres effets gardent le
   filtre au plus proche. Le réglage survit aux changements de contexte GL et
   « Rétablir l'affichage d'origine » le remet à « Aucun ».
@@ -821,7 +821,7 @@ la liste des succès, les classements et le journal hors ligne.
 RA-1 :
 - **SDK** : rcheevos (MIT), révision `1433173` de la bêta, avec ses deux
   correctifs de sûreté appliqués à une copie (`frontend/cmake/rcheevos.cmake`,
-  [provenance](../legal/attributions/rcheevos.md)).
+  [provenance](legal/attributions/rcheevos.md)).
 - **Hôte Libretro** : `RETRO_ENVIRONMENT_SET_MEMORY_MAPS` est gardé (copie des
   descripteurs, oubliée au déchargement) et `SET_SUPPORT_ACHIEVEMENTS` accepté.
 - **Module** `frontend/src/achievements.c` (code RavenEmu, d'après
@@ -1122,7 +1122,7 @@ Demande du propriétaire (23 novembre 2026) : **Google Drive** pour les
 sauvegardes cloud, **avec les services Google Play**, qu'il accepte en
 connaissance de cause (bibliothèque non libre, téléphones sans services
 Google exclus, point de licence à faire vérifier :
-[legal/attributions/google-play-services.md](../legal/attributions/google-play-services.md)).
+[legal/attributions/google-play-services.md](legal/attributions/google-play-services.md)).
 
 - **Même synchronisation que le WebDAV** : `CloudSync` (liste, plan à trois
   états, conflits, versions gardées) ne change pas. `GoogleDriveHttp` est un
@@ -1152,6 +1152,10 @@ Google exclus, point de licence à faire vérifier :
   jeton remplacé, erreurs, noms refusés), `CloudSettingsPageTest` (connexion,
   écran de Google annulé puis accepté, services absents, déconnexion),
   `CloudAccountTest` (compte Drive, ancien compte WebDAV relu).
+- **Masqué en 1.1.1** (`ravenemuGoogleDrive=false`), à la demande du
+  propriétaire, tant que le projet Google de RavenEmu n'existe pas : sans
+  lui, Google refuse toute connexion. Le WebDAV seul est proposé, comme en
+  1.0.0 ; le WebDAV a été validé sur Koofr réel le 23 novembre 2026.
 - **À valider sur téléphone** : connexion réelle avec l'APK Release signé et
   son identifiant OAuth, deux téléphones sur le même compte, compte retiré
   depuis Google.
@@ -1773,7 +1777,7 @@ durées, couleurs, ordre des éléments, textes affichés), relevées dans
 `gfx/widgets/gfx_widget_achievement_popup.c`,
 `gfx/widgets/gfx_widget_leaderboard_display.c`, `gfx/gfx_widgets.h` et
 `cheevos/cheevos.c` ; le code Java est écrit pour RavenEmu. Voir
-[l'attribution](../legal/attributions/retroarch.md).
+[l'attribution](legal/attributions/retroarch.md).
 
 - **Popup** (`AchievementPopup.java`) : un badge carré sur un fond noir à 75 %
   (`DEFAULT_BACKDROP`), puis un fond aussi haut avec deux lignes de la même

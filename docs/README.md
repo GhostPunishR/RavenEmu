@@ -1,6 +1,6 @@
 # Site officiel RavenEmu
 
-Sources du site statique publié par GitHub Pages depuis `main`, dossier `docs/` : <https://ghostpunishr.github.io/RavenEmu/>. Aucune dépendance ni compilation : ouvrez `index.html` ou servez ce dossier avec un serveur HTTP local.
+Sources du site statique publié par GitHub Pages depuis `main`, dossier `docs/` : <https://ghostpunishr.github.io/RavenEmu/>. Ce dossier ne contient que le site : les documents techniques sont à la racine du dépôt, la documentation utilisateur dans `wiki/`. Aucune dépendance ni compilation : ouvrez `index.html` ou servez ce dossier avec un serveur HTTP local.
 
 ## Direction visuelle
 

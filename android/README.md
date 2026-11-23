@@ -29,7 +29,7 @@ nouveau module.
 
 La bibliothèque, la fiche, le lecteur, son menu et les réglages sont en Java,
 mais ce n'est **pas encore une parité totale** : les écarts restants sont tenus
-dans [docs/MIGRATION_NATIVE.md](../docs/MIGRATION_NATIVE.md) et le rendu reste à
+dans [MIGRATION_NATIVE.md](../MIGRATION_NATIVE.md) et le rendu reste à
 valider sur téléphone.
 
 ## Calibrage sur les barres du téléphone

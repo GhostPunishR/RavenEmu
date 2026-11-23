@@ -24,8 +24,8 @@ s'appuient sur le SDK officiel de RetroAchievements, **rcheevos**, sous
 
 - **Distribution** : le SDK est lié dans `libraven_android.so`. Le texte de la
   licence MIT et l'avis de copyright accompagnent l'APK
-  (`android/src/main/assets/licenses/MIT-RCHEEVOS.txt`, onglet « MIT
+  (`android/src/main/assets/licenses/MIT-RCHEEVOS.md`, onglet « MIT
   rcheevos » de **Paramètres → À propos → Licences et crédits**, et
-  `NOTICE.txt`). L'archive de sources jointe à l'APK de test contient le
+  `NOTICE.md`). L'archive de sources jointe à l'APK de test contient le
   checkout réellement compilé, sous `rcheevos/`, vérifié contre la révision
   épinglée (`scripts/package_native_sources.py`).

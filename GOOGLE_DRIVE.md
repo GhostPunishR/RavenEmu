@@ -21,8 +21,8 @@ déclarer) ».
 1. **APIs et services → Écran de consentement OAuth** (Google Auth Platform) :
    type **Externe**.
 2. Nom de l'application **RavenEmu**, adresse d'assistance, liens vers la
-   [politique de confidentialité](../PRIVACY.md) et les
-   [conditions](../TERMS.md) publiées.
+   [politique de confidentialité](PRIVACY.md) et les
+   [conditions](TERMS.md) publiées.
 3. **Accès aux données** : ajoutez seulement la portée
    `https://www.googleapis.com/auth/drive.file`. Google la classe parmi les
    portées non sensibles : pas d'audit de sécurité.
@@ -59,7 +59,23 @@ dont vous avez déclaré la clé.
 Aucun identifiant client n'est à copier dans RavenEmu : Google reconnaît
 l'application par son paquet et sa signature.
 
-## 4. Vérifier
+## 4. Afficher l'option dans RavenEmu
+
+Tant que ce projet n'existe pas, **Paramètres → Sauvegardes cloud** ne propose
+pas Google Drive. Une fois les étapes 1 à 3 faites, passez
+`ravenemuGoogleDrive=true` dans `gradle.properties` par une pull request,
+puis publiez une version ([RELEASING.md](RELEASING.md)).
+
+## 5. Vérifier
+
+Si la connexion échoue, RavenEmu affiche la réponse de Google :
+
+- **« identifiant OAuth Android, code 10 » ou « code 12500 »** : l'identifiant OAuth Android manque, ou son nom de paquet ou son empreinte SHA-1 ne correspond pas à l'APK installé ;
+- **« Google a refusé la connexion (code N) »** : un autre refus de Google, dont le code se cherche dans la documentation de Google Play services ;
+- **« Connexion à Google annulée »** : l'écran de Google a été fermé sans choix.
+
+Une fois la configuration faite :
+
 
 Installez l'APK Release signé, ouvrez **Paramètres → Sauvegardes cloud →
 Se connecter avec Google**, choisissez le compte et acceptez. Le dossier

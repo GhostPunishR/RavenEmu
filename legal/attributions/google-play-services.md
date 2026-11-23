@@ -22,7 +22,7 @@ connaissance de ses conséquences.
   sources jointe à l'APK contient leur POM et leur binaire, et
   `DEPENDENCIES.tsv` indique « - » pour leurs sources ; seul le groupe
   `com.google.android.gms` y est autorisé (`scripts/package_native_sources.py`).
-- **Crédits** : `android/src/main/assets/licenses/NOTICE.txt`, onglet
+- **Crédits** : `android/src/main/assets/licenses/NOTICE.md`, onglet
   « Crédits » de **Paramètres → À propos → Licences et crédits**.
 - **Téléphones sans services Google** (Huawei récents, ROM sans Google) :
   Google Drive y est indisponible et l'écran le dit ; le dossier WebDAV reste

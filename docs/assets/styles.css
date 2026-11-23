@@ -282,6 +282,8 @@ kbd { display: inline-block; min-width: 1.6em; padding: 0 .4em; text-align: cent
 }
 .install-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 28px; }
 .install-head h2 { font-size: clamp(2rem, 4vw, 3rem); }
+/* On a phone the download button may take a second line rather than overflow. */
+.install-head .button { max-width: 100%; white-space: normal; text-align: center; }
 .install-steps { position: relative; display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 44px; }
 .install-steps li { padding: 24px; border-radius: var(--radius-sm); border: 1px solid var(--line); background: rgba(7, 7, 11, .55); }
 .install-steps h3 { margin-top: 16px; font-size: 1.05rem; }

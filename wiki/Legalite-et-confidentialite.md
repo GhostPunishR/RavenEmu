@@ -18,7 +18,7 @@ Le lecteur GBA actuel ne demande pas de fichier BIOS externe à l'utilisateur. C
 
 ## Données locales
 
-La bibliothèque, les ROM importées, les sauvegardes, les états, les réglages et les jaquettes sont conservés sur Android dans l'espace privé de l'application. RavenEmu ne téléverse pas les ROM ou les sauvegardes et n'ajoute ni publicité ni télémétrie.
+La bibliothèque, les ROM importées, les sauvegardes, les états, les réglages et les jaquettes sont conservés sur Android dans l'espace privé de l'application. RavenEmu ne téléverse jamais les ROM et n'ajoute ni publicité ni télémétrie ; les sauvegardes de cartouche ne partent que vers le dossier WebDAV que vous connectez vous-même.
 
 Le sélecteur de documents permet de choisir explicitement fichiers et dossiers. Il n'y a pas de demande d'accès global au stockage pour ces opérations. Désinstaller ou effacer les données supprime le stockage privé ; les exports choisis par l'utilisateur doivent être conservés séparément.
 
@@ -28,8 +28,9 @@ Le sélecteur de documents permet de choisir explicitement fichiers et dossiers.
 |---|---|---|
 | RetroAchievements | Connexion volontaire au compte tiers | Informations de compte/session, identification du jeu et succès prévus par le SDK ; le service reçoit aussi l'adresse IP |
 | Images RetroAchievements | Utilisation du profil et des badges | Requêtes HTTPS d'images et informations techniques de connexion ; images en cache |
+| Sauvegardes cloud (WebDAV) | Connexion volontaire à votre dossier | Sauvegardes de cartouche et liste `ravenemu-saves.json` (empreintes, tailles, dates, modèle du téléphone) ; le serveur reçoit aussi l'adresse IP |
 
-L'application native ne télécharge aucune jaquette et n'a pas encore de câble link sans fil : les jaquettes en ligne et le câble sans fil décrits dans la politique valent pour la bêta retirée, et pour ces fonctions si elles reviennent.
+L'application ne télécharge aucune jaquette, n'a pas de câble link sans fil et ne propose pas encore Google Drive. Elle ne demande que deux permissions : Internet, pour les fonctions ci-dessus, et Vibration, pour les cartouches à vibreur.
 
 Le mot de passe RetroAchievements n'est pas conservé ; le jeton est chiffré sur l'appareil. Pour les hôtes contactés, la conservation, les nouvelles tentatives et la déconnexion, référez-vous à la politique complète.
 

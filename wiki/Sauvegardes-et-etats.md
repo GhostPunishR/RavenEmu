@@ -23,7 +23,7 @@ RavenEmu synchronise les **sauvegardes de cartouche** avec votre **Google Drive*
 
 ### Google Drive
 
-Dans **Paramètres → Sauvegardes cloud**, touchez **Se connecter avec Google**, choisissez votre compte et autorisez RavenEmu. RavenEmu crée lui-même le dossier **RavenEmu** à la racine de votre Drive ; ne le créez pas à la main, RavenEmu ne verrait pas un dossier qu'il n'a pas créé. Il n'accède qu'aux fichiers qu'il y a créés, jamais au reste de votre Drive. Il faut les **services Google Play** : sur un téléphone qui ne les a pas, utilisez un dossier WebDAV. Pour retirer l'accès de RavenEmu, passez par votre compte Google, rubrique Sécurité.
+Google Drive n'est pas encore proposé : il apparaîtra dans une prochaine version, une fois RavenEmu déclaré auprès de Google. Ensuite, dans **Paramètres → Sauvegardes cloud**, touchez **Se connecter avec Google**, choisissez votre compte et autorisez RavenEmu. RavenEmu crée lui-même le dossier **RavenEmu** à la racine de votre Drive ; ne le créez pas à la main, RavenEmu ne verrait pas un dossier qu'il n'a pas créé. Il n'accède qu'aux fichiers qu'il y a créés, jamais au reste de votre Drive. Il faut les **services Google Play** : sur un téléphone qui ne les a pas, utilisez un dossier WebDAV. Pour retirer l'accès de RavenEmu, passez par votre compte Google, rubrique Sécurité.
 
 ### Dossier WebDAV
 

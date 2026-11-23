@@ -5,7 +5,7 @@
 > `main` et retirer la bêta (`androidApp/`, `shared/`, `iosApp/`, `native/`),
 > iOS compris. Ce document est le **contrat architectural à respecter pour
 > toute évolution**. Les agents lisent obligatoirement [AGENTS.md](AGENTS.md),
-> puis la présente architecture. [docs/MIGRATION_NATIVE.md](docs/MIGRATION_NATIVE.md)
+> puis la présente architecture. [MIGRATION_NATIVE.md](MIGRATION_NATIVE.md)
 > retrace la migration et tient la liste des écarts de parité restants.
 >
 > Le code de la bêta reste consultable dans l'historique git, au commit
@@ -29,7 +29,7 @@
 - `legal/attributions/` : notices de provenance des sources externes adaptées, conservées avec leurs licences.
 - `policy/` : tests JVM des règles du dépôt (workflows, symboles JNI, permissions).
 - `scripts/` : contrôles de l'organisation des sources, de l'optimisation native et de l'archive des sources.
-- `docs/` : site statique ; `wiki/` : documentation utilisateur.
+- `docs/` : **le site GitHub Pages seulement** ; `wiki/` : documentation utilisateur. Les documents techniques sont à la racine (`MIGRATION_NATIVE.md`, `GOOGLE_DRIVE.md`, `BUILDING.md`, `RELEASING.md`…).
 
 L'application publiée est **RavenEmu**, identifiant `com.ravenemu` ; l'APK de développement, **RavenEmu Dev**, est `com.ravenemu.dev`. Le propriétaire a fixé ces identifiants et la version 1.0.0 le 22 novembre 2026. Tous deux sont indépendants de la bêta `com.ravenemu.preview`, qui peut rester installée sur les téléphones : ses données privées ne sont ni lues ni migrées automatiquement. Ni ces identifiants ni une CI verte ne valent accord pour publier une version.
 
@@ -119,7 +119,7 @@ mécanisme explicite de transition.
 | `android/src/main/res/` | Thème, icônes et ressources fidèles à RavenEmu ; adaptation aux densités et insets système |
 | `RavenCore` (dépôt indépendant) | Cores **C++20** adaptés à l'ABI Libretro : un seul pour la Game Boy Color et la Game Boy, le core Game Boy Color (la console émulée se choisit par jeu, option `ravenemu_gbc_hardware`), un pour la GBA ; révisions immuables et licences suivies |
 | `policy/` et `.github/workflows/` | Tests des frontières, de l'architecture, de la compilation et de la compatibilité |
-| `docs/MIGRATION_NATIVE.md` | Historique de la migration et écarts de parité restants, **pas** une autre architecture |
+| `MIGRATION_NATIVE.md` | Historique de la migration et écarts de parité restants, **pas** une autre architecture |
 | Bêta retirée (`androidApp/`, `shared/`, `iosApp/`, `native/`) | Supprimée de `main` ; consultable au commit `de1c9cc` comme référence de design et de compatibilité, jamais comme cible |
 
 Les noms de répertoires `android/` et `frontend/` sont définitifs ; un
