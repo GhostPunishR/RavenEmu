@@ -99,4 +99,14 @@ The Maven library is used without copying or modifying its implementation.
 Its AndroidX support libraries are provided by the Android Open Source
 Project under the Apache License, Version 2.0. The Kotlin standard library
 used by these dependencies is provided by JetBrains under the same license.
+
+Google Play services : play-services-auth 22.0.0 et ses modules
+(play-services-base, -basement, -tasks, -auth-base, -auth-api-phone, -fido)
+Copyright Google LLC
+Bibliothèques binaires de Google, sous l'Android Software Development Kit
+License : https://developer.android.com/studio/terms
+Google n'en publie pas les sources. RavenEmu ne s'en sert que pour connecter
+Google Drive aux sauvegardes cloud, quand le joueur le demande ; elles
+s'appuient sur les services Google Play du téléphone. kotlinx.coroutines
+(JetBrains, Apache License 2.0) les accompagne.
 RavenEmu's application sources in this module remain Java and native C/C++.

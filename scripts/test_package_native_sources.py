@@ -120,6 +120,26 @@ class SourceBundleTest(unittest.TestCase):
             (self.dependencies / name).write_bytes(original)
         self.assertFalse(self.output.exists())
 
+    def test_google_play_services_alone_may_come_without_sources(self):
+        rows = "coordinate\tsources\tpom\truntime\nexample:library:1.0\tlib-sources.jar\tlib.pom\tlib.aar\n"
+        (self.dependencies / "gms.pom").write_bytes(b"gms pom")
+        (self.dependencies / "gms.aar").write_bytes(b"gms aar")
+        (self.dependencies / "DEPENDENCIES.tsv").write_text(
+            rows + "com.google.android.gms:play-services-auth:22.0.0\t-\tgms.pom\tgms.aar\n")
+        manifest = self.build()
+        record = manifest["dependencies"][1]
+        self.assertEqual("com.google.android.gms:play-services-auth:22.0.0", record["coordinate"])
+        self.assertIsNone(record["sources"])
+        entries = self.entries()
+        self.assertIn("dependencies/gms.aar", entries)
+        self.assertIn("dependencies/gms.pom", entries)
+        self.assertNotIn("dependencies/-", entries)
+        self.assertIn(b"Android Software Development Kit License", entries["README-SOURCES.txt"])
+        # Any other library must bring its sources.
+        (self.dependencies / "DEPENDENCIES.tsv").write_text(rows + "example:other:2.0\t-\tgms.pom\tgms.aar\n")
+        with self.assertRaisesRegex(SourceError, "Missing source publication: example:other:2.0"):
+            self.build()
+
     def test_rejects_dependency_path_traversal(self):
         (self.dependencies / "DEPENDENCIES.tsv").write_text(
             "example:library:1.0\t../secret.jar\tlib.pom\tlib.aar\n")

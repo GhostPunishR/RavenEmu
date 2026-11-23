@@ -13,31 +13,54 @@ import java.util.Arrays;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-/** The WebDAV folder the cartridge saves are synced with: its address, the
- * user name, the application password and whether the sync runs by itself.
- * Sealed by the Android Keystore in a file excluded from backups, as the
- * RetroAchievements token (AchievementAccount); the password is needed at
- * each sync, so it is kept, encrypted, and nowhere else. */
+/** The cloud the cartridge saves are synced with, and whether the sync runs
+ * by itself: a WebDAV folder (its address, the user name and the application
+ * password) or Google Drive (the account's address only: Google Play
+ * services keep its grant and tokens). Sealed by the Android Keystore in a
+ * file excluded from backups, as the RetroAchievements token
+ * (AchievementAccount); the password is needed at each sync, so it is kept,
+ * encrypted, and nowhere else. */
 public final class CloudAccount {
     static final String FILE = "cloud.account";
     /** Binds the sealed bytes to this file: they never open as another's. */
     private static final byte[] CONTEXT = "RavenEmu.cloud.account.v1".getBytes(StandardCharsets.US_ASCII);
 
+    public static final String WEBDAV = "webdav", DRIVE = "google-drive";
+
+    /** WEBDAV or DRIVE; for Google Drive, `user` is the account's address. */
+    public final String kind;
     public final String folder, user, password;
     public final boolean automatic;
 
+    /** A WebDAV folder. */
     public CloudAccount(String folder, String user, String password, boolean automatic) {
+        this(WEBDAV, folder, user, password, automatic);
+    }
+
+    private CloudAccount(String kind, String folder, String user, String password, boolean automatic) {
+        this.kind = kind;
         this.folder = folder == null ? "" : folder;
         this.user = user == null ? "" : user;
         this.password = password == null ? "" : password;
         this.automatic = automatic;
     }
 
-    public CloudAccount withAutomatic(boolean enabled) { return new CloudAccount(folder, user, password, enabled); }
+    /** The Google Drive of `email`. */
+    public static CloudAccount googleDrive(String email, boolean automatic) {
+        return new CloudAccount(DRIVE, "", email, "", automatic);
+    }
 
-    /** The same folder and user: the sync state survives a new password. */
+    public boolean isGoogleDrive() { return DRIVE.equals(kind); }
+
+    public CloudAccount withAutomatic(boolean enabled) {
+        return new CloudAccount(kind, folder, user, password, enabled);
+    }
+
+    /** The same folder and user, or the same Google account: the sync state
+     * survives a new password, and is never another cloud's. */
     public String fingerprint() {
-        return CloudSync.sha256((folder + "\n" + user).getBytes(StandardCharsets.UTF_8));
+        String identity = isGoogleDrive() ? DRIVE + "\n" + user : folder + "\n" + user;
+        return CloudSync.sha256(identity.getBytes(StandardCharsets.UTF_8));
     }
 
     /** The stored account; null without one, or unreadable (another device's
@@ -49,8 +72,15 @@ public final class CloudAccount {
         try {
             plain = KeystoreSealer.open(file.readFully(), CONTEXT);
             JSONObject json = new JSONObject(new String(plain, StandardCharsets.UTF_8));
+            String kind = json.optString("kind", WEBDAV);
+            boolean automatic = json.optBoolean("automatic", true);
+            if (DRIVE.equals(kind)) {
+                String email = json.getString("user");
+                return email.isEmpty() ? null : googleDrive(email, automatic);
+            }
+            if (!WEBDAV.equals(kind)) return null;
             CloudAccount account = new CloudAccount(json.getString("folder"), json.getString("user"),
-                    json.getString("password"), json.optBoolean("automatic", true));
+                    json.getString("password"), automatic);
             return account.folder.isEmpty() || account.user.isEmpty() ? null : account;
         } catch (IOException | GeneralSecurityException | JSONException | RuntimeException unreadable) {
             return null;
@@ -63,7 +93,7 @@ public final class CloudAccount {
     public void save(Context context) throws IOException, GeneralSecurityException {
         byte[] plain;
         try {
-            plain = new JSONObject().put("folder", folder).put("user", user).put("password", password)
+            plain = new JSONObject().put("kind", kind).put("folder", folder).put("user", user).put("password", password)
                     .put("automatic", automatic).toString().getBytes(StandardCharsets.UTF_8);
         } catch (JSONException impossible) {
             throw new IOException(impossible);
@@ -85,7 +115,8 @@ public final class CloudAccount {
         }
     }
 
-    /** Signing out: the address and the password are forgotten on this device. */
+    /** Signing out: the address and the password, or the Google account, are
+     * forgotten on this device. */
     public static void clear(Context context) {
         file(context).delete();
     }

@@ -52,6 +52,34 @@ public final class CloudAccountTest {
                 new CloudAccount(folder + "Other/", "me", "one", true).fingerprint());
     }
 
+    @Test public void aGoogleDriveAccountKeepsOnlyItsAddress() throws Exception {
+        CloudAccount.googleDrive("player@example.com", true).save(context);
+        CloudAccount read = CloudAccount.load(context);
+        assertTrue(read.isGoogleDrive());
+        assertEquals(CloudAccount.DRIVE, read.kind);
+        assertEquals("player@example.com", read.user);
+        assertEquals("", read.password);
+        assertTrue(read.automatic);
+        assertTrue(read.withAutomatic(false).isGoogleDrive());
+        assertFalse(read.withAutomatic(false).automatic);
+        assertNotEquals("Another cloud, another sync state",
+                new CloudAccount("https://drive.example.org/", "player@example.com", "p", true).fingerprint(),
+                read.fingerprint());
+        assertNotEquals(CloudAccount.googleDrive("other@example.com", true).fingerprint(), read.fingerprint());
+    }
+
+    @Test public void anAccountSavedBeforeGoogleDriveIsAWebDavFolder() throws Exception {
+        File file = new File(context.getNoBackupFilesDir(), CloudAccount.FILE);
+        Files.write(file.toPath(), ClearSealer.sealedFor(("{\"folder\":\"https://x.example/\",\"user\":\"u\","
+                + "\"password\":\"p\",\"automatic\":true}").getBytes(StandardCharsets.UTF_8),
+                "RavenEmu.cloud.account.v1".getBytes(StandardCharsets.US_ASCII)));
+        CloudAccount read = CloudAccount.load(context);
+        assertNotNull(read);
+        assertFalse(read.isGoogleDrive());
+        assertEquals("https://x.example/", read.folder);
+        assertEquals(new CloudAccount("https://x.example/", "u", "other", false).fingerprint(), read.fingerprint());
+    }
+
     @Test public void anotherFilesSealedBytesDoNotOpenAsTheAccount() throws Exception {
         File file = new File(context.getNoBackupFilesDir(), CloudAccount.FILE);
         Files.write(file.toPath(), ClearSealer.sealedFor("{\"folder\":\"https://x/\",\"user\":\"u\",\"password\":\"p\"}"

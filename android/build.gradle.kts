@@ -142,6 +142,7 @@ androidComponents {
 
 dependencies {
     implementation(libs.material)
+    implementation(libs.play.services.auth)
     testImplementation(libs.junit4)
     testImplementation(libs.robolectric.core)
     robolectricSdks(libs.robolectric.sdk)
@@ -149,6 +150,10 @@ dependencies {
 
 // Include the published sources, metadata and unmodified resource containers
 // of the actual runtime libraries beside the native preview's source bundle.
+// Google Play services (com.google.android.gms) are published by Google
+// without sources, under the Android SDK License: their POM and binary are
+// kept, and DEPENDENCIES.tsv says "-" for their sources
+// (legal/attributions/google-play-services.md).
 tasks.register("collectDebugCorrespondingSources") {
     val destination = layout.buildDirectory.dir("corresponding-sources")
     inputs.files(configurations.named("debugRuntimeClasspath"))
@@ -172,12 +177,12 @@ tasks.register("collectDebugCorrespondingSources") {
                 configuration.isTransitive = false
                 return configuration.singleFile
             }
-            val sources = resolve(":sources@jar")
+            val binaryOnly = id.group == "com.google.android.gms"
             val pom = resolve("@pom")
-            val sourceName = "$prefix-sources.jar"
+            val sourceName = if (binaryOnly) "-" else "$prefix-sources.jar"
             val pomName = "$prefix.pom"
             val binaryName = "$prefix.${artifact.file.extension}"
-            sources.copyTo(directory.resolve(sourceName), overwrite = true)
+            if (!binaryOnly) resolve(":sources@jar").copyTo(directory.resolve(sourceName), overwrite = true)
             pom.copyTo(directory.resolve(pomName), overwrite = true)
             artifact.file.copyTo(directory.resolve(binaryName), overwrite = true)
             rows.add("$coordinate\t$sourceName\t$pomName\t$binaryName")

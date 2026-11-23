@@ -1,6 +1,6 @@
 # Politique de confidentialité de RavenEmu
 
-Date d’entrée en vigueur : 22 novembre 2026
+Date d’entrée en vigueur : 23 novembre 2026
 
 ## Champ d’application
 
@@ -8,7 +8,7 @@ Cette politique décrit le fonctionnement de l’application Android RavenEmu, d
 
 ## Application Android
 
-RavenEmu fonctionne sans compte, sans télémétrie et sans publicité. Il propose une connexion facultative au service tiers RetroAchievements, et une synchronisation facultative des sauvegardes de cartouche avec un dossier WebDAV choisi par l’utilisateur. Sans connexion, aucun échange avec ces services n’est effectué. L’application ne téléverse jamais les ROM, BIOS, états instantanés ni pochettes ; les sauvegardes de cartouche ne quittent l’appareil que vers le dossier WebDAV que l’utilisateur a lui-même configuré.
+RavenEmu fonctionne sans compte, sans télémétrie et sans publicité. Il propose une connexion facultative au service tiers RetroAchievements, et une synchronisation facultative des sauvegardes de cartouche avec le Google Drive de l’utilisateur ou un dossier WebDAV qu’il choisit. Sans connexion, aucun échange avec ces services n’est effectué. L’application ne téléverse jamais les ROM, BIOS, états instantanés ni pochettes ; les sauvegardes de cartouche ne quittent l’appareil que vers le Google Drive ou le dossier WebDAV que l’utilisateur a lui-même connecté.
 
 Les données suivantes peuvent être créées ou analysées localement sur l’appareil :
 
@@ -34,13 +34,14 @@ Les informations enregistrées par RetroAchievements relèvent de sa [politique 
 
 ## Synchronisation des sauvegardes (facultatif)
 
-Dans **Paramètres → Sauvegardes cloud**, l’utilisateur peut indiquer l’adresse d’un dossier WebDAV (Nextcloud, ownCloud, kDrive, Koofr, pCloud, NAS…), un identifiant et un mot de passe, de préférence un mot de passe d’application. Sans cette configuration, aucun échange n’a lieu. Le projet ne fournit ni n’héberge ce dossier : il appartient à l’utilisateur, ou au service qu’il a choisi, dont les conditions et la politique de confidentialité s’appliquent.
+Dans **Paramètres → Sauvegardes cloud**, l’utilisateur peut connecter son **Google Drive**, ou indiquer l’adresse d’un **dossier WebDAV** (Nextcloud, ownCloud, kDrive, Koofr, pCloud, NAS…), un identifiant et un mot de passe, de préférence un mot de passe d’application. Sans cette configuration, aucun échange n’a lieu. Le projet ne fournit ni n’héberge ce stockage : il appartient à l’utilisateur, ou au service qu’il a choisi, dont les conditions et la politique de confidentialité s’appliquent ([Règles de confidentialité de Google](https://policies.google.com/privacy) pour Google Drive).
 
 - **Ce qui est envoyé.** Seules les sauvegardes de cartouche (`.srm`) des jeux de la bibliothèque, et une liste `ravenemu-saves.json`. Pour chaque jeu, elle donne l’empreinte SHA-256 qui l’identifie dans RavenEmu, l’empreinte et la taille de sa sauvegarde, la date d’envoi, le nom de l’appareil qui l’a envoyée (fabricant et modèle Android, par exemple « Google Pixel 8 ») et les empreintes des deux versions précédentes. Aucun nom de jeu, aucune ROM, aucun BIOS, aucun état instantané ni aucune jaquette n’est envoyé.
-- **Connexion.** Uniquement en HTTPS, vers l’hôte du dossier ; une redirection n’est jamais suivie. Le serveur reçoit les informations d’une connexion HTTPS, dont l’adresse IP, et l’identifiant du client (User-Agent) « RavenEmu/version (Android) ».
+- **Connexion.** Uniquement en HTTPS, vers l’hôte du dossier WebDAV ou vers l’API Google Drive (`www.googleapis.com`) ; une redirection n’est jamais suivie. Le serveur reçoit les informations d’une connexion HTTPS, dont l’adresse IP, et l’identifiant du client (User-Agent) « RavenEmu/version (Android) ».
+- **Google Drive.** L’utilisateur choisit son compte et autorise RavenEmu sur les écrans de Google, par les services Google Play. RavenEmu demande seulement l’autorisation `drive.file` : il ne voit que les fichiers qu’il a créés, dans le dossier « RavenEmu » de la racine du Drive, jamais le reste du Drive. Les services Google Play conservent l’autorisation et fournissent à chaque synchronisation un jeton d’accès temporaire, que RavenEmu ne stocke pas. RavenEmu lit l’adresse e-mail du compte auprès de Google Drive pour l’afficher dans les paramètres.
 - **Quand.** Au lancement de l’application et à la fermeture d’un jeu si **Synchroniser automatiquement** est activé, et quand l’utilisateur touche **Synchroniser maintenant** ou règle un conflit.
-- **Sur l’appareil.** L’adresse, l’identifiant et le mot de passe sont chiffrés avec Android Keystore dans un fichier exclu des sauvegardes Android : le mot de passe sert à chaque synchronisation et n’est conservé nulle part ailleurs. Un fichier d’état garde les empreintes de la dernière synchronisation et les conflits à régler. Une sauvegarde remplacée par celle du cloud est d’abord copiée dans le stockage privé de l’application, cinq versions par jeu.
-- **Fin.** La déconnexion efface l’adresse, le mot de passe et l’état de synchronisation de l’appareil. Elle ne supprime ni les sauvegardes du téléphone ni les fichiers du dossier WebDAV, que l’utilisateur gère lui-même.
+- **Sur l’appareil.** L’adresse, l’identifiant et le mot de passe du dossier WebDAV, ou l’adresse e-mail du compte Google, sont chiffrés avec Android Keystore dans un fichier exclu des sauvegardes Android : le mot de passe sert à chaque synchronisation et n’est conservé nulle part ailleurs. Un fichier d’état garde les empreintes de la dernière synchronisation et les conflits à régler. Une sauvegarde remplacée par celle du cloud est d’abord copiée dans le stockage privé de l’application, cinq versions par jeu.
+- **Fin.** La déconnexion efface l’adresse, le mot de passe ou le compte Google, et l’état de synchronisation de l’appareil. Elle ne supprime ni les sauvegardes du téléphone ni les fichiers du dossier WebDAV ou du Google Drive, que l’utilisateur gère lui-même. L’autorisation donnée à RavenEmu sur Google Drive se retire depuis le compte Google (rubrique Sécurité, accès des applications tierces).
 
 ## Jaquettes en ligne (facultatif)
 

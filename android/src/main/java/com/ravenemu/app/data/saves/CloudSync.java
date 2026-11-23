@@ -209,15 +209,18 @@ public final class CloudSync {
             case 403: return "Accès refusé à ce dossier";
             case 404:
             case 409: return "Dossier introuvable : créez-le d'abord dans votre cloud";
+            // Koofr, among others, answers 429 after several refused passwords.
+            case 429: return "Le cloud bloque les connexions pour un moment (trop d'essais, souvent un mot de passe "
+                    + "refusé) : patientez avant de réessayer, avec un mot de passe d'application";
             case 507: return "Espace du cloud plein";
             default:
                 if (status >= 300 && status < 400)
                     return "Le serveur redirige ailleurs : vérifiez l'adresse du dossier";
-                return "Le serveur WebDAV a répondu " + status;
+                return "Le cloud a répondu " + status;
         }
     }
 
-    static String message(IOException failure) {
+    public static String message(IOException failure) {
         if (failure instanceof SSLException) return "Connexion sécurisée refusée : certificat du serveur non reconnu";
         if (failure instanceof java.net.UnknownHostException) return "Serveur introuvable : vérifiez l'adresse";
         if (failure instanceof java.net.SocketTimeoutException) return "Le serveur ne répond pas";

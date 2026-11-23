@@ -3,6 +3,7 @@ package com.ravenemu.app.ui.settings;
 import static org.junit.Assert.*;
 import static org.robolectric.Shadows.shadowOf;
 
+import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.Intent;
@@ -20,7 +21,10 @@ import com.ravenemu.app.data.saves.CloudSync;
 import com.ravenemu.app.data.saves.CloudSyncState;
 import com.ravenemu.app.data.saves.SaveRepository;
 import com.ravenemu.app.platform.ClearSealer;
+import com.ravenemu.app.platform.FakeGoogleAuthorizer;
+import com.ravenemu.app.platform.FakeGoogleDrive;
 import com.ravenemu.app.platform.FakeWebDav;
+import com.ravenemu.app.platform.GoogleDriveAuth;
 import com.ravenemu.app.settings.CloudAccount;
 import com.ravenemu.app.ui.library.CloudSyncRunner;
 import java.io.File;
@@ -41,23 +45,28 @@ import org.robolectric.android.controller.ActivityController;
 import org.robolectric.annotation.Config;
 import org.robolectric.annotation.GraphicsMode;
 import org.robolectric.shadows.ShadowDialog;
+import org.robolectric.shadows.ShadowAlertDialog;
 import org.robolectric.util.ReflectionHelpers;
+import org.robolectric.util.ReflectionHelpers.ClassParameter;
 
-/** Settings → Sauvegardes cloud with the WebDAV folder in memory: signing in,
- * the first sync, a conflict settled and signing out. */
+/** Settings → Sauvegardes cloud with the WebDAV folder and the Google Drive in
+ * memory: signing in, the first sync, a conflict settled and signing out. */
 @RunWith(RobolectricTestRunner.class)
 @Config(sdk = 36, qualifiers = "fr-rFR-w320dp-h640dp-mdpi",
-        shadows = {FakeAchievements.class, ClearSealer.class, FakeWebDav.class})
+        shadows = {FakeAchievements.class, ClearSealer.class, FakeWebDav.class, FakeGoogleDrive.class})
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 public final class CloudSettingsPageTest {
     private static final String FOLDER = "https://cloud.example.org/remote.php/dav/files/me/RavenEmu/";
     private final List<ActivityController<PlaybackSettingsActivity>> activities = new ArrayList<>();
     private final Context context = RuntimeEnvironment.getApplication();
     private File files;
+    private final FakeGoogleAuthorizer google = new FakeGoogleAuthorizer();
 
     @Before public void prepare() throws Exception {
         files = context.getFilesDir();
         FakeWebDav.reset();
+        FakeGoogleDrive.reset();
+        GoogleDriveAuth.authorizer = google;
         FakeAchievements.reset();
         CloudAccount.clear(context);
         CloudSyncState.clear(files);
@@ -70,6 +79,7 @@ public final class CloudSettingsPageTest {
         for (ActivityController<PlaybackSettingsActivity> controller : activities) controller.pause().stop().destroy();
         settle(null);
         CloudAccount.clear(context);
+        GoogleDriveAuth.authorizer = GoogleDriveAuth.PLAY;
     }
 
     @Test public void signingInChecksTheFolderThenSyncsTheLibrarysSaves() throws Exception {
@@ -157,6 +167,93 @@ public final class CloudSettingsPageTest {
         assertArrayEquals("kept".getBytes(StandardCharsets.UTF_8), SaveRepository.read(files, game.key, "srm"));
         assertTrue("The cloud keeps its copy", FakeWebDav.folder.files.size() > 1);
         assertNotNull(field(activity, "Adresse WebDAV du dossier (https://…)"));
+    }
+
+    @Test public void googleDriveSignInCreatesTheFolderThenSyncsTheLibrarysSaves() throws Exception {
+        RomLibrary.Entry game = RomLibrary.importRom(files, "Alpha.gb", new byte[0x180]);
+        SaveRepository.write(files, game.key, "srm", "progress".getBytes(StandardCharsets.UTF_8));
+        PlaybackSettingsActivity activity = open();
+        googleButton(activity).performClick();
+        settle(activity);
+        CloudAccount stored = CloudAccount.load(context);
+        assertNotNull(stored);
+        assertTrue(stored.isGoogleDrive());
+        assertEquals("player@example.com", stored.user);
+        assertEquals("No password is kept for Google Drive", "", stored.password);
+        CloudManifest list = CloudManifest.parse(FakeGoogleDrive.folder.files.get(CloudManifest.FILE));
+        CloudManifest.Entry entry = list.get(game.key);
+        assertNotNull("The first sync sent the save", entry);
+        assertArrayEquals("progress".getBytes(StandardCharsets.UTF_8),
+                FakeGoogleDrive.folder.files.get(CloudManifest.fileName(game.key, entry.sha256)));
+        assertTrue("Nothing reaches a WebDAV folder", FakeWebDav.folder.log.isEmpty());
+        assertNotNull(text(activity, "player@example.com · dossier RavenEmu"));
+        assertNotNull(find(activity, view -> view instanceof TextView
+                && ((TextView) view).getText().toString().contains("1 sauvegarde envoyée")));
+        assertEquals("The sync asks Play services for the account's tokens",
+                java.util.Arrays.asList("authorize", "tokens player@example.com"), google.calls);
+    }
+
+    @Test public void googlesConsentScreenCancelledStoresNothingUntilAccepted() throws Exception {
+        google.mode = FakeGoogleAuthorizer.Mode.CONSENT;
+        PlaybackSettingsActivity activity = open();
+        googleButton(activity).performClick();
+        settle(activity);
+        assertFalse(CloudAccount.stored(context));
+        googleResult(activity, Activity.RESULT_CANCELED, null);
+        assertEquals("Connexion à Google annulée",
+                ((TextView) find(activity, view -> "cloud.error".equals(view.getTag()))).getText().toString());
+        assertFalse(CloudAccount.stored(context));
+        assertTrue(FakeGoogleDrive.folder.log.isEmpty());
+
+        googleButton(activity).performClick();
+        settle(activity);
+        googleResult(activity, Activity.RESULT_OK, new Intent());
+        assertTrue(CloudAccount.load(context).isGoogleDrive());
+        assertNotNull(FakeGoogleDrive.folder.files.get(CloudManifest.FILE));
+    }
+
+    @Test public void withoutGooglePlayServicesNothingIsStored() throws Exception {
+        google.mode = FakeGoogleAuthorizer.Mode.FAIL;
+        google.failure = "Les services Google Play sont absents ou désactivés";
+        PlaybackSettingsActivity activity = open();
+        googleButton(activity).performClick();
+        settle(activity);
+        assertEquals(google.failure,
+                ((TextView) find(activity, view -> "cloud.error".equals(view.getTag()))).getText().toString());
+        assertFalse(CloudAccount.stored(context));
+        assertTrue(FakeGoogleDrive.folder.log.isEmpty());
+        assertTrue("The WebDAV form stays", googleButton(activity).isEnabled());
+        assertNotNull(field(activity, "Adresse WebDAV du dossier (https://…)"));
+    }
+
+    @Test public void signingOutOfGoogleDriveForgetsTheAccountAndKeepsTheDrivesCopy() throws Exception {
+        PlaybackSettingsActivity activity = open();
+        googleButton(activity).performClick();
+        settle(activity);
+        assertTrue(CloudAccount.stored(context));
+        described(activity, "Se déconnecter du cloud").performClick();
+        AlertDialog dialog = (AlertDialog) ShadowDialog.getLatestDialog();
+        assertTrue(((ShadowAlertDialog) org.robolectric.shadow.api.Shadow.extract(dialog)).getMessage().toString()
+                .startsWith("Le compte Google est oublié sur cet appareil."));
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        settle(activity);
+        assertFalse(CloudAccount.stored(context));
+        assertNotNull("The Drive keeps its copy", FakeGoogleDrive.folder.files.get(CloudManifest.FILE));
+        assertNotNull(googleButton(activity));
+    }
+
+    private static Button googleButton(PlaybackSettingsActivity activity) {
+        Button button = (Button) find(activity, view -> "cloud.google".equals(view.getTag()));
+        assertNotNull(button);
+        return button;
+    }
+
+    /** Google's consent screen closes with `result`. */
+    private static void googleResult(PlaybackSettingsActivity activity, int result, Intent data) throws Exception {
+        ReflectionHelpers.callInstanceMethod(activity, "onActivityResult",
+                ClassParameter.from(int.class, GoogleDriveSignIn.REQUEST), ClassParameter.from(int.class, result),
+                ClassParameter.from(Intent.class, data));
+        settle(activity);
     }
 
     private PlaybackSettingsActivity open() throws Exception {

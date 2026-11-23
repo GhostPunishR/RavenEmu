@@ -1,6 +1,7 @@
 package com.ravenemu.app.ui.settings;
 
 import android.app.AlertDialog;
+import android.content.Intent;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.text.Editable;
@@ -27,10 +28,11 @@ import java.util.Map;
 
 import static com.ravenemu.app.ui.settings.PlaybackSettingsActivity.CLOUD;
 
-/** Settings → Sauvegardes cloud: the WebDAV folder the cartridge saves are
- * synced with, as RetroArch's cloud sync (Nextcloud, kDrive, a NAS…), how the
- * last sync went, and the conflicts the player settles. Only the .srm of the
- * library's games are sent: never a ROM, a BIOS or a save state. */
+/** Settings → Sauvegardes cloud: the cloud the cartridge saves are synced
+ * with, Google Drive or a WebDAV folder as RetroArch's cloud sync (Nextcloud,
+ * kDrive, a NAS…), how the last sync went, and the conflicts the player
+ * settles. Only the .srm of the library's games are sent: never a ROM, a BIOS
+ * or a save state. */
 final class CloudSettingsPage implements CloudSyncRunner.Listener {
     private static final int ERROR = 0xffff928b;
 
@@ -41,14 +43,37 @@ final class CloudSettingsPage implements CloudSyncRunner.Listener {
     private CloudAccount account;
     private CloudSyncState state;
     private final Map<String, String> titles = new HashMap<>();
-    private boolean accountRead, signingIn, signingOut;
+    private boolean accountRead, signingIn, signingOut, googleSigningIn;
     private String error, typedFolder = "", typedUser = "";
     private AlertDialog signOutDialog;
+    private final GoogleDriveSignIn google;
 
     CloudSettingsPage(PlaybackSettingsActivity activity, SettingsWidgets widgets) {
         this.activity = activity;
         this.widgets = widgets;
         this.theme = activity.theme();
+        this.google = new GoogleDriveSignIn(activity, new GoogleDriveSignIn.Outcome() {
+            @Override public void signedIn(CloudAccount signedIn) {
+                signingIn = googleSigningIn = false;
+                error = null;
+                account = signedIn;
+                state = null;
+                CloudSyncRunner.now(activity);
+                if (CLOUD.equals(activity.page())) activity.showPage(CLOUD);
+            }
+
+            @Override public void failed(String message) {
+                signingIn = googleSigningIn = false;
+                error = message;
+                if (CLOUD.equals(activity.page())) activity.showPage(CLOUD);
+            }
+        });
+    }
+
+    /** Google's consent screen closed. */
+    void googleResult(int resultCode, Intent data) {
+        signingIn = googleSigningIn = true;
+        google.result(resultCode, data);
     }
 
     /** The account, the last sync and the games' titles, read once off the UI thread. */
@@ -105,9 +130,12 @@ final class CloudSettingsPage implements CloudSyncRunner.Listener {
 
     private void signInForm() {
         widgets.add(widgets.text("Retrouvez vos parties sur tous vos appareils : RavenEmu envoie les sauvegardes "
-                + "de cartouche de vos jeux dans un dossier WebDAV, comme RetroArch. Nextcloud, ownCloud, kDrive, "
-                + "Koofr, pCloud ou un NAS le proposent. Créez d'abord un dossier dédié, par exemple RavenEmu, "
-                + "puis copiez son adresse WebDAV.", 13, theme.muted), 0);
+                + "de cartouche de vos jeux dans votre Google Drive ou dans un dossier WebDAV, comme RetroArch.",
+                13, theme.muted), 0);
+        googleChoice();
+        widgets.group("Dossier WebDAV");
+        widgets.add(widgets.text("Nextcloud, ownCloud, kDrive, Koofr, pCloud ou un NAS le proposent. Créez d'abord "
+                + "un dossier dédié, par exemple RavenEmu, puis copiez son adresse WebDAV.", 13, theme.muted), 0);
         EditText folder = widgets.field("Adresse WebDAV du dossier (https://…)",
                 InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
         folder.setText(typedFolder);
@@ -158,6 +186,28 @@ final class CloudSettingsPage implements CloudSyncRunner.Listener {
                 + "d'application, que votre cloud permet de révoquer.", 11, theme.muted), 8);
     }
 
+    /** Google Drive: Google's screens choose the account; RavenEmu then sees
+     * only the folder it creates there. */
+    private void googleChoice() {
+        widgets.group("Google Drive");
+        widgets.add(widgets.text("RavenEmu crée le dossier « RavenEmu » dans votre Drive et n'accède qu'aux "
+                + "fichiers qu'il y a créés. Demande les services Google Play.", 13, theme.muted), 0);
+        Button connect = widgets.button(googleSigningIn ? "Connexion…" : "Se connecter avec Google");
+        connect.setTag("cloud.google");
+        connect.setTextColor(theme.background);
+        connect.setBackground(widgets.shape(theme.accent));
+        connect.setEnabled(!signingIn);
+        connect.setAlpha(signingIn && !googleSigningIn ? 0.5f : 1f);
+        connect.setOnClickListener(view -> {
+            if (signingIn) return;
+            signingIn = googleSigningIn = true;
+            error = null;
+            activity.showPage(CLOUD);
+            google.start();
+        });
+        widgets.add(connect, 10);
+    }
+
     /** The folder answers and can hold the list before anything is stored. */
     private void signIn(String typed, String user, String password) {
         String folder = WebDavHttp.folderAddress(typed);
@@ -202,10 +252,12 @@ final class CloudSettingsPage implements CloudSyncRunner.Listener {
         surface.setCornerRadius(widgets.dp(14));
         card.setBackground(surface);
         card.setPadding(widgets.dp(14), widgets.dp(14), widgets.dp(14), widgets.dp(14));
-        TextView host = widgets.text(WebDavHttp.host(account.folder), 17, theme.text);
+        boolean drive = account.isGoogleDrive();
+        TextView host = widgets.text(drive ? "Google Drive" : WebDavHttp.host(account.folder), 17, theme.text);
         host.setTypeface(null, Typeface.BOLD);
         card.addView(host);
-        card.addView(widgets.text("@" + account.user, 12, theme.muted));
+        card.addView(widgets.text(drive ? account.user + " · dossier RavenEmu" : "@" + account.user, 12,
+                theme.muted));
         widgets.add(card, widgets.text(status(), 12, theme.accent), 8);
         widgets.add(card, 0);
         widgets.settingSwitch("Synchroniser automatiquement",
@@ -289,9 +341,13 @@ final class CloudSettingsPage implements CloudSyncRunner.Listener {
     private void confirmSignOut() {
         if (signingOut || account == null) return;
         if (signOutDialog != null && signOutDialog.isShowing()) return;
+        String forgotten = account.isGoogleDrive()
+                ? "Le compte Google est oublié sur cet appareil. Les sauvegardes restent sur ce téléphone et dans "
+                + "votre Drive. L'accès de RavenEmu se retire depuis votre compte Google, rubrique Sécurité."
+                : "L'adresse et le mot de passe sont oubliés sur cet appareil. Les sauvegardes restent sur ce "
+                + "téléphone et dans le cloud.";
         signOutDialog = new AlertDialog.Builder(activity).setTitle("Se déconnecter du cloud ?")
-                .setMessage("L'adresse et le mot de passe sont oubliés sur cet appareil. Les sauvegardes restent "
-                        + "sur ce téléphone et dans le cloud.")
+                .setMessage(forgotten)
                 .setPositiveButton("Se déconnecter", (dialog, which) -> signOut())
                 .setNegativeButton("Annuler", null).create();
         signOutDialog.show();

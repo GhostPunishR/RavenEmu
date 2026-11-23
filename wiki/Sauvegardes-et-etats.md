@@ -17,9 +17,15 @@ La mémoire batterie modifiée est enregistrée périodiquement, ainsi qu'à la 
 
 Les fichiers sont écrits atomiquement. Cela ne remplace pas une copie externe : une désinstallation ou un effacement des données supprime le stockage privé.
 
-## Synchronisation dans le cloud (WebDAV)
+## Synchronisation dans le cloud (Google Drive ou WebDAV)
 
-Comme dans RetroArch, RavenEmu synchronise les **sauvegardes de cartouche** avec un dossier WebDAV : Nextcloud, ownCloud, kDrive, Koofr, pCloud, un NAS… Vous retrouvez ainsi votre partie sur un autre téléphone. Les ROMs, le BIOS et les états instantanés ne sont jamais envoyés.
+RavenEmu synchronise les **sauvegardes de cartouche** avec votre **Google Drive**, ou, comme RetroArch, avec un dossier **WebDAV** : Nextcloud, ownCloud, kDrive, Koofr, pCloud, un NAS… Vous retrouvez ainsi votre partie sur un autre téléphone. Les ROMs, le BIOS et les états instantanés ne sont jamais envoyés.
+
+### Google Drive
+
+Dans **Paramètres → Sauvegardes cloud**, touchez **Se connecter avec Google**, choisissez votre compte et autorisez RavenEmu. RavenEmu crée lui-même le dossier **RavenEmu** à la racine de votre Drive ; ne le créez pas à la main, RavenEmu ne verrait pas un dossier qu'il n'a pas créé. Il n'accède qu'aux fichiers qu'il y a créés, jamais au reste de votre Drive. Il faut les **services Google Play** : sur un téléphone qui ne les a pas, utilisez un dossier WebDAV. Pour retirer l'accès de RavenEmu, passez par votre compte Google, rubrique Sécurité.
+
+### Dossier WebDAV
 
 1. Dans votre cloud, créez un dossier dédié, par exemple `RavenEmu`, et copiez son adresse WebDAV. Avec Nextcloud : `https://votre-serveur/remote.php/dav/files/identifiant/RavenEmu/`.
 2. Créez si possible un **mot de passe d'application** : votre cloud permet de le révoquer sans changer votre mot de passe principal.
@@ -39,7 +45,9 @@ Un conflit apparaît dans **Paramètres → Sauvegardes cloud**, avec les dates 
 
 Un jeu est reconnu par l'empreinte de sa ROM : la synchronisation ne concerne que deux copies de la **même ROM exacte**. **Déconnexion** oublie l'adresse et le mot de passe sur l'appareil, sans rien supprimer, ni sur le téléphone ni dans le cloud.
 
-Limites actuelles : HTTPS seulement, avec un certificat reconnu par Android (pas de certificat auto-signé de NAS) ; le dossier doit exister avant la connexion ; les versions mises de côté sur le téléphone ne se restaurent pas encore depuis l'application.
+Limites actuelles : en WebDAV, HTTPS seulement, avec un certificat reconnu par Android (pas de certificat auto-signé de NAS), et le dossier doit exister avant la connexion ; les versions mises de côté sur le téléphone ne se restaurent pas encore depuis l'application.
+
+**Erreur 429** : le cloud bloque les connexions pour un moment, le plus souvent après plusieurs mots de passe refusés (Koofr le fait). Patientez, générez un nouveau **mot de passe d'application** dans votre cloud, puis réessayez ; un VPN peut aussi déclencher ce blocage.
 
 ## Quatre emplacements d'état
 
