@@ -1,8 +1,8 @@
 # Journal des modifications de RavenEmu
 
-## Non publié
+## 1.1.0 - 2026-11-23
 
-Version prévue : **1.1.0**, une mise à jour majeure selon les règles de numérotation, puisqu'elle ajoute une fonction.
+Mise à jour majeure : elle ajoute une fonction (règles de numérotation d'[AGENTS.md](AGENTS.md#numéros-de-version)).
 
 - **Sauvegardes cloud dans Google Drive** (**Paramètres → Sauvegardes cloud → Se connecter avec Google**) : choisissez votre compte et autorisez RavenEmu sur les écrans de Google. RavenEmu crée le dossier « RavenEmu » à la racine de votre Drive et n'accède qu'aux fichiers qu'il y a créés. La synchronisation est la même qu'en WebDAV : sauvegardes de cartouche seulement, conflits à régler, versions précédentes gardées. Il faut les services Google Play : sur un téléphone qui ne les a pas, le dossier WebDAV reste possible. Le projet Google de RavenEmu doit déclarer l'application ([docs/GOOGLE_DRIVE.md](docs/GOOGLE_DRIVE.md)). La [politique de confidentialité](PRIVACY.md) et les [conditions](TERMS.md) sont mises à jour ; la bibliothèque de Google est créditée dans **Licences et crédits** ([provenance et licence](legal/attributions/google-play-services.md)).
 - **« Le serveur WebDAV a répondu 429 » corrigé** (Koofr) : Koofr bloque un moment les connexions d'un compte après plusieurs mots de passe refusés, et RavenEmu pouvait prolonger ce blocage.
