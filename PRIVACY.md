@@ -4,23 +4,33 @@ Date d’entrée en vigueur : 23 novembre 2026
 
 ## Champ d’application
 
-Cette politique décrit le fonctionnement de l’application Android RavenEmu, du site officiel et des ressources GitHub du projet.
+Cette politique décrit le fonctionnement de l’application Android RavenEmu (`com.ravenemu`), de son APK de développement (`com.ravenemu.dev`), du site officiel et des ressources GitHub du projet. Les versions publiques sont distribuées dans les Releases GitHub du projet.
 
 ## Application Android
 
-RavenEmu fonctionne sans compte, sans télémétrie et sans publicité. Il propose une connexion facultative au service tiers RetroAchievements, et une synchronisation facultative des sauvegardes de cartouche avec le Google Drive de l’utilisateur ou un dossier WebDAV qu’il choisit. Sans connexion, aucun échange avec ces services n’est effectué. L’application ne téléverse jamais les ROM, BIOS, états instantanés ni pochettes ; les sauvegardes de cartouche ne quittent l’appareil que vers le Google Drive ou le dossier WebDAV que l’utilisateur a lui-même connecté.
+RavenEmu fonctionne sans compte, sans télémétrie et sans publicité. Il propose une connexion facultative au service tiers RetroAchievements, et une synchronisation facultative des sauvegardes de cartouche avec un dossier WebDAV que l’utilisateur choisit. Sans connexion, aucun échange avec ces services n’est effectué. L’application ne téléverse jamais les ROM, BIOS, états instantanés ni pochettes ; les sauvegardes de cartouche ne quittent l’appareil que vers le dossier que l’utilisateur a lui-même connecté.
 
 Les données suivantes peuvent être créées ou analysées localement sur l’appareil :
 
 - chemins de dossiers autorisés par l’utilisateur ;
 - métadonnées et empreintes de jeux ;
 - sauvegardes et états instantanés ;
-- pochettes choisies ou générées localement ;
-- packs de shaders importés par l’utilisateur ;
-- préférences d’affichage, d’audio et de commandes ;
-- mesures de performance affichées dans l’APK Debug.
+- copies privées des ROM et du BIOS importés par l’utilisateur ;
+- pochettes choisies par l’utilisateur ou générées localement ;
+- packs de shaders et skins importés par l’utilisateur ;
+- codes de triche saisis par l’utilisateur ;
+- préférences d’affichage, d’audio et de commandes.
 
-Ces données restent sous le contrôle de l’utilisateur et peuvent être supprimées en retirant les fichiers concernés, en effaçant les données de l’application ou en désinstallant RavenEmu.
+Ces données restent sous le contrôle de l’utilisateur et peuvent être supprimées en retirant les fichiers concernés, en effaçant les données de l’application ou en désinstallant RavenEmu. Elles sont exclues des sauvegardes Android de l’appareil.
+
+## Permissions Android
+
+RavenEmu ne demande que deux permissions, accordées à l’installation :
+
+- **Internet**, pour RetroAchievements et la synchronisation des sauvegardes, seulement quand l’utilisateur les a connectés ;
+- **Vibration**, pour les cartouches à vibreur (Game Boy MBC5 Rumble, Drill Dozer, WarioWare: Twisted!).
+
+Android affiche aussi une permission interne propre à RavenEmu, `com.ravenemu.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`, ajoutée par la bibliothèque AndroidX : elle empêche les autres applications d’envoyer des messages internes à RavenEmu et ne donne accès à aucune donnée. RavenEmu ne demande ni la localisation, ni les contacts, ni l’appareil photo, ni le micro, ni un accès global au stockage.
 
 ## RetroAchievements (facultatif)
 
@@ -34,34 +44,19 @@ Les informations enregistrées par RetroAchievements relèvent de sa [politique 
 
 ## Synchronisation des sauvegardes (facultatif)
 
-Dans **Paramètres → Sauvegardes cloud**, l’utilisateur peut connecter son **Google Drive**, ou indiquer l’adresse d’un **dossier WebDAV** (Nextcloud, ownCloud, kDrive, Koofr, pCloud, NAS…), un identifiant et un mot de passe, de préférence un mot de passe d’application. Sans cette configuration, aucun échange n’a lieu. Le projet ne fournit ni n’héberge ce stockage : il appartient à l’utilisateur, ou au service qu’il a choisi, dont les conditions et la politique de confidentialité s’appliquent ([Règles de confidentialité de Google](https://policies.google.com/privacy) pour Google Drive).
+Dans **Paramètres → Sauvegardes cloud**, l’utilisateur peut indiquer l’adresse d’un **dossier WebDAV** (Nextcloud, ownCloud, kDrive, Koofr, pCloud, NAS…), un identifiant et un mot de passe, de préférence un mot de passe d’application. Sans cette configuration, aucun échange n’a lieu. Le projet ne fournit ni n’héberge ce stockage : il appartient à l’utilisateur, ou au service qu’il a choisi, dont les conditions et la politique de confidentialité s’appliquent.
 
 - **Ce qui est envoyé.** Seules les sauvegardes de cartouche (`.srm`) des jeux de la bibliothèque, et une liste `ravenemu-saves.json`. Pour chaque jeu, elle donne l’empreinte SHA-256 qui l’identifie dans RavenEmu, l’empreinte et la taille de sa sauvegarde, la date d’envoi, le nom de l’appareil qui l’a envoyée (fabricant et modèle Android, par exemple « Google Pixel 8 ») et les empreintes des deux versions précédentes. Aucun nom de jeu, aucune ROM, aucun BIOS, aucun état instantané ni aucune jaquette n’est envoyé.
-- **Connexion.** Uniquement en HTTPS, vers l’hôte du dossier WebDAV ou vers l’API Google Drive (`www.googleapis.com`) ; une redirection n’est jamais suivie. Le serveur reçoit les informations d’une connexion HTTPS, dont l’adresse IP, et l’identifiant du client (User-Agent) « RavenEmu/version (Android) ».
-- **Google Drive.** L’utilisateur choisit son compte et autorise RavenEmu sur les écrans de Google, par les services Google Play. RavenEmu demande seulement l’autorisation `drive.file` : il ne voit que les fichiers qu’il a créés, dans le dossier « RavenEmu » de la racine du Drive, jamais le reste du Drive. Les services Google Play conservent l’autorisation et fournissent à chaque synchronisation un jeton d’accès temporaire, que RavenEmu ne stocke pas. RavenEmu lit l’adresse e-mail du compte auprès de Google Drive pour l’afficher dans les paramètres.
-- **Quand.** Au lancement de l’application et à la fermeture d’un jeu si **Synchroniser automatiquement** est activé, et quand l’utilisateur touche **Synchroniser maintenant** ou règle un conflit.
-- **Sur l’appareil.** L’adresse, l’identifiant et le mot de passe du dossier WebDAV, ou l’adresse e-mail du compte Google, sont chiffrés avec Android Keystore dans un fichier exclu des sauvegardes Android : le mot de passe sert à chaque synchronisation et n’est conservé nulle part ailleurs. Un fichier d’état garde les empreintes de la dernière synchronisation et les conflits à régler. Une sauvegarde remplacée par celle du cloud est d’abord copiée dans le stockage privé de l’application, cinq versions par jeu.
-- **Fin.** La déconnexion efface l’adresse, le mot de passe ou le compte Google, et l’état de synchronisation de l’appareil. Elle ne supprime ni les sauvegardes du téléphone ni les fichiers du dossier WebDAV ou du Google Drive, que l’utilisateur gère lui-même. L’autorisation donnée à RavenEmu sur Google Drive se retire depuis le compte Google (rubrique Sécurité, accès des applications tierces).
+- **Connexion.** Uniquement en HTTPS, vers l’hôte du dossier ; une redirection n’est jamais suivie. Le serveur reçoit les informations d’une connexion HTTPS, dont l’adresse IP, et l’identifiant du client (User-Agent) « RavenEmu/version (Android) ».
+- **Quand.** Au lancement de l’application et à la fermeture d’un jeu si **Synchroniser automatiquement** est activé, et quand l’utilisateur touche **Synchroniser maintenant** ou règle un conflit. Après un refus du serveur (mot de passe refusé, accès retiré, connexions bloquées), les synchronisations automatiques s’arrêtent jusqu’à une synchronisation demandée par l’utilisateur ou une nouvelle connexion.
+- **Sur l’appareil.** L’adresse, l’identifiant et le mot de passe du dossier sont chiffrés avec Android Keystore dans un fichier exclu des sauvegardes Android : le mot de passe sert à chaque synchronisation et n’est conservé nulle part ailleurs. Un fichier d’état garde les empreintes de la dernière synchronisation et les conflits à régler. Une sauvegarde remplacée par celle du cloud est d’abord copiée dans le stockage privé de l’application, cinq versions par jeu.
+- **Fin.** La déconnexion efface l’adresse, le mot de passe et l’état de synchronisation de l’appareil. Elle ne supprime ni les sauvegardes du téléphone ni les fichiers du dossier, que l’utilisateur gère lui-même.
 
-## Jaquettes en ligne (facultatif)
+**Google Drive** n’est pas encore proposé. L’application contient la bibliothèque des services Google Play pour cette option à venir ; elle n’est jamais appelée tant que l’option n’est pas proposée et que l’utilisateur n’a pas connecté son compte. Quand l’option sera proposée, cette politique décrira ce qui est échangé avec Google avant sa mise à disposition.
 
-**L'application native actuelle ne propose pas cette option** : elle ne télécharge aucune jaquette. Ce qui suit vaut pour la bêta retirée, et pour l'option si elle revient.
+## Fonctions de la bêta retirée
 
-Cette option cherche les jaquettes manquantes de la bibliothèque sur `https://thumbnails.libretro.com`, un service tiers. Cette recherche est **désactivée par défaut** et ne démarre que si l’utilisateur l’active dans Réglages → Général → Bibliothèque.
-
-Une fois activée, l’application télécharge l’index public des jaquettes de chaque console présente dans la bibliothèque (Game Boy, Game Boy Color, Game Boy Advance), puis l’image correspondant au nom de fichier de chaque jeu sans jaquette. Ce service reçoit donc les informations d’une connexion HTTPS, dont l’adresse IP de l’appareil, et, à travers les images demandées, le nom des jeux de la bibliothèque. Aucune ROM, empreinte, sauvegarde ni aucun état n’est envoyé. Les jaquettes sont conservées sur l’appareil. Les jeux absents de l’index ne sont pas recherchés de nouveau ; désactiver puis réactiver l’option relance la recherche.
-
-Les images ainsi obtenues sont la propriété de leurs ayants droit ; RavenEmu ne les distribue pas et ne les inclut pas dans l’application.
-
-## Câble link sans fil (Android)
-
-**L'application native actuelle n'a pas encore de câble link sans fil.** Ce qui suit vaut pour la bêta retirée, et pour cette fonction quand elle reviendra.
-
-Le câble link sans fil relie deux téléphones du même réseau local. Il est activé par défaut et se désactive dans Réglages → Général → Câble link. Il ne passe par aucun serveur : les échanges restent sur le réseau local, d’un téléphone à l’autre.
-
-- **Annonce.** Seulement pendant que le jeu en cours se sert de son câble link, l’application s’annonce sur le réseau local (DNS-SD/mDNS) et cherche les autres téléphones. L’annonce indique le modèle du téléphone, la famille de console (Game Boy ou Game Boy Advance), la version du protocole et un identifiant tiré au hasard à chaque lancement de l’application. Elle n’indique ni le jeu, ni le compte, ni aucun fichier. Les appareils du même réseau peuvent la voir.
-- **Liaison.** Une fois deux téléphones reliés, chacun envoie à l’autre le modèle du téléphone et le nom de son fichier de jeu, affichés dans le menu du jeu, puis les données du câble link émulé. Aucune ROM, sauvegarde ni aucun état n’est envoyé.
-- **Fin.** Rien n’est conservé après la liaison. L’annonce s’arrête quand le jeu ne se sert plus du câble, quand l’application passe en arrière-plan ou quand le réglage est désactivé.
+La bêta retirée (`com.ravenemu.preview`) proposait aussi des jaquettes en ligne, téléchargées depuis `thumbnails.libretro.com`, et un câble link sans fil entre téléphones du même réseau local. L’application actuelle n’a aucune de ces deux fonctions : elle ne télécharge aucune jaquette et ne s’annonce pas sur le réseau local. Si l’une d’elles revient, cette politique sera mise à jour avant sa publication.
 
 ## Accès aux fichiers
 
@@ -71,7 +66,7 @@ L’utilisateur reste responsable des ROM, BIOS et autres fichiers qu’il chois
 
 ## Site et services GitHub
 
-Le site officiel est publié avec GitHub Pages. Le dépôt, les issues, les téléchargements et les avis de sécurité sont fournis par GitHub. Ces services peuvent traiter des données techniques conformément à leurs propres politiques.
+Le site officiel est publié avec GitHub Pages. Le dépôt, les issues, les téléchargements de l’application (Releases) et les avis de sécurité sont fournis par GitHub. Ces services peuvent traiter des données techniques, dont l’adresse IP d’un téléchargement, conformément à leurs propres politiques.
 
 RavenEmu n’ajoute aucun outil d’analyse publicitaire ou de suivi au site officiel.
 

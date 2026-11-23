@@ -4,6 +4,12 @@
 
 Version prévue : **1.1.1**, un correctif.
 
+- **Politique de confidentialité et conditions d'utilisation à jour** (**Paramètres → À propos**), datées du 23 novembre 2026 :
+  - elles décrivent l'application telle qu'elle est : synchronisation par WebDAV, Google Drive pas encore proposé, pas de jaquettes en ligne ni de câble sans fil, que seule la bêta retirée avait ;
+  - les deux permissions Android (Internet, Vibration) sont détaillées, avec la permission interne d'AndroidX ;
+  - la mention erronée de « mesures de performance » est retirée ;
+  - les versions officielles sont indiquées : Releases GitHub, signées, avec leurs sources ;
+  - les conditions rappellent d'exporter ses sauvegardes avant une désinstallation.
 - **Licences et crédits lisibles** (**Paramètres → À propos → Licences et crédits**) : les crédits et les licences (GPLv3, AGPLv3, MIT, Apache 2) sont désormais écrits en Markdown et affichés mis en forme. On y trouve des titres, de vrais paragraphes au lieu de lignes coupées tous les 70 caractères, des listes, du code en police fixe et des liens qui s'ouvrent. Le texte des licences est inchangé, mot pour mot, et reste sélectionnable.
 - **Site et documentation** : le site (`docs/`) suit les versions publiées. On y télécharge la dernière version depuis les Releases GitHub, sans compte, au lieu des artefacts de compilation. L'application Android y est marquée « Disponible ». Les notes de l'installation ne se coupent plus en colonnes sur téléphone. `docs/` ne contient plus que le site : `MIGRATION_NATIVE.md` et `GOOGLE_DRIVE.md` passent à la racine, et tous les liens sont mis à jour.
 - **Google Drive masqué en attendant le projet Google de RavenEmu** : sans ce projet, Google refuse toute connexion. **Paramètres → Sauvegardes cloud** ne propose donc plus que le dossier WebDAV, comme en 1.0.0. Le code reste en place : le réglage `ravenemuGoogleDrive` de `gradle.properties` réaffiche l'option une fois le projet créé ([GOOGLE_DRIVE.md](GOOGLE_DRIVE.md)).

@@ -1,12 +1,14 @@
 # Conditions d'utilisation de RavenEmu
 
-Date d'entrée en vigueur : 13 octobre 2026
+Date d'entrée en vigueur : 23 novembre 2026
 
 Ces conditions accompagnent l'application Android RavenEmu et son code source. En utilisant l'application, vous les acceptez. Elles ne remplacent pas la [licence](LICENSE), qui régit le code lui-même, ni la [politique de confidentialité](PRIVACY.md), qui décrit le traitement des données.
 
 ## Ce qu'est RavenEmu
 
-RavenEmu est un émulateur Game Boy, Game Boy Color et Game Boy Advance, écrit pour Android. Un émulateur reproduit le comportement d'une console ; il ne contient aucun jeu. L'application est un logiciel libre, distribuée sous GNU Affero General Public License version 3.
+RavenEmu est un émulateur Game Boy, Game Boy Color et Game Boy Advance, écrit pour Android. Un émulateur reproduit le comportement d'une console ; il ne contient aucun jeu. L'application est un logiciel libre, distribuée gratuitement sous GNU Affero General Public License version 3.
+
+Les versions officielles sont publiées dans les [Releases GitHub du projet](https://github.com/GhostPunishR/RavenEmu/releases), signées par sa clé, avec leurs sources et leurs empreintes SHA-256. Une copie obtenue ailleurs, ou modifiée, n'est pas vérifiée par le projet : à vous d'en juger la provenance.
 
 ## Ce que RavenEmu ne fournit pas
 
@@ -23,21 +25,21 @@ Ces fichiers ne sont ni inclus dans l'application, ni téléchargés par elle.
 
 Vous êtes seul responsable des fichiers que vous ouvrez avec RavenEmu et de leur provenance. Il vous appartient de vérifier que vous disposez du droit de les utiliser dans votre pays. Les règles varient d'un pays à l'autre, y compris pour une copie faite depuis une cartouche que vous possédez.
 
-Vous êtes également responsable de vos sauvegardes. Un état instantané ou une sauvegarde de cartouche est un fichier sur votre appareil : l'application ne les conserve nulle part ailleurs, sauf les sauvegardes de cartouche que vous choisissez de synchroniser avec votre Google Drive ou votre propre dossier WebDAV, et ne peut pas les restaurer si vous les perdez.
+Vous êtes également responsable de vos sauvegardes. Un état instantané ou une sauvegarde de cartouche est un fichier sur votre appareil : l'application ne les conserve nulle part ailleurs, sauf les sauvegardes de cartouche que vous choisissez de synchroniser avec votre propre dossier WebDAV, et ne peut pas les restaurer si vous les perdez. Exportez-les régulièrement depuis l'application, surtout avant de la désinstaller ou d'effacer ses données.
 
 ## Marques
 
 Game Boy, Game Boy Color et Game Boy Advance sont des marques de Nintendo. RavenEmu n'est ni affilié à Nintendo, ni approuvé, ni soutenu par Nintendo. Les noms de jeux, de consoles et de sociétés cités dans l'application ou sa documentation le sont à titre descriptif.
 
-RavenEmu n'est ni affilié à Delta, ni approuvé par ses auteurs : la lecture des skins `.deltaskin` est une compatibilité de format, et aucun skin n'est distribué.
+RavenEmu n'est ni affilié à Delta, ni approuvé par ses auteurs : la lecture des skins `.deltaskin` est une compatibilité de format, et aucun skin n'est distribué. De même, RavenEmu n'est ni affilié à RetroArch ni approuvé par ses auteurs ; les shaders RetroArch (`.glslp`) sont lus par compatibilité de format.
 
 ## Services tiers
 
 RavenEmu propose une connexion facultative à [RetroAchievements](https://retroachievements.org). Sans connexion de votre part, aucun échange n'a lieu avec ce service. Lorsque vous vous connectez, votre usage de ce service relève de ses propres conditions et de sa propre politique de confidentialité, sur lesquelles le projet n'a aucune prise. RavenEmu n'est ni affilié à RetroAchievements, ni approuvé par ce service.
 
-La synchronisation facultative des sauvegardes de cartouche passe par votre Google Drive, que vous connectez par les services Google Play, ou par un dossier WebDAV que vous choisissez et configurez vous-même (Nextcloud, kDrive, un NAS…). Le projet ne fournit ni n'héberge ces services ; leur usage relève des conditions de Google ou de votre fournisseur. Ce qui y est envoyé est décrit dans la [politique de confidentialité](PRIVACY.md).
+La synchronisation facultative des sauvegardes de cartouche passe par un dossier WebDAV que vous choisissez et configurez vous-même (Nextcloud, kDrive, Koofr, un NAS…). Le projet ne fournit ni n'héberge ce service ; son usage relève des conditions de votre fournisseur. Ce qui y est envoyé est décrit dans la [politique de confidentialité](PRIVACY.md). Google Drive n'est pas encore proposé.
 
-Une option facultative, **désactivée par défaut**, de jaquettes en ligne peut aussi être proposée (la bêta l'avait, l'application native actuelle ne l'a pas) : si vous l'activez, l'application télécharge les jaquettes manquantes depuis `thumbnails.libretro.com`, un service tiers. Ces images appartiennent à leurs ayants droit ; elles ne sont ni distribuées avec RavenEmu, ni hébergées par le projet, et restent sur votre appareil. Ce que ce service reçoit est décrit dans la [politique de confidentialité](PRIVACY.md). Vous pouvez à tout moment désactiver l'option, retirer une jaquette ou choisir votre propre image.
+L'application ne télécharge aucune jaquette : les pochettes sont celles que vous choisissez, ou générées sur l'appareil. Les shaders, skins et BIOS que vous importez restent sous la licence et la responsabilité de leurs auteurs ; aucun n'est fourni avec RavenEmu.
 
 ## Absence de garantie
 
