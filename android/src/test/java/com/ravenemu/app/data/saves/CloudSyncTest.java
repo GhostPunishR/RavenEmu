@@ -205,9 +205,17 @@ public final class CloudSyncTest {
     @Test public void theServersRefusalsAreToldInFrench() {
         phone.saves.put(ZELDA, save("zelda"));
         cloud.status = 401;
-        assertEquals("Identifiant ou mot de passe refusé", sync(phone, CloudSyncState.empty("a"), 1).lastError);
+        CloudSyncState refused = sync(phone, CloudSyncState.empty("a"), 1);
+        assertTrue(refused.lastError, refused.lastError.startsWith("Identifiant ou mot de passe refusé : avec Koofr"));
+        assertTrue("A refused password stops the automatic syncs", refused.refused);
+        cloud.status = 429;
+        CloudSyncState blocked = sync(phone, CloudSyncState.empty("a"), 1);
+        assertTrue(blocked.lastError, blocked.lastError.startsWith("Le cloud bloque les connexions pour un moment"));
+        assertTrue(blocked.refused);
         cloud.status = 507;
-        assertEquals("Espace du cloud plein", sync(phone, CloudSyncState.empty("a"), 1).lastError);
+        CloudSyncState full = sync(phone, CloudSyncState.empty("a"), 1);
+        assertEquals("Espace du cloud plein", full.lastError);
+        assertFalse("A full cloud is no refusal: syncs go on", full.refused);
         cloud.status = 0;
         cloud.missingFolder = true;
         assertEquals("Dossier introuvable : créez-le d'abord dans votre cloud",
@@ -227,6 +235,6 @@ public final class CloudSyncTest {
         assertEquals("Dossier introuvable : créez-le d'abord dans votre cloud", CloudSync.verify(missing));
         FakeCloudStore refused = new FakeCloudStore();
         refused.status = 401;
-        assertEquals("Identifiant ou mot de passe refusé", CloudSync.verify(refused));
+        assertTrue(CloudSync.verify(refused).startsWith("Identifiant ou mot de passe refusé"));
     }
 }

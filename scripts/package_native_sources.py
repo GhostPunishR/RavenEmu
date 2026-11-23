@@ -27,6 +27,8 @@ EXCLUDED_DIRECTORIES = {".git", ".gradle", ".cxx", ".aicode", "build",
                         "__pycache__", "node_modules", ".idea"}
 MAX_FILE_BYTES = 256 * 1024 * 1024
 MAX_TOTAL_BYTES = 2 * 1024 * 1024 * 1024
+# Published without sources by their vendor: the only rows allowed "-".
+BINARY_ONLY_GROUPS = {"com.google.android.gms"}
 README = """RavenEmu Native Preview - source inputs
 
 RavenEmu/ contains the tracked workspace sources and build scripts of the
@@ -39,7 +41,10 @@ files, Git metadata, caches and build outputs are excluded.
 
 dependencies/ contains the exact source JARs, POMs and runtime AAR/JAR
 publications listed in DEPENDENCIES.tsv. The runtime publications retain their
-resources and notices. Consult their POMs and upstream repositories for the
+resources and notices. Google publishes Google Play services
+(com.google.android.gms), used for the Google Drive cloud saves, without
+sources, under the Android Software Development Kit License; their rows say
+"-" for the sources, and only their POMs and binaries are included. Consult their POMs and upstream repositories for the
 dependencies' own build configurations and additional source documentation.
 This collection records published inputs; it does not certify the completeness
 of every upstream publication or the legality of a future distribution.
@@ -177,11 +182,16 @@ def dependency_inputs(directory):
         if len(records) >= 4096:
             raise SourceError("Too many dependency publications")
         coordinate, sources, pom, binary = row
-        if not sources.endswith(".jar") or not pom.endswith(".pom") or not binary.endswith((".jar", ".aar")):
+        binary_only = sources == "-"
+        if binary_only and coordinate.split(":")[0] not in BINARY_ONLY_GROUPS:
+            raise SourceError(f"Missing source publication: {coordinate}")
+        if (not binary_only and not sources.endswith(".jar")) or not pom.endswith(".pom") \
+                or not binary.endswith((".jar", ".aar")):
             raise SourceError(f"Unexpected dependency publication type: {coordinate}")
-        names = [safe_relative(name).as_posix() for name in (sources, pom, binary)]
+        names = [None if binary_only else safe_relative(sources).as_posix()]
+        names += [safe_relative(name).as_posix() for name in (pom, binary)]
         for name in names:
-            if name not in files:
+            if name is not None and name not in files:
                 files[name] = read_regular(directory, name)
         records.append(dict(coordinate=coordinate, sources=names[0], pom=names[1], runtime=names[2]))
     if not records:

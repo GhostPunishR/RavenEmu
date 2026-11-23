@@ -59,7 +59,7 @@ Le job compile `assembleRelease`, puis [`scripts/sign_release_apk.sh`](scripts/s
 
 Le job **échoue**, au lieu d'émettre un APK présenté comme publiable, dans les cas suivants : keystore Base64 incomplet, mot de passe incorrect, plusieurs clés privées, mauvais identifiant ou mauvaise version, APK débogable ou bibliothèque manquante. Les secrets ne doivent jamais être ajoutés au dépôt, copiés dans les logs ni communiqués en clair.
 
-**Conservez le keystore d'origine (`.p12`) et son mot de passe hors de GitHub.** Android n'accepte une mise à jour de `com.ravenemu` que signée par la même clé : sans elle, aucune mise à jour de la version publiée n'est possible. Ne remplacez jamais `ANDROID_KEYSTORE_BASE64` par une nouvelle clé après une publication.
+**Conservez le keystore d'origine (`.p12`) et son mot de passe hors de GitHub.** Android n'accepte une mise à jour de `com.ravenemu` que signée par la même clé : sans elle, aucune mise à jour de la version publiée n'est possible. Ne remplacez jamais `ANDROID_KEYSTORE_BASE64` par une nouvelle clé après une publication. L'identifiant OAuth Android de Google Drive est lui aussi lié à l'empreinte SHA-1 de cette clé ([docs/GOOGLE_DRIVE.md](docs/GOOGLE_DRIVE.md)).
 
 ## Publier une version
 

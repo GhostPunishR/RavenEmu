@@ -1,5 +1,17 @@
 # Journal des modifications de RavenEmu
 
+## 1.1.0 - 2026-11-23
+
+Mise à jour majeure : elle ajoute une fonction (règles de numérotation d'[AGENTS.md](AGENTS.md#numéros-de-version)).
+
+- **Sauvegardes cloud dans Google Drive** (**Paramètres → Sauvegardes cloud → Se connecter avec Google**) : choisissez votre compte et autorisez RavenEmu sur les écrans de Google. RavenEmu crée le dossier « RavenEmu » à la racine de votre Drive et n'accède qu'aux fichiers qu'il y a créés. La synchronisation est la même qu'en WebDAV : sauvegardes de cartouche seulement, conflits à régler, versions précédentes gardées. Il faut les services Google Play : sur un téléphone qui ne les a pas, le dossier WebDAV reste possible. Le projet Google de RavenEmu doit déclarer l'application ([docs/GOOGLE_DRIVE.md](docs/GOOGLE_DRIVE.md)). La [politique de confidentialité](PRIVACY.md) et les [conditions](TERMS.md) sont mises à jour ; la bibliothèque de Google est créditée dans **Licences et crédits** ([provenance et licence](legal/attributions/google-play-services.md)).
+- **« Le serveur WebDAV a répondu 429 » corrigé** (Koofr) : Koofr bloque un moment les connexions d'un compte après plusieurs mots de passe refusés, et RavenEmu pouvait prolonger ce blocage.
+  - **Message clair** : « Le cloud bloque les connexions pour un moment, souvent après plusieurs mots de passe refusés », avec le délai donné par le serveur quand il le donne (« réessayez dans 2 minutes »).
+  - **Plus de nouvel essai automatique** après un refus (mot de passe refusé, accès retiré, blocage) : les synchronisations automatiques s'arrêtent jusqu'à **Synchroniser maintenant** ou une nouvelle connexion, et l'écran le dit.
+  - Le mot de passe refusé dit maintenant d'utiliser un **mot de passe d'application** (Koofr, kDrive, Nextcloud).
+  - Un mot de passe collé perd le retour à la ligne qui l'accompagne souvent ; ses espaces, qui peuvent en faire partie, sont gardés.
+  - Le champ du mot de passe n'affiche plus son indication en police à chasse fixe.
+
 ## 1.0.0 - 2026-11-22
 
 ### Application native à la place de la bêta

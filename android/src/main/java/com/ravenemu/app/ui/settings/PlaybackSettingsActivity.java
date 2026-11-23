@@ -236,6 +236,11 @@ public final class PlaybackSettingsActivity extends Activity implements RavenThe
 
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
+        if (request == GoogleDriveSignIn.REQUEST) {
+            // Cancelled or not, the page says how Google's screen ended.
+            cloud.googleResult(result, data);
+            return;
+        }
         if (result != RESULT_OK || data == null || data.getData() == null) return;
         Uri uri = data.getData();
         if (request == PICK_SKIN) {

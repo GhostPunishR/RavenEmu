@@ -2,9 +2,12 @@
 junit = "4.13.2"
 robolectric = "4.16.1"
 material = "1.14.0"
+play-services-auth = "22.0.0"
 
 [libraries]
 junit4 = { module = "junit:junit", version.ref = "junit" }
 robolectric-core = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
 robolectric-sdk = { module = "org.robolectric:android-all-instrumented", version = "16-robolectric-13921718-i7" }
 material = { module = "com.google.android.material:material", version.ref = "material" }
+# Google Drive sign-in (cloud saves): Google Play services, Android SDK License.
+play-services-auth = { module = "com.google.android.gms:play-services-auth", version.ref = "play-services-auth" }

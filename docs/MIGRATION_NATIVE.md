@@ -1116,6 +1116,46 @@ doit exister ; pas encore de restauration des versions mises de côté depuis
 l'application. Validation sur téléphones et serveurs réels (Nextcloud,
 kDrive, NAS) à faire.
 
+## Sauvegardes, lot S-5 : Google Drive
+
+Demande du propriétaire (23 novembre 2026) : **Google Drive** pour les
+sauvegardes cloud, **avec les services Google Play**, qu'il accepte en
+connaissance de cause (bibliothèque non libre, téléphones sans services
+Google exclus, point de licence à faire vérifier :
+[legal/attributions/google-play-services.md](../legal/attributions/google-play-services.md)).
+
+- **Même synchronisation que le WebDAV** : `CloudSync` (liste, plan à trois
+  états, conflits, versions gardées) ne change pas. `GoogleDriveHttp` est un
+  autre `CloudStore`, sur l'API REST v3 de Drive : dossier visible
+  « RavenEmu » à la racine, créé par RavenEmu, autorisation `drive.file`
+  (RavenEmu ne voit que ce qu'il a créé).
+- **Écritures conditionnelles émulées** : Drive v3 n'a pas d'`If-Match`. Un
+  ETag est l'identifiant et la version du fichier, comparés juste avant
+  l'écriture. Deux appareils qui écrivent la liste dans le même instant
+  peuvent encore se recouvrir ; les sauvegardes elles-mêmes, chacune dans son
+  fichier, ne se perdent pas, et la synchronisation suivante refait la liste.
+- **Connexion** (`GoogleDriveAuth`, `GoogleDriveSignIn`) : API d'autorisation
+  des services Google Play (`play-services-auth` 22.0.0). Les écrans de Google
+  choisissent le compte et l'accord ; ensuite chaque synchronisation reçoit un
+  jeton sans écran. RavenEmu ne garde que l'adresse du compte, scellée comme
+  le compte WebDAV (`CloudAccount`, `kind` = `google-drive`). Jeton refusé :
+  un nouveau est demandé une fois, puis « reconnectez-vous ».
+- **Configuration Google** : un projet Google Cloud du propriétaire, avec
+  l'API Drive et un identifiant OAuth Android par application signée
+  ([GOOGLE_DRIVE.md](GOOGLE_DRIVE.md)). Sans lui, la connexion échoue avec
+  « identifiant OAuth à déclarer ».
+- **Erreurs** : quota plein (507), limite de requêtes (429, aussi le blocage
+  de Koofr après des mots de passe refusés), API désactivée : chacune a son
+  message en français.
+- **Tests** : `GoogleDriveHttpTest` (un Drive en mémoire : dossier créé une
+  fois, écritures conditionnelles, fichier trop grand jamais téléchargé,
+  jeton remplacé, erreurs, noms refusés), `CloudSettingsPageTest` (connexion,
+  écran de Google annulé puis accepté, services absents, déconnexion),
+  `CloudAccountTest` (compte Drive, ancien compte WebDAV relu).
+- **À valider sur téléphone** : connexion réelle avec l'APK Release signé et
+  son identifiant OAuth, deux téléphones sur le même compte, compte retiré
+  depuis Google.
+
 ## Vidéo, lot SH-1 : shaders RetroArch (.glslp) importés
 
 Demande du propriétaire (22 novembre 2026) : des shaders externes, au format

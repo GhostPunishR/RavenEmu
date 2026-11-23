@@ -9,8 +9,11 @@ import android.widget.Toast;
 import com.ravenemu.app.BuildConfig;
 import com.ravenemu.app.data.library.RomLibrary;
 import com.ravenemu.app.data.saves.CloudSaves;
+import com.ravenemu.app.data.saves.CloudStore;
 import com.ravenemu.app.data.saves.CloudSync;
 import com.ravenemu.app.data.saves.CloudSyncState;
+import com.ravenemu.app.platform.GoogleDriveAuth;
+import com.ravenemu.app.platform.GoogleDriveHttp;
 import com.ravenemu.app.platform.WebDavHttp;
 import com.ravenemu.app.settings.CloudAccount;
 import java.io.File;
@@ -102,6 +105,8 @@ public final class CloudSyncRunner {
         if (account == null || automatic && !account.automatic) return;
         File files = app.getFilesDir();
         CloudSyncState before = CloudSyncState.load(files, account.fingerprint());
+        // Refused (a wrong password, a block): retrying alone would prolong it.
+        if (automatic && before.refused) return;
         List<String> keys = new ArrayList<>();
         try {
             for (RomLibrary.Entry entry : RomLibrary.list(files)) keys.add(entry.key);
@@ -111,8 +116,7 @@ public final class CloudSyncRunner {
         Map<String, CloudSync.Resolution> answers = new HashMap<>(ANSWERS);
         CloudSyncState after;
         try {
-            WebDavHttp store = new WebDavHttp(account.folder, account.user, account.password, userAgent());
-            after = new CloudSync(store, new CloudSaves(files), deviceName()).run(before, keys, answers,
+            after = new CloudSync(store(app, account), new CloudSaves(files), deviceName()).run(before, keys, answers,
                     System.currentTimeMillis());
         } catch (IllegalArgumentException invalidFolder) {
             return;
@@ -138,6 +142,13 @@ public final class CloudSyncRunner {
             if (!known) count++;
         }
         return count;
+    }
+
+    /** The account's cloud folder: WebDAV, or the RavenEmu folder of its Google Drive. */
+    public static CloudStore store(Context context, CloudAccount account) {
+        if (account.isGoogleDrive())
+            return new GoogleDriveHttp(GoogleDriveAuth.authorizer.tokens(context, account.user), userAgent());
+        return new WebDavHttp(account.folder, account.user, account.password, userAgent());
     }
 
     public static String userAgent() { return "RavenEmu/" + BuildConfig.VERSION_NAME + " (Android)"; }
