@@ -91,7 +91,7 @@ public class GoogleDriveHttp implements CloudStore {
     /** The account's address, as Drive gives it: shown in the settings. */
     public String email() throws IOException {
         Response answer = call("GET", API + "about?fields=user(emailAddress)", null, null, MAX_ANSWER);
-        if (answer.status != 200) throw new IOException(failure(answer));
+        if (answer.status != 200) throw error(answer);
         try {
             String email = json(answer).getJSONObject("user").getString("emailAddress").trim();
             if (email.isEmpty() || email.length() > 320) throw new IOException("Adresse du compte Google illisible");
@@ -174,7 +174,7 @@ public class GoogleDriveHttp implements CloudStore {
             Map<String, String> headers = new LinkedHashMap<>();
             headers.put("Content-Type", "application/json; charset=UTF-8");
             Response answer = call("POST", API + "files?fields=id", headers, metadata, MAX_ANSWER);
-            if (answer.status != 200) throw new IOException(failure(answer));
+            if (answer.status != 200) throw error(answer);
             return folderId = checkId(json(answer).getString("id"));
         } catch (JSONException unreadable) {
             throw new IOException("Réponse de Google Drive illisible");
@@ -199,7 +199,7 @@ public class GoogleDriveHttp implements CloudStore {
         String url = API + "files?spaces=drive&pageSize=10&orderBy=createdTime&q="
                 + URLEncoder.encode(query, "UTF-8") + "&fields=" + URLEncoder.encode("files(" + fields + ")", "UTF-8");
         Response answer = call("GET", url, null, null, MAX_ANSWER);
-        if (answer.status != 200) throw new IOException(failure(answer));
+        if (answer.status != 200) throw error(answer);
         try {
             return json(answer).optJSONArray("files") == null ? new JSONArray() : json(answer).getJSONArray("files");
         } catch (JSONException unreadable) {
@@ -230,8 +230,15 @@ public class GoogleDriveHttp implements CloudStore {
         if ("storageQuotaExceeded".equals(reason)) return 507;
         if (answer.status == 429 || "userRateLimitExceeded".equals(reason) || "rateLimitExceeded".equals(reason))
             return 429;
-        if ("accessNotConfigured".equals(reason)) throw new IOException(failure(answer));
+        if ("accessNotConfigured".equals(reason)) throw error(answer);
         return answer.status;
+    }
+
+    /** Drive's refusals (403, 429) stop the automatic syncs, as the WebDAV ones
+     * do (CloudRefused); other errors only stop this sync. */
+    private static IOException error(Response answer) {
+        if (answer.status == 403 || answer.status == 429) return new CloudRefused(failure(answer));
+        return new IOException(failure(answer));
     }
 
     private static String failure(Response answer) {

@@ -272,8 +272,18 @@ public final class GoogleDriveHttpTest {
         try {
             store.get("ravenemu-saves.json", 1024);
             fail("A refused search stops the sync with Drive's reason");
-        } catch (IOException expected) {
+        } catch (com.ravenemu.app.data.saves.CloudRefused expected) {
+            // A refusal, as an upload's: the automatic syncs stop.
             assertTrue(expected.getMessage(), expected.getMessage().contains("limite les requêtes"));
+        }
+        drive.overrideFor = "GET API/files?";
+        drive.override = FakeDrive.error(500, "backendError");
+        try {
+            store.get("ravenemu-saves.json", 1024);
+            fail("A server error stops this sync");
+        } catch (IOException expected) {
+            assertFalse("Not a refusal: the automatic syncs go on",
+                    expected instanceof com.ravenemu.app.data.saves.CloudRefused);
         }
         drive.overrideFor = "POST UPLOAD/files?uploadType=multipart";
         drive.override = FakeDrive.error(403, "accessNotConfigured");
