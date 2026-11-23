@@ -86,8 +86,9 @@ public final class GoogleDriveAuth {
             final Context app = context.getApplicationContext();
             return new GoogleDriveHttp.Tokens() {
                 @Override public String token() throws IOException {
+                    // Only the player can install Play services: no automatic retry.
                     String missing = unavailable(app);
-                    if (missing != null) throw new IOException(missing);
+                    if (missing != null) throw new CloudRefused(missing);
                     AuthorizationResult result = await(Identity.getAuthorizationClient(app).authorize(request(email)));
                     if (result.hasResolution() || result.getAccessToken() == null) throw new CloudRefused(RECONNECT);
                     return result.getAccessToken();
@@ -131,13 +132,26 @@ public final class GoogleDriveAuth {
         try {
             return Tasks.await(task, WAIT_SECONDS, TimeUnit.SECONDS);
         } catch (ExecutionException failure) {
-            throw new IOException(message(failure.getCause()));
+            throw failure(failure.getCause());
         } catch (TimeoutException late) {
             throw new IOException("Les services Google Play ne répondent pas");
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
             throw new IOException("Synchronisation interrompue");
         }
+    }
+
+    /** Play services' failure, as the sync takes it: what only the player can
+     * settle (signing in again, RavenEmu's OAuth client) stops the automatic
+     * syncs (CloudRefused); the network and the rest are tried again later. */
+    static IOException failure(Throwable cause) {
+        String message = message(cause);
+        if (cause instanceof ApiException) {
+            int status = ((ApiException) cause).getStatusCode();
+            if (status == CommonStatusCodes.SIGN_IN_REQUIRED || status == CommonStatusCodes.DEVELOPER_ERROR)
+                return new CloudRefused(message);
+        }
+        return new IOException(message);
     }
 
     /** Play services' failure, in French. */
