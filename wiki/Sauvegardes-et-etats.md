@@ -47,7 +47,7 @@ Un jeu est reconnu par l'empreinte de sa ROM : la synchronisation ne concerne qu
 
 Limites actuelles : en WebDAV, HTTPS seulement, avec un certificat reconnu par Android (pas de certificat auto-signé de NAS), et le dossier doit exister avant la connexion ; les versions mises de côté sur le téléphone ne se restaurent pas encore depuis l'application.
 
-**Erreur 429** : le cloud bloque les connexions pour un moment, le plus souvent après plusieurs mots de passe refusés (Koofr le fait). Patientez, générez un nouveau **mot de passe d'application** dans votre cloud, puis réessayez ; un VPN peut aussi déclencher ce blocage.
+**Erreur 429, « le cloud bloque les connexions pour un moment »** : le plus souvent après plusieurs mots de passe refusés (Koofr le fait). Patientez, le délai est indiqué quand le serveur le donne. Générez un **mot de passe d'application** dans votre cloud (Koofr : Préférences → Mot de passe), puis réessayez ; un VPN peut aussi déclencher ce blocage. Après un refus, RavenEmu ne réessaie plus de lui-même : touchez **Synchroniser maintenant** une fois le problème réglé.
 
 ## Quatre emplacements d'état
 

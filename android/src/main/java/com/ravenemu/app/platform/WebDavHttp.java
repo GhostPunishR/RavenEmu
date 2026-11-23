@@ -1,5 +1,6 @@
 package com.ravenemu.app.platform;
 
+import com.ravenemu.app.data.saves.CloudRefused;
 import com.ravenemu.app.data.saves.CloudStore;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -64,7 +65,7 @@ public class WebDavHttp implements CloudStore {
     @Override public Fetched get(String name, int maxBytes) throws IOException {
         HttpURLConnection connection = open(name, "GET");
         try {
-            int status = connection.getResponseCode();
+            int status = answered(connection);
             byte[] body = new byte[0];
             if (status == HttpURLConnection.HTTP_OK) {
                 long declared = connection.getContentLengthLong();
@@ -87,7 +88,7 @@ public class WebDavHttp implements CloudStore {
             else if (create) connection.setRequestProperty("If-None-Match", "*");
             connection.setFixedLengthStreamingMode(body.length);
             try (OutputStream output = connection.getOutputStream()) { output.write(body); }
-            return connection.getResponseCode();
+            return answered(connection);
         } finally {
             connection.disconnect();
         }
@@ -96,10 +97,27 @@ public class WebDavHttp implements CloudStore {
     @Override public int delete(String name) throws IOException {
         HttpURLConnection connection = open(name, "DELETE");
         try {
-            return connection.getResponseCode();
+            return answered(connection);
         } finally {
             connection.disconnect();
         }
+    }
+
+    /** The status; a block (429) stops the sync with the wait the server gives. */
+    private static int answered(HttpURLConnection connection) throws IOException {
+        int status = connection.getResponseCode();
+        if (status == 429) throw CloudRefused.blocked(retryAfterSeconds(connection));
+        return status;
+    }
+
+    /** Retry-After, in seconds or as a date; negative when absent. */
+    static long retryAfterSeconds(HttpURLConnection connection) {
+        String value = connection.getHeaderField("Retry-After");
+        if (value == null) return -1;
+        value = value.trim();
+        if (value.matches("[0-9]{1,9}")) return Long.parseLong(value);
+        long date = connection.getHeaderFieldDate("Retry-After", 0);
+        return date > 0 ? Math.max(0, (date - System.currentTimeMillis()) / 1000) : -1;
     }
 
     /** Only names RavenEmu writes: letters, digits, dots and dashes. */

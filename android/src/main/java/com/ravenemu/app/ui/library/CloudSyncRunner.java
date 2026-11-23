@@ -105,6 +105,8 @@ public final class CloudSyncRunner {
         if (account == null || automatic && !account.automatic) return;
         File files = app.getFilesDir();
         CloudSyncState before = CloudSyncState.load(files, account.fingerprint());
+        // Refused (a wrong password, a block): retrying alone would prolong it.
+        if (automatic && before.refused) return;
         List<String> keys = new ArrayList<>();
         try {
             for (RomLibrary.Entry entry : RomLibrary.list(files)) keys.add(entry.key);

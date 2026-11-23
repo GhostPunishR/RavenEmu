@@ -144,6 +144,8 @@ final class CloudSettingsPage implements CloudSyncRunner.Listener {
         user.setText(typedUser);
         EditText password = widgets.field("Mot de passe d'application",
                 InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        // A password field otherwise shows its hint in monospace.
+        password.setTypeface(Typeface.DEFAULT);
         Button connect = widgets.button(signingIn ? "Connexion…" : "Se connecter");
         connect.setTextColor(theme.background);
         connect.setBackground(widgets.shape(theme.accent));
@@ -172,7 +174,8 @@ final class CloudSettingsPage implements CloudSyncRunner.Listener {
         connect.setOnClickListener(view -> {
             String address = folder.getText().toString().trim();
             String name = user.getText().toString().trim();
-            String secret = password.getText().toString();
+            // A pasted application password often brings a space or a line break.
+            String secret = password.getText().toString().trim();
             password.setText("");
             if (address.isEmpty() || name.isEmpty() || secret.isEmpty() || signingIn) return;
             signIn(address, name, secret);
@@ -295,6 +298,8 @@ final class CloudSettingsPage implements CloudSyncRunner.Listener {
         if (CloudSyncRunner.running()) return "Synchronisation en cours…";
         if (state == null || state.lastSync == 0) return "Pas encore synchronisé";
         String when = "Dernière synchronisation : " + date(state.lastSync);
+        if (state.refused) return when + "\n" + state.lastError + "\nSynchronisation automatique suspendue : "
+                + "touchez « Synchroniser maintenant » une fois le problème réglé, ou reconnectez-vous.";
         if (!state.lastError.isEmpty()) return when + "\n" + state.lastError;
         if (state.lastUploaded == 0 && state.lastDownloaded == 0) return when + " · tout est à jour";
         return when + " · " + count(state.lastUploaded, "envoyée") + ", " + count(state.lastDownloaded, "reçue");

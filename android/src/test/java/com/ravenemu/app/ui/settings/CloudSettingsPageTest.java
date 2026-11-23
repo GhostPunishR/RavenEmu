@@ -242,6 +242,13 @@ public final class CloudSettingsPageTest {
         assertNotNull(googleButton(activity));
     }
 
+    private static Button labelled(PlaybackSettingsActivity activity, String label) {
+        Button button = (Button) find(activity, view -> view instanceof Button
+                && label.contentEquals(((Button) view).getText()));
+        assertNotNull(label, button);
+        return button;
+    }
+
     private static Button googleButton(PlaybackSettingsActivity activity) {
         Button button = (Button) find(activity, view -> "cloud.google".equals(view.getTag()));
         assertNotNull(button);
@@ -254,6 +261,34 @@ public final class CloudSettingsPageTest {
                 ClassParameter.from(int.class, GoogleDriveSignIn.REQUEST), ClassParameter.from(int.class, result),
                 ClassParameter.from(Intent.class, data));
         settle(activity);
+    }
+
+    @Test public void aPastedPasswordLosesItsSpacesAndARefusalStopsTheAutomaticSyncs() throws Exception {
+        RomLibrary.Entry game = RomLibrary.importRom(files, "Alpha.gb", new byte[0x180]);
+        SaveRepository.write(files, game.key, "srm", "progress".getBytes(StandardCharsets.UTF_8));
+        PlaybackSettingsActivity activity = open();
+        assertEquals("The hint is not monospace", android.graphics.Typeface.DEFAULT,
+                field(activity, "Mot de passe d'application").getTypeface());
+        signIn(activity, FOLDER, "me", " app-pass\n");
+        assertEquals("app-pass", CloudAccount.load(context).password);
+
+        // The password is revoked: the next sync is refused, and the automatic ones stop.
+        FakeWebDav.folder.status = 401;
+        labelled(activity, "Synchroniser maintenant").performClick();
+        settle(activity);
+        assertNotNull(find(activity, view -> view instanceof TextView
+                && ((TextView) view).getText().toString().contains("Synchronisation automatique suspendue")));
+        int requests = FakeWebDav.folder.log.size();
+        ReflectionHelpers.setStaticField(CloudSyncRunner.class, "lastAutomatic", 0L);
+        CloudSyncRunner.libraryShown(context);
+        settle(activity);
+        assertEquals("No automatic retry while refused", requests, FakeWebDav.folder.log.size());
+
+        // Set right, a sync by hand resumes them.
+        FakeWebDav.folder.status = 0;
+        labelled(activity, "Synchroniser maintenant").performClick();
+        settle(activity);
+        assertFalse(CloudSyncState.load(files, CloudAccount.load(context).fingerprint()).refused);
     }
 
     private PlaybackSettingsActivity open() throws Exception {

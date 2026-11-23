@@ -62,6 +62,7 @@ public final class CloudSync {
         Map<String, String> base = new LinkedHashMap<>(state.base);
         List<CloudSyncState.Conflict> conflicts = keepKnown(state.conflicts, keys);
         String error = "";
+        boolean refused = false;
         int uploaded = 0, downloaded = 0;
         try {
             for (int attempt = 0; ; attempt++) {
@@ -87,8 +88,9 @@ public final class CloudSync {
             }
         } catch (IOException failure) {
             error = message(failure);
+            refused = failure instanceof CloudRefused;
         }
-        return new CloudSyncState(state.account, base, conflicts, now, error, uploaded, downloaded);
+        return new CloudSyncState(state.account, base, conflicts, now, error, refused, uploaded, downloaded);
     }
 
     /** Signing in: the folder answers, and holds a list or can hold one.
@@ -123,7 +125,7 @@ public final class CloudSync {
             final CloudManifest manifest;
             if (fetched.status == 200) manifest = CloudManifest.parse(fetched.body);
             else if (fetched.status == 404) manifest = CloudManifest.empty();
-            else throw new IOException(statusMessage(fetched.status));
+            else throw failure(fetched.status);
             Map<String, byte[]> sent = new LinkedHashMap<>();
             List<String> dropped = new ArrayList<>();
             for (String key : keys) {
@@ -149,7 +151,7 @@ public final class CloudSync {
                         break;
                     case UPLOAD:
                         int status = store.put(CloudManifest.fileName(key, phone), local, null, false);
-                        if (status != 200 && status != 201 && status != 204) throw new IOException(statusMessage(status));
+                        if (status != 200 && status != 201 && status != 204) throw failure(status);
                         dropped.addAll(manifest.put(key, phone, local.length, now, device));
                         sent.put(key, local);
                         break;
@@ -169,7 +171,7 @@ public final class CloudSync {
             String etag = fetched.status == 200 ? fetched.etag : null;
             int status = store.put(CloudManifest.FILE, manifest.toBytes(), etag, fetched.status == 404);
             if (status == 412) return false;
-            if (status != 200 && status != 201 && status != 204) throw new IOException(statusMessage(status));
+            if (status != 200 && status != 201 && status != 204) throw failure(status);
             for (Map.Entry<String, byte[]> save : sent.entrySet()) base.put(save.getKey(), sha256(save.getValue()));
             uploaded = sent.size();
             // The oldest versions: the list no longer names them.
@@ -188,7 +190,7 @@ public final class CloudSync {
         private String download(String key, CloudManifest.Entry entry, String phone) throws IOException {
             CloudStore.Fetched file = store.get(CloudManifest.fileName(key, entry.sha256),
                     SaveRepository.BATTERY_LIMIT_BYTES);
-            if (file.status == 401 || file.status == 403) throw new IOException(statusMessage(file.status));
+            if (file.status == 401 || file.status == 403 || file.status == 429) throw failure(file.status);
             if (file.status != 200) return "Une sauvegarde manque dans le cloud : elle n'est pas reçue";
             if (file.body.length != entry.size || !sha256(file.body).equals(entry.sha256))
                 return "Sauvegarde du cloud incomplète ou modifiée : elle n'est pas reçue";
@@ -203,15 +205,21 @@ public final class CloudSync {
         return Collections.unmodifiableList(kept);
     }
 
+    /** A refusal stops the automatic syncs (CloudRefused); other errors do not. */
+    static IOException failure(int status) {
+        if (status == 401 || status == 403 || status == 429) return new CloudRefused(statusMessage(status));
+        return new IOException(statusMessage(status));
+    }
+
     static String statusMessage(int status) {
         switch (status) {
-            case 401: return "Identifiant ou mot de passe refusé";
+            case 401: return "Identifiant ou mot de passe refusé : avec Koofr, kDrive ou Nextcloud, utilisez un mot "
+                    + "de passe d'application. Après plusieurs refus, le cloud peut bloquer les connexions un moment.";
             case 403: return "Accès refusé à ce dossier";
             case 404:
             case 409: return "Dossier introuvable : créez-le d'abord dans votre cloud";
             // Koofr, among others, answers 429 after several refused passwords.
-            case 429: return "Le cloud bloque les connexions pour un moment (trop d'essais, souvent un mot de passe "
-                    + "refusé) : patientez avant de réessayer, avec un mot de passe d'application";
+            case 429: return CloudRefused.blocked(-1).getMessage();
             case 507: return "Espace du cloud plein";
             default:
                 if (status >= 300 && status < 400)

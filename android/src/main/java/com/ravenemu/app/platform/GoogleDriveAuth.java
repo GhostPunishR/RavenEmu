@@ -16,6 +16,7 @@ import com.google.android.gms.common.api.CommonStatusCodes;
 import com.google.android.gms.common.api.Scope;
 import com.google.android.gms.tasks.Task;
 import com.google.android.gms.tasks.Tasks;
+import com.ravenemu.app.data.saves.CloudRefused;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.concurrent.ExecutionException;
@@ -88,7 +89,7 @@ public final class GoogleDriveAuth {
                     String missing = unavailable(app);
                     if (missing != null) throw new IOException(missing);
                     AuthorizationResult result = await(Identity.getAuthorizationClient(app).authorize(request(email)));
-                    if (result.hasResolution() || result.getAccessToken() == null) throw new IOException(RECONNECT);
+                    if (result.hasResolution() || result.getAccessToken() == null) throw new CloudRefused(RECONNECT);
                     return result.getAccessToken();
                 }
 

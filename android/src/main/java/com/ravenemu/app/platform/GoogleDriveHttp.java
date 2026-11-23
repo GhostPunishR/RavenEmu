@@ -1,5 +1,6 @@
 package com.ravenemu.app.platform;
 
+import com.ravenemu.app.data.saves.CloudRefused;
 import com.ravenemu.app.data.saves.CloudStore;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -218,7 +219,7 @@ public class GoogleDriveHttp implements CloudStore {
             Response answer = transport.send(method, url, headers, body, maxBytes);
             if (answer.status != 401) return answer;
             tokens.refused(token);
-            if (attempt > 0) throw new IOException(
+            if (attempt > 0) throw new CloudRefused(
                     "Google Drive refuse la connexion : reconnectez-vous dans Paramètres → Sauvegardes cloud");
         }
     }

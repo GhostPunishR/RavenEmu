@@ -29,6 +29,7 @@ public final class WebDavHttpTest {
     private volatile int status = 200;
     private volatile byte[] body = "{}".getBytes(StandardCharsets.UTF_8);
     private volatile String location;
+    private volatile String retryAfter;
 
     /** A minimal HTTP/1.1 server: one request per connection, as the client sends them. */
     @Before public void start() throws IOException {
@@ -70,6 +71,7 @@ public final class WebDavHttpTest {
         StringBuilder head = new StringBuilder("HTTP/1.1 " + status + " Status\r\nETag: \"etag-1\"\r\n"
                 + "Connection: close\r\nContent-Length: " + reply.length + "\r\n");
         if (location != null) head.append("Location: ").append(location).append("\r\n");
+        if (retryAfter != null) head.append("Retry-After: ").append(retryAfter).append("\r\n");
         OutputStream output = socket.getOutputStream();
         output.write(head.append("\r\n").toString().getBytes(StandardCharsets.US_ASCII));
         output.write(reply);
@@ -127,6 +129,25 @@ public final class WebDavHttpTest {
         status = 204;
         assertEquals(204, client.delete("ravenemu-1-2.srm"));
         assertEquals("DELETE /files/me/RavenEmu/ravenemu-1-2.srm | Authorization: " + basic, requests.get(3));
+    }
+
+    @Test public void aBlockStopsTheSyncWithTheWaitTheServerGives() throws Exception {
+        status = 429;
+        retryAfter = "120";
+        try {
+            client().get("ravenemu-saves.json", 1024);
+            fail("Blocked");
+        } catch (com.ravenemu.app.data.saves.CloudRefused expected) {
+            assertTrue(expected.getMessage(), expected.getMessage().contains("réessayez dans 2 minutes"));
+        }
+        retryAfter = null;
+        try {
+            client().put("ravenemu-saves.json", new byte[]{'{', '}'}, null, true);
+            fail("Blocked");
+        } catch (com.ravenemu.app.data.saves.CloudRefused expected) {
+            assertTrue(expected.getMessage(), expected.getMessage().contains("patientez avant de réessayer"));
+        }
+        assertEquals("One request each: nothing is retried by itself", 2, requests.size());
     }
 
     @Test public void aRedirectIsAnsweredNotFollowed() throws Exception {

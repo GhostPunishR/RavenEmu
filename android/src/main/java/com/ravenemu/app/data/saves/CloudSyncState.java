@@ -48,21 +48,25 @@ public final class CloudSyncState {
     /** When the last sync ended (0: never), and its error, or "". */
     public final long lastSync;
     public final String lastError;
+    /** The cloud refused the last sync (CloudRefused): no automatic sync
+     * until the player syncs by hand or signs in again. */
+    public final boolean refused;
     public final int lastUploaded, lastDownloaded;
 
     CloudSyncState(String account, Map<String, String> base, List<Conflict> conflicts, long lastSync,
-                   String lastError, int lastUploaded, int lastDownloaded) {
+                   String lastError, boolean refused, int lastUploaded, int lastDownloaded) {
         this.account = account == null ? "" : account;
         this.base = Collections.unmodifiableMap(new LinkedHashMap<>(base));
         this.conflicts = Collections.unmodifiableList(new ArrayList<>(conflicts));
         this.lastSync = lastSync;
         this.lastError = lastError == null ? "" : lastError;
+        this.refused = refused;
         this.lastUploaded = lastUploaded;
         this.lastDownloaded = lastDownloaded;
     }
 
     static CloudSyncState empty(String account) {
-        return new CloudSyncState(account, Collections.emptyMap(), Collections.emptyList(), 0, "", 0, 0);
+        return new CloudSyncState(account, Collections.emptyMap(), Collections.emptyList(), 0, "", false, 0, 0);
     }
 
     /** The base of one game, or null. */
@@ -101,7 +105,7 @@ public final class CloudSyncState {
                 }
             }
             return new CloudSyncState(account, base, conflicts, json.optLong("lastSync"), json.optString("lastError"),
-                    json.optInt("uploaded"), json.optInt("downloaded"));
+                    json.optBoolean("refused", false), json.optInt("uploaded"), json.optInt("downloaded"));
         } catch (IOException | JSONException | RuntimeException unreadable) {
             return empty(account);
         }
@@ -113,6 +117,7 @@ public final class CloudSyncState {
         try {
             JSONObject json = new JSONObject().put("format", FORMAT).put("account", account)
                     .put("base", new JSONObject(base)).put("lastSync", lastSync).put("lastError", lastError)
+                    .put("refused", refused)
                     .put("uploaded", lastUploaded).put("downloaded", lastDownloaded);
             JSONArray waiting = new JSONArray();
             for (Conflict c : conflicts)
